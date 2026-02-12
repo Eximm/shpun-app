@@ -1,8 +1,8 @@
 import { buildServer } from './app/server.js'
 
 async function loadDotenvIfDev() {
-  // В проде env приходит из docker-compose / окружения,
-  // dotenv в рантайме не нужен.
+  // В проде env приходит из docker-compose / окружения.
+  // dotenv в рантайме НЕ нужен.
   if (process.env.NODE_ENV === 'production') return
   await import('dotenv/config')
 }
@@ -11,7 +11,7 @@ function assertEnv() {
   const isProd = process.env.NODE_ENV === 'production'
   if (!isProd) return
 
-  const required = ['SHM_BASE']
+  const required = ['SHM_BASE', 'APP_ORIGIN', 'COOKIE_SECRET']
   for (const key of required) {
     if (!process.env[key]) {
       console.error(`❌ Missing required env variable in production: ${key}`)
@@ -36,7 +36,8 @@ async function main() {
       {
         port,
         nodeEnv: process.env.NODE_ENV || 'development',
-        shmBase: process.env.SHM_BASE || 'not-set'
+        shmBase: process.env.SHM_BASE || 'not-set',
+        appOrigin: process.env.APP_ORIGIN || 'not-set'
       },
       '🚀 Shpun API started'
     )
