@@ -1,9 +1,14 @@
-import 'dotenv/config'
 import { buildServer } from './app/server.js'
+
+async function loadDotenvIfDev() {
+  // В проде env приходит из docker-compose / окружения,
+  // dotenv в рантайме не нужен.
+  if (process.env.NODE_ENV === 'production') return
+  await import('dotenv/config')
+}
 
 function assertEnv() {
   const isProd = process.env.NODE_ENV === 'production'
-
   if (!isProd) return
 
   const required = ['SHM_BASE']
@@ -16,6 +21,7 @@ function assertEnv() {
 }
 
 async function main() {
+  await loadDotenvIfDev()
   assertEnv()
 
   const app = await buildServer()
