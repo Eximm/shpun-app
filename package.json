@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "@fastify/formbody": "^7.4.0",
+    "dotenv": "^17.2.4"
+  }
+}
