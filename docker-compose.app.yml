@@ -1,0 +1,22 @@
+services:
+  shpun-app-web:
+    build:
+      context: ./web
+    container_name: shpun-app-web
+    ports:
+      - "127.0.0.1:8090:80"
+    restart: unless-stopped
+
+  shpun-app-api:
+    build:
+      context: ./api
+    container_name: shpun-app-api
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      SHM_BASE: "https://bill.shpyn.online/shm/"
+      APP_ORIGIN: "https://app.shpyn.online"
+      COOKIE_SECRET: "CHANGE_ME_LONG_RANDOM"
+    ports:
+      - "127.0.0.1:8091:3000"
+    restart: unless-stopped
