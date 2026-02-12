@@ -1,13 +1,7 @@
 import { buildServer } from './app/server.js'
 
-async function loadDotenvIfDev() {
-  // В проде env приходит из docker-compose / окружения.
-  // dotenv в рантайме НЕ нужен.
-  if (process.env.NODE_ENV === 'production') return
-  await import('dotenv/config')
-}
-
 function assertEnv() {
+  // В проде всё приходит через docker-compose / окружение.
   const isProd = process.env.NODE_ENV === 'production'
   if (!isProd) return
 
@@ -21,7 +15,6 @@ function assertEnv() {
 }
 
 async function main() {
-  await loadDotenvIfDev()
   assertEnv()
 
   const app = await buildServer()
@@ -39,7 +32,7 @@ async function main() {
         shmBase: process.env.SHM_BASE || 'not-set',
         appOrigin: process.env.APP_ORIGIN || 'not-set'
       },
-      '🚀 Shpun API started'
+      '🚀 Shpyn API started'
     )
   } catch (err) {
     app.log.error(err)
