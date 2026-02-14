@@ -23,53 +23,86 @@ function getTelegramInitData(): string | null {
   return initData && initData.length > 0 ? initData : null
 }
 
+function readEnv(key: string): string {
+  const v = (import.meta as any).env?.[key]
+  return typeof v === 'string' ? v.trim() : ''
+}
+
 /**
  * Надёжный MiniApp deeplink:
  * https://t.me/<bot>/<app>?startapp=<payload>
  *
  * ВАЖНО: всегда ставим startapp (по умолчанию "1"),
  * иначе в некоторых кейсах Telegram может открыть чат вместо MiniApp.
+ *
+ * Эта версия НЕ использует new URL() и не может "молча" упасть из-за кривых env.
  */
-function buildTelegramOpenUrl(): string {
-  const bot = (import.meta as any).env?.VITE_TG_BOT_USERNAME as string | undefined
-  const app = (import.meta as any).env?.VITE_TG_APP_SHORTNAME as string | undefined
-  const startappRaw = (import.meta as any).env?.VITE_TG_STARTAPP as string | undefined
-  const startapp = startappRaw && startappRaw.trim().length > 0 ? startappRaw.trim() : '1'
+function buildTelegramOpenUrlSafe():
+  | { ok: true; url: string }
+  | { ok: false; error: string; debug?: Record<string, any> } {
+  const botRaw = readEnv('VITE_TG_BOT_USERNAME')
+  const appRaw = readEnv('VITE_TG_APP_SHORTNAME')
+  const startappRaw = readEnv('VITE_TG_STARTAPP')
+  const startapp = startappRaw.length > 0 ? startappRaw : '1'
 
-  if (!bot) return 'https://t.me/'
+  const bot = botRaw.startsWith('@') ? botRaw.slice(1).trim() : botRaw
+  const app = appRaw
 
-  if (app) {
-    const u = new URL(`https://t.me/${bot}/${app}`)
-    u.searchParams.set('startapp', startapp) // <- всегда
-    return u.toString()
+  if (!bot) {
+    return {
+      ok: false,
+      error: 'VITE_TG_BOT_USERNAME is empty in this build',
+      debug: { botRaw, appRaw, startappRaw },
+    }
   }
 
-  return `https://t.me/${bot}`
+  // Если shortname не задан — хотя бы откроем чат бота
+  if (!app) {
+    return { ok: true, url: `https://t.me/${encodeURIComponent(bot)}` }
+  }
+
+  const base = `https://t.me/${encodeURIComponent(bot)}/${encodeURIComponent(app)}`
+  const url = `${base}?startapp=${encodeURIComponent(startapp)}`
+  return { ok: true, url }
 }
 
 /**
  * Открываем MiniApp в Telegram.
- * - В обычном браузере: прямой переход (самый надёжный)
+ * - В обычном браузере/PWA: прямой переход (самый надёжный)
  * - Внутри Telegram WebApp: пробуем tg.openTelegramLink/openLink, потом fallback
  */
-function openInTelegram() {
-  const url = buildTelegramOpenUrl()
+function openInTelegramSafe(setErr?: (s: string) => void) {
+  const built = buildTelegramOpenUrlSafe()
+  if (!built.ok) {
+    setErr?.(built.error)
+    console.warn('[openInTelegram] bad env:', built.error, built.debug)
+    return
+  }
+
+  const url = built.url
   const tg = getTelegramWebApp()
   const hasInitData = !!tg?.initData && tg.initData.length > 0
 
+  // В браузере/PWA — самый надёжный способ
   if (!hasInitData) {
-    window.location.href = url
+    window.location.assign(url)
     return
   }
 
   try {
-    if (tg?.openTelegramLink) return tg.openTelegramLink(url)
-    if (tg?.openLink) return tg.openLink(url)
-  } catch {
-    // ignore
+    if (tg?.openTelegramLink) {
+      tg.openTelegramLink(url)
+      return
+    }
+    if (tg?.openLink) {
+      tg.openLink(url)
+      return
+    }
+  } catch (e) {
+    console.warn('[openInTelegram] tg open failed:', e)
   }
 
-  window.location.href = url
+  window.location.assign(url)
 }
 
 type Mode = 'telegram' | 'web'
@@ -79,8 +112,8 @@ export function Login() {
   const nav = useNavigate()
   const loc: any = useLocation()
 
-  // ВАЖНО: определяем режим по наличию Telegram.WebApp, а не по initData на первом рендере
-  const mode: Mode = getTelegramWebApp() ? 'telegram' : 'web'
+  // telegram-mode только если реально есть initData
+  const mode: Mode = getTelegramInitData() ? 'telegram' : 'web'
 
   const [tgInitData, setTgInitData] = useState<string | null>(null)
 
@@ -134,7 +167,6 @@ export function Login() {
   async function telegramLogin() {
     const initData = tgInitData || getTelegramInitData()
     if (!initData) {
-      // Мы в Telegram, но initData ещё не пришёл/не подхватился — попросим перезапуск
       setErr(t('error.open_in_tg'))
       return
     }
@@ -160,7 +192,6 @@ export function Login() {
     tg?.expand?.()
 
     if (mode === 'telegram') {
-      // initData иногда не сразу доступен — подхватываем несколько раз
       const pull = () => setTgInitData(getTelegramInitData())
 
       pull()
@@ -168,7 +199,6 @@ export function Login() {
       const t2 = window.setTimeout(pull, 200)
       const t3 = window.setTimeout(pull, 600)
 
-      // Автологин — с небольшой задержкой, чтобы initData успел появиться
       if (!autoLoginStarted.current) {
         autoLoginStarted.current = true
         window.setTimeout(() => {
@@ -182,6 +212,7 @@ export function Login() {
         window.clearTimeout(t3)
       }
     }
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode])
 
@@ -216,13 +247,15 @@ export function Login() {
 
           {mode === 'web' && (
             <>
+              {/* Главная CTA — на всю ширину, без кнопки "обновить" */}
               <div className="auth__actions" style={{ marginTop: 12 }}>
-                <button type="button" className="btn btn--primary" onClick={openInTelegram}>
+                <button
+                  type="button"
+                  className="btn btn--primary"
+                  onClick={() => openInTelegramSafe(setErr)}
+                  style={{ width: '100%' }}
+                >
                   {t('login.cta.open_tg')}
-                </button>
-
-                <button type="button" className="btn" onClick={() => window.location.reload()}>
-                  {t('login.cta.refresh')}
                 </button>
               </div>
 
@@ -235,7 +268,12 @@ export function Login() {
               </div>
 
               <div className="auth__providers">
-                <button className="btn auth__provider" onClick={openInTelegram} disabled={loading} type="button">
+                <button
+                  className="btn auth__provider"
+                  onClick={() => openInTelegramSafe(setErr)}
+                  disabled={loading}
+                  type="button"
+                >
                   <span className="auth__providerIcon">✈️</span>
                   <span className="auth__providerText">
                     Telegram

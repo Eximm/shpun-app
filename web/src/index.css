@@ -69,6 +69,11 @@ body {
 
 #root { min-height: 100%; }
 
+/* --- EXTRA SAFETY: clickable controls should always receive taps --- */
+button, a {
+  -webkit-tap-highlight-color: transparent;
+}
+
 /* 3) Safe-area padding for iOS */
 .safe {
   padding-left: max(var(--pad), env(safe-area-inset-left));
@@ -225,6 +230,7 @@ body {
   user-select: none;
   -webkit-user-select: none;
   touch-action: manipulation;
+  pointer-events: auto; /* SAFETY */
 }
 .btn:hover { background: rgba(255,255,255,0.09); border-color: rgba(255,255,255,0.18); }
 .btn:active { transform: translateY(1px) scale(0.99); }
@@ -301,6 +307,8 @@ body {
   -webkit-backdrop-filter: blur(12px);
 
   box-shadow: 0 10px 24px rgba(0,0,0,0.22);
+
+  pointer-events: none; /* SAFETY: never intercept taps on login */
 }
 
 /* добавим маленькую "точку статуса" */
@@ -683,6 +691,8 @@ body {
   align-items:flex-start;
   justify-content:space-between;
   gap: 12px;
+  position: relative;
+  z-index: 1;
 }
 
 .auth__form{ margin-top: 14px; }
@@ -703,6 +713,10 @@ body {
   flex-wrap: wrap;
   align-items:center;
   margin-top: 12px;
+
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
 }
 
 .auth__divider{
@@ -728,6 +742,10 @@ body {
   display:grid;
   grid-template-columns: 1fr;
   gap: 10px;
+
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
 }
 
 .auth__provider{
@@ -739,6 +757,8 @@ body {
   padding: 12px 14px;
   text-align:left;
   border-radius: 16px;
+
+  pointer-events: auto;
 }
 
 .auth__providerIcon{
