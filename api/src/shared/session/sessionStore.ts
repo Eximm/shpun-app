@@ -1,69 +1,107 @@
 // api/src/shared/session/sessionStore.ts
-import { randomUUID } from "node:crypto";
+import { randomUUID } from 'node:crypto'
+import type { FastifyRequest } from 'fastify'
 
 export type AppSession = {
-  shmSessionId: string;
-  shmUserId?: number;
-  createdAt: number;
-  lastSeenAt: number;
-};
+  shmSessionId: string
+  shmUserId?: number
+  userId?: number // алиас под старые места (если где-то ждут userId)
+  createdAt: number
+  lastSeenAt: number
+}
 
-const store = new Map<string, AppSession>();
+const store = new Map<string, AppSession>()
 
-// TTL для in-memory сессий (в миллисекундах)
-// Для беты — 7 дней. Потом можно заменить на Redis и убрать TTL здесь.
-const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+// Для беты: 30 дней “скользящей” сессии в памяти.
+// (user не должен разлогиниваться — это важно для уведомлений)
+const SESSION_TTL_MS = Number(
+  process.env.SESSION_TTL_MS || 30 * 24 * 60 * 60 * 1000
+)
 
 function now() {
-  return Date.now();
+  return Date.now()
 }
 
 function isExpired(s: AppSession, t = now()) {
-  return t - (s.lastSeenAt || s.createdAt) > SESSION_TTL_MS;
+  return t - (s.lastSeenAt || s.createdAt) > SESSION_TTL_MS
 }
 
-// Ленивая уборка: не чаще раза в минуту
-let lastCleanupAt = 0;
+// ленивая уборка: не чаще раза в минуту
+let lastCleanupAt = 0
 function cleanupIfNeeded() {
-  const t = now();
-  if (t - lastCleanupAt < 60_000) return;
-  lastCleanupAt = t;
+  const t = now()
+  if (t - lastCleanupAt < 60_000) return
+  lastCleanupAt = t
 
   for (const [sid, s] of store.entries()) {
-    if (isExpired(s, t)) store.delete(sid);
+    if (isExpired(s, t)) store.delete(sid)
   }
 }
 
 export function createLocalSid() {
-  return randomUUID();
+  return randomUUID()
 }
 
-export function putSession(localSid: string, session: Omit<AppSession, "lastSeenAt">) {
-  const t = now();
-  store.set(localSid, { ...session, lastSeenAt: t });
-}
+export function putSession(localSid: string, session: Omit<AppSession, 'lastSeenAt'>) {
+  const t = now()
 
-export function getSession(localSid: string | undefined) {
-  cleanupIfNeeded();
-
-  if (!localSid) return null;
-
-  const s = store.get(localSid) ?? null;
-  if (!s) return null;
-
-  if (isExpired(s)) {
-    store.delete(localSid);
-    return null;
+  // userId поддержим как алиас к shmUserId — чтобы старые роуты не падали
+  const merged: AppSession = {
+    ...session,
+    shmUserId: session.shmUserId ?? session.userId,
+    userId: session.userId ?? session.shmUserId,
+    lastSeenAt: t,
   }
 
-  // “touch”
-  s.lastSeenAt = now();
-  store.set(localSid, s);
+  store.set(localSid, merged)
+}
 
-  return s;
+/** Получить сессию по localSid (sid cookie) */
+export function getSessionBySid(localSid: string | undefined) {
+  cleanupIfNeeded()
+  if (!localSid) return null
+
+  const s = store.get(localSid) ?? null
+  if (!s) return null
+
+  if (isExpired(s)) {
+    store.delete(localSid)
+    return null
+  }
+
+  // touch (скользящая сессия)
+  s.lastSeenAt = now()
+  store.set(localSid, s)
+
+  return s
+}
+
+/** Вытянуть sid из запроса (cookie sid или заголовок x-app-sid) */
+function getSidFromRequest(req: FastifyRequest): string | undefined {
+  const sidCookie = (req.cookies as any)?.sid
+  if (typeof sidCookie === 'string' && sidCookie.trim()) return sidCookie.trim()
+
+  const sidHeader = req.headers['x-app-sid']
+  if (typeof sidHeader === 'string' && sidHeader.trim()) return sidHeader.trim()
+
+  return undefined
+}
+
+/** Получить сессию из FastifyRequest (sid cookie) */
+export function getSessionFromRequest(req: FastifyRequest) {
+  return getSessionBySid(getSidFromRequest(req))
+}
+
+/**
+ * BACKCOMPAT:
+ * Старые роуты импортят getSession(req) — оставляем алиас.
+ * Важно: getSession принимает именно FastifyRequest (не sid-строку).
+ */
+export function getSession(req: FastifyRequest) {
+  return getSessionFromRequest(req)
 }
 
 export function deleteSession(localSid: string | undefined) {
-  if (!localSid) return;
-  store.delete(localSid);
+  if (!localSid) return
+  store.delete(localSid)
 }

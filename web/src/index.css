@@ -27,6 +27,9 @@
 
   /* App-like touch sizes */
   --tap: 44px;
+
+  /* Bottom nav sizing */
+  --nav-h: 74px; /* общая “ощущаемая” высота таббара */
 }
 
 /* 2) Reset / base */
@@ -41,10 +44,20 @@ html {
 body {
   margin: 0;
   font-family: var(--font);
+
+  /*
+    ВАЖНО: фон должен жить на body/html, чтобы не было "стыка" при скролле.
+    Плюс background-attachment: fixed — градиенты не будут "перезапускаться".
+  */
   background:
     radial-gradient(1200px 800px at 80% -10%, rgba(124, 92, 255, 0.22), transparent 60%),
     radial-gradient(900px 600px at 10% 0%, rgba(77, 215, 255, 0.16), transparent 55%),
-    var(--bg);
+    radial-gradient(1200px 900px at 50% 120%, rgba(124, 92, 255, 0.10), transparent 60%),
+    linear-gradient(180deg, #070a10, var(--bg));
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  background-size: cover;
+
   color: var(--text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -127,9 +140,12 @@ body {
   flex: 1;
 }
 
-/* Make main content feel like app screen */
+/*
+  Резервируем место под fixed bottomnav,
+  иначе контент будет уезжать/перекрываться и создаётся ощущение "скачков".
+*/
 .main .container {
-  padding-bottom: max(18px, env(safe-area-inset-bottom));
+  padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 18px);
 }
 
 .section { margin-top: 18px; }
@@ -163,6 +179,26 @@ body {
   flex-wrap: wrap;
   align-items: center;
 }
+.input{
+  width: 100%;
+  padding: 12px 14px;
+  min-height: var(--tap);
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(0,0,0,0.30);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 750;
+  outline: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+}
+.input::placeholder{ color: rgba(255,255,255,0.45); font-weight: 650; }
+.input:focus{
+  border-color: rgba(124,92,255,0.55);
+  box-shadow: 0 0 0 4px rgba(124,92,255,0.16);
+  background: rgba(0,0,0,0.36);
+}
+
 
 /* Buttons feel like native taps */
 .btn {
@@ -296,11 +332,19 @@ body {
   .h1 { font-size: 26px; }
   .kv { grid-template-columns: repeat(3, 1fr); }
 }
+
 /* 8) Bottom navigation (native tab bar) */
+/*
+  Было sticky -> из-за этого он живёт в потоке и может "прыгать".
+  Делаем fixed + резервируем место в .main .container (см. выше).
+*/
 .bottomnav {
-  position: sticky;
+  position: fixed;
+  left: 0;
+  right: 0;
   bottom: 0;
   z-index: 20;
+
   border-top: 1px solid var(--border);
   background: rgba(11, 15, 23, 0.72);
   backdrop-filter: blur(18px);
@@ -313,7 +357,10 @@ body {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 6px;
+
   padding-top: 10px;
+  padding-left: max(var(--pad), env(safe-area-inset-left));
+  padding-right: max(var(--pad), env(safe-area-inset-right));
   padding-bottom: max(10px, env(safe-area-inset-bottom));
 }
 
@@ -357,4 +404,152 @@ body {
   background: linear-gradient(180deg, rgba(124,92,255,0.18), rgba(77,215,255,0.08));
   border-color: rgba(124,92,255,0.35);
   box-shadow: 0 10px 26px rgba(0,0,0,0.25);
+}
+
+/* --- Auth / Inputs (append) --- */
+
+.input{
+  width: 100%;
+  min-height: var(--tap);
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(0,0,0,0.28);
+  color: var(--text);
+  outline: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+}
+
+.input::placeholder{
+  color: rgba(255,255,255,0.35);
+}
+
+.input:focus{
+  border-color: rgba(124,92,255,0.55);
+  box-shadow: 0 0 0 6px rgba(124,92,255,0.14);
+  background: rgba(0,0,0,0.34);
+}
+
+.field{ display:block; }
+.field__label{
+  display:block;
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12px;
+  color: rgba(255,255,255,0.72);
+}
+
+.auth__head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap: 12px;
+}
+
+.auth__form{ margin-top: 14px; }
+
+.auth__grid{
+  display:grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 720px){
+  .auth__grid{ grid-template-columns: 1fr 1fr; }
+}
+
+.auth__actions{
+  display:flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items:center;
+  margin-top: 12px;
+}
+
+.auth__divider{
+  margin: 16px 0 10px;
+  display:flex;
+  align-items:center;
+  gap: 12px;
+  color: rgba(255,255,255,0.42);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .12px;
+}
+
+.auth__divider::before,
+.auth__divider::after{
+  content:"";
+  height: 1px;
+  flex: 1;
+  background: rgba(255,255,255,0.10);
+}
+
+.auth__providers{
+  display:grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.auth__provider{
+  width:100%;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  text-align:left;
+  border-radius: 16px;
+}
+
+.auth__providerIcon{
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  display:grid;
+  place-items:center;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.10);
+  flex: 0 0 auto;
+}
+
+.auth__providerText{
+  display:flex;
+  flex-direction:column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 900;
+}
+
+.auth__providerHint{
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.55);
+}
+
+.auth__providerRight{
+  color: rgba(255,255,255,0.55);
+  font-weight: 900;
+  flex: 0 0 auto;
+}
+
+.auth__error{
+  margin-top: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,77,109,0.08);
+  padding: 12px 12px;
+}
+
+.auth__errorTitle{
+  font-weight: 900;
+  margin-bottom: 6px;
+}
+
+.auth__errorText{
+  color: rgba(255,255,255,0.72);
+  line-height: 1.35;
+  font-size: 13px;
 }

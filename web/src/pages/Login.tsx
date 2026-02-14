@@ -34,17 +34,21 @@ export function Login() {
   const isTelegram = !!tgInitData
   const autoLoginStarted = useRef(false)
 
+  const canPasswordLogin = login.trim().length > 0 && password.length > 0
+
   async function finishLogin() {
     nav(loc?.state?.from || '/app/cabinet', { replace: true })
   }
 
   async function passwordLogin() {
+    if (!canPasswordLogin) return
+
     setLoading(true)
     setErr(null)
     try {
       await apiFetch('/auth/password', {
         method: 'POST',
-        body: JSON.stringify({ login, password })
+        body: JSON.stringify({ login: login.trim(), password })
       })
       await finishLogin()
     } catch (e: any) {
@@ -93,73 +97,131 @@ export function Login() {
     <div className="section">
       <div className="card">
         <div className="card__body">
-          <h1 className="h1">Sign in</h1>
-          <p className="p">
-            You can sign in with your <b>login &amp; password</b>. If opened inside Telegram, you can also use <b>Telegram login</b>.
-          </p>
-
-          {/* Always show login/password */}
-          <div style={{ marginTop: 14 }}>
-            <div className="row" style={{ gap: 10, alignItems: 'stretch' }}>
-              <input
-                className="input"
-                placeholder="Login"
-                value={login}
-                onChange={(e) => setLogin(e.target.value)}
-                autoComplete="username"
-                disabled={loading}
-                style={{ flex: 1 }}
-              />
-              <input
-                className="input"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                type="password"
-                autoComplete="current-password"
-                disabled={loading}
-                style={{ flex: 1 }}
-              />
+          <div className="auth__head">
+            <div>
+              <h1 className="h1">Sign in</h1>
+              <p className="p">
+                Use <b>login &amp; password</b>. If you opened Shpun inside Telegram — you can sign in with <b>Telegram</b>.
+              </p>
             </div>
 
-            <div className="row" style={{ marginTop: 10 }}>
+            <span className="badge">
+              {isTelegram ? 'Telegram WebApp detected' : 'Web mode'}
+            </span>
+          </div>
+
+          {/* Password form */}
+          <form
+            className="auth__form"
+            onSubmit={(e) => {
+              e.preventDefault()
+              passwordLogin()
+            }}
+          >
+            <div className="auth__grid">
+              <label className="field">
+                <span className="field__label">Login</span>
+                <input
+                  className="input"
+                  placeholder="e.g. @142912013"
+                  value={login}
+                  onChange={(e) => setLogin(e.target.value)}
+                  autoComplete="username"
+                  disabled={loading}
+                  inputMode="text"
+                />
+              </label>
+
+              <label className="field">
+                <span className="field__label">Password</span>
+                <input
+                  className="input"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  type="password"
+                  autoComplete="current-password"
+                  disabled={loading}
+                />
+              </label>
+            </div>
+
+            <div className="auth__actions">
               <button
+                type="submit"
                 className="btn btn--primary"
-                onClick={passwordLogin}
-                disabled={loading || !login || !password}
+                disabled={loading || !canPasswordLogin}
               >
                 {loading ? 'Signing in…' : 'Sign in'}
               </button>
 
-              <span className="badge">Password login</span>
+              <button
+                type="button"
+                className="btn"
+                disabled={true}
+                title="Coming soon"
+              >
+                Forgot password
+              </button>
             </div>
+          </form>
+
+          <div className="auth__divider">
+            <span>or continue with</span>
           </div>
 
-          {/* Telegram option */}
-          <div style={{ marginTop: 14 }}>
-            <div className="row">
-              <button
-                className="btn"
-                onClick={telegramLogin}
-                disabled={loading || !isTelegram}
-                title={!isTelegram ? 'Open inside Telegram WebApp' : ''}
-              >
-                Login via Telegram
-              </button>
-              {isTelegram ? (
-                <span className="badge">Telegram WebApp detected</span>
-              ) : (
-                <span className="badge">Telegram login unavailable here</span>
-              )}
-            </div>
+          {/* Providers (beautiful now, real later) */}
+          <div className="auth__providers">
+            <button
+              className="btn auth__provider"
+              onClick={telegramLogin}
+              disabled={loading || !isTelegram}
+              title={!isTelegram ? 'Open inside Telegram WebApp' : 'Login via Telegram'}
+              type="button"
+            >
+              <span className="auth__providerIcon">✈️</span>
+              <span className="auth__providerText">
+                Telegram
+                <span className="auth__providerHint">
+                  {isTelegram ? 'Fast login in WebApp' : 'Available in Telegram'}
+                </span>
+              </span>
+              <span className="auth__providerRight">{isTelegram ? '→' : '🔒'}</span>
+            </button>
+
+            <button
+              className="btn auth__provider"
+              disabled={true}
+              title="Coming soon"
+              type="button"
+            >
+              <span className="auth__providerIcon">🟦</span>
+              <span className="auth__providerText">
+                Google
+                <span className="auth__providerHint">Coming soon</span>
+              </span>
+              <span className="auth__providerRight">🔒</span>
+            </button>
+
+            <button
+              className="btn auth__provider"
+              disabled={true}
+              title="Coming soon"
+              type="button"
+            >
+              <span className="auth__providerIcon">🟨</span>
+              <span className="auth__providerText">
+                Yandex
+                <span className="auth__providerHint">Coming soon</span>
+              </span>
+              <span className="auth__providerRight">🔒</span>
+            </button>
           </div>
 
           {err && (
-            <div className="card" style={{ marginTop: 14, boxShadow: 'none' }}>
-              <div className="card__body">
-                <div style={{ fontWeight: 800, marginBottom: 6 }}>Error</div>
-                <div style={{ color: 'var(--muted)' }}>{err}</div>
-              </div>
+            <div className="auth__error">
+              <div className="auth__errorTitle">Error</div>
+              <div className="auth__errorText">{err}</div>
             </div>
           )}
         </div>

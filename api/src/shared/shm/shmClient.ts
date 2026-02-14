@@ -156,3 +156,37 @@ export async function shmGetUserServices(
     query: { limit, offset, filter },
   });
 }
+// =====================
+// PAYMENTS
+// =====================
+
+export async function shmGetPaySystems(sessionId: string, opts?: { limit?: number; offset?: number }) {
+  const limit = opts?.limit ?? 50
+  const offset = opts?.offset ?? 0
+  return await shmFetch<any>(sessionId, 'v1/user/pay/paysystems', {
+    method: 'GET',
+    query: { limit, offset },
+  })
+}
+
+export async function shmGetPayForecast(sessionId: string, opts?: { limit?: number; offset?: number }) {
+  const limit = opts?.limit ?? 25
+  const offset = opts?.offset ?? 0
+  return await shmFetch<any>(sessionId, 'v1/user/pay/forecast', {
+    method: 'GET',
+    query: { limit, offset },
+  })
+}
+
+export async function shmGetPays(sessionId: string, opts?: { limit?: number; offset?: number }) {
+  const limit = opts?.limit ?? 25
+  const offset = opts?.offset ?? 0
+  return await shmFetch<any>(sessionId, 'v1/user/pay', {
+    method: 'GET',
+    query: { limit, offset },
+  })
+}
+
+export async function shmDeleteAutopayment(sessionId: string) {
+  return await shmFetch<any>(sessionId, 'v1/user/autopayment', { method: 'DELETE' })
+}

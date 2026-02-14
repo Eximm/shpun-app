@@ -4,14 +4,17 @@ function Tab({
   to,
   label,
   icon,
+  end,
 }: {
   to: string
   label: string
   icon: React.ReactNode
+  end?: boolean
 }) {
   return (
     <NavLink
       to={to}
+      end={end}
       className={({ isActive }) => 'tab' + (isActive ? ' tab--active' : '')}
     >
       <span className="tab__icon" aria-hidden="true">
@@ -24,10 +27,11 @@ function Tab({
 
 export function BottomNav() {
   return (
-    <nav className="bottomnav safe" role="navigation" aria-label="App navigation">
+    <nav className="bottomnav" role="navigation" aria-label="App navigation">
       <div className="bottomnav__inner">
         <Tab
           to="/app"
+          end
           label="Главная"
           icon={
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
