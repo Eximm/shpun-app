@@ -1,6 +1,15 @@
 {
+  "name": "shpun",
+  "private": true,
+  "type": "module",
   "dependencies": {
+    "fastify": "^4.29.1",
     "@fastify/formbody": "^7.4.0",
+    "@fastify/multipart": "^8.3.1",
     "dotenv": "^17.2.4"
+  },
+  "overrides": {
+    "@fastify/formbody": "^7.4.0",
+    "@fastify/multipart": "^8.3.1"
   }
 }
