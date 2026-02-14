@@ -23,25 +23,44 @@ function getTelegramInitData(): string | null {
   return initData && initData.length > 0 ? initData : null
 }
 
+/**
+ * Надёжный MiniApp deeplink:
+ * https://t.me/<bot>/<app>?startapp=<payload>
+ *
+ * ВАЖНО: всегда ставим startapp (по умолчанию "1"),
+ * иначе в некоторых кейсах Telegram может открыть чат вместо MiniApp.
+ */
 function buildTelegramOpenUrl(): string {
   const bot = (import.meta as any).env?.VITE_TG_BOT_USERNAME as string | undefined
   const app = (import.meta as any).env?.VITE_TG_APP_SHORTNAME as string | undefined
-  const startapp = ((import.meta as any).env?.VITE_TG_STARTAPP as string | undefined) || ''
+  const startappRaw = (import.meta as any).env?.VITE_TG_STARTAPP as string | undefined
+  const startapp = startappRaw && startappRaw.trim().length > 0 ? startappRaw.trim() : '1'
 
   if (!bot) return 'https://t.me/'
 
   if (app) {
     const u = new URL(`https://t.me/${bot}/${app}`)
-    if (startapp) u.searchParams.set('startapp', startapp)
+    u.searchParams.set('startapp', startapp) // <- всегда
     return u.toString()
   }
 
   return `https://t.me/${bot}`
 }
 
+/**
+ * Открываем MiniApp в Telegram.
+ * - В обычном браузере: прямой переход (самый надёжный)
+ * - Внутри Telegram WebApp: пробуем tg.openTelegramLink/openLink, потом fallback
+ */
 function openInTelegram() {
   const url = buildTelegramOpenUrl()
   const tg = getTelegramWebApp()
+  const hasInitData = !!tg?.initData && tg.initData.length > 0
+
+  if (!hasInitData) {
+    window.location.href = url
+    return
+  }
 
   try {
     if (tg?.openTelegramLink) return tg.openTelegramLink(url)
@@ -159,9 +178,7 @@ export function Login() {
               )}
             </div>
 
-            <span className="badge">
-              {mode === 'telegram' ? t('login.badge.tg') : t('login.badge.web')}
-            </span>
+            <span className="badge">{mode === 'telegram' ? t('login.badge.tg') : t('login.badge.web')}</span>
           </div>
 
           {/* “цеплялка”: что будет внутри */}
@@ -276,9 +293,7 @@ export function Login() {
                     </button>
                   </div>
 
-                  <div className="pre" style={{ marginTop: 12 }}>
-                    {t('login.password.tip')}
-                  </div>
+                  <div className="pre" style={{ marginTop: 12 }}>{t('login.password.tip')}</div>
                 </form>
               </details>
             </>
