@@ -15,6 +15,8 @@ import { AuthGate } from './app/auth/AuthGate'
 import { InstallBanner } from './app/pwa/InstallBanner'
 import { BottomNav } from './app/layout/BottomNav'
 
+import { I18nProvider, useI18n } from './shared/i18n'
+
 // PWA: auto-update service worker (только в production)
 if (import.meta.env.PROD) {
   import('virtual:pwa-register')
@@ -30,6 +32,8 @@ if (import.meta.env.PROD) {
 }
 
 function AppShell({ children }: { children: React.ReactNode }) {
+  const { t } = useI18n()
+
   return (
     <div className="app">
       <header className="topbar">
@@ -42,7 +46,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          <span className="badge">Beta</span>
+          <span className="badge">{t('app.beta')}</span>
         </div>
       </header>
 
@@ -63,69 +67,71 @@ function AppShell({ children }: { children: React.ReactNode }) {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <AppShell>
-        <Routes>
-          <Route path="/login" element={<Login />} />
+    <I18nProvider>
+      <BrowserRouter>
+        <AppShell>
+          <Routes>
+            <Route path="/login" element={<Login />} />
 
-          <Route
-            path="/app"
-            element={
-              <AuthGate>
-                <Home />
-              </AuthGate>
-            }
-          />
+            <Route
+              path="/app"
+              element={
+                <AuthGate>
+                  <Home />
+                </AuthGate>
+              }
+            />
 
-          {/* Onboarding: set password right after Telegram auth */}
-          <Route
-            path="/app/set-password"
-            element={
-              <AuthGate>
-                <SetPassword />
-              </AuthGate>
-            }
-          />
+            {/* Onboarding: set password right after Telegram auth */}
+            <Route
+              path="/app/set-password"
+              element={
+                <AuthGate>
+                  <SetPassword />
+                </AuthGate>
+              }
+            />
 
-          <Route
-            path="/app/services"
-            element={
-              <AuthGate>
-                <Services />
-              </AuthGate>
-            }
-          />
-          <Route
-            path="/app/payments"
-            element={
-              <AuthGate>
-                <Payments />
-              </AuthGate>
-            }
-          />
-          <Route
-            path="/app/profile"
-            element={
-              <AuthGate>
-                <Profile />
-              </AuthGate>
-            }
-          />
+            <Route
+              path="/app/services"
+              element={
+                <AuthGate>
+                  <Services />
+                </AuthGate>
+              }
+            />
+            <Route
+              path="/app/payments"
+              element={
+                <AuthGate>
+                  <Payments />
+                </AuthGate>
+              }
+            />
+            <Route
+              path="/app/profile"
+              element={
+                <AuthGate>
+                  <Profile />
+                </AuthGate>
+              }
+            />
 
-          {/* Old route kept for now (compat) */}
-          <Route
-            path="/app/cabinet"
-            element={
-              <AuthGate>
-                <Cabinet />
-              </AuthGate>
-            }
-          />
+            {/* Old route kept for now (compat) */}
+            <Route
+              path="/app/cabinet"
+              element={
+                <AuthGate>
+                  <Cabinet />
+                </AuthGate>
+              }
+            />
 
-          <Route path="/" element={<Navigate to="/app" replace />} />
-          <Route path="*" element={<Navigate to="/app" replace />} />
-        </Routes>
-      </AppShell>
-    </BrowserRouter>
+            <Route path="/" element={<Navigate to="/app" replace />} />
+            <Route path="*" element={<Navigate to="/app" replace />} />
+          </Routes>
+        </AppShell>
+      </BrowserRouter>
+    </I18nProvider>
   </React.StrictMode>
 )

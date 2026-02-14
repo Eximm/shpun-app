@@ -1,5 +1,4 @@
 // api/src/modules/user/me.ts
-// Helper без регистрации роутов (чтобы не конфликтовать с modules/user/routes.ts)
 
 import { shmGetMe } from "../../shared/shm/shmClient.js";
 
@@ -12,12 +11,7 @@ export type MeView = {
   created?: string;
   lastLogin?: string;
 
-  // Будущий флаг из settings (через SHM template shpun_app)
-  // Сейчас может быть null/undefined, пока не подключим settings слой
-  passwordSet?: boolean | null;
-
-  // На будущее (под Google/Yandex и т.п.)
-  // telegramLinked?: boolean | null;
+  passwordSet: boolean;
 };
 
 export type MeResult =
@@ -32,6 +26,32 @@ function toNum(v: any, fallback = 0) {
 function toStr(v: any, fallback = "") {
   const s = String(v ?? "").trim();
   return s.length > 0 ? s : fallback;
+}
+
+// --- SHM template helper ---
+function shmBase(): string {
+  const b = String(process.env.SHM_BASE ?? "").trim();
+  if (!b) return "https://bill.shpyn.online/shm/";
+  return b.endsWith("/") ? b : b + "/";
+}
+
+async function getPasswordSet(shmSessionId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${shmBase()}v1/template/shpun_app`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session_id: shmSessionId,
+        action: "status",
+      }),
+    });
+
+    const json: any = await res.json().catch(() => null);
+    const flag = json?.data?.auth?.password_set;
+    return flag === 1 || flag === "1";
+  } catch {
+    return false;
+  }
 }
 
 export async function fetchMe(shmSessionId: string): Promise<MeResult> {
@@ -56,7 +76,8 @@ export async function fetchMe(shmSessionId: string): Promise<MeResult> {
     };
   }
 
-  // По swagger User: user_id, login, full_name, balance, bonus, created, last_login, ...
+  const passwordSet = await getPasswordSet(shmSessionId);
+
   const me: MeView = {
     userId: toNum(meRaw.user_id, 0),
     login: toStr(meRaw.login, ""),
@@ -65,9 +86,7 @@ export async function fetchMe(shmSessionId: string): Promise<MeResult> {
     bonus: toNum(meRaw.bonus, 0),
     created: toStr(meRaw.created, "") || undefined,
     lastLogin: toStr(meRaw.last_login, "") || undefined,
-
-    // пока не подключили settings → неизвестно
-    passwordSet: null,
+    passwordSet,
   };
 
   if (!me.userId || !me.login) {

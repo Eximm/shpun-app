@@ -10,8 +10,8 @@ import {
   getSessionFromRequest,
 } from "../../shared/session/sessionStore.js";
 
-const ALLOWED_PROVIDERS = new Set(["telegram", "google", "yandex", "email"] as const);
-type AllowedProvider = "telegram" | "google" | "yandex" | "email";
+const ALLOWED_PROVIDERS = new Set(["telegram", "password", "google", "yandex"] as const);
+type AllowedProvider = "telegram" | "password" | "google" | "yandex";
 
 function asProvider(v: any): AllowedProvider | null {
   const p = String(v ?? "").trim().toLowerCase();
@@ -19,26 +19,61 @@ function asProvider(v: any): AllowedProvider | null {
 }
 
 /**
- * Пока у нас нет настоящего флага password_set из settings,
- * используем аккуратную эвристику:
- * - если логин похож на "@<digits>" (типичный тех-логин из телеги)
- * - или логин пустой
- * -> предлагаем set_password
- *
- * Как только подключим SHM template shpun_app -> заменим на реальный password_set.
+ * SHM template caller: POST /shm/v1/template/shpun_app
+ * ВАЖНО: base должен заканчиваться на "/shm/" (как у нас принято в проекте).
  */
-function inferNextStep(login: string | undefined | null): "set_password" | "cabinet" {
-  const l = String(login ?? "").trim();
-  if (!l) return "set_password";
-  if (/^@\d+$/.test(l)) return "set_password";
-  return "cabinet";
+function shmBase(): string {
+  const b = String(process.env.SHM_BASE ?? "").trim();
+  // ожидаем вида: https://bill.shpyn.online/shm/
+  if (!b) return "https://bill.shpyn.online/shm/";
+  return b.endsWith("/") ? b : b + "/";
+}
+
+async function callShmTemplate<T = any>(sessionId: string, action: string, extraData?: any): Promise<T> {
+  const url = `${shmBase()}v1/template/shpun_app`;
+  const body = JSON.stringify({ session_id: sessionId, action, ...(extraData ? { data: extraData } : {}) });
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body,
+  });
+
+  const text = await res.text();
+  let json: any;
+  try {
+    json = text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error(`SHM template non-JSON response (${res.status}): ${text?.slice(0, 200)}`);
+  }
+
+  if (!res.ok) {
+    const msg = json?.error || json?.message || `SHM template failed: ${res.status}`;
+    throw new Error(msg);
+  }
+
+  return json as T;
+}
+
+/**
+ * Берём password_set из shpun_app status.
+ * Возвращаем 0/1, если не получилось — считаем 0 (чтобы в первый раз не потерять onboarding).
+ */
+async function getPasswordSetFlag(shmSessionId: string): Promise<0 | 1> {
+  try {
+    const r: any = await callShmTemplate(shmSessionId, "status");
+    const v = r?.data?.auth?.password_set;
+    return v === 1 || v === "1" ? 1 : 0;
+  } catch {
+    return 0;
+  }
 }
 
 export async function authRoutes(app: FastifyInstance) {
   // ====== POST /api/auth/:provider ======
   // body зависит от провайдера:
   // telegram: { initData }
-  // password/email (в будущем): { login, password }
+  // password: { login, password }
   app.post("/auth/:provider", async (req, reply) => {
     const { provider: rawProvider } = req.params as { provider: string };
     const provider = asProvider(rawProvider);
@@ -58,7 +93,13 @@ export async function authRoutes(app: FastifyInstance) {
       createdAt: Date.now(),
     });
 
-    const next = inferNextStep(result.login);
+    // ✅ Ненавязчивый onboarding:
+    // Только при Telegram и только если password_set == 0.
+    let next: "set_password" | "cabinet" = "cabinet";
+    if (provider === "telegram") {
+      const ps = await getPasswordSetFlag(result.shmSessionId!);
+      next = ps === 1 ? "cabinet" : "set_password";
+    }
 
     return reply
       .setCookie("sid", localSid, {
@@ -71,7 +112,7 @@ export async function authRoutes(app: FastifyInstance) {
         ok: true,
         user_id: result.shmUserId,
         login: result.login ?? "",
-        next, // фронту сразу понятно: set_password или cabinet
+        next, // фронту понятно: set_password только 1 раз
       });
   });
 
@@ -83,7 +124,18 @@ export async function authRoutes(app: FastifyInstance) {
     const r = await setPassword(req, password);
     if (!r.ok) return reply.code(r.status || 400).send(r);
 
-    return reply.send({ ok: true });
+    // ✅ фиксируем флаг password_set в SHM (shpun_app)
+    try {
+      const s = getSessionFromRequest(req);
+      const shmSessionId = s?.shmSessionId;
+      if (shmSessionId) {
+        await callShmTemplate(shmSessionId, "password.mark_set");
+      }
+    } catch {
+      // не валим операцию установки пароля, даже если отметка не удалась
+    }
+
+    return reply.send({ ok: true, password_set: 1 });
   });
 
   // ====== GET /api/auth/status ======

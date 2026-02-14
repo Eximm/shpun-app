@@ -3,6 +3,7 @@
 import { telegramAuth } from "./providers/telegram.js";
 import { googleAuth } from "./providers/google.js";
 import { yandexAuth } from "./providers/yandex.js";
+import { passwordAuth } from "./providers/password.js";
 
 export interface AuthResult {
   ok: boolean;
@@ -15,13 +16,13 @@ export interface AuthResult {
   login?: string;
 }
 
-export async function handleAuth(
-  provider: string,
-  body: any
-): Promise<AuthResult> {
+export async function handleAuth(provider: string, body: any): Promise<AuthResult> {
   switch (provider) {
     case "telegram":
       return telegramAuth(body);
+
+    case "password":
+      return passwordAuth(body);
 
     case "google":
       return googleAuth(body);

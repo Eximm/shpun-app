@@ -1,19 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { apiFetch } from '../shared/api/client'
-
-type MeResponse = {
-  ok: boolean
-  profile?: { login?: string | null }
-  error?: string
-}
-
-type AuthResponse = {
-  ok: boolean
-  login?: string
-  next?: 'set_password' | 'cabinet'
-  error?: string
-}
+import type { MeResponse, PasswordSetResponse } from '../shared/api/types'
 
 function pwdScore(p: string) {
   // простая “качелька” для UI: не безопасность, а UX
@@ -60,6 +48,8 @@ export function SetPassword() {
       if (login) return
       try {
         const me = await apiFetch<MeResponse>('/me', { method: 'GET' })
+        if (!me.ok) throw new Error(me.error || 'Not authenticated')
+
         const l = String(me?.profile?.login ?? '').trim()
         if (alive && l) setLogin(l)
       } catch (e: any) {
@@ -81,10 +71,12 @@ export function SetPassword() {
     setErr(null)
 
     try {
-      await apiFetch<{ ok: boolean; error?: string }>('/auth/password/set', {
+      const res = await apiFetch<PasswordSetResponse>('/auth/password/set', {
         method: 'POST',
         body: JSON.stringify({ password })
       })
+
+      if (!res.ok) throw new Error(res.error || 'Failed to set password')
 
       // После установки пароля — сразу в кабинет
       nav('/app/cabinet', { replace: true })

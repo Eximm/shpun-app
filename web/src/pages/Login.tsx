@@ -1,6 +1,8 @@
 ﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { apiFetch } from '../shared/api/client'
+import type { AuthResponse } from '../shared/api/types'
+import { useI18n } from '../shared/i18n'
 
 type TgWebApp = {
   initData?: string
@@ -53,14 +55,8 @@ function openInTelegram() {
 
 type Mode = 'telegram' | 'web'
 
-type AuthOk = {
-  ok: true
-  login?: string
-  user_id?: number
-  next?: 'set_password' | 'cabinet'
-}
-
 export function Login() {
+  const { t } = useI18n()
   const nav = useNavigate()
   const loc: any = useLocation()
 
@@ -77,9 +73,16 @@ export function Login() {
   const autoLoginStarted = useRef(false)
   const canPasswordLogin = login.trim().length > 0 && password.length > 0
 
-  function goAfterAuth(r?: Partial<AuthOk>) {
-    const next = r?.next || 'cabinet'
-    const loginFromApi = String(r?.login ?? '').trim()
+  function goAfterAuth(r?: AuthResponse) {
+    const ok = !!r && (r as any).ok === true
+    if (!ok) {
+      const msg = (r as any)?.error
+      if (msg) setErr(String(msg))
+      return
+    }
+
+    const next = (r as any).next || 'cabinet'
+    const loginFromApi = String((r as any).login ?? '').trim()
 
     if (next === 'set_password') {
       nav('/app/set-password', { replace: true, state: { login: loginFromApi } })
@@ -95,14 +98,13 @@ export function Login() {
     setLoading(true)
     setErr(null)
     try {
-      await apiFetch('/auth/password', {
+      const r = await apiFetch<AuthResponse>('/auth/password', {
         method: 'POST',
-        body: JSON.stringify({ login: login.trim(), password })
+        body: JSON.stringify({ login: login.trim(), password }),
       })
-      // парольный логин сразу в кабинет
-      goAfterAuth({ next: 'cabinet' })
+      goAfterAuth(r)
     } catch (e: any) {
-      setErr(e?.message || 'Password login failed')
+      setErr(e?.message || t('error.password_login_failed'))
     } finally {
       setLoading(false)
     }
@@ -111,22 +113,20 @@ export function Login() {
   async function telegramLogin() {
     const initData = getTelegramInitData()
     if (!initData) {
-      setErr('Open this app inside Telegram to sign in.')
+      setErr(t('error.open_in_tg'))
       return
     }
 
     setLoading(true)
     setErr(null)
     try {
-      const r = await apiFetch<AuthOk>('/auth/telegram', {
+      const r = await apiFetch<AuthResponse>('/auth/telegram', {
         method: 'POST',
-        body: JSON.stringify({ initData })
+        body: JSON.stringify({ initData }),
       })
-
-      // ВАЖНО: теперь решаем следующий шаг по "next"
       goAfterAuth(r)
     } catch (e: any) {
-      setErr(e?.message || 'Telegram login failed')
+      setErr(e?.message || t('error.telegram_login_failed'))
     } finally {
       setLoading(false)
     }
@@ -137,7 +137,6 @@ export function Login() {
     tg?.ready?.()
     tg?.expand?.()
 
-    // Telegram-first: авто-логин один раз
     if (mode === 'telegram' && !autoLoginStarted.current) {
       autoLoginStarted.current = true
       telegramLogin()
@@ -151,50 +150,86 @@ export function Login() {
         <div className="card__body">
           <div className="auth__head">
             <div>
-              <h1 className="h1">Sign in</h1>
+              <h1 className="h1">{t('login.title')}</h1>
 
               {mode === 'telegram' ? (
-                <p className="p">
-                  We&apos;ll sign you in via <b>Telegram</b>. After that, we&apos;ll ask you to set a password and show your login.
-                </p>
+                <p className="p">{t('login.desc.tg')}</p>
               ) : (
-                <p className="p">
-                  Sign in works via <b>Telegram</b>. Open this app from our bot to continue.
-                </p>
+                <p className="p">{t('login.desc.web')}</p>
               )}
             </div>
 
             <span className="badge">
-              {mode === 'telegram' ? 'Telegram WebApp' : 'Web mode'}
+              {mode === 'telegram' ? t('login.badge.tg') : t('login.badge.web')}
             </span>
+          </div>
+
+          {/* “цеплялка”: что будет внутри */}
+          <div className="pre" style={{ marginTop: 10 }}>
+            <div style={{ fontWeight: 900, marginBottom: 8 }}>{t('login.what.title')}</div>
+            <div style={{ display: 'grid', gap: 6 }}>
+              <div>{t('login.what.1')}</div>
+              <div>{t('login.what.2')}</div>
+              <div>{t('login.what.3')}</div>
+              <div>{t('login.what.4')}</div>
+            </div>
           </div>
 
           {mode === 'web' && (
             <>
-              <div className="auth__actions">
-                <button
-                  type="button"
-                  className="btn btn--primary"
-                  onClick={openInTelegram}
-                >
-                  Open in Telegram
+              <div className="auth__actions" style={{ marginTop: 12 }}>
+                <button type="button" className="btn btn--primary" onClick={openInTelegram}>
+                  {t('login.cta.open_tg')}
                 </button>
 
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => window.location.reload()}
-                >
-                  Refresh
+                <button type="button" className="btn" onClick={() => window.location.reload()}>
+                  {t('login.cta.refresh')}
                 </button>
+              </div>
+
+              <div className="pre" style={{ marginTop: 12 }}>
+                <b>{t('login.why.title')}</b> {t('login.why.text')}
               </div>
 
               <div className="auth__divider">
-                <span>already set a password?</span>
+                <span>{t('login.divider.providers')}</span>
+              </div>
+
+              <div className="auth__providers">
+                <button className="btn auth__provider" onClick={openInTelegram} disabled={loading} type="button">
+                  <span className="auth__providerIcon">✈️</span>
+                  <span className="auth__providerText">
+                    Telegram
+                    <span className="auth__providerHint">{t('login.providers.telegram.hint.web')}</span>
+                  </span>
+                  <span className="auth__providerRight">→</span>
+                </button>
+
+                <button className="btn auth__provider" disabled={true} type="button">
+                  <span className="auth__providerIcon">🟦</span>
+                  <span className="auth__providerText">
+                    Google
+                    <span className="auth__providerHint">{t('login.providers.google.hint')}</span>
+                  </span>
+                  <span className="auth__providerRight">🔒</span>
+                </button>
+
+                <button className="btn auth__provider" disabled={true} type="button">
+                  <span className="auth__providerIcon">🟨</span>
+                  <span className="auth__providerText">
+                    Yandex
+                    <span className="auth__providerHint">{t('login.providers.yandex.hint')}</span>
+                  </span>
+                  <span className="auth__providerRight">🔒</span>
+                </button>
+              </div>
+
+              <div className="auth__divider" style={{ marginTop: 14 }}>
+                <span>{t('login.divider.password')}</span>
               </div>
 
               <details className="auth__details">
-                <summary className="auth__detailsSummary">Sign in with password</summary>
+                <summary className="auth__detailsSummary">{t('login.password.summary')}</summary>
 
                 <form
                   className="auth__form"
@@ -205,10 +240,10 @@ export function Login() {
                 >
                   <div className="auth__grid">
                     <label className="field">
-                      <span className="field__label">Login</span>
+                      <span className="field__label">{t('login.password.login')}</span>
                       <input
                         className="input"
-                        placeholder="e.g. @142912013"
+                        placeholder={t('login.password.login_ph')}
                         value={login}
                         onChange={(e) => setLogin(e.target.value)}
                         autoComplete="username"
@@ -218,10 +253,10 @@ export function Login() {
                     </label>
 
                     <label className="field">
-                      <span className="field__label">Password</span>
+                      <span className="field__label">{t('login.password.password')}</span>
                       <input
                         className="input"
-                        placeholder="••••••••"
+                        placeholder={t('login.password.password_ph')}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         type="password"
@@ -232,22 +267,17 @@ export function Login() {
                   </div>
 
                   <div className="auth__actions">
-                    <button
-                      type="submit"
-                      className="btn btn--primary"
-                      disabled={loading || !canPasswordLogin}
-                    >
-                      {loading ? 'Signing in…' : 'Sign in'}
+                    <button type="submit" className="btn btn--primary" disabled={loading || !canPasswordLogin}>
+                      {loading ? t('login.password.submit_loading') : t('login.password.submit')}
                     </button>
 
-                    <button
-                      type="button"
-                      className="btn"
-                      disabled={true}
-                      title="Coming soon"
-                    >
-                      Forgot password
+                    <button type="button" className="btn" disabled={true} title="Coming soon">
+                      {t('login.password.forgot')}
                     </button>
+                  </div>
+
+                  <div className="pre" style={{ marginTop: 12 }}>
+                    {t('login.password.tip')}
                   </div>
                 </form>
               </details>
@@ -256,74 +286,106 @@ export function Login() {
 
           {mode === 'telegram' && (
             <>
-              <div className="auth__actions">
-                <button
-                  type="button"
-                  className="btn btn--primary"
-                  onClick={telegramLogin}
-                  disabled={loading}
-                >
-                  {loading ? 'Signing in…' : 'Continue with Telegram'}
+              <div className="auth__actions" style={{ marginTop: 12 }}>
+                <button type="button" className="btn btn--primary" onClick={telegramLogin} disabled={loading}>
+                  {loading ? t('login.tg.cta_loading') : t('login.tg.cta')}
                 </button>
 
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => window.location.reload()}
-                  disabled={loading}
-                >
-                  Reload
+                <button type="button" className="btn" onClick={() => window.location.reload()} disabled={loading}>
+                  {t('login.tg.reload')}
                 </button>
+              </div>
+
+              <div className="pre" style={{ marginTop: 12 }}>
+                <b>{t('login.tg.secure.title')}</b> {t('login.tg.secure.text')}
               </div>
 
               <div className="auth__divider">
-                <span>more methods later</span>
+                <span>{t('login.divider.providers')}</span>
               </div>
 
               <div className="auth__providers">
-                <button
-                  className="btn auth__provider"
-                  onClick={telegramLogin}
-                  disabled={loading}
-                  title="Login via Telegram"
-                  type="button"
-                >
+                <button className="btn auth__provider" onClick={telegramLogin} disabled={loading} type="button">
                   <span className="auth__providerIcon">✈️</span>
                   <span className="auth__providerText">
                     Telegram
-                    <span className="auth__providerHint">Fast login in WebApp</span>
+                    <span className="auth__providerHint">{t('login.providers.telegram.hint.tg')}</span>
                   </span>
                   <span className="auth__providerRight">→</span>
                 </button>
 
-                <button
-                  className="btn auth__provider"
-                  disabled={true}
-                  title="Coming soon"
-                  type="button"
-                >
+                <button className="btn auth__provider" disabled={true} type="button">
                   <span className="auth__providerIcon">🟦</span>
                   <span className="auth__providerText">
                     Google
-                    <span className="auth__providerHint">Coming soon</span>
+                    <span className="auth__providerHint">{t('login.providers.google.hint')}</span>
                   </span>
                   <span className="auth__providerRight">🔒</span>
                 </button>
 
-                <button
-                  className="btn auth__provider"
-                  disabled={true}
-                  title="Coming soon"
-                  type="button"
-                >
+                <button className="btn auth__provider" disabled={true} type="button">
                   <span className="auth__providerIcon">🟨</span>
                   <span className="auth__providerText">
                     Yandex
-                    <span className="auth__providerHint">Coming soon</span>
+                    <span className="auth__providerHint">{t('login.providers.yandex.hint')}</span>
                   </span>
                   <span className="auth__providerRight">🔒</span>
                 </button>
               </div>
+
+              <div className="auth__divider" style={{ marginTop: 14 }}>
+                <span>{t('login.backup.divider')}</span>
+              </div>
+
+              <details className="auth__details">
+                <summary className="auth__detailsSummary">{t('login.backup.summary')}</summary>
+
+                <form
+                  className="auth__form"
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    passwordLogin()
+                  }}
+                >
+                  <div className="auth__grid">
+                    <label className="field">
+                      <span className="field__label">{t('login.password.login')}</span>
+                      <input
+                        className="input"
+                        placeholder={t('login.password.login_ph')}
+                        value={login}
+                        onChange={(e) => setLogin(e.target.value)}
+                        autoComplete="username"
+                        disabled={loading}
+                        inputMode="text"
+                      />
+                    </label>
+
+                    <label className="field">
+                      <span className="field__label">{t('login.password.password')}</span>
+                      <input
+                        className="input"
+                        placeholder={t('login.password.password_ph')}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        type="password"
+                        autoComplete="current-password"
+                        disabled={loading}
+                      />
+                    </label>
+                  </div>
+
+                  <div className="auth__actions">
+                    <button type="submit" className="btn btn--primary" disabled={loading || !canPasswordLogin}>
+                      {loading ? t('login.password.submit_loading') : t('login.password.submit')}
+                    </button>
+
+                    <button type="button" className="btn" disabled={true} title="Coming soon">
+                      {t('login.password.forgot')}
+                    </button>
+                  </div>
+                </form>
+              </details>
             </>
           )}
 

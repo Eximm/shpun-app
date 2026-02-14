@@ -9,6 +9,11 @@ function toDisplayName(me: any): string {
   return fullName || login || (id ? `User #${id}` : "User");
 }
 
+function toNum(v: any, fallback = 0) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 export async function userRoutes(app: FastifyInstance) {
   // ====== GET /api/me ======
   app.get("/me", async (req, reply) => {
@@ -30,29 +35,35 @@ export async function userRoutes(app: FastifyInstance) {
 
     const meRaw = meRes.meRaw;
 
-    // Стабильный контракт для фронта (beta-friendly)
-    const userId = Number(meRaw.user_id ?? 0) || 0;
-    const balance = Number(meRaw.balance ?? 0) || 0;
-    const bonus = Number(meRaw.bonus ?? 0) || 0;
-    const discount = Number(meRaw.discount ?? 0) || 0;
+    // Стабильный контракт для фронта
+    const userId = toNum(meRaw.user_id, 0);
+    const balance = toNum(meRaw.balance, 0);
+    const bonus = toNum(meRaw.bonus, 0);
+    const discount = toNum(meRaw.discount, 0);
 
-    return reply.send({
+    const payload: any = {
       ok: true,
       profile: {
         id: userId,
         displayName: toDisplayName(meRaw),
         login: meRaw.login ?? null,
         fullName: meRaw.full_name ?? null,
-        // задел под онбординг: покажем флаг, когда подключим settings
-        passwordSet: meRes.me.passwordSet ?? null,
+
+        // ✅ теперь это реальный boolean из shpun_app status
+        passwordSet: !!meRes.me.passwordSet,
       },
       balance: { amount: balance, currency: "RUB" },
       bonus,
       discount,
-      // В бете оставим raw для дебага/диагностики (потом уберём)
-      meRaw,
       shm: { status: 200 },
-    });
+    };
+
+    // ✅ meRaw оставим только в dev (чтобы в проде не светить лишнее)
+    if (process.env.NODE_ENV !== "production") {
+      payload.meRaw = meRaw;
+    }
+
+    return reply.send(payload);
   });
 
   // ⚠️ ВАЖНО:
