@@ -1,32 +1,48 @@
-﻿import { useEffect, useState } from 'react'
+﻿// web/src/app/auth/useMe.ts
+import { useEffect, useState } from 'react'
 import { apiFetch } from '../../shared/api/client'
 
-export type Me = {
+export type MeResponse = {
   ok: true
-  profile: { id: string; displayName: string }
+  profile: {
+    id: number
+    displayName: string
+    login: string | null
+    fullName: string | null
+    passwordSet: boolean
+    created?: string | null
+    lastLogin?: string | null
+  }
   balance: { amount: number; currency: string }
-  services: { active: number; blocked: number; expired: number }
+  bonus: number
+  discount: number
+  shm?: { status?: number }
+  meRaw?: any // только в dev, бэк сам решает
 }
 
 export function useMe() {
-  const [me, setMe] = useState<Me | null>(null)
+  const [me, setMe] = useState<MeResponse | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<Error | null>(null)
 
-  async function refresh() {
+  async function refetch() {
     setLoading(true)
+    setError(null)
     try {
-      const data = await apiFetch<Me>('/me')
+      const data = await apiFetch<MeResponse>('/me')
       setMe(data)
-    } catch {
+    } catch (e: any) {
       setMe(null)
+      setError(e instanceof Error ? e : new Error(String(e?.message || 'me_failed')))
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    refresh()
+    refetch()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  return { me, loading, refresh }
+  return { me, loading, error, refetch }
 }

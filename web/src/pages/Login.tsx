@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { apiFetch } from '../shared/api/client'
 import type { AuthResponse } from '../shared/api/types'
@@ -79,8 +79,10 @@ export function Login() {
   const nav = useNavigate()
   const loc: any = useLocation()
 
-  const tgInitData = useMemo(() => getTelegramInitData(), [])
-  const mode: Mode = tgInitData ? 'telegram' : 'web'
+  // ВАЖНО: определяем режим по наличию Telegram.WebApp, а не по initData на первом рендере
+  const mode: Mode = getTelegramWebApp() ? 'telegram' : 'web'
+
+  const [tgInitData, setTgInitData] = useState<string | null>(null)
 
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState<string | null>(null)
@@ -130,8 +132,9 @@ export function Login() {
   }
 
   async function telegramLogin() {
-    const initData = getTelegramInitData()
+    const initData = tgInitData || getTelegramInitData()
     if (!initData) {
+      // Мы в Telegram, но initData ещё не пришёл/не подхватился — попросим перезапуск
       setErr(t('error.open_in_tg'))
       return
     }
@@ -156,9 +159,28 @@ export function Login() {
     tg?.ready?.()
     tg?.expand?.()
 
-    if (mode === 'telegram' && !autoLoginStarted.current) {
-      autoLoginStarted.current = true
-      telegramLogin()
+    if (mode === 'telegram') {
+      // initData иногда не сразу доступен — подхватываем несколько раз
+      const pull = () => setTgInitData(getTelegramInitData())
+
+      pull()
+      const t1 = window.setTimeout(pull, 50)
+      const t2 = window.setTimeout(pull, 200)
+      const t3 = window.setTimeout(pull, 600)
+
+      // Автологин — с небольшой задержкой, чтобы initData успел появиться
+      if (!autoLoginStarted.current) {
+        autoLoginStarted.current = true
+        window.setTimeout(() => {
+          telegramLogin()
+        }, 120)
+      }
+
+      return () => {
+        window.clearTimeout(t1)
+        window.clearTimeout(t2)
+        window.clearTimeout(t3)
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode])

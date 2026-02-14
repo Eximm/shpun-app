@@ -6,6 +6,7 @@ import { authRoutes } from '../../modules/auth/routes.js'
 import { userRoutes } from '../../modules/user/routes.js'
 import { servicesRoutes } from '../../modules/services/routes.js'
 import { paymentsRoutes } from '../../modules/payments/routes.js'
+import { activityRoutes } from '../../modules/activity/routes.js'
 
 export async function registerRoutes(app: FastifyInstance) {
   await app.register(
@@ -14,6 +15,7 @@ export async function registerRoutes(app: FastifyInstance) {
       await userRoutes(api)
       await servicesRoutes(api)
       await paymentsRoutes(api)
+      await activityRoutes(api)
     },
     { prefix: '/api' }
   )

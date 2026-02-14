@@ -1,6 +1,9 @@
 const API_BASE = '/api'
 
-export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function apiFetch<T = unknown>(
+  path: string,
+  init: RequestInit = {}
+): Promise<T> {
   const headers = new Headers(init.headers || {})
 
   // Content-Type ставим только если реально отправляем body
@@ -12,16 +15,18 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers,
-    credentials: 'include'
+    credentials: 'include',
   })
 
   // 204 No Content
-  if (res.status === 204) return null as unknown as T
+  if (res.status === 204) {
+    return null as T
+  }
 
   const text = await res.text()
 
-  // Пытаемся распарсить JSON, но не падаем, если пришёл текст/HTML
-  let data: any = null
+  let data: unknown = null
+
   if (text) {
     try {
       data = JSON.parse(text)
@@ -31,8 +36,12 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   }
 
   if (!res.ok) {
-    const msg = data?.error || data?.message || `Request failed: ${res.status}`
-    throw new Error(msg)
+    const err =
+      typeof data === 'object' && data !== null
+        ? (data as any).error || (data as any).message
+        : undefined
+
+    throw new Error(err || `Request failed: ${res.status}`)
   }
 
   return data as T

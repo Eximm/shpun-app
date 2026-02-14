@@ -166,6 +166,14 @@ body {
   font-size: 22px;
   letter-spacing: 0.2px;
 }
+
+.h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: 0.1px;
+}
+
 .p {
   margin: 10px 0 0 0;
   color: var(--muted);
@@ -271,6 +279,202 @@ body {
   overflow: auto;
   font-size: 12px;
   line-height: 1.4;
+}
+
+/* ============================================================
+   Cabinet showcase helpers (витрина)
+   ============================================================ */
+
+.kicker {
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.68);
+  font-weight: 900;
+}
+
+.muted {
+  color: var(--muted);
+  opacity: 0.95;
+  font-size: 13px;
+}
+
+.dot {
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.35;
+  margin: 0 8px;
+  transform: translateY(-2px);
+}
+
+/* Money block */
+.money { margin-top: 10px; }
+.money__value {
+  font-size: 40px;
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: 0.2px;
+}
+.money__meta {
+  margin-top: 6px;
+  color: rgba(255,255,255,0.74);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+/* Chips */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.1px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.86);
+}
+
+.chip--ok {
+  border-color: rgba(77,215,255,0.34);
+  background: rgba(77,215,255,0.06);
+}
+
+.chip--bad {
+  border-color: rgba(255,77,109,0.38);
+  background: rgba(255,77,109,0.08);
+}
+
+.chip--warn {
+  border-color: rgba(255,184,107,0.36);
+  background: rgba(255,184,107,0.08);
+}
+
+.chip--soft {
+  opacity: 0.92;
+}
+
+/* List cards */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.list__item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.035);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.list__main { min-width: 0; }
+
+.list__title {
+  font-weight: 900;
+  letter-spacing: 0.1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.list__sub {
+  margin-top: 4px;
+  font-size: 13px;
+  color: rgba(255,255,255,0.70);
+  line-height: 1.35;
+}
+
+.list__side {
+  display: flex;
+  align-items: flex-start;
+  flex: 0 0 auto;
+}
+
+/* Two-column block */
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+@media (min-width: 720px) {
+  .grid2 { grid-template-columns: 1fr 1fr; }
+}
+
+/* Mini panels */
+.mini {
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.035);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.mini__title {
+  font-weight: 900;
+  letter-spacing: 0.1px;
+  color: rgba(255,255,255,0.84);
+}
+
+.mini__list {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mini__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mini__main { min-width: 0; }
+
+.mini__strong {
+  font-weight: 950;
+  letter-spacing: 0.1px;
+}
+
+.mini__muted {
+  color: rgba(255,255,255,0.62);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.mini__empty {
+  margin-top: 10px;
+  color: rgba(255,255,255,0.62);
+  font-size: 13px;
+}
+
+/* Skeleton loading */
+.skeleton {
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,0.04),
+    rgba(255,255,255,0.09),
+    rgba(255,255,255,0.04)
+  );
+  background-size: 200% 100%;
+  animation: sk 1.2s ease-in-out infinite;
+}
+
+.skeleton.h1 { height: 28px; }
+.skeleton.p { height: 16px; border-radius: 10px; }
+
+@keyframes sk {
+  0% { background-position: 0% 0; }
+  100% { background-position: -200% 0; }
 }
 
 /* 6) PWA Install banner (app-like, no Tailwind dependency) */

@@ -49,8 +49,12 @@ export async function userRoutes(app: FastifyInstance) {
         login: meRaw.login ?? null,
         fullName: meRaw.full_name ?? null,
 
-        // ✅ теперь это реальный boolean из shpun_app status
+        // ✅ реальный boolean из shpun_app status
         passwordSet: !!meRes.me.passwordSet,
+
+        // ✅ стабильные даты для витрины
+        created: meRes.me.created ?? null,
+        lastLogin: meRes.me.lastLogin ?? null,
       },
       balance: { amount: balance, currency: "RUB" },
       bonus,
