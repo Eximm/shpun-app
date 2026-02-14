@@ -1,2 +1,5 @@
-package-lock.json
-*.lock
+node_modules
+dist
+.git
+npm-debug.log
+.DS_Store
