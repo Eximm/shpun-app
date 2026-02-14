@@ -232,10 +232,48 @@ body {
 
 .btn--primary {
   border: 0;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
   color: #060814;
-  box-shadow: 0 10px 30px rgba(124, 92, 255, 0.30);
+
+  /* базовый градиент — как у тебя, но фиксируем поведение */
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+
+  /* мягкая "премиальная" подсветка вместо резкого глоу */
+  box-shadow:
+    0 10px 26px rgba(124, 92, 255, 0.22),
+    0 6px 18px rgba(77, 215, 255, 0.16);
+
+  /* плавность: важнее всего именно background/box-shadow */
+  transition:
+    background 220ms ease,
+    box-shadow 220ms ease,
+    transform 150ms ease,
+    opacity 150ms ease;
 }
+
+/* Переопределяем hover именно для primary, чтобы не срабатывал .btn:hover */
+.btn--primary:hover {
+  /* не "тухнем", а слегка "теплеем" */
+  background: linear-gradient(135deg, rgba(124, 92, 255, 0.95), rgba(77, 215, 255, 0.95));
+
+  box-shadow:
+    0 14px 30px rgba(124, 92, 255, 0.26),
+    0 10px 22px rgba(77, 215, 255, 0.20);
+
+  transform: translateY(-1px);
+}
+
+.btn--primary:active {
+  transform: translateY(0) scale(0.99);
+  box-shadow:
+    0 10px 24px rgba(124, 92, 255, 0.20),
+    0 6px 18px rgba(77, 215, 255, 0.14);
+}
+
+.btn--primary:disabled {
+  opacity: 0.60;
+  box-shadow: none;
+}
+
 .btn--danger {
   border: 0;
   background: linear-gradient(135deg, var(--danger), #ffb86b);
@@ -245,14 +283,37 @@ body {
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
+   gap: 8px;
+  padding: 7px 10px;
   border-radius: 999px;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid var(--border);
-  color: var(--muted);
+
+  /* аккуратный стеклянный фон */
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.10);
+
+  /* чуть меньше “серости”, больше контраста */
+  color: rgba(255,255,255,0.78);
   font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.12px;
+
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+
+  box-shadow: 0 10px 24px rgba(0,0,0,0.22);
 }
+
+/* добавим маленькую "точку статуса" */
+.badge::before{
+  content:"";
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  box-shadow: 0 0 16px rgba(124,92,255,0.42);
+  flex: 0 0 auto;
+}
+
 
 /* Key-value blocks */
 .kv {

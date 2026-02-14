@@ -323,13 +323,16 @@ export function Login() {
 
           {mode === 'telegram' && (
             <>
+              {/* Главная кнопка — на всю ширину */}
               <div className="auth__actions" style={{ marginTop: 12 }}>
-                <button type="button" className="btn btn--primary" onClick={telegramLogin} disabled={loading}>
+                <button
+                  type="button"
+                  className="btn btn--primary"
+                  onClick={telegramLogin}
+                  disabled={loading}
+                  style={{ width: '100%' }}
+                >
                   {loading ? t('login.tg.cta_loading') : t('login.tg.cta')}
-                </button>
-
-                <button type="button" className="btn" onClick={() => window.location.reload()} disabled={loading}>
-                  {t('login.tg.reload')}
                 </button>
               </div>
 
@@ -342,7 +345,13 @@ export function Login() {
               </div>
 
               <div className="auth__providers">
-                <button className="btn auth__provider" onClick={telegramLogin} disabled={loading} type="button">
+                <button
+                  className="btn auth__provider"
+                  onClick={telegramLogin}
+                  disabled={loading}
+                  type="button"
+                  style={{ width: '100%' }}
+                >
                   <span className="auth__providerIcon">✈️</span>
                   <span className="auth__providerText">
                     Telegram
@@ -351,7 +360,7 @@ export function Login() {
                   <span className="auth__providerRight">→</span>
                 </button>
 
-                <button className="btn auth__provider" disabled={true} type="button">
+                <button className="btn auth__provider" disabled={true} type="button" style={{ width: '100%' }}>
                   <span className="auth__providerIcon">🟦</span>
                   <span className="auth__providerText">
                     Google
@@ -360,7 +369,7 @@ export function Login() {
                   <span className="auth__providerRight">🔒</span>
                 </button>
 
-                <button className="btn auth__provider" disabled={true} type="button">
+                <button className="btn auth__provider" disabled={true} type="button" style={{ width: '100%' }}>
                   <span className="auth__providerIcon">🟨</span>
                   <span className="auth__providerText">
                     Yandex

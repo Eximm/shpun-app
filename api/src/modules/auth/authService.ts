@@ -5,6 +5,8 @@ import { googleAuth } from "./providers/google.js";
 import { yandexAuth } from "./providers/yandex.js";
 import { passwordAuth } from "./providers/password.js";
 
+export type AllowedProvider = "telegram" | "password" | "google" | "yandex";
+
 export interface AuthResult {
   ok: boolean;
   status?: number;
@@ -16,12 +18,14 @@ export interface AuthResult {
   login?: string;
 }
 
-export async function handleAuth(provider: string, body: any): Promise<AuthResult> {
+export async function handleAuth(provider: AllowedProvider | string, body: any): Promise<AuthResult> {
   switch (provider) {
     case "telegram":
       return telegramAuth(body);
 
     case "password":
+      // ✅ регистрация/логин будет реализована внутри passwordAuth(body)
+      // через body.mode = "register" | "login"
       return passwordAuth(body);
 
     case "google":

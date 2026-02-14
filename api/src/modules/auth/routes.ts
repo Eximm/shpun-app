@@ -18,47 +18,80 @@ function asProvider(v: any): AllowedProvider | null {
   return (ALLOWED_PROVIDERS as any).has(p) ? (p as AllowedProvider) : null;
 }
 
-/**
- * SHM template caller: POST /shm/v1/template/shpun_app
- * ВАЖНО: base должен заканчиваться на "/shm/" (как у нас принято в проекте).
- */
-function shmBase(): string {
-  const b = String(process.env.SHM_BASE ?? "").trim();
-  // ожидаем вида: https://bill.shpyn.online/shm/
-  if (!b) return "https://bill.shpyn.online/shm/";
-  return b.endsWith("/") ? b : b + "/";
+function shmRoot(): string {
+  const b0 = String(process.env.SHM_BASE ?? "").trim(); // ожидаем ".../shm/" или ".../shm"
+  const b = (b0 || "https://bill.shpyn.online/shm/").replace(/\/+$/, "");
+  if (b.endsWith("/shm/v1")) return b.slice(0, -3);
+  return b;
+}
+function shmV1(): string {
+  return `${shmRoot()}/v1`;
 }
 
+async function safeReadJson(res: Response): Promise<any | null> {
+  const ct = res.headers.get("content-type") || "";
+  if (!ct.includes("application/json")) return null;
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Получить user_id по session_id: GET /shm/v1/user
+ * SHM принимает session_id либо cookie, либо header session-id.
+ * Мы используем header session-id — это стабильнее в сервер-сервер.
+ */
+async function shmGetUserId(sessionId: string): Promise<number> {
+  const res = await fetch(`${shmV1()}/user`, {
+    method: "GET",
+    headers: {
+      accept: "application/json",
+      "session-id": sessionId,
+    },
+  });
+
+  const json = await safeReadJson(res);
+  const text = json ? "" : await res.text().catch(() => "");
+
+  if (!res.ok) {
+    throw new Error(`shm_user_failed:${res.status}:${String((json ?? text) || "").slice(0, 200)}`);
+  }
+
+  // Обычно это { data:[{user_id,...}], status:200, ... }
+  const u = Array.isArray(json?.data) ? json.data[0] : json?.data;
+  const userId = Number(u?.user_id ?? u?.id ?? 0) || 0;
+  if (!userId) throw new Error("shm_user_invalid_response");
+
+  return userId;
+}
+
+/**
+ * SHM template caller: POST /shm/v1/template/shpun_app
+ * (используется только для флагов onboarding/auth link, НЕ для регистрации)
+ */
 async function callShmTemplate<T = any>(sessionId: string, action: string, extraData?: any): Promise<T> {
-  const url = `${shmBase()}v1/template/shpun_app`;
+  const url = `${shmV1()}/template/shpun_app`;
   const body = JSON.stringify({ session_id: sessionId, action, ...(extraData ? { data: extraData } : {}) });
 
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", accept: "application/json" },
     body,
   });
 
-  const text = await res.text();
-  let json: any;
-  try {
-    json = text ? JSON.parse(text) : {};
-  } catch {
-    throw new Error(`SHM template non-JSON response (${res.status}): ${text?.slice(0, 200)}`);
-  }
+  const json = await safeReadJson(res);
+  const text = json ? "" : await res.text().catch(() => "");
 
   if (!res.ok) {
-    const msg = json?.error || json?.message || `SHM template failed: ${res.status}`;
-    throw new Error(msg);
+    const msg = (json as any)?.error || (json as any)?.message || `SHM template failed: ${res.status}`;
+    throw new Error(`${msg}:${String(text || "").slice(0, 200)}`);
   }
 
-  return json as T;
+  return (json ?? {}) as T;
 }
 
-/**
- * Берём password_set из shpun_app status.
- * Возвращаем 0/1, если не получилось — считаем 0 (чтобы в первый раз не потерять onboarding).
- */
 async function getPasswordSetFlag(shmSessionId: string): Promise<0 | 1> {
   try {
     const r: any = await callShmTemplate(shmSessionId, "status");
@@ -71,9 +104,10 @@ async function getPasswordSetFlag(shmSessionId: string): Promise<0 | 1> {
 
 export async function authRoutes(app: FastifyInstance) {
   // ====== POST /api/auth/:provider ======
-  // body зависит от провайдера:
   // telegram: { initData }
-  // password: { login, password }
+  // password:
+  //   login:    { login, password }
+  //   register: { login, password, mode:"register" }
   app.post("/auth/:provider", async (req, reply) => {
     const { provider: rawProvider } = req.params as { provider: string };
     const provider = asProvider(rawProvider);
@@ -85,21 +119,37 @@ export async function authRoutes(app: FastifyInstance) {
     const result = await handleAuth(provider, req.body ?? {});
     if (!result.ok) return reply.code(result.status || 400).send(result);
 
+    const shmSessionId = String(result.shmSessionId ?? "").trim();
+    if (!shmSessionId) {
+      return reply.code(502).send({ ok: false, status: 502, error: "no_shm_session" });
+    }
+
+    // ✅ ВАЖНО: гарантируем user_id через /v1/user
+    let shmUserId = Number(result.shmUserId ?? 0) || 0;
+    if (!shmUserId) {
+      try {
+        shmUserId = await shmGetUserId(shmSessionId);
+      } catch (e: any) {
+        return reply.code(502).send({ ok: false, status: 502, error: "shm_user_lookup_failed", detail: e?.message });
+      }
+    }
+
     const localSid = createLocalSid();
 
     putSession(localSid, {
-      shmSessionId: result.shmSessionId!,
-      shmUserId: result.shmUserId!,
+      shmSessionId,
+      shmUserId,
       createdAt: Date.now(),
     });
 
     // ✅ Ненавязчивый onboarding:
-    // Только при Telegram и только если password_set == 0.
     let next: "set_password" | "cabinet" = "cabinet";
     if (provider === "telegram") {
-      const ps = await getPasswordSetFlag(result.shmSessionId!);
+      const ps = await getPasswordSetFlag(shmSessionId);
       next = ps === 1 ? "cabinet" : "set_password";
     }
+
+    const loginFromApi = String(result.login ?? "").trim();
 
     return reply
       .setCookie("sid", localSid, {
@@ -110,9 +160,9 @@ export async function authRoutes(app: FastifyInstance) {
       })
       .send({
         ok: true,
-        user_id: result.shmUserId,
-        login: result.login ?? "",
-        next, // фронту понятно: set_password только 1 раз
+        user_id: shmUserId,
+        login: loginFromApi,
+        next,
       });
   });
 
@@ -122,30 +172,29 @@ export async function authRoutes(app: FastifyInstance) {
     const password = String(body.password ?? "").trim();
 
     const r = await setPassword(req, password);
-    if (!r.ok) return reply.code(r.status || 400).send(r);
+    if (!r.ok) return reply.code((r as any).status || 400).send(r);
 
-    // ✅ фиксируем флаг password_set в SHM (shpun_app)
+    // best-effort флаг password_set
     try {
       const s = getSessionFromRequest(req);
-      const shmSessionId = s?.shmSessionId;
+      const shmSessionId = (s as any)?.shmSessionId;
       if (shmSessionId) {
         await callShmTemplate(shmSessionId, "password.mark_set");
       }
     } catch {
-      // не валим операцию установки пароля, даже если отметка не удалась
+      // ignore
     }
 
     return reply.send({ ok: true, password_set: 1 });
   });
 
   // ====== GET /api/auth/status ======
-  // маленький дебаг-хелпер: есть ли сессия
   app.get("/auth/status", async (req, reply) => {
     const s = getSessionFromRequest(req);
     return reply.send({
       ok: true,
-      authenticated: !!s?.shmSessionId,
-      user_id: s?.shmUserId ?? null,
+      authenticated: !!(s as any)?.shmSessionId,
+      user_id: (s as any)?.shmUserId ?? null,
       has_sid_cookie: !!(req.cookies as any)?.sid,
     });
   });

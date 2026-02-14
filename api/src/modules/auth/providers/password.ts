@@ -2,89 +2,110 @@
 
 import type { AuthResult } from "../authService.js";
 
-/**
- * Нам нужен root вида: https://bill.shpyn.online/shm
- * Но в проекте встречается SHM_BASE_URL вида: https://bill.shpyn.online/shm/v1
- * Поэтому аккуратно нормализуем.
- */
+type Mode = "login" | "register";
+
 function shmRoot(): string {
-  const fromBase = String(process.env.SHM_BASE ?? "").trim(); // если есть — обычно ".../shm/"
-  if (fromBase) {
-    const b = fromBase.endsWith("/") ? fromBase.slice(0, -1) : fromBase;
-    // ожидаем ".../shm"
-    return b.endsWith("/shm") ? b : b;
-  }
-
-  const baseUrl = String(process.env.SHM_BASE_URL ?? "https://bill.shpyn.online/shm/v1").trim();
-  const b = baseUrl.replace(/\/+$/, ""); // trim trailing slash
-  // если это ".../shm/v1" → берём ".../shm"
-  if (b.endsWith("/shm/v1")) return b.slice(0, -3); // remove "/v1"
-  // если это ".../shm" → ок
-  if (b.endsWith("/shm")) return b;
-  // fallback
-  return "https://bill.shpyn.online/shm";
+  const b0 = String(process.env.SHM_BASE ?? "").trim();
+  const b = (b0 || "https://bill.shpyn.online/shm/").replace(/\/+$/, "");
+  if (b.endsWith("/shm/v1")) return b.slice(0, -3);
+  return b;
+}
+function shmV1(): string {
+  return `${shmRoot()}/v1`;
 }
 
-function toFormUrlEncoded(data: Record<string, string>) {
-  return Object.entries(data)
-    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
-    .join("&");
-}
-
-/**
- * Password auth через SHM:
- * POST /shm/user/auth.cgi  (x-www-form-urlencoded login/password)
- * Возвращает JSON { session_id, user_id, status, ... }
- */
-export async function passwordAuth(body: any): Promise<AuthResult> {
-  const login = String(body?.login ?? "").trim();
-  const password = String(body?.password ?? "").trim();
-
-  if (!login || !password) {
-    return { ok: false, status: 400, error: "login_and_password_required" };
-  }
-
+async function safeReadJson(res: Response): Promise<any | null> {
+  const ct = res.headers.get("content-type") || "";
+  if (!ct.includes("application/json")) return null;
   try {
-    const res = await fetch(`${shmRoot()}/user/auth.cgi`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/x-www-form-urlencoded",
-        accept: "application/json",
-      },
-      body: toFormUrlEncoded({ login, password }),
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+async function withTimeout<T>(ms: number, fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fn(controller.signal);
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+function normalizeLogin(v: any) {
+  return String(v ?? "").trim();
+}
+function normalizePassword(v: any) {
+  return String(v ?? "").trim();
+}
+function normalizeMode(v: any): Mode {
+  const s = String(v ?? "login").trim().toLowerCase();
+  return s === "register" ? "register" : "login";
+}
+
+async function shmRegister(login: string, password: string): Promise<{ ok: true } | { ok: false; status: number; detail: any }> {
+  return withTimeout(12_000, async (signal) => {
+    const res = await fetch(`${shmV1()}/user`, {
+      method: "PUT",
+      headers: { "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify({ login, password }),
+      signal,
     });
 
-    const json: any = await res.json().catch(() => undefined);
+    const json = await safeReadJson(res);
+    const text = json ? "" : await res.text().catch(() => "");
+
+    if (!res.ok) return { ok: false, status: res.status || 400, detail: json ?? text };
+    return { ok: true };
+  });
+}
+
+async function shmLogin(login: string, password: string): Promise<AuthResult> {
+  return withTimeout(12_000, async (signal) => {
+    const res = await fetch(`${shmV1()}/user/auth`, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify({ login, password }),
+      signal,
+    });
+
+    const json = await safeReadJson(res);
     const text = json ? "" : await res.text().catch(() => "");
 
     if (!res.ok) {
-      return {
-        ok: false,
-        status: res.status || 401,
-        error: "shm_auth_failed",
-        detail: json ?? text,
-      };
+      return { ok: false, status: res.status || 401, error: "shm_auth_failed", detail: json ?? text };
     }
 
-    const sessionId = String(json?.session_id ?? "").trim();
-    const userId = Number(json?.user_id ?? 0) || 0;
-
-    if (!sessionId || !userId) {
-      return {
-        ok: false,
-        status: 502,
-        error: "shm_auth_invalid_response",
-        detail: json ?? text,
-      };
+    const sessionId = String(json?.session_id ?? json?.id ?? "").trim();
+    if (!sessionId) {
+      return { ok: false, status: 502, error: "shm_auth_invalid_response", detail: json ?? text };
     }
 
-    return {
-      ok: true,
-      shmSessionId: sessionId,
-      shmUserId: userId,
-      login,
-    };
+    return { ok: true, shmSessionId: sessionId, login };
+  });
+}
+
+export async function passwordAuth(body: any): Promise<AuthResult> {
+  const login = normalizeLogin(body?.login);
+  const password = normalizePassword(body?.password);
+  const mode = normalizeMode(body?.mode);
+
+  if (!login || !password) return { ok: false, status: 400, error: "login_and_password_required" };
+  if (login.length < 3) return { ok: false, status: 400, error: "login_too_short" };
+  if (password.length < 8) return { ok: false, status: 400, error: "password_too_short" };
+
+  try {
+    if (mode === "register") {
+      const r = await shmRegister(login, password);
+      if (!r.ok) return { ok: false, status: r.status, error: "shm_register_failed", detail: r.detail };
+      return await shmLogin(login, password);
+    }
+
+    return await shmLogin(login, password);
   } catch (e: any) {
-    return { ok: false, status: 502, error: "shm_auth_exception", detail: e?.message };
+    const msg = e?.name === "AbortError" ? "timeout" : (e?.message || "network_error");
+    return { ok: false, status: 502, error: mode === "register" ? "shm_register_exception" : "shm_auth_exception", detail: msg };
   }
 }
