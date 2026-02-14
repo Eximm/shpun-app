@@ -1,5 +1,5 @@
 ﻿import type { FastifyInstance } from "fastify";
-import { getSession } from "../../shared/session/sessionStore.js";
+import { getSessionFromRequest } from "../../shared/session/sessionStore.js";
 import { shmGetMe, shmGetUserServices } from "../../shared/shm/shmClient.js";
 
 function clampInt(v: any, def: number, min: number, max: number) {
@@ -19,8 +19,7 @@ function toDisplayName(me: any): string {
 export async function userRoutes(app: FastifyInstance) {
   // ====== GET /api/me ======
   app.get("/me", async (req, reply) => {
-    const sid = (req.cookies as any)?.sid as string | undefined;
-    const s = getSession(sid);
+    const s = getSessionFromRequest(req);
 
     if (!s?.shmSessionId) {
       return reply.code(401).send({ ok: false, error: "not_authenticated" });
@@ -74,8 +73,7 @@ export async function userRoutes(app: FastifyInstance) {
 
   // ====== GET /api/services ======
   app.get("/services", async (req, reply) => {
-    const sid = (req.cookies as any)?.sid as string | undefined;
-    const s = getSession(sid);
+    const s = getSessionFromRequest(req);
 
     if (!s?.shmSessionId) {
       return reply.code(401).send({ ok: false, error: "not_authenticated" });
