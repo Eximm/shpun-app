@@ -1,6 +1,6 @@
 ﻿import type { FastifyInstance } from "fastify";
 import { getSessionFromRequest } from "../../shared/session/sessionStore.js";
-import { shmGetMe } from "../../shared/shm/shmClient.js";
+import { fetchMe } from "./me.js";
 
 function toDisplayName(me: any): string {
   const fullName = String(me?.full_name ?? "").trim();
@@ -18,28 +18,17 @@ export async function userRoutes(app: FastifyInstance) {
       return reply.code(401).send({ ok: false, error: "not_authenticated" });
     }
 
-    const r = await shmGetMe(s.shmSessionId);
+    const meRes = await fetchMe(s.shmSessionId);
 
-    if (!r.ok) {
-      return reply.code(r.status || 502).send({
+    if (!meRes.ok) {
+      return reply.code(meRes.status || 502).send({
         ok: false,
-        error: "shm_me_failed",
-        shm: r.json ?? r.text,
+        error: meRes.error,
+        shm: meRes.shm,
       });
     }
 
-    const meRaw =
-      r.json && Array.isArray((r.json as any).data) && (r.json as any).data[0]
-        ? (r.json as any).data[0]
-        : null;
-
-    if (!meRaw) {
-      return reply.code(502).send({
-        ok: false,
-        error: "shm_me_empty",
-        shm: r.json ?? r.text,
-      });
-    }
+    const meRaw = meRes.meRaw;
 
     // Стабильный контракт для фронта (beta-friendly)
     const userId = Number(meRaw.user_id ?? 0) || 0;
@@ -54,13 +43,15 @@ export async function userRoutes(app: FastifyInstance) {
         displayName: toDisplayName(meRaw),
         login: meRaw.login ?? null,
         fullName: meRaw.full_name ?? null,
+        // задел под онбординг: покажем флаг, когда подключим settings
+        passwordSet: meRes.me.passwordSet ?? null,
       },
       balance: { amount: balance, currency: "RUB" },
       bonus,
       discount,
       // В бете оставим raw для дебага/диагностики (потом уберём)
       meRaw,
-      shm: { status: r.status },
+      shm: { status: 200 },
     });
   });
 

@@ -9,6 +9,7 @@ import { Home } from './pages/Home'
 import { Services } from './pages/Services'
 import { Payments } from './pages/Payments'
 import { Profile } from './pages/Profile'
+import { SetPassword } from './pages/SetPassword'
 
 import { AuthGate } from './app/auth/AuthGate'
 import { InstallBanner } from './app/pwa/InstallBanner'
@@ -75,6 +76,17 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
               </AuthGate>
             }
           />
+
+          {/* Onboarding: set password right after Telegram auth */}
+          <Route
+            path="/app/set-password"
+            element={
+              <AuthGate>
+                <SetPassword />
+              </AuthGate>
+            }
+          />
+
           <Route
             path="/app/services"
             element={

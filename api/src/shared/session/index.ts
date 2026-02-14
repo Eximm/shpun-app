@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { shmGetUserServices } from "../../shared/shm/shmClient";
+import { shmGetUserServices } from "../../shared/shm/shmClient.js";
 
 /**
  * ВАЖНО: тут нужен доступ к shm_session_id из твоего session store.
@@ -9,31 +9,36 @@ import { shmGetUserServices } from "../../shared/shm/shmClient";
  * 2) присылаешь api/src/shared/session/* и я сделаю идеально под твою схему.
  */
 async function getShmSessionIdFromRequest(req: any): Promise<string | null> {
-  // ====== ВАРИАНТ A (пример): если у тебя есть req.cookies.sid ======
-  // const sid = req.cookies?.sid
-  // if (!sid) return null
-  // const s = getSession(sid) // <- твой sessionStore
-  // return s?.shm_session_id ?? null
-
-  // ====== ВАРИАНТ B (пример): если у тебя есть helper getSession(req) ======
-  // const s = getSession(req)
-  // return s?.shm_session_id ?? null
-
   return null; // <-- заменишь
 }
 
-type UiServiceStatus = "active" | "blocked" | "pending" | "not_paid" | "removed" | "error" | "init";
+type UiServiceStatus =
+  | "active"
+  | "blocked"
+  | "pending"
+  | "not_paid"
+  | "removed"
+  | "error"
+  | "init";
 
 function mapStatus(shmStatus: string | undefined): UiServiceStatus {
   switch ((shmStatus || "").toUpperCase()) {
-    case "ACTIVE": return "active";
-    case "BLOCK": return "blocked";
-    case "PROGRESS": return "pending";
-    case "NOT PAID": return "not_paid";
-    case "REMOVED": return "removed";
-    case "ERROR": return "error";
-    case "INIT": return "init";
-    default: return "init";
+    case "ACTIVE":
+      return "active";
+    case "BLOCK":
+      return "blocked";
+    case "PROGRESS":
+      return "pending";
+    case "NOT PAID":
+      return "not_paid";
+    case "REMOVED":
+      return "removed";
+    case "ERROR":
+      return "error";
+    case "INIT":
+      return "init";
+    default:
+      return "init";
   }
 }
 
@@ -62,10 +67,13 @@ export async function servicesModule(app: FastifyInstance) {
     const limit = Number((req.query as any)?.limit ?? 50);
     const offset = Number((req.query as any)?.offset ?? 0);
 
-    const r = await shmGetUserServices(shmSessionId, { limit, offset, filter: {} });
+    const r = await shmGetUserServices(shmSessionId, {
+      limit,
+      offset,
+      filter: {},
+    });
 
     if (!r.ok) {
-      // Если SHM сессию не принял — пробрасываем как not_authenticated
       if (r.status === 401 || r.status === 403) {
         return reply.code(401).send({ ok: false, error: "not_authenticated" });
       }
@@ -77,7 +85,6 @@ export async function servicesModule(app: FastifyInstance) {
       });
     }
 
-    // SHM: { data: [USObject], items, limit, offset, status }
     const data = (r.json as any)?.data ?? [];
     const items = Array.isArray(data) ? data : [];
 
@@ -98,27 +105,33 @@ export async function servicesModule(app: FastifyInstance) {
         title: String(svc?.name ?? `Service #${us?.service_id ?? ""}`),
         descr: String(svc?.descr ?? ""),
         category: String(svc?.category ?? ""),
-        status,                 // для UI
+        status,
         statusRaw: String(statusRaw ?? ""),
         createdAt,
         expireAt,
         daysLeft: daysUntil(expireAt),
         price: cost,
         periodMonths: period,
-        currency: "RUB",        // в SHM сейчас нет валюты в Service, считаем RUB
+        currency: "RUB",
       };
     });
 
-    // Summary для Home/Services
     const summary = {
       total: mapped.length,
       active: mapped.filter((x) => x.status === "active").length,
       blocked: mapped.filter((x) => x.status === "blocked").length,
       pending: mapped.filter((x) => x.status === "pending").length,
       notPaid: mapped.filter((x) => x.status === "not_paid").length,
-      expiringSoon: mapped.filter((x) => (x.daysLeft ?? 9999) >= 0 && (x.daysLeft ?? 9999) <= 7).length,
+      expiringSoon: mapped.filter(
+        (x) => (x.daysLeft ?? 9999) >= 0 && (x.daysLeft ?? 9999) <= 7
+      ).length,
       monthlyCost: mapped
-        .filter((x) => x.status === "active" || x.status === "pending" || x.status === "not_paid")
+        .filter(
+          (x) =>
+            x.status === "active" ||
+            x.status === "pending" ||
+            x.status === "not_paid"
+        )
         .reduce((s, x) => s + (Number(x.price) || 0), 0),
       currency: "RUB",
     };

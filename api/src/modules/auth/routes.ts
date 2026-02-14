@@ -1,102 +1,107 @@
-﻿import type { FastifyInstance } from "fastify";
-import {
-  shmAuthWithPassword,
-  shmAuthWithTelegramWebApp,
-} from "../../shared/shm/shmClient.js";
+﻿// api/src/modules/auth/routes.ts
+
+import type { FastifyInstance } from "fastify";
+import { handleAuth } from "./authService.js";
+import { setPassword } from "./password.js";
 import {
   createLocalSid,
   putSession,
   deleteSession,
+  getSessionFromRequest,
 } from "../../shared/session/sessionStore.js";
 
+const ALLOWED_PROVIDERS = new Set(["telegram", "google", "yandex", "email"] as const);
+type AllowedProvider = "telegram" | "google" | "yandex" | "email";
+
+function asProvider(v: any): AllowedProvider | null {
+  const p = String(v ?? "").trim().toLowerCase();
+  return (ALLOWED_PROVIDERS as any).has(p) ? (p as AllowedProvider) : null;
+}
+
+/**
+ * Пока у нас нет настоящего флага password_set из settings,
+ * используем аккуратную эвристику:
+ * - если логин похож на "@<digits>" (типичный тех-логин из телеги)
+ * - или логин пустой
+ * -> предлагаем set_password
+ *
+ * Как только подключим SHM template shpun_app -> заменим на реальный password_set.
+ */
+function inferNextStep(login: string | undefined | null): "set_password" | "cabinet" {
+  const l = String(login ?? "").trim();
+  if (!l) return "set_password";
+  if (/^@\d+$/.test(l)) return "set_password";
+  return "cabinet";
+}
+
 export async function authRoutes(app: FastifyInstance) {
-  // POST /api/auth/telegram
-  // body: { initData }
-  // -> SHM: GET /shm/v1/telegram/webapp/auth?initData=...
-  // <- { session_id }
-  app.post("/auth/telegram", async (req, reply) => {
-    const body = (req.body ?? {}) as any;
-    const initData = String(body.initData ?? "").trim();
+  // ====== POST /api/auth/:provider ======
+  // body зависит от провайдера:
+  // telegram: { initData }
+  // password/email (в будущем): { login, password }
+  app.post("/auth/:provider", async (req, reply) => {
+    const { provider: rawProvider } = req.params as { provider: string };
+    const provider = asProvider(rawProvider);
 
-    if (!initData) {
-      return reply.code(400).send({ ok: false, error: "initData_required" });
+    if (!provider) {
+      return reply.code(400).send({ ok: false, status: 400, error: "unknown_provider" });
     }
 
-    const r = await shmAuthWithTelegramWebApp(initData);
-
-    if (!r.ok || !r.json?.session_id) {
-      return reply.code(r.status || 401).send({
-        ok: false,
-        error: "telegram_auth_failed",
-        shm: r.json ?? r.text,
-      });
-    }
+    const result = await handleAuth(provider, req.body ?? {});
+    if (!result.ok) return reply.code(result.status || 400).send(result);
 
     const localSid = createLocalSid();
 
     putSession(localSid, {
-      shmSessionId: r.json.session_id,
-      shmUserId: r.json.user_id,
+      shmSessionId: result.shmSessionId!,
+      shmUserId: result.shmUserId!,
       createdAt: Date.now(),
     });
 
-    reply
-      .setCookie("sid", localSid, {
-        httpOnly: true,
-        sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
-        path: "/",
-        // domain: process.env.COOKIE_DOMAIN, // включим позже, если нужно
-        // maxAge: 60 * 60 * 24 * 7,          // можно добавить позже
-      })
-      .send({ ok: true });
-  });
+    const next = inferNextStep(result.login);
 
-  // POST /api/auth/password (префикс /api добавляется в app/routes/index.ts)
-  app.post("/auth/password", async (req, reply) => {
-    const body = (req.body ?? {}) as any;
-    const login = String(body.login ?? "");
-    const password = String(body.password ?? "");
-
-    if (!login || !password) {
-      return reply
-        .code(400)
-        .send({ ok: false, error: "login_or_password_required" });
-    }
-
-    const r = await shmAuthWithPassword(login, password);
-
-    if (!r.ok || !r.json?.session_id) {
-      return reply.code(r.status || 401).send({
-        ok: false,
-        error: "auth_failed",
-        shm: r.json ?? r.text,
-      });
-    }
-
-    const localSid = createLocalSid();
-
-    putSession(localSid, {
-      shmSessionId: r.json.session_id,
-      shmUserId: r.json.user_id,
-      createdAt: Date.now(),
-    });
-
-    reply
+    return reply
       .setCookie("sid", localSid, {
         httpOnly: true,
         sameSite: "lax",
         secure: process.env.NODE_ENV === "production",
         path: "/",
       })
-      .send({ ok: true });
+      .send({
+        ok: true,
+        user_id: result.shmUserId,
+        login: result.login ?? "",
+        next, // фронту сразу понятно: set_password или cabinet
+      });
   });
 
-  // POST /api/logout
+  // ====== POST /api/auth/password/set  { password } ======
+  app.post("/auth/password/set", async (req, reply) => {
+    const body = (req.body ?? {}) as any;
+    const password = String(body.password ?? "").trim();
+
+    const r = await setPassword(req, password);
+    if (!r.ok) return reply.code(r.status || 400).send(r);
+
+    return reply.send({ ok: true });
+  });
+
+  // ====== GET /api/auth/status ======
+  // маленький дебаг-хелпер: есть ли сессия
+  app.get("/auth/status", async (req, reply) => {
+    const s = getSessionFromRequest(req);
+    return reply.send({
+      ok: true,
+      authenticated: !!s?.shmSessionId,
+      user_id: s?.shmUserId ?? null,
+      has_sid_cookie: !!(req.cookies as any)?.sid,
+    });
+  });
+
+  // ====== POST /api/logout ======
   app.post("/logout", async (req, reply) => {
     const sid = (req.cookies as any)?.sid as string | undefined;
     deleteSession(sid);
-
-    reply.clearCookie("sid", { path: "/" }).send({ ok: true });
+    return reply.clearCookie("sid", { path: "/" }).send({ ok: true });
   });
 }
