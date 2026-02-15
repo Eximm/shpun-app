@@ -1,3 +1,5 @@
+// api/src/modules/auth/providers/telegram.ts
+
 import { verifyTelegramInitData } from "../../../shared/telegram/verifyInitData.js";
 import { shmAuthWithTelegramWebApp } from "../../../shared/shm/shmClient.js";
 import { getLink, insertLink, touchLink } from "../../../shared/linkdb/linkRepo.js";
@@ -7,6 +9,28 @@ const SHM_BASE_URL = (
 ).replace(/\/+$/, "");
 
 const TG_BOT_TOKEN = process.env.TG_BOT_TOKEN || "";
+
+type TelegramAuthResult =
+  | {
+      ok: true;
+      shmSessionId: string;
+      shmUserId: number;
+      login: string;
+    }
+  | {
+      ok: false;
+      status: number;
+      error: string;
+      detail?: unknown;
+    };
+
+function safeJsonStringify(v: unknown): string {
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return "{}";
+  }
+}
 
 function parseTelegramWebAppInitData(initData: string): {
   tgId: string | null;
@@ -26,16 +50,33 @@ function parseTelegramWebAppInitData(initData: string): {
   }
 }
 
-async function shmGetCurrentUser(sessionId: string) {
+async function safeReadJson(res: Response): Promise<unknown | null> {
+  const ct = res.headers.get("content-type") || "";
+  if (!ct.includes("application/json")) return null;
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+async function shmGetCurrentUser(sessionId: string): Promise<{
+  ok: boolean;
+  status: number;
+  json: unknown | null;
+  text: string;
+}> {
   const res = await fetch(`${SHM_BASE_URL}/user`, {
     method: "GET",
     headers: {
-      Cookie: `session_id=${sessionId}`,
+      // В проекте вы везде используете session-id заголовок; cookie тоже работает в SHM,
+      // но заголовок более предсказуем.
       Accept: "application/json",
+      "session-id": sessionId,
     },
   });
 
-  const json = await res.json().catch(() => undefined);
+  const json = await safeReadJson(res);
   const text = json ? "" : await res.text().catch(() => "");
   return { ok: res.ok, status: res.status, json, text };
 }
@@ -62,10 +103,6 @@ async function shmCallShpunApp(
  * SHM /v1/user (GET) по сваггеру возвращает обёртку:
  * { status, data: [ { user_id, login, ... } ], ... }
  * Но иногда в других шлюзах/обвязках может прийти "плоский" объект.
- *
- * Мы аккуратно:
- * 1) если есть data[] — берём первый элемент как user
- * 2) иначе работаем с payload напрямую
  */
 function normalizeShmUserPayload(payload: any): any {
   const j = payload ?? {};
@@ -84,15 +121,11 @@ function normalizeShmUserPayload(payload: any): any {
   return j;
 }
 
-function extractShmUserIdentity(payload: any): {
-  ok: true;
-  shmUserId: number;
-  login: string;
-} | {
-  ok: false;
-  error: "invalid_user_payload";
-  detail: any;
-} {
+function extractShmUserIdentity(
+  payload: any
+):
+  | { ok: true; shmUserId: number; login: string }
+  | { ok: false; error: "invalid_user_payload"; detail: any } {
   const u = normalizeShmUserPayload(payload);
 
   const rawUserId =
@@ -106,22 +139,18 @@ function extractShmUserIdentity(payload: any): {
   const shmUserId = rawUserId != null ? Number(rawUserId) : NaN;
 
   const login = String(
-    u.login ??
-    u.user?.login ??
-    u.username ??
-    u.user?.username ??
-    ""
-  );
+    u.login ?? u.user?.login ?? u.username ?? u.user?.username ?? ""
+  ).trim();
 
-  if (!Number.isFinite(shmUserId)) {
+  if (!Number.isFinite(shmUserId) || shmUserId <= 0) {
     return { ok: false, error: "invalid_user_payload", detail: payload };
   }
 
   return { ok: true, shmUserId, login };
 }
 
-export async function telegramAuth(body: any) {
-  const initData = String(body.initData ?? "").trim();
+export async function telegramAuth(body: any): Promise<TelegramAuthResult> {
+  const initData = String(body?.initData ?? "").trim();
   if (!initData) return { ok: false, status: 400, error: "initData_required" };
 
   if (!TG_BOT_TOKEN) {
@@ -145,14 +174,17 @@ export async function telegramAuth(body: any) {
     };
   }
 
-  const shmSessionId = String(r.json.session_id);
+  const shmSessionId = String(r.json.session_id).trim();
+  if (!shmSessionId) {
+    return { ok: false, status: 502, error: "no_shm_session" };
+  }
 
   // 2) /user -> user_id + login (Swagger: envelope with data[])
   const me = await shmGetCurrentUser(shmSessionId);
   if (!me.ok || !me.json) {
     return {
       ok: false,
-      status: 500,
+      status: me.status || 500,
       error: "failed_to_get_user",
       detail: me.json ?? me.text,
     };
@@ -168,7 +200,7 @@ export async function telegramAuth(body: any) {
 
   // 3) LinkDB upsert (telegram -> user)
   const profile = "default";
-  const meta = JSON.stringify({ username: tgUser.username });
+  const meta = safeJsonStringify({ username: tgUser.username });
 
   const existing = getLink("telegram", profile, tgUser.tgId);
 

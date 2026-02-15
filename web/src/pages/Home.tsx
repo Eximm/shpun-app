@@ -26,7 +26,7 @@ function fmtDate(v?: string | null) {
 type TransferState =
   | { status: "idle" }
   | { status: "loading" }
-  | { status: "ready"; url: string; expiresAt?: number }
+  | { status: "ready"; consumeUrl: string; expiresAt?: number }
   | { status: "error"; message: string };
 
 type PromoState =
@@ -47,10 +47,30 @@ function ActionGrid({ children }: { children: React.ReactNode }) {
   return <div className={`actions actions--${n}`}>{items}</div>;
 }
 
+function isTelegramWebApp(): boolean {
+  return !!(window as any)?.Telegram?.WebApp;
+}
+
+function openInBrowser(url: string) {
+  // Внутри Telegram WebApp: открыть внешний браузер
+  const tg = (window as any)?.Telegram?.WebApp;
+  if (tg?.openLink) {
+    try {
+      tg.openLink(url);
+      return;
+    } catch {
+      // fallback ниже
+    }
+  }
+  // Обычный браузер / fallback
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
 export function Home() {
   const { me, loading, error, refetch } = useMe();
 
   const [transfer, setTransfer] = useState<TransferState>({ status: "idle" });
+  const [showTransferLink, setShowTransferLink] = useState(false);
 
   // Promo scaffold (will connect later)
   const [promo, setPromo] = useState<{ code: string; state: PromoState }>({
@@ -59,8 +79,12 @@ export function Home() {
   });
 
   // PWA install CTA (works only when browser supports it)
-  const [installEvt, setInstallEvt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [installState, setInstallState] = useState<"idle" | "prompting" | "done">("idle");
+  const [installEvt, setInstallEvt] = useState<BeforeInstallPromptEvent | null>(
+    null
+  );
+  const [installState, setInstallState] = useState<
+    "idle" | "prompting" | "done"
+  >("idle");
 
   const profile = me?.profile;
   const balance = me?.balance;
@@ -75,7 +99,8 @@ export function Home() {
     };
 
     window.addEventListener("beforeinstallprompt", handler as any);
-    return () => window.removeEventListener("beforeinstallprompt", handler as any);
+    return () =>
+      window.removeEventListener("beforeinstallprompt", handler as any);
   }, []);
 
   const canInstall = !!installEvt && installState !== "done";
@@ -99,16 +124,17 @@ export function Home() {
 
   const transferHint = useMemo(() => {
     if (transfer.status !== "ready") return "";
-    if (!transfer.expiresAt) return "Ссылка одноразовая и быстро истекает.";
+    if (!transfer.expiresAt) return "Код одноразовый и быстро истекает.";
     const leftMs = transfer.expiresAt - Date.now();
     const leftSec = Math.max(0, Math.floor(leftMs / 1000));
-    if (leftSec <= 0) return "Срок действия ссылки истёк. Сгенерируй новую.";
-    return `Ссылка одноразовая. Действует примерно ${leftSec} сек.`;
+    if (leftSec <= 0) return "Срок действия кода истёк. Нажми ещё раз.";
+    return `Код одноразовый. Действует примерно ${leftSec} сек.`;
   }, [transfer]);
 
-  async function startTransfer() {
+  async function startTransferAndOpen() {
     try {
       setTransfer({ status: "loading" });
+      setShowTransferLink(false);
 
       const res = await fetch("/api/auth/transfer/start", {
         method: "POST",
@@ -122,28 +148,42 @@ export function Home() {
       if (!res.ok || !json?.ok) {
         const msg =
           json?.error === "not_authenticated"
-            ? "Нужен вход в приложение. Открой Shpun App внутри Telegram и войди."
+            ? "Нужен вход. Открой Shpun App внутри Telegram и войди."
             : String(json?.error || "transfer_start_failed");
         setTransfer({ status: "error", message: msg });
         return;
       }
 
+      const consumeUrl = String(json.consume_url || "").trim();
+      if (!consumeUrl) {
+        setTransfer({
+          status: "error",
+          message: "Сервер не вернул ссылку входа (consume_url).",
+        });
+        return;
+      }
+
+      const expiresAt = Number(json.expires_at || 0) || undefined;
+
       setTransfer({
         status: "ready",
-        url: String(json.url),
-        expiresAt: Number(json.expires_at || 0) || undefined,
+        consumeUrl,
+        expiresAt,
       });
+
+      // ✅ Главное: сразу открываем внешний браузер
+      openInBrowser(consumeUrl);
     } catch (e: any) {
       setTransfer({
         status: "error",
-        message: e?.message || "Не удалось создать ссылку.",
+        message: e?.message || "Не удалось открыть приложение на компьютере.",
       });
     }
   }
 
   async function copyTransferUrl() {
     if (transfer.status !== "ready") return;
-    const url = transfer.url;
+    const url = transfer.consumeUrl;
 
     try {
       await navigator.clipboard.writeText(url);
@@ -224,7 +264,9 @@ export function Home() {
             }}
           >
             <div>
-              <h1 className="h1">Привет{displayName ? `, ${displayName}` : ""} 👋</h1>
+              <h1 className="h1">
+                Привет{displayName ? `, ${displayName}` : ""} 👋
+              </h1>
               <p className="p">SDN System — баланс, услуги и управление подпиской.</p>
             </div>
 
@@ -238,18 +280,26 @@ export function Home() {
             <div className="kv__item">
               <div className="kv__k">Баланс</div>
               <div className="kv__v">
-                {balance ? <Money amount={balance.amount} currency={balance.currency} /> : "—"}
+                {balance ? (
+                  <Money amount={balance.amount} currency={balance.currency} />
+                ) : (
+                  "—"
+                )}
               </div>
             </div>
 
             <div className="kv__item">
               <div className="kv__k">Бонусы</div>
-              <div className="kv__v">{typeof me.bonus === "number" ? me.bonus : 0}</div>
+              <div className="kv__v">
+                {typeof me.bonus === "number" ? me.bonus : 0}
+              </div>
             </div>
 
             <div className="kv__item">
               <div className="kv__k">Скидка</div>
-              <div className="kv__v">{typeof me.discount === "number" ? `${me.discount}%` : "—"}</div>
+              <div className="kv__v">
+                {typeof me.discount === "number" ? `${me.discount}%` : "—"}
+              </div>
             </div>
           </div>
 
@@ -280,7 +330,9 @@ export function Home() {
           <div className="kv kv--3">
             <div className="kv__item">
               <div className="kv__k">Пароль</div>
-              <div className="kv__v">{profile?.passwordSet ? "установлен" : "не установлен"}</div>
+              <div className="kv__v">
+                {profile?.passwordSet ? "установлен" : "не установлен"}
+              </div>
             </div>
             <div className="kv__item">
               <div className="kv__k">Создан</div>
@@ -322,7 +374,8 @@ export function Home() {
                 <div className="list__main">
                   <div className="list__title">✅ Система стабильна — всё работает</div>
                   <div className="list__sub">
-                    Обновления без простоев. Если видишь “Can’t connect” — просто обнови страницу.
+                    Обновления без простоев. Если видишь “Can’t connect” — просто обнови
+                    страницу.
                   </div>
                 </div>
                 <div className="list__side">
@@ -334,7 +387,8 @@ export function Home() {
                 <div className="list__main">
                   <div className="list__title">🧭 Cabinet переехал в “Новости”</div>
                   <div className="list__sub">
-                    Главная — витрина. Новости — лента. Дальше подключим реальные данные в “Услугах”.
+                    Главная — витрина. Новости — лента. Дальше подключим реальные данные в
+                    “Услугах”.
                   </div>
                 </div>
                 <div className="list__side">
@@ -346,11 +400,11 @@ export function Home() {
                 <div className="list__main">
                   <div className="list__title">🔐 Вход с рабочего стола через Telegram</div>
                   <div className="list__sub">
-                    Готовим “transfer-login” — одноразовая ссылка переносит авторизацию в браузер.
+                    Теперь это одна кнопка: откроем браузер и перенесём авторизацию автоматически.
                   </div>
                 </div>
                 <div className="list__side">
-                  <span className="chip chip--warn">soon</span>
+                  <span className="chip chip--warn">new</span>
                 </div>
               </div>
             </div>
@@ -371,36 +425,62 @@ export function Home() {
             <div className="h1" style={{ fontSize: 18 }}>
               Открыть на компьютере
             </div>
+
             <p className="p">
-              Когда ты вошёл в Shpun App внутри Telegram, можно открыть приложение на рабочем столе: выдадим
-              одноразовую ссылку и перенесём авторизацию в браузер.
+              Нажми кнопку — мы откроем внешний браузер и перенесём вход в Shpun App.
+              Ничего копировать не нужно.
             </p>
 
             <ActionGrid>
               <button
                 className="btn btn--primary"
-                onClick={startTransfer}
+                onClick={startTransferAndOpen}
                 disabled={transfer.status === "loading"}
               >
-                {transfer.status === "loading" ? "Генерируем…" : "Сгенерировать ссылку"}
+                {transfer.status === "loading"
+                  ? "Открываем…"
+                  : "Открыть приложение на компьютере"}
               </button>
 
-              {transfer.status === "ready" && (
-                <button className="btn" onClick={copyTransferUrl}>
-                  Скопировать
+              {/* Install CTA рядом (если доступно) */}
+              {canInstall && (
+                <button
+                  className="btn"
+                  onClick={runInstall}
+                  disabled={installState === "prompting"}
+                  title="Установить Shpun App на рабочий стол"
+                >
+                  {installState === "prompting" ? "Установка…" : "Установить"}
                 </button>
               )}
 
-              <Link className="btn" to="/app/profile">
-                Настройки
-              </Link>
+              {/* Fallback: показать ссылку */}
+              {transfer.status === "ready" && (
+                <button
+                  className="btn"
+                  onClick={() => setShowTransferLink((v) => !v)}
+                  title="Если браузер не открылся автоматически"
+                >
+                  {showTransferLink ? "Скрыть ссылку" : "Показать ссылку"}
+                </button>
+              )}
             </ActionGrid>
 
-            {transfer.status === "ready" && (
+            {transfer.status === "ready" && showTransferLink && (
               <div className="pre">
-                <div style={{ fontWeight: 900, marginBottom: 6 }}>Ссылка:</div>
-                <div style={{ wordBreak: "break-word" }}>{transfer.url}</div>
+                <div style={{ fontWeight: 900, marginBottom: 6 }}>
+                  Резервный вариант (если авто-открытие не сработало)
+                </div>
+
+                <div style={{ wordBreak: "break-word" }}>{transfer.consumeUrl}</div>
+
                 <div style={{ marginTop: 10, opacity: 0.85 }}>{transferHint}</div>
+
+                <div style={{ marginTop: 10 }}>
+                  <button className="btn" onClick={copyTransferUrl}>
+                    Скопировать
+                  </button>
+                </div>
               </div>
             )}
 
@@ -408,6 +488,20 @@ export function Home() {
               <div className="pre">
                 <div style={{ fontWeight: 900, marginBottom: 6 }}>Не получилось</div>
                 <div style={{ opacity: 0.85 }}>{transfer.message}</div>
+
+                <div style={{ marginTop: 10, opacity: 0.85 }}>
+                  Подсказка: transfer-login работает только если ты уже вошёл в Shpun App внутри Telegram.
+                </div>
+              </div>
+            )}
+
+            {!canInstall && !isTelegramWebApp() && (
+              <div className="pre" style={{ marginTop: 12, opacity: 0.9 }}>
+                <div style={{ fontWeight: 900, marginBottom: 6 }}>Установка</div>
+                <div style={{ opacity: 0.85 }}>
+                  Если кнопки “Установить” нет — браузер не выдал запрос установки.
+                  Открой приложение в Chrome/Edge и попробуй снова.
+                </div>
               </div>
             )}
           </div>
@@ -423,7 +517,6 @@ export function Home() {
             </div>
             <p className="p">Есть промокод? Введи его здесь — бонусы или скидка применятся к аккаунту.</p>
 
-            {/* input + button = symmetric 2 cols */}
             <div className="actions actions--2">
               <div>
                 <input

@@ -10,7 +10,10 @@ import {
   getSessionFromRequest,
 } from "../../shared/session/sessionStore.js";
 import { shmAuthWithTelegramWebApp } from "../../shared/shm/shmClient.js";
-import { createTransfer, consumeTransfer } from "../../shared/linkdb/transferRepo.js";
+import {
+  createTransfer,
+  consumeTransfer,
+} from "../../shared/linkdb/transferRepo.js";
 
 const ALLOWED_PROVIDERS = new Set(
   ["telegram", "password", "google", "yandex"] as const
@@ -56,7 +59,10 @@ async function shmGetUserId(sessionId: string): Promise<number> {
 
   if (!res.ok) {
     throw new Error(
-      `shm_user_failed:${res.status}:${String((json ?? text) || "").slice(0, 200)}`
+      `shm_user_failed:${res.status}:${String((json ?? text) || "").slice(
+        0,
+        200
+      )}`
     );
   }
 
@@ -101,19 +107,22 @@ async function callShmTemplate<T = any>(
   return (json ?? {}) as T;
 }
 
-async function getPasswordSetFlag(shmSessionId: string): Promise<0 | 1> {
+// ВАЖНО: если не удалось прочитать флаг, НЕ мучаем пользователя повторной установкой пароля.
+// Возвращаем null => "не знаем" => UI НЕ показывает set_password.
+async function getPasswordSetFlag(
+  shmSessionId: string
+): Promise<0 | 1 | null> {
   try {
     const r: any = await callShmTemplate(shmSessionId, "status");
     const v = r?.data?.auth?.password_set;
     return v === 1 || v === "1" ? 1 : 0;
   } catch {
-    return 0;
+    return null;
   }
 }
 
-// выбираем “канонический” внешний URL для приложения (куда редиректить)
+// выбираем “канонический” внешний URL для приложения (куда редиректить/строить ссылки)
 function getPublicAppBase(req: any): string {
-  // 1) если пришёл реальный Origin и он в allowlist — используем его
   const origin = String(req.headers?.origin ?? "").trim();
   const allow = String(process.env.APP_ORIGIN ?? "")
     .split(",")
@@ -121,12 +130,44 @@ function getPublicAppBase(req: any): string {
     .filter(Boolean);
 
   if (origin && allow.includes(origin)) return origin;
-
-  // 2) иначе берём первый из APP_ORIGIN
   if (allow.length) return allow[0];
 
-  // 3) fallback
   return "https://app.shpyn.online";
+}
+
+function normalizeRedirectPath(input: any, fallback = "/app"): string {
+  const v = String(input ?? "").trim();
+  if (!v) return fallback;
+
+  // только относительные пути внутри приложения (защита от open-redirect)
+  if (!v.startsWith("/")) return fallback;
+  if (v.startsWith("//")) return fallback;
+  if (v.includes("\r") || v.includes("\n")) return fallback;
+  if (/[^\x20-\x7E]/.test(v)) return fallback;
+
+  return v;
+}
+
+function getRequestIp(req: any): string {
+  return String(req.headers?.["x-real-ip"] ?? req.ip ?? "").trim();
+}
+
+function isHttpsRequest(req: any): boolean {
+  const xfProto = String(req.headers?.["x-forwarded-proto"] ?? "")
+    .split(",")[0]
+    .trim()
+    .toLowerCase();
+  if (xfProto === "https") return true;
+
+  const proto = String((req as any).protocol ?? "").toLowerCase();
+  if (proto === "https") return true;
+
+  return false;
+}
+
+function shouldSecureCookie(req: any): boolean {
+  if (process.env.NODE_ENV === "production") return true;
+  return isHttpsRequest(req);
 }
 
 export async function authRoutes(app: FastifyInstance) {
@@ -179,10 +220,12 @@ export async function authRoutes(app: FastifyInstance) {
       ...(telegramInitData ? { telegramInitData } : {}),
     });
 
+    // next: по умолчанию сразу в кабинет/приложение
+    // SetPassword показываем только если точно знаем что password_set == 0
     let next: "set_password" | "cabinet" = "cabinet";
     if (provider === "telegram") {
       const ps = await getPasswordSetFlag(shmSessionId);
-      next = ps === 1 ? "cabinet" : "set_password";
+      next = ps === 0 ? "set_password" : "cabinet";
     }
 
     const loginFromApi = String((result as any).login ?? "").trim();
@@ -191,7 +234,7 @@ export async function authRoutes(app: FastifyInstance) {
       .setCookie("sid", localSid, {
         httpOnly: true,
         sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
+        secure: shouldSecureCookie(req),
         path: "/",
       })
       .send({
@@ -226,6 +269,7 @@ export async function authRoutes(app: FastifyInstance) {
             ...s,
             shmSessionId: newShmSessionId,
             shmUserId: newUserId,
+            telegramInitData: initData,
           });
         }
       }
@@ -233,7 +277,7 @@ export async function authRoutes(app: FastifyInstance) {
       // ignore
     }
 
-    // best-effort флаг password_set
+    // best-effort флаг password_set: делаем ПОСЛЕ возможного re-auth, на "живой" session_id
     try {
       const ss = getSessionFromRequest(req) as any;
       const shmSessionId = String(ss?.shmSessionId ?? "").trim();
@@ -248,7 +292,7 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   // ====== POST /api/auth/transfer/start ======
-  // Создаёт одноразовый код на 60 сек и возвращает URL для открытия в браузере/PWA
+  // Создаёт одноразовый код на 60 сек и возвращает consume_url (его надо открыть в браузере)
   app.post("/auth/transfer/start", async (req, reply) => {
     const s = getSessionFromRequest(req) as any;
     const shmSessionId = String(s?.shmSessionId ?? "").trim();
@@ -258,7 +302,7 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(401).send({ ok: false, error: "not_authenticated" });
     }
 
-    const ip = String((req.headers["x-real-ip"] ?? req.ip) || "");
+    const ip = getRequestIp(req);
     const ua = String(req.headers["user-agent"] ?? "");
 
     const { code, expiresAt } = createTransfer({
@@ -270,42 +314,68 @@ export async function authRoutes(app: FastifyInstance) {
     });
 
     const base = getPublicAppBase(req);
-    const url = `${base}/transfer?code=${encodeURIComponent(code)}`;
 
-    return reply.send({ ok: true, url, expires_at: expiresAt });
+    // КЛЮЧЕВОЕ: server consume endpoint ставит cookie и редиректит в /app
+    const consume_url = `${base}/api/auth/transfer/consume?code=${encodeURIComponent(
+      code
+    )}`;
+
+    return reply.send({ ok: true, consume_url, expires_at: expiresAt });
   });
 
   // ====== GET /api/auth/transfer/consume?code=... ======
-  // Открывается в браузере/PWA. Обменивает code -> создаёт sid cookie -> редиректит на /app/home
+  // Открывается в браузере/PWA. Обменивает code -> sid cookie -> редиректит в приложение.
   app.get("/auth/transfer/consume", async (req, reply) => {
     const q = req.query as any;
     const code = String(q.code ?? "").trim();
-    const redirectTo = String(q.redirect ?? "/app/home").trim() || "/app/home";
 
-    if (!code) return reply.code(400).send({ ok: false, error: "code_required" });
+    // default redirect: /app
+    const redirectTo = normalizeRedirectPath(q.redirect, "/app");
+
+    if (!code) {
+      return reply.redirect(303, "/login?transfer=missing_code");
+    }
 
     const r = consumeTransfer(code);
     if (!r.ok) {
-      // можно редиректить на /login с сообщением
-      return reply.code(401).send({ ok: false, error: r.error });
+      // transferRepo может типизировать error не строкой => приводим безопасно
+      const err = String((r as any).error ?? "");
+      let reason: "expired" | "used" | "invalid" = "invalid";
+
+      switch (err) {
+        case "expired":
+          reason = "expired";
+          break;
+        case "used":
+          reason = "used";
+          break;
+        default:
+          reason = "invalid";
+          break;
+      }
+
+      // UX: редирект на логин вместо JSON-ошибки
+      return reply.redirect(
+        303,
+        `/login?transfer=${encodeURIComponent(reason)}`
+      );
     }
 
     const localSid = createLocalSid();
     putSession(localSid, {
-      shmSessionId: r.shmSessionId,
-      shmUserId: r.shmUserId,
+      shmSessionId: (r as any).shmSessionId,
+      shmUserId: (r as any).shmUserId,
       createdAt: Date.now(),
-      // тут уже telegramInitData может быть не нужно — PWA сессия самостоятельная
     });
 
     return reply
       .setCookie("sid", localSid, {
         httpOnly: true,
         sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
+        secure: shouldSecureCookie(req),
         path: "/",
       })
-      .redirect(302, redirectTo);
+      .redirect(303, redirectTo);
   });
 
   // ====== GET /api/auth/status ======

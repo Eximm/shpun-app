@@ -71,9 +71,7 @@ body {
 #root { min-height: 100%; }
 
 /* --- EXTRA SAFETY: clickable controls should always receive taps --- */
-button, a {
-  -webkit-tap-highlight-color: transparent;
-}
+button, a { -webkit-tap-highlight-color: transparent; }
 
 /* 3) Safe-area padding for iOS */
 .safe {
@@ -142,9 +140,7 @@ button, a {
   margin: 0 auto;
 }
 
-.main {
-  flex: 1;
-}
+.main { flex: 1; }
 
 /*
   Резервируем место под fixed bottomnav,
@@ -241,10 +237,19 @@ button, a {
 
   /* ✅ prevents weird shrink in grid */
   min-width: 0;
+
+  /* ✅ allow better focus visibility on keyboard */
+  outline: none;
 }
+
 .btn:hover { background: rgba(255,255,255,0.09); border-color: rgba(255,255,255,0.18); }
 .btn:active { transform: translateY(1px) scale(0.99); }
 .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.btn:focus-visible{
+  border-color: rgba(124,92,255,0.55);
+  box-shadow: 0 0 0 4px rgba(124,92,255,0.16);
+}
 
 .btn--primary {
   border: 0;
@@ -285,16 +290,15 @@ button, a {
     0 6px 18px rgba(77, 215, 255, 0.14);
 }
 
-.btn--primary:disabled {
-  opacity: 0.60;
-  box-shadow: none;
-}
+.btn--primary:disabled { opacity: 0.60; box-shadow: none; }
 
 .btn--danger {
   border: 0;
   background: linear-gradient(135deg, var(--danger), #ffb86b);
   color: #12060a;
 }
+
+/* ===== Badges ===== */
 
 .badge {
   display: inline-flex;
@@ -355,9 +359,7 @@ button, a {
 
 /* ✅ on narrow screens keep it readable */
 @media (max-width: 520px) {
-  .kv--3 { grid-template-columns: 1fr; }
-  .kv--4 { grid-template-columns: 1fr; }
-  .kv--2 { grid-template-columns: 1fr; }
+  .kv--3, .kv--4, .kv--2 { grid-template-columns: 1fr; }
 }
 
 .pre {
@@ -393,9 +395,7 @@ button, a {
   .actions--5 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
-.actions .btn {
-  width: 100%;
-}
+.actions .btn { width: 100%; }
 
 /* Optional: pill-like symmetric grid (if you want chips aligned, not kv cards) */
 .pillgrid {
@@ -407,14 +407,9 @@ button, a {
 .pillgrid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .pillgrid--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 @media (max-width: 520px) {
-  .pillgrid--2,
-  .pillgrid--3,
-  .pillgrid--4 { grid-template-columns: 1fr; }
+  .pillgrid--2, .pillgrid--3, .pillgrid--4 { grid-template-columns: 1fr; }
 }
-.pillgrid .chip {
-  width: 100%;
-  justify-content: center;
-}
+.pillgrid .chip { width: 100%; justify-content: center; }
 
 /* ============================================================
    Cabinet showcase helpers (витрина)
@@ -479,27 +474,18 @@ button, a {
   border-color: rgba(77,215,255,0.34);
   background: rgba(77,215,255,0.06);
 }
-
 .chip--bad {
   border-color: rgba(255,77,109,0.38);
   background: rgba(255,77,109,0.08);
 }
-
 .chip--warn {
   border-color: rgba(255,184,107,0.36);
   background: rgba(255,184,107,0.08);
 }
-
-.chip--soft {
-  opacity: 0.92;
-}
+.chip--soft { opacity: 0.92; }
 
 /* List cards */
-.list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
+.list { display: flex; flex-direction: column; gap: 10px; }
 
 .list__item {
   display: flex;
@@ -528,11 +514,7 @@ button, a {
   line-height: 1.35;
 }
 
-.list__side {
-  display: flex;
-  align-items: flex-start;
-  flex: 0 0 auto;
-}
+.list__side { display: flex; align-items: flex-start; flex: 0 0 auto; }
 
 /* Two-column block */
 .grid2 {
@@ -667,11 +649,7 @@ button, a {
 .install__btn:hover { background: rgba(255,255,255,0.11); border-color: rgba(255,255,255,0.22); }
 .install__btn:active { transform: translateY(1px) scale(0.99); }
 
-/* 7) Responsive */
-@media (min-width: 720px) {
-  .h1 { font-size: 26px; }
-  .kv { grid-template-columns: repeat(3, 1fr); }
-}
+@media (min-width: 720px) { .h1 { font-size: 26px; } }
 
 /* 8) Bottom navigation (native tab bar) */
 .bottomnav {
@@ -728,11 +706,7 @@ button, a {
   min-width: 0;
 }
 
-.tab:hover {
-  background: rgba(255,255,255,0.06);
-  border-color: rgba(255,255,255,0.10);
-}
-
+.tab:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.10); }
 .tab:active { transform: translateY(1px) scale(0.99); }
 
 .tab__icon { line-height: 0; }
@@ -759,15 +733,9 @@ button, a {
 /* ✅ Ultra-narrow screens: tighter labels & spacing */
 @media (max-width: 360px) {
   :root { --pad: 14px; } /* чуть меньше боковые поля */
-
   .bottomnav__inner { gap: 4px; }
-
   .tab { padding: 9px 6px; min-height: 52px; gap: 5px; }
-
-  .tab__label {
-    font-size: 10px;
-    letter-spacing: 0.12px;
-  }
+  .tab__label { font-size: 10px; letter-spacing: 0.12px; }
 }
 
 /* ✅ Very narrow: icons-only (still accessible via aria-label in NavLink) */
@@ -903,10 +871,7 @@ button, a {
   padding: 12px 12px;
 }
 
-.auth__errorTitle{
-  font-weight: 900;
-  margin-bottom: 6px;
-}
+.auth__errorTitle{ font-weight: 900; margin-bottom: 6px; }
 
 .auth__errorText{
   color: rgba(255,255,255,0.72);
@@ -966,9 +931,7 @@ button, a {
    SetPassword: centralized styles (no inline)
    ============================================================ */
 
-.pwdmeter {
-  margin-top: 12px;
-}
+.pwdmeter { margin-top: 12px; }
 
 .pwdmeter__row {
   display: flex;
@@ -976,15 +939,8 @@ button, a {
   gap: 12px;
 }
 
-.pwdmeter__title {
-  color: rgba(255, 255, 255, 0.72);
-  font-weight: 800;
-}
-
-.pwdmeter__score {
-  color: rgba(255, 255, 255, 0.62);
-  font-weight: 800;
-}
+.pwdmeter__title { color: rgba(255, 255, 255, 0.72); font-weight: 800; }
+.pwdmeter__score { color: rgba(255, 255, 255, 0.62); font-weight: 800; }
 
 .pwdmeter__tip {
   margin-top: 8px;

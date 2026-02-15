@@ -3,6 +3,10 @@
 import type { FastifyRequest } from "fastify";
 import { getSession } from "../../shared/session/sessionStore.js";
 
+type SetPasswordResult =
+  | { ok: true }
+  | { ok: false; status: number; error: string; detail?: unknown };
+
 function shmRoot(): string {
   // ожидаем ".../shm/" или ".../shm"
   const b0 = String(process.env.SHM_BASE ?? "").trim();
@@ -14,7 +18,7 @@ function shmV1(): string {
   return `${shmRoot()}/v1`;
 }
 
-async function safeReadJson(res: Response): Promise<any | null> {
+async function safeReadJson(res: Response): Promise<unknown | null> {
   const ct = res.headers.get("content-type") || "";
   if (!ct.includes("application/json")) return null;
   try {
@@ -24,14 +28,17 @@ async function safeReadJson(res: Response): Promise<any | null> {
   }
 }
 
-export async function setPassword(req: FastifyRequest, password: string) {
+export async function setPassword(
+  req: FastifyRequest,
+  password: string
+): Promise<SetPasswordResult> {
   const pwd = String(password || "").trim();
 
   if (!pwd || pwd.length < 8) {
     return { ok: false, status: 400, error: "password_too_short" };
   }
 
-  const s = getSession(req as any);
+  const s = getSession(req);
   if (!s?.shmSessionId) {
     return { ok: false, status: 401, error: "not_authenticated" };
   }
