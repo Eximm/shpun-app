@@ -115,34 +115,6 @@ function firstHeaderValue(v: any): string {
   return s.split(",")[0].trim();
 }
 
-// ===== Public base URL (для редиректов / генерации абсолютных ссылок) =====
-function getPublicAppBase(req: any): string {
-  // 0) приоритет: forwarded headers (nginx/cf)
-  const xfProto = firstHeaderValue(req.headers?.["x-forwarded-proto"]);
-  const xfHost = firstHeaderValue(req.headers?.["x-forwarded-host"]);
-  if (xfHost) {
-    const proto = xfProto || "https";
-    return `${proto}://${xfHost}`;
-  }
-
-  // 1) fallback: Host
-  const host = firstHeaderValue(req.headers?.host);
-  if (host) {
-    const proto = xfProto || "https";
-    return `${proto}://${host}`;
-  }
-
-  // 2) иначе берём первый из APP_ORIGIN
-  const allow = String(process.env.APP_ORIGIN ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-  if (allow.length) return allow[0];
-
-  // 3) final fallback
-  return "https://app.shpyn.online";
-}
-
 function normalizeRedirectPath(input: any, fallback = "/app"): string {
   const v = String(input ?? "").trim();
   if (!v) return fallback;
@@ -179,8 +151,115 @@ function cookieOptions(req: any) {
     secure: isHttps(req), // важно: реальный https, даже если NODE_ENV != production
     path: "/",
     maxAge: cookieMaxAgeSeconds(),
+    domain: "app.sdnonline.online", // ✅ фиксируем домен для РФ
   };
 }
+
+/* ===================== Bridge helpers ===================== */
+
+function escHtml(s: string) {
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" } as any)[c]);
+}
+
+function buildIntentUrl(target: string) {
+  const u = new URL(target);
+  const scheme = u.protocol.replace(":", ""); // https
+  return `intent://${u.host}${u.pathname}${u.search}${u.hash}#Intent;scheme=${scheme};package=com.android.chrome;end`;
+}
+
+function bridgeHtml(targetUrl: string, errorText?: string) {
+  const safeTarget = escHtml(targetUrl);
+  const safeErr = errorText ? escHtml(errorText) : "";
+
+  const title = safeErr ? "Ссылка устарела" : "Открываем в браузере…";
+  const subtitle = safeErr
+    ? "Вернитесь в Telegram и нажмите «Установить» ещё раз."
+    : "Для установки приложения нужно открыть сайт во внешнем браузере (Chrome/Safari).";
+
+  return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>${title}</title>
+  <meta name="referrer" content="no-referrer" />
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto; padding:20px; background:#0b0b0d; color:#fff;}
+    .card{max-width:520px;margin:0 auto;border:1px solid #ffffff1f;border-radius:16px;padding:16px;background:#121219;}
+    h2{margin:0 0 8px 0;font-size:20px;}
+    .muted{opacity:.75;font-size:14px;line-height:1.35;margin-top:8px;}
+    button,a{display:block;width:100%;padding:14px 16px;margin-top:10px;border-radius:12px;border:0;text-align:center;font-weight:700;}
+    button{background:#7c5cff;color:#fff}
+    a{background:#1a1a22;color:#fff;text-decoration:none}
+    code{display:block;word-break:break-all;background:#0d0d13;border:1px solid #ffffff1a;border-radius:10px;padding:10px;margin-top:10px}
+    .row{display:flex;gap:10px}
+    .row button{flex:1;background:#20202a}
+    .warn{margin-top:10px; padding:10px; border-radius:12px; background:#2a1f1f; border:1px solid #ff6b6b33;}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>${title}</h2>
+    <div class="muted">${subtitle}</div>
+    ${safeErr ? `<div class="warn">${safeErr}</div>` : ""}
+
+    <button id="btn">Открыть в браузере</button>
+    <a id="link" href="${safeTarget}" rel="noopener">Открыть обычной ссылкой</a>
+
+    <div class="muted">Если Telegram снова открыл внутри себя: нажмите <b>⋮</b> → <b>Открыть в браузере</b>.</div>
+
+    <div class="muted" style="margin-top:12px;">Ссылка:</div>
+    <code id="url">${safeTarget}</code>
+
+    <div class="row">
+      <button id="copy">Скопировать</button>
+      <button id="retry">Ещё раз</button>
+    </div>
+  </div>
+
+<script>
+(function(){
+  const TARGET = ${JSON.stringify(targetUrl)};
+  const INTENT = ${JSON.stringify(buildIntentUrl(targetUrl))};
+  const ua = navigator.userAgent || "";
+  const isAndroid = /Android/i.test(ua);
+  const isTelegram = /Telegram/i.test(ua);
+
+  const btn = document.getElementById("btn");
+  const copy = document.getElementById("copy");
+  const retry = document.getElementById("retry");
+
+  function openExternal(){
+    if (isAndroid && isTelegram) {
+      location.href = INTENT;
+      setTimeout(function(){ location.href = TARGET; }, 900);
+      return;
+    }
+    location.href = TARGET;
+  }
+
+  btn.addEventListener("click", openExternal);
+  retry.addEventListener("click", openExternal);
+
+  copy.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(TARGET);
+      copy.textContent = "Скопировано ✅";
+      setTimeout(() => copy.textContent = "Скопировать", 1500);
+    } catch (e) {
+      prompt("Скопируйте ссылку:", TARGET);
+    }
+  });
+
+  // автопопытка 1 раз (без циклов)
+  setTimeout(openExternal, 250);
+})();
+</script>
+</body>
+</html>`;
+}
+
+/* ===================== Routes ===================== */
 
 export async function authRoutes(app: FastifyInstance) {
   // ====== POST /api/auth/:provider ======
@@ -294,8 +373,7 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   // ====== POST /api/auth/transfer/start ======
-  // Создаёт одноразовый код на 60 сек и возвращает consume_url (ТОЛЬКО относительный путь).
-  // Его надо открыть во внешнем браузере, чтобы cookie sid попала в cookie-jar браузера.
+  // Создаёт одноразовый код на 60 сек и возвращает consume_url (абсолютный).
   app.post("/auth/transfer/start", async (req, reply) => {
     const s = getSessionFromRequest(req) as any;
     const shmSessionId = String(s?.shmSessionId ?? "").trim();
@@ -316,29 +394,44 @@ export async function authRoutes(app: FastifyInstance) {
       ua,
     });
 
-    // 🔥 ВАЖНО: только относительный путь, без base/host.
-    // Фронт сам нормализует на текущий origin (app.sdnonline.online).
-    const consumePath = `/api/auth/transfer/consume?code=${encodeURIComponent(code)}&redirect=${encodeURIComponent("/app")}`;
+    const redirectTo = "/app";
+    const consumeUrl =
+      `https://app.sdnonline.online` +
+      `/api/auth/transfer/consume?code=${encodeURIComponent(code)}&redirect=${encodeURIComponent(redirectTo)}`;
 
-    return reply.send({ ok: true, consume_url: consumePath, expires_at: expiresAt });
+    return reply.send({ ok: true, consume_url: consumeUrl, expires_at: expiresAt });
   });
 
   // ====== GET /api/auth/transfer/consume?code=...&redirect=/app ======
-  // Открывается в браузере/PWA. Обменивает code -> создаёт sid cookie -> редиректит в приложение.
+  // Открывается из Telegram WebView. Ставит sid cookie и отдаёт HTML bridge, который выбивает во внешний браузер.
   app.get("/auth/transfer/consume", async (req, reply) => {
     const q = req.query as any;
     const code = String(q.code ?? "").trim();
-
-    // default: /app
     const redirectTo = normalizeRedirectPath(q.redirect, "/app");
 
-    if (!code) return reply.code(400).send({ ok: false, error: "code_required" });
+    const targetUrl = `https://app.sdnonline.online${redirectTo}`;
+
+    const noStore = () =>
+      reply
+        .header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+        .header("Pragma", "no-cache");
+
+    if (!code) {
+      noStore();
+      return reply
+        .type("text/html; charset=utf-8")
+        .code(400)
+        .send(bridgeHtml("https://app.sdnonline.online/login?e=code_required", "code_required"));
+    }
 
     const r = consumeTransfer(code);
     if (!r.ok) {
-      const base = getPublicAppBase(req);
-      const url = `${base}/login?e=${encodeURIComponent(r.error)}`;
-      return reply.redirect(303, url);
+      noStore();
+      const errUrl = `https://app.sdnonline.online/login?e=${encodeURIComponent(r.error)}`;
+      return reply
+        .type("text/html; charset=utf-8")
+        .code(410)
+        .send(bridgeHtml(errUrl, r.error));
     }
 
     const localSid = createLocalSid();
@@ -348,11 +441,11 @@ export async function authRoutes(app: FastifyInstance) {
       createdAt: Date.now(),
     });
 
-    // ✅ Ключ: ставим sid cookie и делаем обычный редирект.
-    // Cookie попадёт в ТОТ браузер, который реально открыл consume URL.
+    noStore();
     return reply
       .setCookie("sid", localSid, cookieOptions(req))
-      .redirect(303, redirectTo);
+      .type("text/html; charset=utf-8")
+      .send(bridgeHtml(targetUrl));
   });
 
   // ====== GET /api/auth/status ======

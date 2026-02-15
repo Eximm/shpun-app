@@ -53,9 +53,8 @@ function getTelegramWebApp(): any | null {
 }
 
 /**
- * Важно различать:
- * - настоящий MiniApp (есть initData) -> можно transfer/start (есть сессия TG)
- * - "встроенный браузер/вьюер" (TG объект может быть, но initData нет) -> transfer бессмысленен
+ * ✅ MiniApp считаем только когда initData реально есть.
+ * Если TG объект есть, но initData нет — это "вьюер/встроенный браузер", transfer там не работает.
  */
 function hasTelegramInitData(): boolean {
   const tg = getTelegramWebApp();
@@ -97,9 +96,9 @@ function normalizeConsumeUrl(raw: string): string {
 }
 
 /**
- * Пытаемся максимально надёжно открыть внешний браузер из Telegram (Android часто капризничает).
+ * Надёжно открыть внешний браузер из Telegram (Android капризничает).
  * 1) tg.openLink(url, try_instant_view:false)
- * 2) через 300мс tg.close() (часто помогает не "вложить миниапп в миниапп")
+ * 2) Android: tg.close() через 300мс (иногда помогает не "вложить миниапп в миниапп")
  * 3) Android fallback: intent:// на Chrome
  * 4) fallback: window.open
  */
@@ -146,7 +145,6 @@ function openInBrowser(url: string) {
 function detectInstallHint(): { title: string; text: string } {
   const ua = (navigator.userAgent || "").toLowerCase();
 
-  // very rough, but good enough for UX
   const isSamsung = ua.includes("samsungbrowser");
   const isFirefox = ua.includes("firefox");
   const isEdge = ua.includes("edg/");
@@ -178,7 +176,6 @@ function detectInstallHint(): { title: string; text: string } {
     };
   }
 
-  // iOS / desktop fallback
   return {
     title: "Как установить",
     text: "Откройте меню браузера и выберите “Установить” / “Добавить на главный экран”.",
@@ -230,7 +227,6 @@ export function Home() {
   const shouldShowInstallHelper =
     !inTelegramMiniApp && !canInstallPrompt && installState !== "done";
 
-  // ✅ ВАЖНО: хуки должны вызываться ВСЕГДА, поэтому useMemo — ДО ранних return
   const installHint = useMemo(() => detectInstallHint(), []);
 
   const transferHint = useMemo(() => {
@@ -296,10 +292,7 @@ export function Home() {
       if (!res.ok || !json?.ok) {
         const msg =
           json?.error === "not_authenticated"
-            ? t(
-                "error.open_in_tg",
-                "Откройте приложение внутри Telegram, чтобы войти."
-              )
+            ? t("error.open_in_tg", "Откройте приложение внутри Telegram, чтобы войти.")
             : String(json?.error || "transfer_start_failed");
         setTransfer({ status: "error", message: msg });
         setShowTransferLink(true);
@@ -310,9 +303,7 @@ export function Home() {
       if (!rawConsumeUrl) {
         setTransfer({
           status: "error",
-          message:
-            t("home.install.error", "Не получилось открыть установку.") +
-            ": consume_url",
+          message: t("home.install.error", "Не получилось открыть установку.") + ": consume_url",
         });
         setShowTransferLink(true);
         return;
@@ -331,9 +322,7 @@ export function Home() {
     } catch (e: any) {
       setTransfer({
         status: "error",
-        message:
-          e?.message ||
-          t("home.install.error", "Не получилось открыть установку."),
+        message: e?.message || t("home.install.error", "Не получилось открыть установку."),
       });
       setShowTransferLink(true);
     }
@@ -356,10 +345,7 @@ export function Home() {
     if (!code) {
       setPromo((p) => ({
         ...p,
-        state: {
-          status: "error",
-          message: t("promo.err.empty", "Введите промокод."),
-        },
+        state: { status: "error", message: t("promo.err.empty", "Введите промокод.") },
       }));
       return;
     }
@@ -371,15 +357,12 @@ export function Home() {
       ...p,
       state: {
         status: "done",
-        message: t(
-          "promo.done.stub",
-          "Промокоды скоро будут доступны прямо в приложении ✨"
-        ),
+        message: t("promo.done.stub", "Промокоды скоро будут доступны прямо в приложении ✨"),
       },
     }));
   }
 
-  // ✅ Ранние return теперь НЕ меняют количество хуков (все хуки выше уже вызваны)
+  // ✅ Ранние return НЕ меняют количество хуков (все хуки уже вызваны выше)
   if (loading) {
     return (
       <div className="section">
@@ -420,37 +403,96 @@ export function Home() {
     );
   }
 
+  const installTitle = t("home.install.cta_title", "Установите ShpunApp");
+  const installText = inTelegramMiniApp
+    ? t(
+        "home.install.cta_text_tg",
+        "Откроем браузер и перенесём вход автоматически — так вы сможете установить приложение на устройство."
+      )
+    : t(
+        "home.install.cta_text_web",
+        "Установите приложение, чтобы быстрее открывать сервис и получать более стабильную работу."
+      );
+
+  const installBtnText = canInstallPrompt
+    ? installState === "prompting"
+      ? t("home.install.opening", "Открываем…")
+      : t("home.install", "Установить приложение")
+    : inTelegramMiniApp || hasTelegramObject
+    ? transferBusy
+      ? t("home.install.opening", "Открываем…")
+      : t("home.install", "Установить приложение")
+    : t("home.install", "Установить приложение");
+
+  async function onMainInstallClick() {
+    // 1) В браузере — пробуем prompt если он есть
+    if (canInstallPrompt) {
+      await runInstallPrompt();
+      return;
+    }
+
+    // 2) В Telegram — переносим вход и открываем внешний браузер
+    if (inTelegramMiniApp || hasTelegramObject) {
+      await startTransferAndOpen();
+      return;
+    }
+
+    // 3) В браузере без prompt — просто покажем helper ниже (он уже есть)
+    setInstallState("idle");
+  }
+
   return (
     <div className="section">
+      {/* ✅ BIG INSTALL CTA — отдельный блок сверху */}
+      <div className="card" style={{ marginBottom: 12 }}>
+        <div className="card__body">
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <div>
+              <div className="h1" style={{ fontSize: 20 }}>
+                {installTitle}
+              </div>
+              <p className="p">{installText}</p>
+            </div>
+
+            <button
+              className="btn btn--primary"
+              onClick={onMainInstallClick}
+              disabled={installState === "prompting" || transferBusy}
+              style={{ whiteSpace: "nowrap" }}
+            >
+              {installBtnText}
+            </button>
+          </div>
+
+          {/* маленькая подсказка под CTA */}
+          {inTelegramMiniApp && (
+            <div style={{ marginTop: 10, opacity: 0.75, fontSize: 13 }}>
+              {t("home.install.note_tg", "На телефоне установка работает через внешний браузер (Chrome/Safari).")}
+            </div>
+          )}
+          {!inTelegramMiniApp && !canInstallPrompt && (
+            <div style={{ marginTop: 10, opacity: 0.75, fontSize: 13 }}>
+              {t("home.install.note_web", "Если кнопка установки не появилась — установите через меню браузера.")}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* User hero */}
       <div className="card">
         <div className="card__body">
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 12,
-            }}
-          >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
             <div>
               <h1 className="h1">
                 {t("home.hello", "Привет")}
                 {displayName ? `, ${displayName}` : ""} 👋
               </h1>
               <p className="p">
-                {t(
-                  "home.subtitle",
-                  "SDN System — баланс, услуги и управление подпиской."
-                )}
+                {t("home.subtitle", "SDN System — баланс, услуги и управление подпиской.")}
               </p>
             </div>
 
-            <button
-              className="btn"
-              onClick={() => refetch?.()}
-              title={t("home.refresh", "⟳ Обновить")}
-            >
+            <button className="btn" onClick={() => refetch?.()} title={t("home.refresh", "⟳ Обновить")}>
               {t("home.refresh", "⟳ Обновить")}
             </button>
           </div>
@@ -459,29 +501,22 @@ export function Home() {
             <div className="kv__item">
               <div className="kv__k">{t("home.kv.balance", "Баланс")}</div>
               <div className="kv__v">
-                {balance ? (
-                  <Money amount={balance.amount} currency={balance.currency} />
-                ) : (
-                  "—"
-                )}
+                {balance ? <Money amount={balance.amount} currency={balance.currency} /> : "—"}
               </div>
             </div>
 
             <div className="kv__item">
               <div className="kv__k">{t("home.kv.bonus", "Бонусы")}</div>
-              <div className="kv__v">
-                {typeof me.bonus === "number" ? me.bonus : 0}
-              </div>
+              <div className="kv__v">{typeof me.bonus === "number" ? me.bonus : 0}</div>
             </div>
 
             <div className="kv__item">
               <div className="kv__k">{t("home.kv.discount", "Скидка")}</div>
-              <div className="kv__v">
-                {typeof me.discount === "number" ? `${me.discount}%` : "—"}
-              </div>
+              <div className="kv__v">{typeof me.discount === "number" ? `${me.discount}%` : "—"}</div>
             </div>
           </div>
 
+          {/* ✅ убрали мелкую кнопку "Установить" из сетки */}
           <ActionGrid>
             <Link className="btn btn--primary" to="/app/payments">
               {t("home.actions.payments", "Оплата")}
@@ -492,34 +527,6 @@ export function Home() {
             <Link className="btn" to="/app/profile">
               {t("home.actions.profile", "Профиль")}
             </Link>
-
-            {/* В браузере — реальная установка через prompt */}
-            {canInstallPrompt && (
-              <button
-                className="btn"
-                onClick={runInstallPrompt}
-                disabled={installState === "prompting"}
-                title={t("home.install", "Установить приложение")}
-              >
-                {installState === "prompting"
-                  ? t("home.install.opening", "Открываем…")
-                  : t("home.install", "Установить приложение")}
-              </button>
-            )}
-
-            {/* В Telegram MiniApp — переносим вход и открываем внешний браузер для установки */}
-            {(inTelegramMiniApp || hasTelegramObject) && (
-              <button
-                className="btn"
-                onClick={startTransferAndOpen}
-                disabled={transferBusy}
-                title={t("home.install", "Установить приложение")}
-              >
-                {transferBusy
-                  ? t("home.install.opening", "Открываем…")
-                  : t("home.install", "Установить приложение")}
-              </button>
-            )}
           </ActionGrid>
 
           <div className="kv kv--3">
@@ -536,9 +543,7 @@ export function Home() {
               <div className="kv__v">{fmtDate(profile?.created)}</div>
             </div>
             <div className="kv__item">
-              <div className="kv__k">
-                {t("home.meta.last_login", "Последний вход")}
-              </div>
+              <div className="kv__k">{t("home.meta.last_login", "Последний вход")}</div>
               <div className="kv__v">{fmtDate(profile?.lastLogin)}</div>
             </div>
           </div>
@@ -567,9 +572,7 @@ export function Home() {
 
       {/* Install helper в “телеграмном” сценарии */}
       {(hasTelegramObject || inTelegramMiniApp) &&
-        (showTransferLink ||
-          transfer.status === "ready" ||
-          transfer.status === "error") && (
+        (showTransferLink || transfer.status === "ready" || transfer.status === "error") && (
           <div className="section">
             <div className="card">
               <div className="card__body">
@@ -585,21 +588,14 @@ export function Home() {
 
                 {transfer.status === "ready" && (
                   <ActionGrid>
-                    <button
-                      className="btn btn--primary"
-                      onClick={startTransferAndOpen}
-                      disabled={transferBusy}
-                    >
+                    <button className="btn btn--primary" onClick={startTransferAndOpen} disabled={transferBusy}>
                       {t("home.install.open_browser", "Открыть браузер")}
                     </button>
 
                     <button
                       className="btn"
                       onClick={() => setShowTransferLink((v) => !v)}
-                      title={t(
-                        "home.install.fallback",
-                        "Если авто-открытие не сработало"
-                      )}
+                      title={t("home.install.fallback", "Если авто-открытие не сработало")}
                     >
                       {showTransferLink
                         ? t("home.install.hide_link", "Скрыть ссылку")
@@ -611,17 +607,10 @@ export function Home() {
                 {transfer.status === "ready" && showTransferLink && (
                   <div className="pre" style={{ marginTop: 12 }}>
                     <div style={{ fontWeight: 900, marginBottom: 6 }}>
-                      {t(
-                        "home.install.fallback",
-                        "Если авто-открытие не сработало"
-                      )}
+                      {t("home.install.fallback", "Если авто-открытие не сработало")}
                     </div>
-                    <div style={{ wordBreak: "break-word" }}>
-                      {transfer.consumeUrl}
-                    </div>
-                    <div style={{ marginTop: 10, opacity: 0.85 }}>
-                      {transferHint}
-                    </div>
+                    <div style={{ wordBreak: "break-word" }}>{transfer.consumeUrl}</div>
+                    <div style={{ marginTop: 10, opacity: 0.85 }}>{transferHint}</div>
                     <div style={{ marginTop: 10 }}>
                       <button className="btn" onClick={copyTransferUrl}>
                         {t("home.install.copy", "Скопировать ссылку")}
@@ -633,21 +622,15 @@ export function Home() {
                 {transfer.status === "error" && (
                   <div className="pre" style={{ marginTop: 12 }}>
                     <div style={{ fontWeight: 900, marginBottom: 6 }}>
-                      {t(
-                        "home.install.error",
-                        "Не получилось открыть установку."
-                      )}
+                      {t("home.install.error", "Не получилось открыть установку.")}
                     </div>
                     <div style={{ opacity: 0.85 }}>{transfer.message}</div>
                   </div>
                 )}
 
-                {/* Если нажали “установить” в телеграмном браузере без initData */}
                 {hasTelegramObject && !inTelegramMiniApp && transfer.status === "idle" && (
                   <div className="pre" style={{ marginTop: 12 }}>
-                    <div style={{ fontWeight: 900, marginBottom: 6 }}>
-                      {t("home.install.note", "Важно")}
-                    </div>
+                    <div style={{ fontWeight: 900, marginBottom: 6 }}>{t("home.install.note", "Важно")}</div>
                     <div style={{ opacity: 0.85 }}>
                       {t(
                         "error.open_in_tg",
@@ -665,23 +648,13 @@ export function Home() {
       <div className="section">
         <div className="card">
           <div className="card__body">
-            <div
-              style={{
-                display: "flex",
-                alignItems: "baseline",
-                justifyContent: "space-between",
-                gap: 12,
-              }}
-            >
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
               <div>
                 <div className="h1" style={{ fontSize: 18 }}>
                   {t("home.news.title", "Новости")}
                 </div>
                 <p className="p">
-                  {t(
-                    "home.news.subtitle",
-                    "Коротко и по делу. Полная лента — в “Новости”."
-                  )}
+                  {t("home.news.subtitle", "Коротко и по делу. Полная лента — в “Новости”.")}
                 </p>
               </div>
               <Link className="btn" to="/app/feed">
@@ -693,16 +666,10 @@ export function Home() {
               <div className="list__item">
                 <div className="list__main">
                   <div className="list__title">
-                    {t(
-                      "home.news.item1.title",
-                      "✅ Система стабильна — всё работает"
-                    )}
+                    {t("home.news.item1.title", "✅ Система стабильна — всё работает")}
                   </div>
                   <div className="list__sub">
-                    {t(
-                      "home.news.item1.sub",
-                      "Если видишь “Can’t connect” — просто обнови страницу."
-                    )}
+                    {t("home.news.item1.sub", "Если видишь “Can’t connect” — просто обнови страницу.")}
                   </div>
                 </div>
                 <div className="list__side">
@@ -712,9 +679,7 @@ export function Home() {
 
               <div className="list__item">
                 <div className="list__main">
-                  <div className="list__title">
-                    {t("home.news.item2.title", "🧭 Лента — в “Новости”")}
-                  </div>
+                  <div className="list__title">{t("home.news.item2.title", "🧭 Лента — в “Новости”")}</div>
                   <div className="list__sub">
                     {t(
                       "home.news.item2.sub",
@@ -729,17 +694,9 @@ export function Home() {
 
               <div className="list__item">
                 <div className="list__main">
-                  <div className="list__title">
-                    {t(
-                      "home.news.item3.title",
-                      "🔐 Установка без потери входа"
-                    )}
-                  </div>
+                  <div className="list__title">{t("home.news.item3.title", "🔐 Установка без потери входа")}</div>
                   <div className="list__sub">
-                    {t(
-                      "home.news.item3.sub",
-                      "Откроем браузер и перенесём вход автоматически."
-                    )}
+                    {t("home.news.item3.sub", "Откроем браузер и перенесём вход автоматически.")}
                   </div>
                 </div>
                 <div className="list__side">
@@ -800,12 +757,8 @@ export function Home() {
               </button>
             </div>
 
-            {promo.state.status === "done" && (
-              <div className="pre">{promo.state.message}</div>
-            )}
-            {promo.state.status === "error" && (
-              <div className="pre">{promo.state.message}</div>
-            )}
+            {promo.state.status === "done" && <div className="pre">{promo.state.message}</div>}
+            {promo.state.status === "error" && <div className="pre">{promo.state.message}</div>}
 
             <ActionGrid>
               <Link className="btn" to="/app/profile">
