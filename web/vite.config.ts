@@ -4,42 +4,33 @@ import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
-  // безопасно для CF + поддоменов
   base: "/",
 
-  // 🔧 очень важно при симптомах Minified React error #310:
-  // гарантируем одну копию react/react-dom в бандле
   resolve: {
     dedupe: ["react", "react-dom"],
   },
 
-  // помогает Vite не подтягивать вторые копии react через prebundle
   optimizeDeps: {
     include: ["react", "react-dom"],
   },
 
-  // ✅ включаем sourcemap, чтобы стек показывал src-файлы и строки
   build: {
+    // 🔎 debug-режим: чтобы стек стал читаемым и/или с src-линиями
     sourcemap: true,
+    minify: false,
   },
 
   plugins: [
     react(),
     VitePWA({
-      // ✅ ВАЖНО: не вшиваем авто-регистрацию SW в HTML
-      // (мы зарегистрируем SW вручную и только НЕ в Telegram)
       injectRegister: null,
-
-      // Оставляем стратегию обновления
       registerType: "autoUpdate",
-
       includeAssets: [
         "icons/icon-192.png",
         "icons/icon-512.png",
         "icons/icon-512-maskable.png",
         "icons/apple-touch-icon.png",
       ],
-
       manifest: {
         name: "ShpunApp",
         short_name: "ShpunApp",
