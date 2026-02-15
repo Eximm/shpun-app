@@ -1,3 +1,4 @@
+// web/src/pages/Home.tsx
 import { Link } from "react-router-dom";
 import { useMe } from "../app/auth/useMe";
 import React, { useEffect, useMemo, useState } from "react";
@@ -188,16 +189,15 @@ export function Home() {
   const [installEvt, setInstallEvt] = useState<BeforeInstallPromptEvent | null>(
     null
   );
-  const [installState, setInstallState] = useState<
-    "idle" | "prompting" | "done"
-  >("idle");
+  const [installState, setInstallState] = useState<"idle" | "prompting" | "done">(
+    "idle"
+  );
 
   const inTelegram = isTelegramWebApp();
   const transferBusy = transfer.status === "loading";
 
   const profile = me?.profile;
   const balance = me?.balance;
-
   const displayName = profile?.displayName || profile?.login || "";
 
   useEffect(() => {
@@ -207,13 +207,34 @@ export function Home() {
     };
 
     window.addEventListener("beforeinstallprompt", handler as any);
-    return () =>
-      window.removeEventListener("beforeinstallprompt", handler as any);
+    return () => window.removeEventListener("beforeinstallprompt", handler as any);
   }, []);
 
   // Настоящая PWA-установка (prompt) — только в браузере, не в Telegram WebApp
-  const canInstallPrompt =
-    !inTelegram && !!installEvt && installState !== "done";
+  const canInstallPrompt = !inTelegram && !!installEvt && installState !== "done";
+
+  const shouldShowInstallHelper =
+    !inTelegram && !canInstallPrompt && installState !== "done";
+
+  // ✅ ВАЖНО: хуки должны вызываться ВСЕГДА, поэтому useMemo — ДО ранних return
+  const installHint = useMemo(() => detectInstallHint(), []);
+
+  const transferHint = useMemo(() => {
+    if (transfer.status !== "ready") return "";
+    if (!transfer.expiresAt)
+      return t(
+        "home.install.hint.default",
+        "Ссылка одноразовая и быстро истекает."
+      );
+    const leftMs = transfer.expiresAt - Date.now();
+    const leftSec = Math.max(0, Math.floor(leftMs / 1000));
+    if (leftSec <= 0)
+      return t("home.install.hint.expired", "Срок действия истёк. Нажми ещё раз.");
+    return t(
+      "home.install.hint.left",
+      `Ссылка одноразовая. Действует примерно ${leftSec} сек.`
+    ).replace("{sec}", String(leftSec));
+  }, [transfer, t]);
 
   async function runInstallPrompt() {
     if (!installEvt || inTelegram) return;
@@ -233,23 +254,6 @@ export function Home() {
     }
   }
 
-  const transferHint = useMemo(() => {
-    if (transfer.status !== "ready") return "";
-    if (!transfer.expiresAt)
-      return t(
-        "home.install.hint.default",
-        "Ссылка одноразовая и быстро истекает."
-      );
-    const leftMs = transfer.expiresAt - Date.now();
-    const leftSec = Math.max(0, Math.floor(leftMs / 1000));
-    if (leftSec <= 0)
-      return t("home.install.hint.expired", "Срок действия истёк. Нажми ещё раз.");
-    return t(
-      "home.install.hint.left",
-      `Ссылка одноразовая. Действует примерно ${leftSec} сек.`
-    ).replace("{sec}", String(leftSec));
-  }, [transfer, t]);
-
   async function startTransferAndOpen() {
     try {
       setTransfer({ status: "loading" });
@@ -267,10 +271,7 @@ export function Home() {
       if (!res.ok || !json?.ok) {
         const msg =
           json?.error === "not_authenticated"
-            ? t(
-                "error.open_in_tg",
-                "Откройте приложение внутри Telegram, чтобы войти."
-              )
+            ? t("error.open_in_tg", "Откройте приложение внутри Telegram, чтобы войти.")
             : String(json?.error || "transfer_start_failed");
         setTransfer({ status: "error", message: msg });
         return;
@@ -290,18 +291,12 @@ export function Home() {
       const consumeUrl = normalizeConsumeUrl(rawConsumeUrl);
       const expiresAt = Number(json.expires_at || 0) || undefined;
 
-      setTransfer({
-        status: "ready",
-        consumeUrl,
-        expiresAt,
-      });
-
+      setTransfer({ status: "ready", consumeUrl, expiresAt });
       openInBrowser(consumeUrl);
     } catch (e: any) {
       setTransfer({
         status: "error",
-        message:
-          e?.message || t("home.install.error", "Не получилось открыть установку."),
+        message: e?.message || t("home.install.error", "Не получилось открыть установку."),
       });
     }
   }
@@ -335,14 +330,12 @@ export function Home() {
       ...p,
       state: {
         status: "done",
-        message: t(
-          "promo.done.stub",
-          "Промокоды скоро будут доступны прямо в приложении ✨"
-        ),
+        message: t("promo.done.stub", "Промокоды скоро будут доступны прямо в приложении ✨"),
       },
     }));
   }
 
+  // ✅ Ранние return теперь НЕ меняют количество хуков (все хуки выше уже вызваны)
   if (loading) {
     return (
       <div className="section">
@@ -382,11 +375,6 @@ export function Home() {
       </div>
     );
   }
-
-  const shouldShowInstallHelper =
-    !inTelegram && !canInstallPrompt && installState !== "done";
-
-  const installHint = useMemo(() => detectInstallHint(), []);
 
   return (
     <div className="section">
