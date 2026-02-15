@@ -7,20 +7,24 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
+      injectRegister: "auto",
+
       includeAssets: [
         "icons/icon-192.png",
         "icons/icon-512.png",
         "icons/icon-512-maskable.png",
         "icons/apple-touch-icon.png",
       ],
+
       manifest: {
-        name: "Shpun",
-        short_name: "Shpun",
-        description: "Shpun App — Личный кабинет Шпунь",
-        start_url: "/",
+        name: "ShpunApp",
+        short_name: "ShpunApp",
+        description:
+          "Shpun SDN System — кабинет, баланс, услуги и управление подпиской.",
+        start_url: "/app",
         scope: "/",
         display: "standalone",
-        background_color: "#0b1220",
+        background_color: "#0b0f17",
         theme_color: "#0b1220",
         icons: [
           { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
@@ -33,8 +37,22 @@ export default defineConfig({
           },
         ],
       },
+
+      // Критично для SPA-роутов /app, /app/feed и т.п.
+      workbox: {
+        navigateFallback: "/index.html",
+        navigateFallbackDenylist: [
+          /^\/api\//,
+          /^\/icons\//,
+          /^\/assets\//,
+          /^\/manifest\.webmanifest$/,
+          /^\/sw\.js$/,
+          /^\/workbox-.*\.js$/,
+        ],
+      },
     }),
   ],
+
   server: {
     proxy: {
       "/api": "http://localhost:3000",
