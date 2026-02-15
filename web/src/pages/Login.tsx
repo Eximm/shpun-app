@@ -57,7 +57,6 @@ function buildTelegramOpenUrlSafe():
     };
   }
 
-  // если вдруг app пустой (не должно) — просто на t.me/<bot>
   if (!app) {
     return { ok: true, url: `https://t.me/${encodeURIComponent(bot)}` };
   }
@@ -82,7 +81,6 @@ function openInTelegramSafe(
 
   if (!built.ok) {
     setErr?.(built.error);
-    // один аккуратный warn (без токенов/данных)
     console.warn("[openInTelegram] bad env:", built.error);
     return { ok: false, error: built.error };
   }
@@ -91,7 +89,6 @@ function openInTelegramSafe(
   const tg = getTelegramWebApp();
   const isInsideTelegram = !!tg;
 
-  // В обычном браузере просто переходим на t.me/...
   if (!isInsideTelegram) {
     window.location.assign(url);
     return { ok: true, url };
@@ -106,7 +103,7 @@ function openInTelegramSafe(
       tg.openLink(url, { try_instant_view: false });
       return { ok: true, url };
     }
-  } catch (e) {
+  } catch {
     console.warn("[openInTelegram] tg open failed");
   }
 
@@ -192,7 +189,8 @@ export function Login() {
       goAfterAuth(r);
     } catch (e: any) {
       setErr(
-        e?.message || t("error.password_login_failed", "Не удалось войти по паролю")
+        e?.message ||
+          t("error.password_login_failed", "Не удалось войти по паролю")
       );
     } finally {
       setLoading(false);
@@ -224,7 +222,10 @@ export function Login() {
     const initData = tgInitData || getTelegramInitData();
     if (!initData) {
       setErr(
-        t("error.open_in_tg", "Откройте это приложение внутри Telegram, чтобы войти.")
+        t(
+          "error.open_in_tg",
+          "Откройте это приложение внутри Telegram, чтобы войти."
+        )
       );
       return;
     }
@@ -294,6 +295,53 @@ export function Login() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
+  const headerCard = (
+    <div
+      className="pre"
+      style={{
+        marginTop: 10,
+        background:
+          "linear-gradient(135deg, rgba(124,92,255,0.14), rgba(77,215,255,0.08))",
+        border: "1px solid rgba(255,255,255,0.10)",
+      }}
+    >
+      <div style={{ fontWeight: 900, marginBottom: 8 }}>
+        {t("login.what.title", "Что это такое")}
+      </div>
+
+      <div style={{ display: "grid", gap: 6, opacity: 0.92 }}>
+        <div>
+          ✅{" "}
+          {t(
+            "login.what.1",
+            "Shpun App — кабинет Shpun SDN System: баланс, услуги и управление подпиской."
+          )}
+        </div>
+        <div>
+          ⚡{" "}
+          {t(
+            "login.what.2",
+            "Самый быстрый вход — через Telegram: без паролей и лишних действий."
+          )}
+        </div>
+        <div>
+          🔒{" "}
+          {t(
+            "login.what.3",
+            "Пароль — резервный способ входа (если нужно зайти из браузера)."
+          )}
+        </div>
+        <div>
+          🧩{" "}
+          {t(
+            "login.what.4",
+            "Google/Yandex появятся позже — сейчас всё уже работает через Telegram + пароль."
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
   const passwordDetails = (
     <details className="auth__details">
       <summary className="auth__detailsSummary">
@@ -324,10 +372,7 @@ export function Login() {
             </span>
             <input
               className="input"
-              placeholder={t(
-                "login.password.login_ph",
-                "например @123456789"
-              )}
+              placeholder={t("login.password.login_ph", "например @123456789")}
               value={login}
               onChange={(e) => setLogin(e.target.value)}
               autoComplete="username"
@@ -437,7 +482,7 @@ export function Login() {
           {passMode === "login"
             ? t(
                 "login.password.tip",
-                "Пароль — резервный способ входа. Основной вход — через Telegram."
+                "Пароль — резервный способ. Основной вход — через Telegram."
               )
             : t(
                 "login.password.register_tip",
@@ -479,74 +524,31 @@ export function Login() {
             </span>
           </div>
 
-          {/* ===== Providers (красиво) ===== */}
-          <div className="auth__divider" style={{ marginTop: 12 }}>
-            <span>{t("login.divider.providers", "Способы входа")}</span>
+          {/* ✅ “цепляющая” шапка-объяснялка */}
+          {headerCard}
+
+          {/* =====================================================
+             1) Основной вход: Telegram
+             ===================================================== */}
+          <div className="auth__divider" style={{ marginTop: 14 }}>
+            <span>{t("login.divider.telegram", "Основной вход")}</span>
           </div>
 
-          <div className="auth__providers">
-            {/* Telegram provider */}
-            <button
-              className="btn auth__provider"
-              onClick={mode === "telegram" ? telegramLogin : handleOpenTelegram}
-              disabled={loading}
-              type="button"
-              style={{ width: "100%" }}
-            >
-              <span className="auth__providerIcon">✈️</span>
-              <span className="auth__providerText">
-                Telegram
-                <span className="auth__providerHint">
-                  {mode === "telegram"
-                    ? t("login.providers.telegram.hint.tg", "вход в один тап")
-                    : t(
-                        "login.providers.telegram.hint.web",
-                        "открыть Mini App"
-                      )}
-                </span>
-              </span>
-              <span className="auth__providerRight">→</span>
-            </button>
-
-            {/* Google (soon) */}
-            <button
-              className="btn auth__provider"
-              disabled={true}
-              type="button"
-              style={{ width: "100%" }}
-              title={t("login.providers.soon", "Скоро")}
-            >
-              <span className="auth__providerIcon">🟦</span>
-              <span className="auth__providerText">
-                Google
-                <span className="auth__providerHint">
-                  {t("login.providers.google.hint", "скоро")}
-                </span>
-              </span>
-              <span className="auth__providerRight">🔒</span>
-            </button>
-
-            {/* Yandex (soon) */}
-            <button
-              className="btn auth__provider"
-              disabled={true}
-              type="button"
-              style={{ width: "100%" }}
-              title={t("login.providers.soon", "Скоро")}
-            >
-              <span className="auth__providerIcon">🟨</span>
-              <span className="auth__providerText">
-                Yandex
-                <span className="auth__providerHint">
-                  {t("login.providers.yandex.hint", "скоро")}
-                </span>
-              </span>
-              <span className="auth__providerRight">🔒</span>
-            </button>
-          </div>
-
-          {/* ===== Основная кнопка (для веба оставим удобный CTA) ===== */}
-          {mode === "web" && (
+          {mode === "telegram" ? (
+            <div className="auth__actions" style={{ marginTop: 12 }}>
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={telegramLogin}
+                disabled={loading}
+                style={{ width: "100%" }}
+              >
+                {loading
+                  ? t("login.tg.cta_loading", "Входим…")
+                  : t("login.tg.cta", "Войти через Telegram")}
+              </button>
+            </div>
+          ) : (
             <div className="auth__actions" style={{ marginTop: 12 }}>
               <button
                 type="button"
@@ -560,6 +562,7 @@ export function Login() {
             </div>
           )}
 
+          {/* fallback ссылка (только если реально нужна) */}
           {!!tgOpenUrl && mode === "web" && (
             <div className="pre" style={{ marginTop: 12 }}>
               <div style={{ fontWeight: 900, marginBottom: 6 }}>
@@ -578,12 +581,76 @@ export function Login() {
             </div>
           )}
 
-          {/* ===== Password fallback ===== */}
+          {/* =====================================================
+             2) Резервный вход: password
+             ===================================================== */}
           <div className="auth__divider" style={{ marginTop: 14 }}>
-            <span>{t("login.divider.password", "Резервный вход")}</span>
+            <span>{t("login.divider.password", "Если уже установлен пароль")}</span>
           </div>
 
           {passwordDetails}
+
+          {/* =====================================================
+             3) Другие способы (внизу)
+             ===================================================== */}
+          <div className="auth__divider" style={{ marginTop: 14 }}>
+            <span>{t("login.divider.providers", "Или другой способ")}</span>
+          </div>
+
+          <div className="auth__providers">
+            <button
+              className="btn auth__provider"
+              onClick={mode === "telegram" ? telegramLogin : handleOpenTelegram}
+              disabled={loading}
+              type="button"
+              style={{ width: "100%" }}
+            >
+              <span className="auth__providerIcon">✈️</span>
+              <span className="auth__providerText">
+                Telegram
+                <span className="auth__providerHint">
+                  {mode === "telegram"
+                    ? t("login.providers.telegram.hint.tg", "вход в один тап")
+                    : t("login.providers.telegram.hint.web", "открыть Mini App")}
+                </span>
+              </span>
+              <span className="auth__providerRight">→</span>
+            </button>
+
+            <button
+              className="btn auth__provider"
+              disabled={true}
+              type="button"
+              style={{ width: "100%" }}
+              title={t("login.providers.soon", "Скоро")}
+            >
+              <span className="auth__providerIcon">🟦</span>
+              <span className="auth__providerText">
+                Google
+                <span className="auth__providerHint">
+                  {t("login.providers.google.hint", "скоро")}
+                </span>
+              </span>
+              <span className="auth__providerRight">🔒</span>
+            </button>
+
+            <button
+              className="btn auth__provider"
+              disabled={true}
+              type="button"
+              style={{ width: "100%" }}
+              title={t("login.providers.soon", "Скоро")}
+            >
+              <span className="auth__providerIcon">🟨</span>
+              <span className="auth__providerText">
+                Yandex
+                <span className="auth__providerHint">
+                  {t("login.providers.yandex.hint", "скоро")}
+                </span>
+              </span>
+              <span className="auth__providerRight">🔒</span>
+            </button>
+          </div>
 
           {err && (
             <div className="auth__error" style={{ marginTop: 12 }}>
@@ -598,3 +665,5 @@ export function Login() {
     </div>
   );
 }
+
+export default Login;
