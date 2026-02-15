@@ -3,11 +3,26 @@
 import type { FastifyRequest } from "fastify";
 import { getSession } from "../../shared/session/sessionStore.js";
 
-const SHM_BASE_URL =
-  (process.env.SHM_BASE_URL || "https://bill.shpyn.online/shm/v1").replace(
-    /\/+$/,
-    ""
-  );
+function shmRoot(): string {
+  // ожидаем ".../shm/" или ".../shm"
+  const b0 = String(process.env.SHM_BASE ?? "").trim();
+  const b = (b0 || "https://bill.shpyn.online/shm/").replace(/\/+$/, "");
+  if (b.endsWith("/shm/v1")) return b.slice(0, -3);
+  return b;
+}
+function shmV1(): string {
+  return `${shmRoot()}/v1`;
+}
+
+async function safeReadJson(res: Response): Promise<any | null> {
+  const ct = res.headers.get("content-type") || "";
+  if (!ct.includes("application/json")) return null;
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
 
 export async function setPassword(req: FastifyRequest, password: string) {
   const pwd = String(password || "").trim();
@@ -16,24 +31,23 @@ export async function setPassword(req: FastifyRequest, password: string) {
     return { ok: false, status: 400, error: "password_too_short" };
   }
 
-  // ВАЖНО: используем твою текущую сигнатуру getSession(req)
   const s = getSession(req as any);
   if (!s?.shmSessionId) {
     return { ok: false, status: 401, error: "not_authenticated" };
   }
 
   // SHM: POST /user/passwd  { password }
-  const res = await fetch(`${SHM_BASE_URL}/user/passwd`, {
+  const res = await fetch(`${shmV1()}/user/passwd`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      Accept: "application/json",
-      Cookie: `session_id=${s.shmSessionId}`,
+      accept: "application/json",
+      "session-id": String(s.shmSessionId),
     },
     body: JSON.stringify({ password: pwd }),
   });
 
-  const json = await res.json().catch(() => undefined);
+  const json = await safeReadJson(res);
   const text = json ? "" : await res.text().catch(() => "");
 
   if (!res.ok) {
@@ -46,11 +60,14 @@ export async function setPassword(req: FastifyRequest, password: string) {
   }
 
   // best-effort: отметить в settings (не ломаем flow если упало)
-  await fetch(`${SHM_BASE_URL}/template/shpun_app`, {
+  await fetch(`${shmV1()}/template/shpun_app`, {
     method: "POST",
-    headers: { "content-type": "application/json", accept: "application/json" },
+    headers: {
+      "content-type": "application/json",
+      accept: "application/json",
+    },
     body: JSON.stringify({
-      session_id: s.shmSessionId,
+      session_id: String(s.shmSessionId),
       action: "password.mark_set",
     }),
   }).catch(() => undefined);
