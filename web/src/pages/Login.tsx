@@ -31,11 +31,6 @@ function readEnv(key: string): string {
 /**
  * Надёжный MiniApp deeplink:
  * https://t.me/<bot>/<app>?startapp=<payload>
- *
- * ВАЖНО: всегда ставим startapp (по умолчанию "1"),
- * иначе в некоторых кейсах Telegram может открыть чат вместо MiniApp.
- *
- * Эта версия НЕ использует new URL() и не может "молча" упасть из-за кривых env.
  */
 function buildTelegramOpenUrlSafe():
   | { ok: true; url: string }
@@ -56,7 +51,6 @@ function buildTelegramOpenUrlSafe():
     }
   }
 
-  // Если shortname не задан — хотя бы откроем чат бота
   if (!app) {
     return { ok: true, url: `https://t.me/${encodeURIComponent(bot)}` }
   }
@@ -83,7 +77,6 @@ function openInTelegramSafe(setErr?: (s: string) => void) {
   const tg = getTelegramWebApp()
   const hasInitData = !!tg?.initData && tg.initData.length > 0
 
-  // В браузере/PWA — самый надёжный способ
   if (!hasInitData) {
     window.location.assign(url)
     return
@@ -106,6 +99,7 @@ function openInTelegramSafe(setErr?: (s: string) => void) {
 }
 
 type Mode = 'telegram' | 'web'
+type PassMode = 'login' | 'register'
 
 export function Login() {
   const { t } = useI18n()
@@ -120,12 +114,18 @@ export function Login() {
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
-  // Password fallback (для тех, кто уже выставил пароль)
+  // Password fallback + registration
+  const [passMode, setPassMode] = useState<PassMode>('login')
   const [login, setLogin] = useState('')
   const [password, setPassword] = useState('')
+  const [password2, setPassword2] = useState('')
 
   const autoLoginStarted = useRef(false)
+
   const canPasswordLogin = login.trim().length > 0 && password.length > 0
+  const passwordsMatch = password2.length === 0 ? true : password === password2
+  const canPasswordRegister =
+    login.trim().length > 0 && password.length > 0 && password2.length > 0 && password === password2
 
   function goAfterAuth(r?: AuthResponse) {
     const ok = !!r && (r as any).ok === true
@@ -159,6 +159,25 @@ export function Login() {
       goAfterAuth(r)
     } catch (e: any) {
       setErr(e?.message || t('error.password_login_failed'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function passwordRegister() {
+    if (!canPasswordRegister) return
+
+    setLoading(true)
+    setErr(null)
+    try {
+      // если у тебя другой путь на API — скажешь, я заменю одним файлом
+      const r = await apiFetch<AuthResponse>('/auth/password/register', {
+        method: 'POST',
+        body: JSON.stringify({ login: login.trim(), password }),
+      })
+      goAfterAuth(r)
+    } catch (e: any) {
+      setErr(e?.message || 'Registration failed')
     } finally {
       setLoading(false)
     }
@@ -216,6 +235,131 @@ export function Login() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode])
 
+  const passwordDetails = (
+    <details className="auth__details">
+      <summary className="auth__detailsSummary">{t('login.password.summary')}</summary>
+
+      <form
+        className="auth__form"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (passMode === 'login') passwordLogin()
+          else passwordRegister()
+        }}
+      >
+        {/* Заголовок */}
+        <div style={{ fontWeight: 900, letterSpacing: 0.1, marginBottom: 10 }}>
+          {passMode === 'login' ? 'Войти по логину и паролю' : 'Регистрация по логину и паролю'}
+        </div>
+
+        <div className="auth__grid">
+          <label className="field">
+            <span className="field__label">{t('login.password.login')}</span>
+            <input
+              className="input"
+              placeholder={t('login.password.login_ph')}
+              value={login}
+              onChange={(e) => setLogin(e.target.value)}
+              autoComplete="username"
+              disabled={loading}
+              inputMode="text"
+            />
+          </label>
+
+          <label className="field">
+            <span className="field__label">{t('login.password.password')}</span>
+            <input
+              className="input"
+              placeholder={t('login.password.password_ph')}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              type="password"
+              autoComplete={passMode === 'login' ? 'current-password' : 'new-password'}
+              disabled={loading}
+            />
+          </label>
+
+          {passMode === 'register' && (
+            <label className="field">
+              <span className="field__label">Повтор пароля</span>
+              <input
+                className="input"
+                placeholder="Введите пароль ещё раз"
+                value={password2}
+                onChange={(e) => setPassword2(e.target.value)}
+                type="password"
+                autoComplete="new-password"
+                disabled={loading}
+              />
+            </label>
+          )}
+        </div>
+
+        {passMode === 'register' && password2.length > 0 && !passwordsMatch && (
+          <div className="pre" style={{ marginTop: 12 }}>
+            Пароли не совпадают.
+          </div>
+        )}
+
+        {/* Основная кнопка */}
+        <div className="auth__actions">
+          <button
+            type="submit"
+            className="btn btn--primary"
+            style={{ width: '100%' }}
+            disabled={loading || (passMode === 'login' ? !canPasswordLogin : !canPasswordRegister)}
+          >
+            {loading
+              ? passMode === 'login'
+                ? t('login.password.submit_loading')
+                : 'Создаём аккаунт…'
+              : passMode === 'login'
+                ? t('login.password.submit')
+                : 'Зарегистрироваться'}
+          </button>
+        </div>
+
+        {/* Переключатель НИЖЕ основной кнопки, такой же ширины, отделён тонкой линией */}
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.10)' }}>
+          <button
+            type="button"
+            className="btn"
+            style={{
+              width: '100%',
+              background: 'rgba(255,255,255,0.03)',
+              borderColor: 'rgba(255,255,255,0.12)',
+              fontWeight: 900,
+            }}
+            disabled={loading}
+            onClick={() => {
+              setErr(null)
+              if (passMode === 'login') {
+                setPassMode('register')
+              } else {
+                setPassMode('login')
+                setPassword2('')
+              }
+            }}
+            title={passMode === 'login' ? 'Создать аккаунт' : 'Уже есть аккаунт'}
+          >
+            {passMode === 'login' ? 'Регистрация' : 'Уже есть аккаунт? Вход'}
+          </button>
+        </div>
+
+        {/* Подсказки */}
+        {passMode === 'login' ? (
+          <div className="pre" style={{ marginTop: 12 }}>
+            {t('login.password.tip')}
+          </div>
+        ) : (
+          <div className="pre" style={{ marginTop: 12 }}>
+            После регистрации можно привязать Telegram внутри приложения.
+          </div>
+        )}
+      </form>
+    </details>
+  )
+
   return (
     <div className="section">
       <div className="card">
@@ -247,7 +391,7 @@ export function Login() {
 
           {mode === 'web' && (
             <>
-              {/* Главная CTA — на всю ширину, без кнопки "обновить" */}
+              {/* Главная CTA — на всю ширину */}
               <div className="auth__actions" style={{ marginTop: 12 }}>
                 <button
                   type="button"
@@ -263,6 +407,7 @@ export function Login() {
                 <b>{t('login.why.title')}</b> {t('login.why.text')}
               </div>
 
+              {/* Провайдеры — как было */}
               <div className="auth__divider">
                 <span>{t('login.divider.providers')}</span>
               </div>
@@ -305,57 +450,8 @@ export function Login() {
                 <span>{t('login.divider.password')}</span>
               </div>
 
-              <details className="auth__details">
-                <summary className="auth__detailsSummary">{t('login.password.summary')}</summary>
-
-                <form
-                  className="auth__form"
-                  onSubmit={(e) => {
-                    e.preventDefault()
-                    passwordLogin()
-                  }}
-                >
-                  <div className="auth__grid">
-                    <label className="field">
-                      <span className="field__label">{t('login.password.login')}</span>
-                      <input
-                        className="input"
-                        placeholder={t('login.password.login_ph')}
-                        value={login}
-                        onChange={(e) => setLogin(e.target.value)}
-                        autoComplete="username"
-                        disabled={loading}
-                        inputMode="text"
-                      />
-                    </label>
-
-                    <label className="field">
-                      <span className="field__label">{t('login.password.password')}</span>
-                      <input
-                        className="input"
-                        placeholder={t('login.password.password_ph')}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        type="password"
-                        autoComplete="current-password"
-                        disabled={loading}
-                      />
-                    </label>
-                  </div>
-
-                  <div className="auth__actions">
-                    <button type="submit" className="btn btn--primary" disabled={loading || !canPasswordLogin}>
-                      {loading ? t('login.password.submit_loading') : t('login.password.submit')}
-                    </button>
-
-                    <button type="button" className="btn" disabled={true} title="Coming soon">
-                      {t('login.password.forgot')}
-                    </button>
-                  </div>
-
-                  <div className="pre" style={{ marginTop: 12 }}>{t('login.password.tip')}</div>
-                </form>
-              </details>
+              {/* Спойлер с понятной формой */}
+              {passwordDetails}
             </>
           )}
 
@@ -421,55 +517,8 @@ export function Login() {
                 <span>{t('login.backup.divider')}</span>
               </div>
 
-              <details className="auth__details">
-                <summary className="auth__detailsSummary">{t('login.backup.summary')}</summary>
-
-                <form
-                  className="auth__form"
-                  onSubmit={(e) => {
-                    e.preventDefault()
-                    passwordLogin()
-                  }}
-                >
-                  <div className="auth__grid">
-                    <label className="field">
-                      <span className="field__label">{t('login.password.login')}</span>
-                      <input
-                        className="input"
-                        placeholder={t('login.password.login_ph')}
-                        value={login}
-                        onChange={(e) => setLogin(e.target.value)}
-                        autoComplete="username"
-                        disabled={loading}
-                        inputMode="text"
-                      />
-                    </label>
-
-                    <label className="field">
-                      <span className="field__label">{t('login.password.password')}</span>
-                      <input
-                        className="input"
-                        placeholder={t('login.password.password_ph')}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        type="password"
-                        autoComplete="current-password"
-                        disabled={loading}
-                      />
-                    </label>
-                  </div>
-
-                  <div className="auth__actions">
-                    <button type="submit" className="btn btn--primary" disabled={loading || !canPasswordLogin}>
-                      {loading ? t('login.password.submit_loading') : t('login.password.submit')}
-                    </button>
-
-                    <button type="button" className="btn" disabled={true} title="Coming soon">
-                      {t('login.password.forgot')}
-                    </button>
-                  </div>
-                </form>
-              </details>
+              {/* Спойлер с понятной формой */}
+              {passwordDetails}
             </>
           )}
 
