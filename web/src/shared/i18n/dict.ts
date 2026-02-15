@@ -5,6 +5,22 @@ export const RU: Dict = {
   // app shell
   'app.beta': 'Бета',
 
+    // login (password register extras)
+  'login.password.register_title': 'Регистрация по логину и паролю',
+  'login.password.repeat': 'Повтор пароля',
+  'login.password.repeat_ph': 'Введите пароль ещё раз',
+  'login.password.mismatch': 'Пароли не совпадают.',
+
+  'login.password.register_loading': 'Создаём аккаунт…',
+  'login.password.register_submit': 'Зарегистрироваться',
+
+  'login.password.switch_to_register': 'Создать аккаунт',
+  'login.password.switch_to_login': 'Уже есть аккаунт',
+  'login.password.switch_register': 'Регистрация',
+  'login.password.switch_login': 'Уже есть аккаунт? Вход',
+
+  'login.password.register_tip': 'После регистрации можно привязать Telegram внутри приложения.',
+
   // login page
   'login.title': 'Вход в Shpun App',
   'login.badge.web': 'Веб-режим',
@@ -106,9 +122,137 @@ export const RU: Dict = {
   'profile.debug.title': 'Данные (beta)',
   'profile.debug.subtitle':
     'Это данные из биллинга. Raw оставляем для диагностики (позже уберём).',
+
+  // ===== Home =====
+  'home.loading.title': 'Shpun',
+  'home.loading.text': 'Загрузка…',
+
+  'home.error.title': 'Shpun',
+  'home.error.text': 'Ошибка загрузки профиля.',
+  'home.error.retry': 'Повторить',
+
+  'home.hello': 'Привет',
+  'home.subtitle': 'SDN System — баланс, услуги и управление подпиской.',
+  'home.refresh': '⟳ Обновить',
+
+  'home.kv.balance': 'Баланс',
+  'home.kv.bonus': 'Бонусы',
+  'home.kv.discount': 'Скидка',
+
+  'home.actions.payments': 'Оплата',
+  'home.actions.services': 'Услуги',
+  'home.actions.profile': 'Профиль',
+
+  'home.install': 'Установить',
+  'home.install.opening': 'Открываем…',
+
+  'home.meta.password': 'Пароль',
+  'home.meta.password.on': 'установлен',
+  'home.meta.password.off': 'не установлен',
+  'home.meta.created': 'Создан',
+  'home.meta.last_login': 'Последний вход',
+
+  'home.news.title': 'Новости',
+  'home.news.subtitle': 'Коротко и по делу. Полная лента — в “Новости”.',
+  'home.news.open': 'Открыть',
+  'home.news.open_full': 'Открыть новости',
+
+  'home.news.item1.title': '✅ Система стабильна — всё работает',
+  'home.news.item1.sub':
+    'Обновления без простоев. Если видишь “Can’t connect” — просто обнови страницу.',
+  'home.news.item2.title': '🧭 Cabinet переехал в “Новости”',
+  'home.news.item2.sub':
+    'Главная — витрина. Новости — лента. Дальше подключим реальные данные в “Услугах”.',
+  'home.news.item3.title': '🔐 Вход с рабочего стола через Telegram',
+  'home.news.item3.sub':
+    'Теперь это одна кнопка: откроем браузер и перенесём авторизацию автоматически.',
+
+  'home.desktop.title': 'Открыть на компьютере',
+  'home.desktop.desc':
+    'Нажми кнопку — мы откроем внешний браузер и перенесём вход в Shpun App. Ничего копировать не нужно.',
+  'home.desktop.open': 'Открыть приложение на компьютере',
+  'home.desktop.opening': 'Открываем…',
+  'home.desktop.install': 'Установить',
+  'home.desktop.installing': 'Установка…',
+  'home.desktop.show_link': 'Показать ссылку',
+  'home.desktop.hide_link': 'Скрыть ссылку',
+  'home.desktop.fallback.title': 'Резервный вариант (если авто-открытие не сработало)',
+  'home.desktop.copy': 'Скопировать',
+  'home.desktop.copy_ok': 'Ссылка скопирована 👍',
+  'home.desktop.copy_prompt': 'Скопируй ссылку:',
+  'home.desktop.hint.default': 'Код одноразовый и быстро истекает.',
+  'home.desktop.hint.expired': 'Срок действия кода истёк. Нажми ещё раз.',
+  'home.desktop.hint.left': 'Код одноразовый. Действует примерно {sec} сек.',
+  'home.desktop.error.title': 'Не получилось',
+  'home.desktop.error.tip':
+    'Подсказка: transfer-login работает только если ты уже вошёл в Shpun App внутри Telegram.',
+  'home.install.no_button.title': 'Установка',
+  'home.install.no_button.text':
+    'Если кнопки “Установить” нет — браузер не выдал запрос установки. Открой приложение в Chrome/Edge и попробуй снова.',
+
+  // ===== SetPassword =====
+  'setpwd.checking.title': 'Проверяем…',
+  'setpwd.checking.text': 'Подготавливаем вход.',
+
+  'setpwd.need_login.title': 'Нужен вход',
+  'setpwd.need_login.cta': 'Перейти к входу',
+
+  'setpwd.redirecting': 'Открываем приложение…',
+
+  'setpwd.title': 'Установить пароль',
+  'setpwd.desc':
+    'Вы вошли через Telegram. Создайте пароль — так вы сможете входить и вне Telegram.',
+  'setpwd.badge': 'Шаг 1 / 1',
+
+  'setpwd.kv.login': 'Ваш логин',
+  'setpwd.kv.why': 'Зачем',
+  'setpwd.kv.why_value': 'Резервный вход',
+  'setpwd.kv.next': 'Дальше',
+  'setpwd.kv.next_value': 'Главная',
+
+  'setpwd.field.p1': 'Новый пароль',
+  'setpwd.field.p1_ph': 'Минимум 8 символов',
+  'setpwd.field.p2': 'Повторите пароль',
+  'setpwd.field.p2_ph': 'Повторите пароль',
+
+  'setpwd.strength': 'Надёжность',
+  'setpwd.tip': 'Совет: 8+ символов, цифры и спецсимволы.',
+
+  'setpwd.save': 'Сохранить пароль',
+  'setpwd.saving': 'Сохраняю…',
+  'setpwd.to_home': 'На главную',
+
+  'setpwd.err.title': 'Ошибка',
+
+  // promo (Home stub)
+  'promo.title': 'Промокоды',
+  'promo.desc': 'Есть промокод? Введи его здесь — бонусы или скидка применятся к аккаунту.',
+  'promo.input_ph': 'Например: SHPUN-2026',
+  'promo.apply': 'Применить',
+  'promo.applying': 'Применяем…',
+  'promo.err.empty': 'Введите промокод.',
+  'promo.done.stub': 'Промокоды скоро будут доступны прямо в приложении ✨',
+  'promo.history': 'История / статус',
 }
 
 export const EN: Dict = {
+
+    // login (password register extras)
+  'login.password.register_title': 'Sign up with login & password',
+  'login.password.repeat': 'Repeat password',
+  'login.password.repeat_ph': 'Type your password again',
+  'login.password.mismatch': 'Passwords do not match.',
+
+  'login.password.register_loading': 'Creating account…',
+  'login.password.register_submit': 'Sign up',
+
+  'login.password.switch_to_register': 'Create account',
+  'login.password.switch_to_login': 'Already have an account',
+  'login.password.switch_register': 'Sign up',
+  'login.password.switch_login': 'Already have an account? Sign in',
+
+  'login.password.register_tip': 'After sign-up you can link Telegram inside the app.',
+
   'app.beta': 'Beta',
 
   'login.title': 'Sign in to Shpun App',
@@ -210,4 +354,115 @@ export const EN: Dict = {
   'profile.debug.title': 'Data (beta)',
   'profile.debug.subtitle':
     'This comes from billing. Keeping raw for diagnostics (we will remove it later).',
+
+  // ===== Home =====
+  'home.loading.title': 'Shpun',
+  'home.loading.text': 'Loading…',
+
+  'home.error.title': 'Shpun',
+  'home.error.text': 'Failed to load profile.',
+  'home.error.retry': 'Retry',
+
+  'home.hello': 'Hi',
+  'home.subtitle': 'SDN System — balance, services and subscription management.',
+  'home.refresh': '⟳ Refresh',
+
+  'home.kv.balance': 'Balance',
+  'home.kv.bonus': 'Bonus',
+  'home.kv.discount': 'Discount',
+
+  'home.actions.payments': 'Payments',
+  'home.actions.services': 'Services',
+  'home.actions.profile': 'Profile',
+
+  'home.install': 'Install',
+  'home.install.opening': 'Opening…',
+
+  'home.meta.password': 'Password',
+  'home.meta.password.on': 'set',
+  'home.meta.password.off': 'not set',
+  'home.meta.created': 'Created',
+  'home.meta.last_login': 'Last login',
+
+  'home.news.title': 'News',
+  'home.news.subtitle': 'Short & useful. Full feed is in “News”.',
+  'home.news.open': 'Open',
+  'home.news.open_full': 'Open news',
+
+  'home.news.item1.title': '✅ Stable — everything works',
+  'home.news.item1.sub':
+    'Zero-downtime updates. If you see “Can’t connect” — just refresh the page.',
+  'home.news.item2.title': '🧭 Cabinet moved to “News”',
+  'home.news.item2.sub':
+    'Home is a vitrine. News is the feed. Next we will wire real data into “Services”.',
+  'home.news.item3.title': '🔐 Desktop sign-in via Telegram',
+  'home.news.item3.sub':
+    'Now it’s one button: we open the browser and transfer the session automatically.',
+
+  'home.desktop.title': 'Open on desktop',
+  'home.desktop.desc':
+    'Tap the button — we’ll open your browser and transfer your sign-in. No copying needed.',
+  'home.desktop.open': 'Open app on desktop',
+  'home.desktop.opening': 'Opening…',
+  'home.desktop.install': 'Install',
+  'home.desktop.installing': 'Installing…',
+  'home.desktop.show_link': 'Show link',
+  'home.desktop.hide_link': 'Hide link',
+  'home.desktop.fallback.title': 'Fallback (if auto-open didn’t work)',
+  'home.desktop.copy': 'Copy',
+  'home.desktop.copy_ok': 'Link copied 👍',
+  'home.desktop.copy_prompt': 'Copy this link:',
+  'home.desktop.hint.default': 'This code is one-time and expires quickly.',
+  'home.desktop.hint.expired': 'Expired. Tap the button again.',
+  'home.desktop.hint.left': 'One-time code. About {sec} seconds left.',
+  'home.desktop.error.title': 'Something went wrong',
+  'home.desktop.error.tip':
+    'Tip: transfer-login works only if you already signed in inside Telegram WebApp.',
+  'home.install.no_button.title': 'Install',
+  'home.install.no_button.text':
+    'If there is no “Install” button — the browser didn’t show install prompt. Try Chrome/Edge.',
+
+  // ===== SetPassword =====
+  'setpwd.checking.title': 'Checking…',
+  'setpwd.checking.text': 'Preparing your session.',
+
+  'setpwd.need_login.title': 'Sign-in required',
+  'setpwd.need_login.cta': 'Go to login',
+
+  'setpwd.redirecting': 'Opening the app…',
+
+  'setpwd.title': 'Set a password',
+  'setpwd.desc':
+    'You signed in via Telegram. Set a password to be able to sign in outside Telegram.',
+  'setpwd.badge': 'Step 1 / 1',
+
+  'setpwd.kv.login': 'Your login',
+  'setpwd.kv.why': 'Why',
+  'setpwd.kv.why_value': 'Backup sign-in',
+  'setpwd.kv.next': 'Next',
+  'setpwd.kv.next_value': 'Home',
+
+  'setpwd.field.p1': 'New password',
+  'setpwd.field.p1_ph': 'At least 8 characters',
+  'setpwd.field.p2': 'Repeat password',
+  'setpwd.field.p2_ph': 'Repeat password',
+
+  'setpwd.strength': 'Strength',
+  'setpwd.tip': 'Tip: 8+ chars, numbers and symbols.',
+
+  'setpwd.save': 'Save password',
+  'setpwd.saving': 'Saving…',
+  'setpwd.to_home': 'Go to home',
+
+  'setpwd.err.title': 'Error',
+
+  // promo (Home stub)
+  'promo.title': 'Promo codes',
+  'promo.desc': 'Have a promo code? Enter it here — bonuses or discount will apply to your account.',
+  'promo.input_ph': 'For example: SHPUN-2026',
+  'promo.apply': 'Apply',
+  'promo.applying': 'Applying…',
+  'promo.err.empty': 'Enter a promo code.',
+  'promo.done.stub': 'Promo codes will be available in the app soon ✨',
+  'promo.history': 'History / status',
 }

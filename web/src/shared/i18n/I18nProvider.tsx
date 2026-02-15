@@ -1,45 +1,45 @@
-import React, { createContext, useContext, useMemo, useState } from 'react'
-import type { Dict, Lang } from './dict'
-import { RU, EN } from './dict'
+import React, { createContext, useContext, useMemo, useState } from "react";
+import type { Dict, Lang } from "./dict";
+import { RU, EN } from "./dict";
 
 type I18nCtx = {
-  lang: Lang
-  setLang: (l: Lang) => void
-  t: (key: string) => string
-}
+  lang: Lang;
+  setLang: (l: Lang) => void;
+  t: (key: string, fallback?: string) => string;
+};
 
-const Ctx = createContext<I18nCtx | null>(null)
+const Ctx = createContext<I18nCtx | null>(null);
 
 function getInitialLang(): Lang {
-  const saved = (localStorage.getItem('lang') || '').toLowerCase()
-  if (saved === 'en' || saved === 'ru') return saved
-  return 'ru'
+  const saved = (localStorage.getItem("lang") || "").toLowerCase();
+  if (saved === "en" || saved === "ru") return saved;
+  return "ru";
 }
 
 function dictFor(lang: Lang): Dict {
-  return lang === 'en' ? EN : RU
+  return lang === "en" ? EN : RU;
 }
 
 export function I18nProvider({ children }: { children: React.ReactNode }) {
-  const [lang, setLangState] = useState<Lang>(getInitialLang())
+  const [lang, setLangState] = useState<Lang>(getInitialLang());
 
-  const api = useMemo(() => {
-    const dict = dictFor(lang)
+  const api = useMemo<I18nCtx>(() => {
+    const dict = dictFor(lang);
     return {
       lang,
       setLang: (l: Lang) => {
-        setLangState(l)
-        localStorage.setItem('lang', l)
+        setLangState(l);
+        localStorage.setItem("lang", l);
       },
-      t: (key: string) => dict[key] ?? key,
-    }
-  }, [lang])
+      t: (key: string, fallback?: string) => dict[key] ?? fallback ?? key,
+    };
+  }, [lang]);
 
-  return <Ctx.Provider value={api}>{children}</Ctx.Provider>
+  return <Ctx.Provider value={api}>{children}</Ctx.Provider>;
 }
 
 export function useI18n() {
-  const v = useContext(Ctx)
-  if (!v) throw new Error('useI18n must be used inside I18nProvider')
-  return v
+  const v = useContext(Ctx);
+  if (!v) throw new Error("useI18n must be used inside I18nProvider");
+  return v;
 }
