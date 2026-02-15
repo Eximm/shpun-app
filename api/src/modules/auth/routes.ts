@@ -110,6 +110,7 @@ async function getPasswordSetFlag(shmSessionId: string): Promise<0 | 1> {
 
 // ===== Public base URL (для редиректов) =====
 function getPublicAppBase(req: any): string {
+  // 0) приоритет: forwarded headers (nginx/cf)
   const xfProto = String(req.headers?.["x-forwarded-proto"] ?? "").trim();
   const xfHost = String(req.headers?.["x-forwarded-host"] ?? "").trim();
   if (xfHost) {
@@ -117,6 +118,7 @@ function getPublicAppBase(req: any): string {
     return `${proto}://${xfHost}`;
   }
 
+  // 1) если пришёл реальный Origin и он в allowlist — используем его
   const origin = String(req.headers?.origin ?? "").trim();
   const allow = String(process.env.APP_ORIGIN ?? "")
     .split(",")
@@ -124,17 +126,24 @@ function getPublicAppBase(req: any): string {
     .filter(Boolean);
 
   if (origin && allow.includes(origin)) return origin;
+
+  // 2) иначе берём первый из APP_ORIGIN
   if (allow.length) return allow[0];
+
+  // 3) fallback
   return "https://app.shpyn.online";
 }
 
 function normalizeRedirectPath(input: any, fallback = "/app"): string {
   const v = String(input ?? "").trim();
   if (!v) return fallback;
+
+  // только относительные пути внутри приложения (защита от open-redirect)
   if (!v.startsWith("/")) return fallback;
   if (v.startsWith("//")) return fallback;
   if (v.includes("\r") || v.includes("\n")) return fallback;
   if (/[^\x20-\x7E]/.test(v)) return fallback;
+
   return v;
 }
 
@@ -145,7 +154,6 @@ function getRequestIp(req: any): string {
 function isHttps(req: any): boolean {
   const xfProto = String(req.headers?.["x-forwarded-proto"] ?? "").trim().toLowerCase();
   if (xfProto) return xfProto === "https";
-  // fallback
   const proto = String((req as any).protocol ?? "").toLowerCase();
   return proto === "https";
 }
@@ -210,6 +218,7 @@ export async function authRoutes(app: FastifyInstance) {
       ...(telegramInitData ? { telegramInitData } : {}),
     });
 
+    // ✅ next: только сервер решает, куда идти.
     let next: "set_password" | "home" = "home";
 
     if (provider === "telegram") {
@@ -276,6 +285,9 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   // ====== POST /api/auth/transfer/start ======
+  // Создаёт одноразовый код на 60 сек и возвращает consume_url (API), который:
+  // - ставит sid cookie
+  // - редиректит на /app (Home)
   app.post("/auth/transfer/start", async (req, reply) => {
     const s = getSessionFromRequest(req) as any;
     const shmSessionId = String(s?.shmSessionId ?? "").trim();
@@ -297,26 +309,34 @@ export async function authRoutes(app: FastifyInstance) {
     });
 
     const base = getPublicAppBase(req);
+
+    // Важно: ведём в API consume, а не в SPA "/transfer"
+    // чтобы cookie sid была поставлена сервером.
     const consumeUrl = `${base}/api/auth/transfer/consume?code=${encodeURIComponent(code)}`;
 
     return reply.send({ ok: true, consume_url: consumeUrl, expires_at: expiresAt });
   });
 
   // ====== GET /api/auth/transfer/consume?code=...&redirect=/app ======
+  // Открывается в браузере/PWA. Обменивает code -> создаёт sid cookie -> редиректит в приложение
   app.get("/auth/transfer/consume", async (req, reply) => {
     const q = req.query as any;
     const code = String(q.code ?? "").trim();
+
+    // default: Home (/app)
     const redirectTo = normalizeRedirectPath(q.redirect, "/app");
 
     if (!code) return reply.code(400).send({ ok: false, error: "code_required" });
 
     const r = consumeTransfer(code);
     if (!r.ok) {
+      // UX: мягко отправляем на login с параметром, но без утечек
       const base = getPublicAppBase(req);
       const url = `${base}/login?e=${encodeURIComponent(r.error)}`;
       return reply.redirect(303, url);
     }
 
+    // Ставим sid cookie
     const localSid = createLocalSid();
     putSession(localSid, {
       shmSessionId: r.shmSessionId,
@@ -324,6 +344,93 @@ export async function authRoutes(app: FastifyInstance) {
       createdAt: Date.now(),
     });
 
+    const base = getPublicAppBase(req);
+    const continueUrl = `${base}/api/auth/transfer/consume?code=${encodeURIComponent(
+      code
+    )}&redirect=${encodeURIComponent(redirectTo)}&mode=browser`;
+
+    // Детект Telegram WebView (особенно Android)
+    const ua = String(req.headers["user-agent"] ?? "");
+    const isAndroid = /Android/i.test(ua);
+    const isTelegram = /Telegram/i.test(ua) || /TelegramBot/i.test(ua);
+
+    // Если Telegram на Android — отдаём “прокладку” вместо 303.
+    // Иначе Telegram часто держит всё внутри себя и не уходит в Chrome.
+    if (isTelegram && isAndroid) {
+      // intent:// для Chrome (best-effort)
+      const httpsNoProto = continueUrl.replace(/^https?:\/\//i, "");
+      const intentUrl =
+        `intent://${httpsNoProto}` +
+        `#Intent;scheme=https;package=com.android.chrome;end`;
+
+      const html = `<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Shpun App — открыть в браузере</title>
+  <meta http-equiv="Cache-Control" content="no-store, max-age=0" />
+  <style>
+    :root{color-scheme:dark}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:#0b0f17;color:rgba(255,255,255,.92)}
+    .wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+    .card{max-width:520px;width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:18px;box-shadow:0 14px 38px rgba(0,0,0,.35);padding:18px}
+    h1{font-size:18px;margin:0 0 8px}
+    p{margin:8px 0;color:rgba(255,255,255,.72);line-height:1.45}
+    .btn{display:inline-flex;align-items:center;justify-content:center;width:100%;border:0;border-radius:14px;padding:12px 14px;font-weight:800;cursor:pointer}
+    .btnPrimary{background:linear-gradient(90deg,#7c5cff,#4dd7ff);color:#081018}
+    .btnGhost{margin-top:10px;background:rgba(255,255,255,.08);color:rgba(255,255,255,.92);border:1px solid rgba(255,255,255,.12)}
+    .mono{margin-top:12px;padding:12px;border-radius:14px;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.12);word-break:break-all;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;color:rgba(255,255,255,.78)}
+    .hint{font-size:12px;color:rgba(255,255,255,.62)}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Открываем Shpun App в браузере</h1>
+      <p>Telegram на Android иногда открывает ссылки внутри себя. Чтобы установить приложение и сохранить вход — открой в браузере (Chrome).</p>
+
+      <button class="btn btnPrimary" id="openChrome">Открыть в браузере (Chrome)</button>
+      <button class="btn btnGhost" id="openAny">Открыть обычной ссылкой</button>
+
+      <div class="mono" id="link">${continueUrl}</div>
+      <p class="hint">Если кнопки не сработали — нажми и удерживай ссылку, затем “Открыть в браузере” или “Копировать”.</p>
+    </div>
+  </div>
+
+  <script>
+    const intentUrl = ${JSON.stringify(intentUrl)};
+    const httpsUrl = ${JSON.stringify(continueUrl)};
+
+    function goIntent() { window.location.href = intentUrl; }
+    function goHttps() { window.location.href = httpsUrl; }
+
+    document.getElementById('openChrome').addEventListener('click', () => {
+      goIntent();
+      setTimeout(goHttps, 600);
+    });
+
+    document.getElementById('openAny').addEventListener('click', () => {
+      goHttps();
+    });
+
+    // авто-попытка сразу (best-effort)
+    setTimeout(() => {
+      goIntent();
+      setTimeout(goHttps, 700);
+    }, 150);
+  </script>
+</body>
+</html>`;
+
+      return reply
+        .setCookie("sid", localSid, cookieOptions(req))
+        .header("content-type", "text/html; charset=utf-8")
+        .header("cache-control", "no-store, max-age=0")
+        .send(html);
+    }
+
+    // Обычный сценарий: ставим cookie и редиректим в приложение
     return reply
       .setCookie("sid", localSid, cookieOptions(req))
       .redirect(303, redirectTo);

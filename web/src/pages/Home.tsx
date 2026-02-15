@@ -53,11 +53,8 @@ function isTelegramWebApp(): boolean {
 
 function openInBrowser(url: string) {
   const tg = (window as any)?.Telegram?.WebApp;
-  // В Telegram пытаемся открыть ссылку так, чтобы она ушла во внешний браузер.
-  // У разных клиентов Telegram поведение отличается, поэтому делаем best-effort + fallback.
   if (tg?.openLink) {
     try {
-      // Некоторые клиенты принимают 2-й параметр (options)
       tg.openLink(url, { try_instant_view: false });
       return;
     } catch {
@@ -92,6 +89,7 @@ export function Home() {
   >("idle");
 
   const inTelegram = isTelegramWebApp();
+  const transferBusy = transfer.status === "loading";
 
   const profile = me?.profile;
   const balance = me?.balance;
@@ -109,11 +107,11 @@ export function Home() {
       window.removeEventListener("beforeinstallprompt", handler as any);
   }, []);
 
-  // Важно: install prompt показываем только в обычном браузере (не в Telegram WebApp)
-  const canInstall = !inTelegram && !!installEvt && installState !== "done";
+  // Настоящая PWA-установка (prompt) — только в браузере, не в Telegram WebApp
+  const canInstallPrompt =
+    !inTelegram && !!installEvt && installState !== "done";
 
-  async function runInstall() {
-    // дополнительная защита: в Telegram install-подсказку вообще не открываем
+  async function runInstallPrompt() {
     if (!installEvt || inTelegram) return;
 
     try {
@@ -134,14 +132,14 @@ export function Home() {
   const transferHint = useMemo(() => {
     if (transfer.status !== "ready") return "";
     if (!transfer.expiresAt)
-      return t("home.desktop.hint.default", "Код одноразовый и быстро истекает.");
+      return t("home.install.hint.default", "Ссылка одноразовая и быстро истекает.");
     const leftMs = transfer.expiresAt - Date.now();
     const leftSec = Math.max(0, Math.floor(leftMs / 1000));
     if (leftSec <= 0)
-      return t("home.desktop.hint.expired", "Срок действия кода истёк. Нажми ещё раз.");
+      return t("home.install.hint.expired", "Срок действия истёк. Нажми ещё раз.");
     return t(
-      "home.desktop.hint.left",
-      `Код одноразовый. Действует примерно ${leftSec} сек.`
+      "home.install.hint.left",
+      `Ссылка одноразовая. Действует примерно ${leftSec} сек.`
     ).replace("{sec}", String(leftSec));
   }, [transfer, t]);
 
@@ -162,10 +160,7 @@ export function Home() {
       if (!res.ok || !json?.ok) {
         const msg =
           json?.error === "not_authenticated"
-            ? t(
-                "error.open_in_tg",
-                "Откройте это приложение внутри Telegram, чтобы войти."
-              )
+            ? t("error.open_in_tg", "Откройте приложение внутри Telegram, чтобы войти.")
             : String(json?.error || "transfer_start_failed");
         setTransfer({ status: "error", message: msg });
         return;
@@ -175,7 +170,7 @@ export function Home() {
       if (!consumeUrl) {
         setTransfer({
           status: "error",
-          message: t("home.desktop.error.title", "Не получилось") + ": consume_url",
+          message: t("home.install.error", "Не получилось открыть установку.") + ": consume_url",
         });
         return;
       }
@@ -192,7 +187,7 @@ export function Home() {
     } catch (e: any) {
       setTransfer({
         status: "error",
-        message: e?.message || t("home.desktop.error.title", "Не получилось"),
+        message: e?.message || t("home.install.error", "Не получилось открыть установку."),
       });
     }
   }
@@ -203,9 +198,9 @@ export function Home() {
 
     try {
       await navigator.clipboard.writeText(url);
-      alert(t("home.desktop.copy_ok", "Ссылка скопирована 👍"));
+      alert(t("home.install.copy_ok", "Ссылка скопирована 👍"));
     } catch {
-      window.prompt(t("home.desktop.copy_prompt", "Скопируй ссылку:"), url);
+      window.prompt(t("home.install.copy_prompt", "Скопируй ссылку:"), url);
     }
   }
 
@@ -214,10 +209,7 @@ export function Home() {
     if (!code) {
       setPromo((p) => ({
         ...p,
-        state: {
-          status: "error",
-          message: t("promo.err.empty", "Введите промокод."),
-        },
+        state: { status: "error", message: t("promo.err.empty", "Введите промокод.") },
       }));
       return;
     }
@@ -229,10 +221,7 @@ export function Home() {
       ...p,
       state: {
         status: "done",
-        message: t(
-          "promo.done.stub",
-          "Промокоды скоро будут доступны прямо в приложении ✨"
-        ),
+        message: t("promo.done.stub", "Промокоды скоро будут доступны прямо в приложении ✨"),
       },
     }));
   }
@@ -242,7 +231,7 @@ export function Home() {
       <div className="section">
         <div className="card">
           <div className="card__body">
-            <h1 className="h1">{t("home.loading.title", "Shpun")}</h1>
+            <h1 className="h1">{t("home.loading.title", "ShpunApp")}</h1>
             <p className="p">{t("home.loading.text", "Загрузка…")}</p>
           </div>
         </div>
@@ -255,7 +244,7 @@ export function Home() {
       <div className="section">
         <div className="card">
           <div className="card__body">
-            <h1 className="h1">{t("home.error.title", "Shpun")}</h1>
+            <h1 className="h1">{t("home.error.title", "ShpunApp")}</h1>
             <p className="p">{t("home.error.text", "Ошибка загрузки профиля.")}</p>
 
             <ActionGrid>
@@ -277,29 +266,16 @@ export function Home() {
       {/* User hero */}
       <div className="card">
         <div className="card__body">
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 12,
-            }}
-          >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
             <div>
               <h1 className="h1">
                 {t("home.hello", "Привет")}
                 {displayName ? `, ${displayName}` : ""} 👋
               </h1>
-              <p className="p">
-                {t("home.subtitle", "SDN System — баланс, услуги и управление подпиской.")}
-              </p>
+              <p className="p">{t("home.subtitle", "SDN System — баланс, услуги и управление подпиской.")}</p>
             </div>
 
-            <button
-              className="btn"
-              onClick={() => refetch?.()}
-              title={t("home.refresh", "⟳ Обновить")}
-            >
+            <button className="btn" onClick={() => refetch?.()} title={t("home.refresh", "⟳ Обновить")}>
               {t("home.refresh", "⟳ Обновить")}
             </button>
           </div>
@@ -334,31 +310,31 @@ export function Home() {
               {t("home.actions.profile", "Профиль")}
             </Link>
 
-            {/* Реальная PWA-установка — только в браузере */}
-            {canInstall && (
+            {/* В браузере — реальная установка через prompt */}
+            {canInstallPrompt && (
               <button
                 className="btn"
-                onClick={runInstall}
+                onClick={runInstallPrompt}
                 disabled={installState === "prompting"}
-                title={t("home.install", "Установить")}
+                title={t("home.install", "Установить приложение")}
               >
                 {installState === "prompting"
                   ? t("home.install.opening", "Открываем…")
-                  : t("home.install", "Установить")}
+                  : t("home.install", "Установить приложение")}
               </button>
             )}
 
-            {/* В Telegram вместо "установить" — открываем во внешнем браузере (через transfer) */}
+            {/* В Telegram — открываем браузер и переносим вход (чтобы установить) */}
             {inTelegram && (
               <button
                 className="btn"
                 onClick={startTransferAndOpen}
-                disabled={transfer.status === "loading"}
-                title={t("home.install", "Установить")}
+                disabled={transferBusy}
+                title={t("home.install", "Установить приложение")}
               >
-                {transfer.status === "loading"
+                {transferBusy
                   ? t("home.install.opening", "Открываем…")
-                  : t("home.install", "Установить")}
+                  : t("home.install", "Установить приложение")}
               </button>
             )}
           </ActionGrid>
@@ -381,134 +357,128 @@ export function Home() {
               <div className="kv__v">{fmtDate(profile?.lastLogin)}</div>
             </div>
           </div>
-
-          {/* Подсказка про установку в Telegram */}
-          {inTelegram && (
-            <div className="pre" style={{ marginTop: 12, opacity: 0.9 }}>
-              <div style={{ fontWeight: 900, marginBottom: 6 }}>
-                {t("home.install.tg.title", "Установка")}
-              </div>
-              <div style={{ opacity: 0.85 }}>
-                {t(
-                  "home.install.tg.text",
-                  "Установка приложения работает через браузер. Мы откроем его во внешнем браузере и перенесём вход автоматически."
-                )}
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
-      {/* Desktop transfer login */}
+      {/* Install helper (только когда нужно) */}
+      {inTelegram && (transfer.status === "ready" || transfer.status === "error") && (
+        <div className="section">
+          <div className="card">
+            <div className="card__body">
+              <div className="h1" style={{ fontSize: 18 }}>
+                {t("home.install.title", "Установить приложение")}
+              </div>
+              <p className="p">
+                {t(
+                  "home.install.desc",
+                  "Мы откроем браузер и перенесём вход автоматически. После этого можно установить приложение обычным способом."
+                )}
+              </p>
+
+              {transfer.status === "ready" && (
+                <ActionGrid>
+                  <button className="btn btn--primary" onClick={startTransferAndOpen}>
+                    {t("home.install.open_browser", "Открыть браузер")}
+                  </button>
+
+                  <button
+                    className="btn"
+                    onClick={() => setShowTransferLink((v) => !v)}
+                    title={t("home.install.fallback", "Если авто-открытие не сработало")}
+                  >
+                    {showTransferLink
+                      ? t("home.install.hide_link", "Скрыть ссылку")
+                      : t("home.install.show_link", "Показать ссылку")}
+                  </button>
+                </ActionGrid>
+              )}
+
+              {transfer.status === "ready" && showTransferLink && (
+                <div className="pre" style={{ marginTop: 12 }}>
+                  <div style={{ fontWeight: 900, marginBottom: 6 }}>
+                    {t("home.install.fallback", "Если авто-открытие не сработало")}
+                  </div>
+                  <div style={{ wordBreak: "break-word" }}>{transfer.consumeUrl}</div>
+                  <div style={{ marginTop: 10, opacity: 0.85 }}>{transferHint}</div>
+                  <div style={{ marginTop: 10 }}>
+                    <button className="btn" onClick={copyTransferUrl}>
+                      {t("home.install.copy", "Скопировать ссылку")}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {transfer.status === "error" && (
+                <div className="pre" style={{ marginTop: 12 }}>
+                  <div style={{ fontWeight: 900, marginBottom: 6 }}>
+                    {t("home.install.error", "Не получилось открыть установку.")}
+                  </div>
+                  <div style={{ opacity: 0.85 }}>{transfer.message}</div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* News preview */}
       <div className="section">
         <div className="card">
           <div className="card__body">
-            <div className="h1" style={{ fontSize: 18 }}>
-              {t("home.desktop.title", "Открыть на компьютере")}
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+              <div>
+                <div className="h1" style={{ fontSize: 18 }}>
+                  {t("home.news.title", "Новости")}
+                </div>
+                <p className="p">{t("home.news.subtitle", "Коротко и по делу. Полная лента — в “Новости”.")}</p>
+              </div>
+              <Link className="btn" to="/app/feed">
+                {t("home.news.open", "Открыть")}
+              </Link>
             </div>
 
-            <p className="p">
-              {t(
-                "home.desktop.desc",
-                "Нажми кнопку — мы откроем внешний браузер и перенесём вход в Shpun App. Ничего копировать не нужно."
-              )}
-            </p>
+            <div className="list">
+              <div className="list__item">
+                <div className="list__main">
+                  <div className="list__title">{t("home.news.item1.title", "✅ Система стабильна — всё работает")}</div>
+                  <div className="list__sub">{t("home.news.item1.sub", "Если видишь “Can’t connect” — просто обнови страницу.")}</div>
+                </div>
+                <div className="list__side">
+                  <span className="chip chip--ok">today</span>
+                </div>
+              </div>
+
+              <div className="list__item">
+                <div className="list__main">
+                  <div className="list__title">{t("home.news.item2.title", "🧭 Лента — в “Новости”")}</div>
+                  <div className="list__sub">{t("home.news.item2.sub", "Главная — витрина. Новости — лента. Дальше подключим реальные данные.")}</div>
+                </div>
+                <div className="list__side">
+                  <span className="chip chip--soft">new</span>
+                </div>
+              </div>
+
+              <div className="list__item">
+                <div className="list__main">
+                  <div className="list__title">{t("home.news.item3.title", "🔐 Установка без потери входа")}</div>
+                  <div className="list__sub">{t("home.news.item3.sub", "Откроем браузер и перенесём вход автоматически.")}</div>
+                </div>
+                <div className="list__side">
+                  <span className="chip chip--warn">new</span>
+                </div>
+              </div>
+            </div>
 
             <ActionGrid>
-              <button
-                className="btn btn--primary"
-                onClick={startTransferAndOpen}
-                disabled={transfer.status === "loading"}
-              >
-                {transfer.status === "loading"
-                  ? t("home.desktop.opening", "Открываем…")
-                  : t("home.desktop.open", "Открыть приложение на компьютере")}
-              </button>
-
-              {canInstall && (
-                <button
-                  className="btn"
-                  onClick={runInstall}
-                  disabled={installState === "prompting"}
-                  title={t("home.desktop.install", "Установить")}
-                >
-                  {installState === "prompting"
-                    ? t("home.desktop.installing", "Установка…")
-                    : t("home.desktop.install", "Установить")}
-                </button>
-              )}
-
-              {transfer.status === "ready" && (
-                <button
-                  className="btn"
-                  onClick={() => setShowTransferLink((v) => !v)}
-                  title={t(
-                    "home.desktop.fallback.title",
-                    "Резервный вариант (если авто-открытие не сработало)"
-                  )}
-                >
-                  {showTransferLink
-                    ? t("home.desktop.hide_link", "Скрыть ссылку")
-                    : t("home.desktop.show_link", "Показать ссылку")}
-                </button>
-              )}
+              <Link className="btn" to="/app/feed">
+                {t("home.news.open_full", "Открыть новости")}
+              </Link>
             </ActionGrid>
-
-            {transfer.status === "ready" && showTransferLink && (
-              <div className="pre">
-                <div style={{ fontWeight: 900, marginBottom: 6 }}>
-                  {t(
-                    "home.desktop.fallback.title",
-                    "Резервный вариант (если авто-открытие не сработало)"
-                  )}
-                </div>
-
-                <div style={{ wordBreak: "break-word" }}>{transfer.consumeUrl}</div>
-
-                <div style={{ marginTop: 10, opacity: 0.85 }}>{transferHint}</div>
-
-                <div style={{ marginTop: 10 }}>
-                  <button className="btn" onClick={copyTransferUrl}>
-                    {t("home.desktop.copy", "Скопировать")}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {transfer.status === "error" && (
-              <div className="pre">
-                <div style={{ fontWeight: 900, marginBottom: 6 }}>
-                  {t("home.desktop.error.title", "Не получилось")}
-                </div>
-                <div style={{ opacity: 0.85 }}>{transfer.message}</div>
-
-                <div style={{ marginTop: 10, opacity: 0.85 }}>
-                  {t(
-                    "home.desktop.error.tip",
-                    "Подсказка: transfer-login работает только если ты уже вошёл в Shpun App внутри Telegram."
-                  )}
-                </div>
-              </div>
-            )}
-
-            {!canInstall && !inTelegram && (
-              <div className="pre" style={{ marginTop: 12, opacity: 0.9 }}>
-                <div style={{ fontWeight: 900, marginBottom: 6 }}>
-                  {t("home.install.no_button.title", "Установка")}
-                </div>
-                <div style={{ opacity: 0.85 }}>
-                  {t(
-                    "home.install.no_button.text",
-                    "Если кнопки “Установить” нет — браузер не выдал запрос установки. Открой приложение в Chrome/Edge и попробуй снова."
-                  )}
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>
 
-      {/* Promo codes (bottom) */}
+      {/* Promo codes */}
       <div className="section">
         <div className="card">
           <div className="card__body">
@@ -516,10 +486,7 @@ export function Home() {
               {t("promo.title", "Промокоды")}
             </div>
             <p className="p">
-              {t(
-                "promo.desc",
-                "Есть промокод? Введи его здесь — бонусы или скидка применятся к аккаунту."
-              )}
+              {t("promo.desc", "Есть промокод? Введи его здесь — бонусы или скидка применятся к аккаунту.")}
             </p>
 
             <div className="actions actions--2">
