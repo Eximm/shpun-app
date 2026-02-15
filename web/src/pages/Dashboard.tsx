@@ -1,4 +1,4 @@
-﻿// web/src/pages/Cabinet.tsx
+// web/src/pages/Dashboard.tsx
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMe } from '../app/auth/useMe'
@@ -95,7 +95,7 @@ function chipByServiceStatus(s: ServiceStatus) {
   }
 }
 
-export function Cabinet() {
+export function Dashboard() {
   const { me, loading, error, refetch } = useMe()
   const nav = useNavigate()
 
@@ -120,7 +120,6 @@ export function Cabinet() {
       const svc = await apiFetch<ServicesResponse>('/services')
       if (svc?.ok) setServices(svc)
 
-      // activity — не ломаем кабинет, если вдруг временно упадёт
       try {
         const act = await apiFetch<ActivityResponse>('/activity')
         if (act?.ok) setActivity(act)
@@ -405,7 +404,7 @@ export function Cabinet() {
           <div className="row" style={{ gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
             <button
               className={passwordSet ? 'btn' : 'btn btn--primary'}
-              onClick={() => nav('/app/password')}
+              onClick={() => nav('/app/set-password')}
             >
               {passwordSet ? 'Change password' : 'Set password'}
             </button>

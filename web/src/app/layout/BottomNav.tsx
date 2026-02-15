@@ -1,4 +1,5 @@
-import { NavLink } from 'react-router-dom'
+import React from "react";
+import { NavLink } from "react-router-dom";
 
 function Tab({
   to,
@@ -6,23 +7,23 @@ function Tab({
   icon,
   end,
 }: {
-  to: string
-  label: string
-  icon: React.ReactNode
-  end?: boolean
+  to: string;
+  label: string;
+  icon: React.ReactNode;
+  end?: boolean;
 }) {
   return (
     <NavLink
       to={to}
       end={end}
-      className={({ isActive }) => 'tab' + (isActive ? ' tab--active' : '')}
+      className={({ isActive }) => "tab" + (isActive ? " tab--active" : "")}
     >
       <span className="tab__icon" aria-hidden="true">
         {icon}
       </span>
       <span className="tab__label">{label}</span>
     </NavLink>
-  )
+  );
 }
 
 export function BottomNav() {
@@ -30,7 +31,7 @@ export function BottomNav() {
     <nav className="bottomnav" role="navigation" aria-label="App navigation">
       <div className="bottomnav__inner">
         <Tab
-          to="/app"
+          to="/app/home"
           end
           label="Главная"
           icon={
@@ -44,6 +45,28 @@ export function BottomNav() {
             </svg>
           }
         />
+
+        <Tab
+          to="/app/feed"
+          label="Новости"
+          icon={
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M6 7h12M6 12h12M6 17h9"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                strokeLinecap="round"
+              />
+              <path
+                d="M4 6a2 2 0 0 1 2-2h11a3 3 0 0 1 3 3v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6Z"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                opacity="0.5"
+              />
+            </svg>
+          }
+        />
+
         <Tab
           to="/app/services"
           label="Услуги"
@@ -58,6 +81,7 @@ export function BottomNav() {
             </svg>
           }
         />
+
         <Tab
           to="/app/payments"
           label="Оплата"
@@ -77,6 +101,7 @@ export function BottomNav() {
             </svg>
           }
         />
+
         <Tab
           to="/app/profile"
           label="Профиль"
@@ -98,5 +123,5 @@ export function BottomNav() {
         />
       </div>
     </nav>
-  )
+  );
 }

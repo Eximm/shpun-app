@@ -23,7 +23,8 @@
   --container: 920px;
   --pad: 18px;
 
-  --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial,
+    "Apple Color Emoji", "Segoe UI Emoji";
 
   /* App-like touch sizes */
   --tap: 44px;
@@ -231,6 +232,15 @@ button, a {
   -webkit-user-select: none;
   touch-action: manipulation;
   pointer-events: auto; /* SAFETY */
+
+  /* ✅ makes buttons look centered inside grid cells */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+
+  /* ✅ prevents weird shrink in grid */
+  min-width: 0;
 }
 .btn:hover { background: rgba(255,255,255,0.09); border-color: rgba(255,255,255,0.18); }
 .btn:active { transform: translateY(1px) scale(0.99); }
@@ -289,7 +299,7 @@ button, a {
 .badge {
   display: inline-flex;
   align-items: center;
-   gap: 8px;
+  gap: 8px;
   padding: 7px 10px;
   border-radius: 999px;
 
@@ -322,7 +332,6 @@ button, a {
   flex: 0 0 auto;
 }
 
-
 /* Key-value blocks */
 .kv {
   display: grid;
@@ -339,6 +348,18 @@ button, a {
 .kv__k { font-size: 12px; color: var(--muted); }
 .kv__v { margin-top: 6px; font-weight: 800; }
 
+/* ✅ fixed column variants for symmetric rows (use in Home for 3 chips etc.) */
+.kv--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.kv--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.kv--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+/* ✅ on narrow screens keep it readable */
+@media (max-width: 520px) {
+  .kv--3 { grid-template-columns: 1fr; }
+  .kv--4 { grid-template-columns: 1fr; }
+  .kv--2 { grid-template-columns: 1fr; }
+}
+
 .pre {
   margin-top: 14px;
   background: rgba(0,0,0,0.35);
@@ -348,6 +369,51 @@ button, a {
   overflow: auto;
   font-size: 12px;
   line-height: 1.4;
+}
+
+/* ============================================================
+   Symmetric action grids (buttons aligned to width)
+   ============================================================ */
+
+.actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.actions--1 { grid-template-columns: 1fr; }
+.actions--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.actions--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.actions--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.actions--5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+
+/* On small screens: never force 4-5 columns */
+@media (max-width: 520px) {
+  .actions--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .actions--5 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.actions .btn {
+  width: 100%;
+}
+
+/* Optional: pill-like symmetric grid (if you want chips aligned, not kv cards) */
+.pillgrid {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+.pillgrid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.pillgrid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.pillgrid--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 520px) {
+  .pillgrid--2,
+  .pillgrid--3,
+  .pillgrid--4 { grid-template-columns: 1fr; }
+}
+.pillgrid .chip {
+  width: 100%;
+  justify-content: center;
 }
 
 /* ============================================================
@@ -619,13 +685,18 @@ button, a {
   background: rgba(11, 15, 23, 0.72);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
+
+  /* prevents tiny horizontal scrollbars on some Android WebViews */
+  overflow-x: clip;
 }
 
 .bottomnav__inner {
   max-width: var(--container);
   margin: 0 auto;
+
+  /* ✅ 5 tabs in one row */
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 6px;
 
   padding-top: 10px;
@@ -636,20 +707,25 @@ button, a {
 
 .tab {
   min-height: 54px;
-  padding: 10px 10px;
+  padding: 10px 8px; /* чуть компактнее, чтобы 5 табов помещались */
   border-radius: 16px;
   text-decoration: none;
   color: rgba(255,255,255,0.72);
+
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 6px;
+
   border: 1px solid transparent;
   transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
   user-select: none;
   -webkit-user-select: none;
   touch-action: manipulation;
+
+  /* ✅ never overflow its grid cell */
+  min-width: 0;
 }
 
 .tab:hover {
@@ -665,6 +741,12 @@ button, a {
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.15px;
+
+  /* ✅ keep labels on one line */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .tab--active {
@@ -672,6 +754,26 @@ button, a {
   background: linear-gradient(180deg, rgba(124,92,255,0.18), rgba(77,215,255,0.08));
   border-color: rgba(124,92,255,0.35);
   box-shadow: 0 10px 26px rgba(0,0,0,0.25);
+}
+
+/* ✅ Ultra-narrow screens: tighter labels & spacing */
+@media (max-width: 360px) {
+  :root { --pad: 14px; } /* чуть меньше боковые поля */
+
+  .bottomnav__inner { gap: 4px; }
+
+  .tab { padding: 9px 6px; min-height: 52px; gap: 5px; }
+
+  .tab__label {
+    font-size: 10px;
+    letter-spacing: 0.12px;
+  }
+}
+
+/* ✅ Very narrow: icons-only (still accessible via aria-label in NavLink) */
+@media (max-width: 320px) {
+  .tab__label { display: none; }
+  .tab { min-height: 50px; }
 }
 
 /* --- Auth (Login page helpers) --- */
@@ -858,4 +960,34 @@ button, a {
   margin-top: 0;
   padding: 12px 14px 14px;
   border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+/* ============================================================
+   SetPassword: centralized styles (no inline)
+   ============================================================ */
+
+.pwdmeter {
+  margin-top: 12px;
+}
+
+.pwdmeter__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pwdmeter__title {
+  color: rgba(255, 255, 255, 0.72);
+  font-weight: 800;
+}
+
+.pwdmeter__score {
+  color: rgba(255, 255, 255, 0.62);
+  font-weight: 800;
+}
+
+.pwdmeter__tip {
+  margin-top: 8px;
+  color: rgba(255, 255, 255, 0.62);
+  line-height: 1.35;
 }

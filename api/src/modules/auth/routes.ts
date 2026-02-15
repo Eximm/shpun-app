@@ -9,9 +9,8 @@ import {
   deleteSession,
   getSessionFromRequest,
 } from "../../shared/session/sessionStore.js";
-
-// ✅ нужно для обновления SHM session_id после смены пароля (SHM может инвалидировать старую сессию)
 import { shmAuthWithTelegramWebApp } from "../../shared/shm/shmClient.js";
+import { createTransfer, consumeTransfer } from "../../shared/linkdb/transferRepo.js";
 
 const ALLOWED_PROVIDERS = new Set(
   ["telegram", "password", "google", "yandex"] as const
@@ -43,11 +42,6 @@ async function safeReadJson(res: Response): Promise<any | null> {
   }
 }
 
-/**
- * Получить user_id по session_id: GET /shm/v1/user
- * SHM принимает session_id либо cookie, либо header session-id.
- * Мы используем header session-id — это стабильнее в сервер-сервер.
- */
 async function shmGetUserId(sessionId: string): Promise<number> {
   const res = await fetch(`${shmV1()}/user`, {
     method: "GET",
@@ -62,14 +56,10 @@ async function shmGetUserId(sessionId: string): Promise<number> {
 
   if (!res.ok) {
     throw new Error(
-      `shm_user_failed:${res.status}:${String((json ?? text) || "").slice(
-        0,
-        200
-      )}`
+      `shm_user_failed:${res.status}:${String((json ?? text) || "").slice(0, 200)}`
     );
   }
 
-  // Обычно это { data:[{user_id,...}], status:200, ... }
   const u = Array.isArray((json as any)?.data)
     ? (json as any).data[0]
     : (json as any)?.data;
@@ -79,10 +69,6 @@ async function shmGetUserId(sessionId: string): Promise<number> {
   return userId;
 }
 
-/**
- * SHM template caller: POST /shm/v1/template/shpun_app
- * (используется только для флагов onboarding/auth link, НЕ для регистрации)
- */
 async function callShmTemplate<T = any>(
   sessionId: string,
   action: string,
@@ -125,12 +111,26 @@ async function getPasswordSetFlag(shmSessionId: string): Promise<0 | 1> {
   }
 }
 
+// выбираем “канонический” внешний URL для приложения (куда редиректить)
+function getPublicAppBase(req: any): string {
+  // 1) если пришёл реальный Origin и он в allowlist — используем его
+  const origin = String(req.headers?.origin ?? "").trim();
+  const allow = String(process.env.APP_ORIGIN ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  if (origin && allow.includes(origin)) return origin;
+
+  // 2) иначе берём первый из APP_ORIGIN
+  if (allow.length) return allow[0];
+
+  // 3) fallback
+  return "https://app.shpyn.online";
+}
+
 export async function authRoutes(app: FastifyInstance) {
   // ====== POST /api/auth/:provider ======
-  // telegram: { initData }
-  // password:
-  //   login:    { login, password }
-  //   register: { login, password, mode:"register" }
   app.post("/auth/:provider", async (req, reply) => {
     const { provider: rawProvider } = req.params as { provider: string };
     const provider = asProvider(rawProvider);
@@ -153,7 +153,6 @@ export async function authRoutes(app: FastifyInstance) {
         .send({ ok: false, status: 502, error: "no_shm_session" });
     }
 
-    // ✅ гарантируем user_id через /v1/user
     let shmUserId = Number((result as any).shmUserId ?? 0) || 0;
     if (!shmUserId) {
       try {
@@ -170,7 +169,6 @@ export async function authRoutes(app: FastifyInstance) {
 
     const localSid = createLocalSid();
 
-    // ✅ сохраняем initData для telegram-сессий, чтобы можно было обновить SHM session после смены пароля
     const telegramInitData =
       provider === "telegram" ? String(body.initData ?? "").trim() : "";
 
@@ -181,7 +179,6 @@ export async function authRoutes(app: FastifyInstance) {
       ...(telegramInitData ? { telegramInitData } : {}),
     });
 
-    // ✅ onboarding:
     let next: "set_password" | "cabinet" = "cabinet";
     if (provider === "telegram") {
       const ps = await getPasswordSetFlag(shmSessionId);
@@ -216,16 +213,13 @@ export async function authRoutes(app: FastifyInstance) {
     const r = await setPassword(req, password);
     if (!r.ok) return reply.code((r as any).status || 400).send(r);
 
-    // ✅ КЛЮЧЕВО: после смены пароля SHM может инвалидировать session_id.
-    // Для telegram-сессий обновляем SHM session_id через initData и сохраняем обратно в sessionStore.
+    // ✅ после смены пароля SHM может инвалидировать session_id — обновляем по initData
     try {
       const initData = String(s?.telegramInitData ?? "").trim();
       if (initData && sid) {
         const rr = await shmAuthWithTelegramWebApp(initData);
-        if (rr.ok && (rr as any).json?.session_id) {
+        if ((rr as any)?.ok && (rr as any).json?.session_id) {
           const newShmSessionId = String((rr as any).json.session_id);
-
-          // user_id лучше перепроверить (вдруг session выдана другому uid — маловероятно, но пусть будет строго)
           const newUserId = await shmGetUserId(newShmSessionId);
 
           putSession(sid, {
@@ -236,10 +230,10 @@ export async function authRoutes(app: FastifyInstance) {
         }
       }
     } catch {
-      // ignore — в худшем случае пользователь просто нажмёт "Войти" снова
+      // ignore
     }
 
-    // best-effort флаг password_set (на уже обновлённой сессии, если успели)
+    // best-effort флаг password_set
     try {
       const ss = getSessionFromRequest(req) as any;
       const shmSessionId = String(ss?.shmSessionId ?? "").trim();
@@ -251,6 +245,67 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     return reply.send({ ok: true, password_set: 1 });
+  });
+
+  // ====== POST /api/auth/transfer/start ======
+  // Создаёт одноразовый код на 60 сек и возвращает URL для открытия в браузере/PWA
+  app.post("/auth/transfer/start", async (req, reply) => {
+    const s = getSessionFromRequest(req) as any;
+    const shmSessionId = String(s?.shmSessionId ?? "").trim();
+    const shmUserId = Number(s?.shmUserId ?? 0) || 0;
+
+    if (!shmSessionId || !shmUserId) {
+      return reply.code(401).send({ ok: false, error: "not_authenticated" });
+    }
+
+    const ip = String((req.headers["x-real-ip"] ?? req.ip) || "");
+    const ua = String(req.headers["user-agent"] ?? "");
+
+    const { code, expiresAt } = createTransfer({
+      shmUserId,
+      shmSessionId,
+      ttlSeconds: 60,
+      ip,
+      ua,
+    });
+
+    const base = getPublicAppBase(req);
+    const url = `${base}/transfer?code=${encodeURIComponent(code)}`;
+
+    return reply.send({ ok: true, url, expires_at: expiresAt });
+  });
+
+  // ====== GET /api/auth/transfer/consume?code=... ======
+  // Открывается в браузере/PWA. Обменивает code -> создаёт sid cookie -> редиректит на /app/home
+  app.get("/auth/transfer/consume", async (req, reply) => {
+    const q = req.query as any;
+    const code = String(q.code ?? "").trim();
+    const redirectTo = String(q.redirect ?? "/app/home").trim() || "/app/home";
+
+    if (!code) return reply.code(400).send({ ok: false, error: "code_required" });
+
+    const r = consumeTransfer(code);
+    if (!r.ok) {
+      // можно редиректить на /login с сообщением
+      return reply.code(401).send({ ok: false, error: r.error });
+    }
+
+    const localSid = createLocalSid();
+    putSession(localSid, {
+      shmSessionId: r.shmSessionId,
+      shmUserId: r.shmUserId,
+      createdAt: Date.now(),
+      // тут уже telegramInitData может быть не нужно — PWA сессия самостоятельная
+    });
+
+    return reply
+      .setCookie("sid", localSid, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+      })
+      .redirect(302, redirectTo);
   });
 
   // ====== GET /api/auth/status ======

@@ -1,26 +1,178 @@
-import { Link } from 'react-router-dom'
-import { useMe } from '../app/auth/useMe'
+import { Link } from "react-router-dom";
+import { useMe } from "../app/auth/useMe";
+import React, { useEffect, useMemo, useState } from "react";
 
 function Money({ amount, currency }: { amount: number; currency: string }) {
   const formatted =
-    currency === 'RUB'
-      ? new Intl.NumberFormat('ru-RU').format(amount) + ' ₽'
-      : new Intl.NumberFormat('ru-RU').format(amount) + ` ${currency}`
-  return <>{formatted}</>
+    currency === "RUB"
+      ? new Intl.NumberFormat("ru-RU").format(amount) + " ₽"
+      : new Intl.NumberFormat("ru-RU").format(amount) + ` ${currency}`;
+  return <>{formatted}</>;
+}
+
+function fmtDate(v?: string | null) {
+  if (!v) return "—";
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return String(v);
+  return new Intl.DateTimeFormat("ru-RU", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(d);
+}
+
+type TransferState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "ready"; url: string; expiresAt?: number }
+  | { status: "error"; message: string };
+
+type PromoState =
+  | { status: "idle" }
+  | { status: "applying" }
+  | { status: "done"; message: string }
+  | { status: "error"; message: string };
+
+// for TS only: minimal BeforeInstallPromptEvent
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
+};
+
+function ActionGrid({ children }: { children: React.ReactNode }) {
+  const items = React.Children.toArray(children).filter(Boolean);
+  const n = Math.max(1, Math.min(5, items.length));
+  return <div className={`actions actions--${n}`}>{items}</div>;
 }
 
 export function Home() {
-  const { me, loading, error, refetch } = useMe() as any
+  const { me, loading, error, refetch } = useMe();
 
-  // TODO: позже подменим на реальный URL биллинга/miniapp
-  const PAYMENT_URL = (import.meta as any).env?.VITE_PAYMENT_URL || ''
+  const [transfer, setTransfer] = useState<TransferState>({ status: "idle" });
 
-  function openPayment() {
-    if (!PAYMENT_URL) {
-      alert('Оплата будет подключена после интеграции с биллингом. Сейчас это заглушка.')
-      return
+  // Promo scaffold (will connect later)
+  const [promo, setPromo] = useState<{ code: string; state: PromoState }>({
+    code: "",
+    state: { status: "idle" },
+  });
+
+  // PWA install CTA (works only when browser supports it)
+  const [installEvt, setInstallEvt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [installState, setInstallState] = useState<"idle" | "prompting" | "done">("idle");
+
+  const profile = me?.profile;
+  const balance = me?.balance;
+
+  const displayName = profile?.displayName || profile?.login || "";
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      // Chrome/Android: allows us to show our own "Install" button
+      (e as any).preventDefault?.();
+      setInstallEvt(e as BeforeInstallPromptEvent);
+    };
+
+    window.addEventListener("beforeinstallprompt", handler as any);
+    return () => window.removeEventListener("beforeinstallprompt", handler as any);
+  }, []);
+
+  const canInstall = !!installEvt && installState !== "done";
+
+  async function runInstall() {
+    if (!installEvt) return;
+    try {
+      setInstallState("prompting");
+      await installEvt.prompt();
+      const choice = await installEvt.userChoice.catch(() => null);
+      if (choice?.outcome === "accepted") {
+        setInstallState("done");
+        setInstallEvt(null);
+      } else {
+        setInstallState("idle");
+      }
+    } catch {
+      setInstallState("idle");
     }
-    window.open(PAYMENT_URL, '_blank', 'noopener,noreferrer')
+  }
+
+  const transferHint = useMemo(() => {
+    if (transfer.status !== "ready") return "";
+    if (!transfer.expiresAt) return "Ссылка одноразовая и быстро истекает.";
+    const leftMs = transfer.expiresAt - Date.now();
+    const leftSec = Math.max(0, Math.floor(leftMs / 1000));
+    if (leftSec <= 0) return "Срок действия ссылки истёк. Сгенерируй новую.";
+    return `Ссылка одноразовая. Действует примерно ${leftSec} сек.`;
+  }, [transfer]);
+
+  async function startTransfer() {
+    try {
+      setTransfer({ status: "loading" });
+
+      const res = await fetch("/api/auth/transfer/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({}),
+      });
+
+      const json = await res.json().catch(() => null);
+
+      if (!res.ok || !json?.ok) {
+        const msg =
+          json?.error === "not_authenticated"
+            ? "Нужен вход в приложение. Открой Shpun App внутри Telegram и войди."
+            : String(json?.error || "transfer_start_failed");
+        setTransfer({ status: "error", message: msg });
+        return;
+      }
+
+      setTransfer({
+        status: "ready",
+        url: String(json.url),
+        expiresAt: Number(json.expires_at || 0) || undefined,
+      });
+    } catch (e: any) {
+      setTransfer({
+        status: "error",
+        message: e?.message || "Не удалось создать ссылку.",
+      });
+    }
+  }
+
+  async function copyTransferUrl() {
+    if (transfer.status !== "ready") return;
+    const url = transfer.url;
+
+    try {
+      await navigator.clipboard.writeText(url);
+      alert("Ссылка скопирована 👍");
+    } catch {
+      window.prompt("Скопируй ссылку:", url);
+    }
+  }
+
+  async function applyPromoStub() {
+    const code = promo.code.trim();
+    if (!code) {
+      setPromo((p) => ({
+        ...p,
+        state: { status: "error", message: "Введите промокод." },
+      }));
+      return;
+    }
+
+    setPromo((p) => ({ ...p, state: { status: "applying" } }));
+    await new Promise((r) => setTimeout(r, 450));
+
+    setPromo((p) => ({
+      ...p,
+      state: {
+        status: "done",
+        message: "Промокоды скоро будут доступны прямо в приложении ✨",
+      },
+    }));
   }
 
   if (loading) {
@@ -33,58 +185,47 @@ export function Home() {
           </div>
         </div>
       </div>
-    )
+    );
   }
 
-  if (error) {
+  if (error || !me?.ok) {
     return (
       <div className="section">
         <div className="card">
           <div className="card__body">
             <h1 className="h1">Shpun</h1>
             <p className="p">Ошибка загрузки профиля.</p>
-            <div className="row" style={{ marginTop: 14 }}>
+
+            <ActionGrid>
               <button className="btn btn--primary" onClick={() => refetch?.()}>
                 Повторить
               </button>
               <Link className="btn" to="/app/profile">
                 Профиль
               </Link>
-            </div>
+            </ActionGrid>
           </div>
         </div>
       </div>
-    )
+    );
   }
-
-  // me contract (current MVP)
-  const profile = me?.profile
-  const balance = me?.balance
-  const services = me?.services
-
-  const activeCount = services?.active?.length ?? 0
-  const blockedCount = services?.blocked?.length ?? 0
-  const expiredCount = services?.expired?.length ?? 0
-  const attentionCount = blockedCount + expiredCount
 
   return (
     <div className="section">
-      {/* Hero */}
+      {/* User hero */}
       <div className="card">
         <div className="card__body">
           <div
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
               gap: 12,
             }}
           >
             <div>
-              <h1 className="h1">
-                Привет{profile?.displayName ? `, ${profile.displayName}` : ''} 👋
-              </h1>
-              <p className="p">SDN System — управление балансом и услугами.</p>
+              <h1 className="h1">Привет{displayName ? `, ${displayName}` : ""} 👋</h1>
+              <p className="p">SDN System — баланс, услуги и управление подпиской.</p>
             </div>
 
             <button className="btn" onClick={() => refetch?.()} title="Обновить">
@@ -92,136 +233,235 @@ export function Home() {
             </button>
           </div>
 
-          <div className="kv">
+          {/* Balance / bonus / discount */}
+          <div className="kv kv--3">
             <div className="kv__item">
               <div className="kv__k">Баланс</div>
               <div className="kv__v">
-                {balance ? <Money amount={balance.amount} currency={balance.currency} /> : '—'}
+                {balance ? <Money amount={balance.amount} currency={balance.currency} /> : "—"}
               </div>
             </div>
 
             <div className="kv__item">
-              <div className="kv__k">Активные услуги</div>
-              <div className="kv__v">{activeCount}</div>
+              <div className="kv__k">Бонусы</div>
+              <div className="kv__v">{typeof me.bonus === "number" ? me.bonus : 0}</div>
             </div>
 
             <div className="kv__item">
-              <div className="kv__k">Требуют внимания</div>
-              <div className="kv__v">{attentionCount}</div>
+              <div className="kv__k">Скидка</div>
+              <div className="kv__v">{typeof me.discount === "number" ? `${me.discount}%` : "—"}</div>
             </div>
           </div>
 
-          {attentionCount > 0 && (
-            <div className="pre" style={{ marginTop: 14 }}>
-              Есть услуги, которые требуют внимания: заблокированные или истёкшие. Открой “Услуги” и проверь статусы.
-            </div>
-          )}
-
-          <div className="row" style={{ marginTop: 14 }}>
-            {/* Payment placeholder (we won't rush payments) */}
-            <button className="btn btn--primary" onClick={openPayment}>
-              Пополнить
-            </button>
-
+          {/* Main actions (auto-equal width) */}
+          <ActionGrid>
+            <Link className="btn btn--primary" to="/app/payments">
+              Оплата
+            </Link>
             <Link className="btn" to="/app/services">
               Услуги
             </Link>
             <Link className="btn" to="/app/profile">
               Профиль
             </Link>
-          </div>
-        </div>
-      </div>
-
-      {/* Payment placeholder card */}
-      <div className="section">
-        <div className="card">
-          <div className="card__body">
-            <div className="h1" style={{ fontSize: 18 }}>
-              Оплата
-            </div>
-            <p className="p">
-              Сейчас оплата живёт в Telegram mini app. В Shpun App мы подключим её после интеграции с биллингом
-              (и, возможно, подтянем историю платежей).
-            </p>
-
-            <div className="row" style={{ marginTop: 14 }}>
-              <button className="btn" onClick={openPayment}>
-                Открыть оплату
+            {canInstall && (
+              <button
+                className="btn"
+                onClick={runInstall}
+                disabled={installState === "prompting"}
+                title="Установить Shpun App на устройство"
+              >
+                {installState === "prompting" ? "Открываем…" : "Установить"}
               </button>
-              <Link className="btn" to="/app/profile">
-                Настройки/профиль
-              </Link>
-            </div>
-
-            {!PAYMENT_URL && (
-              <div className="pre" style={{ marginTop: 14 }}>
-                Заглушка: чтобы включить кнопку, позже зададим <b>VITE_PAYMENT_URL</b> (url миниаппа/биллинга).
-              </div>
             )}
+          </ActionGrid>
+
+          {/* Account meta (symmetric) */}
+          <div className="kv kv--3">
+            <div className="kv__item">
+              <div className="kv__k">Пароль</div>
+              <div className="kv__v">{profile?.passwordSet ? "установлен" : "не установлен"}</div>
+            </div>
+            <div className="kv__item">
+              <div className="kv__k">Создан</div>
+              <div className="kv__v">{fmtDate(profile?.created)}</div>
+            </div>
+            <div className="kv__item">
+              <div className="kv__k">Последний вход</div>
+              <div className="kv__v">{fmtDate(profile?.lastLogin)}</div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Services summary */}
+      {/* News preview */}
       <div className="section">
         <div className="card">
           <div className="card__body">
             <div
               style={{
-                display: 'flex',
-                alignItems: 'baseline',
-                justifyContent: 'space-between',
+                display: "flex",
+                alignItems: "baseline",
+                justifyContent: "space-between",
                 gap: 12,
               }}
             >
               <div>
                 <div className="h1" style={{ fontSize: 18 }}>
-                  Сводка по услугам
+                  Новости
                 </div>
-                <p className="p">Быстрое состояние. Детали — в разделе “Услуги”.</p>
+                <p className="p">Коротко и по делу. Полная лента — в “Новости”.</p>
               </div>
-              <Link className="btn" to="/app/services">
+              <Link className="btn" to="/app/feed">
                 Открыть
               </Link>
             </div>
 
-            <div className="kv">
-              <div className="kv__item">
-                <div className="kv__k">Активные</div>
-                <div className="kv__v">{activeCount}</div>
+            <div className="list">
+              <div className="list__item">
+                <div className="list__main">
+                  <div className="list__title">✅ Система стабильна — всё работает</div>
+                  <div className="list__sub">
+                    Обновления без простоев. Если видишь “Can’t connect” — просто обнови страницу.
+                  </div>
+                </div>
+                <div className="list__side">
+                  <span className="chip chip--ok">today</span>
+                </div>
               </div>
-              <div className="kv__item">
-                <div className="kv__k">Заблокированные</div>
-                <div className="kv__v">{blockedCount}</div>
+
+              <div className="list__item">
+                <div className="list__main">
+                  <div className="list__title">🧭 Cabinet переехал в “Новости”</div>
+                  <div className="list__sub">
+                    Главная — витрина. Новости — лента. Дальше подключим реальные данные в “Услугах”.
+                  </div>
+                </div>
+                <div className="list__side">
+                  <span className="chip chip--soft">new</span>
+                </div>
               </div>
-              <div className="kv__item">
-                <div className="kv__k">Истёкшие</div>
-                <div className="kv__v">{expiredCount}</div>
+
+              <div className="list__item">
+                <div className="list__main">
+                  <div className="list__title">🔐 Вход с рабочего стола через Telegram</div>
+                  <div className="list__sub">
+                    Готовим “transfer-login” — одноразовая ссылка переносит авторизацию в браузер.
+                  </div>
+                </div>
+                <div className="list__side">
+                  <span className="chip chip--warn">soon</span>
+                </div>
               </div>
             </div>
 
-            {activeCount === 0 && blockedCount === 0 && expiredCount === 0 && (
-              <div className="pre" style={{ marginTop: 14 }}>
-                Пока нет услуг. Когда подключим SHM — тут появятся “Заказать / Продлить” и реальные статусы.
+            <ActionGrid>
+              <Link className="btn" to="/app/feed">
+                Открыть новости
+              </Link>
+            </ActionGrid>
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop transfer login */}
+      <div className="section">
+        <div className="card">
+          <div className="card__body">
+            <div className="h1" style={{ fontSize: 18 }}>
+              Открыть на компьютере
+            </div>
+            <p className="p">
+              Когда ты вошёл в Shpun App внутри Telegram, можно открыть приложение на рабочем столе: выдадим
+              одноразовую ссылку и перенесём авторизацию в браузер.
+            </p>
+
+            <ActionGrid>
+              <button
+                className="btn btn--primary"
+                onClick={startTransfer}
+                disabled={transfer.status === "loading"}
+              >
+                {transfer.status === "loading" ? "Генерируем…" : "Сгенерировать ссылку"}
+              </button>
+
+              {transfer.status === "ready" && (
+                <button className="btn" onClick={copyTransferUrl}>
+                  Скопировать
+                </button>
+              )}
+
+              <Link className="btn" to="/app/profile">
+                Настройки
+              </Link>
+            </ActionGrid>
+
+            {transfer.status === "ready" && (
+              <div className="pre">
+                <div style={{ fontWeight: 900, marginBottom: 6 }}>Ссылка:</div>
+                <div style={{ wordBreak: "break-word" }}>{transfer.url}</div>
+                <div style={{ marginTop: 10, opacity: 0.85 }}>{transferHint}</div>
+              </div>
+            )}
+
+            {transfer.status === "error" && (
+              <div className="pre">
+                <div style={{ fontWeight: 900, marginBottom: 6 }}>Не получилось</div>
+                <div style={{ opacity: 0.85 }}>{transfer.message}</div>
               </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* Debug (optional, keep for MVP) */}
+      {/* Promo codes (bottom) */}
       <div className="section">
         <div className="card">
           <div className="card__body">
             <div className="h1" style={{ fontSize: 18 }}>
-              Текущие данные (MVP)
+              Промокоды
             </div>
-            <p className="p">Это временно — пока идём к SHM /me.</p>
-            <pre className="pre">{JSON.stringify(me, null, 2)}</pre>
+            <p className="p">Есть промокод? Введи его здесь — бонусы или скидка применятся к аккаунту.</p>
+
+            {/* input + button = symmetric 2 cols */}
+            <div className="actions actions--2">
+              <div>
+                <input
+                  className="input"
+                  value={promo.code}
+                  onChange={(e) =>
+                    setPromo((p) => ({
+                      ...p,
+                      code: e.target.value,
+                      state: { status: "idle" },
+                    }))
+                  }
+                  placeholder="Например: SHPUN-2026"
+                  autoCapitalize="characters"
+                  spellCheck={false}
+                />
+              </div>
+
+              <button
+                className="btn btn--primary"
+                onClick={applyPromoStub}
+                disabled={promo.state.status === "applying"}
+              >
+                {promo.state.status === "applying" ? "Применяем…" : "Применить"}
+              </button>
+            </div>
+
+            {promo.state.status === "done" && <div className="pre">{promo.state.message}</div>}
+            {promo.state.status === "error" && <div className="pre">{promo.state.message}</div>}
+
+            <ActionGrid>
+              <Link className="btn" to="/app/profile">
+                История / статус
+              </Link>
+            </ActionGrid>
           </div>
         </div>
       </div>
     </div>
-  )
+  );
 }

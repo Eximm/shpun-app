@@ -1,38 +1,38 @@
-﻿import React from 'react'
-import ReactDOM from 'react-dom/client'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import './index.css'
+﻿import React from "react";
+import ReactDOM from "react-dom/client";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import "./index.css";
 
-import { Login } from './pages/Login'
-import { Cabinet } from './pages/Cabinet'
-import { Home } from './pages/Home'
-import { Services } from './pages/Services'
-import { Payments } from './pages/Payments'
-import { Profile } from './pages/Profile'
-import { SetPassword } from './pages/SetPassword'
+import { Login } from "./pages/Login";
+import { Home } from "./pages/Home";
+import { Feed } from "./pages/Feed";
+import { Dashboard } from "./pages/Dashboard";
+import { Services } from "./pages/Services";
+import { Payments } from "./pages/Payments";
+import { Profile } from "./pages/Profile";
+import { SetPassword } from "./pages/SetPassword";
+import { Transfer } from "./pages/Transfer";
 
-import { AuthGate } from './app/auth/AuthGate'
-import { InstallBanner } from './app/pwa/InstallBanner'
-import { BottomNav } from './app/layout/BottomNav'
+import { AuthGate } from "./app/auth/AuthGate";
+import { BottomNav } from "./app/layout/BottomNav";
 
-import { I18nProvider, useI18n } from './shared/i18n'
+import { I18nProvider, useI18n } from "./shared/i18n";
 
-// PWA: auto-update service worker (только в production)
 if (import.meta.env.PROD) {
-  import('virtual:pwa-register')
+  import("virtual:pwa-register")
     .then(({ registerSW }) => {
       registerSW({
         immediate: true,
         onRegisterError(error: unknown) {
-          console.error('SW register error', error)
+          console.error("SW register error", error);
         },
-      })
+      });
     })
-    .catch((e: unknown) => console.error('SW import error', e))
+    .catch((e: unknown) => console.error("SW import error", e));
 }
 
 function AppShell({ children }: { children: React.ReactNode }) {
-  const { t } = useI18n()
+  const { t } = useI18n();
 
   return (
     <div className="app">
@@ -46,92 +46,62 @@ function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          <span className="badge">{t('app.beta')}</span>
+          <span className="badge">{t("app.beta")}</span>
         </div>
       </header>
 
       <main className="main">
-        <div className="container safe">
-          <div style={{ marginBottom: 16 }}>
-            <InstallBanner />
-          </div>
-
-          {children}
-        </div>
+        <div className="container safe">{children}</div>
       </main>
 
       <BottomNav />
     </div>
-  )
+  );
 }
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+function Authed(el: React.ReactNode) {
+  return <AuthGate>{el}</AuthGate>;
+}
+
+ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <I18nProvider>
       <BrowserRouter>
         <AppShell>
           <Routes>
+            {/* Desktop / PWA transfer-login entry */}
+            <Route path="/transfer" element={<Transfer />} />
+
+            {/* Public */}
             <Route path="/login" element={<Login />} />
 
-            <Route
-              path="/app"
-              element={
-                <AuthGate>
-                  <Home />
-                </AuthGate>
-              }
-            />
+            {/* App root */}
+            <Route path="/app" element={<Navigate to="/app/home" replace />} />
 
-            {/* Onboarding: set password right after Telegram auth */}
-            <Route
-              path="/app/set-password"
-              element={
-                <AuthGate>
-                  <SetPassword />
-                </AuthGate>
-              }
-            />
+            {/* Главная витрина */}
+            <Route path="/app/home" element={Authed(<Home />)} />
 
-            <Route
-              path="/app/services"
-              element={
-                <AuthGate>
-                  <Services />
-                </AuthGate>
-              }
-            />
-            <Route
-              path="/app/payments"
-              element={
-                <AuthGate>
-                  <Payments />
-                </AuthGate>
-              }
-            />
-            <Route
-              path="/app/profile"
-              element={
-                <AuthGate>
-                  <Profile />
-                </AuthGate>
-              }
-            />
+            {/* Новости (бывший Cabinet) */}
+            <Route path="/app/feed" element={Authed(<Feed />)} />
 
-            {/* Old route kept for now (compat) */}
-            <Route
-              path="/app/cabinet"
-              element={
-                <AuthGate>
-                  <Cabinet />
-                </AuthGate>
-              }
-            />
+            {/* Внутренние/служебные страницы */}
+            <Route path="/app/dashboard" element={Authed(<Dashboard />)} />
 
-            <Route path="/" element={<Navigate to="/app" replace />} />
-            <Route path="*" element={<Navigate to="/app" replace />} />
+            {/* Остальное */}
+            <Route path="/app/services" element={Authed(<Services />)} />
+            <Route path="/app/payments" element={Authed(<Payments />)} />
+            <Route path="/app/profile" element={Authed(<Profile />)} />
+            <Route path="/app/set-password" element={Authed(<SetPassword />)} />
+
+            {/* Совместимость со старыми ссылками */}
+            <Route path="/app/cabinet" element={<Navigate to="/app/feed" replace />} />
+
+            {/* Default */}
+            <Route path="/" element={<Navigate to="/app/home" replace />} />
+            <Route path="*" element={<Navigate to="/app/home" replace />} />
           </Routes>
         </AppShell>
       </BrowserRouter>
     </I18nProvider>
   </React.StrictMode>
-)
+);

@@ -1,10 +1,11 @@
+// web/src/pages/SetPassword.tsx
+
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { apiFetch } from '../shared/api/client'
 import type { MeResponse, PasswordSetResponse } from '../shared/api/types'
 
 function pwdScore(p: string) {
-  // простая “качелька” для UI: не безопасность, а UX
   let s = 0
   if (p.length >= 8) s++
   if (/[A-Z]/.test(p)) s++
@@ -20,7 +21,6 @@ export function SetPassword() {
 
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState<string | null>(null)
-
   const [login, setLogin] = useState<string>('')
 
   const [password, setPassword] = useState('')
@@ -53,7 +53,6 @@ export function SetPassword() {
         const l = String(me?.profile?.login ?? '').trim()
         if (alive && l) setLogin(l)
       } catch (e: any) {
-        // если /me не доступно — значит нет сессии
         if (!alive) return
         setErr(e?.message || 'Not authenticated')
       }
@@ -73,13 +72,13 @@ export function SetPassword() {
     try {
       const res = await apiFetch<PasswordSetResponse>('/auth/password/set', {
         method: 'POST',
-        body: JSON.stringify({ password })
+        body: JSON.stringify({ password }),
       })
 
       if (!res.ok) throw new Error(res.error || 'Failed to set password')
 
-      // После установки пароля — сразу в кабинет
-      nav('/app/cabinet', { replace: true })
+      // ✅ Правильно: после установки пароля ведём на Главную (Home)
+      nav('/app', { replace: true })
     } catch (e: any) {
       setErr(e?.message || 'Failed to set password')
     } finally {
@@ -93,27 +92,27 @@ export function SetPassword() {
         <div className="card__body">
           <div className="auth__head">
             <div>
-              <h1 className="h1">Set password</h1>
+              <h1 className="h1">Установить пароль</h1>
               <p className="p">
-                You signed in with <b>Telegram</b>. Now create a password to keep access even outside Telegram.
+                Вы вошли через <b>Telegram</b>. Создайте пароль — так вы сможете входить и вне Telegram.
               </p>
             </div>
 
-            <span className="badge">Step 1 / 1</span>
+            <span className="badge">Шаг 1 / 1</span>
           </div>
 
           <div className="kv">
             <div className="kv__item">
-              <div className="kv__k">Your login</div>
+              <div className="kv__k">Ваш логин</div>
               <div className="kv__v">{login || '…'}</div>
             </div>
             <div className="kv__item">
-              <div className="kv__k">Why needed</div>
-              <div className="kv__v">Backup access</div>
+              <div className="kv__k">Зачем</div>
+              <div className="kv__v">Резервный вход</div>
             </div>
             <div className="kv__item">
-              <div className="kv__k">Next</div>
-              <div className="kv__v">Cabinet</div>
+              <div className="kv__k">Дальше</div>
+              <div className="kv__v">Главная</div>
             </div>
           </div>
 
@@ -126,10 +125,10 @@ export function SetPassword() {
           >
             <div className="auth__grid">
               <label className="field">
-                <span className="field__label">New password</span>
+                <span className="field__label">Новый пароль</span>
                 <input
                   className="input"
-                  placeholder="Minimum 8 characters"
+                  placeholder="Минимум 8 символов"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   type="password"
@@ -139,10 +138,10 @@ export function SetPassword() {
               </label>
 
               <label className="field">
-                <span className="field__label">Repeat password</span>
+                <span className="field__label">Повторите пароль</span>
                 <input
                   className="input"
-                  placeholder="Repeat password"
+                  placeholder="Повторите пароль"
                   value={password2}
                   onChange={(e) => setPassword2(e.target.value)}
                   type="password"
@@ -152,23 +151,23 @@ export function SetPassword() {
               </label>
             </div>
 
-            <div className="pre" style={{ marginTop: 12 }}>
+            <div className="pre">
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
                 <span style={{ color: 'rgba(255,255,255,0.72)', fontWeight: 800 }}>
-                  Password strength
+                  Надёжность
                 </span>
                 <span style={{ color: 'rgba(255,255,255,0.62)', fontWeight: 800 }}>
                   {score}/5
                 </span>
               </div>
               <div style={{ marginTop: 8, color: 'rgba(255,255,255,0.62)', lineHeight: 1.35 }}>
-                Tips: use 8+ chars, add numbers and symbols.
+                Совет: 8+ символов, цифры и спецсимволы.
               </div>
             </div>
 
             <div className="auth__actions">
               <button type="submit" className="btn btn--primary" disabled={!canSubmit}>
-                {loading ? 'Saving…' : 'Save password'}
+                {loading ? 'Сохраняю…' : 'Сохранить пароль'}
               </button>
 
               <button
@@ -176,16 +175,16 @@ export function SetPassword() {
                 className="btn"
                 disabled={loading}
                 onClick={() => nav('/login', { replace: true })}
-                title="Back to login"
+                title="Назад"
               >
-                Back
+                Назад
               </button>
             </div>
           </form>
 
           {err && (
             <div className="auth__error">
-              <div className="auth__errorTitle">Error</div>
+              <div className="auth__errorTitle">Ошибка</div>
               <div className="auth__errorText">{err}</div>
             </div>
           )}
