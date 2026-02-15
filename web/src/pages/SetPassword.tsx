@@ -22,10 +22,30 @@ type GateState =
   | { status: "blocked" }
   | { status: "error"; message: string };
 
+function normalizeRedirectPath(input: any, fallback: string) {
+  const v = String(input ?? "").trim();
+  if (!v) return fallback;
+  if (!v.startsWith("/")) return fallback;
+  if (v.startsWith("//")) return fallback;
+  if (v.includes("\r") || v.includes("\n")) return fallback;
+  if (/[^\x20-\x7E]/.test(v)) return fallback;
+  return v;
+}
+
 export function SetPassword() {
   const { t } = useI18n();
   const nav = useNavigate();
-  const loc: any = useLocation();
+  const loc = useLocation();
+
+  const sp = useMemo(() => new URLSearchParams(loc.search), [loc.search]);
+  const intent = (sp.get("intent") || "").trim().toLowerCase(); // "change" | ""
+  const isChange = intent === "change";
+
+  const redirectTo = useMemo(() => {
+    const raw = sp.get("redirect");
+    // default: onboarding -> /app ; change -> /app/profile
+    return normalizeRedirectPath(raw, isChange ? "/app/profile" : "/app");
+  }, [sp, isChange]);
 
   const [gate, setGate] = useState<GateState>({ status: "checking" });
 
@@ -45,11 +65,6 @@ export function SetPassword() {
     !loading;
 
   useEffect(() => {
-    const stateLogin = String(loc?.state?.login ?? "").trim();
-    if (stateLogin) setLogin(stateLogin);
-  }, [loc?.state?.login]);
-
-  useEffect(() => {
     let alive = true;
 
     async function gateAndLoadMe() {
@@ -62,25 +77,27 @@ export function SetPassword() {
           return;
         }
 
-        const l = String(me?.profile?.login ?? "").trim();
+        const l = String((me as any)?.profile?.login ?? "").trim();
         if (alive && l && !login) setLogin(l);
 
         const ps = (me as any)?.profile?.passwordSet;
 
-        if (ps === true) {
+        // ===== Gate rules =====
+        // 1) intent=change: пользователь сам хочет сменить пароль => разрешаем всегда (если залогинен)
+        if (isChange) {
           if (!alive) return;
-          setGate({ status: "blocked" });
-          nav("/app", { replace: true });
+          setGate({ status: "allowed" });
           return;
         }
 
+        // 2) onboarding: разрешаем ТОЛЬКО если пароль не установлен
         if (ps === false) {
           if (!alive) return;
           setGate({ status: "allowed" });
           return;
         }
 
-        // unknown => не мучаем
+        // 3) если пароль уже установлен или неизвестно — блокируем и уводим на /app
         if (!alive) return;
         setGate({ status: "blocked" });
         nav("/app", { replace: true });
@@ -95,7 +112,7 @@ export function SetPassword() {
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isChange]);
 
   async function submit() {
     if (!canSubmit) return;
@@ -110,7 +127,8 @@ export function SetPassword() {
 
       if (!res.ok) throw new Error(res.error || "Failed to set password");
 
-      nav("/app", { replace: true });
+      // onboarding => /app, change => /app/profile (или redirect=...)
+      nav(redirectTo, { replace: true });
     } catch (e: any) {
       setErr(e?.message || "Failed to set password");
     } finally {
@@ -138,7 +156,10 @@ export function SetPassword() {
           <div className="card__body">
             <h1 className="h1">{t("setpwd.need_login.title", "Нужен вход")}</h1>
             <p className="p">{gate.message}</p>
-            <button className="btn btn--primary" onClick={() => nav("/login", { replace: true })}>
+            <button
+              className="btn btn--primary"
+              onClick={() => nav("/login", { replace: true })}
+            >
               {t("setpwd.need_login.cta", "Перейти к входу")}
             </button>
           </div>
@@ -159,6 +180,24 @@ export function SetPassword() {
     );
   }
 
+  const title = isChange
+    ? t("setpwd.change.title", "Сменить пароль")
+    : t("setpwd.title", "Установить пароль");
+
+  const desc = isChange
+    ? t(
+        "setpwd.change.desc",
+        "Вы можете изменить пароль в любой момент. Это не влияет на вход через Telegram."
+      )
+    : t(
+        "setpwd.desc",
+        "Вы вошли через Telegram. Создайте пароль — так вы сможете входить и вне Telegram."
+      );
+
+  const nextText = isChange
+    ? t("setpwd.kv.next_value_profile", "Профиль")
+    : t("setpwd.kv.next_value", "Главная");
+
   // allowed
   return (
     <div className="section">
@@ -166,16 +205,11 @@ export function SetPassword() {
         <div className="card__body">
           <div className="auth__head">
             <div>
-              <h1 className="h1">{t("setpwd.title", "Установить пароль")}</h1>
-              <p className="p">
-                {t(
-                  "setpwd.desc",
-                  "Вы вошли через Telegram. Создайте пароль — так вы сможете входить и вне Telegram."
-                )}
-              </p>
+              <h1 className="h1">{title}</h1>
+              <p className="p">{desc}</p>
             </div>
 
-            <span className="badge">{t("setpwd.badge", "Шаг 1 / 1")}</span>
+            {!isChange && <span className="badge">{t("setpwd.badge", "Шаг 1 / 1")}</span>}
           </div>
 
           <div className="kv">
@@ -189,7 +223,7 @@ export function SetPassword() {
             </div>
             <div className="kv__item">
               <div className="kv__k">{t("setpwd.kv.next", "Дальше")}</div>
-              <div className="kv__v">{t("setpwd.kv.next_value", "Главная")}</div>
+              <div className="kv__v">{nextText}</div>
             </div>
           </div>
 
@@ -202,7 +236,9 @@ export function SetPassword() {
           >
             <div className="auth__grid">
               <label className="field">
-                <span className="field__label">{t("setpwd.field.p1", "Новый пароль")}</span>
+                <span className="field__label">
+                  {t("setpwd.field.p1", "Новый пароль")}
+                </span>
                 <input
                   className="input"
                   placeholder={t("setpwd.field.p1_ph", "Минимум 8 символов")}
@@ -215,7 +251,9 @@ export function SetPassword() {
               </label>
 
               <label className="field">
-                <span className="field__label">{t("setpwd.field.p2", "Повторите пароль")}</span>
+                <span className="field__label">
+                  {t("setpwd.field.p2", "Повторите пароль")}
+                </span>
                 <input
                   className="input"
                   placeholder={t("setpwd.field.p2_ph", "Повторите пароль")}
@@ -244,17 +282,21 @@ export function SetPassword() {
 
             <div className="auth__actions">
               <button type="submit" className="btn btn--primary" disabled={!canSubmit}>
-                {loading ? t("setpwd.saving", "Сохраняю…") : t("setpwd.save", "Сохранить пароль")}
+                {loading
+                  ? t("setpwd.saving", "Сохраняю…")
+                  : isChange
+                  ? t("setpwd.change.save", "Сменить пароль")
+                  : t("setpwd.save", "Сохранить пароль")}
               </button>
 
               <button
                 type="button"
                 className="btn"
                 disabled={loading}
-                onClick={() => nav("/app", { replace: true })}
-                title={t("setpwd.to_home", "На главную")}
+                onClick={() => nav(redirectTo, { replace: true })}
+                title={t("setpwd.back", "Назад")}
               >
-                {t("setpwd.to_home", "На главную")}
+                {isChange ? t("setpwd.back", "Назад") : t("setpwd.to_home", "На главную")}
               </button>
             </div>
           </form>

@@ -16,7 +16,6 @@ function copyToClipboard(text: string) {
 function formatDate(v?: string | null) {
   const s = String(v ?? '').trim()
   if (!s) return '—'
-  // SHM часто отдаёт уже строку "YYYY-MM-DD ..." — оставим как есть, без локализации пока.
   return s
 }
 
@@ -25,13 +24,11 @@ export function Profile() {
   const { me, loading, error, refetch } = useMe() as any
   const { lang, setLang, t } = useI18n()
 
-  // TODO: позже подставим реальный URL миниаппа/биллинга
   const PAYMENT_URL = (import.meta as any).env?.VITE_PAYMENT_URL || ''
 
   const profile = me?.profile
   const balance = me?.balance
 
-  // Логин стараемся показывать везде (чтобы не забывали).
   const loginText = useMemo(() => {
     const l =
       String(profile?.login ?? profile?.username ?? '').trim() ||
@@ -43,7 +40,6 @@ export function Profile() {
 
   async function logout() {
     try {
-      // ВАЖНО: apiFetch уже добавляет /api, поэтому тут просто '/logout'
       await apiFetch('/logout', { method: 'POST' })
     } finally {
       nav('/login', { replace: true })
@@ -59,7 +55,10 @@ export function Profile() {
   }
 
   function goChangePassword() {
-    nav('/app/set-password', { state: { mode: 'profile', login: loginText } })
+    // Важно: state легко теряется, поэтому режим передаём через URL.
+    // intent=change => это добровольная смена пароля, НЕ онбординг.
+    // redirect => куда вернуться после успешной смены.
+    nav('/app/set-password?intent=change&redirect=/app/profile')
   }
 
   function doCopyLogin() {
@@ -103,7 +102,6 @@ export function Profile() {
     )
   }
 
-  // Реальные поля из /api/me (который ходит в SHM)
   const bonus = me?.bonus
   const discount = me?.discount
   const created = profile?.created ?? me?.meRaw?.created
@@ -112,7 +110,6 @@ export function Profile() {
 
   return (
     <div className="section">
-      {/* Header card */}
       <div className="card">
         <div className="card__body">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
@@ -206,7 +203,6 @@ export function Profile() {
             </button>
           </div>
 
-
           {!PAYMENT_URL && (
             <div className="pre" style={{ marginTop: 14 }}>
               {t('profile.payment_stub_hint')}
@@ -221,7 +217,6 @@ export function Profile() {
         </div>
       </div>
 
-      {/* Settings */}
       <div className="section">
         <div className="card">
           <div className="card__body">
@@ -239,7 +234,6 @@ export function Profile() {
         </div>
       </div>
 
-      {/* Language toggle */}
       <div className="section">
         <div className="card">
           <div className="card__body">
@@ -268,7 +262,6 @@ export function Profile() {
         </div>
       </div>
 
-      {/* Auth methods */}
       <div className="section">
         <div className="card">
           <div className="card__body">
@@ -303,7 +296,6 @@ export function Profile() {
         </div>
       </div>
 
-      {/* Debug (optional, beta) */}
       <div className="section">
         <div className="card">
           <div className="card__body">

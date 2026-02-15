@@ -1,11 +1,18 @@
 // api/src/shared/session/sessionStore.ts
 import { randomUUID } from "node:crypto";
 import type { FastifyRequest } from "fastify";
+import {
+  upsertSession,
+  getSession as getDbSession,
+  touchSession,
+  deleteSessionBySid,
+  cleanupSessions,
+} from "../linkdb/sessionRepo.js";
 
 export type AppSession = {
   shmSessionId: string;
   shmUserId?: number;
-  userId?: number; // алиас под старые места (если где-то ждут userId)
+  userId?: number; // backcompat alias
   createdAt: number;
   lastSeenAt: number;
 
@@ -13,13 +20,13 @@ export type AppSession = {
   telegramInitData?: string;
 };
 
-const store = new Map<string, AppSession>();
-
-// Для беты: 30 дней “скользящей” сессии в памяти.
-// (user не должен разлогиниваться — это важно для уведомлений)
+// Максимально долго: по умолчанию 365 дней “скользящей” сессии.
 const SESSION_TTL_MS = Number(
-  process.env.SESSION_TTL_MS || 30 * 24 * 60 * 60 * 1000
+  process.env.SESSION_TTL_MS || 365 * 24 * 60 * 60 * 1000
 );
+
+// Чтобы не писать в SQLite на каждый запрос — троттлим touch.
+const TOUCH_MIN_INTERVAL_MS = Number(process.env.SESSION_TOUCH_MS || 30_000);
 
 function now() {
   return Date.now();
@@ -36,8 +43,10 @@ function cleanupIfNeeded() {
   if (t - lastCleanupAt < 60_000) return;
   lastCleanupAt = t;
 
-  for (const [sid, s] of store.entries()) {
-    if (isExpired(s, t)) store.delete(sid);
+  try {
+    cleanupSessions(SESSION_TTL_MS);
+  } catch {
+    // best-effort
   }
 }
 
@@ -51,20 +60,24 @@ export function putSession(
 ) {
   const t = now();
 
-  // userId поддержим как алиас к shmUserId — чтобы старые роуты не падали
   const merged: AppSession = {
     ...session,
     shmUserId: session.shmUserId ?? session.userId,
     userId: session.userId ?? session.shmUserId,
     lastSeenAt: t,
-
-    // мягкая нормализация: если поле есть, то строка без мусора
     ...(session.telegramInitData
       ? { telegramInitData: String(session.telegramInitData).trim() }
       : {}),
   };
 
-  store.set(localSid, merged);
+  upsertSession({
+    sid: localSid,
+    shmUserId: Number(merged.shmUserId || 0),
+    shmSessionId: String(merged.shmSessionId || ""),
+    telegramInitData: merged.telegramInitData,
+    createdAt: Number(merged.createdAt || t),
+    lastSeenAt: Number(merged.lastSeenAt || t),
+  });
 }
 
 /** Получить сессию по localSid (sid cookie) */
@@ -72,17 +85,33 @@ export function getSessionBySid(localSid: string | undefined) {
   cleanupIfNeeded();
   if (!localSid) return null;
 
-  const s = store.get(localSid) ?? null;
-  if (!s) return null;
+  const s0 = getDbSession(localSid);
+  if (!s0) return null;
+
+  const s: AppSession = {
+    shmSessionId: s0.shmSessionId,
+    shmUserId: s0.shmUserId,
+    userId: s0.shmUserId,
+    createdAt: s0.createdAt,
+    lastSeenAt: s0.lastSeenAt,
+    ...(s0.telegramInitData ? { telegramInitData: s0.telegramInitData } : {}),
+  };
 
   if (isExpired(s)) {
-    store.delete(localSid);
+    deleteSessionBySid(localSid);
     return null;
   }
 
-  // touch (скользящая сессия)
-  s.lastSeenAt = now();
-  store.set(localSid, s);
+  // touch (скользящая сессия), но не чаще TOUCH_MIN_INTERVAL_MS
+  const t = now();
+  if (t - (s.lastSeenAt || s.createdAt) >= TOUCH_MIN_INTERVAL_MS) {
+    try {
+      touchSession(localSid, t);
+      s.lastSeenAt = t;
+    } catch {
+      // ignore
+    }
+  }
 
   return s;
 }
@@ -106,7 +135,7 @@ export function getSessionFromRequest(req: FastifyRequest) {
 /**
  * BACKCOMPAT:
  * Старые роуты импортят getSession(req) — оставляем алиас.
- * Важно: getSession принимает именно FastifyRequest (не sid-строку).
+ * Важно: принимает FastifyRequest (не sid-строку).
  */
 export function getSession(req: FastifyRequest) {
   return getSessionFromRequest(req);
@@ -114,5 +143,9 @@ export function getSession(req: FastifyRequest) {
 
 export function deleteSession(localSid: string | undefined) {
   if (!localSid) return;
-  store.delete(localSid);
+  try {
+    deleteSessionBySid(localSid);
+  } catch {
+    // ignore
+  }
 }

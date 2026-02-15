@@ -51,17 +51,33 @@ function isTelegramWebApp(): boolean {
   return !!(window as any)?.Telegram?.WebApp;
 }
 
-function openInBrowser(url: string) {
+function isStandalone(): boolean {
+  const nav = window.navigator as any;
+  const iosStandalone = !!nav.standalone;
+  const mql = window.matchMedia?.("(display-mode: standalone)")?.matches;
+  return iosStandalone || !!mql;
+}
+
+/**
+ * Important:
+ * - В Telegram WebApp window.open() почти всегда открывает НОВЫЙ webview (внутри Telegram)
+ * - Нам для установки нужно вытащить пользователя во внешний браузер.
+ *
+ * Telegram.WebApp.openLink(url, { try_instant_view:false }) — наиболее корректный путь.
+ * Если Telegram не дал — делаем location.href (не window.open).
+ */
+function openExternal(url: string) {
   const tg = (window as any)?.Telegram?.WebApp;
   if (tg?.openLink) {
     try {
-      tg.openLink(url);
+      tg.openLink(url, { try_instant_view: false });
       return;
     } catch {
       // fallback below
     }
   }
-  window.open(url, "_blank", "noopener,noreferrer");
+  // В WebView window.open часто создаёт ещё один WebView — не то, что нужно.
+  window.location.href = url;
 }
 
 export function Home() {
@@ -79,9 +95,10 @@ export function Home() {
   const [installEvt, setInstallEvt] = useState<BeforeInstallPromptEvent | null>(
     null
   );
-  const [installState, setInstallState] = useState<
-    "idle" | "prompting" | "done"
-  >("idle");
+  const [installState, setInstallState] = useState<"idle" | "prompting" | "done">(
+    "idle"
+  );
+  const [installed, setInstalled] = useState<boolean>(isStandalone());
 
   const profile = me?.profile;
   const balance = me?.balance;
@@ -89,19 +106,26 @@ export function Home() {
   const displayName = profile?.displayName || profile?.login || "";
 
   useEffect(() => {
-    const handler = (e: Event) => {
+    const onAppInstalled = () => setInstalled(true);
+
+    const onBIP = (e: Event) => {
       (e as any).preventDefault?.();
       setInstallEvt(e as BeforeInstallPromptEvent);
     };
 
-    window.addEventListener("beforeinstallprompt", handler as any);
-    return () =>
-      window.removeEventListener("beforeinstallprompt", handler as any);
+    window.addEventListener("appinstalled", onAppInstalled);
+    window.addEventListener("beforeinstallprompt", onBIP as any);
+
+    return () => {
+      window.removeEventListener("appinstalled", onAppInstalled);
+      window.removeEventListener("beforeinstallprompt", onBIP as any);
+    };
   }, []);
 
-  const canInstall = !!installEvt && installState !== "done";
+  const isTg = isTelegramWebApp();
+  const canBrowserInstall = !!installEvt && installState !== "done" && !installed;
 
-  async function runInstall() {
+  async function runBrowserInstall() {
     if (!installEvt) return;
     try {
       setInstallState("prompting");
@@ -120,14 +144,20 @@ export function Home() {
 
   const transferHint = useMemo(() => {
     if (transfer.status !== "ready") return "";
-    if (!transfer.expiresAt) return t("home.desktop.hint.default", "Код одноразовый и быстро истекает.");
+    if (!transfer.expiresAt)
+      return t("home.desktop.hint.default", "Ссылка одноразовая и быстро истекает.");
     const leftMs = transfer.expiresAt - Date.now();
     const leftSec = Math.max(0, Math.floor(leftMs / 1000));
-    if (leftSec <= 0) return t("home.desktop.hint.expired", "Срок действия кода истёк. Нажми ещё раз.");
-    return t("home.desktop.hint.left", `Код одноразовый. Действует примерно ${leftSec} сек.`).replace("{sec}", String(leftSec));
+    if (leftSec <= 0)
+      return t("home.desktop.hint.expired", "Срок действия истёк. Нажми ещё раз.");
+    return t(
+      "home.desktop.hint.left",
+      `Ссылка одноразовая. Действует примерно ${leftSec} сек.`
+    )
+      .replace("{sec}", String(leftSec));
   }, [transfer, t]);
 
-  async function startTransferAndOpen() {
+  async function startTransferAndOpen(mode: "desktop" | "install") {
     try {
       setTransfer({ status: "loading" });
       setShowTransferLink(false);
@@ -144,7 +174,10 @@ export function Home() {
       if (!res.ok || !json?.ok) {
         const msg =
           json?.error === "not_authenticated"
-            ? t("error.open_in_tg", "Откройте это приложение внутри Telegram, чтобы войти.")
+            ? t(
+                "error.open_in_tg",
+                "Откройте это приложение внутри Telegram, чтобы войти."
+              )
             : String(json?.error || "transfer_start_failed");
         setTransfer({ status: "error", message: msg });
         return;
@@ -167,7 +200,14 @@ export function Home() {
         expiresAt,
       });
 
-      openInBrowser(consumeUrl);
+      // Для сценария "install" мы хотим гарантированно вывести во внешний браузер
+      // (там уже появится нативная установка PWA, если доступно).
+      if (mode === "install") {
+        openExternal(consumeUrl);
+      } else {
+        // desktop flow такой же: открыть внешний браузер
+        openExternal(consumeUrl);
+      }
     } catch (e: any) {
       setTransfer({
         status: "error",
@@ -203,7 +243,10 @@ export function Home() {
 
     setPromo((p) => ({
       ...p,
-      state: { status: "done", message: t("promo.done.stub", "Промокоды скоро будут доступны прямо в приложении ✨") },
+      state: {
+        status: "done",
+        message: t("promo.done.stub", "Промокоды скоро будут доступны прямо в приложении ✨"),
+      },
     }));
   }
 
@@ -290,18 +333,34 @@ export function Home() {
             <Link className="btn" to="/app/profile">
               {t("home.actions.profile", "Профиль")}
             </Link>
-            {canInstall && (
+
+            {/* Install button logic:
+                - В Telegram: делаем transfer->consume во внешний браузер (чтобы там можно было поставить PWA)
+                - В обычном браузере: используем нативный beforeinstallprompt
+             */}
+            {isTg ? (
               <button
                 className="btn"
-                onClick={runInstall}
+                onClick={() => startTransferAndOpen("install")}
+                disabled={transfer.status === "loading"}
+                title={t("home.install", "Установить приложение")}
+              >
+                {transfer.status === "loading"
+                  ? t("home.install.opening", "Открываем…")
+                  : t("home.install", "Установить")}
+              </button>
+            ) : canBrowserInstall ? (
+              <button
+                className="btn"
+                onClick={runBrowserInstall}
                 disabled={installState === "prompting"}
-                title={t("home.install", "Установить")}
+                title={t("home.install", "Установить приложение")}
               >
                 {installState === "prompting"
                   ? t("home.install.opening", "Открываем…")
                   : t("home.install", "Установить")}
               </button>
-            )}
+            ) : null}
           </ActionGrid>
 
           <div className="kv kv--3">
@@ -322,6 +381,35 @@ export function Home() {
               <div className="kv__v">{fmtDate(profile?.lastLogin)}</div>
             </div>
           </div>
+
+          {/* Hints */}
+          {isTg && (
+            <div className="pre" style={{ marginTop: 12, opacity: 0.9 }}>
+              <div style={{ fontWeight: 900, marginBottom: 6 }}>
+                {t("home.install.tg.title", "Установка")}
+              </div>
+              <div style={{ opacity: 0.85 }}>
+                {t(
+                  "home.install.tg.text",
+                  "В Telegram установка недоступна напрямую. Мы откроем приложение во внешнем браузере и перенесём авторизацию — там можно установить."
+                )}
+              </div>
+            </div>
+          )}
+
+          {!isTg && !canBrowserInstall && !installed && (
+            <div className="pre" style={{ marginTop: 12, opacity: 0.9 }}>
+              <div style={{ fontWeight: 900, marginBottom: 6 }}>
+                {t("home.install.no_button.title", "Установка")}
+              </div>
+              <div style={{ opacity: 0.85 }}>
+                {t(
+                  "home.install.no_button.text",
+                  "Если кнопки “Установить” нет — браузер не выдал запрос установки. Открой приложение в Chrome/Edge и попробуй снова."
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -397,26 +485,13 @@ export function Home() {
             <ActionGrid>
               <button
                 className="btn btn--primary"
-                onClick={startTransferAndOpen}
+                onClick={() => startTransferAndOpen("desktop")}
                 disabled={transfer.status === "loading"}
               >
                 {transfer.status === "loading"
                   ? t("home.desktop.opening", "Открываем…")
                   : t("home.desktop.open", "Открыть приложение на компьютере")}
               </button>
-
-              {canInstall && (
-                <button
-                  className="btn"
-                  onClick={runInstall}
-                  disabled={installState === "prompting"}
-                  title={t("home.desktop.install", "Установить")}
-                >
-                  {installState === "prompting"
-                    ? t("home.desktop.installing", "Установка…")
-                    : t("home.desktop.install", "Установить")}
-                </button>
-              )}
 
               {transfer.status === "ready" && (
                 <button
@@ -459,21 +534,7 @@ export function Home() {
                 <div style={{ marginTop: 10, opacity: 0.85 }}>
                   {t(
                     "home.desktop.error.tip",
-                    "Подсказка: transfer-login работает только если ты уже вошёл в Shpun App внутри Telegram."
-                  )}
-                </div>
-              </div>
-            )}
-
-            {!canInstall && !isTelegramWebApp() && (
-              <div className="pre" style={{ marginTop: 12, opacity: 0.9 }}>
-                <div style={{ fontWeight: 900, marginBottom: 6 }}>
-                  {t("home.install.no_button.title", "Установка")}
-                </div>
-                <div style={{ opacity: 0.85 }}>
-                  {t(
-                    "home.install.no_button.text",
-                    "Если кнопки “Установить” нет — браузер не выдал запрос установки. Открой приложение в Chrome/Edge и попробуй снова."
+                    "Подсказка: перенос входа работает только если ты уже вошёл в Shpun App внутри Telegram."
                   )}
                 </div>
               </div>

@@ -110,7 +110,6 @@ async function getPasswordSetFlag(shmSessionId: string): Promise<0 | 1> {
 
 // ===== Public base URL (для редиректов) =====
 function getPublicAppBase(req: any): string {
-  // 0) приоритет: forwarded headers (nginx/cf)
   const xfProto = String(req.headers?.["x-forwarded-proto"] ?? "").trim();
   const xfHost = String(req.headers?.["x-forwarded-host"] ?? "").trim();
   if (xfHost) {
@@ -118,7 +117,6 @@ function getPublicAppBase(req: any): string {
     return `${proto}://${xfHost}`;
   }
 
-  // 1) если пришёл реальный Origin и он в allowlist — используем его
   const origin = String(req.headers?.origin ?? "").trim();
   const allow = String(process.env.APP_ORIGIN ?? "")
     .split(",")
@@ -126,24 +124,17 @@ function getPublicAppBase(req: any): string {
     .filter(Boolean);
 
   if (origin && allow.includes(origin)) return origin;
-
-  // 2) иначе берём первый из APP_ORIGIN
   if (allow.length) return allow[0];
-
-  // 3) fallback
   return "https://app.shpyn.online";
 }
 
 function normalizeRedirectPath(input: any, fallback = "/app"): string {
   const v = String(input ?? "").trim();
   if (!v) return fallback;
-
-  // только относительные пути внутри приложения (защита от open-redirect)
   if (!v.startsWith("/")) return fallback;
   if (v.startsWith("//")) return fallback;
   if (v.includes("\r") || v.includes("\n")) return fallback;
   if (/[^\x20-\x7E]/.test(v)) return fallback;
-
   return v;
 }
 
@@ -151,9 +142,27 @@ function getRequestIp(req: any): string {
   return String(req.headers?.["x-real-ip"] ?? req.ip ?? "").trim();
 }
 
-function cookieSecure(): boolean {
-  // в проде — secure обязательно, иначе браузер может не принять cookie в https
-  return process.env.NODE_ENV === "production";
+function isHttps(req: any): boolean {
+  const xfProto = String(req.headers?.["x-forwarded-proto"] ?? "").trim().toLowerCase();
+  if (xfProto) return xfProto === "https";
+  // fallback
+  const proto = String((req as any).protocol ?? "").toLowerCase();
+  return proto === "https";
+}
+
+function cookieMaxAgeSeconds(): number {
+  // максимально долго по умолчанию (365 дней)
+  return Number(process.env.SID_COOKIE_MAX_AGE_SEC || 365 * 24 * 60 * 60);
+}
+
+function cookieOptions(req: any) {
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: isHttps(req), // важно: реальный https, даже если NODE_ENV != production
+    path: "/",
+    maxAge: cookieMaxAgeSeconds(),
+  };
 }
 
 export async function authRoutes(app: FastifyInstance) {
@@ -169,7 +178,7 @@ export async function authRoutes(app: FastifyInstance) {
     const body = (req.body ?? {}) as any;
 
     const result = await handleAuth(provider, body);
-    if (!result.ok) return reply.code(result.status || 400).send(result);
+    if (!result.ok) return reply.code((result as any).status || 400).send(result);
 
     const shmSessionId = String((result as any).shmSessionId ?? "").trim();
     if (!shmSessionId) {
@@ -201,7 +210,6 @@ export async function authRoutes(app: FastifyInstance) {
       ...(telegramInitData ? { telegramInitData } : {}),
     });
 
-    // ✅ next: только сервер решает, куда идти.
     let next: "set_password" | "home" = "home";
 
     if (provider === "telegram") {
@@ -212,12 +220,7 @@ export async function authRoutes(app: FastifyInstance) {
     const loginFromApi = String((result as any).login ?? "").trim();
 
     return reply
-      .setCookie("sid", localSid, {
-        httpOnly: true,
-        sameSite: "lax",
-        secure: cookieSecure(),
-        path: "/",
-      })
+      .setCookie("sid", localSid, cookieOptions(req))
       .send({
         ok: true,
         user_id: shmUserId,
@@ -250,6 +253,7 @@ export async function authRoutes(app: FastifyInstance) {
             ...s,
             shmSessionId: newShmSessionId,
             shmUserId: newUserId,
+            createdAt: s?.createdAt || Date.now(),
           });
         }
       }
@@ -272,9 +276,6 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   // ====== POST /api/auth/transfer/start ======
-  // Создаёт одноразовый код на 60 сек и возвращает consume_url (API), который:
-  // - ставит sid cookie
-  // - редиректит на /app (Home)
   app.post("/auth/transfer/start", async (req, reply) => {
     const s = getSessionFromRequest(req) as any;
     const shmSessionId = String(s?.shmSessionId ?? "").trim();
@@ -296,28 +297,21 @@ export async function authRoutes(app: FastifyInstance) {
     });
 
     const base = getPublicAppBase(req);
-
-    // Важно: ведём в API consume, а не в SPA "/transfer"
-    // чтобы cookie sid была поставлена сервером.
     const consumeUrl = `${base}/api/auth/transfer/consume?code=${encodeURIComponent(code)}`;
 
     return reply.send({ ok: true, consume_url: consumeUrl, expires_at: expiresAt });
   });
 
   // ====== GET /api/auth/transfer/consume?code=...&redirect=/app ======
-  // Открывается в браузере/PWA. Обменивает code -> создаёт sid cookie -> редиректит в приложение
   app.get("/auth/transfer/consume", async (req, reply) => {
     const q = req.query as any;
     const code = String(q.code ?? "").trim();
-
-    // default: Home (/app)
     const redirectTo = normalizeRedirectPath(q.redirect, "/app");
 
     if (!code) return reply.code(400).send({ ok: false, error: "code_required" });
 
     const r = consumeTransfer(code);
     if (!r.ok) {
-      // UX: мягко отправляем на login с параметром, но без утечек
       const base = getPublicAppBase(req);
       const url = `${base}/login?e=${encodeURIComponent(r.error)}`;
       return reply.redirect(303, url);
@@ -331,12 +325,7 @@ export async function authRoutes(app: FastifyInstance) {
     });
 
     return reply
-      .setCookie("sid", localSid, {
-        httpOnly: true,
-        sameSite: "lax",
-        secure: cookieSecure(),
-        path: "/",
-      })
+      .setCookie("sid", localSid, cookieOptions(req))
       .redirect(303, redirectTo);
   });
 
