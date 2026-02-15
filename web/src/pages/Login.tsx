@@ -1,4 +1,5 @@
-﻿import { useEffect, useRef, useState } from "react";
+﻿// web/src/pages/Login.tsx
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { apiFetch } from "../shared/api/client";
 import type { AuthResponse } from "../shared/api/types";
@@ -46,7 +47,7 @@ function buildTelegramOpenUrlSafe():
   if (!bot) {
     return {
       ok: false,
-      error: "VITE_TG_BOT_USERNAME is empty in this build",
+      error: "Сборка без VITE_TG_BOT_USERNAME — не могу сформировать ссылку на Telegram.",
       debug: { botRaw, appRaw, startappRaw },
     };
   }
@@ -62,40 +63,44 @@ function buildTelegramOpenUrlSafe():
 
 /**
  * Открываем MiniApp в Telegram.
- * - В обычном браузере/PWA: прямой переход (самый надёжный)
- * - Внутри Telegram WebApp: пробуем tg.openTelegramLink/openLink, потом fallback
+ * Возвращаем URL, чтобы UI мог показать fallback ссылку.
  */
-function openInTelegramSafe(setErr?: (s: string) => void) {
+function openInTelegramSafe(setErr?: (s: string) => void):
+  | { ok: true; url: string }
+  | { ok: false; error: string; url?: string } {
   const built = buildTelegramOpenUrlSafe();
+
   if (!built.ok) {
     setErr?.(built.error);
     console.warn("[openInTelegram] bad env:", built.error, built.debug);
-    return;
+    return { ok: false, error: built.error };
   }
 
   const url = built.url;
   const tg = getTelegramWebApp();
-  const isInsideTelegram = !!tg; // важный критерий — наличие WebApp, а не initData
+  const isInsideTelegram = !!tg;
 
+  // В обычном браузере просто переходим на t.me/...
   if (!isInsideTelegram) {
     window.location.assign(url);
-    return;
+    return { ok: true, url };
   }
 
   try {
     if (tg?.openTelegramLink) {
       tg.openTelegramLink(url);
-      return;
+      return { ok: true, url };
     }
     if (tg?.openLink) {
-      tg.openLink(url);
-      return;
+      tg.openLink(url, { try_instant_view: false });
+      return { ok: true, url };
     }
   } catch (e) {
     console.warn("[openInTelegram] tg open failed:", e);
   }
 
   window.location.assign(url);
+  return { ok: true, url };
 }
 
 type Mode = "telegram" | "web";
@@ -106,13 +111,17 @@ export function Login() {
   const nav = useNavigate();
   const loc: any = useLocation();
 
-  // ✅ telegram-mode если мы внутри Telegram WebApp (initData может прийти чуть позже)
-  const mode: Mode = getTelegramWebApp() ? "telegram" : "web";
+  // ✅ Telegram-mode только когда реально есть initData (иначе это “просто браузер”)
+  const initDataNow = getTelegramInitData();
+  const mode: Mode = initDataNow ? "telegram" : "web";
 
-  const [tgInitData, setTgInitData] = useState<string | null>(null);
+  const [tgInitData, setTgInitData] = useState<string | null>(initDataNow);
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  // Показываем пользователю ссылку, если “ничего не произошло”
+  const [tgOpenUrl, setTgOpenUrl] = useState<string | null>(null);
 
   // Password fallback + registration
   const [passMode, setPassMode] = useState<PassMode>("login");
@@ -130,6 +139,11 @@ export function Login() {
     password2.length > 0 &&
     password === password2;
 
+  const tgLinkPreview = useMemo(() => {
+    const built = buildTelegramOpenUrlSafe();
+    return built.ok ? built.url : null;
+  }, []);
+
   function goAfterAuth(r?: AuthResponse) {
     const ok = !!r && (r as any).ok === true;
     if (!ok) {
@@ -138,10 +152,8 @@ export function Login() {
       return;
     }
 
-    // ✅ только сервер решает, нужен ли set_password
     const nextRaw = String((r as any).next ?? "home").trim();
     const next = nextRaw || "home";
-
     const loginFromApi = String((r as any).login ?? "").trim();
 
     if (next === "set_password") {
@@ -149,7 +161,6 @@ export function Login() {
       return;
     }
 
-    // совместимость со старым "cabinet" (но ведём в Home)
     const to = String(loc?.state?.from ?? "").trim() || "/app";
     nav(to, { replace: true });
   }
@@ -178,7 +189,6 @@ export function Login() {
     setLoading(true);
     setErr(null);
     try {
-      // если у тебя другой путь на API — скажешь, я заменю одним файлом
       const r = await apiFetch<AuthResponse>("/auth/password/register", {
         method: "POST",
         body: JSON.stringify({ login: login.trim(), password }),
@@ -213,6 +223,24 @@ export function Login() {
     }
   }
 
+  function handleOpenTelegram() {
+    setErr(null);
+    setTgOpenUrl(null);
+
+    const res = openInTelegramSafe(setErr);
+    if (res.ok) setTgOpenUrl(res.url);
+    else if (tgLinkPreview) setTgOpenUrl(tgLinkPreview);
+  }
+
+  async function copyLink(url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+      alert(t("home.install.copy_ok", "Ссылка скопирована 👍"));
+    } catch {
+      window.prompt(t("home.install.copy_prompt", "Скопируй ссылку:"), url);
+    }
+  }
+
   useEffect(() => {
     const tg = getTelegramWebApp();
     tg?.ready?.();
@@ -226,7 +254,6 @@ export function Login() {
       const t2 = window.setTimeout(pull, 200);
       const t3 = window.setTimeout(pull, 600);
 
-      // ✅ автологин делаем один раз, но даём initData шанс появиться
       if (!autoLoginStarted.current) {
         autoLoginStarted.current = true;
         window.setTimeout(() => {
@@ -347,26 +374,12 @@ export function Login() {
                 setPassword2("");
               }
             }}
-            title={passMode === "login" ? t("login.password.switch_to_register", "Создать аккаунт") : t("login.password.switch_to_login", "Уже есть аккаунт")}
           >
             {passMode === "login"
               ? t("login.password.switch_register", "Регистрация")
               : t("login.password.switch_login", "Уже есть аккаунт? Вход")}
           </button>
         </div>
-
-        {passMode === "login" ? (
-          <div className="pre" style={{ marginTop: 12 }}>
-            {t(
-              "login.password.tip",
-              "Пароль — резервный способ входа. Основной вход осуществляется через Telegram."
-            )}
-          </div>
-        ) : (
-          <div className="pre" style={{ marginTop: 12 }}>
-            {t("login.password.register_tip", "После регистрации можно привязать Telegram внутри приложения.")}
-          </div>
-        )}
       </form>
     </details>
   );
@@ -378,76 +391,30 @@ export function Login() {
           <div className="auth__head">
             <div>
               <h1 className="h1">{t("login.title", "Вход в Shpun App")}</h1>
-
-              {mode === "telegram" ? (
-                <p className="p">{t("login.desc.tg")}</p>
-              ) : (
-                <p className="p">{t("login.desc.web")}</p>
-              )}
+              {mode === "telegram" ? <p className="p">{t("login.desc.tg")}</p> : <p className="p">{t("login.desc.web")}</p>}
             </div>
-
             <span className="badge">{mode === "telegram" ? t("login.badge.tg") : t("login.badge.web")}</span>
-          </div>
-
-          <div className="pre" style={{ marginTop: 10 }}>
-            <div style={{ fontWeight: 900, marginBottom: 8 }}>{t("login.what.title")}</div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <div>{t("login.what.1")}</div>
-              <div>{t("login.what.2")}</div>
-              <div>{t("login.what.3")}</div>
-              <div>{t("login.what.4")}</div>
-            </div>
           </div>
 
           {mode === "web" && (
             <>
               <div className="auth__actions" style={{ marginTop: 12 }}>
-                <button
-                  type="button"
-                  className="btn btn--primary"
-                  onClick={() => openInTelegramSafe(setErr)}
-                  style={{ width: "100%" }}
-                >
+                <button type="button" className="btn btn--primary" onClick={handleOpenTelegram} style={{ width: "100%" }}>
                   {t("login.cta.open_tg")}
                 </button>
               </div>
 
-              <div className="pre" style={{ marginTop: 12 }}>
-                <b>{t("login.why.title")}</b> {t("login.why.text")}
-              </div>
-
-              <div className="auth__divider">
-                <span>{t("login.divider.providers")}</span>
-              </div>
-
-              <div className="auth__providers">
-                <button className="btn auth__provider" onClick={() => openInTelegramSafe(setErr)} disabled={loading} type="button">
-                  <span className="auth__providerIcon">✈️</span>
-                  <span className="auth__providerText">
-                    Telegram
-                    <span className="auth__providerHint">{t("login.providers.telegram.hint.web")}</span>
-                  </span>
-                  <span className="auth__providerRight">→</span>
-                </button>
-
-                <button className="btn auth__provider" disabled={true} type="button">
-                  <span className="auth__providerIcon">🟦</span>
-                  <span className="auth__providerText">
-                    Google
-                    <span className="auth__providerHint">{t("login.providers.google.hint")}</span>
-                  </span>
-                  <span className="auth__providerRight">🔒</span>
-                </button>
-
-                <button className="btn auth__provider" disabled={true} type="button">
-                  <span className="auth__providerIcon">🟨</span>
-                  <span className="auth__providerText">
-                    Yandex
-                    <span className="auth__providerHint">{t("login.providers.yandex.hint")}</span>
-                  </span>
-                  <span className="auth__providerRight">🔒</span>
-                </button>
-              </div>
+              {!!tgOpenUrl && (
+                <div className="pre" style={{ marginTop: 12 }}>
+                  <div style={{ fontWeight: 900, marginBottom: 6 }}>{t("login.link.title", "Ссылка для открытия в Telegram")}</div>
+                  <div style={{ wordBreak: "break-word" }}>{tgOpenUrl}</div>
+                  <div style={{ marginTop: 10 }}>
+                    <button className="btn" type="button" onClick={() => copyLink(tgOpenUrl)}>
+                      {t("login.link.copy", "Скопировать ссылку")}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className="auth__divider" style={{ marginTop: 14 }}>
                 <span>{t("login.divider.password")}</span>
@@ -460,57 +427,8 @@ export function Login() {
           {mode === "telegram" && (
             <>
               <div className="auth__actions" style={{ marginTop: 12 }}>
-                <button
-                  type="button"
-                  className="btn btn--primary"
-                  onClick={telegramLogin}
-                  disabled={loading}
-                  style={{ width: "100%" }}
-                >
+                <button type="button" className="btn btn--primary" onClick={telegramLogin} disabled={loading} style={{ width: "100%" }}>
                   {loading ? t("login.tg.cta_loading") : t("login.tg.cta")}
-                </button>
-              </div>
-
-              <div className="pre" style={{ marginTop: 12 }}>
-                <b>{t("login.tg.secure.title")}</b> {t("login.tg.secure.text")}
-              </div>
-
-              <div className="auth__divider">
-                <span>{t("login.divider.providers")}</span>
-              </div>
-
-              <div className="auth__providers">
-                <button
-                  className="btn auth__provider"
-                  onClick={telegramLogin}
-                  disabled={loading}
-                  type="button"
-                  style={{ width: "100%" }}
-                >
-                  <span className="auth__providerIcon">✈️</span>
-                  <span className="auth__providerText">
-                    Telegram
-                    <span className="auth__providerHint">{t("login.providers.telegram.hint.tg")}</span>
-                  </span>
-                  <span className="auth__providerRight">→</span>
-                </button>
-
-                <button className="btn auth__provider" disabled={true} type="button" style={{ width: "100%" }}>
-                  <span className="auth__providerIcon">🟦</span>
-                  <span className="auth__providerText">
-                    Google
-                    <span className="auth__providerHint">{t("login.providers.google.hint")}</span>
-                  </span>
-                  <span className="auth__providerRight">🔒</span>
-                </button>
-
-                <button className="btn auth__provider" disabled={true} type="button" style={{ width: "100%" }}>
-                  <span className="auth__providerIcon">🟨</span>
-                  <span className="auth__providerText">
-                    Yandex
-                    <span className="auth__providerHint">{t("login.providers.yandex.hint")}</span>
-                  </span>
-                  <span className="auth__providerRight">🔒</span>
                 </button>
               </div>
 
