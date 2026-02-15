@@ -58,6 +58,68 @@ async function shmCallShpunApp(
   }).catch(() => undefined);
 }
 
+/**
+ * SHM /v1/user (GET) по сваггеру возвращает обёртку:
+ * { status, data: [ { user_id, login, ... } ], ... }
+ * Но иногда в других шлюзах/обвязках может прийти "плоский" объект.
+ *
+ * Мы аккуратно:
+ * 1) если есть data[] — берём первый элемент как user
+ * 2) иначе работаем с payload напрямую
+ */
+function normalizeShmUserPayload(payload: any): any {
+  const j = payload ?? {};
+
+  // Swagger form: { data: [ { user_id, login, ... } ], status, ... }
+  if (Array.isArray(j.data) && j.data.length > 0) {
+    return j.data[0];
+  }
+
+  // Some variants: { data: { user_id, ... } }
+  if (j.data && typeof j.data === "object" && !Array.isArray(j.data)) {
+    return j.data;
+  }
+
+  // Fallback: already user object
+  return j;
+}
+
+function extractShmUserIdentity(payload: any): {
+  ok: true;
+  shmUserId: number;
+  login: string;
+} | {
+  ok: false;
+  error: "invalid_user_payload";
+  detail: any;
+} {
+  const u = normalizeShmUserPayload(payload);
+
+  const rawUserId =
+    u.user_id ??
+    u.userId ??
+    u.id ??
+    u.user?.id ??
+    u.user?.user_id ??
+    u.user?.userId;
+
+  const shmUserId = rawUserId != null ? Number(rawUserId) : NaN;
+
+  const login = String(
+    u.login ??
+    u.user?.login ??
+    u.username ??
+    u.user?.username ??
+    ""
+  );
+
+  if (!Number.isFinite(shmUserId)) {
+    return { ok: false, error: "invalid_user_payload", detail: payload };
+  }
+
+  return { ok: true, shmUserId, login };
+}
+
 export async function telegramAuth(body: any) {
   const initData = String(body.initData ?? "").trim();
   if (!initData) return { ok: false, status: 400, error: "initData_required" };
@@ -85,7 +147,7 @@ export async function telegramAuth(body: any) {
 
   const shmSessionId = String(r.json.session_id);
 
-  // 2) /user -> user_id + login
+  // 2) /user -> user_id + login (Swagger: envelope with data[])
   const me = await shmGetCurrentUser(shmSessionId);
   if (!me.ok || !me.json) {
     return {
@@ -96,13 +158,13 @@ export async function telegramAuth(body: any) {
     };
   }
 
-  const j = me.json as any;
-  const shmUserId = Number(j.user_id);
-  const login = String(j.login ?? "");
-
-  if (!Number.isFinite(shmUserId)) {
-    return { ok: false, status: 500, error: "invalid_user_payload", detail: j };
+  const ident = extractShmUserIdentity(me.json);
+  if (!ident.ok) {
+    return { ok: false, status: 500, error: ident.error, detail: ident.detail };
   }
+
+  const shmUserId = ident.shmUserId;
+  const login = ident.login;
 
   // 3) LinkDB upsert (telegram -> user)
   const profile = "default";
