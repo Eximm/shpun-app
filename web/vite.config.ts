@@ -1,8 +1,28 @@
+// web/vite.config.ts
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
+  // безопасно для CF + поддоменов
+  base: "/",
+
+  // 🔧 очень важно при симптомах Minified React error #310:
+  // гарантируем одну копию react/react-dom в бандле
+  resolve: {
+    dedupe: ["react", "react-dom"],
+  },
+
+  // помогает Vite не подтягивать вторые копии react через prebundle
+  optimizeDeps: {
+    include: ["react", "react-dom"],
+  },
+
+  // ✅ включаем sourcemap, чтобы стек показывал src-файлы и строки
+  build: {
+    sourcemap: true,
+  },
+
   plugins: [
     react(),
     VitePWA({
@@ -23,7 +43,8 @@ export default defineConfig({
       manifest: {
         name: "ShpunApp",
         short_name: "ShpunApp",
-        description: "Shpun SDN System — кабинет, баланс, услуги и управление подпиской.",
+        description:
+          "Shpun SDN System — кабинет, баланс, услуги и управление подпиской.",
         start_url: "/app",
         scope: "/",
         display: "standalone",
