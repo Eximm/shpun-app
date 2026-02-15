@@ -18,7 +18,13 @@ import { BottomNav } from "./app/layout/BottomNav";
 
 import { I18nProvider, useI18n } from "./shared/i18n";
 
-if (import.meta.env.PROD) {
+/* ============================================================
+   ✅ Service Worker: регистрируем ТОЛЬКО НЕ в Telegram WebApp
+   ============================================================ */
+
+const inTelegram = !!(window as any)?.Telegram?.WebApp;
+
+if (import.meta.env.PROD && !inTelegram) {
   import("virtual:pwa-register")
     .then(({ registerSW }) => {
       registerSW({
@@ -30,6 +36,10 @@ if (import.meta.env.PROD) {
     })
     .catch((e: unknown) => console.error("SW import error", e));
 }
+
+/* ============================================================
+   AppShell
+   ============================================================ */
 
 function AppShell({ children }: { children: React.ReactNode }) {
   const { t } = useI18n();
@@ -63,13 +73,17 @@ function Authed(el: React.ReactNode) {
   return <AuthGate>{el}</AuthGate>;
 }
 
+/* ============================================================
+   Render
+   ============================================================ */
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <I18nProvider>
       <BrowserRouter>
         <AppShell>
           <Routes>
-            {/* Desktop / PWA transfer-login entry */}
+            {/* Transfer login entry (desktop / external browser) */}
             <Route path="/transfer" element={<Transfer />} />
 
             {/* Public */}
@@ -78,22 +92,22 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             {/* App root */}
             <Route path="/app" element={<Navigate to="/app/home" replace />} />
 
-            {/* Главная витрина */}
+            {/* Главная */}
             <Route path="/app/home" element={Authed(<Home />)} />
 
-            {/* Новости (бывший Cabinet) */}
+            {/* Новости */}
             <Route path="/app/feed" element={Authed(<Feed />)} />
 
-            {/* Внутренние/служебные страницы */}
+            {/* Служебные */}
             <Route path="/app/dashboard" element={Authed(<Dashboard />)} />
 
-            {/* Остальное */}
+            {/* Основные */}
             <Route path="/app/services" element={Authed(<Services />)} />
             <Route path="/app/payments" element={Authed(<Payments />)} />
             <Route path="/app/profile" element={Authed(<Profile />)} />
             <Route path="/app/set-password" element={Authed(<SetPassword />)} />
 
-            {/* Совместимость со старыми ссылками */}
+            {/* Legacy */}
             <Route path="/app/cabinet" element={<Navigate to="/app/feed" replace />} />
 
             {/* Default */}

@@ -6,8 +6,12 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      // ✅ ВАЖНО: не вшиваем авто-регистрацию SW в HTML
+      // (мы зарегистрируем SW вручную и только НЕ в Telegram)
+      injectRegister: null,
+
+      // Оставляем стратегию обновления
       registerType: "autoUpdate",
-      injectRegister: "auto",
 
       includeAssets: [
         "icons/icon-192.png",
@@ -19,8 +23,7 @@ export default defineConfig({
       manifest: {
         name: "ShpunApp",
         short_name: "ShpunApp",
-        description:
-          "Shpun SDN System — кабинет, баланс, услуги и управление подпиской.",
+        description: "Shpun SDN System — кабинет, баланс, услуги и управление подпиской.",
         start_url: "/app",
         scope: "/",
         display: "standalone",
@@ -35,19 +38,6 @@ export default defineConfig({
             type: "image/png",
             purpose: "maskable",
           },
-        ],
-      },
-
-      // Критично для SPA-роутов /app, /app/feed и т.п.
-      workbox: {
-        navigateFallback: "/index.html",
-        navigateFallbackDenylist: [
-          /^\/api\//,
-          /^\/icons\//,
-          /^\/assets\//,
-          /^\/manifest\.webmanifest$/,
-          /^\/sw\.js$/,
-          /^\/workbox-.*\.js$/,
         ],
       },
     }),
