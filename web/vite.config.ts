@@ -15,16 +15,14 @@ export default defineConfig({
   },
 
   build: {
-    // 🔎 debug-режим: чтобы стек стал читаемым и/или с src-линиями
-    sourcemap: true,
-    minify: false,
+    sourcemap: false,
+    minify: "esbuild",
   },
 
   plugins: [
     react(),
     VitePWA({
-      injectRegister: null,
-      registerType: "autoUpdate",
+      registerType: "prompt",
       includeAssets: [
         "icons/icon-192.png",
         "icons/icon-512.png",

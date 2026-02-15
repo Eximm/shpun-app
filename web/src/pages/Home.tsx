@@ -52,10 +52,6 @@ function getTelegramWebApp(): any | null {
   return (window as any)?.Telegram?.WebApp ?? null;
 }
 
-/**
- * ✅ MiniApp считаем только когда initData реально есть.
- * Если TG объект есть, но initData нет — это "вьюер/встроенный браузер", transfer там не работает.
- */
 function hasTelegramInitData(): boolean {
   const tg = getTelegramWebApp();
   const initData = String(tg?.initData ?? "").trim();
@@ -66,25 +62,18 @@ function isAndroid(): boolean {
   return /Android/i.test(navigator.userAgent || "");
 }
 
-/**
- * consume_url может приходить абсолютным на другом домене (например app.shpyn.online).
- * Для миграции нужно всегда открывать consume на текущем origin (app.sdnonline.online),
- * иначе cookie sid окажется не там и в браузере будет 401.
- */
 function normalizeConsumeUrl(raw: string): string {
   const s = String(raw || "").trim();
   if (!s) return s;
 
   const origin = window.location.origin;
 
-  // relative -> absolute on current origin
   if (s.startsWith("/")) return origin + s;
 
   try {
     const u = new URL(s);
     const cur = new URL(origin);
 
-    // rewrite host to current host if differs
     if (u.host !== cur.host) {
       u.protocol = cur.protocol;
       u.host = cur.host;
@@ -95,13 +84,6 @@ function normalizeConsumeUrl(raw: string): string {
   }
 }
 
-/**
- * Надёжно открыть внешний браузер из Telegram (Android капризничает).
- * 1) tg.openLink(url, try_instant_view:false)
- * 2) Android: tg.close() через 300мс (иногда помогает не "вложить миниапп в миниапп")
- * 3) Android fallback: intent:// на Chrome
- * 4) fallback: window.open
- */
 function openInBrowser(url: string) {
   const tg = getTelegramWebApp();
   const android = isAndroid();
@@ -124,7 +106,6 @@ function openInBrowser(url: string) {
     }
   }
 
-  // Android hard fallback: intent to Chrome
   if (android) {
     try {
       const u = new URL(url);
@@ -153,33 +134,18 @@ function detectInstallHint(): { title: string; text: string } {
 
   if (isAndroid()) {
     if (isSamsung) {
-      return {
-        title: "Как установить",
-        text: "В Samsung Internet: меню ☰ → “Добавить страницу на” → “Главный экран”.",
-      };
+      return { title: "Как установить", text: "Samsung Internet: ☰ → “Добавить страницу на” → “Главный экран”." };
     }
     if (isFirefox) {
-      return {
-        title: "Как установить",
-        text: "В Firefox: меню ⋮ → “Установить” или “Добавить на главный экран”.",
-      };
+      return { title: "Как установить", text: "Firefox: ⋮ → “Установить” / “Добавить на главный экран”." };
     }
     if (isChrome || isEdge) {
-      return {
-        title: "Как установить",
-        text: "В Chrome/Edge: меню ⋮ → “Установить приложение” (или “Добавить на главный экран”).",
-      };
+      return { title: "Как установить", text: "Chrome/Edge: ⋮ → “Установить приложение” (или “Добавить на главный экран”)." };
     }
-    return {
-      title: "Как установить",
-      text: "Откройте меню браузера и выберите “Установить приложение” / “Добавить на главный экран”.",
-    };
+    return { title: "Как установить", text: "Откройте меню браузера и выберите “Установить приложение” / “Добавить на главный экран”." };
   }
 
-  return {
-    title: "Как установить",
-    text: "Откройте меню браузера и выберите “Установить” / “Добавить на главный экран”.",
-  };
+  return { title: "Как установить", text: "Откройте меню браузера и выберите “Установить” / “Добавить на главный экран”." };
 }
 
 export function Home() {
@@ -194,14 +160,10 @@ export function Home() {
     state: { status: "idle" },
   });
 
-  const [installEvt, setInstallEvt] = useState<BeforeInstallPromptEvent | null>(
-    null
-  );
-  const [installState, setInstallState] = useState<"idle" | "prompting" | "done">(
-    "idle"
-  );
+  const [installEvt, setInstallEvt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [installState, setInstallState] = useState<"idle" | "prompting" | "done">("idle");
+  const [showInstallHint, setShowInstallHint] = useState(false);
 
-  // ✅ “в Telegram MiniApp” только если initData реально есть
   const inTelegramMiniApp = hasTelegramInitData();
   const hasTelegramObject = !!getTelegramWebApp();
   const transferBusy = transfer.status === "loading";
@@ -215,33 +177,13 @@ export function Home() {
       (e as any).preventDefault?.();
       setInstallEvt(e as BeforeInstallPromptEvent);
     };
-
     window.addEventListener("beforeinstallprompt", handler as any);
     return () => window.removeEventListener("beforeinstallprompt", handler as any);
   }, []);
 
-  // Настоящая PWA-установка (prompt) — только в браузере, не в Telegram WebApp
-  const canInstallPrompt =
-    !inTelegramMiniApp && !!installEvt && installState !== "done";
-
-  const shouldShowInstallHelper =
-    !inTelegramMiniApp && !canInstallPrompt && installState !== "done";
-
+  const canInstallPrompt = !inTelegramMiniApp && !!installEvt && installState !== "done";
   const installHint = useMemo(() => detectInstallHint(), []);
-
-  const transferHint = useMemo(() => {
-    if (transfer.status !== "ready") return "";
-    if (!transfer.expiresAt)
-      return t("home.install.hint.default", "Ссылка одноразовая и быстро истекает.");
-    const leftMs = transfer.expiresAt - Date.now();
-    const leftSec = Math.max(0, Math.floor(leftMs / 1000));
-    if (leftSec <= 0)
-      return t("home.install.hint.expired", "Срок действия истёк. Нажми ещё раз.");
-    return t(
-      "home.install.hint.left",
-      `Ссылка одноразовая. Действует примерно ${leftSec} сек.`
-    ).replace("{sec}", String(leftSec));
-  }, [transfer, t]);
+  const shouldShowBrowserInstallHint = !inTelegramMiniApp && !canInstallPrompt && installState !== "done" && showInstallHint;
 
   async function runInstallPrompt() {
     if (!installEvt || inTelegramMiniApp) return;
@@ -262,15 +204,10 @@ export function Home() {
   }
 
   async function startTransferAndOpen() {
-    // Если это Telegram-окружение без initData (встроенный браузер),
-    // то transfer не сработает: нет telegram initData-сессии.
     if (hasTelegramObject && !inTelegramMiniApp) {
       setTransfer({
         status: "error",
-        message: t(
-          "error.open_in_tg",
-          "Откройте приложение внутри Telegram (в Mini App), чтобы перенести вход в браузер."
-        ),
+        message: t("error.open_in_tg", "Откройте приложение внутри Telegram (в Mini App), чтобы перенести вход в браузер."),
       });
       setShowTransferLink(true);
       return;
@@ -314,10 +251,7 @@ export function Home() {
 
       setTransfer({ status: "ready", consumeUrl, expiresAt });
 
-      // Пытаемся открыть внешний браузер
       openInBrowser(consumeUrl);
-
-      // ✅ fallback UX: даже если открылось “не туда”, пользователь сразу видит ссылку
       window.setTimeout(() => setShowTransferLink(true), 600);
     } catch (e: any) {
       setTransfer({
@@ -326,6 +260,25 @@ export function Home() {
       });
       setShowTransferLink(true);
     }
+  }
+
+  async function onInstallClick() {
+    // Браузер: системный prompt (если доступен)
+    if (canInstallPrompt) {
+      setShowInstallHint(false);
+      await runInstallPrompt();
+      return;
+    }
+
+    // Telegram: переносим вход во внешний браузер
+    if (inTelegramMiniApp || hasTelegramObject) {
+      setShowInstallHint(false);
+      await startTransferAndOpen();
+      return;
+    }
+
+    // Браузер без prompt: показываем короткую подсказку
+    setShowInstallHint(true);
   }
 
   async function copyTransferUrl() {
@@ -362,7 +315,6 @@ export function Home() {
     }));
   }
 
-  // ✅ Ранние return НЕ меняют количество хуков (все хуки уже вызваны выше)
   if (loading) {
     return (
       <div className="section">
@@ -403,80 +355,33 @@ export function Home() {
     );
   }
 
-  const installTitle = t("home.install.cta_title", "Установите ShpunApp");
-  const installText = inTelegramMiniApp
-    ? t(
-        "home.install.cta_text_tg",
-        "Откроем браузер и перенесём вход автоматически — так вы сможете установить приложение на устройство."
-      )
-    : t(
-        "home.install.cta_text_web",
-        "Установите приложение, чтобы быстрее открывать сервис и получать более стабильную работу."
-      );
-
-  const installBtnText = canInstallPrompt
-    ? installState === "prompting"
-      ? t("home.install.opening", "Открываем…")
-      : t("home.install", "Установить приложение")
-    : inTelegramMiniApp || hasTelegramObject
-    ? transferBusy
-      ? t("home.install.opening", "Открываем…")
-      : t("home.install", "Установить приложение")
-    : t("home.install", "Установить приложение");
-
-  async function onMainInstallClick() {
-    // 1) В браузере — пробуем prompt если он есть
-    if (canInstallPrompt) {
-      await runInstallPrompt();
-      return;
-    }
-
-    // 2) В Telegram — переносим вход и открываем внешний браузер
-    if (inTelegramMiniApp || hasTelegramObject) {
-      await startTransferAndOpen();
-      return;
-    }
-
-    // 3) В браузере без prompt — просто покажем helper ниже (он уже есть)
-    setInstallState("idle");
-  }
-
   return (
     <div className="section">
-      {/* ✅ BIG INSTALL CTA — отдельный блок сверху */}
-      <div className="card" style={{ marginBottom: 12 }}>
-        <div className="card__body">
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-            <div>
-              <div className="h1" style={{ fontSize: 20 }}>
-                {installTitle}
-              </div>
-              <p className="p">{installText}</p>
-            </div>
-
-            <button
-              className="btn btn--primary"
-              onClick={onMainInstallClick}
-              disabled={installState === "prompting" || transferBusy}
-              style={{ whiteSpace: "nowrap" }}
-            >
-              {installBtnText}
-            </button>
-          </div>
-
-          {/* маленькая подсказка под CTA */}
-          {inTelegramMiniApp && (
-            <div style={{ marginTop: 10, opacity: 0.75, fontSize: 13 }}>
-              {t("home.install.note_tg", "На телефоне установка работает через внешний браузер (Chrome/Safari).")}
-            </div>
-          )}
-          {!inTelegramMiniApp && !canInstallPrompt && (
-            <div style={{ marginTop: 10, opacity: 0.75, fontSize: 13 }}>
-              {t("home.install.note_web", "Если кнопка установки не появилась — установите через меню браузера.")}
-            </div>
-          )}
-        </div>
+      {/* ✅ компактная install-кнопка без простыней */}
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+        <button
+          className="btn btn--primary"
+          onClick={onInstallClick}
+          disabled={installState === "prompting" || transferBusy}
+          title={t("home.install", "Установить приложение")}
+        >
+          {installState === "prompting" || transferBusy
+            ? t("home.install.opening", "Открываем…")
+            : t("home.install", "Установить приложение")}
+        </button>
       </div>
+
+      {/* короткая подсказка по установке в браузере (только если prompt не пришёл) */}
+      {shouldShowBrowserInstallHint && (
+        <div className="card" style={{ marginBottom: 12 }}>
+          <div className="card__body">
+            <div className="h1" style={{ fontSize: 16 }}>
+              {t("home.install.title", installHint.title)}
+            </div>
+            <div className="pre">{installHint.text}</div>
+          </div>
+        </div>
+      )}
 
       {/* User hero */}
       <div className="card">
@@ -516,7 +421,6 @@ export function Home() {
             </div>
           </div>
 
-          {/* ✅ убрали мелкую кнопку "Установить" из сетки */}
           <ActionGrid>
             <Link className="btn btn--primary" to="/app/payments">
               {t("home.actions.payments", "Оплата")}
@@ -533,9 +437,7 @@ export function Home() {
             <div className="kv__item">
               <div className="kv__k">{t("home.meta.password", "Пароль")}</div>
               <div className="kv__v">
-                {profile?.passwordSet
-                  ? t("home.meta.password.on", "установлен")
-                  : t("home.meta.password.off", "не установлен")}
+                {profile?.passwordSet ? t("home.meta.password.on", "установлен") : t("home.meta.password.off", "не установлен")}
               </div>
             </div>
             <div className="kv__item">
@@ -550,27 +452,7 @@ export function Home() {
         </div>
       </div>
 
-      {/* Install helper in browser (если prompt не пришёл) */}
-      {shouldShowInstallHelper && (
-        <div className="section">
-          <div className="card">
-            <div className="card__body">
-              <div className="h1" style={{ fontSize: 18 }}>
-                {t("home.install.title", installHint.title)}
-              </div>
-              <p className="p">
-                {t(
-                  "home.install.desc_browser",
-                  "Браузер не показал кнопку установки автоматически. Это нормально — установку можно сделать через меню."
-                )}
-              </p>
-              <div className="pre">{installHint.text}</div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Install helper в “телеграмном” сценарии */}
+      {/* “телеграмный” блок-помощник (показывается только если что-то пошло не так) */}
       {(hasTelegramObject || inTelegramMiniApp) &&
         (showTransferLink || transfer.status === "ready" || transfer.status === "error") && (
           <div className="section">
@@ -580,37 +462,12 @@ export function Home() {
                   {t("home.install.title", "Установить приложение")}
                 </div>
                 <p className="p">
-                  {t(
-                    "home.install.desc",
-                    "Мы откроем браузер и перенесём вход автоматически. После этого установите приложение обычным способом."
-                  )}
+                  {t("home.install.desc", "Если браузер не открылся автоматически — используйте ссылку ниже.")}
                 </p>
 
                 {transfer.status === "ready" && (
-                  <ActionGrid>
-                    <button className="btn btn--primary" onClick={startTransferAndOpen} disabled={transferBusy}>
-                      {t("home.install.open_browser", "Открыть браузер")}
-                    </button>
-
-                    <button
-                      className="btn"
-                      onClick={() => setShowTransferLink((v) => !v)}
-                      title={t("home.install.fallback", "Если авто-открытие не сработало")}
-                    >
-                      {showTransferLink
-                        ? t("home.install.hide_link", "Скрыть ссылку")
-                        : t("home.install.show_link", "Показать ссылку")}
-                    </button>
-                  </ActionGrid>
-                )}
-
-                {transfer.status === "ready" && showTransferLink && (
                   <div className="pre" style={{ marginTop: 12 }}>
-                    <div style={{ fontWeight: 900, marginBottom: 6 }}>
-                      {t("home.install.fallback", "Если авто-открытие не сработало")}
-                    </div>
                     <div style={{ wordBreak: "break-word" }}>{transfer.consumeUrl}</div>
-                    <div style={{ marginTop: 10, opacity: 0.85 }}>{transferHint}</div>
                     <div style={{ marginTop: 10 }}>
                       <button className="btn" onClick={copyTransferUrl}>
                         {t("home.install.copy", "Скопировать ссылку")}
@@ -621,22 +478,7 @@ export function Home() {
 
                 {transfer.status === "error" && (
                   <div className="pre" style={{ marginTop: 12 }}>
-                    <div style={{ fontWeight: 900, marginBottom: 6 }}>
-                      {t("home.install.error", "Не получилось открыть установку.")}
-                    </div>
                     <div style={{ opacity: 0.85 }}>{transfer.message}</div>
-                  </div>
-                )}
-
-                {hasTelegramObject && !inTelegramMiniApp && transfer.status === "idle" && (
-                  <div className="pre" style={{ marginTop: 12 }}>
-                    <div style={{ fontWeight: 900, marginBottom: 6 }}>{t("home.install.note", "Важно")}</div>
-                    <div style={{ opacity: 0.85 }}>
-                      {t(
-                        "error.open_in_tg",
-                        "Откройте приложение внутри Telegram (в Mini App), чтобы перенести вход в браузер."
-                      )}
-                    </div>
                   </div>
                 )}
               </div>
@@ -676,33 +518,6 @@ export function Home() {
                   <span className="chip chip--ok">today</span>
                 </div>
               </div>
-
-              <div className="list__item">
-                <div className="list__main">
-                  <div className="list__title">{t("home.news.item2.title", "🧭 Лента — в “Новости”")}</div>
-                  <div className="list__sub">
-                    {t(
-                      "home.news.item2.sub",
-                      "Главная — витрина. Новости — лента. Дальше подключим реальные данные."
-                    )}
-                  </div>
-                </div>
-                <div className="list__side">
-                  <span className="chip chip--soft">new</span>
-                </div>
-              </div>
-
-              <div className="list__item">
-                <div className="list__main">
-                  <div className="list__title">{t("home.news.item3.title", "🔐 Установка без потери входа")}</div>
-                  <div className="list__sub">
-                    {t("home.news.item3.sub", "Откроем браузер и перенесём вход автоматически.")}
-                  </div>
-                </div>
-                <div className="list__side">
-                  <span className="chip chip--warn">new</span>
-                </div>
-              </div>
             </div>
 
             <ActionGrid>
@@ -722,10 +537,7 @@ export function Home() {
               {t("promo.title", "Промокоды")}
             </div>
             <p className="p">
-              {t(
-                "promo.desc",
-                "Есть промокод? Введи его здесь — бонусы или скидка применятся к аккаунту."
-              )}
+              {t("promo.desc", "Есть промокод? Введи его здесь — бонусы или скидка применятся к аккаунту.")}
             </p>
 
             <div className="actions actions--2">
@@ -751,20 +563,12 @@ export function Home() {
                 onClick={applyPromoStub}
                 disabled={promo.state.status === "applying"}
               >
-                {promo.state.status === "applying"
-                  ? t("promo.applying", "Применяем…")
-                  : t("promo.apply", "Применить")}
+                {promo.state.status === "applying" ? t("promo.applying", "Применяем…") : t("promo.apply", "Применить")}
               </button>
             </div>
 
             {promo.state.status === "done" && <div className="pre">{promo.state.message}</div>}
             {promo.state.status === "error" && <div className="pre">{promo.state.message}</div>}
-
-            <ActionGrid>
-              <Link className="btn" to="/app/profile">
-                {t("promo.history", "История / статус")}
-              </Link>
-            </ActionGrid>
           </div>
         </div>
       </div>

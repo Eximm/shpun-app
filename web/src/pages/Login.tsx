@@ -32,6 +32,8 @@ function readEnv(key: string): string {
 /**
  * Надёжный MiniApp deeplink:
  * https://t.me/<bot>/<app>?startapp=<payload>
+ *
+ * Важно: если VITE_TG_APP_SHORTNAME не задан, используем "shpun_app" (продовый shortname).
  */
 function buildTelegramOpenUrlSafe():
   | { ok: true; url: string }
@@ -42,21 +44,27 @@ function buildTelegramOpenUrlSafe():
   const startapp = startappRaw.length > 0 ? startappRaw : "1";
 
   const bot = botRaw.startsWith("@") ? botRaw.slice(1).trim() : botRaw;
-  const app = appRaw;
+
+  // ✅ чтобы не было “пустого app” в проде
+  const app = (appRaw || "shpun_app").trim();
 
   if (!bot) {
     return {
       ok: false,
-      error: "Сборка без VITE_TG_BOT_USERNAME — не могу сформировать ссылку на Telegram.",
+      error:
+        "Сборка без VITE_TG_BOT_USERNAME — не могу сформировать ссылку на Telegram.",
       debug: { botRaw, appRaw, startappRaw },
     };
   }
 
+  // если вдруг app пустой (не должно) — просто на t.me/<bot>
   if (!app) {
     return { ok: true, url: `https://t.me/${encodeURIComponent(bot)}` };
   }
 
-  const base = `https://t.me/${encodeURIComponent(bot)}/${encodeURIComponent(app)}`;
+  const base = `https://t.me/${encodeURIComponent(bot)}/${encodeURIComponent(
+    app
+  )}`;
   const url = `${base}?startapp=${encodeURIComponent(startapp)}`;
   return { ok: true, url };
 }
@@ -65,14 +73,17 @@ function buildTelegramOpenUrlSafe():
  * Открываем MiniApp в Telegram.
  * Возвращаем URL, чтобы UI мог показать fallback ссылку.
  */
-function openInTelegramSafe(setErr?: (s: string) => void):
+function openInTelegramSafe(
+  setErr?: (s: string) => void
+):
   | { ok: true; url: string }
   | { ok: false; error: string; url?: string } {
   const built = buildTelegramOpenUrlSafe();
 
   if (!built.ok) {
     setErr?.(built.error);
-    console.warn("[openInTelegram] bad env:", built.error, built.debug);
+    // один аккуратный warn (без токенов/данных)
+    console.warn("[openInTelegram] bad env:", built.error);
     return { ok: false, error: built.error };
   }
 
@@ -96,7 +107,7 @@ function openInTelegramSafe(setErr?: (s: string) => void):
       return { ok: true, url };
     }
   } catch (e) {
-    console.warn("[openInTelegram] tg open failed:", e);
+    console.warn("[openInTelegram] tg open failed");
   }
 
   window.location.assign(url);
@@ -157,7 +168,10 @@ export function Login() {
     const loginFromApi = String((r as any).login ?? "").trim();
 
     if (next === "set_password") {
-      nav("/app/set-password", { replace: true, state: { login: loginFromApi } });
+      nav("/app/set-password", {
+        replace: true,
+        state: { login: loginFromApi },
+      });
       return;
     }
 
@@ -177,7 +191,9 @@ export function Login() {
       });
       goAfterAuth(r);
     } catch (e: any) {
-      setErr(e?.message || t("error.password_login_failed", "Не удалось войти по паролю"));
+      setErr(
+        e?.message || t("error.password_login_failed", "Не удалось войти по паролю")
+      );
     } finally {
       setLoading(false);
     }
@@ -195,7 +211,10 @@ export function Login() {
       });
       goAfterAuth(r);
     } catch (e: any) {
-      setErr(e?.message || t("error.password_login_failed", "Не удалось выполнить регистрацию"));
+      setErr(
+        e?.message ||
+          t("error.password_login_failed", "Не удалось выполнить регистрацию")
+      );
     } finally {
       setLoading(false);
     }
@@ -204,7 +223,9 @@ export function Login() {
   async function telegramLogin() {
     const initData = tgInitData || getTelegramInitData();
     if (!initData) {
-      setErr(t("error.open_in_tg", "Откройте это приложение внутри Telegram, чтобы войти."));
+      setErr(
+        t("error.open_in_tg", "Откройте это приложение внутри Telegram, чтобы войти.")
+      );
       return;
     }
 
@@ -217,7 +238,10 @@ export function Login() {
       });
       goAfterAuth(r);
     } catch (e: any) {
-      setErr(e?.message || t("error.telegram_login_failed", "Не удалось войти через Telegram"));
+      setErr(
+        e?.message ||
+          t("error.telegram_login_failed", "Не удалось войти через Telegram")
+      );
     } finally {
       setLoading(false);
     }
@@ -272,7 +296,9 @@ export function Login() {
 
   const passwordDetails = (
     <details className="auth__details">
-      <summary className="auth__detailsSummary">{t("login.password.summary", "Войти по логину и паролю")}</summary>
+      <summary className="auth__detailsSummary">
+        {t("login.password.summary", "Войти по логину и паролю")}
+      </summary>
 
       <form
         className="auth__form"
@@ -285,15 +311,23 @@ export function Login() {
         <div style={{ fontWeight: 900, letterSpacing: 0.1, marginBottom: 10 }}>
           {passMode === "login"
             ? t("login.password.summary", "Войти по логину и паролю")
-            : t("login.password.register_title", "Регистрация по логину и паролю")}
+            : t(
+                "login.password.register_title",
+                "Регистрация по логину и паролю"
+              )}
         </div>
 
         <div className="auth__grid">
           <label className="field">
-            <span className="field__label">{t("login.password.login", "Логин")}</span>
+            <span className="field__label">
+              {t("login.password.login", "Логин")}
+            </span>
             <input
               className="input"
-              placeholder={t("login.password.login_ph", "например @123456789")}
+              placeholder={t(
+                "login.password.login_ph",
+                "например @123456789"
+              )}
               value={login}
               onChange={(e) => setLogin(e.target.value)}
               autoComplete="username"
@@ -303,24 +337,33 @@ export function Login() {
           </label>
 
           <label className="field">
-            <span className="field__label">{t("login.password.password", "Пароль")}</span>
+            <span className="field__label">
+              {t("login.password.password", "Пароль")}
+            </span>
             <input
               className="input"
               placeholder={t("login.password.password_ph", "••••••••")}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               type="password"
-              autoComplete={passMode === "login" ? "current-password" : "new-password"}
+              autoComplete={
+                passMode === "login" ? "current-password" : "new-password"
+              }
               disabled={loading}
             />
           </label>
 
           {passMode === "register" && (
             <label className="field">
-              <span className="field__label">{t("login.password.repeat", "Повтор пароля")}</span>
+              <span className="field__label">
+                {t("login.password.repeat", "Повтор пароля")}
+              </span>
               <input
                 className="input"
-                placeholder={t("login.password.repeat_ph", "Введите пароль ещё раз")}
+                placeholder={t(
+                  "login.password.repeat_ph",
+                  "Введите пароль ещё раз"
+                )}
                 value={password2}
                 onChange={(e) => setPassword2(e.target.value)}
                 type="password"
@@ -342,7 +385,10 @@ export function Login() {
             type="submit"
             className="btn btn--primary"
             style={{ width: "100%" }}
-            disabled={loading || (passMode === "login" ? !canPasswordLogin : !canPasswordRegister)}
+            disabled={
+              loading ||
+              (passMode === "login" ? !canPasswordLogin : !canPasswordRegister)
+            }
           >
             {loading
               ? passMode === "login"
@@ -354,7 +400,13 @@ export function Login() {
           </button>
         </div>
 
-        <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.10)" }}>
+        <div
+          style={{
+            marginTop: 12,
+            paddingTop: 12,
+            borderTop: "1px solid rgba(255,255,255,0.10)",
+          }}
+        >
           <button
             type="button"
             className="btn"
@@ -380,6 +432,18 @@ export function Login() {
               : t("login.password.switch_login", "Уже есть аккаунт? Вход")}
           </button>
         </div>
+
+        <div className="pre" style={{ marginTop: 12 }}>
+          {passMode === "login"
+            ? t(
+                "login.password.tip",
+                "Пароль — резервный способ входа. Основной вход — через Telegram."
+              )
+            : t(
+                "login.password.register_tip",
+                "Регистрация — резервный способ. Основной вход — через Telegram."
+              )}
+        </div>
       </form>
     </details>
   );
@@ -391,58 +455,141 @@ export function Login() {
           <div className="auth__head">
             <div>
               <h1 className="h1">{t("login.title", "Вход в Shpun App")}</h1>
-              {mode === "telegram" ? <p className="p">{t("login.desc.tg")}</p> : <p className="p">{t("login.desc.web")}</p>}
+              {mode === "telegram" ? (
+                <p className="p">
+                  {t(
+                    "login.desc.tg",
+                    "Мы распознали Telegram Mini App — можно войти в один тап."
+                  )}
+                </p>
+              ) : (
+                <p className="p">
+                  {t(
+                    "login.desc.web",
+                    "Рекомендуем открыть Shpun внутри Telegram — это самый быстрый способ входа."
+                  )}
+                </p>
+              )}
             </div>
-            <span className="badge">{mode === "telegram" ? t("login.badge.tg") : t("login.badge.web")}</span>
+
+            <span className="badge">
+              {mode === "telegram"
+                ? t("login.badge.tg", "Telegram")
+                : t("login.badge.web", "Веб-режим")}
+            </span>
           </div>
 
+          {/* ===== Providers (красиво) ===== */}
+          <div className="auth__divider" style={{ marginTop: 12 }}>
+            <span>{t("login.divider.providers", "Способы входа")}</span>
+          </div>
+
+          <div className="auth__providers">
+            {/* Telegram provider */}
+            <button
+              className="btn auth__provider"
+              onClick={mode === "telegram" ? telegramLogin : handleOpenTelegram}
+              disabled={loading}
+              type="button"
+              style={{ width: "100%" }}
+            >
+              <span className="auth__providerIcon">✈️</span>
+              <span className="auth__providerText">
+                Telegram
+                <span className="auth__providerHint">
+                  {mode === "telegram"
+                    ? t("login.providers.telegram.hint.tg", "вход в один тап")
+                    : t(
+                        "login.providers.telegram.hint.web",
+                        "открыть Mini App"
+                      )}
+                </span>
+              </span>
+              <span className="auth__providerRight">→</span>
+            </button>
+
+            {/* Google (soon) */}
+            <button
+              className="btn auth__provider"
+              disabled={true}
+              type="button"
+              style={{ width: "100%" }}
+              title={t("login.providers.soon", "Скоро")}
+            >
+              <span className="auth__providerIcon">🟦</span>
+              <span className="auth__providerText">
+                Google
+                <span className="auth__providerHint">
+                  {t("login.providers.google.hint", "скоро")}
+                </span>
+              </span>
+              <span className="auth__providerRight">🔒</span>
+            </button>
+
+            {/* Yandex (soon) */}
+            <button
+              className="btn auth__provider"
+              disabled={true}
+              type="button"
+              style={{ width: "100%" }}
+              title={t("login.providers.soon", "Скоро")}
+            >
+              <span className="auth__providerIcon">🟨</span>
+              <span className="auth__providerText">
+                Yandex
+                <span className="auth__providerHint">
+                  {t("login.providers.yandex.hint", "скоро")}
+                </span>
+              </span>
+              <span className="auth__providerRight">🔒</span>
+            </button>
+          </div>
+
+          {/* ===== Основная кнопка (для веба оставим удобный CTA) ===== */}
           {mode === "web" && (
-            <>
-              <div className="auth__actions" style={{ marginTop: 12 }}>
-                <button type="button" className="btn btn--primary" onClick={handleOpenTelegram} style={{ width: "100%" }}>
-                  {t("login.cta.open_tg")}
-                </button>
-              </div>
-
-              {!!tgOpenUrl && (
-                <div className="pre" style={{ marginTop: 12 }}>
-                  <div style={{ fontWeight: 900, marginBottom: 6 }}>{t("login.link.title", "Ссылка для открытия в Telegram")}</div>
-                  <div style={{ wordBreak: "break-word" }}>{tgOpenUrl}</div>
-                  <div style={{ marginTop: 10 }}>
-                    <button className="btn" type="button" onClick={() => copyLink(tgOpenUrl)}>
-                      {t("login.link.copy", "Скопировать ссылку")}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              <div className="auth__divider" style={{ marginTop: 14 }}>
-                <span>{t("login.divider.password")}</span>
-              </div>
-
-              {passwordDetails}
-            </>
+            <div className="auth__actions" style={{ marginTop: 12 }}>
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={handleOpenTelegram}
+                style={{ width: "100%" }}
+                disabled={loading}
+              >
+                {t("login.cta.open_tg", "Открыть в Telegram")}
+              </button>
+            </div>
           )}
 
-          {mode === "telegram" && (
-            <>
-              <div className="auth__actions" style={{ marginTop: 12 }}>
-                <button type="button" className="btn btn--primary" onClick={telegramLogin} disabled={loading} style={{ width: "100%" }}>
-                  {loading ? t("login.tg.cta_loading") : t("login.tg.cta")}
+          {!!tgOpenUrl && mode === "web" && (
+            <div className="pre" style={{ marginTop: 12 }}>
+              <div style={{ fontWeight: 900, marginBottom: 6 }}>
+                {t("login.link.title", "Ссылка для открытия в Telegram")}
+              </div>
+              <div style={{ wordBreak: "break-word" }}>{tgOpenUrl}</div>
+              <div style={{ marginTop: 10 }}>
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => copyLink(tgOpenUrl)}
+                >
+                  {t("login.link.copy", "Скопировать ссылку")}
                 </button>
               </div>
-
-              <div className="auth__divider" style={{ marginTop: 14 }}>
-                <span>{t("login.backup.divider")}</span>
-              </div>
-
-              {passwordDetails}
-            </>
+            </div>
           )}
+
+          {/* ===== Password fallback ===== */}
+          <div className="auth__divider" style={{ marginTop: 14 }}>
+            <span>{t("login.divider.password", "Резервный вход")}</span>
+          </div>
+
+          {passwordDetails}
 
           {err && (
-            <div className="auth__error">
-              <div className="auth__errorTitle">{t("setpwd.err.title", "Ошибка")}</div>
+            <div className="auth__error" style={{ marginTop: 12 }}>
+              <div className="auth__errorTitle">
+                {t("setpwd.err.title", "Ошибка")}
+              </div>
               <div className="auth__errorText">{err}</div>
             </div>
           )}
