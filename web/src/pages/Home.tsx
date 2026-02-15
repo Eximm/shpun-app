@@ -51,22 +51,126 @@ function isTelegramWebApp(): boolean {
   return !!(window as any)?.Telegram?.WebApp;
 }
 
+function isAndroid(): boolean {
+  return /Android/i.test(navigator.userAgent || "");
+}
+
+/**
+ * consume_url может приходить абсолютным на другом домене (например app.shpyn.online).
+ * Для миграции нужно всегда открывать consume на текущем origin (app.sdnonline.online),
+ * иначе cookie sid окажется не там и в браузере будет 401.
+ */
+function normalizeConsumeUrl(raw: string): string {
+  const s = String(raw || "").trim();
+  if (!s) return s;
+
+  const origin = window.location.origin;
+
+  // relative -> absolute on current origin
+  if (s.startsWith("/")) return origin + s;
+
+  try {
+    const u = new URL(s);
+    const cur = new URL(origin);
+
+    // rewrite host to current host if differs
+    if (u.host !== cur.host) {
+      u.protocol = cur.protocol;
+      u.host = cur.host;
+    }
+    return u.toString();
+  } catch {
+    return s;
+  }
+}
+
+/**
+ * Пытаемся максимально надёжно открыть внешний браузер из Telegram (Android часто капризничает).
+ * 1) tg.openLink(url, try_instant_view:false)
+ * 2) через 300мс tg.close() (часто помогает не "вложить миниапп в миниапп")
+ * 3) Android fallback: intent:// на Chrome
+ * 4) fallback: window.open
+ */
 function openInBrowser(url: string) {
   const tg = (window as any)?.Telegram?.WebApp;
+  const android = isAndroid();
+
   if (tg?.openLink) {
     try {
       tg.openLink(url, { try_instant_view: false });
+      if (android) {
+        setTimeout(() => {
+          try {
+            tg.close();
+          } catch {
+            // ignore
+          }
+        }, 300);
+      }
       return;
     } catch {
-      try {
-        tg.openLink(url);
-        return;
-      } catch {
-        // fallback below
-      }
+      // continue fallbacks
     }
   }
+
+  // Android hard fallback: intent to Chrome
+  if (android) {
+    try {
+      const u = new URL(url);
+      const scheme = u.protocol.replace(":", "");
+      const intentUrl =
+        `intent://${u.host}${u.pathname}${u.search}${u.hash}` +
+        `#Intent;scheme=${scheme};package=com.android.chrome;end`;
+      window.location.href = intentUrl;
+      return;
+    } catch {
+      // ignore
+    }
+  }
+
   window.open(url, "_blank", "noopener,noreferrer");
+}
+
+function detectInstallHint(): { title: string; text: string } {
+  const ua = (navigator.userAgent || "").toLowerCase();
+
+  // very rough, but good enough for UX
+  const isSamsung = ua.includes("samsungbrowser");
+  const isFirefox = ua.includes("firefox");
+  const isEdge = ua.includes("edg/");
+  const isChrome =
+    ua.includes("chrome") && !isEdge && !isSamsung && !ua.includes("opr/");
+
+  if (isAndroid()) {
+    if (isSamsung) {
+      return {
+        title: "Как установить",
+        text: "В Samsung Internet: меню ☰ → “Добавить страницу на” → “Главный экран”.",
+      };
+    }
+    if (isFirefox) {
+      return {
+        title: "Как установить",
+        text: "В Firefox: меню ⋮ → “Установить” или “Добавить на главный экран”.",
+      };
+    }
+    if (isChrome || isEdge) {
+      return {
+        title: "Как установить",
+        text: "В Chrome/Edge: меню ⋮ → “Установить приложение” (или “Добавить на главный экран”).",
+      };
+    }
+    return {
+      title: "Как установить",
+      text: "Откройте меню браузера и выберите “Установить приложение” / “Добавить на главный экран”.",
+    };
+  }
+
+  // iOS / desktop fallback
+  return {
+    title: "Как установить",
+    text: "Откройте меню браузера и выберите “Установить” / “Добавить на главный экран”.",
+  };
 }
 
 export function Home() {
@@ -132,7 +236,10 @@ export function Home() {
   const transferHint = useMemo(() => {
     if (transfer.status !== "ready") return "";
     if (!transfer.expiresAt)
-      return t("home.install.hint.default", "Ссылка одноразовая и быстро истекает.");
+      return t(
+        "home.install.hint.default",
+        "Ссылка одноразовая и быстро истекает."
+      );
     const leftMs = transfer.expiresAt - Date.now();
     const leftSec = Math.max(0, Math.floor(leftMs / 1000));
     if (leftSec <= 0)
@@ -160,21 +267,27 @@ export function Home() {
       if (!res.ok || !json?.ok) {
         const msg =
           json?.error === "not_authenticated"
-            ? t("error.open_in_tg", "Откройте приложение внутри Telegram, чтобы войти.")
+            ? t(
+                "error.open_in_tg",
+                "Откройте приложение внутри Telegram, чтобы войти."
+              )
             : String(json?.error || "transfer_start_failed");
         setTransfer({ status: "error", message: msg });
         return;
       }
 
-      const consumeUrl = String(json.consume_url || "").trim();
-      if (!consumeUrl) {
+      const rawConsumeUrl = String(json.consume_url || "").trim();
+      if (!rawConsumeUrl) {
         setTransfer({
           status: "error",
-          message: t("home.install.error", "Не получилось открыть установку.") + ": consume_url",
+          message:
+            t("home.install.error", "Не получилось открыть установку.") +
+            ": consume_url",
         });
         return;
       }
 
+      const consumeUrl = normalizeConsumeUrl(rawConsumeUrl);
       const expiresAt = Number(json.expires_at || 0) || undefined;
 
       setTransfer({
@@ -187,7 +300,8 @@ export function Home() {
     } catch (e: any) {
       setTransfer({
         status: "error",
-        message: e?.message || t("home.install.error", "Не получилось открыть установку."),
+        message:
+          e?.message || t("home.install.error", "Не получилось открыть установку."),
       });
     }
   }
@@ -221,7 +335,10 @@ export function Home() {
       ...p,
       state: {
         status: "done",
-        message: t("promo.done.stub", "Промокоды скоро будут доступны прямо в приложении ✨"),
+        message: t(
+          "promo.done.stub",
+          "Промокоды скоро будут доступны прямо в приложении ✨"
+        ),
       },
     }));
   }
@@ -254,6 +371,11 @@ export function Home() {
               <Link className="btn" to="/app/profile">
                 {t("home.actions.profile", "Профиль")}
               </Link>
+              {!inTelegram && (
+                <Link className="btn" to="/login">
+                  {t("home.actions.login", "Войти")}
+                </Link>
+              )}
             </ActionGrid>
           </div>
         </div>
@@ -261,21 +383,39 @@ export function Home() {
     );
   }
 
+  const shouldShowInstallHelper =
+    !inTelegram && !canInstallPrompt && installState !== "done";
+
+  const installHint = useMemo(() => detectInstallHint(), []);
+
   return (
     <div className="section">
       {/* User hero */}
       <div className="card">
         <div className="card__body">
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+            }}
+          >
             <div>
               <h1 className="h1">
                 {t("home.hello", "Привет")}
                 {displayName ? `, ${displayName}` : ""} 👋
               </h1>
-              <p className="p">{t("home.subtitle", "SDN System — баланс, услуги и управление подпиской.")}</p>
+              <p className="p">
+                {t("home.subtitle", "SDN System — баланс, услуги и управление подпиской.")}
+              </p>
             </div>
 
-            <button className="btn" onClick={() => refetch?.()} title={t("home.refresh", "⟳ Обновить")}>
+            <button
+              className="btn"
+              onClick={() => refetch?.()}
+              title={t("home.refresh", "⟳ Обновить")}
+            >
               {t("home.refresh", "⟳ Обновить")}
             </button>
           </div>
@@ -324,7 +464,7 @@ export function Home() {
               </button>
             )}
 
-            {/* В Telegram — открываем браузер и переносим вход (чтобы установить) */}
+            {/* В Telegram — переносим вход и открываем внешний браузер для установки */}
             {inTelegram && (
               <button
                 className="btn"
@@ -360,7 +500,27 @@ export function Home() {
         </div>
       </div>
 
-      {/* Install helper (только когда нужно) */}
+      {/* Install helper in browser (если prompt не пришёл) */}
+      {shouldShowInstallHelper && (
+        <div className="section">
+          <div className="card">
+            <div className="card__body">
+              <div className="h1" style={{ fontSize: 18 }}>
+                {t("home.install.title", installHint.title)}
+              </div>
+              <p className="p">
+                {t(
+                  "home.install.desc_browser",
+                  "Браузер не показал кнопку установки автоматически. Это нормально — установку можно сделать через меню."
+                )}
+              </p>
+              <div className="pre">{installHint.text}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Install helper in Telegram (fallback UI) */}
       {inTelegram && (transfer.status === "ready" || transfer.status === "error") && (
         <div className="section">
           <div className="card">
@@ -371,7 +531,7 @@ export function Home() {
               <p className="p">
                 {t(
                   "home.install.desc",
-                  "Мы откроем браузер и перенесём вход автоматически. После этого можно установить приложение обычным способом."
+                  "Мы откроем браузер и перенесём вход автоматически. После этого установите приложение обычным способом."
                 )}
               </p>
 
@@ -425,12 +585,21 @@ export function Home() {
       <div className="section">
         <div className="card">
           <div className="card__body">
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "baseline",
+                justifyContent: "space-between",
+                gap: 12,
+              }}
+            >
               <div>
                 <div className="h1" style={{ fontSize: 18 }}>
                   {t("home.news.title", "Новости")}
                 </div>
-                <p className="p">{t("home.news.subtitle", "Коротко и по делу. Полная лента — в “Новости”.")}</p>
+                <p className="p">
+                  {t("home.news.subtitle", "Коротко и по делу. Полная лента — в “Новости”.")}
+                </p>
               </div>
               <Link className="btn" to="/app/feed">
                 {t("home.news.open", "Открыть")}
@@ -440,8 +609,12 @@ export function Home() {
             <div className="list">
               <div className="list__item">
                 <div className="list__main">
-                  <div className="list__title">{t("home.news.item1.title", "✅ Система стабильна — всё работает")}</div>
-                  <div className="list__sub">{t("home.news.item1.sub", "Если видишь “Can’t connect” — просто обнови страницу.")}</div>
+                  <div className="list__title">
+                    {t("home.news.item1.title", "✅ Система стабильна — всё работает")}
+                  </div>
+                  <div className="list__sub">
+                    {t("home.news.item1.sub", "Если видишь “Can’t connect” — просто обнови страницу.")}
+                  </div>
                 </div>
                 <div className="list__side">
                   <span className="chip chip--ok">today</span>
@@ -451,7 +624,12 @@ export function Home() {
               <div className="list__item">
                 <div className="list__main">
                   <div className="list__title">{t("home.news.item2.title", "🧭 Лента — в “Новости”")}</div>
-                  <div className="list__sub">{t("home.news.item2.sub", "Главная — витрина. Новости — лента. Дальше подключим реальные данные.")}</div>
+                  <div className="list__sub">
+                    {t(
+                      "home.news.item2.sub",
+                      "Главная — витрина. Новости — лента. Дальше подключим реальные данные."
+                    )}
+                  </div>
                 </div>
                 <div className="list__side">
                   <span className="chip chip--soft">new</span>
@@ -461,7 +639,9 @@ export function Home() {
               <div className="list__item">
                 <div className="list__main">
                   <div className="list__title">{t("home.news.item3.title", "🔐 Установка без потери входа")}</div>
-                  <div className="list__sub">{t("home.news.item3.sub", "Откроем браузер и перенесём вход автоматически.")}</div>
+                  <div className="list__sub">
+                    {t("home.news.item3.sub", "Откроем браузер и перенесём вход автоматически.")}
+                  </div>
                 </div>
                 <div className="list__side">
                   <span className="chip chip--warn">new</span>

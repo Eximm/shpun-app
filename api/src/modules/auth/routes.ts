@@ -108,29 +108,38 @@ async function getPasswordSetFlag(shmSessionId: string): Promise<0 | 1> {
   }
 }
 
-// ===== Public base URL (для редиректов) =====
+function firstHeaderValue(v: any): string {
+  const s = String(v ?? "").trim();
+  if (!s) return "";
+  // CF/nginx иногда кладут списки через запятую
+  return s.split(",")[0].trim();
+}
+
+// ===== Public base URL (для редиректов / генерации абсолютных ссылок) =====
 function getPublicAppBase(req: any): string {
   // 0) приоритет: forwarded headers (nginx/cf)
-  const xfProto = String(req.headers?.["x-forwarded-proto"] ?? "").trim();
-  const xfHost = String(req.headers?.["x-forwarded-host"] ?? "").trim();
+  const xfProto = firstHeaderValue(req.headers?.["x-forwarded-proto"]);
+  const xfHost = firstHeaderValue(req.headers?.["x-forwarded-host"]);
   if (xfHost) {
     const proto = xfProto || "https";
     return `${proto}://${xfHost}`;
   }
 
-  // 1) если пришёл реальный Origin и он в allowlist — используем его
-  const origin = String(req.headers?.origin ?? "").trim();
+  // 1) fallback: Host
+  const host = firstHeaderValue(req.headers?.host);
+  if (host) {
+    const proto = xfProto || "https";
+    return `${proto}://${host}`;
+  }
+
+  // 2) иначе берём первый из APP_ORIGIN
   const allow = String(process.env.APP_ORIGIN ?? "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-
-  if (origin && allow.includes(origin)) return origin;
-
-  // 2) иначе берём первый из APP_ORIGIN
   if (allow.length) return allow[0];
 
-  // 3) fallback
+  // 3) final fallback
   return "https://app.shpyn.online";
 }
 
@@ -152,7 +161,7 @@ function getRequestIp(req: any): string {
 }
 
 function isHttps(req: any): boolean {
-  const xfProto = String(req.headers?.["x-forwarded-proto"] ?? "").trim().toLowerCase();
+  const xfProto = firstHeaderValue(req.headers?.["x-forwarded-proto"]).toLowerCase();
   if (xfProto) return xfProto === "https";
   const proto = String((req as any).protocol ?? "").toLowerCase();
   return proto === "https";
@@ -308,10 +317,10 @@ export async function authRoutes(app: FastifyInstance) {
       ua,
     });
 
+    // 🔥 ВАЖНО: base берём из реального публичного запроса (через forwarded/host),
+    // чтобы при фасаде app.sdnonline.online cookie ставилась именно на него.
     const base = getPublicAppBase(req);
 
-    // Важно: ведём в API consume, а не в SPA "/transfer"
-    // чтобы cookie sid была поставлена сервером.
     const consumeUrl = `${base}/api/auth/transfer/consume?code=${encodeURIComponent(code)}`;
 
     return reply.send({ ok: true, consume_url: consumeUrl, expires_at: expiresAt });
@@ -328,6 +337,7 @@ export async function authRoutes(app: FastifyInstance) {
 
     if (!code) return reply.code(400).send({ ok: false, error: "code_required" });
 
+    // ✅ потребляем код ОДИН раз
     const r = consumeTransfer(code);
     if (!r.ok) {
       // UX: мягко отправляем на login с параметром, но без утечек
@@ -345,20 +355,18 @@ export async function authRoutes(app: FastifyInstance) {
     });
 
     const base = getPublicAppBase(req);
-    const continueUrl = `${base}/api/auth/transfer/consume?code=${encodeURIComponent(
-      code
-    )}&redirect=${encodeURIComponent(redirectTo)}&mode=browser`;
+    const targetUrl = `${base}${redirectTo}`;
 
     // Детект Telegram WebView (особенно Android)
     const ua = String(req.headers["user-agent"] ?? "");
     const isAndroid = /Android/i.test(ua);
     const isTelegram = /Telegram/i.test(ua) || /TelegramBot/i.test(ua);
 
-    // Если Telegram на Android — отдаём “прокладку” вместо 303.
-    // Иначе Telegram часто держит всё внутри себя и не уходит в Chrome.
+    // ✅ Если Telegram на Android — отдаём “прокладку”,
+    // но уже БЕЗ повторного consume по коду: открываем сразу targetUrl.
     if (isTelegram && isAndroid) {
       // intent:// для Chrome (best-effort)
-      const httpsNoProto = continueUrl.replace(/^https?:\/\//i, "");
+      const httpsNoProto = targetUrl.replace(/^https?:\/\//i, "");
       const intentUrl =
         `intent://${httpsNoProto}` +
         `#Intent;scheme=https;package=com.android.chrome;end`;
@@ -393,14 +401,14 @@ export async function authRoutes(app: FastifyInstance) {
       <button class="btn btnPrimary" id="openChrome">Открыть в браузере (Chrome)</button>
       <button class="btn btnGhost" id="openAny">Открыть обычной ссылкой</button>
 
-      <div class="mono" id="link">${continueUrl}</div>
+      <div class="mono" id="link">${targetUrl}</div>
       <p class="hint">Если кнопки не сработали — нажми и удерживай ссылку, затем “Открыть в браузере” или “Копировать”.</p>
     </div>
   </div>
 
   <script>
     const intentUrl = ${JSON.stringify(intentUrl)};
-    const httpsUrl = ${JSON.stringify(continueUrl)};
+    const httpsUrl = ${JSON.stringify(targetUrl)};
 
     function goIntent() { window.location.href = intentUrl; }
     function goHttps() { window.location.href = httpsUrl; }
