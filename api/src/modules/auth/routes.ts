@@ -10,6 +10,9 @@ import {
   getSessionFromRequest,
 } from "../../shared/session/sessionStore.js";
 
+// ✅ нужно для обновления SHM session_id после смены пароля (SHM может инвалидировать старую сессию)
+import { shmAuthWithTelegramWebApp } from "../../shared/shm/shmClient.js";
+
 const ALLOWED_PROVIDERS = new Set(
   ["telegram", "password", "google", "yandex"] as const
 );
@@ -67,7 +70,9 @@ async function shmGetUserId(sessionId: string): Promise<number> {
   }
 
   // Обычно это { data:[{user_id,...}], status:200, ... }
-  const u = Array.isArray((json as any)?.data) ? (json as any).data[0] : (json as any)?.data;
+  const u = Array.isArray((json as any)?.data)
+    ? (json as any).data[0]
+    : (json as any)?.data;
   const userId = Number(u?.user_id ?? u?.id ?? 0) || 0;
   if (!userId) throw new Error("shm_user_invalid_response");
 
@@ -136,17 +141,19 @@ export async function authRoutes(app: FastifyInstance) {
         .send({ ok: false, status: 400, error: "unknown_provider" });
     }
 
-    const result = await handleAuth(provider, req.body ?? {});
+    const body = (req.body ?? {}) as any;
+
+    const result = await handleAuth(provider, body);
     if (!result.ok) return reply.code(result.status || 400).send(result);
 
-    const shmSessionId = String(result.shmSessionId ?? "").trim();
+    const shmSessionId = String((result as any).shmSessionId ?? "").trim();
     if (!shmSessionId) {
       return reply
         .code(502)
         .send({ ok: false, status: 502, error: "no_shm_session" });
     }
 
-    // ✅ ВАЖНО: гарантируем user_id через /v1/user
+    // ✅ гарантируем user_id через /v1/user
     let shmUserId = Number((result as any).shmUserId ?? 0) || 0;
     if (!shmUserId) {
       try {
@@ -163,13 +170,18 @@ export async function authRoutes(app: FastifyInstance) {
 
     const localSid = createLocalSid();
 
+    // ✅ сохраняем initData для telegram-сессий, чтобы можно было обновить SHM session после смены пароля
+    const telegramInitData =
+      provider === "telegram" ? String(body.initData ?? "").trim() : "";
+
     putSession(localSid, {
       shmSessionId,
       shmUserId,
       createdAt: Date.now(),
+      ...(telegramInitData ? { telegramInitData } : {}),
     });
 
-    // ✅ Ненавязчивый onboarding:
+    // ✅ onboarding:
     let next: "set_password" | "cabinet" = "cabinet";
     if (provider === "telegram") {
       const ps = await getPasswordSetFlag(shmSessionId);
@@ -198,34 +210,39 @@ export async function authRoutes(app: FastifyInstance) {
     const body = (req.body ?? {}) as any;
     const password = String(body.password ?? "").trim();
 
-    // 🔒 Сохраняем sid и текущую сессию ДО setPassword
     const sid = String((req.cookies as any)?.sid ?? "").trim();
-    const before = getSessionFromRequest(req) as any;
+    const s = getSessionFromRequest(req) as any;
 
     const r = await setPassword(req, password);
     if (!r.ok) return reply.code((r as any).status || 400).send(r);
 
-    // ✅ КРИТИЧНО: после смены пароля НЕ теряем локальную сессию
-    // Если setPassword внутри чистит/реконфигурит что-то — мы жёстко восстанавливаем.
-    if (sid && before?.shmSessionId && before?.shmUserId) {
-      putSession(sid, {
-        shmSessionId: before.shmSessionId,
-        shmUserId: before.shmUserId,
-        createdAt: before.createdAt ?? Date.now(),
-      });
+    // ✅ КЛЮЧЕВО: после смены пароля SHM может инвалидировать session_id.
+    // Для telegram-сессий обновляем SHM session_id через initData и сохраняем обратно в sessionStore.
+    try {
+      const initData = String(s?.telegramInitData ?? "").trim();
+      if (initData && sid) {
+        const rr = await shmAuthWithTelegramWebApp(initData);
+        if (rr.ok && (rr as any).json?.session_id) {
+          const newShmSessionId = String((rr as any).json.session_id);
 
-      reply.setCookie("sid", sid, {
-        httpOnly: true,
-        sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
-        path: "/",
-      });
+          // user_id лучше перепроверить (вдруг session выдана другому uid — маловероятно, но пусть будет строго)
+          const newUserId = await shmGetUserId(newShmSessionId);
+
+          putSession(sid, {
+            ...s,
+            shmSessionId: newShmSessionId,
+            shmUserId: newUserId,
+          });
+        }
+      }
+    } catch {
+      // ignore — в худшем случае пользователь просто нажмёт "Войти" снова
     }
 
-    // best-effort флаг password_set
+    // best-effort флаг password_set (на уже обновлённой сессии, если успели)
     try {
-      const s = before || (getSessionFromRequest(req) as any);
-      const shmSessionId = (s as any)?.shmSessionId;
+      const ss = getSessionFromRequest(req) as any;
+      const shmSessionId = String(ss?.shmSessionId ?? "").trim();
       if (shmSessionId) {
         await callShmTemplate(shmSessionId, "password.mark_set");
       }
