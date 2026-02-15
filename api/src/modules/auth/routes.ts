@@ -10,7 +10,9 @@ import {
   getSessionFromRequest,
 } from "../../shared/session/sessionStore.js";
 
-const ALLOWED_PROVIDERS = new Set(["telegram", "password", "google", "yandex"] as const);
+const ALLOWED_PROVIDERS = new Set(
+  ["telegram", "password", "google", "yandex"] as const
+);
 type AllowedProvider = "telegram" | "password" | "google" | "yandex";
 
 function asProvider(v: any): AllowedProvider | null {
@@ -56,11 +58,16 @@ async function shmGetUserId(sessionId: string): Promise<number> {
   const text = json ? "" : await res.text().catch(() => "");
 
   if (!res.ok) {
-    throw new Error(`shm_user_failed:${res.status}:${String((json ?? text) || "").slice(0, 200)}`);
+    throw new Error(
+      `shm_user_failed:${res.status}:${String((json ?? text) || "").slice(
+        0,
+        200
+      )}`
+    );
   }
 
   // Обычно это { data:[{user_id,...}], status:200, ... }
-  const u = Array.isArray(json?.data) ? json.data[0] : json?.data;
+  const u = Array.isArray((json as any)?.data) ? (json as any).data[0] : (json as any)?.data;
   const userId = Number(u?.user_id ?? u?.id ?? 0) || 0;
   if (!userId) throw new Error("shm_user_invalid_response");
 
@@ -71,9 +78,17 @@ async function shmGetUserId(sessionId: string): Promise<number> {
  * SHM template caller: POST /shm/v1/template/shpun_app
  * (используется только для флагов onboarding/auth link, НЕ для регистрации)
  */
-async function callShmTemplate<T = any>(sessionId: string, action: string, extraData?: any): Promise<T> {
+async function callShmTemplate<T = any>(
+  sessionId: string,
+  action: string,
+  extraData?: any
+): Promise<T> {
   const url = `${shmV1()}/template/shpun_app`;
-  const body = JSON.stringify({ session_id: sessionId, action, ...(extraData ? { data: extraData } : {}) });
+  const body = JSON.stringify({
+    session_id: sessionId,
+    action,
+    ...(extraData ? { data: extraData } : {}),
+  });
 
   const res = await fetch(url, {
     method: "POST",
@@ -85,7 +100,10 @@ async function callShmTemplate<T = any>(sessionId: string, action: string, extra
   const text = json ? "" : await res.text().catch(() => "");
 
   if (!res.ok) {
-    const msg = (json as any)?.error || (json as any)?.message || `SHM template failed: ${res.status}`;
+    const msg =
+      (json as any)?.error ||
+      (json as any)?.message ||
+      `SHM template failed: ${res.status}`;
     throw new Error(`${msg}:${String(text || "").slice(0, 200)}`);
   }
 
@@ -113,7 +131,9 @@ export async function authRoutes(app: FastifyInstance) {
     const provider = asProvider(rawProvider);
 
     if (!provider) {
-      return reply.code(400).send({ ok: false, status: 400, error: "unknown_provider" });
+      return reply
+        .code(400)
+        .send({ ok: false, status: 400, error: "unknown_provider" });
     }
 
     const result = await handleAuth(provider, req.body ?? {});
@@ -121,16 +141,23 @@ export async function authRoutes(app: FastifyInstance) {
 
     const shmSessionId = String(result.shmSessionId ?? "").trim();
     if (!shmSessionId) {
-      return reply.code(502).send({ ok: false, status: 502, error: "no_shm_session" });
+      return reply
+        .code(502)
+        .send({ ok: false, status: 502, error: "no_shm_session" });
     }
 
     // ✅ ВАЖНО: гарантируем user_id через /v1/user
-    let shmUserId = Number(result.shmUserId ?? 0) || 0;
+    let shmUserId = Number((result as any).shmUserId ?? 0) || 0;
     if (!shmUserId) {
       try {
         shmUserId = await shmGetUserId(shmSessionId);
       } catch (e: any) {
-        return reply.code(502).send({ ok: false, status: 502, error: "shm_user_lookup_failed", detail: e?.message });
+        return reply.code(502).send({
+          ok: false,
+          status: 502,
+          error: "shm_user_lookup_failed",
+          detail: e?.message,
+        });
       }
     }
 
@@ -149,7 +176,7 @@ export async function authRoutes(app: FastifyInstance) {
       next = ps === 1 ? "cabinet" : "set_password";
     }
 
-    const loginFromApi = String(result.login ?? "").trim();
+    const loginFromApi = String((result as any).login ?? "").trim();
 
     return reply
       .setCookie("sid", localSid, {
@@ -171,12 +198,33 @@ export async function authRoutes(app: FastifyInstance) {
     const body = (req.body ?? {}) as any;
     const password = String(body.password ?? "").trim();
 
+    // 🔒 Сохраняем sid и текущую сессию ДО setPassword
+    const sid = String((req.cookies as any)?.sid ?? "").trim();
+    const before = getSessionFromRequest(req) as any;
+
     const r = await setPassword(req, password);
     if (!r.ok) return reply.code((r as any).status || 400).send(r);
 
+    // ✅ КРИТИЧНО: после смены пароля НЕ теряем локальную сессию
+    // Если setPassword внутри чистит/реконфигурит что-то — мы жёстко восстанавливаем.
+    if (sid && before?.shmSessionId && before?.shmUserId) {
+      putSession(sid, {
+        shmSessionId: before.shmSessionId,
+        shmUserId: before.shmUserId,
+        createdAt: before.createdAt ?? Date.now(),
+      });
+
+      reply.setCookie("sid", sid, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+      });
+    }
+
     // best-effort флаг password_set
     try {
-      const s = getSessionFromRequest(req);
+      const s = before || (getSessionFromRequest(req) as any);
       const shmSessionId = (s as any)?.shmSessionId;
       if (shmSessionId) {
         await callShmTemplate(shmSessionId, "password.mark_set");
@@ -190,11 +238,11 @@ export async function authRoutes(app: FastifyInstance) {
 
   // ====== GET /api/auth/status ======
   app.get("/auth/status", async (req, reply) => {
-    const s = getSessionFromRequest(req);
+    const s = getSessionFromRequest(req) as any;
     return reply.send({
       ok: true,
-      authenticated: !!(s as any)?.shmSessionId,
-      user_id: (s as any)?.shmUserId ?? null,
+      authenticated: !!s?.shmSessionId,
+      user_id: s?.shmUserId ?? null,
       has_sid_cookie: !!(req.cookies as any)?.sid,
     });
   });
