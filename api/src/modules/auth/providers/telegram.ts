@@ -2,13 +2,11 @@ import { verifyTelegramInitData } from "../../../shared/telegram/verifyInitData.
 import { shmAuthWithTelegramWebApp } from "../../../shared/shm/shmClient.js";
 import { getLink, insertLink, touchLink } from "../../../shared/linkdb/linkRepo.js";
 
-const SHM_BASE_URL =
-  (process.env.SHM_BASE_URL || "https://bill.shpyn.online/shm/v1").replace(
-    /\/+$/,
-    ""
-  );
+const SHM_BASE_URL = (
+  process.env.SHM_BASE_URL || "https://bill.shpyn.online/shm/v1"
+).replace(/\/+$/, "");
 
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
+const TG_BOT_TOKEN = process.env.TG_BOT_TOKEN || "";
 
 function parseTelegramWebAppInitData(initData: string): {
   tgId: string | null;
@@ -42,7 +40,11 @@ async function shmGetCurrentUser(sessionId: string) {
   return { ok: res.ok, status: res.status, json, text };
 }
 
-async function shmCallShpunApp(sessionId: string, telegram_id: string, telegram_login: string) {
+async function shmCallShpunApp(
+  sessionId: string,
+  telegram_id: string,
+  telegram_login: string
+) {
   // best-effort — не ломаем авторизацию из-за шаблона
   await fetch(`${SHM_BASE_URL}/template/shpun_app`, {
     method: "POST",
@@ -60,11 +62,11 @@ export async function telegramAuth(body: any) {
   const initData = String(body.initData ?? "").trim();
   if (!initData) return { ok: false, status: 400, error: "initData_required" };
 
-  if (!TELEGRAM_BOT_TOKEN) {
-    return { ok: false, status: 500, error: "TELEGRAM_BOT_TOKEN_missing" };
+  if (!TG_BOT_TOKEN) {
+    return { ok: false, status: 500, error: "TG_BOT_TOKEN_missing" };
   }
 
-  const valid = verifyTelegramInitData(initData, TELEGRAM_BOT_TOKEN);
+  const valid = verifyTelegramInitData(initData, TG_BOT_TOKEN);
   if (!valid) return { ok: false, status: 401, error: "bad_init_data" };
 
   const tgUser = parseTelegramWebAppInitData(initData);
@@ -73,7 +75,12 @@ export async function telegramAuth(body: any) {
   // 1) SHM telegram auth -> { session_id }
   const r = await shmAuthWithTelegramWebApp(initData);
   if (!r.ok || !r.json?.session_id) {
-    return { ok: false, status: r.status || 401, error: "telegram_auth_failed", detail: r.json ?? r.text };
+    return {
+      ok: false,
+      status: r.status || 401,
+      error: "telegram_auth_failed",
+      detail: r.json ?? r.text,
+    };
   }
 
   const shmSessionId = String(r.json.session_id);
@@ -81,7 +88,12 @@ export async function telegramAuth(body: any) {
   // 2) /user -> user_id + login
   const me = await shmGetCurrentUser(shmSessionId);
   if (!me.ok || !me.json) {
-    return { ok: false, status: 500, error: "failed_to_get_user", detail: me.json ?? me.text };
+    return {
+      ok: false,
+      status: 500,
+      error: "failed_to_get_user",
+      detail: me.json ?? me.text,
+    };
   }
 
   const j = me.json as any;
