@@ -947,3 +947,84 @@ button, a { -webkit-tap-highlight-color: transparent; }
   color: rgba(255, 255, 255, 0.62);
   line-height: 1.35;
 }
+
+/* ============================================================
+   Home page extracted styles (no inline)
+   ============================================================ */
+
+.home-hero__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Install CTA card */
+.home-install {
+  position: relative;
+  overflow: hidden;
+
+  border: 1px solid rgba(124,92,255,0.35);
+  background: linear-gradient(
+    135deg,
+    rgba(124,92,255,0.10),
+    rgba(77,215,255,0.10)
+  );
+}
+
+.home-install__glow {
+  position: absolute;
+  top: -60px;
+  right: -60px;
+  width: 180px;
+  height: 180px;
+  background: radial-gradient(
+    circle,
+    rgba(124,92,255,0.35),
+    transparent 70%
+  );
+  filter: blur(40px);
+  pointer-events: none;
+}
+
+.home-install__copy { max-width: 520px; }
+
+.home-install__title {
+  font-size: 20px;
+  font-weight: 900;
+  margin-bottom: 6px;
+  letter-spacing: 0.2px;
+}
+
+.home-install__sub {
+  opacity: 0.8;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.home-install__error { margin-top: 12px; }
+
+.home-install__btnwrap { margin-top: 14px; }
+
+/* CTA button: only what differs from base .btn--primary */
+.home-install__btn {
+  width: 100%;
+  padding: 14px 18px;
+  font-size: 16px;
+  font-weight: 900;
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(124,92,255,0.35);
+}
+
+/* News head layout + tiny title tweaks */
+.home-news__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.home-news__title { font-size: 18px; }
+
+/* Promo title tweak */
+.home-promo__title { font-size: 18px; }

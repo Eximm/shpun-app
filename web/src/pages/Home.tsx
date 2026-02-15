@@ -67,14 +67,12 @@ function normalizeConsumeUrl(raw: string): string {
 
   const origin = window.location.origin;
 
-  // relative -> absolute on current origin
   if (s.startsWith("/")) return origin + s;
 
   try {
     const u = new URL(s);
     const cur = new URL(origin);
 
-    // rewrite host to current host if differs
     if (u.host !== cur.host) {
       u.protocol = cur.protocol;
       u.host = cur.host;
@@ -142,25 +140,19 @@ export function Home() {
     state: { status: "idle" },
   });
 
-  // ✅ “в Telegram MiniApp” только если initData реально есть
   const inTelegramMiniApp = hasTelegramInitData();
-  const hasTelegramObject = !!getTelegramWebApp(); // оставляем для защиты сценария "TG object, но initData нет"
+  const hasTelegramObject = !!getTelegramWebApp();
   const transferBusy = transfer.status === "loading";
 
   const profile = me?.profile;
   const balance = me?.balance;
   const displayName = profile?.displayName || profile?.login || "";
 
-  // если пользователь снова нажмёт на “Установить” — прячем старую ошибку
   useEffect(() => {
-    if (transfer.status === "error") {
-      // не трогаем, просто оставляем как есть
-    }
+    // intentionally empty
   }, [transfer.status]);
 
   async function startTransferAndOpen() {
-    // Если это Telegram-окружение без initData (встроенный браузер/preview),
-    // transfer бессмысленен: нет TG-сессии.
     if (hasTelegramObject && !inTelegramMiniApp) {
       setTransfer({
         status: "error",
@@ -197,9 +189,7 @@ export function Home() {
       if (!rawConsumeUrl) {
         setTransfer({
           status: "error",
-          message:
-            t("home.install.error", "Не получилось открыть установку.") +
-            ": consume_url",
+          message: t("home.install.error", "Не получилось открыть установку.") + ": consume_url",
         });
         return;
       }
@@ -209,14 +199,11 @@ export function Home() {
 
       setTransfer({ status: "ready", consumeUrl, expiresAt });
 
-      // открываем браузер
       openInBrowser(consumeUrl);
     } catch (e: any) {
       setTransfer({
         status: "error",
-        message:
-          e?.message ||
-          t("home.install.error", "Не получилось открыть установку."),
+        message: e?.message || t("home.install.error", "Не получилось открыть установку."),
       });
     }
   }
@@ -226,10 +213,7 @@ export function Home() {
     if (!code) {
       setPromo((p) => ({
         ...p,
-        state: {
-          status: "error",
-          message: t("promo.err.empty", "Введите промокод."),
-        },
+        state: { status: "error", message: t("promo.err.empty", "Введите промокод.") },
       }));
       return;
     }
@@ -241,10 +225,7 @@ export function Home() {
       ...p,
       state: {
         status: "done",
-        message: t(
-          "promo.done.stub",
-          "Промокоды скоро будут доступны прямо в приложении ✨"
-        ),
+        message: t("promo.done.stub", "Промокоды скоро будут доступны прямо в приложении ✨"),
       },
     }));
   }
@@ -294,32 +275,18 @@ export function Home() {
       {/* User hero */}
       <div className="card">
         <div className="card__body">
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 12,
-            }}
-          >
+          <div className="home-hero__head">
             <div>
               <h1 className="h1">
                 {t("home.hello", "Привет")}
                 {displayName ? `, ${displayName}` : ""} 👋
               </h1>
               <p className="p">
-                {t(
-                  "home.subtitle",
-                  "SDN System — баланс, услуги и управление подпиской."
-                )}
+                {t("home.subtitle", "SDN System — баланс, услуги и управление подпиской.")}
               </p>
             </div>
 
-            <button
-              className="btn"
-              onClick={() => refetch?.()}
-              title={t("home.refresh", "⟳ Обновить")}
-            >
+            <button className="btn" onClick={() => refetch?.()} title={t("home.refresh", "⟳ Обновить")}>
               {t("home.refresh", "⟳ Обновить")}
             </button>
           </div>
@@ -328,26 +295,18 @@ export function Home() {
             <div className="kv__item">
               <div className="kv__k">{t("home.kv.balance", "Баланс")}</div>
               <div className="kv__v">
-                {balance ? (
-                  <Money amount={balance.amount} currency={balance.currency} />
-                ) : (
-                  "—"
-                )}
+                {balance ? <Money amount={balance.amount} currency={balance.currency} /> : "—"}
               </div>
             </div>
 
             <div className="kv__item">
               <div className="kv__k">{t("home.kv.bonus", "Бонусы")}</div>
-              <div className="kv__v">
-                {typeof me.bonus === "number" ? me.bonus : 0}
-              </div>
+              <div className="kv__v">{typeof me.bonus === "number" ? me.bonus : 0}</div>
             </div>
 
             <div className="kv__item">
               <div className="kv__k">{t("home.kv.discount", "Скидка")}</div>
-              <div className="kv__v">
-                {typeof me.discount === "number" ? `${me.discount}%` : "—"}
-              </div>
+              <div className="kv__v">{typeof me.discount === "number" ? `${me.discount}%` : "—"}</div>
             </div>
           </div>
 
@@ -377,92 +336,39 @@ export function Home() {
               <div className="kv__v">{fmtDate(profile?.created)}</div>
             </div>
             <div className="kv__item">
-              <div className="kv__k">
-                {t("home.meta.last_login", "Последний вход")}
-              </div>
+              <div className="kv__k">{t("home.meta.last_login", "Последний вход")}</div>
               <div className="kv__v">{fmtDate(profile?.lastLogin)}</div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* ============================================================
-         Install CTA — ONLY inside Telegram MiniApp
-         (в вебе — ничего, ждём нативный install popup браузера)
-         ============================================================ */}
+      {/* Install CTA — ONLY inside Telegram MiniApp */}
       {inTelegramMiniApp && (
         <div className="section">
-          <div
-            className="card"
-            style={{
-              position: "relative",
-              overflow: "hidden",
-              border: "1px solid rgba(124,92,255,0.35)",
-              background:
-                "linear-gradient(135deg, rgba(124,92,255,0.10), rgba(77,215,255,0.10))",
-            }}
-          >
-            <div
-              style={{
-                position: "absolute",
-                top: -60,
-                right: -60,
-                width: 180,
-                height: 180,
-                background:
-                  "radial-gradient(circle, rgba(124,92,255,0.35), transparent 70%)",
-                filter: "blur(40px)",
-                pointerEvents: "none",
-              }}
-            />
-
-            <div
-              className="card__body"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 24,
-                flexWrap: "wrap",
-              }}
-            >
-              <div style={{ maxWidth: 480 }}>
-                <div
-                  style={{
-                    fontSize: 20,
-                    fontWeight: 900,
-                    marginBottom: 6,
-                    letterSpacing: 0.2,
-                  }}
-                >
-                  🚀 Установить Shpun App
-                </div>
-                <div style={{ opacity: 0.8, fontSize: 14, lineHeight: 1.45 }}>
+          <div className="card home-install">
+            <div className="home-install__glow" />
+            <div className="card__body">
+              <div className="home-install__copy">
+                <div className="home-install__title">🚀 Установить Shpun App</div>
+                <div className="home-install__sub">
                   Откроем браузер и предложим установку приложения на устройство.
                 </div>
 
                 {transfer.status === "error" && (
-                  <div className="pre" style={{ marginTop: 12 }}>
-                    {transfer.message}
-                  </div>
+                  <div className="pre home-install__error">{transfer.message}</div>
                 )}
               </div>
 
-              <button
-                className="btn btn--primary"
-                onClick={startTransferAndOpen}
-                disabled={transferBusy}
-                style={{
-                  padding: "14px 28px",
-                  fontSize: 15,
-                  fontWeight: 900,
-                  minWidth: 170,
-                  whiteSpace: "nowrap",
-                  boxShadow: "0 8px 24px rgba(124,92,255,0.35)",
-                }}
-              >
-                {transferBusy ? "Открываем…" : "Установить"}
-              </button>
+              <div className="home-install__btnwrap">
+                <button
+                  className="btn btn--primary home-install__btn"
+                  onClick={startTransferAndOpen}
+                  disabled={transferBusy}
+                >
+                  {transferBusy ? "Открываем…" : "Установить"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -472,23 +378,11 @@ export function Home() {
       <div className="section">
         <div className="card">
           <div className="card__body">
-            <div
-              style={{
-                display: "flex",
-                alignItems: "baseline",
-                justifyContent: "space-between",
-                gap: 12,
-              }}
-            >
+            <div className="home-news__head">
               <div>
-                <div className="h1" style={{ fontSize: 18 }}>
-                  {t("home.news.title", "Новости")}
-                </div>
+                <div className="h1 home-news__title">{t("home.news.title", "Новости")}</div>
                 <p className="p">
-                  {t(
-                    "home.news.subtitle",
-                    "Коротко и по делу. Полная лента — в “Новости”."
-                  )}
+                  {t("home.news.subtitle", "Коротко и по делу. Полная лента — в “Новости”.")}
                 </p>
               </div>
               <Link className="btn" to="/app/feed">
@@ -500,16 +394,10 @@ export function Home() {
               <div className="list__item">
                 <div className="list__main">
                   <div className="list__title">
-                    {t(
-                      "home.news.item1.title",
-                      "✅ Система стабильна — всё работает"
-                    )}
+                    {t("home.news.item1.title", "✅ Система стабильна — всё работает")}
                   </div>
                   <div className="list__sub">
-                    {t(
-                      "home.news.item1.sub",
-                      "Если видишь “Can’t connect” — просто обнови страницу."
-                    )}
+                    {t("home.news.item1.sub", "Если видишь “Can’t connect” — просто обнови страницу.")}
                   </div>
                 </div>
                 <div className="list__side">
@@ -519,9 +407,7 @@ export function Home() {
 
               <div className="list__item">
                 <div className="list__main">
-                  <div className="list__title">
-                    {t("home.news.item2.title", "🧭 Лента — в “Новости”")}
-                  </div>
+                  <div className="list__title">{t("home.news.item2.title", "🧭 Лента — в “Новости”")}</div>
                   <div className="list__sub">
                     {t(
                       "home.news.item2.sub",
@@ -548,14 +434,9 @@ export function Home() {
       <div className="section">
         <div className="card">
           <div className="card__body">
-            <div className="h1" style={{ fontSize: 18 }}>
-              {t("promo.title", "Промокоды")}
-            </div>
+            <div className="h1 home-promo__title">{t("promo.title", "Промокоды")}</div>
             <p className="p">
-              {t(
-                "promo.desc",
-                "Есть промокод? Введи его здесь — бонусы или скидка применятся к аккаунту."
-              )}
+              {t("promo.desc", "Есть промокод? Введи его здесь — бонусы или скидка применятся к аккаунту.")}
             </p>
 
             <div className="actions actions--2">
@@ -587,12 +468,8 @@ export function Home() {
               </button>
             </div>
 
-            {promo.state.status === "done" && (
-              <div className="pre">{promo.state.message}</div>
-            )}
-            {promo.state.status === "error" && (
-              <div className="pre">{promo.state.message}</div>
-            )}
+            {promo.state.status === "done" && <div className="pre">{promo.state.message}</div>}
+            {promo.state.status === "error" && <div className="pre">{promo.state.message}</div>}
 
             <ActionGrid>
               <Link className="btn" to="/app/profile">
