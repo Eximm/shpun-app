@@ -19,6 +19,58 @@ import {
    Helpers
 ============================================================ */
 
+function isAuthDebug(): boolean {
+  const v = String(process.env.AUTH_DEBUG ?? "").trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes" || v === "on";
+}
+
+function maskValue(v: unknown, max = 6): string {
+  const s = String(v ?? "");
+  if (!s) return "";
+  if (s.length <= max) return `${s[0]}…`;
+  return `${s.slice(0, max)}…(${s.length})`;
+}
+
+function safeKeys(obj: any): string[] {
+  if (!obj || typeof obj !== "object") return [];
+  try {
+    return Object.keys(obj).sort();
+  } catch {
+    return [];
+  }
+}
+
+function dbg(req: any, label: string, extra?: Record<string, any>) {
+  if (!isAuthDebug()) return;
+
+  const host = String(req?.headers?.host ?? req?.hostname ?? "").trim();
+  const xfProto = String(req?.headers?.["x-forwarded-proto"] ?? "")
+    .split(",")[0]
+    .trim()
+    .toLowerCase();
+  const xfFor = String(req?.headers?.["x-forwarded-for"] ?? "")
+    .split(",")[0]
+    .trim();
+  const ua = String(req?.headers?.["user-agent"] ?? "").slice(0, 120);
+
+  const cookieHdr = String(req?.headers?.cookie ?? "");
+  const hasSid = /(?:^|;\s*)sid=/.test(cookieHdr);
+
+  const payload = {
+    label,
+    host,
+    xfProto: xfProto || undefined,
+    xfFor: xfFor || undefined,
+    ip: String(req?.ip ?? ""),
+    hasSidCookie: hasSid,
+    ua,
+    ...(extra ?? {}),
+  };
+
+  // eslint-disable-next-line no-console
+  console.log(JSON.stringify({ level: "debug", time: Date.now(), auth: payload }));
+}
+
 async function shmGetUserIdentity(sessionId: string): Promise<{
   userId: number;
   login: string;
@@ -90,14 +142,20 @@ function isHttps(req: any): boolean {
 }
 
 function cookieOptions(req: any) {
+  const isProd = String(process.env.NODE_ENV ?? "").trim().toLowerCase() === "production";
+
   return {
     httpOnly: true,
     sameSite: "lax" as const,
-    secure: isHttps(req),
+
+    // ВАЖНО:
+    // В production всегда Secure=true (оба домена https).
+    // Иначе при проблемах с X-Forwarded-Proto cookie может не сохраниться → /api/me 401.
+    secure: isProd ? true : isHttps(req),
+
     path: "/",
     maxAge: Number(process.env.SID_COOKIE_MAX_AGE_SEC || 365 * 24 * 60 * 60),
 
-    // ВАЖНО:
     // domain НЕ задаём — cookie должна быть host-only,
     // потому что у нас 2 разных домена (app.shpyn.online и app.sdnonline.online).
   };
@@ -141,8 +199,18 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(400).send({ ok: false, error: "init_data_required" });
     }
 
+    dbg(req, "tg_webapp_auth:incoming", {
+      initDataLen: initData.length,
+    });
+
     // shmTelegramWebAppAuth возвращает ShmResult<{session_id?:string}>
     const rr = await shmTelegramWebAppAuth(initData);
+
+    dbg(req, "tg_webapp_auth:shm_result", {
+      shmOk: rr.ok,
+      shmStatus: rr.status,
+      shmSessionId: maskValue(rr.json?.session_id),
+    });
 
     if (!rr.ok) {
       return reply.code(mapShmAuthErrorStatus(rr.status || 502)).send({
@@ -188,6 +256,13 @@ export async function authRoutes(app: FastifyInstance) {
     const ps = await getPasswordSetFlag(shmSessionId);
     const next: "set_password" | "home" = ps === 1 ? "home" : "set_password";
 
+    dbg(req, "tg_webapp_auth:set_cookie_and_reply", {
+      userId: shmUserId,
+      next,
+      sid: maskValue(localSid),
+      cookieSecure: cookieOptions(req).secure,
+    });
+
     return reply
       .setCookie("sid", localSid, cookieOptions(req))
       .send({ ok: true, user_id: shmUserId, login, next });
@@ -200,6 +275,13 @@ export async function authRoutes(app: FastifyInstance) {
   app.post("/auth/telegram_widget", async (req, reply) => {
     const body = (req.body ?? {}) as any;
 
+    dbg(req, "tg_widget_post:incoming", {
+      keys: safeKeys(body),
+      id: maskValue(body?.id),
+      auth_date: maskValue(body?.auth_date),
+      hash: maskValue(body?.hash),
+    });
+
     // Пустой/непохожий payload — это 400, а не 502
     if (isProbablyEmptyTelegramWidgetPayload(body)) {
       return reply.code(400).send({ ok: false, error: "missing_telegram_payload" });
@@ -207,6 +289,12 @@ export async function authRoutes(app: FastifyInstance) {
 
     // shmTelegramWebAuth возвращает ShmResult<{session_id?:string}>
     const rr = await shmTelegramWebAuth(body);
+
+    dbg(req, "tg_widget_post:shm_result", {
+      shmOk: rr.ok,
+      shmStatus: rr.status,
+      shmSessionId: maskValue(rr.json?.session_id),
+    });
 
     if (!rr.ok) {
       return reply.code(mapShmAuthErrorStatus(rr.status || 502)).send({
@@ -251,6 +339,13 @@ export async function authRoutes(app: FastifyInstance) {
     const ps = await getPasswordSetFlag(shmSessionId);
     const next: "set_password" | "home" = ps === 1 ? "home" : "set_password";
 
+    dbg(req, "tg_widget_post:set_cookie_and_reply", {
+      userId: shmUserId,
+      next,
+      sid: maskValue(localSid),
+      cookieSecure: cookieOptions(req).secure,
+    });
+
     return reply
       .setCookie("sid", localSid, cookieOptions(req))
       .send({ ok: true, user_id: shmUserId, login, next });
@@ -259,18 +354,33 @@ export async function authRoutes(app: FastifyInstance) {
   /* ===============================
      2b) Telegram Login Widget (WEB)
      GET redirect-flow — КАНОН для браузера
-     (решает “мигнуло и всё”)
   =============================== */
   app.get("/auth/telegram_widget_redirect", async (req, reply) => {
     const payload = (req.query ?? {}) as any;
 
+    dbg(req, "tg_widget_redirect:incoming", {
+      keys: safeKeys(payload),
+      id: maskValue(payload?.id),
+      auth_date: maskValue(payload?.auth_date),
+      hash: maskValue(payload?.hash),
+    });
+
     if (isProbablyEmptyTelegramWidgetPayload(payload)) {
+      dbg(req, "tg_widget_redirect:empty_payload_redirect");
       return reply.redirect("/login?e=missing_telegram_payload");
     }
 
     const rr = await shmTelegramWebAuth(payload);
 
+    dbg(req, "tg_widget_redirect:shm_result", {
+      shmOk: rr.ok,
+      shmStatus: rr.status,
+      shmSessionId: maskValue(rr.json?.session_id),
+    });
+
     if (!rr.ok) {
+      // полезно различать “невалидный payload” и “апстрим упал”
+      // но для UI достаточно общего кода
       return reply.redirect("/login?e=tg_widget_failed");
     }
 
@@ -300,6 +410,13 @@ export async function authRoutes(app: FastifyInstance) {
 
     const ps = await getPasswordSetFlag(shmSessionId);
     const next: "set_password" | "home" = ps === 1 ? "home" : "set_password";
+
+    dbg(req, "tg_widget_redirect:set_cookie_and_redirect", {
+      userId: shmUserId,
+      next,
+      sid: maskValue(localSid),
+      cookieSecure: cookieOptions(req).secure,
+    });
 
     reply.setCookie("sid", localSid, cookieOptions(req));
 
@@ -345,6 +462,12 @@ export async function authRoutes(app: FastifyInstance) {
     const localSid = createLocalSid();
     putSession(localSid, { shmSessionId, shmUserId, createdAt: Date.now() });
 
+    dbg(req, "password_auth:set_cookie_and_reply", {
+      userId: shmUserId,
+      sid: maskValue(localSid),
+      cookieSecure: cookieOptions(req).secure,
+    });
+
     return reply
       .setCookie("sid", localSid, cookieOptions(req))
       .send({ ok: true, user_id: shmUserId, login, next: "home" });
@@ -352,8 +475,6 @@ export async function authRoutes(app: FastifyInstance) {
 
   /* ===============================
      4) Set password
-     - best-effort: mark flag in SHM
-     - important: re-auth for Telegram Mini App because SHM may rotate session_id
   =============================== */
   app.post("/auth/password/set", async (req, reply) => {
     const password = String((req.body as any)?.password ?? "");
