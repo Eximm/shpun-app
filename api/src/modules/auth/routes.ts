@@ -96,8 +96,33 @@ function cookieOptions(req: any) {
     secure: isHttps(req),
     path: "/",
     maxAge: Number(process.env.SID_COOKIE_MAX_AGE_SEC || 365 * 24 * 60 * 60),
-    domain: "app.sdnonline.online",
+
+    // ВАЖНО:
+    // domain НЕ задаём — cookie должна быть host-only,
+    // потому что у нас 2 разных домена (app.shpyn.online и app.sdnonline.online).
   };
+}
+
+function isProbablyEmptyTelegramWidgetPayload(p: any): boolean {
+  if (!p || typeof p !== "object") return true;
+  const keys = Object.keys(p);
+  if (keys.length === 0) return true;
+
+  const hasHash = typeof p.hash === "string" && p.hash.trim().length > 0;
+  const hasAuthDate = typeof p.auth_date === "string" || typeof p.auth_date === "number";
+  const hasId = typeof p.id === "string" || typeof p.id === "number";
+
+  return !(hasHash && hasAuthDate && hasId);
+}
+
+function mapShmAuthErrorStatus(st: number): number {
+  // SHM вернул “плохие данные/не авторизован” — не превращаем в 502
+  if (st === 400) return 400;
+  if (st === 401) return 401;
+  if (st === 403) return 403;
+
+  // Остальное считаем проблемой апстрима/сети
+  return 502;
 }
 
 /* ============================================================
@@ -116,17 +141,17 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(400).send({ ok: false, error: "init_data_required" });
     }
 
-    let shmSessionId = "";
-    try {
-      const rr: any = await shmTelegramWebAppAuth(initData);
-      shmSessionId = String(rr?.session_id ?? "").trim();
-    } catch {
-      return reply.code(502).send({
+    // shmTelegramWebAppAuth возвращает ShmResult<{session_id?:string}>
+    const rr = await shmTelegramWebAppAuth(initData);
+
+    if (!rr.ok) {
+      return reply.code(mapShmAuthErrorStatus(rr.status || 502)).send({
         ok: false,
         error: "shm_telegram_auth_failed",
       });
     }
 
+    const shmSessionId = String(rr.json?.session_id ?? "").trim();
     if (!shmSessionId) {
       return reply.code(502).send({ ok: false, error: "no_shm_session" });
     }
@@ -175,17 +200,22 @@ export async function authRoutes(app: FastifyInstance) {
   app.post("/auth/telegram_widget", async (req, reply) => {
     const body = (req.body ?? {}) as any;
 
-    let shmSessionId = "";
-    try {
-      const rr: any = await shmTelegramWebAuth(body);
-      shmSessionId = String(rr?.session_id ?? "").trim();
-    } catch {
-      return reply.code(502).send({
+    // Пустой/непохожий payload — это 400, а не 502
+    if (isProbablyEmptyTelegramWidgetPayload(body)) {
+      return reply.code(400).send({ ok: false, error: "missing_telegram_payload" });
+    }
+
+    // shmTelegramWebAuth возвращает ShmResult<{session_id?:string}>
+    const rr = await shmTelegramWebAuth(body);
+
+    if (!rr.ok) {
+      return reply.code(mapShmAuthErrorStatus(rr.status || 502)).send({
         ok: false,
         error: "shm_telegram_widget_auth_failed",
       });
     }
 
+    const shmSessionId = String(rr.json?.session_id ?? "").trim();
     if (!shmSessionId) {
       return reply.code(502).send({ ok: false, error: "no_shm_session" });
     }
@@ -234,14 +264,17 @@ export async function authRoutes(app: FastifyInstance) {
   app.get("/auth/telegram_widget_redirect", async (req, reply) => {
     const payload = (req.query ?? {}) as any;
 
-    let shmSessionId = "";
-    try {
-      const rr: any = await shmTelegramWebAuth(payload);
-      shmSessionId = String(rr?.session_id ?? "").trim();
-    } catch {
+    if (isProbablyEmptyTelegramWidgetPayload(payload)) {
+      return reply.redirect("/login?e=missing_telegram_payload");
+    }
+
+    const rr = await shmTelegramWebAuth(payload);
+
+    if (!rr.ok) {
       return reply.redirect("/login?e=tg_widget_failed");
     }
 
+    const shmSessionId = String(rr.json?.session_id ?? "").trim();
     if (!shmSessionId) return reply.redirect("/login?e=no_shm_session");
 
     let shmUserId = 0;
@@ -334,8 +367,8 @@ export async function authRoutes(app: FastifyInstance) {
     try {
       const initData = String(session?.telegramInitData ?? "").trim();
       if (initData && sid) {
-        const rr: any = await shmTelegramWebAppAuth(initData);
-        const newShmSessionId = String(rr?.session_id ?? "").trim();
+        const rr = await shmTelegramWebAppAuth(initData);
+        const newShmSessionId = String(rr.json?.session_id ?? "").trim();
         if (newShmSessionId) {
           const ident = await shmGetUserIdentity(newShmSessionId);
           putSession(sid, {

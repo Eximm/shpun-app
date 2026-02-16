@@ -36,6 +36,31 @@ function getTelegramBotUsername(): string {
 type Mode = "telegram" | "web";
 type PassMode = "login" | "register";
 
+function getAuthRedirectUrl(): string {
+  // ВАЖНО: не хардкодим домен. Берём текущий origin страницы.
+  // Тогда будет работать и на app.shpyn.online, и на app.sdnonline.online, и на dev-доменах.
+  const origin = window.location.origin;
+  return `${origin}/api/auth/telegram_widget_redirect`;
+}
+
+function mapRedirectError(e: string, t: (k: string, fb?: string) => string): string {
+  const code = String(e || "").trim();
+  if (!code) return "";
+
+  switch (code) {
+    case "missing_telegram_payload":
+      return t("login.err.missing_payload", "Telegram не передал данные для входа. Попробуйте ещё раз.");
+    case "tg_widget_failed":
+      return t("login.err.tg_widget_failed", "Не удалось войти через Telegram-виджет. Попробуйте ещё раз.");
+    case "no_shm_session":
+      return t("login.err.no_shm_session", "Сессия не была создана. Попробуйте ещё раз.");
+    case "user_lookup_failed":
+      return t("login.err.user_lookup_failed", "Не удалось получить данные пользователя. Попробуйте ещё раз.");
+    default:
+      return t("login.err.unknown", "Не удалось выполнить вход. Попробуйте ещё раз.");
+  }
+}
+
 export function Login() {
   const { t } = useI18n();
   const nav = useNavigate();
@@ -57,7 +82,6 @@ export function Login() {
   const [password2, setPassword2] = useState("");
 
   const autoLoginStarted = useRef(false);
-  const widgetMounted = useRef(false);
   const widgetWrapRef = useRef<HTMLDivElement | null>(null);
 
   const canPasswordLogin = login.trim().length > 0 && password.length > 0;
@@ -106,9 +130,7 @@ export function Login() {
       });
       goAfterAuth(r);
     } catch (e: any) {
-      setErr(
-        e?.message || t("error.password_login_failed", "Не удалось войти по паролю")
-      );
+      setErr(e?.message || t("error.password_login_failed", "Не удалось войти по паролю"));
     } finally {
       setLoading(false);
     }
@@ -120,16 +142,13 @@ export function Login() {
     setLoading(true);
     setErr(null);
     try {
-      // ✅ Канон: один endpoint, регистрация через mode=register
       const r = await apiFetch<AuthResponse>("/auth/password", {
         method: "POST",
         body: JSON.stringify({ login: login.trim(), password, mode: "register" }),
       });
       goAfterAuth(r);
     } catch (e: any) {
-      setErr(
-        e?.message || t("error.password_login_failed", "Не удалось выполнить регистрацию")
-      );
+      setErr(e?.message || t("error.password_login_failed", "Не удалось выполнить регистрацию"));
     } finally {
       setLoading(false);
     }
@@ -160,6 +179,19 @@ export function Login() {
   function focusWidget() {
     widgetWrapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
+
+  // Пришли после redirect-flow: /login?e=...
+  useEffect(() => {
+    const sp = new URLSearchParams(String(loc?.search ?? ""));
+    const e = sp.get("e") ?? "";
+    if (!e) return;
+
+    setErr(mapRedirectError(e, t));
+
+    // можно почистить URL, чтобы не висело ?e=... (опционально)
+    // nav("/login", { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loc?.search]);
 
   // Telegram Mini App: готовим окружение + auto-login
   useEffect(() => {
@@ -199,16 +231,10 @@ export function Login() {
     const container = document.getElementById(containerId);
     if (!container) return;
 
+    // каждый раз аккуратно очищаем контейнер
     container.innerHTML = "";
 
-    if (!botUsername) {
-      widgetMounted.current = false;
-      return;
-    }
-
-    // чтобы не дублировать инжект при HMR/перерендерах
-    if (widgetMounted.current) return;
-    widgetMounted.current = true;
+    if (!botUsername) return;
 
     const script = document.createElement("script");
     script.async = true;
@@ -218,20 +244,15 @@ export function Login() {
     script.setAttribute("data-userpic", "false");
     script.setAttribute("data-request-access", "write");
 
-    // ✅ КАНОН для браузера: redirect-flow
-    // !!! Если у тебя другой домен/путь — меняй тут одну строку
-    script.setAttribute(
-      "data-auth-url",
-      "https://app.sdnonline.online/api/auth/telegram_widget_redirect"
-    );
+    // ✅ Канон: redirect-flow и без хардкода домена
+    script.setAttribute("data-auth-url", getAuthRedirectUrl());
 
     container.appendChild(script);
 
     return () => {
+      // cleanup для StrictMode/HMR
       container.innerHTML = "";
-      widgetMounted.current = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, botUsername]);
 
   const headerCard = (
@@ -268,7 +289,10 @@ export function Login() {
         </div>
         <div>
           🧩{" "}
-          {t("login.what.4", "Google/Yandex появятся позже — сейчас всё уже работает через Telegram + пароль.")}
+          {t(
+            "login.what.4",
+            "Google/Yandex появятся позже — сейчас всё уже работает через Telegram + пароль."
+          )}
         </div>
       </div>
     </div>

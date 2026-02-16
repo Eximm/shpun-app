@@ -15,7 +15,12 @@
     "resolveJsonModule": true,
     "types": ["node"],
 
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+
+    // --- ВАЖНО для NodeNext + ESM imports с .js в исходниках ---
+    "verbatimModuleSyntax": true,
+    "allowImportingTsExtensions": false,
+    "noEmitOnError": true
   },
   "include": ["src/**/*.ts"]
 }
