@@ -50,14 +50,15 @@ export function Login() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // Password + registration
+  // Password fallback + registration
   const [passMode, setPassMode] = useState<PassMode>("login");
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [password2, setPassword2] = useState("");
 
   const autoLoginStarted = useRef(false);
-  const widgetScriptRef = useRef<HTMLScriptElement | null>(null);
+  const widgetMounted = useRef(false);
+  const widgetWrapRef = useRef<HTMLDivElement | null>(null);
 
   const canPasswordLogin = login.trim().length > 0 && password.length > 0;
   const passwordsMatch = password2.length === 0 ? true : password === password2;
@@ -73,7 +74,7 @@ export function Login() {
     const ok = !!r && (r as any).ok === true;
     if (!ok) {
       const msg = (r as any)?.error;
-      setErr(String(msg || "auth_failed"));
+      if (msg) setErr(String(msg));
       return;
     }
 
@@ -106,8 +107,7 @@ export function Login() {
       goAfterAuth(r);
     } catch (e: any) {
       setErr(
-        e?.message ||
-          t("error.password_login_failed", "Не удалось войти по паролю")
+        e?.message || t("error.password_login_failed", "Не удалось войти по паролю")
       );
     } finally {
       setLoading(false);
@@ -120,20 +120,15 @@ export function Login() {
     setLoading(true);
     setErr(null);
     try {
-      // Канон: один endpoint, регистрация через mode=register
+      // ✅ Канон: один endpoint, регистрация через mode=register
       const r = await apiFetch<AuthResponse>("/auth/password", {
         method: "POST",
-        body: JSON.stringify({
-          login: login.trim(),
-          password,
-          mode: "register",
-        }),
+        body: JSON.stringify({ login: login.trim(), password, mode: "register" }),
       });
       goAfterAuth(r);
     } catch (e: any) {
       setErr(
-        e?.message ||
-          t("error.password_login_failed", "Не удалось выполнить регистрацию")
+        e?.message || t("error.password_login_failed", "Не удалось выполнить регистрацию")
       );
     } finally {
       setLoading(false);
@@ -143,12 +138,7 @@ export function Login() {
   async function telegramLoginMiniApp() {
     const initData = tgInitData || getTelegramInitData();
     if (!initData) {
-      setErr(
-        t(
-          "error.open_in_tg",
-          "Откройте это приложение внутри Telegram, чтобы войти."
-        )
-      );
+      setErr(t("error.open_in_tg", "Откройте это приложение внутри Telegram, чтобы войти."));
       return;
     }
 
@@ -161,32 +151,14 @@ export function Login() {
       });
       goAfterAuth(r);
     } catch (e: any) {
-      setErr(
-        e?.message ||
-          t("error.telegram_login_failed", "Не удалось войти через Telegram")
-      );
+      setErr(e?.message || t("error.telegram_login_failed", "Не удалось войти через Telegram"));
     } finally {
       setLoading(false);
     }
   }
 
-  async function telegramWidgetLogin(user: any) {
-    setLoading(true);
-    setErr(null);
-    try {
-      const r = await apiFetch<AuthResponse>("/auth/telegram_widget", {
-        method: "POST",
-        body: JSON.stringify(user ?? {}),
-      });
-      goAfterAuth(r);
-    } catch (e: any) {
-      setErr(
-        e?.message ||
-          t("error.telegram_login_failed", "Не удалось войти через Telegram")
-      );
-    } finally {
-      setLoading(false);
-    }
+  function focusWidget() {
+    widgetWrapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   // Telegram Mini App: готовим окружение + auto-login
@@ -219,7 +191,7 @@ export function Login() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
-  // Web mode: inject Telegram Login Widget (официальный Telegram Login Widget)
+  // Web mode: inject Telegram Login Widget (redirect-flow via data-auth-url)
   useEffect(() => {
     if (mode !== "web") return;
 
@@ -227,25 +199,16 @@ export function Login() {
     const container = document.getElementById(containerId);
     if (!container) return;
 
-    // очистим контейнер
     container.innerHTML = "";
 
-    // подчистим предыдущий script (если был)
-    if (widgetScriptRef.current) {
-      try {
-        widgetScriptRef.current.remove();
-      } catch {
-        // ignore
-      }
-      widgetScriptRef.current = null;
+    if (!botUsername) {
+      widgetMounted.current = false;
+      return;
     }
 
-    if (!botUsername) return;
-
-    // callback в глобале — так работает data-onauth
-    (window as any).onTelegramAuth = (user: any) => {
-      telegramWidgetLogin(user);
-    };
+    // чтобы не дублировать инжект при HMR/перерендерах
+    if (widgetMounted.current) return;
+    widgetMounted.current = true;
 
     const script = document.createElement("script");
     script.async = true;
@@ -254,24 +217,19 @@ export function Login() {
     script.setAttribute("data-size", "large");
     script.setAttribute("data-userpic", "false");
     script.setAttribute("data-request-access", "write");
-    script.setAttribute("data-onauth", "onTelegramAuth(user)");
+
+    // ✅ КАНОН для браузера: redirect-flow
+    // !!! Если у тебя другой домен/путь — меняй тут одну строку
+    script.setAttribute(
+      "data-auth-url",
+      "https://app.sdnonline.online/api/auth/telegram_widget_redirect"
+    );
 
     container.appendChild(script);
-    widgetScriptRef.current = script;
 
     return () => {
-      try {
-        delete (window as any).onTelegramAuth;
-      } catch {
-        // ignore
-      }
-      try {
-        script.remove();
-      } catch {
-        // ignore
-      }
-      widgetScriptRef.current = null;
       container.innerHTML = "";
+      widgetMounted.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, botUsername]);
@@ -281,8 +239,7 @@ export function Login() {
       className="pre"
       style={{
         marginTop: 10,
-        background:
-          "linear-gradient(135deg, rgba(124,92,255,0.14), rgba(77,215,255,0.08))",
+        background: "linear-gradient(135deg, rgba(124,92,255,0.14), rgba(77,215,255,0.08))",
         border: "1px solid rgba(255,255,255,0.10)",
       }}
     >
@@ -307,17 +264,11 @@ export function Login() {
         </div>
         <div>
           🔒{" "}
-          {t(
-            "login.what.3",
-            "Пароль — резервный способ входа (если нужно зайти из браузера)."
-          )}
+          {t("login.what.3", "Пароль — резервный способ входа (если нужно зайти из браузера).")}
         </div>
         <div>
           🧩{" "}
-          {t(
-            "login.what.4",
-            "Google/Yandex появятся позже — сейчас всё уже работает через Telegram + пароль."
-          )}
+          {t("login.what.4", "Google/Yandex появятся позже — сейчас всё уже работает через Telegram + пароль.")}
         </div>
       </div>
     </div>
@@ -340,17 +291,12 @@ export function Login() {
         <div style={{ fontWeight: 900, letterSpacing: 0.1, marginBottom: 10 }}>
           {passMode === "login"
             ? t("login.password.summary", "Войти по логину и паролю")
-            : t(
-                "login.password.register_title",
-                "Регистрация по логину и паролю"
-              )}
+            : t("login.password.register_title", "Регистрация по логину и паролю")}
         </div>
 
         <div className="auth__grid">
           <label className="field">
-            <span className="field__label">
-              {t("login.password.login", "Логин")}
-            </span>
+            <span className="field__label">{t("login.password.login", "Логин")}</span>
             <input
               className="input"
               placeholder={t("login.password.login_ph", "например @123456789")}
@@ -363,33 +309,24 @@ export function Login() {
           </label>
 
           <label className="field">
-            <span className="field__label">
-              {t("login.password.password", "Пароль")}
-            </span>
+            <span className="field__label">{t("login.password.password", "Пароль")}</span>
             <input
               className="input"
               placeholder={t("login.password.password_ph", "••••••••")}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               type="password"
-              autoComplete={
-                passMode === "login" ? "current-password" : "new-password"
-              }
+              autoComplete={passMode === "login" ? "current-password" : "new-password"}
               disabled={loading}
             />
           </label>
 
           {passMode === "register" && (
             <label className="field">
-              <span className="field__label">
-                {t("login.password.repeat", "Повтор пароля")}
-              </span>
+              <span className="field__label">{t("login.password.repeat", "Повтор пароля")}</span>
               <input
                 className="input"
-                placeholder={t(
-                  "login.password.repeat_ph",
-                  "Введите пароль ещё раз"
-                )}
+                placeholder={t("login.password.repeat_ph", "Введите пароль ещё раз")}
                 value={password2}
                 onChange={(e) => setPassword2(e.target.value)}
                 type="password"
@@ -411,10 +348,7 @@ export function Login() {
             type="submit"
             className="btn btn--primary"
             style={{ width: "100%" }}
-            disabled={
-              loading ||
-              (passMode === "login" ? !canPasswordLogin : !canPasswordRegister)
-            }
+            disabled={loading || (passMode === "login" ? !canPasswordLogin : !canPasswordRegister)}
           >
             {loading
               ? passMode === "login"
@@ -461,14 +395,8 @@ export function Login() {
 
         <div className="pre" style={{ marginTop: 12 }}>
           {passMode === "login"
-            ? t(
-                "login.password.tip",
-                "Пароль — резервный способ. Основной вход — через Telegram."
-              )
-            : t(
-                "login.password.register_tip",
-                "Регистрация — резервный способ. Основной вход — через Telegram."
-              )}
+            ? t("login.password.tip", "Пароль — резервный способ. Основной вход — через Telegram.")
+            : t("login.password.register_tip", "Регистрация — резервный способ. Основной вход — через Telegram.")}
         </div>
       </form>
     </details>
@@ -483,25 +411,17 @@ export function Login() {
               <h1 className="h1">{t("login.title", "Вход в Shpun App")}</h1>
               {mode === "telegram" ? (
                 <p className="p">
-                  {t(
-                    "login.desc.tg",
-                    "Мы распознали Telegram Mini App — можно войти в один тап."
-                  )}
+                  {t("login.desc.tg", "Мы распознали Telegram Mini App — можно войти в один тап.")}
                 </p>
               ) : (
                 <p className="p">
-                  {t(
-                    "login.desc.web",
-                    "Войдите через Telegram-виджет или используйте логин и пароль."
-                  )}
+                  {t("login.desc.web", "Войдите через Telegram-виджет или используйте логин и пароль.")}
                 </p>
               )}
             </div>
 
             <span className="badge">
-              {mode === "telegram"
-                ? t("login.badge.tg", "Telegram")
-                : t("login.badge.web", "Веб-режим")}
+              {mode === "telegram" ? t("login.badge.tg", "Telegram") : t("login.badge.web", "Веб-режим")}
             </span>
           </div>
 
@@ -521,42 +441,21 @@ export function Login() {
                 disabled={loading}
                 style={{ width: "100%" }}
               >
-                {loading
-                  ? t("login.tg.cta_loading", "Входим…")
-                  : t("login.tg.cta", "Войти через Telegram")}
+                {loading ? t("login.tg.cta_loading", "Входим…") : t("login.tg.cta", "Войти через Telegram")}
               </button>
             </div>
           ) : (
-            <div style={{ marginTop: 12 }}>
-              <div
-                className="pre"
-                style={{
-                  marginBottom: 10,
-                  borderColor: "rgba(255,255,255,0.10)",
-                }}
-              >
-                {t(
-                  "login.widget.tip",
-                  "Нажмите кнопку ниже — это официальный вход через Telegram."
-                )}
+            <div ref={widgetWrapRef} style={{ marginTop: 12 }}>
+              <div className="pre" style={{ marginBottom: 10, borderColor: "rgba(255,255,255,0.10)" }}>
+                {t("login.widget.tip", "Нажмите кнопку ниже — это официальный вход через Telegram.")}
               </div>
 
               {!botUsername ? (
                 <div className="pre">
-                  {t(
-                    "login.widget.env_missing",
-                    "Не настроен VITE_TG_BOT_USERNAME — виджет Telegram недоступен."
-                  )}
+                  {t("login.widget.env_missing", "Не настроен VITE_TG_BOT_USERNAME — виджет Telegram недоступен.")}
                 </div>
               ) : (
-                <div
-                  id="tg-widget-container"
-                  style={{
-                    display: "grid",
-                    justifyItems: "center",
-                    padding: "12px 0",
-                  }}
-                />
+                <div id="tg-widget-container" style={{ display: "grid", justifyItems: "center", padding: "12px 0" }} />
               )}
             </div>
           )}
@@ -576,18 +475,10 @@ export function Login() {
           <div className="auth__providers">
             <button
               className="btn auth__provider"
-              onClick={mode === "telegram" ? telegramLoginMiniApp : () => {}}
+              onClick={mode === "telegram" ? telegramLoginMiniApp : focusWidget}
               disabled={loading}
               type="button"
               style={{ width: "100%" }}
-              title={
-                mode === "telegram"
-                  ? undefined
-                  : t(
-                      "login.providers.telegram.hint.web",
-                      "вход через виджет"
-                    )
-              }
             >
               <span className="auth__providerIcon">✈️</span>
               <span className="auth__providerText">
@@ -611,9 +502,7 @@ export function Login() {
               <span className="auth__providerIcon">🟦</span>
               <span className="auth__providerText">
                 Google
-                <span className="auth__providerHint">
-                  {t("login.providers.google.hint", "скоро")}
-                </span>
+                <span className="auth__providerHint">{t("login.providers.google.hint", "скоро")}</span>
               </span>
               <span className="auth__providerRight">🔒</span>
             </button>
@@ -628,9 +517,7 @@ export function Login() {
               <span className="auth__providerIcon">🟨</span>
               <span className="auth__providerText">
                 Yandex
-                <span className="auth__providerHint">
-                  {t("login.providers.yandex.hint", "скоро")}
-                </span>
+                <span className="auth__providerHint">{t("login.providers.yandex.hint", "скоро")}</span>
               </span>
               <span className="auth__providerRight">🔒</span>
             </button>
@@ -638,9 +525,7 @@ export function Login() {
 
           {err && (
             <div className="auth__error" style={{ marginTop: 12 }}>
-              <div className="auth__errorTitle">
-                {t("setpwd.err.title", "Ошибка")}
-              </div>
+              <div className="auth__errorTitle">{t("setpwd.err.title", "Ошибка")}</div>
               <div className="auth__errorText">{err}</div>
             </div>
           )}
