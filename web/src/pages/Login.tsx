@@ -9,8 +9,6 @@ type TgWebApp = {
   initData?: string;
   ready?: () => void;
   expand?: () => void;
-  openTelegramLink?: (url: string) => void;
-  openLink?: (url: string, options?: any) => void;
 };
 
 function getTelegramWebApp(): TgWebApp | null {
@@ -29,86 +27,10 @@ function readEnv(key: string): string {
   return typeof v === "string" ? v.trim() : "";
 }
 
-/**
- * Надёжный MiniApp deeplink:
- * https://t.me/<bot>/<app>?startapp=<payload>
- *
- * Важно: если VITE_TG_APP_SHORTNAME не задан, используем "shpun_app" (продовый shortname).
- */
-function buildTelegramOpenUrlSafe():
-  | { ok: true; url: string }
-  | { ok: false; error: string; debug?: Record<string, any> } {
-  const botRaw = readEnv("VITE_TG_BOT_USERNAME");
-  const appRaw = readEnv("VITE_TG_APP_SHORTNAME");
-  const startappRaw = readEnv("VITE_TG_STARTAPP");
-  const startapp = startappRaw.length > 0 ? startappRaw : "1";
-
-  const bot = botRaw.startsWith("@") ? botRaw.slice(1).trim() : botRaw;
-
-  // ✅ чтобы не было “пустого app” в проде
-  const app = (appRaw || "shpun_app").trim();
-
-  if (!bot) {
-    return {
-      ok: false,
-      error:
-        "Сборка без VITE_TG_BOT_USERNAME — не могу сформировать ссылку на Telegram.",
-      debug: { botRaw, appRaw, startappRaw },
-    };
-  }
-
-  if (!app) {
-    return { ok: true, url: `https://t.me/${encodeURIComponent(bot)}` };
-  }
-
-  const base = `https://t.me/${encodeURIComponent(bot)}/${encodeURIComponent(
-    app
-  )}`;
-  const url = `${base}?startapp=${encodeURIComponent(startapp)}`;
-  return { ok: true, url };
-}
-
-/**
- * Открываем MiniApp в Telegram.
- * Возвращаем URL, чтобы UI мог показать fallback ссылку.
- */
-function openInTelegramSafe(
-  setErr?: (s: string) => void
-):
-  | { ok: true; url: string }
-  | { ok: false; error: string; url?: string } {
-  const built = buildTelegramOpenUrlSafe();
-
-  if (!built.ok) {
-    setErr?.(built.error);
-    console.warn("[openInTelegram] bad env:", built.error);
-    return { ok: false, error: built.error };
-  }
-
-  const url = built.url;
-  const tg = getTelegramWebApp();
-  const isInsideTelegram = !!tg;
-
-  if (!isInsideTelegram) {
-    window.location.assign(url);
-    return { ok: true, url };
-  }
-
-  try {
-    if (tg?.openTelegramLink) {
-      tg.openTelegramLink(url);
-      return { ok: true, url };
-    }
-    if (tg?.openLink) {
-      tg.openLink(url, { try_instant_view: false });
-      return { ok: true, url };
-    }
-  } catch {
-    console.warn("[openInTelegram] tg open failed");
-  }
-
-  window.location.assign(url);
-  return { ok: true, url };
+function getTelegramBotUsername(): string {
+  const raw = readEnv("VITE_TG_BOT_USERNAME");
+  const bot = raw.startsWith("@") ? raw.slice(1).trim() : raw.trim();
+  return bot;
 }
 
 type Mode = "telegram" | "web";
@@ -119,7 +41,7 @@ export function Login() {
   const nav = useNavigate();
   const loc: any = useLocation();
 
-  // ✅ Telegram-mode только когда реально есть initData (иначе это “просто браузер”)
+  // Telegram-mode только когда реально есть initData
   const initDataNow = getTelegramInitData();
   const mode: Mode = initDataNow ? "telegram" : "web";
 
@@ -128,16 +50,14 @@ export function Login() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // Показываем пользователю ссылку, если “ничего не произошло”
-  const [tgOpenUrl, setTgOpenUrl] = useState<string | null>(null);
-
-  // Password fallback + registration
+  // Password + registration
   const [passMode, setPassMode] = useState<PassMode>("login");
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [password2, setPassword2] = useState("");
 
   const autoLoginStarted = useRef(false);
+  const widgetScriptRef = useRef<HTMLScriptElement | null>(null);
 
   const canPasswordLogin = login.trim().length > 0 && password.length > 0;
   const passwordsMatch = password2.length === 0 ? true : password === password2;
@@ -147,16 +67,13 @@ export function Login() {
     password2.length > 0 &&
     password === password2;
 
-  const tgLinkPreview = useMemo(() => {
-    const built = buildTelegramOpenUrlSafe();
-    return built.ok ? built.url : null;
-  }, []);
+  const botUsername = useMemo(() => getTelegramBotUsername(), []);
 
   function goAfterAuth(r?: AuthResponse) {
     const ok = !!r && (r as any).ok === true;
     if (!ok) {
       const msg = (r as any)?.error;
-      if (msg) setErr(String(msg));
+      setErr(String(msg || "auth_failed"));
       return;
     }
 
@@ -184,7 +101,7 @@ export function Login() {
     try {
       const r = await apiFetch<AuthResponse>("/auth/password", {
         method: "POST",
-        body: JSON.stringify({ login: login.trim(), password }),
+        body: JSON.stringify({ login: login.trim(), password, mode: "login" }),
       });
       goAfterAuth(r);
     } catch (e: any) {
@@ -203,9 +120,14 @@ export function Login() {
     setLoading(true);
     setErr(null);
     try {
-      const r = await apiFetch<AuthResponse>("/auth/password/register", {
+      // Канон: один endpoint, регистрация через mode=register
+      const r = await apiFetch<AuthResponse>("/auth/password", {
         method: "POST",
-        body: JSON.stringify({ login: login.trim(), password }),
+        body: JSON.stringify({
+          login: login.trim(),
+          password,
+          mode: "register",
+        }),
       });
       goAfterAuth(r);
     } catch (e: any) {
@@ -218,7 +140,7 @@ export function Login() {
     }
   }
 
-  async function telegramLogin() {
+  async function telegramLoginMiniApp() {
     const initData = tgInitData || getTelegramInitData();
     if (!initData) {
       setErr(
@@ -248,24 +170,26 @@ export function Login() {
     }
   }
 
-  function handleOpenTelegram() {
+  async function telegramWidgetLogin(user: any) {
+    setLoading(true);
     setErr(null);
-    setTgOpenUrl(null);
-
-    const res = openInTelegramSafe(setErr);
-    if (res.ok) setTgOpenUrl(res.url);
-    else if (tgLinkPreview) setTgOpenUrl(tgLinkPreview);
-  }
-
-  async function copyLink(url: string) {
     try {
-      await navigator.clipboard.writeText(url);
-      alert(t("home.install.copy_ok", "Ссылка скопирована 👍"));
-    } catch {
-      window.prompt(t("home.install.copy_prompt", "Скопируй ссылку:"), url);
+      const r = await apiFetch<AuthResponse>("/auth/telegram_widget", {
+        method: "POST",
+        body: JSON.stringify(user ?? {}),
+      });
+      goAfterAuth(r);
+    } catch (e: any) {
+      setErr(
+        e?.message ||
+          t("error.telegram_login_failed", "Не удалось войти через Telegram")
+      );
+    } finally {
+      setLoading(false);
     }
   }
 
+  // Telegram Mini App: готовим окружение + auto-login
   useEffect(() => {
     const tg = getTelegramWebApp();
     tg?.ready?.();
@@ -282,7 +206,7 @@ export function Login() {
       if (!autoLoginStarted.current) {
         autoLoginStarted.current = true;
         window.setTimeout(() => {
-          telegramLogin();
+          telegramLoginMiniApp();
         }, 180);
       }
 
@@ -294,6 +218,63 @@ export function Login() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
+
+  // Web mode: inject Telegram Login Widget (официальный Telegram Login Widget)
+  useEffect(() => {
+    if (mode !== "web") return;
+
+    const containerId = "tg-widget-container";
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    // очистим контейнер
+    container.innerHTML = "";
+
+    // подчистим предыдущий script (если был)
+    if (widgetScriptRef.current) {
+      try {
+        widgetScriptRef.current.remove();
+      } catch {
+        // ignore
+      }
+      widgetScriptRef.current = null;
+    }
+
+    if (!botUsername) return;
+
+    // callback в глобале — так работает data-onauth
+    (window as any).onTelegramAuth = (user: any) => {
+      telegramWidgetLogin(user);
+    };
+
+    const script = document.createElement("script");
+    script.async = true;
+    script.src = "https://telegram.org/js/telegram-widget.js?22";
+    script.setAttribute("data-telegram-login", botUsername);
+    script.setAttribute("data-size", "large");
+    script.setAttribute("data-userpic", "false");
+    script.setAttribute("data-request-access", "write");
+    script.setAttribute("data-onauth", "onTelegramAuth(user)");
+
+    container.appendChild(script);
+    widgetScriptRef.current = script;
+
+    return () => {
+      try {
+        delete (window as any).onTelegramAuth;
+      } catch {
+        // ignore
+      }
+      try {
+        script.remove();
+      } catch {
+        // ignore
+      }
+      widgetScriptRef.current = null;
+      container.innerHTML = "";
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, botUsername]);
 
   const headerCard = (
     <div
@@ -511,7 +492,7 @@ export function Login() {
                 <p className="p">
                   {t(
                     "login.desc.web",
-                    "Рекомендуем открыть Shpun внутри Telegram — это самый быстрый способ входа."
+                    "Войдите через Telegram-виджет или используйте логин и пароль."
                   )}
                 </p>
               )}
@@ -524,12 +505,9 @@ export function Login() {
             </span>
           </div>
 
-          {/* ✅ “цепляющая” шапка-объяснялка */}
           {headerCard}
 
-          {/* =====================================================
-             1) Основной вход: Telegram
-             ===================================================== */}
+          {/* Основной вход: Telegram */}
           <div className="auth__divider" style={{ marginTop: 14 }}>
             <span>{t("login.divider.telegram", "Основной вход")}</span>
           </div>
@@ -539,7 +517,7 @@ export function Login() {
               <button
                 type="button"
                 className="btn btn--primary"
-                onClick={telegramLogin}
+                onClick={telegramLoginMiniApp}
                 disabled={loading}
                 style={{ width: "100%" }}
               >
@@ -549,50 +527,48 @@ export function Login() {
               </button>
             </div>
           ) : (
-            <div className="auth__actions" style={{ marginTop: 12 }}>
-              <button
-                type="button"
-                className="btn btn--primary"
-                onClick={handleOpenTelegram}
-                style={{ width: "100%" }}
-                disabled={loading}
+            <div style={{ marginTop: 12 }}>
+              <div
+                className="pre"
+                style={{
+                  marginBottom: 10,
+                  borderColor: "rgba(255,255,255,0.10)",
+                }}
               >
-                {t("login.cta.open_tg", "Открыть в Telegram")}
-              </button>
+                {t(
+                  "login.widget.tip",
+                  "Нажмите кнопку ниже — это официальный вход через Telegram."
+                )}
+              </div>
+
+              {!botUsername ? (
+                <div className="pre">
+                  {t(
+                    "login.widget.env_missing",
+                    "Не настроен VITE_TG_BOT_USERNAME — виджет Telegram недоступен."
+                  )}
+                </div>
+              ) : (
+                <div
+                  id="tg-widget-container"
+                  style={{
+                    display: "grid",
+                    justifyItems: "center",
+                    padding: "12px 0",
+                  }}
+                />
+              )}
             </div>
           )}
 
-          {/* fallback ссылка (только если реально нужна) */}
-          {!!tgOpenUrl && mode === "web" && (
-            <div className="pre" style={{ marginTop: 12 }}>
-              <div style={{ fontWeight: 900, marginBottom: 6 }}>
-                {t("login.link.title", "Ссылка для открытия в Telegram")}
-              </div>
-              <div style={{ wordBreak: "break-word" }}>{tgOpenUrl}</div>
-              <div style={{ marginTop: 10 }}>
-                <button
-                  className="btn"
-                  type="button"
-                  onClick={() => copyLink(tgOpenUrl)}
-                >
-                  {t("login.link.copy", "Скопировать ссылку")}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* =====================================================
-             2) Резервный вход: password
-             ===================================================== */}
+          {/* Резервный вход: password */}
           <div className="auth__divider" style={{ marginTop: 14 }}>
-            <span>{t("login.divider.password", "Если уже установлен пароль")}</span>
+            <span>{t("login.divider.password", "Вход по логину и паролю")}</span>
           </div>
 
           {passwordDetails}
 
-          {/* =====================================================
-             3) Другие способы (внизу)
-             ===================================================== */}
+          {/* Другие способы */}
           <div className="auth__divider" style={{ marginTop: 14 }}>
             <span>{t("login.divider.providers", "Или другой способ")}</span>
           </div>
@@ -600,10 +576,18 @@ export function Login() {
           <div className="auth__providers">
             <button
               className="btn auth__provider"
-              onClick={mode === "telegram" ? telegramLogin : handleOpenTelegram}
+              onClick={mode === "telegram" ? telegramLoginMiniApp : () => {}}
               disabled={loading}
               type="button"
               style={{ width: "100%" }}
+              title={
+                mode === "telegram"
+                  ? undefined
+                  : t(
+                      "login.providers.telegram.hint.web",
+                      "вход через виджет"
+                    )
+              }
             >
               <span className="auth__providerIcon">✈️</span>
               <span className="auth__providerText">
@@ -611,7 +595,7 @@ export function Login() {
                 <span className="auth__providerHint">
                   {mode === "telegram"
                     ? t("login.providers.telegram.hint.tg", "вход в один тап")
-                    : t("login.providers.telegram.hint.web", "открыть Mini App")}
+                    : t("login.providers.telegram.hint.web", "вход через виджет")}
                 </span>
               </span>
               <span className="auth__providerRight">→</span>

@@ -15,13 +15,9 @@ export type ShmResult<T = unknown> = {
 };
 
 function normalizeBase(raw: string) {
-  // убираем пробелы и приводим к виду ".../shm/"
-  let s = (raw || "").trim();
+  let s = String(raw || "").trim();
   if (!s) s = "https://bill.shpyn.online/shm/";
-
-  // если кто-то передал ".../shm" без слеша — добавим
   if (!s.endsWith("/")) s += "/";
-
   return s;
 }
 
@@ -29,9 +25,9 @@ export const SHM_BASE = normalizeBase(
   process.env.SHM_BASE ?? "https://bill.shpyn.online/shm/"
 );
 
-export function toFormUrlEncoded(obj: Record<string, string>) {
+export function toFormUrlEncoded(obj: Record<string, unknown>) {
   const p = new URLSearchParams();
-  for (const [k, v] of Object.entries(obj)) p.set(k, v ?? "");
+  for (const [k, v] of Object.entries(obj)) p.set(k, String(v ?? ""));
   return p.toString();
 }
 
@@ -43,20 +39,20 @@ function safeJsonParse(text: string): unknown | null {
   }
 }
 
+type ShmFetchOpts = {
+  method?: string;
+  query?: Record<string, string | number | boolean | null | undefined>;
+  headers?: Record<string, string>;
+  body?: string | Record<string, any> | null;
+  signal?: AbortSignal;
+};
+
 export async function shmFetch<T = unknown>(
   sessionId: string | null,
-  path: string, // path должен быть БЕЗ ведущего слеша, например "v1/user"
-  opts?: {
-    method?: string;
-    query?: Record<string, string | number | boolean | null | undefined>;
-    headers?: Record<string, string>;
-    body?: string;
-    signal?: AbortSignal;
-  }
+  path: string, // path без ведущего слеша, например "v1/user"
+  opts?: ShmFetchOpts
 ): Promise<ShmResult<T>> {
-  // Если вдруг кто-то передал "/v1/user" — аккуратно нормализуем
   const cleanPath = path.startsWith("/") ? path.slice(1) : path;
-
   const url = new URL(cleanPath, SHM_BASE);
 
   if (opts?.query) {
@@ -73,29 +69,38 @@ export async function shmFetch<T = unknown>(
 
   if (sessionId) headers["session-id"] = sessionId;
 
+  let body: any = opts?.body ?? undefined;
+
+  // если body объект — отправляем JSON
+  if (body && typeof body === "object" && !(body instanceof String)) {
+    if (!headers["Content-Type"]) headers["Content-Type"] = "application/json";
+    body = JSON.stringify(body);
+  }
+
   const res = await fetch(url.toString(), {
     method: opts?.method ?? "GET",
     headers,
-    body: opts?.body,
+    body,
     signal: opts?.signal,
   });
 
   const text = await res.text().catch(() => "");
 
-  // Пытаемся распарсить JSON максимально мягко:
-  // 1) если content-type json — parse
-  // 2) иначе fallback parse (иногда SHM отдаёт json без корректного content-type)
-  let json: unknown | undefined = undefined;
-  const contentType = res.headers.get("content-type") || "";
-  if (contentType.includes("application/json")) {
-    const parsed = safeJsonParse(text);
-    if (parsed !== null) json = parsed;
-  } else {
-    const parsed = safeJsonParse(text);
-    if (parsed !== null) json = parsed;
-  }
+  // SHM иногда отдаёт JSON без корректного content-type — парсим мягко всегда
+  const parsed = safeJsonParse(text);
+  const json = parsed !== null ? (parsed as T) : undefined;
 
-  return { ok: res.ok, status: res.status, json: json as T, text };
+  return { ok: res.ok, status: res.status, json, text };
+}
+
+/**
+ * Удобный helper для мест, где нужно “взорваться” на ошибке
+ * (опционально использовать, не обязателен).
+ */
+export function assertOk<T>(r: ShmResult<T>, label = "shm_request_failed"): T {
+  if (r.ok && r.json !== undefined) return r.json;
+  const detail = String(r.text || "").slice(0, 200);
+  throw new Error(`${label}:${r.status}:${detail}`);
 }
 
 // =====================
@@ -119,14 +124,15 @@ export async function shmAuthWithPassword(login: string, password: string) {
 }
 
 /**
- * Auth via Telegram WebApp initData -> /shm/v1/telegram/webapp/auth?initData=...
- * По Swagger: GET /telegram/webapp/auth (security: [])
+ * Канон:
+ * Telegram Mini App (WebApp) initData -> SHM -> session_id
+ *
+ * GET /shm/v1/telegram/webapp/auth?initData=...
  * Ответ: { session_id: string }
  */
-export async function shmAuthWithTelegramWebApp(initData: string) {
+export async function shmTelegramWebAppAuth(initData: string) {
   const clean = String(initData ?? "").trim();
-
-  return await shmFetch<{ session_id?: string; user_id?: number }>(
+  return await shmFetch<{ session_id?: string }>(
     null,
     "v1/telegram/webapp/auth",
     {
@@ -136,11 +142,27 @@ export async function shmAuthWithTelegramWebApp(initData: string) {
   );
 }
 
+/**
+ * Канон:
+ * Telegram Login Widget -> SHM -> session_id
+ *
+ * POST /shm/v1/telegram/web/auth
+ * Ответ: { session_id: string }
+ *
+ * Payload: объект, который отдаёт Telegram widget (id, first_name, auth_date, hash, ...)
+ * SHM сам валидирует подпись — мы не проверяем.
+ */
+export async function shmTelegramWebAuth(widgetPayload: Record<string, any>) {
+  return await shmFetch<{ session_id?: string }>(null, "v1/telegram/web/auth", {
+    method: "POST",
+    body: widgetPayload ?? {},
+  });
+}
+
 // =====================
 // USER
 // =====================
 
-// GET /shm/v1/user (returns { data:[{...}], ... })
 export async function shmGetMe(sessionId: string) {
   return await shmFetch<any>(sessionId, "v1/user", {
     method: "GET",
@@ -148,15 +170,12 @@ export async function shmGetMe(sessionId: string) {
   });
 }
 
-// GET /shm/v1/user/service
 export async function shmGetUserServices(
   sessionId: string,
   opts?: { limit?: number; offset?: number; filter?: unknown }
 ) {
   const limit = opts?.limit ?? 25;
   const offset = opts?.offset ?? 0;
-
-  // SHM ожидает filter как JSON-строку, как у тебя в логах: filter=%7B%7D
   const filterObj = (opts?.filter ?? {}) as any;
   const filter = JSON.stringify(filterObj);
 
@@ -206,8 +225,6 @@ export async function shmGetPays(
   });
 }
 
-// ✅ NEW: withdrawals (charges)
-// GET /shm/v1/user/withdraw
 export async function shmGetWithdraws(
   sessionId: string,
   opts?: { limit?: number; offset?: number }

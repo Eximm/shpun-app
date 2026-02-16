@@ -350,9 +350,9 @@ export function Home() {
             <div className="home-install__glow" />
             <div className="card__body">
               <div className="home-install__copy">
-                <div className="home-install__title">🚀 Установить Shpun App</div>
+                <div className="home-install__title">🚀 Установить ShpunApp</div>
                 <div className="home-install__sub">
-                  Откроем браузер и предложим установку приложения на устройство.
+                  Установить наше приложение на устройство. Откроется в внешнем браузере.
                 </div>
 
                 {transfer.status === "error" && (

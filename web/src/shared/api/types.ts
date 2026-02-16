@@ -1,25 +1,27 @@
 // web/src/shared/api/types.ts
 
-export type ApiOk = { ok: true }
-export type ApiErr = { ok: false; error: string }
+export type ApiOk = { ok: true };
+export type ApiErr = { ok: false; error: string; detail?: unknown };
+export type ApiResult<T> = (ApiOk & T) | ApiErr;
 
-// /api/me (или /me — как у тебя сейчас настроено в apiFetch)
-export type MeResponse =
-  | (ApiOk & { profile?: { login?: string | null } })
-  | ApiErr
+// /api/me
+export type MeProfile = {
+  login?: string | null;
+  passwordSet?: boolean; // важно для gate в SetPassword
+  user_id?: number | null;
+};
 
-// Ответы логина (Telegram / Password), чтобы роутить:
-// next = 'set_password' | 'cabinet'
-export type AuthResponse =
-  | (ApiOk & {
-      login?: string
-      next: 'set_password' | 'cabinet'
-    })
-  | ApiErr
+export type MeResponse = ApiResult<{ profile?: MeProfile }>;
 
-// Ответ установки/смены пароля (подходит и для first-time, и для "Change password" в профиле)
-export type PasswordSetResponse =
-  | (ApiOk & {
-      password_set: 1
-    })
-  | ApiErr
+// Ответы логина (Telegram / Password / Widget):
+// next = 'set_password' | 'home'
+export type AuthResponse = ApiResult<{
+  login?: string;
+  next: "set_password" | "home";
+  user_id?: number;
+}>;
+
+// Ответ установки/смены пароля
+export type PasswordSetResponse = ApiResult<{
+  password_set: 1;
+}>;

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { apiFetch } from "../shared/api/client";
 import type { MeResponse, PasswordSetResponse } from "../shared/api/types";
-import { useI18n } from "../shared/i18n/I18nProvider";
+import { useI18n } from "../shared/i18n";
 
 function pwdScore(p: string) {
   let s = 0;
@@ -51,7 +51,14 @@ export function SetPassword() {
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [login, setLogin] = useState<string>("");
+
+  // сначала пробуем взять login из location.state (приходит из Login после auth)
+  const initialLogin = useMemo(() => {
+    const s: any = (loc as any)?.state;
+    return String(s?.login ?? "").trim();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const [login, setLogin] = useState<string>(initialLogin || "");
 
   const [password, setPassword] = useState("");
   const [password2, setPassword2] = useState("");
@@ -73,14 +80,20 @@ export function SetPassword() {
 
         if (!me.ok) {
           if (!alive) return;
-          setGate({ status: "error", message: me.error || "Not authenticated" });
+          setGate({
+            status: "error",
+            message: me.error || t("setpwd.need_login.text", "Нужен вход"),
+          });
           return;
         }
 
         const l = String((me as any)?.profile?.login ?? "").trim();
         if (alive && l && !login) setLogin(l);
 
-        const ps = (me as any)?.profile?.passwordSet;
+        // мягко: если бек не прислал — будет undefined
+        const psRaw = (me as any)?.profile?.passwordSet;
+        const passwordSet: boolean | undefined =
+          typeof psRaw === "boolean" ? psRaw : undefined;
 
         // ===== Gate rules =====
         // 1) intent=change: пользователь сам хочет сменить пароль => разрешаем всегда (если залогинен)
@@ -90,20 +103,24 @@ export function SetPassword() {
           return;
         }
 
-        // 2) onboarding: разрешаем ТОЛЬКО если пароль не установлен
-        if (ps === false) {
+        // 2) onboarding: разрешаем ТОЛЬКО если точно знаем, что пароль НЕ установлен
+        if (passwordSet === false) {
           if (!alive) return;
           setGate({ status: "allowed" });
           return;
         }
 
-        // 3) если пароль уже установлен или неизвестно — блокируем и уводим на /app
+        // 3) если пароль уже установлен ИЛИ неизвестно — блокируем и уводим на /app
         if (!alive) return;
         setGate({ status: "blocked" });
         nav("/app", { replace: true });
       } catch (e: any) {
         if (!alive) return;
-        setGate({ status: "error", message: e?.message || "Not authenticated" });
+        setGate({
+          status: "error",
+          message:
+            e?.message || t("setpwd.need_login.text", "Нужен вход"),
+        });
       }
     }
 
@@ -116,13 +133,14 @@ export function SetPassword() {
 
   async function submit() {
     if (!canSubmit) return;
+
     setLoading(true);
     setErr(null);
 
     try {
       const res = await apiFetch<PasswordSetResponse>("/auth/password/set", {
         method: "POST",
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ password: password.trim() }),
       });
 
       if (!res.ok) throw new Error(res.error || "Failed to set password");
@@ -130,7 +148,7 @@ export function SetPassword() {
       // onboarding => /app, change => /app/profile (или redirect=...)
       nav(redirectTo, { replace: true });
     } catch (e: any) {
-      setErr(e?.message || "Failed to set password");
+      setErr(e?.message || t("setpwd.err.generic", "Не удалось сохранить пароль"));
     } finally {
       setLoading(false);
     }
@@ -198,7 +216,6 @@ export function SetPassword() {
     ? t("setpwd.kv.next_value_profile", "Профиль")
     : t("setpwd.kv.next_value", "Главная");
 
-  // allowed
   return (
     <div className="section">
       <div className="card">
@@ -209,7 +226,9 @@ export function SetPassword() {
               <p className="p">{desc}</p>
             </div>
 
-            {!isChange && <span className="badge">{t("setpwd.badge", "Шаг 1 / 1")}</span>}
+            {!isChange && (
+              <span className="badge">{t("setpwd.badge", "Шаг 1 / 1")}</span>
+            )}
           </div>
 
           <div className="kv">
@@ -236,9 +255,7 @@ export function SetPassword() {
           >
             <div className="auth__grid">
               <label className="field">
-                <span className="field__label">
-                  {t("setpwd.field.p1", "Новый пароль")}
-                </span>
+                <span className="field__label">{t("setpwd.field.p1", "Новый пароль")}</span>
                 <input
                   className="input"
                   placeholder={t("setpwd.field.p1_ph", "Минимум 8 символов")}
@@ -251,9 +268,7 @@ export function SetPassword() {
               </label>
 
               <label className="field">
-                <span className="field__label">
-                  {t("setpwd.field.p2", "Повторите пароль")}
-                </span>
+                <span className="field__label">{t("setpwd.field.p2", "Повторите пароль")}</span>
                 <input
                   className="input"
                   placeholder={t("setpwd.field.p2_ph", "Повторите пароль")}
@@ -312,3 +327,5 @@ export function SetPassword() {
     </div>
   );
 }
+
+export default SetPassword;

@@ -1,8 +1,5 @@
 // api/src/modules/auth/authService.ts
 
-import { telegramAuth } from "./providers/telegram.js";
-import { googleAuth } from "./providers/google.js";
-import { yandexAuth } from "./providers/yandex.js";
 import { passwordAuth } from "./providers/password.js";
 
 export type AllowedProvider = "telegram" | "password" | "google" | "yandex";
@@ -18,24 +15,41 @@ export type AuthResult = {
   login?: string;
 };
 
+/**
+ * handleAuth — центральный роутер провайдеров.
+ *
+ * Важно:
+ * - Telegram auth НЕ обрабатывается здесь.
+ *   Он реализован напрямую в routes.ts через SHM canonical endpoints.
+ *
+ * - Google/Yandex пока не реализованы (заглушки).
+ *
+ * Это место должно оставаться тонким диспетчером.
+ */
 export async function handleAuth(
   provider: AllowedProvider | string,
   body: unknown
 ): Promise<AuthResult> {
   switch (provider) {
-    case "telegram":
-      return telegramAuth(body as any);
-
     case "password":
-      // ✅ регистрация/логин будет реализована внутри passwordAuth(body)
-      // через body.mode = "register" | "login"
+      // Логин / регистрация через passwordAuth
       return passwordAuth(body as any);
 
-    case "google":
-      return googleAuth(body as any);
+    case "telegram":
+      // Telegram обрабатывается напрямую в routes.ts
+      return {
+        ok: false,
+        status: 400,
+        error: "telegram_provider_not_supported_here",
+      };
 
+    case "google":
     case "yandex":
-      return yandexAuth(body as any);
+      return {
+        ok: false,
+        status: 501,
+        error: "provider_not_implemented",
+      };
 
     default:
       return { ok: false, status: 400, error: "unknown_provider" };

@@ -1,27 +1,30 @@
 // api/src/modules/auth/providers/password.ts
 
 import type { AuthResult } from "../authService.js";
+import { shmFetch } from "../../../shared/shm/shmClient.js";
 
 type Mode = "login" | "register";
 
-function shmRoot(): string {
-  const b0 = String(process.env.SHM_BASE ?? "").trim();
-  const b = (b0 || "https://bill.shpyn.online/shm/").replace(/\/+$/, "");
-  if (b.endsWith("/shm/v1")) return b.slice(0, -3);
-  return b;
+function normalizeLogin(v: unknown) {
+  return String(v ?? "").trim();
 }
-function shmV1(): string {
-  return `${shmRoot()}/v1`;
+function normalizePassword(v: unknown) {
+  return String(v ?? "").trim();
+}
+function normalizeMode(v: unknown): Mode {
+  const s = String(v ?? "login").trim().toLowerCase();
+  return s === "register" ? "register" : "login";
 }
 
-async function safeReadJson(res: Response): Promise<unknown | null> {
-  const ct = res.headers.get("content-type") || "";
-  if (!ct.includes("application/json")) return null;
-  try {
-    return await res.json();
-  } catch {
-    return null;
-  }
+function extractSessionId(payload: unknown): string {
+  const j = (payload ?? {}) as any;
+  return String(j?.session_id ?? j?.sessionId ?? j?.id ?? "").trim();
+}
+
+function toErrorDetail(e: unknown): string {
+  const anyE = e as any;
+  if (anyE?.name === "AbortError") return "timeout";
+  return String(anyE?.message ?? "network_error");
 }
 
 async function withTimeout<T>(
@@ -37,100 +40,50 @@ async function withTimeout<T>(
   }
 }
 
-function normalizeLogin(v: unknown) {
-  return String(v ?? "").trim();
-}
-function normalizePassword(v: unknown) {
-  return String(v ?? "").trim();
-}
-function normalizeMode(v: unknown): Mode {
-  const s = String(v ?? "login").trim().toLowerCase();
-  return s === "register" ? "register" : "login";
-}
-
-type ShmOpResult =
-  | { ok: true }
-  | { ok: false; status: number; detail: unknown };
-
-async function shmRegister(
-  login: string,
-  password: string
-): Promise<ShmOpResult> {
-  return withTimeout(12_000, async (signal) => {
-    const res = await fetch(`${shmV1()}/user`, {
-      method: "PUT",
-      headers: {
-        "content-type": "application/json",
-        accept: "application/json",
-      },
-      body: JSON.stringify({ login, password }),
-      signal,
-    });
-
-    const json = await safeReadJson(res);
-    const text = json ? "" : await res.text().catch(() => "");
-
-    if (!res.ok) {
-      return {
-        ok: false,
-        status: res.status || 400,
-        detail: json ?? text,
-      };
-    }
-
-    return { ok: true };
+async function shmRegister(login: string, password: string, signal: AbortSignal) {
+  // PUT /shm/v1/user  { login, password }
+  const r = await shmFetch<any>(null, "v1/user", {
+    method: "PUT",
+    body: { login, password },
+    signal,
   });
+
+  if (r.ok) return { ok: true as const };
+  return {
+    ok: false as const,
+    status: r.status || 400,
+    detail: r.json ?? r.text,
+  };
 }
 
-function extractSessionId(payload: unknown): string {
-  // SHM /user/auth обычно возвращает { session_id: "..." }
-  // Но оставим безопасные фоллбэки.
-  const j = (payload ?? {}) as any;
-  return String(j?.session_id ?? j?.sessionId ?? j?.id ?? "").trim();
-}
-
-async function shmLogin(login: string, password: string): Promise<AuthResult> {
-  return withTimeout(12_000, async (signal) => {
-    const res = await fetch(`${shmV1()}/user/auth`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        accept: "application/json",
-      },
-      body: JSON.stringify({ login, password }),
-      signal,
-    });
-
-    const json = await safeReadJson(res);
-    const text = json ? "" : await res.text().catch(() => "");
-
-    if (!res.ok) {
-      return {
-        ok: false,
-        status: res.status || 401,
-        error: "shm_auth_failed",
-        detail: json ?? text,
-      };
-    }
-
-    const sessionId = extractSessionId(json);
-    if (!sessionId) {
-      return {
-        ok: false,
-        status: 502,
-        error: "shm_auth_invalid_response",
-        detail: json ?? text,
-      };
-    }
-
-    return { ok: true, shmSessionId: sessionId, login };
+async function shmLogin(login: string, password: string, signal: AbortSignal): Promise<AuthResult> {
+  // POST /shm/v1/user/auth  { login, password }
+  const r = await shmFetch<any>(null, "v1/user/auth", {
+    method: "POST",
+    body: { login, password },
+    signal,
   });
-}
 
-function toErrorDetail(e: unknown): string {
-  const anyE = e as any;
-  if (anyE?.name === "AbortError") return "timeout";
-  return String(anyE?.message ?? "network_error");
+  if (!r.ok) {
+    return {
+      ok: false,
+      status: r.status || 401,
+      error: "shm_auth_failed",
+      detail: r.json ?? r.text,
+    };
+  }
+
+  const sessionId = extractSessionId(r.json);
+  if (!sessionId) {
+    return {
+      ok: false,
+      status: 502,
+      error: "shm_auth_invalid_response",
+      detail: r.json ?? r.text,
+    };
+  }
+
+  return { ok: true, shmSessionId: sessionId, login };
 }
 
 export async function passwordAuth(body: any): Promise<AuthResult> {
@@ -141,27 +94,31 @@ export async function passwordAuth(body: any): Promise<AuthResult> {
   if (!login || !password) {
     return { ok: false, status: 400, error: "login_and_password_required" };
   }
-  if (login.length < 3) return { ok: false, status: 400, error: "login_too_short" };
+  if (login.length < 3) {
+    return { ok: false, status: 400, error: "login_too_short" };
+  }
   if (password.length < 8) {
     return { ok: false, status: 400, error: "password_too_short" };
   }
 
   try {
-    if (mode === "register") {
-      const r = await shmRegister(login, password);
-      if (!r.ok) {
-        return {
-          ok: false,
-          status: r.status,
-          error: "shm_register_failed",
-          detail: r.detail,
-        };
+    return await withTimeout(12_000, async (signal) => {
+      if (mode === "register") {
+        const reg = await shmRegister(login, password, signal);
+        if (!reg.ok) {
+          return {
+            ok: false,
+            status: reg.status,
+            error: "shm_register_failed",
+            detail: reg.detail,
+          };
+        }
+        // после регистрации — сразу логиним
+        return await shmLogin(login, password, signal);
       }
-      // после регистрации — сразу логиним
-      return await shmLogin(login, password);
-    }
 
-    return await shmLogin(login, password);
+      return await shmLogin(login, password, signal);
+    });
   } catch (e: unknown) {
     const msg = toErrorDetail(e);
     return {
