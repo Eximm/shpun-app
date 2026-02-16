@@ -50,6 +50,32 @@ export default defineConfig({
           },
         ],
       },
+
+      // ✅ КРИТИЧНО: API никогда не должно попадать под SW кеш/навигацию
+      workbox: {
+        // если Workbox включает navigateFallback (SPA), то запрещаем /api/*
+        navigateFallbackDenylist: [/^\/api\//],
+
+        // на всякий: API всегда NetworkOnly
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) => url.pathname.startsWith("/api/"),
+            handler: "NetworkOnly",
+            method: "GET",
+            options: {
+              cacheName: "api-never-cache",
+            },
+          },
+          {
+            urlPattern: ({ url }) => url.pathname.startsWith("/api/"),
+            handler: "NetworkOnly",
+            method: "POST",
+            options: {
+              cacheName: "api-never-cache",
+            },
+          },
+        ],
+      },
     }),
   ],
 
