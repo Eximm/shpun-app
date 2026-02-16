@@ -25,10 +25,34 @@ export const SHM_BASE = normalizeBase(
   process.env.SHM_BASE ?? "https://bill.shpyn.online/shm/"
 );
 
-export function toFormUrlEncoded(obj: Record<string, unknown>) {
-  const p = new URLSearchParams();
-  for (const [k, v] of Object.entries(obj)) p.set(k, String(v ?? ""));
-  return p.toString();
+function envBool(name: string, def = false): boolean {
+  const v = String(process.env[name] ?? "").trim().toLowerCase();
+  if (!v) return def;
+  return v === "1" || v === "true" || v === "yes" || v === "on";
+}
+
+const SHM_DEBUG = envBool("SHM_DEBUG", false) || envBool("AUTH_DEBUG", false);
+
+function dbg(label: string, data: Record<string, any>) {
+  if (!SHM_DEBUG) return;
+  // Логируем коротко и безопасно (не выводим session-id/пароли)
+  try {
+    console.debug(
+      JSON.stringify({
+        level: "debug",
+        time: Date.now(),
+        shm: { label, ...data },
+      })
+    );
+  } catch {
+    // ignore
+  }
+}
+
+function clip(s: string, n = 400) {
+  const t = String(s ?? "");
+  if (t.length <= n) return t;
+  return t.slice(0, n) + "…";
 }
 
 function safeJsonParse(text: string): unknown | null {
@@ -39,6 +63,12 @@ function safeJsonParse(text: string): unknown | null {
   }
 }
 
+export function toFormUrlEncoded(obj: Record<string, unknown>) {
+  const p = new URLSearchParams();
+  for (const [k, v] of Object.entries(obj)) p.set(k, String(v ?? ""));
+  return p.toString();
+}
+
 type ShmFetchOpts = {
   method?: string;
   query?: Record<string, string | number | boolean | null | undefined>;
@@ -46,6 +76,25 @@ type ShmFetchOpts = {
   body?: string | Record<string, any> | null;
   signal?: AbortSignal;
 };
+
+function sanitizeUrlForLog(u: URL): string {
+  // Не логируем гигантские/чувствительные query целиком.
+  // Оставим только ключи и первые символы значений.
+  const safe = new URL(u.toString());
+  for (const [k, v] of safe.searchParams.entries()) {
+    const vv = String(v ?? "");
+    // initData может быть большим — режем
+    safe.searchParams.set(k, vv.length > 32 ? vv.slice(0, 32) + "…" : vv);
+  }
+  return safe.toString();
+}
+
+function isProbablyHtml(text: string, contentType: string) {
+  const ct = (contentType || "").toLowerCase();
+  if (ct.includes("text/html")) return true;
+  const t = (text || "").trim().toLowerCase();
+  return t.startsWith("<!doctype html") || t.startsWith("<html");
+}
 
 export async function shmFetch<T = unknown>(
   sessionId: string | null,
@@ -62,11 +111,14 @@ export async function shmFetch<T = unknown>(
     }
   }
 
+  const method = String(opts?.method ?? "GET").toUpperCase();
+
   const headers: Record<string, string> = {
     Accept: "application/json",
     ...(opts?.headers ?? {}),
   };
 
+  // session-id не логируем
   if (sessionId) headers["session-id"] = sessionId;
 
   let body: any = opts?.body ?? undefined;
@@ -77,20 +129,54 @@ export async function shmFetch<T = unknown>(
     body = JSON.stringify(body);
   }
 
-  const res = await fetch(url.toString(), {
-    method: opts?.method ?? "GET",
-    headers,
-    body,
-    signal: opts?.signal,
+  const startedAt = Date.now();
+  dbg("request", {
+    method,
+    url: sanitizeUrlForLog(url),
+    hasSessionId: !!sessionId,
+    contentType: headers["Content-Type"] || "",
   });
 
-  const text = await res.text().catch(() => "");
+  try {
+    const res = await fetch(url.toString(), {
+      method,
+      headers,
+      body,
+      signal: opts?.signal,
+    });
 
-  // SHM иногда отдаёт JSON без корректного content-type — парсим мягко всегда
-  const parsed = safeJsonParse(text);
-  const json = parsed !== null ? (parsed as T) : undefined;
+    const contentType = String(res.headers.get("content-type") ?? "");
+    const text = await res.text().catch(() => "");
+    const ms = Date.now() - startedAt;
 
-  return { ok: res.ok, status: res.status, json, text };
+    // SHM иногда отдаёт JSON без корректного content-type — парсим мягко всегда
+    const parsed = safeJsonParse(text);
+    const json = parsed !== null ? (parsed as T) : undefined;
+
+    dbg("response", {
+      method,
+      url: sanitizeUrlForLog(url),
+      status: res.status,
+      ok: res.ok,
+      ms,
+      contentType,
+      looksHtml: isProbablyHtml(text, contentType),
+      text: clip(text, 400),
+      parsedJson: parsed !== null,
+    });
+
+    return { ok: res.ok, status: res.status, json, text };
+  } catch (e: any) {
+    const ms = Date.now() - startedAt;
+    const msg = String(e?.message ?? e ?? "unknown_fetch_error");
+    dbg("fetch_error", {
+      method,
+      url: sanitizeUrlForLog(url),
+      ms,
+      error: clip(msg, 300),
+    });
+    return { ok: false, status: 502, text: `fetch_error:${msg}` };
+  }
 }
 
 /**
@@ -132,14 +218,10 @@ export async function shmAuthWithPassword(login: string, password: string) {
  */
 export async function shmTelegramWebAppAuth(initData: string) {
   const clean = String(initData ?? "").trim();
-  return await shmFetch<{ session_id?: string }>(
-    null,
-    "v1/telegram/webapp/auth",
-    {
-      method: "GET",
-      query: { initData: clean },
-    }
-  );
+  return await shmFetch<{ session_id?: string }>(null, "v1/telegram/webapp/auth", {
+    method: "GET",
+    query: { initData: clean },
+  });
 }
 
 /**
@@ -149,7 +231,7 @@ export async function shmTelegramWebAppAuth(initData: string) {
  * POST /shm/v1/telegram/web/auth
  * Ответ: { session_id: string }
  *
- * Payload: объект, который отдаёт Telegram widget (id, first_name, auth_date, hash, ...)
+ * Payload: объект, который отдаёт Telegram widget (id, first_name, auth_date, hash, ...).
  * SHM сам валидирует подпись — мы не проверяем.
  */
 export async function shmTelegramWebAuth(widgetPayload: Record<string, any>) {

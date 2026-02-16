@@ -22,13 +22,16 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: "prompt",
+      // 🔥 ВАЖНО: чтобы новый SW сам обновлялся без ожидания “Prompt”
+      registerType: "autoUpdate",
+
       includeAssets: [
         "icons/icon-192.png",
         "icons/icon-512.png",
         "icons/icon-512-maskable.png",
         "icons/apple-touch-icon.png",
       ],
+
       manifest: {
         name: "ShpunApp",
         short_name: "ShpunApp",
@@ -51,28 +54,21 @@ export default defineConfig({
         ],
       },
 
-      // ✅ КРИТИЧНО: API никогда не должно попадать под SW кеш/навигацию
       workbox: {
-        // если Workbox включает navigateFallback (SPA), то запрещаем /api/*
+        // ✅ новый SW активируется сразу
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
+
+        // ✅ КРИТИЧНО: любые навигации на /api/* не должны попадать под SPA fallback
         navigateFallbackDenylist: [/^\/api\//],
 
-        // на всякий: API всегда NetworkOnly
+        // ✅ И на всякий: /api/* никогда не кешируем, всегда в сеть
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.pathname.startsWith("/api/"),
             handler: "NetworkOnly",
-            method: "GET",
-            options: {
-              cacheName: "api-never-cache",
-            },
-          },
-          {
-            urlPattern: ({ url }) => url.pathname.startsWith("/api/"),
-            handler: "NetworkOnly",
-            method: "POST",
-            options: {
-              cacheName: "api-never-cache",
-            },
+            options: { cacheName: "api-never-cache" },
           },
         ],
       },
