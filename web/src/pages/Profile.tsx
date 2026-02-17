@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMe } from "../app/auth/useMe";
 import { apiFetch } from "../shared/api/client";
@@ -18,28 +18,22 @@ function formatDate(v?: string | null) {
   return s ? s : "—";
 }
 
-function isTelegramWebView() {
-  const w = window as any;
-  const hasTg = !!w?.Telegram?.WebApp;
-  const ua = String(navigator.userAgent || "");
-  return hasTg || ua.includes("Telegram");
-}
-
-function isStandaloneMode() {
-  const w = window as any;
-  if (typeof w?.navigator?.standalone === "boolean") return !!w.navigator.standalone; // iOS
-  return window.matchMedia?.("(display-mode: standalone)")?.matches ?? false;
-}
-
-type InstallPromptEvent = Event & {
-  prompt?: () => Promise<void>;
-  userChoice?: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
-};
-
-function CardTitle({ children }: { children: any }) {
+function CardTitle({
+  icon,
+  children,
+  right,
+}: {
+  icon?: string;
+  children: any;
+  right?: any;
+}) {
   return (
-    <div className="h1" style={{ fontSize: 18, margin: 0 }}>
-      {children}
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+      <div className="h1" style={{ fontSize: 18, margin: 0, display: "flex", alignItems: "center", gap: 10 }}>
+        {icon ? <span aria-hidden="true">{icon}</span> : null}
+        <span>{children}</span>
+      </div>
+      {right}
     </div>
   );
 }
@@ -52,31 +46,81 @@ function SmallMuted({ children }: { children: any }) {
   );
 }
 
-function FieldRow({
+function Badge({
+  text,
+  tone = "neutral",
+}: {
+  text: string;
+  tone?: "ok" | "soon" | "neutral";
+}) {
+  const bg =
+    tone === "ok" ? "rgba(46, 204, 113, .14)" : tone === "soon" ? "rgba(241, 196, 15, .14)" : "rgba(255,255,255,.08)";
+  const bd =
+    tone === "ok" ? "rgba(46, 204, 113, .35)" : tone === "soon" ? "rgba(241, 196, 15, .35)" : "rgba(255,255,255,.12)";
+  return (
+    <span
+      style={{
+        fontSize: 12,
+        padding: "4px 8px",
+        borderRadius: 999,
+        border: `1px solid ${bd}`,
+        background: bg,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {text}
+    </span>
+  );
+}
+
+function RowLine({
+  icon,
   label,
   value,
-  action,
+  right,
+  hint,
 }: {
+  icon?: string;
   label: string;
-  value: any;
-  action?: any;
+  value?: any;
+  right?: any;
+  hint?: any;
 }) {
   return (
-    <div className="kv__item">
-      <div className="kv__k">{label}</div>
-      <div
-        className="kv__v"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          flexWrap: "nowrap",
-          width: "100%",
-        }}
-      >
-        <div style={{ minWidth: 0, flex: 1 }}>{value}</div>
-        {action}
+    <div
+      style={{
+        padding: "10px 12px",
+        borderRadius: 14,
+        border: "1px solid rgba(255,255,255,.08)",
+        background: "rgba(255,255,255,.02)",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+          {icon ? <span aria-hidden="true" style={{ opacity: 0.9 }}>{icon}</span> : null}
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 12, opacity: 0.7 }}>{label}</div>
+            {value != null ? (
+              <div
+                style={{
+                  fontSize: 14,
+                  fontWeight: 600,
+                  marginTop: 2,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {value}
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        {right ? <div style={{ display: "flex", alignItems: "center", gap: 10 }}>{right}</div> : null}
       </div>
+
+      {hint ? <div style={{ marginTop: 6, fontSize: 12, opacity: 0.7 }}>{hint}</div> : null}
     </div>
   );
 }
@@ -138,18 +182,8 @@ function Toast({ text }: { text: string }) {
           from { opacity: 0; transform: translateY(-6px); }
           to   { opacity: 1; transform: translateY(0); }
         }
-        @keyframes shp_toast_out {
-          from { opacity: 1; transform: translateY(0); }
-          to   { opacity: 0; transform: translateY(-6px); }
-        }
       `}</style>
-      <div
-        className="pre"
-        style={{
-          marginTop: 12,
-          animation: "shp_toast_in 140ms ease-out",
-        }}
-      >
+      <div className="pre" style={{ marginTop: 12, animation: "shp_toast_in 140ms ease-out" }}>
         {text}
       </div>
     </>
@@ -173,14 +207,13 @@ export function Profile() {
   const created = profile?.created ?? null;
   const lastLogin = profile?.lastLogin ?? null;
 
-  // ---- Local UI state (to avoid full refetch after saves) ----
   const [toast, setToast] = useState<string | null>(null);
   function showToast(msg: string) {
     setToast(msg);
     window.setTimeout(() => setToast(null), 1800);
   }
 
-  // Personal fields
+  // Personal
   const [editPersonal, setEditPersonal] = useState(false);
   const [savingPersonal, setSavingPersonal] = useState(false);
   const [personalError, setPersonalError] = useState<string | null>(null);
@@ -190,37 +223,6 @@ export function Profile() {
   const [savedFullName, setSavedFullName] = useState<string>("");
   const [savedPhone, setSavedPhone] = useState<string>("");
 
-  // Telegram
-  const [telegramLocal, setTelegramLocal] = useState<any>(null);
-  const telegramRaw = telegramLocal ?? me?.telegram ?? null;
-
-  const telegramLogin = useMemo(() => {
-    const raw = telegramRaw?.login ?? telegramRaw?.username ?? "";
-    const s = String(raw ?? "").trim();
-    if (!s) return "";
-    return s.startsWith("@") ? s : `@${s}`;
-  }, [telegramRaw?.login, telegramRaw?.username]);
-
-  // Copy login
-  const [copied, setCopied] = useState(false);
-
-  // Logout
-  const [loggingOut, setLoggingOut] = useState(false);
-
-  // Telegram modal
-  const [tgModal, setTgModal] = useState(false);
-  const [tgLoginDraft, setTgLoginDraft] = useState<string>("");
-  const [savingTg, setSavingTg] = useState(false);
-  const [tgError, setTgError] = useState<string | null>(null);
-
-  // PWA install state
-  const [tgWebView, setTgWebView] = useState<boolean>(() => isTelegramWebView());
-  const [standalone, setStandalone] = useState<boolean>(() => isStandaloneMode());
-  const installEventRef = useRef<InstallPromptEvent | null>(null);
-  const [canInstall, setCanInstall] = useState<boolean>(false);
-  const [installing, setInstalling] = useState<boolean>(false);
-
-  // Sync local fields from /me
   useEffect(() => {
     const fn = String(profile?.fullName ?? profile?.full_name ?? profile?.displayName ?? "").trim();
     const ph = String(profile?.phone ?? "").trim();
@@ -228,65 +230,8 @@ export function Profile() {
     setPhone(ph);
     setSavedFullName(fn);
     setSavedPhone(ph);
-    // do not include editPersonal to avoid overriding during edit
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.fullName, profile?.full_name, profile?.displayName, profile?.phone]);
-
-  useEffect(() => {
-    // keep local telegram snapshot in sync with /me when not yet changed locally
-    if (!telegramLocal && me?.telegram) setTelegramLocal(me.telegram);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [me?.telegram]);
-
-  useEffect(() => {
-    if (!tgModal) {
-      setTgLoginDraft(String(telegramLogin || "").replace(/^@/, ""));
-      setTgError(null);
-    }
-  }, [tgModal, telegramLogin]);
-
-  useEffect(() => {
-    const onBip = (e: Event) => {
-      e.preventDefault?.();
-      installEventRef.current = e as InstallPromptEvent;
-      setCanInstall(true);
-    };
-    window.addEventListener("beforeinstallprompt", onBip as any);
-
-    const refreshEnv = () => {
-      setTgWebView(isTelegramWebView());
-      setStandalone(isStandaloneMode());
-    };
-    window.addEventListener("resize", refreshEnv);
-    document.addEventListener("visibilitychange", refreshEnv);
-
-    return () => {
-      window.removeEventListener("beforeinstallprompt", onBip as any);
-      window.removeEventListener("resize", refreshEnv);
-      document.removeEventListener("visibilitychange", refreshEnv);
-    };
-  }, []);
-
-  async function logout() {
-    setLoggingOut(true);
-    try {
-      await apiFetch("/logout", { method: "POST" });
-    } finally {
-      setLoggingOut(false);
-      nav("/login", { replace: true });
-    }
-  }
-
-  async function doCopyLogin() {
-    if (!loginText) return;
-    await copyToClipboard(loginText);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1200);
-  }
-
-  function goChangePassword() {
-    nav("/set-password?intent=change&redirect=/profile");
-  }
 
   async function savePersonal() {
     setPersonalError(null);
@@ -305,7 +250,6 @@ export function Profile() {
 
       setSavedFullName(payload.full_name);
       setSavedPhone(payload.phone);
-
       setEditPersonal(false);
       showToast("Данные сохранены ✅");
     } catch (e: any) {
@@ -321,6 +265,34 @@ export function Profile() {
     setFullName(savedFullName);
     setPhone(savedPhone);
   }
+
+  // Telegram binding
+  const [telegramLocal, setTelegramLocal] = useState<any>(null);
+  const telegramRaw = telegramLocal ?? me?.telegram ?? null;
+
+  useEffect(() => {
+    if (!telegramLocal && me?.telegram) setTelegramLocal(me.telegram);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [me?.telegram]);
+
+  const telegramLogin = useMemo(() => {
+    const raw = telegramRaw?.login ?? telegramRaw?.username ?? "";
+    const s = String(raw ?? "").trim();
+    if (!s) return "";
+    return s.startsWith("@") ? s : `@${s}`;
+  }, [telegramRaw?.login, telegramRaw?.username]);
+
+  const [tgModal, setTgModal] = useState(false);
+  const [tgLoginDraft, setTgLoginDraft] = useState<string>("");
+  const [savingTg, setSavingTg] = useState(false);
+  const [tgError, setTgError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!tgModal) {
+      setTgLoginDraft(String(telegramLogin || "").replace(/^@/, ""));
+      setTgError(null);
+    }
+  }, [tgModal, telegramLogin]);
 
   async function saveTelegramLogin() {
     setTgError(null);
@@ -342,10 +314,8 @@ export function Profile() {
         body: JSON.stringify({ login: clean }),
       });
 
-      // /api/user/telegram returns { ok: true, telegram: ... }
       const tg = resp?.telegram ?? null;
       if (tg) {
-        // normalize to what /me provides
         setTelegramLocal({
           login: tg.login ?? clean,
           username: tg.username ?? null,
@@ -365,31 +335,30 @@ export function Profile() {
     }
   }
 
-  function openLoginInBrowser() {
-    const url = `${window.location.origin}/login`;
-    const w = window as any;
-    if (w?.Telegram?.WebApp?.openLink) w.Telegram.WebApp.openLink(url);
-    else window.open(url, "_blank", "noopener,noreferrer");
+  // Copy login
+  const [copied, setCopied] = useState(false);
+  async function doCopyLogin() {
+    if (!loginText) return;
+    await copyToClipboard(loginText);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1200);
   }
 
-  async function doInstallPwa() {
-    const ev = installEventRef.current;
-    if (!ev?.prompt) return;
-    setInstalling(true);
+  // Logout / password
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  async function logout() {
+    setLoggingOut(true);
     try {
-      await ev.prompt();
-      try {
-        await ev.userChoice;
-      } catch {
-        // ignore
-      }
-      setStandalone(isStandaloneMode());
-      setCanInstall(false);
-      installEventRef.current = null;
-      showToast("Установка завершена ✅");
+      await apiFetch("/logout", { method: "POST" });
     } finally {
-      setInstalling(false);
+      setLoggingOut(false);
+      nav("/login", { replace: true });
     }
+  }
+
+  function goChangePassword() {
+    nav("/set-password?intent=change&redirect=/profile");
   }
 
   if (loading) {
@@ -426,30 +395,27 @@ export function Profile() {
     );
   }
 
-  const pwaTitle = tgWebView ? "Открыто в Telegram" : standalone ? "Установлено" : "Открыто в браузере";
-  const pwaHint = tgWebView
-    ? "Для установки PWA откройте приложение в браузере и войдите через Telegram Widget."
-    : standalone
-    ? "Приложение установлено и будет открываться как отдельное."
-    : canInstall
-    ? "Можно установить приложение одним нажатием."
-    : "Если кнопки установки нет — используйте меню браузера: «Установить приложение / Add to Home screen».";
+  const personalNameView = savedFullName || profile?.displayName || "—";
+  const personalPhoneView = savedPhone || "—";
+  const telegramStatusBadge = telegramLogin ? <Badge text="Привязан" tone="ok" /> : <Badge text="Не привязан" />;
+  const soonBadge = <Badge text="Скоро" tone="soon" />;
 
   return (
     <div className="section">
       {/* Header */}
       <div className="card">
         <div className="card__body">
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-            <div>
-              <h1 className="h1">{t("profile.title")}</h1>
-              <p className="p">Управление аккаунтом и привязками</p>
-            </div>
-
-            <button className="btn" onClick={() => refetch?.()} title={t("profile.refresh")}>
-              {t("profile.refresh")}
-            </button>
-          </div>
+          <CardTitle
+            icon="👤"
+            right={
+              <button className="btn" onClick={() => refetch?.()} title={t("profile.refresh")}>
+                {t("profile.refresh")}
+              </button>
+            }
+          >
+            {t("profile.title")}
+          </CardTitle>
+          <p className="p">Аккаунт • привязки • настройки</p>
 
           {toast ? <Toast text={toast} /> : null}
 
@@ -457,39 +423,29 @@ export function Profile() {
             style={{
               marginTop: 14,
               display: "grid",
-              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+              gridTemplateColumns: "1fr",
               gap: 10,
             }}
           >
             <button className="btn" onClick={goChangePassword} style={{ width: "100%" }}>
-              {t("profile.change_password")}
+              🔐 {t("profile.change_password")}
             </button>
 
             <button className="btn btn--danger" onClick={logout} disabled={loggingOut} style={{ width: "100%" }}>
-              {loggingOut ? "…" : t("profile.logout")}
+              🚪 {loggingOut ? "…" : t("profile.logout")}
             </button>
           </div>
         </div>
       </div>
 
-      {/* Two-column layout */}
-      <div
-        style={{
-          marginTop: 14,
-          display: "grid",
-          gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-          gap: 14,
-        }}
-      >
-        {/* LEFT */}
-        <div style={{ display: "grid", gap: 14 }}>
-          {/* Personal */}
-          <div className="card">
-            <div className="card__body">
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                <CardTitle>Личные данные</CardTitle>
-
-                {!editPersonal ? (
+      {/* Personal */}
+      <div className="section" style={{ marginTop: 14 }}>
+        <div className="card">
+          <div className="card__body">
+            <CardTitle
+              icon="🪪"
+              right={
+                !editPersonal ? (
                   <button className="btn" onClick={() => setEditPersonal(true)}>
                     Редактировать
                   </button>
@@ -502,198 +458,152 @@ export function Profile() {
                       Отмена
                     </button>
                   </div>
-                )}
+                )
+              }
+            >
+              Личные данные
+            </CardTitle>
+
+            {personalError ? (
+              <div className="pre" style={{ marginTop: 10 }}>
+                {personalError}
               </div>
+            ) : null}
 
-              {personalError ? (
-                <div className="pre" style={{ marginTop: 10 }}>
-                  {personalError}
-                </div>
-              ) : null}
+            <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+              <RowLine
+                icon="🙍"
+                label="Имя"
+                value={
+                  editPersonal ? (
+                    <input
+                      className="input"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      placeholder="Полное имя"
+                      style={{ width: "100%" }}
+                    />
+                  ) : (
+                    personalNameView
+                  )
+                }
+              />
 
-              <div className="kv" style={{ marginTop: 10 }}>
-                <FieldRow
-                  label="Имя"
-                  value={
-                    editPersonal ? (
-                      <input
-                        className="input"
-                        value={fullName}
-                        onChange={(e) => setFullName(e.target.value)}
-                        placeholder="Полное имя"
-                        style={{ width: "100%" }}
-                      />
-                    ) : (
-                      savedFullName || profile?.displayName || "—"
-                    )
-                  }
-                />
+              <RowLine
+                icon="📞"
+                label="Телефон"
+                value={
+                  editPersonal ? (
+                    <input
+                      className="input"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="Например: +7 912 345-67-89"
+                      style={{ width: "100%" }}
+                    />
+                  ) : (
+                    personalPhoneView
+                  )
+                }
+              />
 
-                <FieldRow
-                  label="Телефон"
-                  value={
-                    editPersonal ? (
-                      <input
-                        className="input"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        placeholder="+47…"
-                        style={{ width: "100%" }}
-                      />
-                    ) : (
-                      savedPhone || "—"
-                    )
-                  }
-                />
-
-                <FieldRow
-                  label="Логин"
-                  value={
-                    <span
-                      style={{
-                        display: "block",
-                        minWidth: 0,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
+              <RowLine
+                icon="🆔"
+                label="Логин"
+                value={loginText || "—"}
+                right={
+                  loginText ? (
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={doCopyLogin}
+                      style={{ padding: "6px 10px" }}
+                      title="Copy"
                     >
-                      {loginText || "—"}
-                    </span>
-                  }
-                  action={
-                    loginText ? (
-                      <button
-                        type="button"
-                        className="btn"
-                        onClick={doCopyLogin}
-                        style={{ padding: "6px 10px", marginLeft: "auto" }}
-                        title="Copy"
-                      >
-                        {copied ? t("profile.copied") : t("profile.copy")}
-                      </button>
-                    ) : null
-                  }
-                />
+                      {copied ? "✓" : "Копировать"}
+                    </button>
+                  ) : null
+                }
+              />
 
-                <FieldRow label="ID" value={profile?.id ?? "—"} />
-                <FieldRow label="Создан" value={formatDate(created)} />
-                <FieldRow label="Последний вход" value={formatDate(lastLogin)} />
-              </div>
-            </div>
-          </div>
-
-          {/* Settings (language + notifications) */}
-          <div className="card">
-            <div className="card__body">
-              <CardTitle>Настройки приложения</CardTitle>
-
-              <div style={{ marginTop: 10 }}>
-                <div className="p" style={{ margin: 0, opacity: 0.85 }}>
-                  Язык интерфейса
-                </div>
-
-                <div className="row" style={{ marginTop: 10 }}>
-                  <button
-                    type="button"
-                    className={`btn ${lang === "ru" ? "btn--primary" : ""}`}
-                    onClick={() => setLang("ru")}
-                  >
-                    {t("profile.lang.ru")}
-                  </button>
-
-                  <button
-                    type="button"
-                    className={`btn ${lang === "en" ? "btn--primary" : ""}`}
-                    onClick={() => setLang("en")}
-                  >
-                    {t("profile.lang.en")}
-                  </button>
-                </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+                <RowLine icon="🔢" label="ID" value={profile?.id ?? "—"} />
+                <RowLine icon="📅" label="Создан" value={formatDate(created)} />
               </div>
 
-              <div style={{ marginTop: 14 }}>
-                <div className="p" style={{ margin: 0, opacity: 0.85 }}>
-                  Уведомления
-                </div>
-                <SmallMuted>Скоро: управление Push/Telegram уведомлениями и важными событиями аккаунта.</SmallMuted>
-              </div>
+              <RowLine icon="🕒" label="Последний вход" value={formatDate(lastLogin)} />
             </div>
           </div>
         </div>
+      </div>
 
-        {/* RIGHT */}
-        <div style={{ display: "grid", gap: 14 }}>
-          {/* Auth & bindings */}
-          <div className="card">
-            <div className="card__body">
-              <CardTitle>Авторизация и привязки</CardTitle>
+      {/* Auth */}
+      <div className="section" style={{ marginTop: 14 }}>
+        <div className="card">
+          <div className="card__body">
+            <CardTitle icon="🔑">Авторизация и привязки</CardTitle>
 
-              <div className="kv" style={{ marginTop: 10 }}>
-                <div className="kv__item">
-                  <div className="kv__k">Telegram</div>
-                  <div
-                    className="kv__v"
-                    style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}
-                  >
-                    <span>
-                      {telegramLogin ? (
-                        <>
-                          <b>{telegramLogin}</b> <span style={{ opacity: 0.8 }}>— привязан</span>
-                        </>
-                      ) : (
-                        "Не привязан"
-                      )}
-                    </span>
+            <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+              <RowLine
+                icon="✈️"
+                label="Telegram"
+                value={telegramLogin ? `${telegramLogin}` : "Не привязан"}
+                right={
+                  <>
+                    {telegramStatusBadge}
                     <button className="btn" onClick={() => setTgModal(true)}>
                       {telegramLogin ? "Изменить" : "Привязать"}
                     </button>
-                  </div>
-                  <SmallMuted>Привязка Telegram используется для входа и уведомлений.</SmallMuted>
-                </div>
+                  </>
+                }
+                hint="Используется для входа и уведомлений."
+              />
 
-                <div className="kv__item">
-                  <div className="kv__k">Google</div>
-                  <div className="kv__v">Скоро</div>
-                </div>
-
-                <div className="kv__item">
-                  <div className="kv__k">Yandex</div>
-                  <div className="kv__v">Скоро</div>
-                </div>
-              </div>
+              <RowLine icon="🟦" label="Google" value="OAuth" right={soonBadge} />
+              <RowLine icon="🟥" label="Yandex" value="OAuth" right={soonBadge} />
             </div>
           </div>
+        </div>
+      </div>
 
-          {/* PWA */}
-          <div className="card">
-            <div className="card__body">
-              <CardTitle>PWA и установка</CardTitle>
+      {/* Settings */}
+      <div className="section" style={{ marginTop: 14 }}>
+        <div className="card">
+          <div className="card__body">
+            <CardTitle icon="⚙️">Настройки</CardTitle>
 
-              <div style={{ marginTop: 10 }}>
-                <div className="p" style={{ margin: 0, opacity: 0.85 }}>
-                  Статус: <b>{pwaTitle}</b>
-                </div>
-                <SmallMuted>{pwaHint}</SmallMuted>
-              </div>
+            <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+              <RowLine
+                icon="🌍"
+                label="Язык интерфейса"
+                value={lang === "ru" ? "Русский" : "English"}
+                right={
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      className={`btn ${lang === "ru" ? "btn--primary" : ""}`}
+                      onClick={() => setLang("ru")}
+                    >
+                      Русский
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn ${lang === "en" ? "btn--primary" : ""}`}
+                      onClick={() => setLang("en")}
+                    >
+                      English
+                    </button>
+                  </div>
+                }
+              />
 
-              <div style={{ marginTop: 12 }}>
-                {tgWebView ? (
-                  <button className="btn btn--primary" onClick={openLoginInBrowser} style={{ width: "100%" }}>
-                    Открыть в браузере (для установки)
-                  </button>
-                ) : (
-                  <button
-                    className={`btn ${canInstall && !standalone ? "btn--primary" : ""}`}
-                    onClick={doInstallPwa}
-                    disabled={!canInstall || installing || standalone}
-                    style={{ width: "100%" }}
-                    title={!canInstall ? "Браузер не предлагает установку сейчас." : ""}
-                  >
-                    {standalone ? "Уже установлено ✅" : installing ? "…" : canInstall ? "Установить" : "Установка недоступна"}
-                  </button>
-                )}
-              </div>
+              <RowLine
+                icon="🔔"
+                label="Уведомления"
+                value="Скоро"
+                right={soonBadge}
+                hint="Позже добавим управление Push/Telegram уведомлениями."
+              />
             </div>
           </div>
         </div>
@@ -713,7 +623,7 @@ export function Profile() {
           className="input"
           value={tgLoginDraft}
           onChange={(e) => setTgLoginDraft(e.target.value)}
-          placeholder="например: nivats"
+          placeholder="например: vasya_pupkin"
           style={{ width: "100%", marginTop: 8 }}
         />
 
