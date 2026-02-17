@@ -13,6 +13,7 @@ import {
   shmFetch,
   shmTelegramWebAppAuth,
   shmTelegramWebAuth,
+  toFormUrlEncoded,
 } from "../../shared/shm/shmClient.js";
 
 /* ============================================================
@@ -94,39 +95,6 @@ async function shmGetUserIdentity(sessionId: string): Promise<{
   return { userId, login };
 }
 
-async function callShmTemplate(
-  sessionId: string,
-  action: string,
-  extraData?: any
-): Promise<void> {
-  // best-effort: если шаблон временно отвалился — логин не ломаем
-  const r = await shmFetch<any>(null, "v1/template/shpun_app", {
-    method: "POST",
-    body: {
-      session_id: sessionId,
-      action,
-      ...(extraData ? { data: extraData } : {}),
-    },
-  });
-
-  if (!r.ok) throw new Error(`shm_template_failed:${r.status}`);
-}
-
-async function getPasswordSetFlag(shmSessionId: string): Promise<0 | 1> {
-  try {
-    const r = await shmFetch<any>(null, "v1/template/shpun_app", {
-      method: "POST",
-      body: { session_id: shmSessionId, action: "status" },
-    });
-
-    const v = (r.json as any)?.data?.auth?.password_set;
-    return v === 1 || v === "1" ? 1 : 0;
-  } catch {
-    // лучше считать установленным, чем гонять людей по кругу
-    return 1;
-  }
-}
-
 function getRequestIp(req: any): string {
   return String(req.headers?.["x-real-ip"] ?? req.ip ?? "").trim();
 }
@@ -142,13 +110,13 @@ function isHttps(req: any): boolean {
 }
 
 function cookieOptions(req: any) {
-  const isProd = String(process.env.NODE_ENV ?? "").trim().toLowerCase() === "production";
+  const isProd =
+    String(process.env.NODE_ENV ?? "").trim().toLowerCase() === "production";
 
   return {
     httpOnly: true,
     sameSite: "lax" as const,
 
-    // ВАЖНО:
     // В production всегда Secure=true (оба домена https).
     // Иначе при проблемах с X-Forwarded-Proto cookie может не сохраниться → /api/me 401.
     secure: isProd ? true : isHttps(req),
@@ -167,20 +135,84 @@ function isProbablyEmptyTelegramWidgetPayload(p: any): boolean {
   if (keys.length === 0) return true;
 
   const hasHash = typeof p.hash === "string" && p.hash.trim().length > 0;
-  const hasAuthDate = typeof p.auth_date === "string" || typeof p.auth_date === "number";
+  const hasAuthDate =
+    typeof p.auth_date === "string" || typeof p.auth_date === "number";
   const hasId = typeof p.id === "string" || typeof p.id === "number";
 
   return !(hasHash && hasAuthDate && hasId);
 }
 
 function mapShmAuthErrorStatus(st: number): number {
-  // SHM вернул “плохие данные/не авторизован” — не превращаем в 502
   if (st === 400) return 400;
   if (st === 401) return 401;
   if (st === 403) return 403;
-
-  // Остальное считаем проблемой апстрима/сети
   return 502;
+}
+
+/**
+ * Telegram MiniApp initData is querystring-like string.
+ * We only need user.id and user.username.
+ */
+function parseTelegramInitDataUser(initData: string): { tgId?: string; tgLogin?: string } {
+  try {
+    const qs = new URLSearchParams(String(initData ?? "").trim());
+    const userRaw = qs.get("user");
+    if (!userRaw) return {};
+
+    // user is JSON string
+    const u = JSON.parse(userRaw);
+    const tgId = u?.id != null ? String(u.id) : undefined;
+    const tgLogin =
+      u?.username != null ? String(u.username) : (u?.first_name != null ? String(u.first_name) : undefined);
+
+    return { tgId, tgLogin };
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * IMPORTANT:
+ * For SHM template we send application/x-www-form-urlencoded,
+ * because TT2 reads request.params reliably in that mode.
+ *
+ * Also: template expects telegram_id / telegram_login directly in params
+ * for action "auth.telegram".
+ */
+async function callShmTemplate(
+  sessionId: string,
+  action: string,
+  extraParams?: Record<string, any>
+): Promise<void> {
+  const flat: Record<string, any> = {
+    session_id: sessionId,
+    action,
+    ...(extraParams ?? {}),
+  };
+
+  const r = await shmFetch<any>(null, "v1/template/shpun_app", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: toFormUrlEncoded(flat),
+  });
+
+  if (!r.ok) throw new Error(`shm_template_failed:${r.status}`);
+}
+
+async function getPasswordSetFlag(shmSessionId: string): Promise<0 | 1> {
+  try {
+    const r = await shmFetch<any>(null, "v1/template/shpun_app", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: toFormUrlEncoded({ session_id: shmSessionId, action: "status" }),
+    });
+
+    const v = (r.json as any)?.data?.auth?.password_set;
+    return v === 1 || v === "1" ? 1 : 0;
+  } catch {
+    // лучше считать установленным, чем гонять людей по кругу
+    return 1;
+  }
 }
 
 /* ============================================================
@@ -199,11 +231,8 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(400).send({ ok: false, error: "init_data_required" });
     }
 
-    dbg(req, "tg_webapp_auth:incoming", {
-      initDataLen: initData.length,
-    });
+    dbg(req, "tg_webapp_auth:incoming", { initDataLen: initData.length });
 
-    // shmTelegramWebAppAuth возвращает ShmResult<{session_id?:string}>
     const rr = await shmTelegramWebAppAuth(initData);
 
     dbg(req, "tg_webapp_auth:shm_result", {
@@ -231,10 +260,7 @@ export async function authRoutes(app: FastifyInstance) {
       shmUserId = ident.userId;
       login = ident.login;
     } catch {
-      return reply.code(502).send({
-        ok: false,
-        error: "shm_user_lookup_failed",
-      });
+      return reply.code(502).send({ ok: false, error: "shm_user_lookup_failed" });
     }
 
     const localSid = createLocalSid();
@@ -245,9 +271,13 @@ export async function authRoutes(app: FastifyInstance) {
       telegramInitData: initData, // нужно для re-auth после смены пароля
     });
 
-    // фиксация входа через Telegram (best-effort)
+    // фиксация входа/привязки телеги (best-effort)
+    // ВАЖНО: TT2 требует telegram_id
     try {
+      const { tgId, tgLogin } = parseTelegramInitDataUser(initData);
       await callShmTemplate(shmSessionId, "auth.telegram", {
+        telegram_id: tgId ?? "",
+        telegram_login: tgLogin ?? "",
         ip: getRequestIp(req),
         ua: String(req.headers["user-agent"] ?? ""),
       });
@@ -280,14 +310,13 @@ export async function authRoutes(app: FastifyInstance) {
       id: maskValue(body?.id),
       auth_date: maskValue(body?.auth_date),
       hash: maskValue(body?.hash),
+      username: maskValue(body?.username),
     });
 
-    // Пустой/непохожий payload — это 400, а не 502
     if (isProbablyEmptyTelegramWidgetPayload(body)) {
       return reply.code(400).send({ ok: false, error: "missing_telegram_payload" });
     }
 
-    // shmTelegramWebAuth возвращает ShmResult<{session_id?:string}>
     const rr = await shmTelegramWebAuth(body);
 
     dbg(req, "tg_widget_post:shm_result", {
@@ -315,22 +344,17 @@ export async function authRoutes(app: FastifyInstance) {
       shmUserId = ident.userId;
       login = ident.login;
     } catch {
-      return reply.code(502).send({
-        ok: false,
-        error: "shm_user_lookup_failed",
-      });
+      return reply.code(502).send({ ok: false, error: "shm_user_lookup_failed" });
     }
 
     const localSid = createLocalSid();
-    putSession(localSid, {
-      shmSessionId,
-      shmUserId,
-      createdAt: Date.now(),
-    });
+    putSession(localSid, { shmSessionId, shmUserId, createdAt: Date.now() });
 
-    // фиксация входа через Telegram (best-effort)
+    // фиксация входа/привязки телеги (best-effort)
     try {
       await callShmTemplate(shmSessionId, "auth.telegram", {
+        telegram_id: body?.id != null ? String(body.id) : "",
+        telegram_login: body?.username != null ? String(body.username) : "",
         ip: getRequestIp(req),
         ua: String(req.headers["user-agent"] ?? ""),
       });
@@ -363,6 +387,7 @@ export async function authRoutes(app: FastifyInstance) {
       id: maskValue(payload?.id),
       auth_date: maskValue(payload?.auth_date),
       hash: maskValue(payload?.hash),
+      username: maskValue(payload?.username),
     });
 
     if (isProbablyEmptyTelegramWidgetPayload(payload)) {
@@ -378,11 +403,7 @@ export async function authRoutes(app: FastifyInstance) {
       shmSessionId: maskValue(rr.json?.session_id),
     });
 
-    if (!rr.ok) {
-      // полезно различать “невалидный payload” и “апстрим упал”
-      // но для UI достаточно общего кода
-      return reply.redirect("/login?e=tg_widget_failed");
-    }
+    if (!rr.ok) return reply.redirect("/login?e=tg_widget_failed");
 
     const shmSessionId = String(rr.json?.session_id ?? "").trim();
     if (!shmSessionId) return reply.redirect("/login?e=no_shm_session");
@@ -400,9 +421,11 @@ export async function authRoutes(app: FastifyInstance) {
     const localSid = createLocalSid();
     putSession(localSid, { shmSessionId, shmUserId, createdAt: Date.now() });
 
-    // фиксация входа через Telegram (best-effort)
+    // фиксация входа/привязки телеги (best-effort)
     try {
       await callShmTemplate(shmSessionId, "auth.telegram", {
+        telegram_id: payload?.id != null ? String(payload.id) : "",
+        telegram_login: payload?.username != null ? String(payload.username) : "",
         ip: getRequestIp(req),
         ua: String(req.headers["user-agent"] ?? ""),
       });
@@ -446,7 +469,6 @@ export async function authRoutes(app: FastifyInstance) {
     let shmUserId = Number(result.shmUserId ?? 0) || 0;
     let login = String(result.login ?? "").trim();
 
-    // если provider не вернул user/login — доберём из /v1/user
     if (!shmUserId || !login) {
       try {
         const ident = await shmGetUserIdentity(shmSessionId);

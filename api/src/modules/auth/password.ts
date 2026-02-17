@@ -43,7 +43,7 @@ export async function setPassword(
     return { ok: false, status: 401, error: "not_authenticated" };
   }
 
-  // SHM: POST /user/passwd  { password }
+  // SHM: POST /v1/user/passwd  { password }
   const res = await fetch(`${shmV1()}/user/passwd`, {
     method: "POST",
     headers: {
@@ -66,18 +66,9 @@ export async function setPassword(
     };
   }
 
-  // best-effort: отметить в settings (не ломаем flow если упало)
-  await fetch(`${shmV1()}/template/shpun_app`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      accept: "application/json",
-    },
-    body: JSON.stringify({
-      session_id: String(s.shmSessionId),
-      action: "password.mark_set",
-    }),
-  }).catch(() => undefined);
-
+  // ВАЖНО:
+  // фиксацию password_set делаем НЕ здесь.
+  // После смены пароля SHM может ротировать session_id,
+  // поэтому mark_set выполняем в auth/routes.ts ПОСЛЕ re-auth.
   return { ok: true };
 }
