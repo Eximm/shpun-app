@@ -18,6 +18,9 @@ export type AppSession = {
 
   // важно для re-auth после смены пароля в Telegram WebApp
   telegramInitData?: string;
+
+  // важно для re-auth после смены пароля в Telegram Widget
+  telegramWidgetPayload?: Record<string, any>;
 };
 
 // Максимально долго: по умолчанию 365 дней “скользящей” сессии.
@@ -50,6 +53,17 @@ function cleanupIfNeeded() {
   }
 }
 
+function safeParseJsonObject(text: string | undefined): Record<string, any> | undefined {
+  if (!text) return undefined;
+  try {
+    const v = JSON.parse(text);
+    if (v && typeof v === "object") return v as any;
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function createLocalSid() {
   return randomUUID();
 }
@@ -70,11 +84,17 @@ export function putSession(
       : {}),
   };
 
+  const widgetJson =
+    merged.telegramWidgetPayload && typeof merged.telegramWidgetPayload === "object"
+      ? JSON.stringify(merged.telegramWidgetPayload)
+      : undefined;
+
   upsertSession({
     sid: localSid,
     shmUserId: Number(merged.shmUserId || 0),
     shmSessionId: String(merged.shmSessionId || ""),
     telegramInitData: merged.telegramInitData,
+    telegramWidgetPayload: widgetJson,
     createdAt: Number(merged.createdAt || t),
     lastSeenAt: Number(merged.lastSeenAt || t),
   });
@@ -95,6 +115,9 @@ export function getSessionBySid(localSid: string | undefined) {
     createdAt: s0.createdAt,
     lastSeenAt: s0.lastSeenAt,
     ...(s0.telegramInitData ? { telegramInitData: s0.telegramInitData } : {}),
+    ...(s0.telegramWidgetPayload
+      ? { telegramWidgetPayload: safeParseJsonObject(s0.telegramWidgetPayload) }
+      : {}),
   };
 
   if (isExpired(s)) {
