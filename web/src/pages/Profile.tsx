@@ -28,8 +28,24 @@ function CardTitle({
   right?: any;
 }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-      <div className="h1" style={{ fontSize: 18, margin: 0, display: "flex", alignItems: "center", gap: 10 }}>
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+      }}
+    >
+      <div
+        className="h1"
+        style={{
+          fontSize: 18,
+          margin: 0,
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+        }}
+      >
         {icon ? <span aria-hidden="true">{icon}</span> : null}
         <span>{children}</span>
       </div>
@@ -54,9 +70,19 @@ function Badge({
   tone?: "ok" | "soon" | "neutral";
 }) {
   const bg =
-    tone === "ok" ? "rgba(46, 204, 113, .14)" : tone === "soon" ? "rgba(241, 196, 15, .14)" : "rgba(255,255,255,.08)";
+    tone === "ok"
+      ? "rgba(46, 204, 113, .14)"
+      : tone === "soon"
+      ? "rgba(241, 196, 15, .14)"
+      : "rgba(255,255,255,.08)";
+
   const bd =
-    tone === "ok" ? "rgba(46, 204, 113, .35)" : tone === "soon" ? "rgba(241, 196, 15, .35)" : "rgba(255,255,255,.12)";
+    tone === "ok"
+      ? "rgba(46, 204, 113, .35)"
+      : tone === "soon"
+      ? "rgba(241, 196, 15, .35)"
+      : "rgba(255,255,255,.12)";
+
   return (
     <span
       style={{
@@ -93,11 +119,52 @@ function RowLine({
         borderRadius: 14,
         border: "1px solid rgba(255,255,255,.08)",
         background: "rgba(255,255,255,.02)",
+        transition:
+          "transform 120ms ease, background 120ms ease, border-color 120ms ease",
+      }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLDivElement).style.background =
+          "rgba(255,255,255,.04)";
+        (e.currentTarget as HTMLDivElement).style.borderColor =
+          "rgba(255,255,255,.14)";
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLDivElement).style.background =
+          "rgba(255,255,255,.02)";
+        (e.currentTarget as HTMLDivElement).style.borderColor =
+          "rgba(255,255,255,.08)";
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-          {icon ? <span aria-hidden="true" style={{ opacity: 0.9 }}>{icon}</span> : null}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            minWidth: 0,
+          }}
+        >
+          {icon ? (
+            <span
+              aria-hidden="true"
+              style={{
+                opacity: 0.9,
+                width: 22,
+                display: "inline-flex",
+                justifyContent: "center",
+              }}
+            >
+              {icon}
+            </span>
+          ) : null}
+
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 12, opacity: 0.7 }}>{label}</div>
             {value != null ? (
@@ -117,10 +184,16 @@ function RowLine({
           </div>
         </div>
 
-        {right ? <div style={{ display: "flex", alignItems: "center", gap: 10 }}>{right}</div> : null}
+        {right ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {right}
+          </div>
+        ) : null}
       </div>
 
-      {hint ? <div style={{ marginTop: 6, fontSize: 12, opacity: 0.7 }}>{hint}</div> : null}
+      {hint ? (
+        <div style={{ marginTop: 6, fontSize: 12, opacity: 0.7 }}>{hint}</div>
+      ) : null}
     </div>
   );
 }
@@ -159,7 +232,14 @@ function Modal({
         style={{ width: "min(680px, 100%)" }}
       >
         <div className="card__body">
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+            }}
+          >
             <div className="h1" style={{ fontSize: 18, margin: 0 }}>
               {title}
             </div>
@@ -183,7 +263,13 @@ function Toast({ text }: { text: string }) {
           to   { opacity: 1; transform: translateY(0); }
         }
       `}</style>
-      <div className="pre" style={{ marginTop: 12, animation: "shp_toast_in 140ms ease-out" }}>
+      <div
+        className="pre"
+        style={{
+          marginTop: 12,
+          animation: "shp_toast_in 140ms ease-out",
+        }}
+      >
         {text}
       </div>
     </>
@@ -207,6 +293,7 @@ export function Profile() {
   const created = profile?.created ?? null;
   const lastLogin = profile?.lastLogin ?? null;
 
+  // Toast
   const [toast, setToast] = useState<string | null>(null);
   function showToast(msg: string) {
     setToast(msg);
@@ -224,14 +311,21 @@ export function Profile() {
   const [savedPhone, setSavedPhone] = useState<string>("");
 
   useEffect(() => {
-    const fn = String(profile?.fullName ?? profile?.full_name ?? profile?.displayName ?? "").trim();
+    const fn = String(
+      profile?.fullName ?? profile?.full_name ?? profile?.displayName ?? ""
+    ).trim();
     const ph = String(profile?.phone ?? "").trim();
     setFullName(fn);
     setPhone(ph);
     setSavedFullName(fn);
     setSavedPhone(ph);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile?.fullName, profile?.full_name, profile?.displayName, profile?.phone]);
+  }, [
+    profile?.fullName,
+    profile?.full_name,
+    profile?.displayName,
+    profile?.phone,
+  ]);
 
   async function savePersonal() {
     setPersonalError(null);
@@ -385,7 +479,11 @@ export function Profile() {
               <button className="btn btn--primary" onClick={() => refetch?.()}>
                 Повторить
               </button>
-              <button className="btn btn--danger" onClick={logout} disabled={loggingOut}>
+              <button
+                className="btn btn--danger"
+                onClick={logout}
+                disabled={loggingOut}
+              >
                 {loggingOut ? "…" : t("profile.logout")}
               </button>
             </div>
@@ -397,7 +495,11 @@ export function Profile() {
 
   const personalNameView = savedFullName || profile?.displayName || "—";
   const personalPhoneView = savedPhone || "—";
-  const telegramStatusBadge = telegramLogin ? <Badge text="Привязан" tone="ok" /> : <Badge text="Не привязан" />;
+  const telegramStatusBadge = telegramLogin ? (
+    <Badge text="Привязан" tone="ok" />
+  ) : (
+    <Badge text="Не привязан" />
+  );
   const soonBadge = <Badge text="Скоро" tone="soon" />;
 
   return (
@@ -408,30 +510,33 @@ export function Profile() {
           <CardTitle
             icon="👤"
             right={
-              <button className="btn" onClick={() => refetch?.()} title={t("profile.refresh")}>
+              <button
+                className="btn"
+                onClick={() => refetch?.()}
+                title={t("profile.refresh")}
+              >
                 {t("profile.refresh")}
               </button>
             }
           >
             {t("profile.title")}
           </CardTitle>
+
           <p className="p">Аккаунт • привязки • настройки</p>
 
           {toast ? <Toast text={toast} /> : null}
 
-          <div
-            style={{
-              marginTop: 14,
-              display: "grid",
-              gridTemplateColumns: "1fr",
-              gap: 10,
-            }}
-          >
+          <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
             <button className="btn" onClick={goChangePassword} style={{ width: "100%" }}>
               🔐 {t("profile.change_password")}
             </button>
 
-            <button className="btn btn--danger" onClick={logout} disabled={loggingOut} style={{ width: "100%" }}>
+            <button
+              className="btn btn--danger"
+              onClick={logout}
+              disabled={loggingOut}
+              style={{ width: "100%" }}
+            >
               🚪 {loggingOut ? "…" : t("profile.logout")}
             </button>
           </div>
@@ -451,7 +556,11 @@ export function Profile() {
                   </button>
                 ) : (
                   <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                    <button className="btn btn--primary" onClick={savePersonal} disabled={savingPersonal}>
+                    <button
+                      className="btn btn--primary"
+                      onClick={savePersonal}
+                      disabled={savingPersonal}
+                    >
                       {savingPersonal ? "…" : "Сохранить"}
                     </button>
                     <button className="btn" onClick={cancelPersonal} disabled={savingPersonal}>
@@ -498,7 +607,7 @@ export function Profile() {
                       className="input"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
-                      placeholder="Например: +7 912 345-67-89"
+                      placeholder="+47…"
                       style={{ width: "100%" }}
                     />
                   ) : (
@@ -517,16 +626,22 @@ export function Profile() {
                       type="button"
                       className="btn"
                       onClick={doCopyLogin}
-                      style={{ padding: "6px 10px" }}
+                      style={{ padding: "6px 10px", opacity: 0.9 }}
                       title="Copy"
                     >
-                      {copied ? "✓" : "Копировать"}
+                      {copied ? "✓" : "📋"}
                     </button>
                   ) : null
                 }
               />
 
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                  gap: 10,
+                }}
+              >
                 <RowLine icon="🔢" label="ID" value={profile?.id ?? "—"} />
                 <RowLine icon="📅" label="Создан" value={formatDate(created)} />
               </div>
@@ -623,7 +738,7 @@ export function Profile() {
           className="input"
           value={tgLoginDraft}
           onChange={(e) => setTgLoginDraft(e.target.value)}
-          placeholder="например: vasya_pupkin"
+          placeholder="например: nivats"
           style={{ width: "100%", marginTop: 8 }}
         />
 
