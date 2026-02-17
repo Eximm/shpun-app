@@ -1,11 +1,14 @@
 // api/src/modules/user/me.ts
-
-import { shmGetMe } from "../../shared/shm/shmClient.js";
+import { shmFetch, shmGetMe, toFormUrlEncoded } from "../../shared/shm/shmClient.js";
 
 export type MeView = {
   userId: number;
   login: string;
   fullName?: string;
+  phone?: string;
+
+  // Эти поля могут быть полезны другим экранам (Home/Payments),
+  // в Profile UI мы их больше не показываем.
   balance?: number;
   bonus?: number;
   created?: string;
@@ -28,26 +31,15 @@ function toStr(v: any, fallback = "") {
   return s.length > 0 ? s : fallback;
 }
 
-// --- SHM template helper ---
-function shmBase(): string {
-  const b = String(process.env.SHM_BASE ?? "").trim();
-  if (!b) return "https://bill.shpyn.online/shm/";
-  return b.endsWith("/") ? b : b + "/";
-}
-
 async function getPasswordSet(shmSessionId: string): Promise<boolean> {
   try {
-    const res = await fetch(`${shmBase()}v1/template/shpun_app`, {
+    const r = await shmFetch<any>(null, "v1/template/shpun_app", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        session_id: shmSessionId,
-        action: "status",
-      }),
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: toFormUrlEncoded({ session_id: shmSessionId, action: "status" }),
     });
 
-    const json: any = await res.json().catch(() => null);
-    const flag = json?.data?.auth?.password_set;
+    const flag = (r.json as any)?.data?.auth?.password_set;
     return flag === 1 || flag === "1";
   } catch {
     return false;
@@ -82,10 +74,13 @@ export async function fetchMe(shmSessionId: string): Promise<MeResult> {
     userId: toNum(meRaw.user_id, 0),
     login: toStr(meRaw.login, ""),
     fullName: toStr(meRaw.full_name, "") || undefined,
+    phone: toStr(meRaw.phone, "") || undefined,
+
     balance: toNum(meRaw.balance, 0),
     bonus: toNum(meRaw.bonus, 0),
     created: toStr(meRaw.created, "") || undefined,
     lastLogin: toStr(meRaw.last_login, "") || undefined,
+
     passwordSet,
   };
 

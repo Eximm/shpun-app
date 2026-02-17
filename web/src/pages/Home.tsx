@@ -1,7 +1,7 @@
 // web/src/pages/Home.tsx
+import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMe } from "../app/auth/useMe";
-import React, { useEffect, useState } from "react";
 import { useI18n } from "../shared/i18n";
 
 function Money({ amount, currency }: { amount: number; currency: string }) {
@@ -148,10 +148,6 @@ export function Home() {
   const balance = me?.balance;
   const displayName = profile?.displayName || profile?.login || "";
 
-  useEffect(() => {
-    // intentionally empty
-  }, [transfer.status]);
-
   async function startTransferAndOpen() {
     if (hasTelegramObject && !inTelegramMiniApp) {
       setTransfer({
@@ -286,7 +282,11 @@ export function Home() {
               </p>
             </div>
 
-            <button className="btn" onClick={() => refetch?.()} title={t("home.refresh", "⟳ Обновить")}>
+            <button
+              className="btn"
+              onClick={() => refetch?.()}
+              title={t("home.refresh", "⟳ Обновить")}
+            >
               {t("home.refresh", "⟳ Обновить")}
             </button>
           </div>

@@ -45,9 +45,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const { t } = useI18n();
   const loc = useLocation();
 
-  const hideNav =
-    loc.pathname === "/login" ||
-    loc.pathname.startsWith("/transfer");
+  const hideNav = loc.pathname === "/login" || loc.pathname.startsWith("/transfer");
 
   return (
     <div className="app">
@@ -100,14 +98,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                 </Authed>
               }
             />
-            <Route
-              path="/home"
-              element={
-                <Authed>
-                  <Home />
-                </Authed>
-              }
-            />
+
             <Route
               path="/feed"
               element={
@@ -156,6 +147,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                 </Authed>
               }
             />
+
+            {/* Clean routing: /home is not used */}
+            <Route path="/home" element={<Navigate to="/" replace />} />
 
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />
