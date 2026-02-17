@@ -18,7 +18,6 @@ function isIOS(): boolean {
 
 function isSafari(): boolean {
   const ua = navigator.userAgent.toLowerCase();
-  // Safari on iOS includes "safari"; Chrome iOS uses CriOS; Firefox iOS uses FxiOS
   return /safari/.test(ua) && !/crios|fxios|edgios|opios|chrome|android/.test(ua);
 }
 
@@ -28,56 +27,77 @@ function isTelegramWebView(): boolean {
   return hasTgSDK || /Telegram/i.test(ua);
 }
 
+/**
+ * ============================================================
+ * 🔥 ВАЖНО:
+ * Ловим beforeinstallprompt как можно раньше (до React),
+ * иначе Chrome на быстрых девайсах может показать свой auto-banner
+ * до того, как useEffect повесит listener.
+ * ============================================================
+ */
+
+let bufferedBip: BeforeInstallPromptEvent | null = null;
+
+function installGlobalBipListenerOnce() {
+  if ((window as any).__shpun_bip_listener_installed__) return;
+  (window as any).__shpun_bip_listener_installed__ = true;
+
+  window.addEventListener("beforeinstallprompt", (e: Event) => {
+    // Всегда берём управление на себя (единый UX)
+    e.preventDefault();
+    bufferedBip = e as BeforeInstallPromptEvent;
+  });
+}
+
+installGlobalBipListenerOnce();
+
 export function useInstallPrompt() {
-  const [bipEvent, setBipEvent] = useState<BeforeInstallPromptEvent | null>(null);
+  const [bipEvent, setBipEvent] = useState<BeforeInstallPromptEvent | null>(
+    () => bufferedBip
+  );
   const [installed, setInstalled] = useState<boolean>(() => isStandalone());
 
-  // keep installed state in sync (display-mode can change)
+  const inTelegram = useMemo(() => isTelegramWebView(), []);
+
+  // синхронизируем установку (standalone может поменяться)
   useEffect(() => {
     const mq = window.matchMedia?.("(display-mode: standalone)");
-    if (!mq) return;
-
     const onChange = () => setInstalled(isStandalone());
 
-    // Safari < 14 uses addListener/removeListener
-    if ("addEventListener" in mq) mq.addEventListener("change", onChange);
-    else (mq as any).addListener(onChange);
+    if (mq) {
+      if ("addEventListener" in mq) mq.addEventListener("change", onChange);
+      else (mq as any).addListener(onChange);
+    }
 
-    // also re-check when tab becomes visible again (sometimes after install)
     const onVis = () => {
       if (document.visibilityState === "visible") setInstalled(isStandalone());
     };
     document.addEventListener("visibilitychange", onVis);
 
-    return () => {
-      if ("removeEventListener" in mq) mq.removeEventListener("change", onChange);
-      else (mq as any).removeListener(onChange);
-      document.removeEventListener("visibilitychange", onVis);
-    };
-  }, []);
-
-  useEffect(() => {
-    const onBIP = (e: Event) => {
-      // IMPORTANT: must preventDefault to show our own UI
-      e.preventDefault();
-      setBipEvent(e as BeforeInstallPromptEvent);
-    };
-
     const onAppInstalled = () => {
       setInstalled(true);
+      bufferedBip = null;
       setBipEvent(null);
     };
-
-    window.addEventListener("beforeinstallprompt", onBIP as any);
     window.addEventListener("appinstalled", onAppInstalled);
 
+    // если bufferedBip появился после первого рендера
+    const t = window.setInterval(() => {
+      if (!installed && !bipEvent && bufferedBip) setBipEvent(bufferedBip);
+    }, 400);
+
     return () => {
-      window.removeEventListener("beforeinstallprompt", onBIP as any);
+      if (mq) {
+        if ("removeEventListener" in mq) mq.removeEventListener("change", onChange);
+        else (mq as any).removeListener(onChange);
+      }
+      document.removeEventListener("visibilitychange", onVis);
       window.removeEventListener("appinstalled", onAppInstalled);
+      window.clearInterval(t);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const inTelegram = useMemo(() => isTelegramWebView(), []);
   const showIOSHint = useMemo(
     () => !installed && !inTelegram && isIOS() && isSafari(),
     [installed, inTelegram]
@@ -93,17 +113,12 @@ export function useInstallPrompt() {
 
     try {
       await bipEvent.prompt();
-      const res = await bipEvent.userChoice;
-
-      // If accepted, clear. If dismissed, also clear to avoid stuck CTA this session.
-      // (Chrome may not re-fire BIP soon after dismissal anyway.)
+      await bipEvent.userChoice;
+      // после попытки — очищаем, чтобы UI не “залипал”
+      bufferedBip = null;
       setBipEvent(null);
-
-      if (res?.outcome === "accepted") {
-        // appinstalled will also flip installed=true
-      }
     } catch {
-      // On any failure, just clear for this session
+      bufferedBip = null;
       setBipEvent(null);
     }
   }
@@ -114,7 +129,6 @@ export function useInstallPrompt() {
       await navigator.clipboard.writeText(url);
       return true;
     } catch {
-      // fallback
       try {
         const ta = document.createElement("textarea");
         ta.value = url;
@@ -131,12 +145,5 @@ export function useInstallPrompt() {
     }
   }
 
-  return {
-    installed,
-    canPrompt,
-    showIOSHint,
-    inTelegram,
-    promptInstall,
-    copyLink,
-  };
+  return { installed, canPrompt, showIOSHint, inTelegram, promptInstall, copyLink };
 }

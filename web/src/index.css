@@ -603,11 +603,21 @@ button, a { -webkit-tap-highlight-color: transparent; }
   box-shadow: 0 10px 28px rgba(0,0,0,0.28);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
+  position: relative;
+
+  /* animation */
+  transform-origin: top;
+  will-change: transform, opacity;
+  animation: install-in 220ms ease-out both;
 }
 
-@media (max-width: 520px) {
-  .install__row { flex-direction: column; align-items: stretch; }
-  .install__btn { width: 100%; }
+@keyframes install-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .install { animation: none; }
 }
 
 .install__row {
@@ -651,10 +661,15 @@ button, a { -webkit-tap-highlight-color: transparent; }
   touch-action: manipulation;
   white-space: nowrap;
 }
+
 .install__btn:hover { background: rgba(255,255,255,0.11); border-color: rgba(255,255,255,0.22); }
 .install__btn:active { transform: translateY(1px) scale(0.99); }
 
-@media (min-width: 720px) { .h1 { font-size: 26px; } }
+/* Mobile: stack text + button, full-width button */
+@media (max-width: 520px) {
+  .install__row { flex-direction: column; align-items: stretch; }
+  .install__btn { width: 100%; }
+}
 
 /* 8) Bottom navigation (native tab bar) */
 .bottomnav {
