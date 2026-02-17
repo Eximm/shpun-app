@@ -22,6 +22,7 @@ import { Transfer } from "./pages/Transfer";
 import { AuthGate } from "./app/auth/AuthGate";
 import { BottomNav } from "./app/layout/BottomNav";
 import { I18nProvider, useI18n } from "./shared/i18n";
+import { InstallBanner } from "./app/pwa/InstallBanner";
 
 /* ============================================================
    ✅ Service Worker (production only)
@@ -30,7 +31,8 @@ import { I18nProvider, useI18n } from "./shared/i18n";
 if (import.meta.env.PROD) {
   import("virtual:pwa-register")
     .then(({ registerSW }) => {
-      registerSW();
+      // быстрее берёт контроль над страницей
+      registerSW({ immediate: true });
     })
     .catch(() => {
       /* ignore */
@@ -46,8 +48,11 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const loc = useLocation();
 
   const hideNav =
-    loc.pathname === "/login" ||
-    loc.pathname.startsWith("/transfer");
+    loc.pathname === "/login" || loc.pathname.startsWith("/transfer");
+
+  // чтобы не мешал критичным сценариям
+  const hideInstall =
+    loc.pathname === "/login" || loc.pathname.startsWith("/transfer");
 
   return (
     <div className="app">
@@ -65,7 +70,10 @@ function AppShell({ children }: { children: React.ReactNode }) {
       </header>
 
       <main className="main">
-        <div className="container safe">{children}</div>
+        <div className="container safe">
+          {!hideInstall ? <InstallBanner /> : null}
+          {children}
+        </div>
       </main>
 
       {!hideNav ? <BottomNav /> : null}

@@ -22,13 +22,19 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      // Мы регистрируем SW сами через virtual:pwa-register в main.tsx
+      injectRegister: null,
+
+      // Обновления SW — через ваш UI/логику (prompt)
       registerType: "prompt",
+
       includeAssets: [
         "icons/icon-192.png",
         "icons/icon-512.png",
         "icons/icon-512-maskable.png",
         "icons/apple-touch-icon.png",
       ],
+
       manifest: {
         name: "ShpunApp",
         short_name: "ShpunApp",
@@ -51,15 +57,20 @@ export default defineConfig({
         ],
       },
 
-      // ✅ КЛЮЧЕВОЕ: Service Worker не должен перехватывать /api/*
-      // Иначе он подсовывает index.html на редиректах/навигации
-      // и Set-Cookie может не сохраниться → /api/me = 401 → выкидывает на /login
+      // ✅ КЛЮЧЕВОЕ: SW не должен перехватывать /api/*
       workbox: {
-        navigateFallbackDenylist: [
-          /^\/api\//,
-          /^\/shm\//, // на всякий случай, если вдруг появится
-          /^\/\.well-known\//,
-        ],
+        navigateFallback: "/index.html",
+        navigateFallbackDenylist: [/^\/api\//, /^\/shm\//, /^\/\.well-known\//],
+
+        // более "чистое" поведение при обновлениях
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
+        skipWaiting: true,
+      },
+
+      // dev: не включаем PWA, чтобы не ловить "призраков" кэша при разработке
+      devOptions: {
+        enabled: false,
       },
     }),
   ],

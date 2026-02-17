@@ -605,6 +605,11 @@ button, a { -webkit-tap-highlight-color: transparent; }
   -webkit-backdrop-filter: blur(16px);
 }
 
+@media (max-width: 520px) {
+  .install__row { flex-direction: column; align-items: stretch; }
+  .install__btn { width: 100%; }
+}
+
 .install__row {
   display: flex;
   align-items: flex-start;
