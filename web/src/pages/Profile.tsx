@@ -53,15 +53,6 @@ function CardTitle({
     </div>
   );
 }
-
-function SmallMuted({ children }: { children: any }) {
-  return (
-    <div className="p" style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
-      {children}
-    </div>
-  );
-}
-
 function Badge({
   text,
   tone = "neutral",
