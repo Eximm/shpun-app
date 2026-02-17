@@ -58,7 +58,7 @@ export function Profile() {
     // Важно: state легко теряется, поэтому режим передаём через URL.
     // intent=change => это добровольная смена пароля, НЕ онбординг.
     // redirect => куда вернуться после успешной смены.
-    nav('/app/set-password?intent=change&redirect=/app/profile')
+    nav('/set-password?intent=change&redirect=/profile')
   }
 
   function doCopyLogin() {

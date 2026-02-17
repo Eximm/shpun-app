@@ -255,7 +255,7 @@ export function Home() {
               <button className="btn btn--primary" onClick={() => refetch?.()}>
                 {t("home.error.retry", "Повторить")}
               </button>
-              <Link className="btn" to="/app/profile">
+              <Link className="btn" to="/profile">
                 {t("home.actions.profile", "Профиль")}
               </Link>
               {!inTelegramMiniApp && (
@@ -311,13 +311,13 @@ export function Home() {
           </div>
 
           <ActionGrid>
-            <Link className="btn btn--primary" to="/app/payments">
+            <Link className="btn btn--primary" to="/payments">
               {t("home.actions.payments", "Оплата")}
             </Link>
-            <Link className="btn" to="/app/services">
+            <Link className="btn" to="/services">
               {t("home.actions.services", "Услуги")}
             </Link>
-            <Link className="btn" to="/app/profile">
+            <Link className="btn" to="/profile">
               {t("home.actions.profile", "Профиль")}
             </Link>
           </ActionGrid>
@@ -385,7 +385,7 @@ export function Home() {
                   {t("home.news.subtitle", "Коротко и по делу. Полная лента — в “Новости”.")}
                 </p>
               </div>
-              <Link className="btn" to="/app/feed">
+              <Link className="btn" to="/feed">
                 {t("home.news.open", "Открыть")}
               </Link>
             </div>
@@ -422,7 +422,7 @@ export function Home() {
             </div>
 
             <ActionGrid>
-              <Link className="btn" to="/app/feed">
+              <Link className="btn" to="/feed">
                 {t("home.news.open_full", "Открыть новости")}
               </Link>
             </ActionGrid>
@@ -472,7 +472,7 @@ export function Home() {
             {promo.state.status === "error" && <div className="pre">{promo.state.message}</div>}
 
             <ActionGrid>
-              <Link className="btn" to="/app/profile">
+              <Link className="btn" to="/profile">
                 {t("promo.history", "История / статус")}
               </Link>
             </ActionGrid>

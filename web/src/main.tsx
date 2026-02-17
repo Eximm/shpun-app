@@ -1,6 +1,12 @@
 ﻿import React from "react";
 import ReactDOM from "react-dom/client";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  useLocation,
+} from "react-router-dom";
 import "./index.css";
 
 import { Login } from "./pages/Login";
@@ -18,13 +24,12 @@ import { BottomNav } from "./app/layout/BottomNav";
 import { I18nProvider, useI18n } from "./shared/i18n";
 
 /* ============================================================
-   ✅ Service Worker (production only)
+   Service Worker (production only)
    ============================================================ */
 
 if (import.meta.env.PROD) {
   import("virtual:pwa-register")
     .then(({ registerSW }) => {
-      // Без UI: просто регистрируем SW (не мешаем браузеру показывать системный install prompt)
       registerSW({ immediate: true });
     })
     .catch(() => {
@@ -40,7 +45,9 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const { t } = useI18n();
   const loc = useLocation();
 
-  const hideNav = loc.pathname === "/login" || loc.pathname.startsWith("/transfer");
+  const hideNav =
+    loc.pathname === "/login" ||
+    loc.pathname.startsWith("/transfer");
 
   return (
     <div className="app">
@@ -80,13 +87,13 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       <BrowserRouter>
         <AppShell>
           <Routes>
-            <Route path="/transfer" element={<Transfer />} />
+            {/* Public */}
             <Route path="/login" element={<Login />} />
+            <Route path="/transfer" element={<Transfer />} />
 
-            <Route path="/app" element={<Navigate to="/app/home" replace />} />
-
+            {/* Authed main sections */}
             <Route
-              path="/app/home"
+              path="/"
               element={
                 <Authed>
                   <Home />
@@ -94,7 +101,15 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               }
             />
             <Route
-              path="/app/feed"
+              path="/home"
+              element={
+                <Authed>
+                  <Home />
+                </Authed>
+              }
+            />
+            <Route
+              path="/feed"
               element={
                 <Authed>
                   <Feed />
@@ -102,7 +117,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               }
             />
             <Route
-              path="/app/dashboard"
+              path="/dashboard"
               element={
                 <Authed>
                   <Dashboard />
@@ -110,7 +125,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               }
             />
             <Route
-              path="/app/services"
+              path="/services"
               element={
                 <Authed>
                   <Services />
@@ -118,7 +133,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               }
             />
             <Route
-              path="/app/payments"
+              path="/payments"
               element={
                 <Authed>
                   <Payments />
@@ -126,7 +141,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               }
             />
             <Route
-              path="/app/profile"
+              path="/profile"
               element={
                 <Authed>
                   <Profile />
@@ -134,7 +149,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               }
             />
             <Route
-              path="/app/set-password"
+              path="/set-password"
               element={
                 <Authed>
                   <SetPassword />
@@ -142,8 +157,8 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               }
             />
 
-            <Route path="/" element={<Navigate to="/app/home" replace />} />
-            <Route path="*" element={<Navigate to="/app/home" replace />} />
+            {/* Fallback */}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </AppShell>
       </BrowserRouter>

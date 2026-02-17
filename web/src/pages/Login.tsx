@@ -107,7 +107,7 @@ export function Login() {
     const loginFromApi = String((r as any).login ?? "").trim();
 
     if (next === "set_password") {
-      nav("/app/set-password", {
+      nav("/set-password", {
         replace: true,
         state: { login: loginFromApi },
       });

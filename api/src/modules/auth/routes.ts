@@ -499,7 +499,7 @@ export async function authRoutes(app: FastifyInstance) {
 
     reply.setCookie("sid", localSid, cookieOptions(req));
 
-    if (next === "set_password") return reply.redirect("/app/set-password");
+    if (next === "set_password") return reply.redirect("/set-password");
     return reply.redirect("/app");
   });
 

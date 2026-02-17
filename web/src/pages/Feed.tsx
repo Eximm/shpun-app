@@ -59,7 +59,7 @@ export function Feed() {
               </p>
             </div>
 
-            <Link className="btn" to="/app/home" title="На главную">
+            <Link className="btn" to="/home" title="На главную">
               Главная
             </Link>
           </div>

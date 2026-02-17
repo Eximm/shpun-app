@@ -43,8 +43,8 @@ export function SetPassword() {
 
   const redirectTo = useMemo(() => {
     const raw = sp.get("redirect");
-    // default: onboarding -> /app ; change -> /app/profile
-    return normalizeRedirectPath(raw, isChange ? "/app/profile" : "/app");
+    // default: onboarding -> /app ; change -> /profile
+    return normalizeRedirectPath(raw, isChange ? "/profile" : "/app");
   }, [sp, isChange]);
 
   const [gate, setGate] = useState<GateState>({ status: "checking" });
@@ -145,7 +145,7 @@ export function SetPassword() {
 
       if (!res.ok) throw new Error(res.error || "Failed to set password");
 
-      // onboarding => /app, change => /app/profile (или redirect=...)
+      // onboarding => /app, change => /profile (или redirect=...)
       nav(redirectTo, { replace: true });
     } catch (e: any) {
       setErr(e?.message || t("setpwd.err.generic", "Не удалось сохранить пароль"));

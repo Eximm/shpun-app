@@ -243,7 +243,7 @@ export function Dashboard() {
                 <button className="btn btn--primary" onClick={() => nav('/app/services')}>
                   My services
                 </button>
-                <button className="btn" onClick={() => nav('/app/payments')}>
+                <button className="btn" onClick={() => nav('/payments')}>
                   Top up
                 </button>
                 <button
@@ -386,7 +386,7 @@ export function Dashboard() {
           </div>
 
           <div className="row" style={{ marginTop: 12 }}>
-            <button className="btn" onClick={() => nav('/app/payments')}>
+            <button className="btn" onClick={() => nav('/payments')}>
               Open payments
             </button>
           </div>
@@ -404,7 +404,7 @@ export function Dashboard() {
           <div className="row" style={{ gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
             <button
               className={passwordSet ? 'btn' : 'btn btn--primary'}
-              onClick={() => nav('/app/set-password')}
+              onClick={() => nav('/set-password')}
             >
               {passwordSet ? 'Change password' : 'Set password'}
             </button>

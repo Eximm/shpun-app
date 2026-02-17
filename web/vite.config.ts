@@ -22,10 +22,7 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      // Мы регистрируем SW сами через virtual:pwa-register в main.tsx
       injectRegister: null,
-
-      // Обновления SW — через ваш UI/логику (prompt)
       registerType: "prompt",
 
       includeAssets: [
@@ -41,13 +38,11 @@ export default defineConfig({
         description:
           "Shpun SDN System — кабинет, баланс, услуги и управление подпиской.",
 
-        // Без редиректа (/app -> /app/home)
-        start_url: "/app/home",
-
-        // Стабильная идентичность приложения (Android/Chrome)
-        id: "/app",
-
+        // Новый корень приложения
+        start_url: "/",
+        id: "/",
         scope: "/",
+
         display: "standalone",
         background_color: "#0b0f17",
         theme_color: "#0b1220",
@@ -65,18 +60,14 @@ export default defineConfig({
         ],
       },
 
-      // ✅ КЛЮЧЕВОЕ: SW не должен перехватывать /api/*
       workbox: {
         navigateFallback: "/index.html",
         navigateFallbackDenylist: [/^\/api\//, /^\/shm\//, /^\/\.well-known\//],
-
-        // более "чистое" поведение при обновлениях
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
       },
 
-      // dev: не включаем PWA, чтобы не ловить "призраков" кэша при разработке
       devOptions: {
         enabled: false,
       },

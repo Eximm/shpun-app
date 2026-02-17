@@ -31,7 +31,7 @@ export function BottomNav() {
     <nav className="bottomnav" role="navigation" aria-label="App navigation">
       <div className="bottomnav__inner">
         <Tab
-          to="/app/home"
+          to="/"
           end
           label="Главная"
           icon={
@@ -47,7 +47,7 @@ export function BottomNav() {
         />
 
         <Tab
-          to="/app/feed"
+          to="/feed"
           label="Новости"
           icon={
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
@@ -68,7 +68,7 @@ export function BottomNav() {
         />
 
         <Tab
-          to="/app/services"
+          to="/services"
           label="Услуги"
           icon={
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
@@ -83,7 +83,7 @@ export function BottomNav() {
         />
 
         <Tab
-          to="/app/payments"
+          to="/payments"
           label="Оплата"
           icon={
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
@@ -103,7 +103,7 @@ export function BottomNav() {
         />
 
         <Tab
-          to="/app/profile"
+          to="/profile"
           label="Профиль"
           icon={
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
