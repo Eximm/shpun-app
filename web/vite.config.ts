@@ -40,11 +40,19 @@ export default defineConfig({
         short_name: "ShpunApp",
         description:
           "Shpun SDN System — кабинет, баланс, услуги и управление подпиской.",
-        start_url: "/app",
+
+        // Без редиректа (/app -> /app/home)
+        start_url: "/app/home",
+
+        // Стабильная идентичность приложения (Android/Chrome)
+        id: "/app",
+
         scope: "/",
         display: "standalone",
         background_color: "#0b0f17",
         theme_color: "#0b1220",
+        lang: "ru",
+
         icons: [
           { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
           { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
