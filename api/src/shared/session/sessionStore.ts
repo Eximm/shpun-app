@@ -139,13 +139,31 @@ export function getSessionBySid(localSid: string | undefined) {
   return s;
 }
 
-/** Вытянуть sid из запроса (cookie sid или заголовок x-app-sid) */
+/** Robust sid parse from raw Cookie header (fallback) */
+function getSidFromCookieHeader(req: FastifyRequest): string | undefined {
+  const hdr = String(req.headers?.cookie ?? "");
+  if (!hdr) return undefined;
+  const m = hdr.match(/(?:^|;\s*)sid=([^;]+)/);
+  if (!m) return undefined;
+  const raw = String(m[1] ?? "").trim();
+  if (!raw) return undefined;
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
+/** Вытянуть sid из запроса (cookie sid, заголовок x-app-sid, или raw Cookie header) */
 function getSidFromRequest(req: FastifyRequest): string | undefined {
   const sidCookie = (req.cookies as any)?.sid;
   if (typeof sidCookie === "string" && sidCookie.trim()) return sidCookie.trim();
 
   const sidHeader = req.headers["x-app-sid"];
   if (typeof sidHeader === "string" && sidHeader.trim()) return sidHeader.trim();
+
+  const fromCookieHdr = getSidFromCookieHeader(req);
+  if (fromCookieHdr && fromCookieHdr.trim()) return fromCookieHdr.trim();
 
   return undefined;
 }

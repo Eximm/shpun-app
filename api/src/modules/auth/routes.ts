@@ -110,8 +110,8 @@ function isHttps(req: any): boolean {
 }
 
 /**
- * ✅ FIX #1: Telegram WebView стабильно работает с SameSite=None (в prod).
- * В dev оставляем lax (удобнее локально).
+ * Cookie options:
+ * - Telegram WebView: SameSite=None + Secure required in production
  */
 function cookieOptions(req: any) {
   const prod =
@@ -119,7 +119,7 @@ function cookieOptions(req: any) {
 
   return {
     httpOnly: true,
-    sameSite: prod ? ("none" as const) : ("lax" as const), // ✅ FIX
+    sameSite: prod ? ("none" as const) : ("lax" as const),
     secure: prod ? true : isHttps(req),
     path: "/",
     maxAge: Number(process.env.SID_COOKIE_MAX_AGE_SEC || 365 * 24 * 60 * 60),
@@ -127,13 +127,29 @@ function cookieOptions(req: any) {
 }
 
 /**
- * ✅ FIX #2: не ротируем sid, если он уже есть.
- * Это убирает гонку: tg auth ставит cookie, а /api/me может прийти “раньше”
- * и уйти в 401 -> повторный tg auth -> вечная петля.
+ * Robust sid extractor from raw Cookie header.
+ * Needed because req.cookies may be empty if cookie plugin is not applied/encapsulated.
+ */
+function getSidFromCookieHeader(req: any): string {
+  const hdr = String(req?.headers?.cookie ?? "");
+  if (!hdr) return "";
+  const m = hdr.match(/(?:^|;\s*)sid=([^;]+)/);
+  if (!m) return "";
+  try {
+    return decodeURIComponent(m[1]).trim();
+  } catch {
+    return String(m[1]).trim();
+  }
+}
+
+/**
+ * Reuse sid if already present (cookie), otherwise create.
+ * Uses both parsed cookies and raw Cookie header as fallback.
  */
 function reuseOrCreateSid(req: any): string {
-  const existingSid = String((req.cookies as any)?.sid ?? "").trim();
-  return existingSid || createLocalSid();
+  const parsed = String((req.cookies as any)?.sid ?? "").trim();
+  const fromHdr = getSidFromCookieHeader(req);
+  return (parsed || fromHdr).trim() || createLocalSid();
 }
 
 function isProbablyEmptyTelegramWidgetPayload(p: any): boolean {
@@ -317,7 +333,6 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(502).send({ ok: false, error: "shm_user_lookup_failed" });
     }
 
-    // ✅ FIX: reuse sid if present (avoid loop)
     const localSid = reuseOrCreateSid(req);
 
     putSession(localSid, {
@@ -409,7 +424,6 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(502).send({ ok: false, error: "shm_user_lookup_failed" });
     }
 
-    // ✅ FIX: reuse sid if present (avoid loop)
     const localSid = reuseOrCreateSid(req);
 
     putSession(localSid, {
@@ -487,7 +501,6 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.redirect("/login?e=user_lookup_failed");
     }
 
-    // ✅ FIX: reuse sid if present (avoid loop)
     const localSid = reuseOrCreateSid(req);
 
     putSession(localSid, {
@@ -556,7 +569,6 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(502).send({ ok: false, error: "shm_user_lookup_failed" });
     }
 
-    // ✅ FIX: reuse sid if present (avoid loop)
     const localSid = reuseOrCreateSid(req);
 
     putSession(localSid, { shmSessionId, shmUserId, createdAt: Date.now() });
