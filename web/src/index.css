@@ -971,3 +971,311 @@ button, a { -webkit-tap-highlight-color: transparent; }
 
 /* Promo title tweak */
 .home-promo__title { font-size: 18px; }
+
+/* ============================================================
+   Home (rethink): header tiles + referrals + news + bonus-codes
+   ============================================================ */
+
+/* Header row (title + refresh) */
+.home-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.home-head__left {
+  min-width: 0;
+}
+
+.home-head__title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 950;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.home-head__sub {
+  margin-top: 6px;
+  font-size: 13px;
+  color: rgba(255,255,255,0.68);
+  line-height: 1.35;
+}
+
+/* On phones: stack title + refresh */
+@media (max-width: 520px) {
+  .home-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .home-head__title { font-size: 20px; }
+}
+
+/* Tiles grid: 3 → 2 → 1 (no horizontal scroll ever) */
+.home-tiles {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+/* medium */
+@media (max-width: 920px) {
+  .home-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ultra narrow */
+@media (max-width: 380px) {
+  .home-tiles {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Clickable tile base */
+.home-tile {
+  display: block;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background:
+    radial-gradient(900px 220px at 18% 0%, rgba(124, 92, 255, 0.12), transparent 58%),
+    rgba(255,255,255,0.035);
+  box-shadow: 0 14px 32px rgba(0,0,0,0.26);
+  padding: 12px 12px 10px;
+  color: rgba(255,255,255,0.92);
+  text-decoration: none;
+
+  transition: transform 140ms ease, filter 140ms ease, border-color 140ms ease, background 140ms ease;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+
+  /* Ensure tap hit area feels native */
+  min-height: 92px;
+}
+
+.home-tile:hover {
+  filter: brightness(1.06);
+  border-color: rgba(255,255,255,0.18);
+}
+
+.home-tile:active {
+  transform: translateY(1px) scale(0.995);
+}
+
+/* Keyboard focus */
+.home-tile:focus-visible {
+  outline: none;
+  border-color: rgba(124,92,255,0.55);
+  box-shadow: 0 0 0 4px rgba(124,92,255,0.16), 0 14px 32px rgba(0,0,0,0.26);
+}
+
+/* Tile header (title + badge/arrow) */
+.home-tile__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.home-tile__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.12px;
+  color: rgba(255,255,255,0.74);
+}
+
+.home-tile__icon {
+  width: 18px;
+  text-align: center;
+  opacity: 0.95;
+  flex: 0 0 auto;
+}
+
+.home-tile__chev {
+  font-weight: 950;
+  opacity: 0.55;
+  flex: 0 0 auto;
+  transform: translateY(-1px);
+}
+
+/* Tile value */
+.home-tile__value {
+  margin-top: 8px;
+  font-size: 18px;
+  font-weight: 950;
+  letter-spacing: -0.01em;
+
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Tile subtext (one line) */
+.home-tile__sub {
+  margin-top: 6px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.64);
+
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* keep tile heights aligned even if sub is absent */
+.home-tile__sub--empty { height: 14px; }
+
+/* Optional badge inside tile */
+.home-tile__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.10);
+
+  color: rgba(255,255,255,0.78);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.10px;
+
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+
+  pointer-events: none;
+}
+
+.home-tile__badge::before{
+  content:"";
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  box-shadow: 0 0 14px rgba(124,92,255,0.42);
+  flex: 0 0 auto;
+}
+
+/* Badge variants */
+.home-badge { }
+.home-badge--danger {
+  border-color: rgba(255,77,109,0.22);
+  background: rgba(255,77,109,0.08);
+}
+
+/* Tile tones (keep within your palette) */
+.home-tile--ok {
+  background:
+    radial-gradient(900px 220px at 18% 0%, rgba(77,215,255,0.14), transparent 58%),
+    rgba(255,255,255,0.035);
+}
+
+.home-tile--warn {
+  background:
+    radial-gradient(900px 220px at 18% 0%, rgba(255,184,107,0.14), transparent 58%),
+    rgba(255,255,255,0.035);
+}
+
+.home-tile--danger {
+  background:
+    radial-gradient(900px 220px at 18% 0%, rgba(255,77,109,0.14), transparent 58%),
+    rgba(255,255,255,0.035);
+}
+
+.home-tile--accent {
+  background:
+    radial-gradient(900px 240px at 18% 0%, rgba(124,92,255,0.18), transparent 58%),
+    rgba(255,255,255,0.035);
+}
+
+/* On very small phones: denser tiles */
+@media (max-width: 420px) {
+  .home-tile { padding: 11px 11px 9px; min-height: 88px; }
+  .home-tile__value { font-size: 17px; }
+}
+
+/* ===== Section headers (Referrals / News / Bonus codes) ===== */
+.home-block-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+@media (max-width: 520px) {
+  .home-block-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* ===== Referrals block layout ===== */
+.home-ref {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 12px;
+  align-items: center;
+}
+
+.home-ref__kpi {
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.03);
+  padding: 12px;
+}
+
+.home-ref__k {
+  font-size: 12px;
+  opacity: 0.70;
+  font-weight: 900;
+  letter-spacing: 0.12px;
+}
+
+.home-ref__v {
+  margin-top: 6px;
+  font-size: 20px;
+  font-weight: 950;
+  letter-spacing: -0.01em;
+}
+
+.home-ref__cta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.home-ref__hint {
+  font-size: 12px;
+  opacity: 0.70;
+  line-height: 1.35;
+}
+
+@media (max-width: 640px) {
+  .home-ref { grid-template-columns: 1fr; }
+}
+
+/* ===== (Optional) Make list items feel more tappable in News section ===== */
+.list__item {
+  transition: filter 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+
+.list__item:hover {
+  filter: brightness(1.04);
+  border-color: rgba(255,255,255,0.12);
+}
+
+.list__item:active {
+  transform: translateY(1px);
+}

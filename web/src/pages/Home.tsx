@@ -99,12 +99,6 @@ type PromoState =
   | { status: "done"; message: string }
   | { status: "error"; message: string };
 
-function ActionGrid({ children }: { children: React.ReactNode }) {
-  const items = React.Children.toArray(children).filter(Boolean);
-  const n = Math.max(1, Math.min(5, items.length));
-  return <div className={`actions actions--${n}`}>{items}</div>;
-}
-
 /** ===== Services summary (from /api/services) ===== */
 type ApiSummary = {
   total: number;
@@ -130,6 +124,22 @@ type ApiServicesResponse = {
   forecast?: ApiForecast;
 };
 
+/** ===== Payments ===== */
+type PaySystem = {
+  name?: string;
+  shm_url?: string;
+  recurring?: string | number;
+  amount?: number;
+};
+type PaysystemsResp = { ok: true; items: PaySystem[]; raw?: any };
+type ForecastResp = { ok: true; raw: any };
+
+function pickDefaultPayAmount(items: PaySystem[]) {
+  const v = items.find((x) => Number(x?.amount || 0) > 0)?.amount;
+  const n = v ? Math.round(Number(v)) : null;
+  return Number.isFinite(n as any) && (n as any) > 0 ? (n as number) : null;
+}
+
 function fmtMoney(n: number, cur: string) {
   const v = Number(n || 0);
   try {
@@ -150,22 +160,10 @@ function fmtShortDate(iso: string | null | undefined) {
   return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "2-digit" });
 }
 
-/** ===== Payments (reuse what you already have in Payments module) ===== */
-type PaySystem = {
-  name?: string;
-  shm_url?: string;
-  recurring?: string | number;
-  amount?: number;
-};
-type PaysystemsResp = { ok: true; items: PaySystem[]; raw?: any };
-type ForecastResp = { ok: true; raw: any };
-
-function pickDefaultPayAmount(items: PaySystem[]) {
-  const v = items.find((x) => Number(x?.amount || 0) > 0)?.amount;
-  const n = v ? Math.round(Number(v)) : null;
-  return Number.isFinite(n as any) && (n as any) > 0 ? (n as number) : null;
-}
-
+/**
+ * We treat /payments/forecast as the primary "ready sum" source (per your billing template logic).
+ * We do NOT assume exact schema; parse common variants.
+ */
 function parsePaymentsForecast(raw: any): { whenText?: string; amount?: number } | null {
   if (!raw || typeof raw !== "object") return null;
 
@@ -189,135 +187,46 @@ function parsePaymentsForecast(raw: any): { whenText?: string; amount?: number }
   return { whenText, amount: amount ?? undefined };
 }
 
-function PillBase({
-  icon,
-  label,
-  value,
-  tone,
-}: {
-  icon?: string;
-  label: string;
-  value: React.ReactNode;
-  tone?: "default" | "warn" | "danger" | "ok" | "accent";
-}) {
-  const bg =
-    tone === "danger"
-      ? "rgba(255, 80, 80, 0.10)"
-      : tone === "warn"
-      ? "rgba(255, 200, 60, 0.10)"
-      : tone === "ok"
-      ? "rgba(80, 255, 170, 0.10)"
-      : tone === "accent"
-      ? "rgba(110, 140, 255, 0.12)"
-      : "rgba(255,255,255,0.06)";
-
-  const border =
-    tone === "danger"
-      ? "rgba(255, 90, 90, 0.20)"
-      : tone === "warn"
-      ? "rgba(255, 210, 80, 0.18)"
-      : tone === "ok"
-      ? "rgba(120, 255, 190, 0.18)"
-      : tone === "accent"
-      ? "rgba(140, 160, 255, 0.22)"
-      : "rgba(255,255,255,0.10)";
-
-  return (
-    <div
-      className="home-pill"
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 10,
-        padding: "10px 12px",
-        borderRadius: 999,
-        border: `1px solid ${border}`,
-        background: bg,
-        whiteSpace: "nowrap",
-        userSelect: "none",
-      }}
-    >
-      {icon ? (
-        <span
-          aria-hidden
-          style={{
-            width: 20,
-            height: 20,
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            borderRadius: 999,
-            background: "rgba(255,255,255,0.08)",
-            fontSize: 12,
-          }}
-        >
-          {icon}
-        </span>
-      ) : null}
-
-      <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.05 }}>
-        <span style={{ fontSize: 11, opacity: 0.75 }}>{label}</span>
-        <span style={{ fontSize: 13, fontWeight: 900, opacity: 0.95 }}>{value}</span>
-      </div>
-    </div>
-  );
+function ActionGrid({ children }: { children: React.ReactNode }) {
+  const items = React.Children.toArray(children).filter(Boolean);
+  const n = Math.max(1, Math.min(5, items.length));
+  return <div className={`actions actions--${n}`}>{items}</div>;
 }
 
-function Pill({
+function Tile({
   to,
-  icon,
-  label,
-  value,
-  tone,
   title,
+  value,
+  sub,
+  icon,
+  tone,
+  badge,
 }: {
-  to?: string;
-  icon?: string;
-  label: string;
+  to: string;
+  title: string;
   value: React.ReactNode;
-  tone?: "default" | "warn" | "danger" | "ok" | "accent";
-  title?: string;
+  sub?: React.ReactNode;
+  icon?: string;
+  badge?: React.ReactNode;
+  tone?: "default" | "ok" | "warn" | "danger" | "accent";
 }) {
-  if (!to) return <PillBase icon={icon} label={label} value={value} tone={tone} />;
-
   return (
-    <Link
-      to={to}
-      title={title}
-      style={{
-        textDecoration: "none",
-        display: "inline-flex",
-        borderRadius: 999,
-        outline: "none",
-      }}
-      onMouseDown={(e) => {
-        const el = (e.currentTarget.firstChild as HTMLElement) || null;
-        if (el) el.style.transform = "translateY(1px)";
-      }}
-      onMouseUp={(e) => {
-        const el = (e.currentTarget.firstChild as HTMLElement) || null;
-        if (el) el.style.transform = "";
-      }}
-      onMouseLeave={(e) => {
-        const el = (e.currentTarget.firstChild as HTMLElement) || null;
-        if (el) el.style.transform = "";
-      }}
-    >
-      <div
-        style={{
-          borderRadius: 999,
-          transition: "filter 120ms ease, transform 120ms ease",
-          filter: "brightness(1)",
-        }}
-        onMouseEnter={(e) => {
-          (e.currentTarget as HTMLElement).style.filter = "brightness(1.08)";
-        }}
-        onMouseLeave={(e) => {
-          (e.currentTarget as HTMLElement).style.filter = "brightness(1)";
-        }}
-      >
-        <PillBase icon={icon} label={label} value={value} tone={tone} />
+    <Link to={to} className={`home-tile home-tile--${tone || "default"}`} style={{ textDecoration: "none" }}>
+      <div className="home-tile__head">
+        <div className="home-tile__title">
+          {icon ? (
+            <span className="home-tile__icon" aria-hidden>
+              {icon}
+            </span>
+          ) : null}
+          <span>{title}</span>
+        </div>
+
+        {badge ? <div className="home-tile__badge">{badge}</div> : <div className="home-tile__chev">→</div>}
       </div>
+
+      <div className="home-tile__value">{value}</div>
+      {sub ? <div className="home-tile__sub">{sub}</div> : <div className="home-tile__sub home-tile__sub--empty" />}
     </Link>
   );
 }
@@ -339,7 +248,7 @@ export function Home() {
   const [svcSummary, setSvcSummary] = useState<ApiSummary | null>(null);
   const [svcForecast, setSvcForecast] = useState<ApiForecast | null>(null);
 
-  // payments (for forecast + default amount)
+  // payments
   const [payLoading, setPayLoading] = useState(false);
   const [payAmount, setPayAmount] = useState<number | null>(null);
   const [payForecast, setPayForecast] = useState<{ whenText?: string; amount?: number } | null>(null);
@@ -349,10 +258,28 @@ export function Home() {
 
   const profile = me?.profile;
   const balance = me?.balance;
+
   const displayName = profile?.displayName || profile?.login || "";
 
+  // existing code uses me.bonus; keep safe default
+  const bonusValue = typeof (me as any)?.bonus === "number" ? (me as any).bonus : 0;
+
+  // referral count already used in your code
   const referralsCount: number | null =
     typeof (me as any)?.referralsCount === "number" ? (me as any).referralsCount : null;
+
+  // partner percent from billing: user.income_percent (but name in API may vary)
+  const incomePercentRaw =
+    (me as any)?.income_percent ??
+    (me as any)?.incomePercent ??
+    (me as any)?.partner_income_percent ??
+    (me as any)?.partnerIncomePercent ??
+    null;
+
+  const incomePercent: number | null = (() => {
+    const n = Number(incomePercentRaw);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  })();
 
   const attentionCount = useMemo(() => {
     const s = svcSummary;
@@ -404,6 +331,11 @@ export function Home() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me?.ok]);
+
+  async function hardRefresh() {
+    await Promise.resolve(refetch?.());
+    await Promise.all([loadServicesSummary(), loadPaymentsLite()]);
+  }
 
   async function startTransferAndOpen() {
     try {
@@ -461,13 +393,8 @@ export function Home() {
 
     setPromo((p) => ({
       ...p,
-      state: { status: "done", message: t("promo.done.stub", "Промокоды скоро будут доступны прямо в приложении ✨") },
+      state: { status: "done", message: t("promo.done.stub", "Бонус-коды скоро будут доступны прямо в приложении ✨") },
     }));
-  }
-
-  async function hardRefresh() {
-    await Promise.resolve(refetch?.());
-    await Promise.all([loadServicesSummary(), loadPaymentsLite()]);
   }
 
   if (loading) {
@@ -513,16 +440,16 @@ export function Home() {
   const s = svcSummary;
   const currencyFallback = s?.currency || balance?.currency || "RUB";
 
-  const showAttention = !!s && attentionCount > 0;
   const showNotPaid = !!s && s.notPaid > 0;
   const showBlocked = !!s && s.blocked > 0;
-  const showPending = !!s && s.pending > 0;
-  const showExpSoon = !!s && s.expiringSoon > 0;
 
-  const paymentForecastText = payForecast
-    ? `${payForecast.whenText ?? "—"}${payForecast.amount ? ` · ~${fmtMoney(payForecast.amount, currencyFallback)}` : ""}`
-    : null;
+  // "Forecast payment" per your request: use ready sum from payments forecast
+  const forecastAmountText =
+    typeof payForecast?.amount === "number" ? fmtMoney(payForecast.amount, currencyFallback) : null;
 
+  const forecastWhenText = payForecast?.whenText || null;
+
+  // service forecast fallback (only if payments forecast absent)
   const servicesForecastText =
     svcForecast && (svcForecast.nextInDays != null || svcForecast.nextDate || svcForecast.nextAmount != null)
       ? `${svcForecast.nextInDays != null ? `через ${svcForecast.nextInDays} дн.` : svcForecast.nextDate ? fmtShortDate(svcForecast.nextDate) : "—"}${
@@ -530,19 +457,31 @@ export function Home() {
         }`
       : null;
 
-  const forecastText = paymentForecastText || servicesForecastText;
+  // For tile sub: show payment "when", else service forecast, else placeholder
+  const forecastSub = forecastWhenText || servicesForecastText || (payLoading ? "Считаем…" : "—");
+
+  // Nice compact sub for "actions needed"
+  const attentionSub = (() => {
+    if (!s) return svcLoading ? "Проверяем…" : "—";
+    const parts: string[] = [];
+    if (s.notPaid > 0) parts.push(`Оплата: ${s.notPaid}`);
+    if (s.blocked > 0) parts.push(`Блок: ${s.blocked}`);
+    if (parts.length === 0) return "Всё в порядке";
+    return parts.join(" · ");
+  })();
 
   return (
     <div className="section">
+      {/* ===== Header / Accent: Account + Services (tiles) ===== */}
       <div className="card">
         <div className="card__body">
-          <div className="home-hero__head">
-            <div>
-              <h1 className="h1">
+          <div className="home-head">
+            <div className="home-head__left">
+              <div className="home-head__title">
                 {t("home.hello", "Привет")}
                 {displayName ? `, ${displayName}` : ""} 👋
-              </h1>
-              <p className="p">{t("home.subtitle", "SDN System — баланс, услуги и управление подпиской.")}</p>
+              </div>
+              <div className="home-head__sub">Аккаунт и услуги — самое важное. Плитки ведут в нужные разделы.</div>
             </div>
 
             <button className="btn" onClick={hardRefresh} title={t("home.refresh", "⟳ Обновить")}>
@@ -550,136 +489,77 @@ export function Home() {
             </button>
           </div>
 
-          <div className="kv kv--3">
-            <Link className="kv__item" to="/payments" style={{ textDecoration: "none" }}>
-              <div className="kv__k">Баланс</div>
-              <div className="kv__v">{balance ? <Money amount={balance.amount} currency={balance.currency} /> : "—"}</div>
-            </Link>
+          <div className="home-tiles">
+            {/* 1) Balance */}
+            <Tile
+              to="/payments"
+              icon="💰"
+              title="Баланс"
+              value={balance ? <Money amount={balance.amount} currency={balance.currency} /> : "—"}
+              sub="Пополнение и история"
+              tone="accent"
+            />
 
-            <Link className="kv__item" to="/payments" style={{ textDecoration: "none" }}>
-              <div className="kv__k">Бонусы</div>
-              <div className="kv__v">{typeof me.bonus === "number" ? me.bonus : 0}</div>
-            </Link>
+            {/* 2) Services */}
+            <Tile
+              to="/services"
+              icon="🛰️"
+              title="Услуги"
+              value={svcLoading ? "…" : s ? `${s.active}/${s.total}` : "—"}
+              sub="Список и статусы"
+              tone="ok"
+            />
 
-            <Link className="kv__item" to="/services" style={{ textDecoration: "none" }}>
-              <div className="kv__k">Услуги</div>
-              <div className="kv__v">{svcLoading ? "…" : s ? `${s.active}/${s.total}` : "—"}</div>
-            </Link>
+            {/* 3) Attention */}
+            <Tile
+              to={showNotPaid ? "/payments" : "/services"}
+              icon={attentionCount > 0 ? "⚠️" : "✅"}
+              title={attentionCount > 0 ? "Требуют действий" : "Состояние"}
+              value={svcLoading ? "…" : s ? attentionCount : "—"}
+              sub={attentionSub}
+              tone={attentionCount > 0 ? "warn" : "ok"}
+              badge={showBlocked ? <span className="home-badge home-badge--danger">есть блок</span> : null}
+            />
+
+            {/* 4) Monthly */}
+            <Tile
+              to="/services"
+              icon="📦"
+              title="В месяц"
+              value={svcLoading ? "…" : s ? fmtMoney(s.monthlyCost || 0, currencyFallback) : "—"}
+              sub="Плановый расход"
+              tone="default"
+            />
+
+            {/* 5) Bonus */}
+            <Tile
+              to="/payments"
+              icon="🎁"
+              title="Бонусы"
+              value={bonusValue}
+              sub="Начисления и списания"
+              tone="default"
+            />
+
+            {/* 6) Forecast payment (from payments forecast ready amount) */}
+            <Tile
+              to="/payments"
+              icon="🗓️"
+              title="Прогноз оплаты"
+              value={forecastAmountText || (payLoading ? "…" : "—")}
+              sub={forecastAmountText ? `Когда: ${forecastSub}` : forecastSub}
+              tone="default"
+            />
           </div>
 
-          {/* Summary tile */}
-          <Link to="/services" style={{ textDecoration: "none" }}>
-            <div
-              className="kv__item"
-              style={{
-                marginTop: 14,
-                borderRadius: 18,
-                border: "1px solid rgba(255,255,255,0.10)",
-                background:
-                  "radial-gradient(900px 220px at 18% 0%, rgba(130,160,255,0.14), transparent 55%), rgba(255,255,255,0.03)",
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
-                <div>
-                  <div className="kv__k" style={{ fontSize: 12, opacity: 0.8 }}>
-                    Состояние услуг
-                  </div>
-                  <div className="kv__v" style={{ marginTop: 6 }}>
-                    {showAttention ? (
-                      <>
-                        ⚠️ Требуют действий: <span style={{ opacity: 0.95 }}>{attentionCount}</span>
-                      </>
-                    ) : (
-                      <>Сводка статусов и прогноз оплаты</>
-                    )}
-                  </div>
-                </div>
-
-                <div style={{ opacity: 0.75, fontWeight: 800 }}>Открыть →</div>
-              </div>
-
-              <div
-                style={{
-                  marginTop: 12,
-                  display: "flex",
-                  gap: 10,
-                  overflowX: "auto",
-                  paddingBottom: 4,
-                  WebkitOverflowScrolling: "touch",
-                }}
-              >
-                <Pill to="/services" icon="✅" label="Активные" value={svcLoading ? "…" : s ? s.active : "—"} tone="ok" />
-                {showNotPaid ? <Pill to="/payments" icon="💳" label="Требуют оплаты" value={s!.notPaid} tone="warn" /> : null}
-                {showBlocked ? <Pill to="/services" icon="⛔" label="Заблокированы" value={s!.blocked} tone="danger" /> : null}
-                {showPending ? <Pill to="/services" icon="⏳" label="Подключаются" value={s!.pending} /> : null}
-                {s ? (
-                  <Pill
-                    to="/services"
-                    icon="📦"
-                    label="В месяц"
-                    value={fmtMoney(s.monthlyCost || 0, s.currency || currencyFallback)}
-                    tone="accent"
-                  />
-                ) : null}
-                {showExpSoon ? <Pill to="/services" icon="🕒" label="Скоро истекают" value={s!.expiringSoon} tone="warn" /> : null}
-                {forecastText ? <Pill to="/payments" icon="🗓️" label="Прогноз оплаты" value={forecastText} tone="accent" /> : null}
-              </div>
-
-              {payAmount ? (
-                <div style={{ marginTop: 10, fontSize: 12, opacity: 0.78 }}>
-                  К оплате обычно: <b style={{ opacity: 0.95 }}>{fmtMoney(payAmount, "RUB")}</b>{" "}
-                  <span style={{ opacity: 0.8 }}>·</span>{" "}
-                  <Link to="/payments" style={{ textDecoration: "underline", color: "rgba(255,255,255,0.85)" }}>
-                    перейти в оплату
-                  </Link>
-                </div>
-              ) : payLoading ? (
-                <div style={{ marginTop: 10, fontSize: 12, opacity: 0.7 }}>Считаем сумму для оплаты…</div>
-              ) : null}
-
-              {svcError ? <div style={{ marginTop: 10, fontSize: 12, opacity: 0.7 }}>Не удалось обновить статусы услуг.</div> : null}
-            </div>
-          </Link>
-
-          {/* Referrals (NOW from /api/me) */}
-          <Link to="/referrals" style={{ textDecoration: "none" }}>
-            <div
-              className="kv__item"
-              style={{
-                marginTop: 12,
-                borderRadius: 18,
-                border: "1px solid rgba(255,255,255,0.10)",
-                background:
-                  "radial-gradient(900px 200px at 20% 0%, rgba(170,120,255,0.12), transparent 55%), rgba(255,255,255,0.03)",
-              }}
-            >
-              <div className="row" style={{ justifyContent: "space-between", gap: 10 }}>
-                <div className="kv__k">Рефералы</div>
-                <span className="badge" style={{ opacity: 0.9 }}>
-                  важно
-                </span>
-              </div>
-
-              <div className="kv__v" style={{ marginTop: 6 }}>
-                Приглашайте друзей → получайте бонусы
-              </div>
-
-              {typeof referralsCount === "number" ? (
-                <div style={{ marginTop: 8, fontSize: 12, opacity: 0.75 }}>
-                  Приглашено: <b style={{ opacity: 0.95 }}>{referralsCount}</b> · открыть детали
-                </div>
-              ) : (
-                <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
-                  Открыть, чтобы получить ссылку для приглашений
-                </div>
-              )}
-            </div>
-          </Link>
+          {svcError ? (
+            <div style={{ marginTop: 10, fontSize: 12, opacity: 0.72 }}>Не удалось обновить статусы услуг.</div>
+          ) : null}
         </div>
       </div>
 
       {/* Install CTA — ONLY inside Telegram MiniApp */}
-      {inTelegramMiniApp && (
+      {inTelegramMiniApp ? (
         <div className="section">
           <div className="card home-install">
             <div className="home-install__glow" />
@@ -687,7 +567,6 @@ export function Home() {
               <div className="home-install__copy">
                 <div className="home-install__title">🚀 Установить ShpunApp</div>
                 <div className="home-install__sub">Откроем приложение во внешнем браузере для установки.</div>
-
                 {transfer.status === "error" && <div className="pre home-install__error">{transfer.message}</div>}
               </div>
 
@@ -699,16 +578,63 @@ export function Home() {
             </div>
           </div>
         </div>
-      )}
+      ) : null}
 
-      {/* News preview */}
+      {/* ===== Referrals ===== */}
       <div className="section">
         <div className="card">
           <div className="card__body">
-            <div className="home-news__head">
+            <div className="home-block-head">
               <div>
-                <div className="h1 home-news__title">{t("home.news.title", "Новости")}</div>
-                <p className="p">{t("home.news.subtitle", "Коротко и по делу. Полная лента — в “Новости”.")}</p>
+                <div className="h1" style={{ margin: 0 }}>Реферальная программа</div>
+                <div className="p" style={{ marginTop: 6 }}>
+                  Получай процент от пополнений твоих рефералов
+                  {incomePercent ? (
+                    <>
+                      {" "}
+                      <span className="dot" />
+                      <span style={{ color: "rgba(255,255,255,0.86)", fontWeight: 900 }}>
+                        {incomePercent}%
+                      </span>
+                    </>
+                  ) : null}
+                </div>
+              </div>
+
+              <Link className="btn" to="/referrals">
+                Открыть
+              </Link>
+            </div>
+
+            <div className="home-ref">
+              <div className="home-ref__kpi">
+                <div className="home-ref__k">Приглашено</div>
+                <div className="home-ref__v">{typeof referralsCount === "number" ? referralsCount : "—"}</div>
+              </div>
+
+              <div className="home-ref__cta">
+                <Link className="btn btn--primary" to="/referrals">
+                  Получить ссылку
+                </Link>
+                <div className="home-ref__hint">
+                  {incomePercent
+                    ? `Партнёрские бонусы: ${incomePercent}% от пополнений рефералов`
+                    : "Поделись ссылкой — получи бонус от пополнений друзей"}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ===== News ===== */}
+      <div className="section">
+        <div className="card">
+          <div className="card__body">
+            <div className="home-block-head">
+              <div>
+                <div className="h1" style={{ margin: 0 }}>{t("home.news.title", "Новости")}</div>
+                <div className="p" style={{ marginTop: 6 }}>{t("home.news.subtitle", "Коротко и по делу. Полная лента — в “Новости”.")}</div>
               </div>
               <Link className="btn" to="/feed">
                 {t("home.news.open", "Открыть")}
@@ -716,25 +642,29 @@ export function Home() {
             </div>
 
             <div className="list">
-              <div className="list__item">
-                <div className="list__main">
-                  <div className="list__title">{t("home.news.item1.title", "✅ Система стабильна — всё работает")}</div>
-                  <div className="list__sub">{t("home.news.item1.sub", "Если видишь “Can’t connect” — просто обнови страницу.")}</div>
+              <Link to="/feed" style={{ textDecoration: "none", color: "inherit" }}>
+                <div className="list__item">
+                  <div className="list__main">
+                    <div className="list__title">{t("home.news.item1.title", "✅ Система стабильна — всё работает")}</div>
+                    <div className="list__sub">{t("home.news.item1.sub", "Если видишь “Can’t connect” — просто обнови страницу.")}</div>
+                  </div>
+                  <div className="list__side">
+                    <span className="chip chip--ok">today</span>
+                  </div>
                 </div>
-                <div className="list__side">
-                  <span className="chip chip--ok">today</span>
-                </div>
-              </div>
+              </Link>
 
-              <div className="list__item">
-                <div className="list__main">
-                  <div className="list__title">{t("home.news.item2.title", "🧭 Лента — в “Новости”")}</div>
-                  <div className="list__sub">{t("home.news.item2.sub", "Главная — витрина. Новости — лента. Дальше подключим реальные данные.")}</div>
+              <Link to="/feed" style={{ textDecoration: "none", color: "inherit" }}>
+                <div className="list__item">
+                  <div className="list__main">
+                    <div className="list__title">{t("home.news.item2.title", "🧭 Лента — в “Новости”")}</div>
+                    <div className="list__sub">{t("home.news.item2.sub", "Главная — витрина. Новости — лента. Дальше подключим реальные данные.")}</div>
+                  </div>
+                  <div className="list__side">
+                    <span className="chip chip--soft">new</span>
+                  </div>
                 </div>
-                <div className="list__side">
-                  <span className="chip chip--soft">new</span>
-                </div>
-              </div>
+              </Link>
             </div>
 
             <ActionGrid>
@@ -746,12 +676,16 @@ export function Home() {
         </div>
       </div>
 
-      {/* Promo codes */}
+      {/* ===== Bonus codes (footer) ===== */}
       <div className="section">
         <div className="card">
           <div className="card__body">
-            <div className="h1 home-promo__title">{t("promo.title", "Промокоды")}</div>
-            <p className="p">{t("promo.desc", "Есть промокод? Введи его здесь — бонусы или скидка применятся к аккаунту.")}</p>
+            <div className="home-block-head">
+              <div>
+                <div className="h1" style={{ margin: 0 }}>Бонус-коды</div>
+                <div className="p" style={{ marginTop: 6 }}>Введи код — бонусы или скидка применятся к аккаунту.</div>
+              </div>
+            </div>
 
             <div className="actions actions--2">
               <div>
@@ -765,25 +699,19 @@ export function Home() {
                       state: { status: "idle" },
                     }))
                   }
-                  placeholder={t("promo.input_ph", "Например: SHPUN-2026")}
+                  placeholder="Например: SHPUN-2026"
                   autoCapitalize="characters"
                   spellCheck={false}
                 />
               </div>
 
               <button className="btn btn--primary" onClick={applyPromoStub} disabled={promo.state.status === "applying"}>
-                {promo.state.status === "applying" ? t("promo.applying", "Применяем…") : t("promo.apply", "Применить")}
+                {promo.state.status === "applying" ? "Применяем…" : "Применить"}
               </button>
             </div>
 
             {promo.state.status === "done" && <div className="pre">{promo.state.message}</div>}
             {promo.state.status === "error" && <div className="pre">{promo.state.message}</div>}
-
-            <ActionGrid>
-              <Link className="btn" to="/profile">
-                {t("promo.history", "История / статус")}
-              </Link>
-            </ActionGrid>
           </div>
         </div>
       </div>
