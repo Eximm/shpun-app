@@ -109,17 +109,31 @@ function isHttps(req: any): boolean {
   return proto === "https";
 }
 
+/**
+ * ✅ FIX #1: Telegram WebView стабильно работает с SameSite=None (в prod).
+ * В dev оставляем lax (удобнее локально).
+ */
 function cookieOptions(req: any) {
-  const isProd =
+  const prod =
     String(process.env.NODE_ENV ?? "").trim().toLowerCase() === "production";
 
   return {
     httpOnly: true,
-    sameSite: "lax" as const,
-    secure: isProd ? true : isHttps(req),
+    sameSite: prod ? ("none" as const) : ("lax" as const), // ✅ FIX
+    secure: prod ? true : isHttps(req),
     path: "/",
     maxAge: Number(process.env.SID_COOKIE_MAX_AGE_SEC || 365 * 24 * 60 * 60),
   };
+}
+
+/**
+ * ✅ FIX #2: не ротируем sid, если он уже есть.
+ * Это убирает гонку: tg auth ставит cookie, а /api/me может прийти “раньше”
+ * и уйти в 401 -> повторный tg auth -> вечная петля.
+ */
+function reuseOrCreateSid(req: any): string {
+  const existingSid = String((req.cookies as any)?.sid ?? "").trim();
+  return existingSid || createLocalSid();
 }
 
 function isProbablyEmptyTelegramWidgetPayload(p: any): boolean {
@@ -303,7 +317,9 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(502).send({ ok: false, error: "shm_user_lookup_failed" });
     }
 
-    const localSid = createLocalSid();
+    // ✅ FIX: reuse sid if present (avoid loop)
+    const localSid = reuseOrCreateSid(req);
+
     putSession(localSid, {
       shmSessionId,
       shmUserId,
@@ -393,7 +409,9 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(502).send({ ok: false, error: "shm_user_lookup_failed" });
     }
 
-    const localSid = createLocalSid();
+    // ✅ FIX: reuse sid if present (avoid loop)
+    const localSid = reuseOrCreateSid(req);
+
     putSession(localSid, {
       shmSessionId,
       shmUserId,
@@ -469,7 +487,9 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.redirect("/login?e=user_lookup_failed");
     }
 
-    const localSid = createLocalSid();
+    // ✅ FIX: reuse sid if present (avoid loop)
+    const localSid = reuseOrCreateSid(req);
+
     putSession(localSid, {
       shmSessionId,
       shmUserId,
@@ -536,7 +556,9 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(502).send({ ok: false, error: "shm_user_lookup_failed" });
     }
 
-    const localSid = createLocalSid();
+    // ✅ FIX: reuse sid if present (avoid loop)
+    const localSid = reuseOrCreateSid(req);
+
     putSession(localSid, { shmSessionId, shmUserId, createdAt: Date.now() });
 
     dbg(req, "password_auth:set_cookie_and_reply", {
