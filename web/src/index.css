@@ -1167,13 +1167,6 @@ button, a { -webkit-tap-highlight-color: transparent; }
   flex: 0 0 auto;
 }
 
-/* Badge variants */
-.home-badge { }
-.home-badge--danger {
-  border-color: rgba(255,77,109,0.22);
-  background: rgba(255,77,109,0.08);
-}
-
 /* Tile tones (keep within your palette) */
 .home-tile--ok {
   background:

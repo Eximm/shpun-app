@@ -124,21 +124,8 @@ type ApiServicesResponse = {
   forecast?: ApiForecast;
 };
 
-/** ===== Payments ===== */
-type PaySystem = {
-  name?: string;
-  shm_url?: string;
-  recurring?: string | number;
-  amount?: number;
-};
-type PaysystemsResp = { ok: true; items: PaySystem[]; raw?: any };
+/** ===== Payments forecast ===== */
 type ForecastResp = { ok: true; raw: any };
-
-function pickDefaultPayAmount(items: PaySystem[]) {
-  const v = items.find((x) => Number(x?.amount || 0) > 0)?.amount;
-  const n = v ? Math.round(Number(v)) : null;
-  return Number.isFinite(n as any) && (n as any) > 0 ? (n as number) : null;
-}
 
 function fmtMoney(n: number, cur: string) {
   const v = Number(n || 0);
@@ -161,8 +148,10 @@ function fmtShortDate(iso: string | null | undefined) {
 }
 
 /**
- * We treat /payments/forecast as the primary "ready sum" source (per your billing template logic).
- * We do NOT assume exact schema; parse common variants.
+ * Forecast parsing: we do NOT assume exact schema.
+ * We only extract:
+ * - amount (ready sum)
+ * - whenText (days/date)
  */
 function parsePaymentsForecast(raw: any): { whenText?: string; amount?: number } | null {
   if (!raw || typeof raw !== "object") return null;
@@ -248,9 +237,8 @@ export function Home() {
   const [svcSummary, setSvcSummary] = useState<ApiSummary | null>(null);
   const [svcForecast, setSvcForecast] = useState<ApiForecast | null>(null);
 
-  // payments
+  // payments forecast
   const [payLoading, setPayLoading] = useState(false);
-  const [payAmount, setPayAmount] = useState<number | null>(null);
   const [payForecast, setPayForecast] = useState<{ whenText?: string; amount?: number } | null>(null);
 
   const inTelegramMiniApp = hasTelegramInitData();
@@ -261,14 +249,12 @@ export function Home() {
 
   const displayName = profile?.displayName || profile?.login || "";
 
-  // existing code uses me.bonus; keep safe default
   const bonusValue = typeof (me as any)?.bonus === "number" ? (me as any).bonus : 0;
 
-  // referral count already used in your code
   const referralsCount: number | null =
     typeof (me as any)?.referralsCount === "number" ? (me as any).referralsCount : null;
 
-  // partner percent from billing: user.income_percent (but name in API may vary)
+  // partner percent from billing: user.income_percent (but API field name may vary)
   const incomePercentRaw =
     (me as any)?.income_percent ??
     (me as any)?.incomePercent ??
@@ -303,21 +289,12 @@ export function Home() {
     }
   }
 
-  async function loadPaymentsLite() {
+  async function loadPaymentsForecast() {
     setPayLoading(true);
     try {
-      const ps = (await apiFetch("/payments/paysystems", { method: "GET" })) as PaysystemsResp;
-      const items = ps?.items || [];
-      setPayAmount(pickDefaultPayAmount(items));
-
-      try {
-        const fc = (await apiFetch("/payments/forecast", { method: "GET" })) as ForecastResp;
-        setPayForecast(parsePaymentsForecast(fc?.raw ?? null));
-      } catch {
-        setPayForecast(null);
-      }
+      const fc = (await apiFetch("/payments/forecast", { method: "GET" })) as ForecastResp;
+      setPayForecast(parsePaymentsForecast(fc?.raw ?? null));
     } catch {
-      setPayAmount(null);
       setPayForecast(null);
     } finally {
       setPayLoading(false);
@@ -327,14 +304,14 @@ export function Home() {
   useEffect(() => {
     if (me?.ok) {
       loadServicesSummary();
-      loadPaymentsLite();
+      loadPaymentsForecast();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me?.ok]);
 
   async function hardRefresh() {
     await Promise.resolve(refetch?.());
-    await Promise.all([loadServicesSummary(), loadPaymentsLite()]);
+    await Promise.all([loadServicesSummary(), loadPaymentsForecast()]);
   }
 
   async function startTransferAndOpen() {
@@ -440,16 +417,15 @@ export function Home() {
   const s = svcSummary;
   const currencyFallback = s?.currency || balance?.currency || "RUB";
 
-  const showNotPaid = !!s && s.notPaid > 0;
   const showBlocked = !!s && s.blocked > 0;
 
-  // "Forecast payment" per your request: use ready sum from payments forecast
+  // Forecast tile: primary = ready sum from payments forecast
   const forecastAmountText =
     typeof payForecast?.amount === "number" ? fmtMoney(payForecast.amount, currencyFallback) : null;
 
+  // Sub: payment when if available, else service forecast, else placeholder
   const forecastWhenText = payForecast?.whenText || null;
 
-  // service forecast fallback (only if payments forecast absent)
   const servicesForecastText =
     svcForecast && (svcForecast.nextInDays != null || svcForecast.nextDate || svcForecast.nextAmount != null)
       ? `${svcForecast.nextInDays != null ? `через ${svcForecast.nextInDays} дн.` : svcForecast.nextDate ? fmtShortDate(svcForecast.nextDate) : "—"}${
@@ -457,10 +433,8 @@ export function Home() {
         }`
       : null;
 
-  // For tile sub: show payment "when", else service forecast, else placeholder
   const forecastSub = forecastWhenText || servicesForecastText || (payLoading ? "Считаем…" : "—");
 
-  // Nice compact sub for "actions needed"
   const attentionSub = (() => {
     if (!s) return svcLoading ? "Проверяем…" : "—";
     const parts: string[] = [];
@@ -472,7 +446,7 @@ export function Home() {
 
   return (
     <div className="section">
-      {/* ===== Header / Accent: Account + Services (tiles) ===== */}
+      {/* ===== Header / Accent: Account + Services ===== */}
       <div className="card">
         <div className="card__body">
           <div className="home-head">
@@ -490,7 +464,6 @@ export function Home() {
           </div>
 
           <div className="home-tiles">
-            {/* 1) Balance */}
             <Tile
               to="/payments"
               icon="💰"
@@ -500,7 +473,6 @@ export function Home() {
               tone="accent"
             />
 
-            {/* 2) Services */}
             <Tile
               to="/services"
               icon="🛰️"
@@ -510,9 +482,8 @@ export function Home() {
               tone="ok"
             />
 
-            {/* 3) Attention */}
             <Tile
-              to={showNotPaid ? "/payments" : "/services"}
+              to="/services"
               icon={attentionCount > 0 ? "⚠️" : "✅"}
               title={attentionCount > 0 ? "Требуют действий" : "Состояние"}
               value={svcLoading ? "…" : s ? attentionCount : "—"}
@@ -521,7 +492,6 @@ export function Home() {
               badge={showBlocked ? <span className="home-badge home-badge--danger">есть блок</span> : null}
             />
 
-            {/* 4) Monthly */}
             <Tile
               to="/services"
               icon="📦"
@@ -531,7 +501,6 @@ export function Home() {
               tone="default"
             />
 
-            {/* 5) Bonus */}
             <Tile
               to="/payments"
               icon="🎁"
@@ -541,7 +510,6 @@ export function Home() {
               tone="default"
             />
 
-            {/* 6) Forecast payment (from payments forecast ready amount) */}
             <Tile
               to="/payments"
               icon="🗓️"
@@ -593,9 +561,7 @@ export function Home() {
                     <>
                       {" "}
                       <span className="dot" />
-                      <span style={{ color: "rgba(255,255,255,0.86)", fontWeight: 900 }}>
-                        {incomePercent}%
-                      </span>
+                      <span style={{ color: "rgba(255,255,255,0.86)", fontWeight: 900 }}>{incomePercent}%</span>
                     </>
                   ) : null}
                 </div>
@@ -619,7 +585,7 @@ export function Home() {
                 <div className="home-ref__hint">
                   {incomePercent
                     ? `Партнёрские бонусы: ${incomePercent}% от пополнений рефералов`
-                    : "Поделись ссылкой — получи бонус от пополнений друзей"}
+                    : "Поделись ссылкой — бонусы начислятся автоматически"}
                 </div>
               </div>
             </div>
