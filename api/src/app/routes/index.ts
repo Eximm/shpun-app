@@ -16,7 +16,7 @@ export async function registerRoutes(app: FastifyInstance) {
       await servicesRoutes(api)
       await paymentsRoutes(api)
       await activityRoutes(api)
-    },
+      },
     { prefix: '/api' }
   )
 }

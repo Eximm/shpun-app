@@ -150,16 +150,6 @@ function fmtShortDate(iso: string | null | undefined) {
   return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "2-digit" });
 }
 
-/** ===== Referrals (from /api/referrals/summary) ===== */
-type ApiReferralsSummary = {
-  ok: true;
-  invited: number;
-  ref_link?: string | null;
-  ref_code?: string | null;
-  earned_bonus?: number | null;
-  paid_count?: number | null;
-};
-
 /** ===== Payments (reuse what you already have in Payments module) ===== */
 type PaySystem = {
   name?: string;
@@ -301,7 +291,6 @@ function Pill({
         outline: "none",
       }}
       onMouseDown={(e) => {
-        // tiny pressed feel (without CSS files)
         const el = (e.currentTarget.firstChild as HTMLElement) || null;
         if (el) el.style.transform = "translateY(1px)";
       }}
@@ -350,10 +339,6 @@ export function Home() {
   const [svcSummary, setSvcSummary] = useState<ApiSummary | null>(null);
   const [svcForecast, setSvcForecast] = useState<ApiForecast | null>(null);
 
-  // referrals
-  const [refLoading, setRefLoading] = useState(false);
-  const [refSummary, setRefSummary] = useState<ApiReferralsSummary | null>(null);
-
   // payments (for forecast + default amount)
   const [payLoading, setPayLoading] = useState(false);
   const [payAmount, setPayAmount] = useState<number | null>(null);
@@ -365,6 +350,9 @@ export function Home() {
   const profile = me?.profile;
   const balance = me?.balance;
   const displayName = profile?.displayName || profile?.login || "";
+
+  const referralsCount: number | null =
+    typeof (me as any)?.referralsCount === "number" ? (me as any).referralsCount : null;
 
   const attentionCount = useMemo(() => {
     const s = svcSummary;
@@ -385,19 +373,6 @@ export function Home() {
       setSvcForecast(null);
     } finally {
       setSvcLoading(false);
-    }
-  }
-
-  async function loadReferralsSummary() {
-    setRefLoading(true);
-    try {
-      const r = (await apiFetch("/referrals/summary", { method: "GET" })) as ApiReferralsSummary;
-      if (r?.ok) setRefSummary(r);
-      else setRefSummary(null);
-    } catch {
-      setRefSummary(null);
-    } finally {
-      setRefLoading(false);
     }
   }
 
@@ -425,7 +400,6 @@ export function Home() {
   useEffect(() => {
     if (me?.ok) {
       loadServicesSummary();
-      loadReferralsSummary();
       loadPaymentsLite();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -493,10 +467,9 @@ export function Home() {
 
   async function hardRefresh() {
     await Promise.resolve(refetch?.());
-    await Promise.all([loadServicesSummary(), loadReferralsSummary(), loadPaymentsLite()]);
+    await Promise.all([loadServicesSummary(), loadPaymentsLite()]);
   }
 
-  // --- no hooks below ---
   if (loading) {
     return (
       <div className="section">
@@ -540,14 +513,12 @@ export function Home() {
   const s = svcSummary;
   const currencyFallback = s?.currency || balance?.currency || "RUB";
 
-  // show only meaningful pills (avoid noise)
   const showAttention = !!s && attentionCount > 0;
   const showNotPaid = !!s && s.notPaid > 0;
   const showBlocked = !!s && s.blocked > 0;
   const showPending = !!s && s.pending > 0;
   const showExpSoon = !!s && s.expiringSoon > 0;
 
-  // forecast: prefer payments forecast, fallback to services forecast
   const paymentForecastText = payForecast
     ? `${payForecast.whenText ?? "—"}${payForecast.amount ? ` · ~${fmtMoney(payForecast.amount, currencyFallback)}` : ""}`
     : null;
@@ -563,7 +534,6 @@ export function Home() {
 
   return (
     <div className="section">
-      {/* User hero */}
       <div className="card">
         <div className="card__body">
           <div className="home-hero__head">
@@ -583,9 +553,7 @@ export function Home() {
           <div className="kv kv--3">
             <Link className="kv__item" to="/payments" style={{ textDecoration: "none" }}>
               <div className="kv__k">Баланс</div>
-              <div className="kv__v">
-                {balance ? <Money amount={balance.amount} currency={balance.currency} /> : "—"}
-              </div>
+              <div className="kv__v">{balance ? <Money amount={balance.amount} currency={balance.currency} /> : "—"}</div>
             </Link>
 
             <Link className="kv__item" to="/payments" style={{ textDecoration: "none" }}>
@@ -641,12 +609,8 @@ export function Home() {
                 }}
               >
                 <Pill to="/services" icon="✅" label="Активные" value={svcLoading ? "…" : s ? s.active : "—"} tone="ok" />
-                {showNotPaid ? (
-                  <Pill to="/payments" icon="💳" label="Требуют оплаты" value={s!.notPaid} tone="warn" />
-                ) : null}
-                {showBlocked ? (
-                  <Pill to="/services" icon="⛔" label="Заблокированы" value={s!.blocked} tone="danger" />
-                ) : null}
+                {showNotPaid ? <Pill to="/payments" icon="💳" label="Требуют оплаты" value={s!.notPaid} tone="warn" /> : null}
+                {showBlocked ? <Pill to="/services" icon="⛔" label="Заблокированы" value={s!.blocked} tone="danger" /> : null}
                 {showPending ? <Pill to="/services" icon="⏳" label="Подключаются" value={s!.pending} /> : null}
                 {s ? (
                   <Pill
@@ -657,12 +621,8 @@ export function Home() {
                     tone="accent"
                   />
                 ) : null}
-                {showExpSoon ? (
-                  <Pill to="/services" icon="🕒" label="Скоро истекают" value={s!.expiringSoon} tone="warn" />
-                ) : null}
-                {forecastText ? (
-                  <Pill to="/payments" icon="🗓️" label="Прогноз оплаты" value={forecastText} tone="accent" />
-                ) : null}
+                {showExpSoon ? <Pill to="/services" icon="🕒" label="Скоро истекают" value={s!.expiringSoon} tone="warn" /> : null}
+                {forecastText ? <Pill to="/payments" icon="🗓️" label="Прогноз оплаты" value={forecastText} tone="accent" /> : null}
               </div>
 
               {payAmount ? (
@@ -677,13 +637,11 @@ export function Home() {
                 <div style={{ marginTop: 10, fontSize: 12, opacity: 0.7 }}>Считаем сумму для оплаты…</div>
               ) : null}
 
-              {svcError ? (
-                <div style={{ marginTop: 10, fontSize: 12, opacity: 0.7 }}>Не удалось обновить статусы услуг.</div>
-              ) : null}
+              {svcError ? <div style={{ marginTop: 10, fontSize: 12, opacity: 0.7 }}>Не удалось обновить статусы услуг.</div> : null}
             </div>
           </Link>
 
-          {/* Referrals */}
+          {/* Referrals (NOW from /api/me) */}
           <Link to="/referrals" style={{ textDecoration: "none" }}>
             <div
               className="kv__item"
@@ -706,12 +664,10 @@ export function Home() {
                 Приглашайте друзей → получайте бонусы
               </div>
 
-              {refSummary ? (
+              {typeof referralsCount === "number" ? (
                 <div style={{ marginTop: 8, fontSize: 12, opacity: 0.75 }}>
-                  Приглашено: <b style={{ opacity: 0.95 }}>{refSummary.invited}</b> · открыть детали
+                  Приглашено: <b style={{ opacity: 0.95 }}>{referralsCount}</b> · открыть детали
                 </div>
-              ) : refLoading ? (
-                <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>Обновляем статистику…</div>
               ) : (
                 <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
                   Открыть, чтобы получить ссылку для приглашений
@@ -732,17 +688,11 @@ export function Home() {
                 <div className="home-install__title">🚀 Установить ShpunApp</div>
                 <div className="home-install__sub">Откроем приложение во внешнем браузере для установки.</div>
 
-                {transfer.status === "error" && (
-                  <div className="pre home-install__error">{transfer.message}</div>
-                )}
+                {transfer.status === "error" && <div className="pre home-install__error">{transfer.message}</div>}
               </div>
 
               <div className="home-install__btnwrap">
-                <button
-                  className="btn btn--primary home-install__btn"
-                  onClick={startTransferAndOpen}
-                  disabled={transferBusy}
-                >
+                <button className="btn btn--primary home-install__btn" onClick={startTransferAndOpen} disabled={transferBusy}>
                   {transferBusy ? "Открываем…" : "Открыть в браузере"}
                 </button>
               </div>
@@ -769,9 +719,7 @@ export function Home() {
               <div className="list__item">
                 <div className="list__main">
                   <div className="list__title">{t("home.news.item1.title", "✅ Система стабильна — всё работает")}</div>
-                  <div className="list__sub">
-                    {t("home.news.item1.sub", "Если видишь “Can’t connect” — просто обнови страницу.")}
-                  </div>
+                  <div className="list__sub">{t("home.news.item1.sub", "Если видишь “Can’t connect” — просто обнови страницу.")}</div>
                 </div>
                 <div className="list__side">
                   <span className="chip chip--ok">today</span>
@@ -781,9 +729,7 @@ export function Home() {
               <div className="list__item">
                 <div className="list__main">
                   <div className="list__title">{t("home.news.item2.title", "🧭 Лента — в “Новости”")}</div>
-                  <div className="list__sub">
-                    {t("home.news.item2.sub", "Главная — витрина. Новости — лента. Дальше подключим реальные данные.")}
-                  </div>
+                  <div className="list__sub">{t("home.news.item2.sub", "Главная — витрина. Новости — лента. Дальше подключим реальные данные.")}</div>
                 </div>
                 <div className="list__side">
                   <span className="chip chip--soft">new</span>
@@ -805,9 +751,7 @@ export function Home() {
         <div className="card">
           <div className="card__body">
             <div className="h1 home-promo__title">{t("promo.title", "Промокоды")}</div>
-            <p className="p">
-              {t("promo.desc", "Есть промокод? Введи его здесь — бонусы или скидка применятся к аккаунту.")}
-            </p>
+            <p className="p">{t("promo.desc", "Есть промокод? Введи его здесь — бонусы или скидка применятся к аккаунту.")}</p>
 
             <div className="actions actions--2">
               <div>
@@ -827,14 +771,8 @@ export function Home() {
                 />
               </div>
 
-              <button
-                className="btn btn--primary"
-                onClick={applyPromoStub}
-                disabled={promo.state.status === "applying"}
-              >
-                {promo.state.status === "applying"
-                  ? t("promo.applying", "Применяем…")
-                  : t("promo.apply", "Применить")}
+              <button className="btn btn--primary" onClick={applyPromoStub} disabled={promo.state.status === "applying"}>
+                {promo.state.status === "applying" ? t("promo.applying", "Применяем…") : t("promo.apply", "Применить")}
               </button>
             </div>
 

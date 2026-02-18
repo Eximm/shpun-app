@@ -60,6 +60,7 @@ export async function userRoutes(app: FastifyInstance) {
     const balance = toNum(meRaw.balance, 0);
     const bonus = toNum(meRaw.bonus, 0);
     const discount = toNum(meRaw.discount, 0);
+    const referralsCount = toNum(meRaw.referrals_count, 0);
 
     const payload: any = {
       ok: true,
@@ -83,6 +84,9 @@ export async function userRoutes(app: FastifyInstance) {
       balance: { amount: balance, currency: "RUB" },
       bonus,
       discount,
+
+      // ✅ рефералы из биллинга
+      referralsCount,
 
       shm: { status: 200 },
     };
