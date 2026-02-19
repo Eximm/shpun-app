@@ -23,75 +23,34 @@ function hasTelegramInitData(): boolean {
   return initData.length > 0;
 }
 
-function isAndroid(): boolean {
-  return /Android/i.test(navigator.userAgent || "");
-}
+/**
+ * ✅ New behavior: no transfer, no cookies, no session migration.
+ * Just open an external browser to the page with Telegram Widget auth.
+ *
+ * If your widget is NOT on /login — change targetPath to the correct route.
+ */
+function openExternalAuthPage() {
+  const targetPath = "/login";
 
-function normalizeConsumeUrl(raw: string): string {
-  const s = String(raw || "").trim();
-  if (!s) return s;
+  const url = new URL(window.location.href);
+  url.pathname = targetPath;
+  url.search = "";
+  url.hash = "";
+  url.searchParams.set("from", "tg");
 
-  const origin = window.location.origin;
-  if (s.startsWith("/")) return origin + s;
+  const tg = getTelegramWebApp();
 
   try {
-    const u = new URL(s);
-    const cur = new URL(origin);
-
-    if (u.host !== cur.host) {
-      u.protocol = cur.protocol;
-      u.host = cur.host;
+    if (tg?.openLink) {
+      tg.openLink(url.toString(), { try_instant_view: false });
+      return;
     }
-    return u.toString();
   } catch {
-    return s;
+    // fall back below
   }
+
+  window.open(url.toString(), "_blank", "noopener,noreferrer");
 }
-
-function openInBrowser(url: string) {
-  const tg = getTelegramWebApp();
-  const android = isAndroid();
-
-  if (tg?.openLink) {
-    try {
-      tg.openLink(url, { try_instant_view: false });
-      if (android) {
-        setTimeout(() => {
-          try {
-            tg.close();
-          } catch {
-            // ignore
-          }
-        }, 300);
-      }
-      return;
-    } catch {
-      // continue fallbacks
-    }
-  }
-
-  if (android) {
-    try {
-      const u = new URL(url);
-      const scheme = u.protocol.replace(":", "");
-      const intentUrl =
-        `intent://${u.host}${u.pathname}${u.search}${u.hash}` +
-        `#Intent;scheme=${scheme};package=com.android.chrome;end`;
-      window.location.href = intentUrl;
-      return;
-    } catch {
-      // ignore
-    }
-  }
-
-  window.open(url, "_blank", "noopener,noreferrer");
-}
-
-type TransferState =
-  | { status: "idle" }
-  | { status: "loading" }
-  | { status: "ready"; consumeUrl: string; expiresAt?: number }
-  | { status: "error"; message: string };
 
 type PromoState =
   | { status: "idle" }
@@ -148,8 +107,8 @@ function fmtShortDate(iso: string | null | undefined) {
 }
 
 /**
- * Forecast parsing: we do NOT assume exact schema.
- * We only extract:
+ * Forecast parsing: do NOT assume exact schema.
+ * Extract:
  * - amount (ready sum)
  * - whenText (days/date)
  */
@@ -224,8 +183,6 @@ export function Home() {
   const { t } = useI18n();
   const { me, loading, error, refetch } = useMe();
 
-  const [transfer, setTransfer] = useState<TransferState>({ status: "idle" });
-
   const [promo, setPromo] = useState<{ code: string; state: PromoState }>({
     code: "",
     state: { status: "idle" },
@@ -242,11 +199,9 @@ export function Home() {
   const [payForecast, setPayForecast] = useState<{ whenText?: string; amount?: number } | null>(null);
 
   const inTelegramMiniApp = hasTelegramInitData();
-  const transferBusy = transfer.status === "loading";
 
   const profile = me?.profile;
   const balance = me?.balance;
-
   const displayName = profile?.displayName || profile?.login || "";
 
   const bonusValue = typeof (me as any)?.bonus === "number" ? (me as any).bonus : 0;
@@ -254,7 +209,7 @@ export function Home() {
   const referralsCount: number | null =
     typeof (me as any)?.referralsCount === "number" ? (me as any).referralsCount : null;
 
-  // partner percent from billing: user.income_percent (but API field name may vary)
+  // partner percent from billing: user.income_percent (API name can vary)
   const incomePercentRaw =
     (me as any)?.income_percent ??
     (me as any)?.incomePercent ??
@@ -312,47 +267,6 @@ export function Home() {
   async function hardRefresh() {
     await Promise.resolve(refetch?.());
     await Promise.all([loadServicesSummary(), loadPaymentsForecast()]);
-  }
-
-  async function startTransferAndOpen() {
-    try {
-      setTransfer({ status: "loading" });
-
-      const res = await fetch("/api/auth/transfer/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({}),
-      });
-
-      const json = await res.json().catch(() => null);
-
-      if (!res.ok || !json?.ok) {
-        setTransfer({
-          status: "error",
-          message: t("home.install.error", "Не удалось открыть в браузере. Попробуйте ещё раз."),
-        });
-        return;
-      }
-
-      const rawConsumeUrl = String(json.consume_url || "").trim();
-      if (!rawConsumeUrl) {
-        setTransfer({
-          status: "error",
-          message: t("home.install.error", "Не удалось открыть в браузере. Попробуйте ещё раз."),
-        });
-        return;
-      }
-
-      const consumeUrl = normalizeConsumeUrl(rawConsumeUrl);
-      setTransfer({ status: "ready", consumeUrl });
-      openInBrowser(consumeUrl);
-    } catch {
-      setTransfer({
-        status: "error",
-        message: t("home.install.error", "Не удалось открыть в браузере. Попробуйте ещё раз."),
-      });
-    }
   }
 
   async function applyPromoStub() {
@@ -423,7 +337,6 @@ export function Home() {
   const forecastAmountText =
     typeof payForecast?.amount === "number" ? fmtMoney(payForecast.amount, currencyFallback) : null;
 
-  // Sub: payment when if available, else service forecast, else placeholder
   const forecastWhenText = payForecast?.whenText || null;
 
   const servicesForecastText =
@@ -526,7 +439,7 @@ export function Home() {
         </div>
       </div>
 
-      {/* Install CTA — ONLY inside Telegram MiniApp */}
+      {/* ===== Install CTA — ONLY inside Telegram MiniApp ===== */}
       {inTelegramMiniApp ? (
         <div className="section">
           <div className="card home-install">
@@ -534,13 +447,12 @@ export function Home() {
             <div className="card__body">
               <div className="home-install__copy">
                 <div className="home-install__title">🚀 Установить ShpunApp</div>
-                <div className="home-install__sub">Откроем приложение во внешнем браузере для установки.</div>
-                {transfer.status === "error" && <div className="pre home-install__error">{transfer.message}</div>}
+                <div className="home-install__sub">Откроем приложение во внешнем браузере для входа через Telegram Widget.</div>
               </div>
 
               <div className="home-install__btnwrap">
-                <button className="btn btn--primary home-install__btn" onClick={startTransferAndOpen} disabled={transferBusy}>
-                  {transferBusy ? "Открываем…" : "Открыть в браузере"}
+                <button className="btn btn--primary home-install__btn" onClick={openExternalAuthPage}>
+                  Открыть в браузере
                 </button>
               </div>
             </div>
