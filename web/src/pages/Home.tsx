@@ -183,6 +183,25 @@ function Tile({
   );
 }
 
+/** ===== Referrals status from /api/referrals/status ===== */
+type ReferralsStatusResp = {
+  ok: number | boolean;
+  data?: {
+    referrals?: {
+      enabled?: number;
+      kind?: string;
+      income_percent?: number;
+      referrals_count?: number;
+      bonus?: number;
+    };
+  };
+};
+
+function toNum(v: any, def = 0) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : def;
+}
+
 export function Home() {
   const { t } = useI18n();
   const { me, loading, error, refetch } = useMe();
@@ -202,6 +221,11 @@ export function Home() {
   const [payLoading, setPayLoading] = useState(false);
   const [payForecast, setPayForecast] = useState<{ whenText?: string; amount?: number } | null>(null);
 
+  // referrals status
+  const [refsLoading, setRefsLoading] = useState(false);
+  const [refsError, setRefsError] = useState<string | null>(null);
+  const [refs, setRefs] = useState<{ incomePercent: number; referralsCount: number; bonus: number } | null>(null);
+
   const inTelegramMiniApp = hasTelegramInitData();
 
   const profile = me?.profile;
@@ -209,22 +233,6 @@ export function Home() {
   const displayName = profile?.displayName || profile?.login || "";
 
   const bonusValue = typeof (me as any)?.bonus === "number" ? (me as any).bonus : 0;
-
-  const referralsCount: number | null =
-    typeof (me as any)?.referralsCount === "number" ? (me as any).referralsCount : null;
-
-  // partner percent from billing: user.income_percent (API name can vary)
-  const incomePercentRaw =
-    (me as any)?.income_percent ??
-    (me as any)?.incomePercent ??
-    (me as any)?.partner_income_percent ??
-    (me as any)?.partnerIncomePercent ??
-    null;
-
-  const incomePercent: number | null = (() => {
-    const n = Number(incomePercentRaw);
-    return Number.isFinite(n) && n > 0 ? n : null;
-  })();
 
   const attentionCount = useMemo(() => {
     const s = svcSummary;
@@ -260,17 +268,37 @@ export function Home() {
     }
   }
 
+  async function loadReferralsStatus() {
+    setRefsLoading(true);
+    setRefsError(null);
+    try {
+      const r = (await apiFetch("/referrals/status", { method: "GET" })) as ReferralsStatusResp;
+      const rr = (r as any)?.data?.referrals ?? {};
+      setRefs({
+        incomePercent: toNum(rr.income_percent, 0),
+        referralsCount: toNum(rr.referrals_count, 0),
+        bonus: toNum(rr.bonus, 0),
+      });
+    } catch (e: any) {
+      setRefs(null);
+      setRefsError(e?.message || "Failed to load referrals");
+    } finally {
+      setRefsLoading(false);
+    }
+  }
+
   useEffect(() => {
     if (me?.ok) {
       loadServicesSummary();
       loadPaymentsForecast();
+      loadReferralsStatus();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me?.ok]);
 
   async function hardRefresh() {
     await Promise.resolve(refetch?.());
-    await Promise.all([loadServicesSummary(), loadPaymentsForecast()]);
+    await Promise.all([loadServicesSummary(), loadPaymentsForecast(), loadReferralsStatus()]);
   }
 
   async function applyPromoStub() {
@@ -359,6 +387,9 @@ export function Home() {
     if (parts.length === 0) return "Всё в порядке";
     return parts.join(" · ");
   })();
+
+  const referralsCount = refs?.referralsCount ?? null;
+  const incomePercent = refs?.incomePercent ?? null;
 
   return (
     <div className="section">
@@ -472,7 +503,13 @@ export function Home() {
                 <div className="h1" style={{ margin: 0 }}>Реферальная программа</div>
                 <div className="p" style={{ marginTop: 6 }}>
                   Получай процент от пополнений твоих рефералов
-                  {incomePercent ? (
+                  {refsLoading ? (
+                    <>
+                      {" "}
+                      <span className="dot" />
+                      <span style={{ opacity: 0.75 }}>…</span>
+                    </>
+                  ) : incomePercent != null && incomePercent > 0 ? (
                     <>
                       {" "}
                       <span className="dot" />
@@ -490,7 +527,9 @@ export function Home() {
             <div className="home-ref">
               <div className="home-ref__kpi">
                 <div className="home-ref__k">Приглашено</div>
-                <div className="home-ref__v">{typeof referralsCount === "number" ? referralsCount : "—"}</div>
+                <div className="home-ref__v">
+                  {refsLoading ? "…" : typeof referralsCount === "number" ? referralsCount : "—"}
+                </div>
               </div>
 
               <div className="home-ref__cta">
@@ -498,12 +537,15 @@ export function Home() {
                   Получить ссылку
                 </Link>
                 <div className="home-ref__hint">
-                  {incomePercent
-                    ? `Партнёрские бонусы: ${incomePercent}% от пополнений рефералов`
-                    : "Поделись ссылкой — бонусы начислятся автоматически"}
+                  {refsError
+                    ? "Не удалось загрузить рефералы. Нажми “⟳ Обновить”."
+                    : incomePercent != null && incomePercent > 0
+                      ? "Бонусы начисляются автоматически после оплаты рефералов"
+                      : "Поделись ссылкой — и получай бонусы"}
                 </div>
               </div>
             </div>
+
           </div>
         </div>
       </div>

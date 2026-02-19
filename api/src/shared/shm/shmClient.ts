@@ -355,3 +355,19 @@ export async function shmShpunAppTemplate<T = any>(
 export async function shmShpunAppStatus(shmSessionId: string) {
   return await shmShpunAppTemplate<any>(shmSessionId, "status");
 }
+
+/** Рефералы: статус (процент/кол-во/бонусы) */
+export async function shmShpunAppReferralsStatus(shmSessionId: string) {
+  return await shmShpunAppTemplate<any>(shmSessionId, "referrals.status");
+}
+
+/** Рефералы: список приглашённых (limit/offset) */
+export async function shmShpunAppReferralsList(
+  shmSessionId: string,
+  opts?: { limit?: number; offset?: number }
+) {
+  return await shmShpunAppTemplate<any>(shmSessionId, "referrals.list", {
+    limit: opts?.limit ?? 7,
+    offset: opts?.offset ?? 0,
+  });
+}
