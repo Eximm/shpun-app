@@ -1,5 +1,5 @@
 // api/src/modules/user/me.ts
-import { shmFetch, shmGetMe, toFormUrlEncoded } from "../../shared/shm/shmClient.js";
+import { shmGetMe, shmShpunAppStatus } from "../../shared/shm/shmClient.js";
 
 export type MeView = {
   userId: number;
@@ -33,12 +33,7 @@ function toStr(v: any, fallback = "") {
 
 async function getPasswordSet(shmSessionId: string): Promise<boolean> {
   try {
-    const r = await shmFetch<any>(null, "v1/template/shpun_app", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: toFormUrlEncoded({ session_id: shmSessionId, action: "status" }),
-    });
-
+    const r = await shmShpunAppStatus(shmSessionId);
     const flag = (r.json as any)?.data?.auth?.password_set;
     return flag === 1 || flag === "1";
   } catch {

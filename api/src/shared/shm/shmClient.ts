@@ -324,3 +324,34 @@ export async function shmDeleteAutopayment(sessionId: string) {
     method: "DELETE",
   });
 }
+
+// =====================
+// TEMPLATE: ShpunApp
+// =====================
+
+/**
+ * Унифицированный вызов TT2-шаблона приложения в биллинге.
+ * ВАЖНО: отправляем form-urlencoded, потому что TT2 читает request.params надёжно в таком режиме.
+ */
+export async function shmShpunAppTemplate<T = any>(
+  shmSessionId: string,
+  action: string,
+  extraParams?: Record<string, any>
+) {
+  const flat: Record<string, any> = {
+    session_id: shmSessionId,
+    action,
+    ...(extraParams ?? {}),
+  };
+
+  return await shmFetch<T>(null, "v1/template/shpun_app", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: toFormUrlEncoded(flat),
+  });
+}
+
+/** Короткий хелпер: статус (в т.ч. password_set) */
+export async function shmShpunAppStatus(shmSessionId: string) {
+  return await shmShpunAppTemplate<any>(shmSessionId, "status");
+}
