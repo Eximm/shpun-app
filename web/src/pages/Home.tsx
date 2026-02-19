@@ -24,10 +24,10 @@ function hasTelegramInitData(): boolean {
 }
 
 /**
- * ✅ New behavior: no transfer, no cookies, no session migration.
- * Just open an external browser to the page with Telegram Widget auth.
+ * ✅ No transfer, no cookie migration.
+ * Just open external browser to the page with Telegram Widget auth.
  *
- * If your widget is NOT on /login — change targetPath to the correct route.
+ * If your widget is NOT on /login — change targetPath.
  */
 function openExternalAuthPage() {
   const targetPath = "/login";
@@ -46,7 +46,7 @@ function openExternalAuthPage() {
       return;
     }
   } catch {
-    // fall back below
+    // fallback below
   }
 
   window.open(url.toString(), "_blank", "noopener,noreferrer");
@@ -99,6 +99,20 @@ function fmtMoney(n: number, cur: string) {
   }
 }
 
+function fmtMoneyForecast(n: number, cur: string) {
+  const v = Number(n || 0);
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: cur || "RUB",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }).format(v);
+  } catch {
+    return `${v} ${cur || "RUB"}`;
+  }
+}
+
 function fmtShortDate(iso: string | null | undefined) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -107,31 +121,21 @@ function fmtShortDate(iso: string | null | undefined) {
 }
 
 /**
- * Forecast parsing: do NOT assume exact schema.
- * Extract:
- * - amount (ready sum)
- * - whenText (days/date)
+ * ✅ Strictly matches your real payload:
+ * raw: { data: [ { total: 117.35, ... } ], date: "Thu Feb ..." }
  */
 function parsePaymentsForecast(raw: any): { whenText?: string; amount?: number } | null {
   if (!raw || typeof raw !== "object") return null;
 
+  const data0 = Array.isArray(raw.data) && raw.data.length ? raw.data[0] : null;
+
   const amount =
-    Number(raw.amount ?? raw.next_amount ?? raw.nextAmount ?? raw.sum ?? raw.to_pay ?? raw.pay_amount) || null;
+    typeof data0?.total === "number" && Number.isFinite(data0.total) ? data0.total : null;
 
-  const nextInDays =
-    raw.next_in_days ?? raw.nextInDays ?? raw.in_days ?? raw.days_left ?? raw.daysLeft ?? null;
+  const whenText =
+    typeof raw.date === "string" && raw.date ? fmtShortDate(raw.date) : undefined;
 
-  const nextDate =
-    raw.next_date ?? raw.nextDate ?? raw.date ?? raw.pay_date ?? raw.payment_date ?? null;
-
-  let whenText: string | undefined;
-  if (typeof nextInDays === "number" && Number.isFinite(nextInDays)) {
-    whenText = `через ${Math.max(0, Math.round(nextInDays))} дн.`;
-  } else if (typeof nextDate === "string" && nextDate) {
-    whenText = fmtShortDate(nextDate);
-  }
-
-  if (!whenText && !amount) return null;
+  if (!whenText && amount == null) return null;
   return { whenText, amount: amount ?? undefined };
 }
 
@@ -333,16 +337,15 @@ export function Home() {
 
   const showBlocked = !!s && s.blocked > 0;
 
-  // Forecast tile: primary = ready sum from payments forecast
   const forecastAmountText =
-    typeof payForecast?.amount === "number" ? fmtMoney(payForecast.amount, currencyFallback) : null;
+    typeof payForecast?.amount === "number" ? fmtMoneyForecast(payForecast.amount, currencyFallback) : null;
 
   const forecastWhenText = payForecast?.whenText || null;
 
   const servicesForecastText =
     svcForecast && (svcForecast.nextInDays != null || svcForecast.nextDate || svcForecast.nextAmount != null)
       ? `${svcForecast.nextInDays != null ? `через ${svcForecast.nextInDays} дн.` : svcForecast.nextDate ? fmtShortDate(svcForecast.nextDate) : "—"}${
-          svcForecast.nextAmount != null ? ` · ~${fmtMoney(svcForecast.nextAmount, svcForecast.currency || currencyFallback)}` : ""
+          svcForecast.nextAmount != null ? ` · ~${fmtMoneyForecast(svcForecast.nextAmount, svcForecast.currency || currencyFallback)}` : ""
         }`
       : null;
 
@@ -428,7 +431,7 @@ export function Home() {
               icon="🗓️"
               title="Прогноз оплаты"
               value={forecastAmountText || (payLoading ? "…" : "—")}
-              sub={forecastAmountText ? `Когда: ${forecastSub}` : forecastSub}
+              sub={forecastAmountText ? `${forecastSub}` : forecastSub}
               tone="default"
             />
           </div>
