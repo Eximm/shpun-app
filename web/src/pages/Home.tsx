@@ -5,6 +5,10 @@ import { useMe } from "../app/auth/useMe";
 import { useI18n } from "../shared/i18n";
 import { apiFetch } from "../shared/api/client";
 
+/* ========================================================================
+   UTIL: Money formatting
+   ======================================================================== */
+
 function Money({ amount, currency }: { amount: number; currency: string }) {
   const formatted =
     currency === "RUB"
@@ -12,6 +16,10 @@ function Money({ amount, currency }: { amount: number; currency: string }) {
       : new Intl.NumberFormat("ru-RU").format(amount) + ` ${currency}`;
   return <>{formatted}</>;
 }
+
+/* ========================================================================
+   UTIL: Telegram env helpers
+   ======================================================================== */
 
 function getTelegramWebApp(): any | null {
   return (window as any)?.Telegram?.WebApp ?? null;
@@ -52,6 +60,10 @@ function openExternalAuthPage() {
   window.open(url.toString(), "_blank", "noopener,noreferrer");
 }
 
+/* ========================================================================
+   TYPES: Promo & API payloads
+   ======================================================================== */
+
 type PromoState =
   | { status: "idle" }
   | { status: "applying" }
@@ -85,6 +97,10 @@ type ApiServicesResponse = {
 
 /** ===== Payments forecast ===== */
 type ForecastResp = { ok: true; raw: any };
+
+/* ========================================================================
+   UTIL: Formatting helpers
+   ======================================================================== */
 
 function fmtMoney(n: number, cur: string) {
   const v = Number(n || 0);
@@ -147,6 +163,10 @@ function parsePaymentsForecast(
   return { whenText, amount: amount ?? undefined };
 }
 
+/* ========================================================================
+   UI: Small building blocks
+   ======================================================================== */
+
 function ActionGrid({ children }: { children: React.ReactNode }) {
   const items = React.Children.toArray(children).filter(Boolean);
   const n = Math.max(1, Math.min(5, items.length));
@@ -199,6 +219,10 @@ function Tile({
   );
 }
 
+/* ========================================================================
+   PAGE: Home
+   ======================================================================== */
+
 export function Home() {
   const { t } = useI18n();
   const { me, loading, error, refetch } = useMe();
@@ -236,13 +260,15 @@ export function Home() {
     return Number(s.blocked || 0) + Number(s.notPaid || 0);
   }, [svcSummary]);
 
+  /* ======================================================================
+     DATA: load services + payments forecast
+     ====================================================================== */
+
   async function loadServicesSummary() {
     setSvcLoading(true);
     setSvcError(null);
     try {
-      const r = (await apiFetch("/services", {
-        method: "GET",
-      })) as ApiServicesResponse;
+      const r = (await apiFetch("/services", { method: "GET" })) as ApiServicesResponse;
       setSvcSummary(r?.summary ?? null);
       setSvcForecast((r as any)?.forecast ?? null);
     } catch (e: any) {
@@ -257,9 +283,7 @@ export function Home() {
   async function loadPaymentsForecast() {
     setPayLoading(true);
     try {
-      const fc = (await apiFetch("/payments/forecast", {
-        method: "GET",
-      })) as ForecastResp;
+      const fc = (await apiFetch("/payments/forecast", { method: "GET" })) as ForecastResp;
       setPayForecast(parsePaymentsForecast(fc?.raw ?? null));
     } catch {
       setPayForecast(null);
@@ -281,6 +305,10 @@ export function Home() {
     await Promise.all([loadServicesSummary(), loadPaymentsForecast()]);
   }
 
+  /* ======================================================================
+     ACTION: promo stub
+     ====================================================================== */
+
   async function applyPromoStub() {
     const code = promo.code.trim();
     if (!code) {
@@ -298,13 +326,14 @@ export function Home() {
       ...p,
       state: {
         status: "done",
-        message: t(
-          "promo.done.stub",
-          "Бонус-коды скоро будут доступны прямо в приложении ✨"
-        ),
+        message: t("promo.done.stub", "Бонус-коды скоро будут доступны прямо в приложении ✨"),
       },
     }));
   }
+
+  /* ======================================================================
+     STATES: loading / error
+     ====================================================================== */
 
   if (loading) {
     return (
@@ -346,8 +375,13 @@ export function Home() {
     );
   }
 
+  /* ======================================================================
+     DERIVED: values for tiles
+     ====================================================================== */
+
   const s = svcSummary;
   const currencyFallback = s?.currency || balance?.currency || "RUB";
+
   const showBlocked = !!s && s.blocked > 0;
 
   const forecastAmountText =
@@ -390,9 +424,15 @@ export function Home() {
     return parts.join(" · ");
   })();
 
+  /* ======================================================================
+     RENDER
+     ====================================================================== */
+
   return (
     <div className="section">
-      {/* ===== Header / Accent: Account + Services ===== */}
+      {/* ==================================================================
+         MODULE: Header + Main tiles
+         ================================================================== */}
       <div className="card">
         <div className="card__body">
           <div className="home-head">
@@ -406,6 +446,7 @@ export function Home() {
               </div>
             </div>
 
+            {/* “акцентная” вторичная кнопка */}
             <button
               className="btn btn--accent"
               onClick={hardRefresh}
@@ -420,13 +461,7 @@ export function Home() {
               to="/payments"
               icon="💰"
               title="Баланс"
-              value={
-                balance ? (
-                  <Money amount={balance.amount} currency={balance.currency} />
-                ) : (
-                  "—"
-                )
-              }
+              value={balance ? <Money amount={balance.amount} currency={balance.currency} /> : "—"}
               sub="Пополнение и история"
               tone="accent"
             />
@@ -458,9 +493,7 @@ export function Home() {
               to="/services"
               icon="📦"
               title="В месяц"
-              value={
-                svcLoading ? "…" : s ? fmtMoney(s.monthlyCost || 0, currencyFallback) : "—"
-              }
+              value={svcLoading ? "…" : s ? fmtMoney(s.monthlyCost || 0, currencyFallback) : "—"}
               sub="Плановый расход"
               tone="default"
             />
@@ -492,7 +525,9 @@ export function Home() {
         </div>
       </div>
 
-      {/* ===== Install CTA — ONLY inside Telegram MiniApp ===== */}
+      {/* ==================================================================
+         MODULE: Install CTA (only inside Telegram mini-app)
+         ================================================================== */}
       {inTelegramMiniApp ? (
         <div className="section">
           <div className="card home-install">
@@ -518,7 +553,9 @@ export function Home() {
         </div>
       ) : null}
 
-      {/* ===== News ===== */}
+      {/* ==================================================================
+         MODULE: News (single CTA button)
+         ================================================================== */}
       <div className="section">
         <div className="card">
           <div className="card__body">
@@ -529,12 +566,9 @@ export function Home() {
                   {t("home.news.subtitle", "Коротко и по делу. Полная лента — в “Новости”.")}
                 </div>
               </div>
-              <Link className="btn btn--accent" to="/feed">
-                {t("home.news.open", "Открыть")}
-              </Link>
             </div>
 
-            <div className="list">
+            <div className="list home-newsList">
               <Link to="/feed" className="home-link">
                 <div className="list__item">
                   <div className="list__main">
@@ -574,16 +608,19 @@ export function Home() {
               </Link>
             </div>
 
-            <ActionGrid>
-              <Link className="btn" to="/feed">
-                {t("home.news.open_full", "Открыть новости")}
+            {/* ✅ unified CTA */}
+            <div className="home-cta">
+              <Link className="btn btn--accent home-cta__btn" to="/feed">
+                {t("home.news.open", "Открыть")}
               </Link>
-            </ActionGrid>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* ===== Referrals (harmonized) ===== */}
+      {/* ==================================================================
+         MODULE: Referrals (premium card-first + equal action buttons)
+         ================================================================== */}
       <div className="section">
         <div className="card home-refcard">
           <div className="card__body">
@@ -595,10 +632,6 @@ export function Home() {
                   <span className="dot" /> Это реально “пассивка”.
                 </div>
               </div>
-
-              <Link className="btn btn--primary" to="/referrals">
-                Открыть
-              </Link>
             </div>
 
             <div className="kv kv--3 home-refkv">
@@ -617,25 +650,33 @@ export function Home() {
             </div>
 
             <div className="home-refactions">
-              <Link className="btn" to="/referrals#link">
-                Скопировать ссылку
-              </Link>
-              <Link className="btn" to="/referrals#list">
-                Список
-              </Link>
-              <Link className="btn" to="/referrals#rules">
-                Правила
-              </Link>
-
-              <div className="home-refnote">
-                Подсказка: кинь ссылку в чат друзьям — дальше всё начислится автоматически.
+              {/* ВАЖНО: равномерные кнопки по ширине */}
+              <div className="actions actions--3 home-refactions__grid">
+                <Link className="btn" to="/referrals#link">
+                  Скопировать ссылку
+                </Link>
+                <Link className="btn" to="/referrals#list">
+                  Список
+                </Link>
+                <Link className="btn" to="/referrals#rules">
+                  Правила
+                </Link>
               </div>
-            </div>
+
+              {/* ✅ unified CTA like News */}
+              <div className="home-cta">
+                <Link className="btn btn--accent home-cta__btn" to="/referrals">
+                  Открыть
+                </Link>
+              </div>
+              </div>
           </div>
         </div>
       </div>
 
-      {/* ===== Bonus codes (harmonized) ===== */}
+      {/* ==================================================================
+         MODULE: Promo codes (input + unified button under input)
+         ================================================================== */}
       <div className="section">
         <div className="card home-promocard">
           <div className="card__body">
@@ -663,18 +704,13 @@ export function Home() {
               />
 
               <button
-                className="btn btn--primary"
+                className="btn btn--accent home-cta__btn"
                 onClick={applyPromoStub}
                 disabled={promo.state.status === "applying"}
               >
                 {promo.state.status === "applying" ? "Применяем…" : "Применить"}
               </button>
             </div>
-
-            <div className="home-promoMeta">
-              Код применится к текущему аккаунту. Ограничения (если есть) покажем после проверки.
-            </div>
-
             {promo.state.status === "done" && (
               <div className="home-alert home-alert--ok">{promo.state.message}</div>
             )}
