@@ -117,20 +117,28 @@ function fmtShortDate(iso: string | null | undefined) {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return String(iso);
-  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "2-digit" });
+  return d.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+  });
 }
 
 /**
  * ✅ Strictly matches your real payload:
  * raw: { data: [ { total: 117.35, ... } ], date: "Thu Feb ..." }
  */
-function parsePaymentsForecast(raw: any): { whenText?: string; amount?: number } | null {
+function parsePaymentsForecast(
+  raw: any
+): { whenText?: string; amount?: number } | null {
   if (!raw || typeof raw !== "object") return null;
 
   const data0 = Array.isArray(raw.data) && raw.data.length ? raw.data[0] : null;
 
   const amount =
-    typeof data0?.total === "number" && Number.isFinite(data0.total) ? data0.total : null;
+    typeof data0?.total === "number" && Number.isFinite(data0.total)
+      ? data0.total
+      : null;
 
   const whenText =
     typeof raw.date === "string" && raw.date ? fmtShortDate(raw.date) : undefined;
@@ -163,7 +171,7 @@ function Tile({
   tone?: "default" | "ok" | "warn" | "danger" | "accent";
 }) {
   return (
-    <Link to={to} className={`home-tile home-tile--${tone || "default"}`} style={{ textDecoration: "none" }}>
+    <Link to={to} className={`home-tile home-tile--${tone || "default"}`}>
       <div className="home-tile__head">
         <div className="home-tile__title">
           {icon ? (
@@ -174,32 +182,21 @@ function Tile({
           <span>{title}</span>
         </div>
 
-        {badge ? <div className="home-tile__badge">{badge}</div> : <div className="home-tile__chev">→</div>}
+        {badge ? (
+          <div className="home-tile__badge">{badge}</div>
+        ) : (
+          <div className="home-tile__chev">→</div>
+        )}
       </div>
 
       <div className="home-tile__value">{value}</div>
-      {sub ? <div className="home-tile__sub">{sub}</div> : <div className="home-tile__sub home-tile__sub--empty" />}
+      {sub ? (
+        <div className="home-tile__sub">{sub}</div>
+      ) : (
+        <div className="home-tile__sub home-tile__sub--empty" />
+      )}
     </Link>
   );
-}
-
-/** ===== Referrals status from /api/referrals/status ===== */
-type ReferralsStatusResp = {
-  ok: number | boolean;
-  data?: {
-    referrals?: {
-      enabled?: number;
-      kind?: string;
-      income_percent?: number;
-      referrals_count?: number;
-      bonus?: number;
-    };
-  };
-};
-
-function toNum(v: any, def = 0) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : def;
 }
 
 export function Home() {
@@ -219,12 +216,10 @@ export function Home() {
 
   // payments forecast
   const [payLoading, setPayLoading] = useState(false);
-  const [payForecast, setPayForecast] = useState<{ whenText?: string; amount?: number } | null>(null);
-
-  // referrals status
-  const [refsLoading, setRefsLoading] = useState(false);
-  const [refsError, setRefsError] = useState<string | null>(null);
-  const [refs, setRefs] = useState<{ incomePercent: number; referralsCount: number; bonus: number } | null>(null);
+  const [payForecast, setPayForecast] = useState<{
+    whenText?: string;
+    amount?: number;
+  } | null>(null);
 
   const inTelegramMiniApp = hasTelegramInitData();
 
@@ -232,7 +227,8 @@ export function Home() {
   const balance = me?.balance;
   const displayName = profile?.displayName || profile?.login || "";
 
-  const bonusValue = typeof (me as any)?.bonus === "number" ? (me as any).bonus : 0;
+  const bonusValue =
+    typeof (me as any)?.bonus === "number" ? (me as any).bonus : 0;
 
   const attentionCount = useMemo(() => {
     const s = svcSummary;
@@ -244,7 +240,9 @@ export function Home() {
     setSvcLoading(true);
     setSvcError(null);
     try {
-      const r = (await apiFetch("/services", { method: "GET" })) as ApiServicesResponse;
+      const r = (await apiFetch("/services", {
+        method: "GET",
+      })) as ApiServicesResponse;
       setSvcSummary(r?.summary ?? null);
       setSvcForecast((r as any)?.forecast ?? null);
     } catch (e: any) {
@@ -259,7 +257,9 @@ export function Home() {
   async function loadPaymentsForecast() {
     setPayLoading(true);
     try {
-      const fc = (await apiFetch("/payments/forecast", { method: "GET" })) as ForecastResp;
+      const fc = (await apiFetch("/payments/forecast", {
+        method: "GET",
+      })) as ForecastResp;
       setPayForecast(parsePaymentsForecast(fc?.raw ?? null));
     } catch {
       setPayForecast(null);
@@ -268,37 +268,17 @@ export function Home() {
     }
   }
 
-  async function loadReferralsStatus() {
-    setRefsLoading(true);
-    setRefsError(null);
-    try {
-      const r = (await apiFetch("/referrals/status", { method: "GET" })) as ReferralsStatusResp;
-      const rr = (r as any)?.data?.referrals ?? {};
-      setRefs({
-        incomePercent: toNum(rr.income_percent, 0),
-        referralsCount: toNum(rr.referrals_count, 0),
-        bonus: toNum(rr.bonus, 0),
-      });
-    } catch (e: any) {
-      setRefs(null);
-      setRefsError(e?.message || "Failed to load referrals");
-    } finally {
-      setRefsLoading(false);
-    }
-  }
-
   useEffect(() => {
     if (me?.ok) {
       loadServicesSummary();
       loadPaymentsForecast();
-      loadReferralsStatus();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me?.ok]);
 
   async function hardRefresh() {
     await Promise.resolve(refetch?.());
-    await Promise.all([loadServicesSummary(), loadPaymentsForecast(), loadReferralsStatus()]);
+    await Promise.all([loadServicesSummary(), loadPaymentsForecast()]);
   }
 
   async function applyPromoStub() {
@@ -316,7 +296,13 @@ export function Home() {
 
     setPromo((p) => ({
       ...p,
-      state: { status: "done", message: t("promo.done.stub", "Бонус-коды скоро будут доступны прямо в приложении ✨") },
+      state: {
+        status: "done",
+        message: t(
+          "promo.done.stub",
+          "Бонус-коды скоро будут доступны прямо в приложении ✨"
+        ),
+      },
     }));
   }
 
@@ -362,22 +348,38 @@ export function Home() {
 
   const s = svcSummary;
   const currencyFallback = s?.currency || balance?.currency || "RUB";
-
   const showBlocked = !!s && s.blocked > 0;
 
   const forecastAmountText =
-    typeof payForecast?.amount === "number" ? fmtMoneyForecast(payForecast.amount, currencyFallback) : null;
+    typeof payForecast?.amount === "number"
+      ? fmtMoneyForecast(payForecast.amount, currencyFallback)
+      : null;
 
   const forecastWhenText = payForecast?.whenText || null;
 
   const servicesForecastText =
-    svcForecast && (svcForecast.nextInDays != null || svcForecast.nextDate || svcForecast.nextAmount != null)
-      ? `${svcForecast.nextInDays != null ? `через ${svcForecast.nextInDays} дн.` : svcForecast.nextDate ? fmtShortDate(svcForecast.nextDate) : "—"}${
-          svcForecast.nextAmount != null ? ` · ~${fmtMoneyForecast(svcForecast.nextAmount, svcForecast.currency || currencyFallback)}` : ""
+    svcForecast &&
+    (svcForecast.nextInDays != null ||
+      svcForecast.nextDate ||
+      svcForecast.nextAmount != null)
+      ? `${
+          svcForecast.nextInDays != null
+            ? `через ${svcForecast.nextInDays} дн.`
+            : svcForecast.nextDate
+            ? fmtShortDate(svcForecast.nextDate)
+            : "—"
+        }${
+          svcForecast.nextAmount != null
+            ? ` · ~${fmtMoneyForecast(
+                svcForecast.nextAmount,
+                svcForecast.currency || currencyFallback
+              )}`
+            : ""
         }`
       : null;
 
-  const forecastSub = forecastWhenText || servicesForecastText || (payLoading ? "Считаем…" : "—");
+  const forecastSub =
+    forecastWhenText || servicesForecastText || (payLoading ? "Считаем…" : "—");
 
   const attentionSub = (() => {
     if (!s) return svcLoading ? "Проверяем…" : "—";
@@ -387,9 +389,6 @@ export function Home() {
     if (parts.length === 0) return "Всё в порядке";
     return parts.join(" · ");
   })();
-
-  const referralsCount = refs?.referralsCount ?? null;
-  const incomePercent = refs?.incomePercent ?? null;
 
   return (
     <div className="section">
@@ -402,10 +401,16 @@ export function Home() {
                 {t("home.hello", "Привет")}
                 {displayName ? `, ${displayName}` : ""} 👋
               </div>
-              <div className="home-head__sub">Аккаунт и услуги — самое важное. Плитки ведут в нужные разделы.</div>
+              <div className="home-head__sub">
+                Аккаунт и услуги — самое важное. Плитки ведут в нужные разделы.
+              </div>
             </div>
 
-            <button className="btn" onClick={hardRefresh} title={t("home.refresh", "⟳ Обновить")}>
+            <button
+              className="btn btn--accent"
+              onClick={hardRefresh}
+              title={t("home.refresh", "⟳ Обновить")}
+            >
               {t("home.refresh", "⟳ Обновить")}
             </button>
           </div>
@@ -415,7 +420,13 @@ export function Home() {
               to="/payments"
               icon="💰"
               title="Баланс"
-              value={balance ? <Money amount={balance.amount} currency={balance.currency} /> : "—"}
+              value={
+                balance ? (
+                  <Money amount={balance.amount} currency={balance.currency} />
+                ) : (
+                  "—"
+                )
+              }
               sub="Пополнение и история"
               tone="accent"
             />
@@ -436,14 +447,20 @@ export function Home() {
               value={svcLoading ? "…" : s ? attentionCount : "—"}
               sub={attentionSub}
               tone={attentionCount > 0 ? "warn" : "ok"}
-              badge={showBlocked ? <span className="home-badge home-badge--danger">есть блок</span> : null}
+              badge={
+                showBlocked ? (
+                  <span className="home-badge home-badge--danger">есть блок</span>
+                ) : null
+              }
             />
 
             <Tile
               to="/services"
               icon="📦"
               title="В месяц"
-              value={svcLoading ? "…" : s ? fmtMoney(s.monthlyCost || 0, currencyFallback) : "—"}
+              value={
+                svcLoading ? "…" : s ? fmtMoney(s.monthlyCost || 0, currencyFallback) : "—"
+              }
               sub="Плановый расход"
               tone="default"
             />
@@ -468,7 +485,9 @@ export function Home() {
           </div>
 
           {svcError ? (
-            <div style={{ marginTop: 10, fontSize: 12, opacity: 0.72 }}>Не удалось обновить статусы услуг.</div>
+            <div className="muted" style={{ marginTop: 10 }}>
+              Не удалось обновить статусы услуг.
+            </div>
           ) : null}
         </div>
       </div>
@@ -481,11 +500,16 @@ export function Home() {
             <div className="card__body">
               <div className="home-install__copy">
                 <div className="home-install__title">🚀 Установить ShpunApp</div>
-                <div className="home-install__sub">Откроем приложение во внешнем браузере для входа через Telegram Widget.</div>
+                <div className="home-install__sub">
+                  Откроем приложение во внешнем браузере для входа через Telegram Widget.
+                </div>
               </div>
 
               <div className="home-install__btnwrap">
-                <button className="btn btn--primary home-install__btn" onClick={openExternalAuthPage}>
+                <button
+                  className="btn btn--primary home-install__btn"
+                  onClick={openExternalAuthPage}
+                >
                   Открыть в браузере
                 </button>
               </div>
@@ -494,82 +518,35 @@ export function Home() {
         </div>
       ) : null}
 
-      {/* ===== Referrals ===== */}
-      <div className="section">
-        <div className="card">
-          <div className="card__body">
-            <div className="home-block-head">
-              <div>
-                <div className="h1" style={{ margin: 0 }}>Реферальная программа</div>
-                <div className="p" style={{ marginTop: 6 }}>
-                  Получай процент от пополнений твоих рефералов
-                  {refsLoading ? (
-                    <>
-                      {" "}
-                      <span className="dot" />
-                      <span style={{ opacity: 0.75 }}>…</span>
-                    </>
-                  ) : incomePercent != null && incomePercent > 0 ? (
-                    <>
-                      {" "}
-                      <span className="dot" />
-                      <span style={{ color: "rgba(255,255,255,0.86)", fontWeight: 900 }}>{incomePercent}%</span>
-                    </>
-                  ) : null}
-                </div>
-              </div>
-
-              <Link className="btn" to="/referrals">
-                Открыть
-              </Link>
-            </div>
-
-            <div className="home-ref">
-              <div className="home-ref__kpi">
-                <div className="home-ref__k">Приглашено</div>
-                <div className="home-ref__v">
-                  {refsLoading ? "…" : typeof referralsCount === "number" ? referralsCount : "—"}
-                </div>
-              </div>
-
-              <div className="home-ref__cta">
-                <Link className="btn btn--primary" to="/referrals">
-                  Получить ссылку
-                </Link>
-                <div className="home-ref__hint">
-                  {refsError
-                    ? "Не удалось загрузить рефералы. Нажми “⟳ Обновить”."
-                    : incomePercent != null && incomePercent > 0
-                      ? "Бонусы начисляются автоматически после оплаты рефералов"
-                      : "Поделись ссылкой — и получай бонусы"}
-                </div>
-              </div>
-            </div>
-
-          </div>
-        </div>
-      </div>
-
       {/* ===== News ===== */}
       <div className="section">
         <div className="card">
           <div className="card__body">
             <div className="home-block-head">
               <div>
-                <div className="h1" style={{ margin: 0 }}>{t("home.news.title", "Новости")}</div>
-                <div className="p" style={{ marginTop: 6 }}>{t("home.news.subtitle", "Коротко и по делу. Полная лента — в “Новости”.")}</div>
+                <div className="h1">{t("home.news.title", "Новости")}</div>
+                <div className="p">
+                  {t("home.news.subtitle", "Коротко и по делу. Полная лента — в “Новости”.")}
+                </div>
               </div>
-              <Link className="btn" to="/feed">
+              <Link className="btn btn--accent" to="/feed">
                 {t("home.news.open", "Открыть")}
               </Link>
             </div>
 
             <div className="list">
-              <Link to="/feed" style={{ textDecoration: "none", color: "inherit" }}>
+              <Link to="/feed" className="home-link">
                 <div className="list__item">
                   <div className="list__main">
-                    <div className="list__title">{t("home.news.item1.title", "✅ Система стабильна — всё работает")}</div>
-                    <div className="list__sub">{t("home.news.item1.sub", "Если видишь “Can’t connect” — просто обнови страницу.")}</div>
+                    <div className="list__title">
+                      {t("home.news.item1.title", "✅ Система стабильна — всё работает")}
+                    </div>
+                    <div className="list__sub">
+                      {t(
+                        "home.news.item1.sub",
+                        "Если видишь “Can’t connect” — просто обнови страницу."
+                      )}
+                    </div>
                   </div>
                   <div className="list__side">
                     <span className="chip chip--ok">today</span>
@@ -577,11 +554,18 @@ export function Home() {
                 </div>
               </Link>
 
-              <Link to="/feed" style={{ textDecoration: "none", color: "inherit" }}>
+              <Link to="/feed" className="home-link">
                 <div className="list__item">
                   <div className="list__main">
-                    <div className="list__title">{t("home.news.item2.title", "🧭 Лента — в “Новости”")}</div>
-                    <div className="list__sub">{t("home.news.item2.sub", "Главная — витрина. Новости — лента. Дальше подключим реальные данные.")}</div>
+                    <div className="list__title">
+                      {t("home.news.item2.title", "🧭 Лента — в “Новости”")}
+                    </div>
+                    <div className="list__sub">
+                      {t(
+                        "home.news.item2.sub",
+                        "Главная — витрина. Новости — лента. Дальше подключим реальные данные."
+                      )}
+                    </div>
                   </div>
                   <div className="list__side">
                     <span className="chip chip--soft">new</span>
@@ -599,42 +583,104 @@ export function Home() {
         </div>
       </div>
 
-      {/* ===== Bonus codes (footer) ===== */}
+      {/* ===== Referrals (harmonized) ===== */}
       <div className="section">
-        <div className="card">
+        <div className="card home-refcard">
           <div className="card__body">
             <div className="home-block-head">
               <div>
-                <div className="h1" style={{ margin: 0 }}>Бонус-коды</div>
-                <div className="p" style={{ marginTop: 6 }}>Введи код — бонусы или скидка применятся к аккаунту.</div>
+                <div className="h1">🤝 Реферальная программа</div>
+                <div className="p">
+                  Пригласи друзей — и получай бонусы с их пополнений.
+                  <span className="dot" /> Это реально “пассивка”.
+                </div>
+              </div>
+
+              <Link className="btn btn--primary" to="/referrals">
+                Открыть
+              </Link>
+            </div>
+
+            <div className="kv kv--3 home-refkv">
+              <div className="kv__item">
+                <div className="kv__k">🔗 Ссылка</div>
+                <div className="kv__v">Поделись в чат</div>
+              </div>
+              <div className="kv__item">
+                <div className="kv__k">👥 Приглашённые</div>
+                <div className="kv__v">Список и статусы</div>
+              </div>
+              <div className="kv__item">
+                <div className="kv__k">💸 Процент</div>
+                <div className="kv__v">Правила и начисления</div>
               </div>
             </div>
 
-            <div className="actions actions--2">
-              <div>
-                <input
-                  className="input"
-                  value={promo.code}
-                  onChange={(e) =>
-                    setPromo((p) => ({
-                      ...p,
-                      code: e.target.value,
-                      state: { status: "idle" },
-                    }))
-                  }
-                  placeholder="Например: SHPUN-2026"
-                  autoCapitalize="characters"
-                  spellCheck={false}
-                />
-              </div>
+            <div className="home-refactions">
+              <Link className="btn" to="/referrals#link">
+                Скопировать ссылку
+              </Link>
+              <Link className="btn" to="/referrals#list">
+                Список
+              </Link>
+              <Link className="btn" to="/referrals#rules">
+                Правила
+              </Link>
 
-              <button className="btn btn--primary" onClick={applyPromoStub} disabled={promo.state.status === "applying"}>
+              <div className="home-refnote">
+                Подсказка: кинь ссылку в чат друзьям — дальше всё начислится автоматически.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ===== Bonus codes (harmonized) ===== */}
+      <div className="section">
+        <div className="card home-promocard">
+          <div className="card__body">
+            <div className="home-block-head">
+              <div>
+                <div className="h1">Бонус-коды</div>
+                <div className="p">Введи код — бонусы или скидка применятся к аккаунту.</div>
+              </div>
+            </div>
+
+            <div className="home-promoRow">
+              <input
+                className="input"
+                value={promo.code}
+                onChange={(e) =>
+                  setPromo((p) => ({
+                    ...p,
+                    code: e.target.value,
+                    state: { status: "idle" },
+                  }))
+                }
+                placeholder="Например: SHPUN-2026"
+                autoCapitalize="characters"
+                spellCheck={false}
+              />
+
+              <button
+                className="btn btn--primary"
+                onClick={applyPromoStub}
+                disabled={promo.state.status === "applying"}
+              >
                 {promo.state.status === "applying" ? "Применяем…" : "Применить"}
               </button>
             </div>
 
-            {promo.state.status === "done" && <div className="pre">{promo.state.message}</div>}
-            {promo.state.status === "error" && <div className="pre">{promo.state.message}</div>}
+            <div className="home-promoMeta">
+              Код применится к текущему аккаунту. Ограничения (если есть) покажем после проверки.
+            </div>
+
+            {promo.state.status === "done" && (
+              <div className="home-alert home-alert--ok">{promo.state.message}</div>
+            )}
+            {promo.state.status === "error" && (
+              <div className="home-alert home-alert--danger">{promo.state.message}</div>
+            )}
           </div>
         </div>
       </div>

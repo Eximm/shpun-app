@@ -959,16 +959,6 @@ button, a { -webkit-tap-highlight-color: transparent; }
   box-shadow: 0 8px 24px rgba(124,92,255,0.35);
 }
 
-/* News head layout + tiny title tweaks */
-.home-news__head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.home-news__title { font-size: 18px; }
-
 /* Promo title tweak */
 .home-promo__title { font-size: 18px; }
 
@@ -984,9 +974,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
   gap: 12px;
 }
 
-.home-head__left {
-  min-width: 0;
-}
+.home-head__left { min-width: 0; }
 
 .home-head__title {
   margin: 0;
@@ -1011,7 +999,6 @@ button, a { -webkit-tap-highlight-color: transparent; }
     flex-direction: column;
     align-items: stretch;
   }
-
   .home-head__title { font-size: 20px; }
 }
 
@@ -1025,16 +1012,12 @@ button, a { -webkit-tap-highlight-color: transparent; }
 
 /* medium */
 @media (max-width: 920px) {
-  .home-tiles {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+  .home-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* ultra narrow */
 @media (max-width: 380px) {
-  .home-tiles {
-    grid-template-columns: 1fr;
-  }
+  .home-tiles { grid-template-columns: 1fr; }
 }
 
 /* Clickable tile base */
@@ -1064,9 +1047,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
   border-color: rgba(255,255,255,0.18);
 }
 
-.home-tile:active {
-  transform: translateY(1px) scale(0.995);
-}
+.home-tile:active { transform: translateY(1px) scale(0.995); }
 
 /* Keyboard focus */
 .home-tile:focus-visible {
@@ -1213,52 +1194,6 @@ button, a { -webkit-tap-highlight-color: transparent; }
   }
 }
 
-/* ===== Referrals block layout ===== */
-.home-ref {
-  margin-top: 12px;
-  display: grid;
-  grid-template-columns: 180px 1fr;
-  gap: 12px;
-  align-items: center;
-}
-
-.home-ref__kpi {
-  border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: rgba(255,255,255,0.03);
-  padding: 12px;
-}
-
-.home-ref__k {
-  font-size: 12px;
-  opacity: 0.70;
-  font-weight: 900;
-  letter-spacing: 0.12px;
-}
-
-.home-ref__v {
-  margin-top: 6px;
-  font-size: 20px;
-  font-weight: 950;
-  letter-spacing: -0.01em;
-}
-
-.home-ref__cta {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.home-ref__hint {
-  font-size: 12px;
-  opacity: 0.70;
-  line-height: 1.35;
-}
-
-@media (max-width: 640px) {
-  .home-ref { grid-template-columns: 1fr; }
-}
-
 /* ===== (Optional) Make list items feel more tappable in News section ===== */
 .list__item {
   transition: filter 140ms ease, border-color 140ms ease, transform 140ms ease;
@@ -1271,4 +1206,123 @@ button, a { -webkit-tap-highlight-color: transparent; }
 
 .list__item:active {
   transform: translateY(1px);
+}
+
+/* ============================================================
+   ADD: Harmonized Referrals + Promo blocks (premium, card-first)
+   ============================================================ */
+
+/* a-links inside home lists without inline styles */
+.home-link {
+  text-decoration: none;
+  color: inherit;
+}
+
+/* Referrals card: remove "banner feeling", keep subtle premium highlight */
+.home-refcard {
+  /* чуть спокойнее, чем home-install */
+  background:
+    radial-gradient(900px 260px at 16% 0%, rgba(124,92,255,0.10), transparent 62%),
+    linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.04));
+  border-color: rgba(255,255,255,0.12);
+}
+
+/* make kv under referrals tighter and more "feature cards" */
+.home-refkv {
+  margin-top: 12px;
+}
+
+/* actions row under referrals: 3 buttons + right-aligned hint */
+.home-refactions {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.home-refnote {
+  margin-left: auto;
+  font-size: 12px;
+  color: rgba(255,255,255,0.62);
+  line-height: 1.35;
+}
+
+/* on narrow screens hint becomes full width */
+@media (max-width: 640px) {
+  .home-refnote { margin-left: 0; width: 100%; }
+}
+
+/* Promo: input + primary button like a single premium control */
+.home-promoRow {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.home-promoMeta {
+  margin-top: 10px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.62);
+  line-height: 1.35;
+}
+
+/* Alerts for promo result (instead of raw .pre) */
+.home-alert {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.home-alert--ok {
+  border-color: rgba(77,215,255,0.28);
+  background: rgba(77,215,255,0.08);
+}
+
+.home-alert--danger {
+  border-color: rgba(255,77,109,0.28);
+  background: rgba(255,77,109,0.08);
+}
+
+/* small screens: stack promo controls */
+@media (max-width: 520px) {
+  .home-promoRow { grid-template-columns: 1fr; }
+  .home-promoRow .btn { width: 100%; }
+}
+/* ============================================================
+   ADD: Accent-outline button (premium secondary CTA)
+   ============================================================ */
+
+.btn--accent {
+  border: 1px solid rgba(124,92,255,0.45);
+  background: linear-gradient(
+    180deg,
+    rgba(124,92,255,0.12),
+    rgba(255,255,255,0.05)
+  );
+  color: rgba(255,255,255,0.92);
+  box-shadow: 0 10px 24px rgba(0,0,0,0.20);
+}
+
+.btn--accent:hover {
+  border-color: rgba(77,215,255,0.55);
+  background: linear-gradient(
+    180deg,
+    rgba(77,215,255,0.12),
+    rgba(255,255,255,0.06)
+  );
+  box-shadow:
+    0 14px 30px rgba(124,92,255,0.18),
+    0 10px 22px rgba(77,215,255,0.14);
+  transform: translateY(-1px);
+}
+
+.btn--accent:active {
+  transform: translateY(0) scale(0.99);
 }

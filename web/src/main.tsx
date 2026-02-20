@@ -1,4 +1,6 @@
-﻿import React from "react";
+﻿// web/src/main.tsx
+
+import React from "react";
 import ReactDOM from "react-dom/client";
 import {
   BrowserRouter,
@@ -18,6 +20,7 @@ import { Payments } from "./pages/Payments";
 import { Profile } from "./pages/Profile";
 import { SetPassword } from "./pages/SetPassword";
 import { Transfer } from "./pages/Transfer";
+import { Referrals } from "./pages/Referrals";
 
 import { AuthGate } from "./app/auth/AuthGate";
 import { BottomNav } from "./app/layout/BottomNav";
@@ -45,7 +48,8 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const { t } = useI18n();
   const loc = useLocation();
 
-  const hideNav = loc.pathname === "/login" || loc.pathname.startsWith("/transfer");
+  const hideNav =
+    loc.pathname === "/login" || loc.pathname.startsWith("/transfer");
 
   return (
     <div className="app">
@@ -95,6 +99,15 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               element={
                 <Authed>
                   <Home />
+                </Authed>
+              }
+            />
+
+            <Route
+              path="/referrals"
+              element={
+                <Authed>
+                  <Referrals />
                 </Authed>
               }
             />
