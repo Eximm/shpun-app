@@ -1344,3 +1344,105 @@ button, a { -webkit-tap-highlight-color: transparent; }
   flex-direction: column;
   gap: 10px;
 }
+/* ============================================================
+   Services page (centralized, no inline)
+   ============================================================ */
+
+.services-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.services-head__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 950;
+  letter-spacing: -0.02em;
+}
+
+.services-head__meta {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Category header in section cards */
+.services-cat__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.services-cat__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 950;
+  letter-spacing: 0.1px;
+}
+
+/* Service item layout (stable grid = no jumping text) */
+.svc {
+  padding: 12px 12px;
+}
+
+.svc__btn {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.svc__row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: start;
+}
+
+.svc__left { min-width: 0; }
+.svc__right {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+  text-align: right;
+}
+
+.svc__status { font-size: 12px; color: var(--muted); }
+.svc__title {
+  margin-top: 6px;
+  font-weight: 900;
+  line-height: 1.12;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.svc__sub {
+  margin-top: 6px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.70);
+  line-height: 1.25;
+}
+
+.svc__hint {
+  font-size: 12px;
+  color: rgba(255,255,255,0.70);
+  min-height: 16px; /* ключ: фиксирует высоту и убирает "скачки" */
+}
+
+.svc__toggle {
+  margin-top: 8px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.60);
+}
+
+.svc__details {
+  margin-top: 12px;
+}
