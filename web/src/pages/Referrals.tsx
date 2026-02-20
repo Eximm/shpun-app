@@ -2,7 +2,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMe } from "../app/auth/useMe";
-import { apiFetch } from "../shared/api/client";
 
 function getTelegramWebApp(): any | null {
   return (window as any)?.Telegram?.WebApp ?? null;
@@ -21,7 +20,11 @@ function fmtDate(iso: string) {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return String(iso);
-  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "2-digit" });
+  return d.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+  });
 }
 
 type RefStatusResp = {
@@ -70,7 +73,8 @@ export function Referrals() {
   const { me, loading, error } = useMe();
 
   const botUsername =
-    String((import.meta as any)?.env?.VITE_TG_BOT_USERNAME ?? "").trim() || "shpunvpn_bot";
+    String((import.meta as any)?.env?.VITE_TG_BOT_USERNAME ?? "").trim() ||
+    "shpunvpn_bot";
 
   const userId =
     // максимально “устойчиво” к структуре me
@@ -110,7 +114,7 @@ export function Referrals() {
     setStLoading(true);
     setStError(null);
     try {
-      const r = (await apiFetch("/referrals/status", { method: "GET" })) as RefStatusResp;
+      const r = (await (await fetch(`/api/referrals/status`, { method: "GET" })).json()) as RefStatusResp;
       const refs = (r as any)?.data?.referrals ?? {};
       setIncomePercent(toNum(refs.income_percent, 0));
       setRefCount(toNum(refs.referrals_count, 0));
@@ -127,9 +131,11 @@ export function Referrals() {
     setListLoading(true);
     setListError(null);
     try {
-      const r = (await apiFetch(`/referrals/list?limit=${limit}&offset=${nextOffset}`, {
-        method: "GET",
-      })) as RefListResp;
+      const r = (await (
+        await fetch(`/api/referrals/list?limit=${limit}&offset=${nextOffset}`, {
+          method: "GET",
+        })
+      ).json()) as RefListResp;
 
       const refs = (r as any)?.data?.referrals ?? {};
       setItems(Array.isArray(refs.items) ? refs.items : []);
@@ -157,7 +163,11 @@ export function Referrals() {
     navigator.clipboard?.writeText(referralUrl).catch(() => {});
     const tg = getTelegramWebApp();
     try {
-      tg?.showPopup?.({ title: "Готово", message: "Ссылка скопирована", buttons: [{ type: "ok" }] });
+      tg?.showPopup?.({
+        title: "Готово",
+        message: "Ссылка скопирована",
+        buttons: [{ type: "ok" }],
+      });
     } catch {
       // ignore
     }
@@ -180,8 +190,10 @@ export function Referrals() {
       <div className="section">
         <div className="card">
           <div className="card__body">
-            <div className="h1" style={{ margin: 0 }}>Рефералы</div>
-            <div className="p" style={{ marginTop: 6 }}>Загрузка…</div>
+            <div className="h1">Рефералы</div>
+            <div className="p" style={{ marginTop: 6 }}>
+              Загрузка…
+            </div>
           </div>
         </div>
       </div>
@@ -193,11 +205,17 @@ export function Referrals() {
       <div className="section">
         <div className="card">
           <div className="card__body">
-            <div className="h1" style={{ margin: 0 }}>Рефералы</div>
-            <div className="p" style={{ marginTop: 6 }}>Нужно войти в аккаунт.</div>
+            <div className="h1">Рефералы</div>
+            <div className="p" style={{ marginTop: 6 }}>
+              Нужно войти в аккаунт.
+            </div>
             <div className="actions actions--2" style={{ marginTop: 12 }}>
-              <Link className="btn btn--primary" to="/login">Войти</Link>
-              <Link className="btn" to="/app">На главную</Link>
+              <Link className="btn btn--primary" to="/login">
+                Войти
+              </Link>
+              <Link className="btn" to="/app">
+                На главную
+              </Link>
             </div>
           </div>
         </div>
@@ -215,24 +233,22 @@ export function Referrals() {
         <div className="card__body">
           <div className="home-block-head">
             <div>
-              <div className="h1" style={{ margin: 0 }}>🤝 Партнёрская программа</div>
+              <div className="h1">🤝 Партнёрская программа</div>
               <div className="p" style={{ marginTop: 6 }}>
                 Приглашай друзей и получай процент с их пополнений
-                {" "}
-                <span className="dot" />
-                {" "}
-                <span style={{ fontWeight: 900, opacity: 0.9 }}>
-                  {stLoading ? "…" : `${incomePercent || 0}%`}
-                </span>
               </div>
             </div>
 
-            <Link className="btn" to="/app">Главная</Link>
+            <Link className="btn" to="/app">
+              Главная
+            </Link>
           </div>
 
           {/* Link box */}
           <div style={{ marginTop: 12 }}>
-            <div style={{ fontSize: 12, opacity: 0.72, marginBottom: 6 }}>Твоя реферальная ссылка</div>
+            <div style={{ fontSize: 12, opacity: 0.72, marginBottom: 6 }}>
+              Твоя реферальная ссылка
+            </div>
 
             <div className="pre" style={{ marginTop: 0, userSelect: "text" }}>
               {referralUrl || "Ссылка недоступна (bot username или userId не определены)"}
@@ -272,9 +288,13 @@ export function Referrals() {
           <div className="card__body">
             <div className="home-block-head">
               <div>
-                <div className="h1" style={{ margin: 0 }}>📃 Список приглашённых</div>
+                <div className="h1">📃 Список приглашённых</div>
                 <div className="p" style={{ marginTop: 6 }}>
-                  {listLoading ? "Загрузка…" : total ? `Всего: ${total}` : "Пока никого нет — поделись ссылкой 🙂"}
+                  {listLoading
+                    ? "Загрузка…"
+                    : total
+                    ? `Всего: ${total}`
+                    : "Пока никого нет — поделись ссылкой 🙂"}
                 </div>
               </div>
             </div>
@@ -303,15 +323,19 @@ export function Referrals() {
                       <div className="list__main">
                         <div className="list__title">
                           {name}
-                          {uname ? <span style={{ opacity: 0.75, fontWeight: 600 }}> {" "}@{uname}</span> : null}
+                          {uname ? (
+                            <span style={{ opacity: 0.75, fontWeight: 600 }}>
+                              {" "}
+                              @{uname}
+                            </span>
+                          ) : null}
                         </div>
                         <div className="list__sub">
                           {created ? `Присоединился: ${fmtDate(created)}` : "—"}
                         </div>
                       </div>
-                      <div className="list__side">
-                        <span className="chip chip--soft">ID {toStr(r?.id, "—")}</span>
-                      </div>
+
+                      {/* ✅ ID intentionally not shown */}
                     </div>
                   );
                 })
@@ -327,10 +351,18 @@ export function Referrals() {
 
             {/* Pagination */}
             <div className="actions actions--2" style={{ marginTop: 12 }}>
-              <button className="btn" disabled={!hasPrev || listLoading} onClick={() => loadList(Math.max(0, offset - limit))}>
+              <button
+                className="btn"
+                disabled={!hasPrev || listLoading}
+                onClick={() => loadList(Math.max(0, offset - limit))}
+              >
                 ⬅️ Назад
               </button>
-              <button className="btn" disabled={!hasNext || listLoading} onClick={() => loadList(offset + limit)}>
+              <button
+                className="btn"
+                disabled={!hasNext || listLoading}
+                onClick={() => loadList(offset + limit)}
+              >
                 Ещё ➡️
               </button>
             </div>
