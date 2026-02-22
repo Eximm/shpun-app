@@ -37,7 +37,6 @@ function calcDaysLeft(iso: string | null) {
 }
 
 function pickPrice(x: any) {
-  // для UI почти всегда лучше real_cost, если он есть
   const real = Number(x?.real_cost ?? NaN)
   if (Number.isFinite(real) && real >= 0) return real
   const cost = Number(x?.cost ?? 0)
@@ -49,8 +48,6 @@ function pickPeriodRaw(p: any) {
   return raw.trim()
 }
 
-// SHM create-order иногда возвращает массив USObject или объект.
-// Берём первый элемент массива или сам объект.
 function unwrapUsObject(json: any): any | null {
   const data = json?.data ?? json
   if (Array.isArray(data)) return data[0] ?? null
@@ -79,10 +76,13 @@ async function loadUserServiceByUsi(shmSessionId: string, usi: number) {
   return { ok: true as const, item: found }
 }
 
+function isDebug(req: any) {
+  const q = (req.query ?? {}) as any
+  const v = String(q?.debug ?? '').trim()
+  return v === '1' || v.toLowerCase() === 'true' || v.toLowerCase() === 'yes'
+}
+
 export async function servicesRoutes(app: FastifyInstance) {
-  // =====================
-  // /api/services
-  // =====================
   app.get('/services', async (req, reply) => {
     const shmSessionId = ensureAuthed(req, reply)
     if (!shmSessionId) return
@@ -97,7 +97,6 @@ export async function servicesRoutes(app: FastifyInstance) {
       if (r.status === 401 || r.status === 403) {
         return reply.code(401).send({ ok: false, error: 'not_authenticated' })
       }
-
       return reply.code(502).send({
         ok: false,
         error: 'shm_error',
@@ -147,9 +146,6 @@ export async function servicesRoutes(app: FastifyInstance) {
     return reply.send({ ok: true, items, summary })
   })
 
-  // =====================
-  // DELETE /api/services/:usi
-  // =====================
   app.delete('/services/:usi', async (req, reply) => {
     const shmSessionId = ensureAuthed(req, reply)
     if (!shmSessionId) return
@@ -159,7 +155,6 @@ export async function servicesRoutes(app: FastifyInstance) {
       return reply.code(400).send({ ok: false, error: 'bad_request', details: 'usi_required' })
     }
 
-    // (спокойная защита) убеждаемся, что услуга существует
     const svc = await loadUserServiceByUsi(shmSessionId, usi)
     if (!svc.ok) {
       return reply.code(502).send({
@@ -173,14 +168,12 @@ export async function servicesRoutes(app: FastifyInstance) {
       return reply.code(404).send({ ok: false, error: 'service_not_found' })
     }
 
-    // Вызываем SHM строго по Swagger: DELETE /user/service?user_service_id=...
     const r = await shmDeleteUserService(shmSessionId, usi)
 
     if (!r.ok) {
       if (r.status === 401 || r.status === 403) {
         return reply.code(401).send({ ok: false, error: 'not_authenticated' })
       }
-
       return reply.code(502).send({
         ok: false,
         error: 'shm_error',
@@ -189,26 +182,28 @@ export async function servicesRoutes(app: FastifyInstance) {
       })
     }
 
-    // Успех: фронт просто перезагрузит список (у тебя уже load() после delete)
     return reply.send({ ok: true, removed: true, usi })
   })
 
-  // =====================
-  // Router controls (via shpun_app template)
-  // =====================
+  // ---------------------
+  // ROUTERS
+  // ---------------------
 
   app.get('/services/:usi/router', async (req, reply) => {
     const shmSessionId = ensureAuthed(req, reply)
     if (!shmSessionId) return
+
+    const debug = isDebug(req)
 
     const usi = Number((req.params as any)?.usi ?? 0)
     if (!usi || !Number.isFinite(usi)) {
       return reply.code(400).send({ ok: false, error: 'bad_request', details: 'usi_required' })
     }
 
+    // (валидация услуги оставляем как была)
     const svc = await loadUserServiceByUsi(shmSessionId, usi)
     if (!svc.ok) {
-      return reply.code(502).send({ ok: false, error: 'shm_error', status: svc.status })
+      return reply.code(502).send({ ok: false, error: 'shm_error', status: svc.status, details: svc.json ?? svc.text })
     }
     if (!svc.item) {
       return reply.code(404).send({ ok: false, error: 'service_not_found' })
@@ -217,11 +212,9 @@ export async function servicesRoutes(app: FastifyInstance) {
     const statusRaw = String(svc.item?.status ?? '')
     const category = String(svc.item?.service?.category ?? svc.item?.category ?? '')
 
-    // только router-услуга
     if (category !== 'marzban-r') {
-      return reply.code(400).send({ ok: false, error: 'not_router_service' })
+      return reply.code(400).send({ ok: false, error: 'not_router_service', details: debug ? { category, usi } : undefined })
     }
-    // не трогаем "в процессе"
     if (String(statusRaw).toUpperCase() !== 'ACTIVE') {
       return reply.code(409).send({ ok: false, error: 'service_not_ready', status: statusRaw })
     }
@@ -229,20 +222,41 @@ export async function servicesRoutes(app: FastifyInstance) {
     const r = await shmShpunAppRouterList(shmSessionId, usi)
     const j: any = r.json ?? {}
 
-    // TT2 может вернуть 200 + ok:0
     if (!r.ok) {
-      return reply.code(502).send({ ok: false, error: 'shm_template_failed', status: r.status })
+      return reply.code(502).send({
+        ok: false,
+        error: 'shm_template_failed',
+        status: r.status,
+        details: debug ? { text: r.text, json: r.json } : undefined,
+      })
     }
     if ((j?.ok ?? 0) !== 1) {
-      return reply.code(400).send({ ok: false, error: j?.error || 'router_list_failed', details: j })
+      return reply.code(400).send({ ok: false, error: j?.error || 'router_list_failed', details: debug ? j : undefined })
     }
 
-    return reply.send({ ok: true, routers: Array.isArray(j?.routers) ? j.routers : [] })
+    const routers = Array.isArray(j?.routers) ? j.routers : []
+
+    if (debug) {
+      return reply.send({
+        ok: true,
+        routers,
+        debug: {
+          usi,
+          category,
+          statusRaw,
+          template_response: j,
+        },
+      })
+    }
+
+    return reply.send({ ok: true, routers })
   })
 
   app.post('/services/:usi/router/bind', async (req, reply) => {
     const shmSessionId = ensureAuthed(req, reply)
     if (!shmSessionId) return
+
+    const debug = isDebug(req)
 
     const usi = Number((req.params as any)?.usi ?? 0)
     if (!usi || !Number.isFinite(usi)) {
@@ -254,7 +268,7 @@ export async function servicesRoutes(app: FastifyInstance) {
 
     const svc = await loadUserServiceByUsi(shmSessionId, usi)
     if (!svc.ok) {
-      return reply.code(502).send({ ok: false, error: 'shm_error', status: svc.status })
+      return reply.code(502).send({ ok: false, error: 'shm_error', status: svc.status, details: svc.json ?? svc.text })
     }
     if (!svc.item) {
       return reply.code(404).send({ ok: false, error: 'service_not_found' })
@@ -263,9 +277,7 @@ export async function servicesRoutes(app: FastifyInstance) {
     const statusRaw = String(svc.item?.status ?? '')
     const category = String(svc.item?.service?.category ?? svc.item?.category ?? '')
 
-    if (category !== 'marzban-r') {
-      return reply.code(400).send({ ok: false, error: 'not_router_service' })
-    }
+    if (category !== 'marzban-r') return reply.code(400).send({ ok: false, error: 'not_router_service' })
     if (String(statusRaw).toUpperCase() !== 'ACTIVE') {
       return reply.code(409).send({ ok: false, error: 'service_not_ready', status: statusRaw })
     }
@@ -274,18 +286,26 @@ export async function servicesRoutes(app: FastifyInstance) {
     const j: any = r.json ?? {}
 
     if (!r.ok) {
-      return reply.code(502).send({ ok: false, error: 'shm_template_failed', status: r.status })
+      return reply.code(502).send({
+        ok: false,
+        error: 'shm_template_failed',
+        status: r.status,
+        details: debug ? { text: r.text, json: r.json } : undefined,
+      })
     }
     if ((j?.ok ?? 0) !== 1) {
-      return reply.code(400).send({ ok: false, error: j?.error || 'router_bind_failed', details: j })
+      return reply.code(400).send({ ok: false, error: j?.error || 'router_bind_failed', details: debug ? j : undefined })
     }
 
+    if (debug) return reply.send({ ok: true, clean_code: j?.clean_code ?? '', debug: { template_response: j } })
     return reply.send({ ok: true, clean_code: j?.clean_code ?? '' })
   })
 
   app.post('/services/:usi/router/unbind', async (req, reply) => {
     const shmSessionId = ensureAuthed(req, reply)
     if (!shmSessionId) return
+
+    const debug = isDebug(req)
 
     const usi = Number((req.params as any)?.usi ?? 0)
     if (!usi || !Number.isFinite(usi)) {
@@ -297,7 +317,7 @@ export async function servicesRoutes(app: FastifyInstance) {
 
     const svc = await loadUserServiceByUsi(shmSessionId, usi)
     if (!svc.ok) {
-      return reply.code(502).send({ ok: false, error: 'shm_error', status: svc.status })
+      return reply.code(502).send({ ok: false, error: 'shm_error', status: svc.status, details: svc.json ?? svc.text })
     }
     if (!svc.item) {
       return reply.code(404).send({ ok: false, error: 'service_not_found' })
@@ -306,9 +326,7 @@ export async function servicesRoutes(app: FastifyInstance) {
     const statusRaw = String(svc.item?.status ?? '')
     const category = String(svc.item?.service?.category ?? svc.item?.category ?? '')
 
-    if (category !== 'marzban-r') {
-      return reply.code(400).send({ ok: false, error: 'not_router_service' })
-    }
+    if (category !== 'marzban-r') return reply.code(400).send({ ok: false, error: 'not_router_service' })
     if (String(statusRaw).toUpperCase() !== 'ACTIVE') {
       return reply.code(409).send({ ok: false, error: 'service_not_ready', status: statusRaw })
     }
@@ -317,17 +335,35 @@ export async function servicesRoutes(app: FastifyInstance) {
     const j: any = r.json ?? {}
 
     if (!r.ok) {
-      return reply.code(502).send({ ok: false, error: 'shm_template_failed', status: r.status })
+      return reply.code(502).send({
+        ok: false,
+        error: 'shm_template_failed',
+        status: r.status,
+        details: debug ? { text: r.text, json: r.json } : undefined,
+      })
     }
     if ((j?.ok ?? 0) !== 1) {
-      return reply.code(400).send({ ok: false, error: j?.error || 'router_unbind_failed', details: j })
+      return reply.code(400).send({
+        ok: false,
+        error: j?.error || 'router_unbind_failed',
+        details: debug ? j : undefined,
+      })
+    }
+
+    if (debug) {
+      return reply.send({
+        ok: true,
+        unbound: j?.unbound ?? 0,
+        clean_code: j?.clean_code ?? '',
+        debug: { template_response: j },
+      })
     }
 
     return reply.send({ ok: true, unbound: j?.unbound ?? 0, clean_code: j?.clean_code ?? '' })
   })
 
   // =====================
-  // /api/services/order (list tariffs)
+  // /api/services/order
   // =====================
   app.get('/services/order', async (req, reply) => {
     const shmSessionId = ensureAuthed(req, reply)
@@ -336,15 +372,8 @@ export async function servicesRoutes(app: FastifyInstance) {
     const r = await shmGetServiceOrder(shmSessionId)
 
     if (!r.ok) {
-      if (r.status === 401 || r.status === 403) {
-        return reply.code(401).send({ ok: false, error: 'not_authenticated' })
-      }
-      return reply.code(502).send({
-        ok: false,
-        error: 'shm_error',
-        status: r.status,
-        details: r.json ?? r.text,
-      })
+      if (r.status === 401 || r.status === 403) return reply.code(401).send({ ok: false, error: 'not_authenticated' })
+      return reply.code(502).send({ ok: false, error: 'shm_error', status: r.status, details: r.json ?? r.text })
     }
 
     const raw = (r.json as any)?.data ?? []
@@ -366,18 +395,13 @@ export async function servicesRoutes(app: FastifyInstance) {
           currency: 'RUB',
           periodRaw,
           periodHuman: p.human,
-          flags: {
-            orderOnlyOnce: !!x?.config?.order_only_once,
-          },
+          flags: { orderOnlyOnce: !!x?.config?.order_only_once },
         }
       })
 
     return reply.send({ ok: true, items })
   })
 
-  // =====================
-  // /api/services/order (create user-service)
-  // =====================
   app.put('/services/order', async (req, reply) => {
     const shmSessionId = ensureAuthed(req, reply)
     if (!shmSessionId) return
@@ -392,21 +416,12 @@ export async function servicesRoutes(app: FastifyInstance) {
     const r = await shmCreateServiceOrder(shmSessionId, serviceId)
 
     if (!r.ok) {
-      if (r.status === 401 || r.status === 403) {
-        return reply.code(401).send({ ok: false, error: 'not_authenticated' })
-      }
-      return reply.code(502).send({
-        ok: false,
-        error: 'shm_error',
-        status: r.status,
-        details: r.json ?? r.text,
-      })
+      if (r.status === 401 || r.status === 403) return reply.code(401).send({ ok: false, error: 'not_authenticated' })
+      return reply.code(502).send({ ok: false, error: 'shm_error', status: r.status, details: r.json ?? r.text })
     }
 
     const us = unwrapUsObject(r.json)
-    if (!us) {
-      return reply.code(502).send({ ok: false, error: 'shm_bad_response', details: r.json ?? r.text })
-    }
+    if (!us) return reply.code(502).send({ ok: false, error: 'shm_bad_response', details: r.json ?? r.text })
 
     const statusRaw = String(us?.status ?? '')
     const item = {

@@ -429,6 +429,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 
 .actions .btn { width: 100%; }
 
+
 /* Optional: pill-like symmetric grid (if you want chips aligned, not kv cards) */
 .pillgrid {
   display: grid;
@@ -527,6 +528,18 @@ button, a { -webkit-tap-highlight-color: transparent; }
   border-radius: 16px;
   background: rgba(255,255,255,0.035);
   border: 1px solid rgba(255,255,255,0.08);
+
+  /* ⬇️ moved here (was duplicated later) */
+  transition: filter 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+
+.list__item:hover {
+  filter: brightness(1.04);
+  border-color: rgba(255,255,255,0.12);
+}
+
+.list__item:active {
+  transform: translateY(1px);
 }
 
 .list__main { min-width: 0; }
@@ -1291,20 +1304,6 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .home-ref { grid-template-columns: 1fr; }
 }
 
-/* ===== (Optional) Make list items feel more tappable in News section ===== */
-.list__item {
-  transition: filter 140ms ease, border-color 140ms ease, transform 140ms ease;
-}
-
-.list__item:hover {
-  filter: brightness(1.04);
-  border-color: rgba(255,255,255,0.12);
-}
-
-.list__item:active {
-  transform: translateY(1px);
-}
-
 /* ============================================================
    Home: helpers used by final Home.tsx
    ============================================================ */
@@ -1344,6 +1343,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
   flex-direction: column;
   gap: 10px;
 }
+
 /* ============================================================
    Services page (centralized, no inline)
    ============================================================ */
@@ -1447,6 +1447,66 @@ button, a { -webkit-tap-highlight-color: transparent; }
   margin-top: 12px;
 }
 
+/* ============================================================
+   ServicesOrder (centralized, no inline)
+   ============================================================ */
+
+/* ServicesOrder: buttons full width when needed */
+
+   .so__btnFull { width: 100%; }
+.so__mt6 { margin-top: 6px; }
+.so__mt8 { margin-top: 8px; }
+.so__mt10 { margin-top: 10px; }
+.so__mt12 { margin-top: 12px; }
+
+.so__h18 { font-size: 18px; }
+
+.so__rowWrap { flex-wrap: wrap; }
+
+.so__spaceBetween {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.so__headerRow {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+/* nested card inside section should look flat */
+.so__cardFlat { box-shadow: none; }
+
+/* Collapsible details block */
+.so__details {
+  overflow: hidden;
+  max-height: 1200px;
+  opacity: 1;
+  transform: translateY(0);
+  transition: max-height 260ms ease, opacity 220ms ease, transform 220ms ease;
+}
+
+.so__details.is-collapsed {
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+/* Payment block appear */
+.so__pay {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 240ms ease, transform 240ms ease;
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .so__details,
+  .so__pay {
+    transition: none;
+  }
+}
+
+
 /* ===== Overlay (used in ServicesOrder) ===== */
 
 .overlay {
@@ -1467,4 +1527,92 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .overlay__title {
   font-size: 18px;
   font-weight: 1000;
+}
+/* ============================================================
+   ConnectRouter (clean UX, no debug)
+   ============================================================ */
+
+.cr__mt10 { margin-top: 10px; }
+.cr__mt12 { margin-top: 12px; }
+.cr__mt6 { margin-top: 6px; }
+
+.cr__hintTop { margin-top: 0; }
+
+/* state card (pre) layout */
+.cr__state{
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cr__stateMain{ min-width: 0; }
+
+.cr__meta{
+  opacity: 0.85;
+  margin-top: 2px;
+}
+
+/* input */
+.cr__form{ margin-top: 12px; }
+
+.cr__input{
+  width: 100%;
+  letter-spacing: 1px;
+}
+
+/* status badge */
+.cr__badge{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1.2;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.10);
+  opacity: 0.92;
+  flex: 0 0 auto;
+}
+
+.cr__badgeK{ opacity: 0.75; }
+.cr__badgeV{ text-transform: uppercase; }
+
+.cr__badge--good{
+  border-color: rgba(77,215,255,0.34);
+  background: rgba(77,215,255,0.08);
+}
+
+.cr__badge--bad{
+  border-color: rgba(255,77,109,0.38);
+  background: rgba(255,77,109,0.10);
+}
+
+.cr__badge--muted{
+  border-color: rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.05);
+}
+
+/* actions: full-width, intuitive */
+.cr__actionsGrid{
+  display: grid;
+  gap: 10px;
+}
+
+.cr__actionsGrid--2{
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 520px){
+  .cr__actionsGrid--2{ grid-template-columns: 1fr; }
+}
+
+.cr__btnFull{ width: 100%; }
+
+/* helper note */
+.cr__note{
+  opacity: 0.78;
+  font-size: 12px;
+  line-height: 1.35;
 }

@@ -48,6 +48,29 @@ function extractRouters(resp: any): ApiRouterItem[] {
   return n ? [n] : []
 }
 
+function toClean8(raw: string) {
+  return String(raw || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, 8)
+}
+
+function toPretty9(raw: string) {
+  const c = toClean8(raw)
+  if (!c) return ''
+  if (c.length <= 4) return c
+  return c.slice(0, 4) + '-' + c.slice(4)
+}
+
+function statusView(status?: string) {
+  const s = String(status || '').trim().toLowerCase()
+  if (!s) return { label: 'unknown', tone: 'muted' as const }
+  if (s === 'bound' || s === 'active' || s === 'ok') return { label: s, tone: 'good' as const }
+  if (s === 'unbound' || s === 'removed' || s === 'none' || s === 'new') return { label: s, tone: 'muted' as const }
+  if (s === 'error' || s === 'fail' || s === 'failed') return { label: s, tone: 'bad' as const }
+  return { label: s, tone: 'muted' as const }
+}
+
 export default function ConnectRouter({ usi, onDone }: Props) {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -56,28 +79,31 @@ export default function ConnectRouter({ usi, onDone }: Props) {
   const [routers, setRouters] = useState<ApiRouterItem[]>([])
   const [code, setCode] = useState('')
 
-  const [debug, setDebug] = useState<any>(null)
-  const [debugOpen, setDebugOpen] = useState(false)
-
   const first = routers?.[0]
-  const shownCode = String(first?.clean_code || first?.code || '').trim()
-  const shownStatus = String(first?.status || '').trim()
+  const shownClean = String(first?.clean_code || first?.cleanCode || '').trim()
+  const shownCode = String(first?.code || first?.router_code || '').trim()
+
+  const shownPretty = useMemo(() => {
+    const base = shownClean || shownCode
+    return base ? toPretty9(base) : ''
+  }, [shownClean, shownCode])
+
+  const st = useMemo(() => statusView(first?.status), [first?.status])
 
   const hasBound = useMemo(() => {
     if (!first) return false
-    const st = String(first.status || '').toLowerCase()
-    if (st === 'bound' || st === 'active' || st === 'ok') return true
-    if (st === 'unbound' || st === 'removed' || st === 'none' || st === 'new') return false
-    if (!st && shownCode) return true
-    return !!shownCode
-  }, [first, shownCode])
+    const normalized = String(first.status || '').toLowerCase()
+    if (normalized === 'bound' || normalized === 'active' || normalized === 'ok') return true
+    if (normalized === 'unbound' || normalized === 'removed' || normalized === 'none' || normalized === 'new') return false
+    // если статус непонятный, но код есть — считаем, что привязан (чтобы не скрывать существующую связку)
+    return !!(shownClean || shownCode)
+  }, [first, shownClean, shownCode])
 
-  async function load(opts?: { debug?: boolean }) {
+  async function load() {
     setLoading(true)
     setError(null)
     try {
-      const q = opts?.debug ? '?debug=1' : ''
-      const r = (await apiFetch(`/services/${encodeURIComponent(String(usi))}/router${q}`, {
+      const r = (await apiFetch(`/services/${encodeURIComponent(String(usi))}/router`, {
         method: 'GET',
       })) as any
 
@@ -85,27 +111,31 @@ export default function ConnectRouter({ usi, onDone }: Props) {
         throw new Error(String(r.error || r.message))
       }
 
-      setDebug(r?.debug ?? null)
-      const list = extractRouters(r)
-      setRouters(list)
+      setRouters(extractRouters(r))
     } catch (e: any) {
       setError(e?.message || 'Не удалось загрузить состояние роутера')
       setRouters([])
-      setDebug(null)
     } finally {
       setLoading(false)
     }
   }
 
   async function bind() {
-    const v = String(code || '').trim()
-    if (!v) return
+    const pretty = toPretty9(code)
+    const clean = toClean8(code)
+
+    if (!clean) return
+    if (clean.length !== 8) {
+      setError('Код должен быть в формате XXXX-XXXX (латинские буквы и цифры).')
+      return
+    }
+
     setBusy(true)
     setError(null)
     try {
       const r = (await apiFetch(`/services/${encodeURIComponent(String(usi))}/router/bind`, {
         method: 'POST',
-        body: { code: v },
+        body: { code: pretty },
       } as any)) as any
 
       if (r && (r.ok === false || r.ok === 0) && (r.error || r.message)) {
@@ -113,7 +143,7 @@ export default function ConnectRouter({ usi, onDone }: Props) {
       }
 
       setCode('')
-      await load({ debug: debugOpen })
+      await load()
       onDone?.()
     } catch (e: any) {
       setError(e?.message || 'Не удалось привязать роутер')
@@ -123,21 +153,23 @@ export default function ConnectRouter({ usi, onDone }: Props) {
   }
 
   async function unbind() {
-    const v = String(first?.clean_code || first?.code || '').trim()
-    if (!v) return
+    const v = String(first?.clean_code || first?.cleanCode || first?.code || first?.router_code || '').trim()
+    const clean = toClean8(v)
+    if (!clean) return
+
     setBusy(true)
     setError(null)
     try {
       const r = (await apiFetch(`/services/${encodeURIComponent(String(usi))}/router/unbind`, {
         method: 'POST',
-        body: { code: v },
+        body: { code: clean },
       } as any)) as any
 
       if (r && (r.ok === false || r.ok === 0) && (r.error || r.message)) {
         throw new Error(String(r.error || r.message))
       }
 
-      await load({ debug: debugOpen })
+      await load()
       onDone?.()
     } catch (e: any) {
       setError(e?.message || 'Не удалось отвязать роутер')
@@ -151,102 +183,104 @@ export default function ConnectRouter({ usi, onDone }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usi])
 
+  const inputValue = toPretty9(code)
+  const cleanLen = toClean8(code).length
+  const canBind = !busy && !hasBound && cleanLen === 8
+
+  const statusToneClass =
+    st.tone === 'good' ? 'cr__badge--good' : st.tone === 'bad' ? 'cr__badge--bad' : 'cr__badge--muted'
+
+  const actionsCols = hasBound ? 'cr__actionsGrid--2' : 'cr__actionsGrid--2'
+
   return (
-    <div>
-      <div className="p" style={{ marginTop: 0 }}>
-        Введите код с экрана роутера, чтобы привязать устройство к этой услуге.
-      </div>
+    <div className="cr">
+      <div className="p cr__hintTop">Введите код с экрана роутера, чтобы привязать устройство к этой услуге.</div>
 
       {loading ? <div className="p">Загрузка состояния…</div> : null}
 
-      {error ? (
-        <div className="pre" style={{ marginTop: 10 }}>
-          {error}
-        </div>
-      ) : null}
+      {error ? <div className="pre cr__mt10">{error}</div> : null}
 
       {!loading ? (
-        <div className="pre" style={{ marginTop: 10 }}>
+        <div className="pre cr__mt10 cr__state">
+          <div className="cr__stateMain">
+            {hasBound ? (
+              <>
+                <div>
+                  ✅ Роутер привязан: <b>{shownPretty || '—'}</b>
+                </div>
+
+                {first?.created_at ? (
+                  <div className="cr__meta cr__mt6">
+                    Привязан: <b>{fmtTs(first.created_at)}</b>
+                  </div>
+                ) : null}
+
+                {first?.last_seen_at ? (
+                  <div className="cr__meta">
+                    Последний контакт: <b>{fmtTs(first.last_seen_at)}</b>
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <div>Роутер ещё не привязан.</div>
+            )}
+          </div>
+
           {first ? (
-            <>
-              <div>
-                Привязан роутер: <b>{shownCode || '—'}</b>
-              </div>
-              <div>
-                Статус: <b>{shownStatus || 'unknown'}</b>
-              </div>
-              {first.created_at ? (
-                <div>
-                  Привязан: <b>{fmtTs(first.created_at)}</b>
-                </div>
-              ) : null}
-              {first.last_seen_at ? (
-                <div>
-                  Последний контакт: <b>{fmtTs(first.last_seen_at)}</b>
-                </div>
-              ) : null}
-            </>
-          ) : (
-            <>Роутер ещё не привязан.</>
-          )}
+            <span className={`cr__badge ${statusToneClass}`} title="Статус привязки">
+              <span className="cr__badgeK">status</span>
+              <b className="cr__badgeV">{st.label}</b>
+            </span>
+          ) : null}
         </div>
       ) : null}
 
-      <div className="row" style={{ marginTop: 12, gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-        <input
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-          placeholder="Код с экрана роутера"
-          className="input"
-          style={{ minWidth: 240 }}
-          disabled={busy || hasBound}
-        />
-        <button className="btn btn--primary" onClick={bind} disabled={busy || hasBound || !String(code).trim()}>
-          {busy ? 'Подождите…' : 'Привязать роутер'}
-        </button>
+      {!hasBound ? (
+        <div className="cr__form">
+          <input
+            value={inputValue}
+            onChange={(e) => {
+              setError(null)
+              setCode(e.target.value)
+            }}
+            onBlur={() => setCode((cur) => toPretty9(cur))}
+            placeholder="Например: N8JD-6TQ4"
+            className="input cr__input"
+            disabled={busy}
+            inputMode="text"
+            lang="en"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            autoComplete="off"
+            pattern="[A-Za-z0-9-]*"
+          />
+        </div>
+      ) : null}
 
-        {first ? (
-          <button className="btn" onClick={unbind} disabled={busy || !hasBound}>
-            Отвязать
+      <div className={`cr__actionsGrid ${actionsCols} cr__mt12`}>
+        {!hasBound ? (
+          <button className="btn btn--primary cr__btnFull" onClick={bind} disabled={!canBind}>
+            {busy ? 'Подождите…' : 'Привязать роутер'}
           </button>
-        ) : null}
+        ) : (
+          <button className="btn btn--danger cr__btnFull" onClick={unbind} disabled={busy}>
+            {busy ? 'Подождите…' : 'Отвязать роутер'}
+          </button>
+        )}
 
-        <button
-          className="btn"
-          onClick={async () => {
-            await load({ debug: debugOpen })
-          }}
-          disabled={busy}
-        >
+        <button className="btn cr__btnFull" onClick={load} disabled={busy}>
           Обновить
-        </button>
-
-        <button
-          className="btn"
-          onClick={async () => {
-            const next = !debugOpen
-            setDebugOpen(next)
-            await load({ debug: next })
-          }}
-          disabled={busy}
-          title="Показать диагностическую информацию (без секретов)"
-        >
-          {debugOpen ? 'Скрыть диагностику' : 'Диагностика'}
         </button>
       </div>
 
       {hasBound ? (
-        <div style={{ marginTop: 10, opacity: 0.82, fontSize: 12 }}>
-          Один роутер может быть привязан к услуге одновременно.
+        <div className="cr__note cr__mt10">Один роутер может быть привязан к услуге одновременно.</div>
+      ) : (
+        <div className="cr__note cr__mt10">
+          Формат кода: <b>XXXX-XXXX</b> (только латинские буквы и цифры).
         </div>
-      ) : null}
-
-      {debugOpen && debug ? (
-        <div className="pre" style={{ marginTop: 10, whiteSpace: 'pre-wrap' }}>
-          <div style={{ opacity: 0.82, marginBottom: 6 }}>Диагностика:</div>
-          {JSON.stringify(debug, null, 2)}
-        </div>
-      ) : null}
+      )}
     </div>
   )
 }

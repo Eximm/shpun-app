@@ -8,87 +8,90 @@
  */
 
 export type ShmResult<T = unknown> = {
-  ok: boolean
-  status: number
-  json?: T
-  text?: string
-}
+  ok: boolean;
+  status: number;
+  json?: T;
+  text?: string;
+};
 
 function normalizeBase(raw: string) {
-  let s = String(raw || '').trim()
-  if (!s) s = 'https://bill.shpyn.online/shm/'
-  if (!s.endsWith('/')) s += '/'
-  return s
+  let s = String(raw || "").trim();
+  if (!s) s = "https://bill.shpyn.online/shm/";
+  if (!s.endsWith("/")) s += "/";
+  return s;
 }
 
-export const SHM_BASE = normalizeBase(process.env.SHM_BASE ?? 'https://bill.shpyn.online/shm/')
+export const SHM_BASE = normalizeBase(
+  process.env.SHM_BASE ?? "https://bill.shpyn.online/shm/"
+);
 
 function envBool(name: string, def = false): boolean {
-  const v = String(process.env[name] ?? '').trim().toLowerCase()
-  if (!v) return def
-  return v === '1' || v === 'true' || v === 'yes' || v === 'on'
+  const v = String(process.env[name] ?? "").trim().toLowerCase();
+  if (!v) return def;
+  return v === "1" || v === "true" || v === "yes" || v === "on";
 }
 
-const SHM_DEBUG = envBool('SHM_DEBUG', false) || envBool('AUTH_DEBUG', false)
+const SHM_DEBUG = envBool("SHM_DEBUG", false) || envBool("AUTH_DEBUG", false);
 
 function dbg(label: string, data: Record<string, any>) {
-  if (!SHM_DEBUG) return
+  if (!SHM_DEBUG) return;
   // Логируем коротко и безопасно (не выводим session-id/пароли)
   try {
     console.debug(
       JSON.stringify({
-        level: 'debug',
+        level: "debug",
         time: Date.now(),
         shm: { label, ...data },
       })
-    )
+    );
   } catch {
     // ignore
   }
 }
 
 function clip(s: string, n = 400) {
-  const t = String(s ?? '')
-  if (t.length <= n) return t
-  return t.slice(0, n) + '…'
+  const t = String(s ?? "");
+  if (t.length <= n) return t;
+  return t.slice(0, n) + "…";
 }
 
 function safeJsonParse(text: string): unknown | null {
   try {
-    return JSON.parse(text)
+    return JSON.parse(text);
   } catch {
-    return null
+    return null;
   }
 }
 
 export function toFormUrlEncoded(obj: Record<string, unknown>) {
-  const p = new URLSearchParams()
-  for (const [k, v] of Object.entries(obj)) p.set(k, String(v ?? ''))
-  return p.toString()
+  const p = new URLSearchParams();
+  for (const [k, v] of Object.entries(obj)) p.set(k, String(v ?? ""));
+  return p.toString();
 }
 
 type ShmFetchOpts = {
-  method?: string
-  query?: Record<string, string | number | boolean | null | undefined>
-  headers?: Record<string, string>
-  body?: string | Record<string, any> | null
-  signal?: AbortSignal
-}
+  method?: string;
+  query?: Record<string, string | number | boolean | null | undefined>;
+  headers?: Record<string, string>;
+  body?: string | Record<string, any> | null;
+  signal?: AbortSignal;
+};
 
 function sanitizeUrlForLog(u: URL): string {
-  const safe = new URL(u.toString())
+  // Не логируем гигантские/чувствительные query целиком.
+  const safe = new URL(u.toString());
   for (const [k, v] of safe.searchParams.entries()) {
-    const vv = String(v ?? '')
-    safe.searchParams.set(k, vv.length > 32 ? vv.slice(0, 32) + '…' : vv)
+    const vv = String(v ?? "");
+    safe.searchParams.set(k, vv.length > 32 ? vv.slice(0, 32) + "…" : vv);
   }
-  return safe.toString()
+  return safe.toString();
 }
 
 function isProbablyHtml(text: string, contentType: string) {
-  const ct = (contentType || '').toLowerCase()
-  if (ct.includes('text/html')) return true
-  const t = (text || '').trim().toLowerCase()
-  return t.startsWith('<!doctype html') || t.startsWith('<html')
+  const ct = (contentType || "").toLowerCase();
+  if (ct.includes("text/html")) return true;
+  const t = (text || "").trim().toLowerCase();
+  return t.startsWith("<!doctype html") || t.startsWith("<html");
 }
 
 export async function shmFetch<T = unknown>(
@@ -96,41 +99,41 @@ export async function shmFetch<T = unknown>(
   path: string, // path без ведущего слеша, например "v1/user"
   opts?: ShmFetchOpts
 ): Promise<ShmResult<T>> {
-  const cleanPath = path.startsWith('/') ? path.slice(1) : path
-  const url = new URL(cleanPath, SHM_BASE)
+  const cleanPath = path.startsWith("/") ? path.slice(1) : path;
+  const url = new URL(cleanPath, SHM_BASE);
 
   if (opts?.query) {
     for (const [k, v] of Object.entries(opts.query)) {
-      if (v === undefined || v === null) continue
-      url.searchParams.set(k, String(v))
+      if (v === undefined || v === null) continue;
+      url.searchParams.set(k, String(v));
     }
   }
 
-  const method = String(opts?.method ?? 'GET').toUpperCase()
+  const method = String(opts?.method ?? "GET").toUpperCase();
 
   const headers: Record<string, string> = {
-    Accept: 'application/json',
+    Accept: "application/json",
     ...(opts?.headers ?? {}),
-  }
+  };
 
   // session-id не логируем
-  if (sessionId) headers['session-id'] = sessionId
+  if (sessionId) headers["session-id"] = sessionId;
 
-  let body: any = opts?.body ?? undefined
+  let body: any = opts?.body ?? undefined;
 
   // если body объект — отправляем JSON
-  if (body && typeof body === 'object' && !(body instanceof String)) {
-    if (!headers['Content-Type']) headers['Content-Type'] = 'application/json'
-    body = JSON.stringify(body)
+  if (body && typeof body === "object" && !(body instanceof String)) {
+    if (!headers["Content-Type"]) headers["Content-Type"] = "application/json";
+    body = JSON.stringify(body);
   }
 
-  const startedAt = Date.now()
-  dbg('request', {
+  const startedAt = Date.now();
+  dbg("request", {
     method,
     url: sanitizeUrlForLog(url),
     hasSessionId: !!sessionId,
-    contentType: headers['Content-Type'] || '',
-  })
+    contentType: headers["Content-Type"] || "",
+  });
 
   try {
     const res = await fetch(url.toString(), {
@@ -138,17 +141,17 @@ export async function shmFetch<T = unknown>(
       headers,
       body,
       signal: opts?.signal,
-    })
+    });
 
-    const contentType = String(res.headers.get('content-type') ?? '')
-    const text = await res.text().catch(() => '')
-    const ms = Date.now() - startedAt
+    const contentType = String(res.headers.get("content-type") ?? "");
+    const text = await res.text().catch(() => "");
+    const ms = Date.now() - startedAt;
 
     // SHM иногда отдаёт JSON без корректного content-type — парсим мягко всегда
-    const parsed = safeJsonParse(text)
-    const json = parsed !== null ? (parsed as T) : undefined
+    const parsed = safeJsonParse(text);
+    const json = parsed !== null ? (parsed as T) : undefined;
 
-    dbg('response', {
+    dbg("response", {
       method,
       url: sanitizeUrlForLog(url),
       status: res.status,
@@ -158,59 +161,87 @@ export async function shmFetch<T = unknown>(
       looksHtml: isProbablyHtml(text, contentType),
       text: clip(text, 400),
       parsedJson: parsed !== null,
-    })
+    });
 
-    return { ok: res.ok, status: res.status, json, text }
+    return { ok: res.ok, status: res.status, json, text };
   } catch (e: any) {
-    const ms = Date.now() - startedAt
-    const msg = String(e?.message ?? e ?? 'unknown_fetch_error')
-    dbg('fetch_error', {
+    const ms = Date.now() - startedAt;
+    const msg = String(e?.message ?? e ?? "unknown_fetch_error");
+    dbg("fetch_error", {
       method,
       url: sanitizeUrlForLog(url),
       ms,
       error: clip(msg, 300),
-    })
-    return { ok: false, status: 502, text: `fetch_error:${msg}` }
+    });
+    return { ok: false, status: 502, text: `fetch_error:${msg}` };
   }
+}
+
+/**
+ * Удобный helper для мест, где нужно “взорваться” на ошибке.
+ */
+export function assertOk<T>(r: ShmResult<T>, label = "shm_request_failed"): T {
+  if (r.ok && r.json !== undefined) return r.json;
+  const detail = String(r.text || "").slice(0, 200);
+  throw new Error(`${label}:${r.status}:${detail}`);
+}
+
+/**
+ * Для запросов, где SHM может вернуть успех без JSON (на всякий случай).
+ */
+export function assertOkVoid(r: ShmResult<any>, label = "shm_request_failed"): void {
+  if (r.ok) return;
+  const detail = String(r.text || "").slice(0, 200);
+  throw new Error(`${label}:${r.status}:${detail}`);
 }
 
 // =====================
 // AUTH
 // =====================
 
+// Auth via login/password -> /shm/user/auth.cgi
 export async function shmAuthWithPassword(login: string, password: string) {
-  const body = toFormUrlEncoded({ login, password })
+  const body = toFormUrlEncoded({ login, password });
+
   return await shmFetch<{
-    session_id?: string
-    user_id?: number
-    status?: number
-    msg?: string
-  }>(null, 'user/auth.cgi', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    session_id?: string;
+    user_id?: number;
+    status?: number;
+    msg?: string;
+  }>(null, "user/auth.cgi", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body,
-  })
+  });
 }
 
 /**
- * Telegram Mini App initData -> SHM -> session_id
+ * Канон:
+ * Telegram Mini App (WebApp) initData -> SHM -> session_id
+ *
+ * GET /shm/v1/telegram/webapp/auth?initData=...
+ * Ответ: { session_id: string }
  */
 export async function shmTelegramWebAppAuth(initData: string) {
-  const clean = String(initData ?? '').trim()
-  return await shmFetch<{ session_id?: string }>(null, 'v1/telegram/webapp/auth', {
-    method: 'GET',
+  const clean = String(initData ?? "").trim();
+  return await shmFetch<{ session_id?: string }>(null, "v1/telegram/webapp/auth", {
+    method: "GET",
     query: { initData: clean },
-  })
+  });
 }
 
 /**
+ * Канон:
  * Telegram Login Widget -> SHM -> session_id
+ *
+ * POST /shm/v1/telegram/web/auth
+ * Ответ: { session_id: string }
  */
 export async function shmTelegramWebAuth(widgetPayload: Record<string, any>) {
-  return await shmFetch<{ session_id?: string }>(null, 'v1/telegram/web/auth', {
-    method: 'POST',
+  return await shmFetch<{ session_id?: string }>(null, "v1/telegram/web/auth", {
+    method: "POST",
     body: widgetPayload ?? {},
-  })
+  });
 }
 
 // =====================
@@ -218,36 +249,37 @@ export async function shmTelegramWebAuth(widgetPayload: Record<string, any>) {
 // =====================
 
 export async function shmGetMe(sessionId: string) {
-  return await shmFetch<any>(sessionId, 'v1/user', {
-    method: 'GET',
+  return await shmFetch<any>(sessionId, "v1/user", {
+    method: "GET",
     query: { limit: 1, offset: 0 },
-  })
+  });
 }
 
 export async function shmGetUserServices(
   sessionId: string,
   opts?: { limit?: number; offset?: number; filter?: unknown }
 ) {
-  const limit = opts?.limit ?? 25
-  const offset = opts?.offset ?? 0
-  const filterObj = (opts?.filter ?? {}) as any
-  const filter = JSON.stringify(filterObj)
+  const limit = opts?.limit ?? 25;
+  const offset = opts?.offset ?? 0;
+  const filterObj = (opts?.filter ?? {}) as any;
+  const filter = JSON.stringify(filterObj);
 
-  return await shmFetch<any>(sessionId, 'v1/user/service', {
-    method: 'GET',
+  return await shmFetch<any>(sessionId, "v1/user/service", {
+    method: "GET",
     query: { limit, offset, filter },
-  })
+  });
 }
 
 /**
  * ✅ Swagger: DELETE /shm/v1/user/service?user_service_id=<number>
+ * Удалить услугу пользователя.
  */
 export async function shmDeleteUserService(sessionId: string, user_service_id: number) {
-  const usi = Number(user_service_id ?? 0)
-  return await shmFetch<any>(sessionId, 'v1/user/service', {
-    method: 'DELETE',
+  const usi = Number(user_service_id ?? 0);
+  return await shmFetch<any>(sessionId, "v1/user/service", {
+    method: "DELETE",
     query: { user_service_id: usi },
-  })
+  });
 }
 
 // =====================
@@ -255,158 +287,150 @@ export async function shmDeleteUserService(sessionId: string, user_service_id: n
 // =====================
 
 export type ShmServiceOrderItem = {
-  service_id: number
-  category: string
-  name: string
-  descr: string | null
-  cost: number
-  real_cost?: number
-  period: number | string
-  allow_to_order?: 0 | 1
-  deleted?: 0 | 1
-  config?: Record<string, any>
-  [k: string]: any
-}
+  service_id: number;
+  category: string;
+  name: string;
+  descr: string | null;
+  cost: number;
+  real_cost?: number;
+  period: number | string;
+  allow_to_order?: 0 | 1;
+  deleted?: 0 | 1;
+  config?: Record<string, any>;
+  [k: string]: any;
+};
 
 export type ShmGetServiceOrderResp = {
-  status?: number
-  data?: ShmServiceOrderItem[]
-  error?: string
-  [k: string]: any
-}
+  status?: number;
+  data?: ShmServiceOrderItem[];
+  error?: string;
+  [k: string]: any;
+};
 
 export async function shmGetServiceOrder(sessionId: string) {
-  return await shmFetch<ShmGetServiceOrderResp>(sessionId, 'v1/service/order', {
-    method: 'GET',
-  })
+  return await shmFetch<ShmGetServiceOrderResp>(sessionId, "v1/service/order", {
+    method: "GET",
+  });
 }
 
 export type ShmCreateServiceOrderResp = {
-  status?: number | string
-  data?: any
-  error?: string
-  message?: string
-  [k: string]: any
-}
+  status?: number | string;
+  data?: any;
+  error?: string;
+  message?: string;
+  [k: string]: any;
+};
 
 export async function shmCreateServiceOrder(sessionId: string, service_id: number) {
-  return await shmFetch<ShmCreateServiceOrderResp>(sessionId, 'v1/service/order', {
-    method: 'PUT',
+  return await shmFetch<ShmCreateServiceOrderResp>(sessionId, "v1/service/order", {
+    method: "PUT",
     body: { service_id },
-  })
+  });
 }
 
 // =====================
 // PAYMENTS
 // =====================
 
-export async function shmGetPaySystems(sessionId: string, opts?: { limit?: number; offset?: number }) {
-  const limit = opts?.limit ?? 50
-  const offset = opts?.offset ?? 0
-  return await shmFetch<any>(sessionId, 'v1/user/pay/paysystems', {
-    method: 'GET',
+export async function shmGetPaySystems(
+  sessionId: string,
+  opts?: { limit?: number; offset?: number }
+) {
+  const limit = opts?.limit ?? 50;
+  const offset = opts?.offset ?? 0;
+  return await shmFetch<any>(sessionId, "v1/user/pay/paysystems", {
+    method: "GET",
     query: { limit, offset },
-  })
+  });
 }
 
-export async function shmGetPayForecast(sessionId: string, opts?: { limit?: number; offset?: number }) {
-  const limit = opts?.limit ?? 25
-  const offset = opts?.offset ?? 0
-  return await shmFetch<any>(sessionId, 'v1/user/pay/forecast', {
-    method: 'GET',
+export async function shmGetPayForecast(
+  sessionId: string,
+  opts?: { limit?: number; offset?: number }
+) {
+  const limit = opts?.limit ?? 25;
+  const offset = opts?.offset ?? 0;
+  return await shmFetch<any>(sessionId, "v1/user/pay/forecast", {
+    method: "GET",
     query: { limit, offset },
-  })
+  });
 }
 
-export async function shmGetPays(sessionId: string, opts?: { limit?: number; offset?: number }) {
-  const limit = opts?.limit ?? 25
-  const offset = opts?.offset ?? 0
-  return await shmFetch<any>(sessionId, 'v1/user/pay', {
-    method: 'GET',
+export async function shmGetPays(
+  sessionId: string,
+  opts?: { limit?: number; offset?: number }
+) {
+  const limit = opts?.limit ?? 25;
+  const offset = opts?.offset ?? 0;
+  return await shmFetch<any>(sessionId, "v1/user/pay", {
+    method: "GET",
     query: { limit, offset },
-  })
+  });
 }
 
-export async function shmGetWithdraws(sessionId: string, opts?: { limit?: number; offset?: number }) {
-  const limit = opts?.limit ?? 25
-  const offset = opts?.offset ?? 0
-  return await shmFetch<any>(sessionId, 'v1/user/withdraw', {
-    method: 'GET',
+export async function shmGetWithdraws(
+  sessionId: string,
+  opts?: { limit?: number; offset?: number }
+) {
+  const limit = opts?.limit ?? 25;
+  const offset = opts?.offset ?? 0;
+  return await shmFetch<any>(sessionId, "v1/user/withdraw", {
+    method: "GET",
     query: { limit, offset },
-  })
+  });
 }
 
 export async function shmDeleteAutopayment(sessionId: string) {
-  return await shmFetch<any>(sessionId, 'v1/user/autopayment', {
-    method: 'DELETE',
-  })
+  return await shmFetch<any>(sessionId, "v1/user/autopayment", {
+    method: "DELETE",
+  });
 }
 
 // =====================
 // TEMPLATE: ShpunApp
 // =====================
 
-// вытаскиваем uid из /v1/user, чтобы TT2-шаблон всегда понимал пользователя
-async function resolveUidForTemplate(shmSessionId: string): Promise<number | null> {
-  try {
-    const r = await shmGetMe(shmSessionId)
-    if (!r.ok) return null
-    const j: any = r.json ?? {}
-    const uid = Number(j?.data?.[0]?.user_id ?? j?.user_id ?? 0)
-    return uid && Number.isFinite(uid) ? uid : null
-  } catch {
-    return null
-  }
-}
-
 /**
  * Унифицированный вызов TT2-шаблона приложения в биллинге.
  * ВАЖНО: отправляем form-urlencoded, потому что TT2 читает request.params надёжно в таком режиме.
- *
- * ⚠️ Критично: TT2 в shpun_app иногда не умеет резолвить пользователя из "API session-id".
- * Поэтому мы автоматически добавляем uid (получаем его через shmGetMe()).
  */
 export async function shmShpunAppTemplate<T = any>(
   shmSessionId: string,
   action: string,
   extraParams?: Record<string, any>
 ) {
-  const params: Record<string, any> = { ...(extraParams ?? {}) }
-
-  if (params.uid == null || params.uid === '') {
-    const uid = await resolveUidForTemplate(shmSessionId)
-    if (uid) params.uid = uid
-  }
-
   const flat: Record<string, any> = {
     session_id: shmSessionId,
     action,
-    ...params,
-  }
+    ...(extraParams ?? {}),
+  };
 
-  return await shmFetch<T>(null, 'v1/template/shpun_app', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  return await shmFetch<T>(null, "v1/template/shpun_app", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: toFormUrlEncoded(flat),
-  })
+  });
 }
 
-/** статус */
+/** Короткий хелпер: статус (в т.ч. password_set) */
 export async function shmShpunAppStatus(shmSessionId: string) {
-  return await shmShpunAppTemplate<any>(shmSessionId, 'status')
+  return await shmShpunAppTemplate<any>(shmSessionId, "status");
 }
 
-/** Рефералы: статус */
+/** Рефералы: статус (процент/кол-во/бонусы) */
 export async function shmShpunAppReferralsStatus(shmSessionId: string) {
-  return await shmShpunAppTemplate<any>(shmSessionId, 'referrals.status')
+  return await shmShpunAppTemplate<any>(shmSessionId, "referrals.status");
 }
 
-/** Рефералы: список */
-export async function shmShpunAppReferralsList(shmSessionId: string, opts?: { limit?: number; offset?: number }) {
-  return await shmShpunAppTemplate<any>(shmSessionId, 'referrals.list', {
+/** Рефералы: список приглашённых (limit/offset) */
+export async function shmShpunAppReferralsList(
+  shmSessionId: string,
+  opts?: { limit?: number; offset?: number }
+) {
+  return await shmShpunAppTemplate<any>(shmSessionId, "referrals.list", {
     limit: opts?.limit ?? 7,
     offset: opts?.offset ?? 0,
-  })
+  });
 }
 
 // =====================
@@ -414,52 +438,63 @@ export async function shmShpunAppReferralsList(shmSessionId: string, opts?: { li
 // =====================
 
 export type ShpunAppRouterItem = {
-  code?: string
-  clean_code?: string
-  status?: string
-  created_at?: number
-  last_seen_at?: number
-}
+  code?: string;
+  clean_code?: string;
+  status?: string;
+  created_at?: number;
+  last_seen_at?: number;
+};
 
 export type ShpunAppRouterListResp = {
-  ok?: number
-  ver?: string
-  action?: string
-  routers?: ShpunAppRouterItem[]
-  error?: string
-  [k: string]: any
-}
+  ok?: number;
+  ver?: string;
+  action?: string;
+  routers?: ShpunAppRouterItem[];
+  error?: string;
+  [k: string]: any;
+};
 
 export type ShpunAppRouterBindResp = {
-  ok?: number
-  ver?: string
-  action?: string
-  clean_code?: string
-  pair_key?: string
-  error?: string
-  [k: string]: any
-}
+  ok?: number;
+  ver?: string;
+  action?: string;
+  clean_code?: string;
+  pair_key?: string;
+  error?: string;
+  [k: string]: any;
+};
 
 export type ShpunAppRouterUnbindResp = {
-  ok?: number
-  ver?: string
-  action?: string
-  clean_code?: string
-  unbound?: number
-  error?: string
-  [k: string]: any
-}
+  ok?: number;
+  ver?: string;
+  action?: string;
+  clean_code?: string;
+  unbound?: number;
+  error?: string;
+  [k: string]: any;
+};
 
 export async function shmShpunAppRouterList(shmSessionId: string, usi: number) {
-  return await shmShpunAppTemplate<ShpunAppRouterListResp>(shmSessionId, 'router.list', { usi })
+  return await shmShpunAppTemplate<ShpunAppRouterListResp>(shmSessionId, "router.list", {
+    usi,
+    user_service_id: usi, // совместимость
+    us_id: usi,           // совместимость
+  });
 }
 
-export async function shmShpunAppRouterBind(shmSessionId: string, usi: number, code: string, tg_id?: string | number) {
-  return await shmShpunAppTemplate<ShpunAppRouterBindResp>(shmSessionId, 'router.bind', {
+export async function shmShpunAppRouterBind(
+  shmSessionId: string,
+  usi: number,
+  code: string,
+  tg_id?: string | number
+) {
+  return await shmShpunAppTemplate<ShpunAppRouterBindResp>(shmSessionId, "router.bind", {
     usi,
+    user_service_id: usi, // совместимость
+    us_id: usi,           // совместимость
     code,
     ...(tg_id != null ? { tg_id } : {}),
-  })
+  });
 }
 
 export async function shmShpunAppRouterUnbind(
@@ -468,9 +503,11 @@ export async function shmShpunAppRouterUnbind(
   code: string,
   tg_id?: string | number
 ) {
-  return await shmShpunAppTemplate<ShpunAppRouterUnbindResp>(shmSessionId, 'router.unbind', {
+  return await shmShpunAppTemplate<ShpunAppRouterUnbindResp>(shmSessionId, "router.unbind", {
     usi,
+    user_service_id: usi, // совместимость
+    us_id: usi,           // совместимость
     code,
     ...(tg_id != null ? { tg_id } : {}),
-  })
+  });
 }
