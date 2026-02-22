@@ -3,6 +3,7 @@ import { getSessionFromRequest } from '../../shared/session/sessionStore.js'
 import { parseShmPeriod } from '../../shared/shm/period.js'
 import {
   shmCreateServiceOrder,
+  shmDeleteUserService,
   shmGetServiceOrder,
   shmGetUserServices,
   shmShpunAppRouterBind,
@@ -144,6 +145,52 @@ export async function servicesRoutes(app: FastifyInstance) {
     }
 
     return reply.send({ ok: true, items, summary })
+  })
+
+  // =====================
+  // DELETE /api/services/:usi
+  // =====================
+  app.delete('/services/:usi', async (req, reply) => {
+    const shmSessionId = ensureAuthed(req, reply)
+    if (!shmSessionId) return
+
+    const usi = Number((req.params as any)?.usi ?? 0)
+    if (!usi || !Number.isFinite(usi)) {
+      return reply.code(400).send({ ok: false, error: 'bad_request', details: 'usi_required' })
+    }
+
+    // (спокойная защита) убеждаемся, что услуга существует
+    const svc = await loadUserServiceByUsi(shmSessionId, usi)
+    if (!svc.ok) {
+      return reply.code(502).send({
+        ok: false,
+        error: 'shm_error',
+        status: svc.status,
+        details: svc.json ?? svc.text,
+      })
+    }
+    if (!svc.item) {
+      return reply.code(404).send({ ok: false, error: 'service_not_found' })
+    }
+
+    // Вызываем SHM строго по Swagger: DELETE /user/service?user_service_id=...
+    const r = await shmDeleteUserService(shmSessionId, usi)
+
+    if (!r.ok) {
+      if (r.status === 401 || r.status === 403) {
+        return reply.code(401).send({ ok: false, error: 'not_authenticated' })
+      }
+
+      return reply.code(502).send({
+        ok: false,
+        error: 'shm_error',
+        status: r.status,
+        details: r.json ?? r.text,
+      })
+    }
+
+    // Успех: фронт просто перезагрузит список (у тебя уже load() после delete)
+    return reply.send({ ok: true, removed: true, usi })
   })
 
   // =====================

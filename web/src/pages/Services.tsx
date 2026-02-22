@@ -214,7 +214,10 @@ function Modal({
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(0,0,0,0.55)',
+        // ✅ более плотный оверлей + блюр — не “шумит” фон
+        background: 'rgba(0,0,0,0.72)',
+        backdropFilter: 'blur(6px)',
+        WebkitBackdropFilter: 'blur(6px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -227,6 +230,9 @@ function Modal({
         style={{
           width: 'min(560px, 100%)',
           boxShadow: '0 12px 40px rgba(0,0,0,0.45)',
+          // ✅ уплотняем саму карточку, если card полупрозрачная в теме
+          background: 'rgba(18, 18, 20, 0.92)',
+          border: '1px solid rgba(255,255,255,0.08)',
         }}
       >
         <div className="card__body">
@@ -270,7 +276,7 @@ function Modal({
  * Важно: код/данные подтягиваются только при открытии блока подключения.
  */
 const ConnectAmneziaWG = React.lazy(() => import('./connect/ConnectAmneziaWG'))
-const ConnectMarzban = React.lazy(() => import('./connect/ConnectMarzban'))
+const ConnectMarzban = React.lazy(() => import('./connect/ConnectMarzban.tsx'))
 const ConnectRouter = React.lazy(() => import('./connect/ConnectRouter'))
 
 function ConnectInline({
@@ -347,8 +353,7 @@ function ServiceCard({
 
   const allowDelete = canDeleteStatus(s.status)
 
-  const canShowConnect =
-    kind !== 'unknown' && s.status === 'active' // "в процессе" и неактивные — не трогаем, как договорились
+  const canShowConnect = kind !== 'unknown' && s.status === 'active'
 
   return (
     <div className="kv__item svc">
@@ -441,9 +446,7 @@ function ServiceCard({
             </div>
           ) : null}
 
-          {connectOpen && canShowConnect ? (
-            <ConnectInline kind={kind} service={s} onDone={onRefresh} />
-          ) : null}
+          {connectOpen && canShowConnect ? <ConnectInline kind={kind} service={s} onDone={onRefresh} /> : null}
 
           {allowDelete ? (
             <div className="actions actions--1" style={{ marginTop: 10 }}>
@@ -598,11 +601,9 @@ export function Services() {
                   connectOpen={connectOpenId === x.userServiceId}
                   onToggle={() => {
                     setExpandedId((cur) => (cur === x.userServiceId ? null : x.userServiceId))
-                    // если свернули карточку — прячем подключение
                     setConnectOpenId((cur) => (cur === x.userServiceId ? null : cur))
                   }}
                   onToggleConnect={() => {
-                    // открываем connect только внутри раскрытой карточки
                     setExpandedId(x.userServiceId)
                     setConnectOpenId((cur) => (cur === x.userServiceId ? null : x.userServiceId))
                   }}

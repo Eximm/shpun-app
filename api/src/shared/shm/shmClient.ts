@@ -186,6 +186,15 @@ export function assertOk<T>(r: ShmResult<T>, label = "shm_request_failed"): T {
   throw new Error(`${label}:${r.status}:${detail}`);
 }
 
+/**
+ * Для запросов, где SHM может вернуть успех без JSON (на всякий случай).
+ */
+export function assertOkVoid(r: ShmResult<any>, label = "shm_request_failed"): void {
+  if (r.ok) return;
+  const detail = String(r.text || "").slice(0, 200);
+  throw new Error(`${label}:${r.status}:${detail}`);
+}
+
 // =====================
 // AUTH
 // =====================
@@ -258,6 +267,18 @@ export async function shmGetUserServices(
   return await shmFetch<any>(sessionId, "v1/user/service", {
     method: "GET",
     query: { limit, offset, filter },
+  });
+}
+
+/**
+ * ✅ Swagger: DELETE /shm/v1/user/service?user_service_id=<number>
+ * Удалить услугу пользователя.
+ */
+export async function shmDeleteUserService(sessionId: string, user_service_id: number) {
+  const usi = Number(user_service_id ?? 0);
+  return await shmFetch<any>(sessionId, "v1/user/service", {
+    method: "DELETE",
+    query: { user_service_id: usi },
   });
 }
 
