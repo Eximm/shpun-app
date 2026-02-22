@@ -79,11 +79,9 @@ type ShmFetchOpts = {
 
 function sanitizeUrlForLog(u: URL): string {
   // Не логируем гигантские/чувствительные query целиком.
-  // Оставим только ключи и первые символы значений.
   const safe = new URL(u.toString());
   for (const [k, v] of safe.searchParams.entries()) {
     const vv = String(v ?? "");
-    // initData может быть большим — режем
     safe.searchParams.set(k, vv.length > 32 ? vv.slice(0, 32) + "…" : vv);
   }
   return safe.toString();
@@ -180,8 +178,7 @@ export async function shmFetch<T = unknown>(
 }
 
 /**
- * Удобный helper для мест, где нужно “взорваться” на ошибке
- * (опционально использовать, не обязателен).
+ * Удобный helper для мест, где нужно “взорваться” на ошибке.
  */
 export function assertOk<T>(r: ShmResult<T>, label = "shm_request_failed"): T {
   if (r.ok && r.json !== undefined) return r.json;
@@ -230,9 +227,6 @@ export async function shmTelegramWebAppAuth(initData: string) {
  *
  * POST /shm/v1/telegram/web/auth
  * Ответ: { session_id: string }
- *
- * Payload: объект, который отдаёт Telegram widget (id, first_name, auth_date, hash, ...).
- * SHM сам валидирует подпись — мы не проверяем.
  */
 export async function shmTelegramWebAuth(widgetPayload: Record<string, any>) {
   return await shmFetch<{ session_id?: string }>(null, "v1/telegram/web/auth", {
@@ -264,6 +258,52 @@ export async function shmGetUserServices(
   return await shmFetch<any>(sessionId, "v1/user/service", {
     method: "GET",
     query: { limit, offset, filter },
+  });
+}
+
+// =====================
+// SERVICE ORDER
+// =====================
+
+export type ShmServiceOrderItem = {
+  service_id: number;
+  category: string;
+  name: string;
+  descr: string | null;
+  cost: number;
+  real_cost?: number;
+  period: number | string;
+  allow_to_order?: 0 | 1;
+  deleted?: 0 | 1;
+  config?: Record<string, any>;
+  [k: string]: any;
+};
+
+export type ShmGetServiceOrderResp = {
+  status?: number;
+  data?: ShmServiceOrderItem[];
+  error?: string;
+  [k: string]: any;
+};
+
+export async function shmGetServiceOrder(sessionId: string) {
+  return await shmFetch<ShmGetServiceOrderResp>(sessionId, "v1/service/order", {
+    method: "GET",
+  });
+}
+
+export type ShmCreateServiceOrderResp = {
+  status?: number | string;
+  data?: any;
+  error?: string;
+  message?: string;
+  [k: string]: any;
+};
+
+export async function shmCreateServiceOrder(sessionId: string, service_id: number) {
+  return await shmFetch<ShmCreateServiceOrderResp>(sessionId, "v1/service/order", {
+    method: "PUT",
+    body: { service_id },
   });
 }
 

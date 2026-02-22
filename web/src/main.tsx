@@ -16,6 +16,7 @@ import { Home } from "./pages/Home";
 import { Feed } from "./pages/Feed";
 import { Dashboard } from "./pages/Dashboard";
 import { Services } from "./pages/Services";
+import { ServicesOrder } from "./pages/ServicesOrder";
 import { Payments } from "./pages/Payments";
 import { Profile } from "./pages/Profile";
 import { SetPassword } from "./pages/SetPassword";
@@ -128,6 +129,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                 </Authed>
               }
             />
+
             <Route
               path="/services"
               element={
@@ -136,6 +138,15 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                 </Authed>
               }
             />
+            <Route
+              path="/services/order"
+              element={
+                <Authed>
+                  <ServicesOrder />
+                </Authed>
+              }
+            />
+
             <Route
               path="/payments"
               element={

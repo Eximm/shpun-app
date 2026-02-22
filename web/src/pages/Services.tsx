@@ -173,7 +173,6 @@ function ServiceCard({
 
       {expanded ? (
         <div className="svc__details">
-          {/* actions grid already exists in index.css */}
           {s.status === 'active' ? (
             <div className="actions actions--2">
               <button className="btn btn--primary" onClick={() => go(connectUrl)}>Подключение</button>
@@ -213,14 +212,6 @@ function ServiceCard({
               <button className="btn btn--primary" onClick={() => go(orderUrl)}>Заказать снова</button>
             </div>
           ) : null}
-
-          <div className="pre">
-            <div style={{ fontWeight: 900, marginBottom: 6 }}>Данные услуги</div>
-            <div>usi: <b>{s.userServiceId}</b></div>
-            <div>service_id: <b>{s.serviceId}</b></div>
-            <div>category: <b>{s.category || '—'}</b></div>
-            <div>status: <b>{s.status}</b> ({s.statusRaw || '—'})</div>
-          </div>
         </div>
       ) : null}
     </div>
@@ -345,7 +336,6 @@ export function Services() {
 
   return (
     <div className="section">
-      {/* Compact header */}
       <div className="card">
         <div className="card__body">
           <div className="services-head">
@@ -374,18 +364,6 @@ export function Services() {
       <Section kind="marzban" />
       <Section kind="marzban_router" />
       <Section kind="unknown" />
-
-      <div className="section">
-        <details className="card" style={{ boxShadow: 'none' }}>
-          <summary className="card__body" style={{ cursor: 'pointer', userSelect: 'none' }}>
-            <span style={{ fontWeight: 900 }}>Данные (debug)</span>
-            <span style={{ color: 'var(--muted)', marginLeft: 10 }}>сырой ответ /api/services</span>
-          </summary>
-          <div className="card__body" style={{ paddingTop: 0 }}>
-            <pre className="pre">{JSON.stringify({ summary, items }, null, 2)}</pre>
-          </div>
-        </details>
-      </div>
     </div>
   )
 }

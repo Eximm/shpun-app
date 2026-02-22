@@ -1446,3 +1446,25 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .svc__details {
   margin-top: 12px;
 }
+
+/* ===== Overlay (used in ServicesOrder) ===== */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(10px);
+}
+
+.overlay__card {
+  max-width: 620px;
+  margin: 10vh auto 0;
+  box-shadow: 0 30px 80px rgba(0,0,0,0.65);
+}
+
+.overlay__title {
+  font-size: 18px;
+  font-weight: 1000;
+}
