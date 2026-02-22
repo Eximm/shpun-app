@@ -3,9 +3,11 @@ import { getSessionFromRequest } from '../../shared/session/sessionStore.js'
 import { parseShmPeriod } from '../../shared/shm/period.js'
 import {
   shmCreateServiceOrder,
-  shmDeleteUserService,
   shmGetServiceOrder,
   shmGetUserServices,
+  shmShpunAppRouterBind,
+  shmShpunAppRouterList,
+  shmShpunAppRouterUnbind,
 } from '../../shared/shm/shmClient.js'
 
 function mapStatus(raw?: string) {
@@ -55,17 +57,34 @@ function unwrapUsObject(json: any): any | null {
   return null
 }
 
+function ensureAuthed(req: any, reply: any): string | null {
+  const session = getSessionFromRequest(req as any)
+  const shmSessionId = session?.shmSessionId || null
+  if (!shmSessionId) {
+    reply.code(401).send({ ok: false, error: 'not_authenticated' })
+    return null
+  }
+  return shmSessionId
+}
+
+async function loadUserServiceByUsi(shmSessionId: string, usi: number) {
+  const r = await shmGetUserServices(shmSessionId, { limit: 50, offset: 0, filter: {} })
+  if (!r.ok) {
+    return { ok: false as const, status: r.status, json: r.json, text: r.text }
+  }
+  const raw = (r.json as any)?.data ?? []
+  const list = Array.isArray(raw) ? raw : []
+  const found = list.find((x: any) => Number(x?.user_service_id ?? 0) === usi) ?? null
+  return { ok: true as const, item: found }
+}
+
 export async function servicesRoutes(app: FastifyInstance) {
   // =====================
-  // /api/services (list)
+  // /api/services
   // =====================
   app.get('/services', async (req, reply) => {
-    const session = getSessionFromRequest(req as any)
-    const shmSessionId = session?.shmSessionId || null
-
-    if (!shmSessionId) {
-      return reply.code(401).send({ ok: false, error: 'not_authenticated' })
-    }
+    const shmSessionId = ensureAuthed(req, reply)
+    if (!shmSessionId) return
 
     const r = await shmGetUserServices(shmSessionId, {
       limit: 50,
@@ -128,63 +147,144 @@ export async function servicesRoutes(app: FastifyInstance) {
   })
 
   // =====================
-  // /api/services/:userServiceId (delete)
+  // Router controls (via shpun_app template)
   // =====================
-  app.delete('/services/:userServiceId', async (req, reply) => {
-    const session = getSessionFromRequest(req as any)
-    const shmSessionId = session?.shmSessionId || null
 
-    if (!shmSessionId) {
-      return reply.code(401).send({ ok: false, error: 'not_authenticated' })
-    }
+  app.get('/services/:usi/router', async (req, reply) => {
+    const shmSessionId = ensureAuthed(req, reply)
+    if (!shmSessionId) return
 
-    const params = (req.params ?? {}) as any
-    const usi = Number(params?.userServiceId ?? 0)
-
+    const usi = Number((req.params as any)?.usi ?? 0)
     if (!usi || !Number.isFinite(usi)) {
-      return reply.code(400).send({ ok: false, error: 'bad_request', details: 'userServiceId_required' })
+      return reply.code(400).send({ ok: false, error: 'bad_request', details: 'usi_required' })
     }
 
-    const r = await shmDeleteUserService(shmSessionId, usi)
+    const svc = await loadUserServiceByUsi(shmSessionId, usi)
+    if (!svc.ok) {
+      return reply.code(502).send({ ok: false, error: 'shm_error', status: svc.status })
+    }
+    if (!svc.item) {
+      return reply.code(404).send({ ok: false, error: 'service_not_found' })
+    }
 
-    // Идемпотентность: если SHM скажет "не найдено" — считаем, что для пользователя уже удалено.
-    // (на практике SHM может вернуть 404/400 — мы это мягко проглотим как ok)
+    const statusRaw = String(svc.item?.status ?? '')
+    const category = String(svc.item?.service?.category ?? svc.item?.category ?? '')
+
+    // только router-услуга
+    if (category !== 'marzban-r') {
+      return reply.code(400).send({ ok: false, error: 'not_router_service' })
+    }
+    // не трогаем "в процессе"
+    if (String(statusRaw).toUpperCase() !== 'ACTIVE') {
+      return reply.code(409).send({ ok: false, error: 'service_not_ready', status: statusRaw })
+    }
+
+    const r = await shmShpunAppRouterList(shmSessionId, usi)
+    const j: any = r.json ?? {}
+
+    // TT2 может вернуть 200 + ok:0
     if (!r.ok) {
-      if (r.status === 401 || r.status === 403) {
-        return reply.code(401).send({ ok: false, error: 'not_authenticated' })
-      }
-
-      if (r.status === 404) {
-        return reply.send({ ok: true, already: true })
-      }
-
-      // Иногда SHM может отвечать 400, если уже удалено — в этом случае тоже считаем ok (лучший UX).
-      // Если окажется, что 400 бывает по другим причинам — ты скажешь, и мы сузим условие.
-      if (r.status === 400) {
-        return reply.send({ ok: true, maybeAlready: true })
-      }
-
-      return reply.code(502).send({
-        ok: false,
-        error: 'shm_error',
-        status: r.status,
-        details: r.json ?? r.text,
-      })
+      return reply.code(502).send({ ok: false, error: 'shm_template_failed', status: r.status })
+    }
+    if ((j?.ok ?? 0) !== 1) {
+      return reply.code(400).send({ ok: false, error: j?.error || 'router_list_failed', details: j })
     }
 
-    return reply.send({ ok: true })
+    return reply.send({ ok: true, routers: Array.isArray(j?.routers) ? j.routers : [] })
+  })
+
+  app.post('/services/:usi/router/bind', async (req, reply) => {
+    const shmSessionId = ensureAuthed(req, reply)
+    if (!shmSessionId) return
+
+    const usi = Number((req.params as any)?.usi ?? 0)
+    if (!usi || !Number.isFinite(usi)) {
+      return reply.code(400).send({ ok: false, error: 'bad_request', details: 'usi_required' })
+    }
+
+    const code = String((req.body as any)?.code ?? '').trim()
+    if (!code) return reply.code(400).send({ ok: false, error: 'code_required' })
+
+    const svc = await loadUserServiceByUsi(shmSessionId, usi)
+    if (!svc.ok) {
+      return reply.code(502).send({ ok: false, error: 'shm_error', status: svc.status })
+    }
+    if (!svc.item) {
+      return reply.code(404).send({ ok: false, error: 'service_not_found' })
+    }
+
+    const statusRaw = String(svc.item?.status ?? '')
+    const category = String(svc.item?.service?.category ?? svc.item?.category ?? '')
+
+    if (category !== 'marzban-r') {
+      return reply.code(400).send({ ok: false, error: 'not_router_service' })
+    }
+    if (String(statusRaw).toUpperCase() !== 'ACTIVE') {
+      return reply.code(409).send({ ok: false, error: 'service_not_ready', status: statusRaw })
+    }
+
+    const r = await shmShpunAppRouterBind(shmSessionId, usi, code)
+    const j: any = r.json ?? {}
+
+    if (!r.ok) {
+      return reply.code(502).send({ ok: false, error: 'shm_template_failed', status: r.status })
+    }
+    if ((j?.ok ?? 0) !== 1) {
+      return reply.code(400).send({ ok: false, error: j?.error || 'router_bind_failed', details: j })
+    }
+
+    return reply.send({ ok: true, clean_code: j?.clean_code ?? '' })
+  })
+
+  app.post('/services/:usi/router/unbind', async (req, reply) => {
+    const shmSessionId = ensureAuthed(req, reply)
+    if (!shmSessionId) return
+
+    const usi = Number((req.params as any)?.usi ?? 0)
+    if (!usi || !Number.isFinite(usi)) {
+      return reply.code(400).send({ ok: false, error: 'bad_request', details: 'usi_required' })
+    }
+
+    const code = String((req.body as any)?.code ?? '').trim()
+    if (!code) return reply.code(400).send({ ok: false, error: 'code_required' })
+
+    const svc = await loadUserServiceByUsi(shmSessionId, usi)
+    if (!svc.ok) {
+      return reply.code(502).send({ ok: false, error: 'shm_error', status: svc.status })
+    }
+    if (!svc.item) {
+      return reply.code(404).send({ ok: false, error: 'service_not_found' })
+    }
+
+    const statusRaw = String(svc.item?.status ?? '')
+    const category = String(svc.item?.service?.category ?? svc.item?.category ?? '')
+
+    if (category !== 'marzban-r') {
+      return reply.code(400).send({ ok: false, error: 'not_router_service' })
+    }
+    if (String(statusRaw).toUpperCase() !== 'ACTIVE') {
+      return reply.code(409).send({ ok: false, error: 'service_not_ready', status: statusRaw })
+    }
+
+    const r = await shmShpunAppRouterUnbind(shmSessionId, usi, code)
+    const j: any = r.json ?? {}
+
+    if (!r.ok) {
+      return reply.code(502).send({ ok: false, error: 'shm_template_failed', status: r.status })
+    }
+    if ((j?.ok ?? 0) !== 1) {
+      return reply.code(400).send({ ok: false, error: j?.error || 'router_unbind_failed', details: j })
+    }
+
+    return reply.send({ ok: true, unbound: j?.unbound ?? 0, clean_code: j?.clean_code ?? '' })
   })
 
   // =====================
   // /api/services/order (list tariffs)
   // =====================
   app.get('/services/order', async (req, reply) => {
-    const session = getSessionFromRequest(req as any)
-    const shmSessionId = session?.shmSessionId || null
-
-    if (!shmSessionId) {
-      return reply.code(401).send({ ok: false, error: 'not_authenticated' })
-    }
+    const shmSessionId = ensureAuthed(req, reply)
+    if (!shmSessionId) return
 
     const r = await shmGetServiceOrder(shmSessionId)
 
@@ -232,12 +332,8 @@ export async function servicesRoutes(app: FastifyInstance) {
   // /api/services/order (create user-service)
   // =====================
   app.put('/services/order', async (req, reply) => {
-    const session = getSessionFromRequest(req as any)
-    const shmSessionId = session?.shmSessionId || null
-
-    if (!shmSessionId) {
-      return reply.code(401).send({ ok: false, error: 'not_authenticated' })
-    }
+    const shmSessionId = ensureAuthed(req, reply)
+    if (!shmSessionId) return
 
     const body = (req.body ?? {}) as any
     const serviceId = Number(body?.service_id ?? body?.serviceId ?? 0)

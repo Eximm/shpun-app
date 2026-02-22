@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import React, { Suspense, useEffect, useMemo, useState } from 'react'
 import { apiFetch } from '../shared/api/client'
 
 type UiStatus = 'active' | 'blocked' | 'pending' | 'not_paid' | 'removed' | 'error' | 'init'
@@ -52,32 +52,48 @@ function detectKind(category?: string): ServiceKind {
 
 function kindTitle(k: ServiceKind) {
   switch (k) {
-    case 'amneziawg': return 'AmneziaWG'
-    case 'marzban': return 'Marzban (все устройства)'
-    case 'marzban_router': return 'Marzban (роутеры)'
-    default: return 'Другое'
+    case 'amneziawg':
+      return 'AmneziaWG'
+    case 'marzban':
+      return 'Marzban (все устройства)'
+    case 'marzban_router':
+      return 'Marzban (роутеры)'
+    default:
+      return 'Другое'
   }
 }
 
 function kindDescr(k: ServiceKind) {
   switch (k) {
-    case 'amneziawg': return 'VPN-протокол AmneziaWG.'
-    case 'marzban': return 'Подписка Marzban для всех устройств.'
-    case 'marzban_router': return 'Подписка Marzban для роутеров.'
-    default: return 'Прочие услуги.'
+    case 'amneziawg':
+      return 'VPN-протокол AmneziaWG.'
+    case 'marzban':
+      return 'Подписка Marzban для всех устройств.'
+    case 'marzban_router':
+      return 'Подписка Marzban для роутеров.'
+    default:
+      return 'Прочие услуги.'
   }
 }
 
 function statusLabel(s: UiStatus) {
   switch (s) {
-    case 'active': return 'Активна'
-    case 'pending': return 'Подключается'
-    case 'not_paid': return 'Не оплачена'
-    case 'blocked': return 'Заблокирована'
-    case 'removed': return 'Завершена'
-    case 'error': return 'Ошибка'
-    case 'init': return 'Инициализация'
-    default: return 'Статус'
+    case 'active':
+      return 'Активна'
+    case 'pending':
+      return 'Подключается'
+    case 'not_paid':
+      return 'Не оплачена'
+    case 'blocked':
+      return 'Заблокирована'
+    case 'removed':
+      return 'Завершена'
+    case 'error':
+      return 'Ошибка'
+    case 'init':
+      return 'Инициализация'
+    default:
+      return 'Статус'
   }
 }
 
@@ -114,14 +130,22 @@ function hintText(s: ApiServiceItem) {
 
 function statusSortWeight(s: UiStatus) {
   switch (s) {
-    case 'active': return 0
-    case 'pending': return 1
-    case 'not_paid': return 2
-    case 'blocked': return 3
-    case 'init': return 4
-    case 'error': return 5
-    case 'removed': return 6
-    default: return 99
+    case 'active':
+      return 0
+    case 'pending':
+      return 1
+    case 'not_paid':
+      return 2
+    case 'blocked':
+      return 3
+    case 'init':
+      return 4
+    case 'error':
+      return 5
+    case 'removed':
+      return 6
+    default:
+      return 99
   }
 }
 
@@ -241,16 +265,75 @@ function Modal({
   )
 }
 
+/**
+ * "Дополнительные страницы" (лениво), которые мы рендерим ВНУТРИ карточки.
+ * Важно: код/данные подтягиваются только при открытии блока подключения.
+ */
+const ConnectAmneziaWG = React.lazy(() => import('./connect/ConnectAmneziaWG'))
+const ConnectMarzban = React.lazy(() => import('./connect/ConnectMarzban'))
+const ConnectRouter = React.lazy(() => import('./connect/ConnectRouter'))
+
+function ConnectInline({
+  kind,
+  service,
+  onDone,
+}: {
+  kind: ServiceKind
+  service: ApiServiceItem
+  onDone?: () => void
+}) {
+  return (
+    <div
+      style={{
+        marginTop: 10,
+        paddingTop: 10,
+        borderTop: '1px solid rgba(255,255,255,0.08)',
+      }}
+    >
+      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+        <div className="services-cat__title" style={{ fontSize: 14 }}>
+          Подключение
+        </div>
+        <span className="badge">{kindTitle(kind)}</span>
+      </div>
+
+      <div style={{ marginTop: 10 }}>
+        <Suspense fallback={<div className="p">Загрузка…</div>}>
+          {kind === 'amneziawg' ? (
+            <ConnectAmneziaWG usi={service.userServiceId} service={service} onDone={onDone} />
+          ) : null}
+
+          {kind === 'marzban' ? (
+            <ConnectMarzban usi={service.userServiceId} service={service} onDone={onDone} />
+          ) : null}
+
+          {kind === 'marzban_router' ? (
+            <ConnectRouter usi={service.userServiceId} service={service} onDone={onDone} />
+          ) : null}
+
+          {kind === 'unknown' ? (
+            <div className="pre">Для этого типа услуги пока нет помощника подключения.</div>
+          ) : null}
+        </Suspense>
+      </div>
+    </div>
+  )
+}
+
 function ServiceCard({
   s,
   expanded,
+  connectOpen,
   onToggle,
+  onToggleConnect,
   onRefresh,
   onAskDelete,
 }: {
   s: ApiServiceItem
   expanded: boolean
+  connectOpen: boolean
   onToggle: () => void
+  onToggleConnect: () => void
   onRefresh: () => void
   onAskDelete: (s: ApiServiceItem) => void
 }) {
@@ -258,12 +341,14 @@ function ServiceCard({
   const kind = detectKind(s.category)
   const hint = hintText(s)
 
-  const connectUrl = `/services/${s.userServiceId}/connect/${kind}`
   const orderUrl = `/services/order`
   const payUrl = `/payments?reason=service&usi=${encodeURIComponent(String(s.userServiceId))}`
   const supportUrl = `/support?topic=service&usi=${encodeURIComponent(String(s.userServiceId))}`
 
   const allowDelete = canDeleteStatus(s.status)
+
+  const canShowConnect =
+    kind !== 'unknown' && s.status === 'active' // "в процессе" и неактивные — не трогаем, как договорились
 
   return (
     <div className="kv__item svc">
@@ -272,9 +357,7 @@ function ServiceCard({
           <div className="svc__left">
             <div className="svc__status">{statusLabel(s.status)}</div>
             <div className="svc__title">{s.title}</div>
-            <div className="svc__sub">
-              {until ? <>До: <b>{until}</b></> : 'Без даты окончания'}
-            </div>
+            <div className="svc__sub">{until ? <>До: <b>{until}</b></> : 'Без даты окончания'}</div>
           </div>
 
           <div className="svc__right">
@@ -295,42 +378,71 @@ function ServiceCard({
         <div className="svc__details">
           {s.status === 'active' ? (
             <div className="actions actions--2">
-              <button className="btn btn--primary" onClick={() => go(connectUrl)}>Подключение</button>
-              <button className="btn" onClick={() => go(orderUrl)}>Заказать ещё</button>
+              <button
+                className="btn btn--primary"
+                onClick={onToggleConnect}
+                disabled={!canShowConnect}
+                title={!canShowConnect ? 'Подключение доступно только для активной услуги' : 'Открыть подключение'}
+              >
+                {connectOpen ? 'Скрыть подключение' : 'Подключение'}
+              </button>
+              <button className="btn" onClick={() => go(orderUrl)}>
+                Заказать ещё
+              </button>
             </div>
           ) : null}
 
           {s.status === 'not_paid' ? (
             <div className="actions actions--2">
-              <button className="btn btn--primary" onClick={() => go(payUrl)}>Оплатить / пополнить</button>
-              <button className="btn" onClick={() => go(orderUrl)}>Выбрать тариф</button>
+              <button className="btn btn--primary" onClick={() => go(payUrl)}>
+                Оплатить / пополнить
+              </button>
+              <button className="btn" onClick={() => go(orderUrl)}>
+                Выбрать тариф
+              </button>
             </div>
           ) : null}
 
           {(s.status === 'pending' || s.status === 'init') ? (
             <div className="actions actions--1">
-              <button className="btn btn--primary" onClick={onRefresh}>Обновить статус</button>
+              <button className="btn btn--primary" onClick={onRefresh}>
+                Обновить статус
+              </button>
             </div>
           ) : null}
 
           {s.status === 'blocked' ? (
             <div className="actions actions--2">
-              <button className="btn btn--primary" onClick={() => go(payUrl)}>Пополнить / оплатить</button>
-              <button className="btn" onClick={() => go(supportUrl)}>В поддержку</button>
+              <button className="btn btn--primary" onClick={() => go(payUrl)}>
+                Пополнить / оплатить
+              </button>
+              <button className="btn" onClick={() => go(supportUrl)}>
+                В поддержку
+              </button>
             </div>
           ) : null}
 
           {s.status === 'error' ? (
             <div className="actions actions--2">
-              <button className="btn btn--primary" onClick={onRefresh}>Обновить</button>
-              <button className="btn" onClick={() => go(supportUrl)}>В поддержку</button>
+              <button className="btn btn--primary" onClick={onRefresh}>
+                Обновить
+              </button>
+              <button className="btn" onClick={() => go(supportUrl)}>
+                В поддержку
+              </button>
             </div>
           ) : null}
 
           {s.status === 'removed' ? (
             <div className="actions actions--1">
-              <button className="btn btn--primary" onClick={() => go(orderUrl)}>Заказать снова</button>
+              <button className="btn btn--primary" onClick={() => go(orderUrl)}>
+                Заказать снова
+              </button>
             </div>
+          ) : null}
+
+          {connectOpen && canShowConnect ? (
+            <ConnectInline kind={kind} service={s} onDone={onRefresh} />
           ) : null}
 
           {allowDelete ? (
@@ -351,7 +463,9 @@ export function Services() {
   const [error, setError] = useState<string | null>(null)
   const [items, setItems] = useState<ApiServiceItem[]>([])
   const [summary, setSummary] = useState<ApiSummary | null>(null)
+
   const [expandedId, setExpandedId] = useState<number | null>(null)
+  const [connectOpenId, setConnectOpenId] = useState<number | null>(null)
 
   const [deleteTarget, setDeleteTarget] = useState<ApiServiceItem | null>(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
@@ -384,6 +498,7 @@ export function Services() {
       await deleteService(usi)
       setDeleteTarget(null)
       setExpandedId((cur) => (cur === usi ? null : cur))
+      setConnectOpenId((cur) => (cur === usi ? null : cur))
       await load()
     } catch (e: any) {
       setDeleteError(e?.message || 'Не удалось удалить услугу. Попробуйте ещё раз или обратитесь в поддержку.')
@@ -442,7 +557,9 @@ export function Services() {
               <span style={{ color: 'rgba(255,255,255,0.82)' }}>{error}</span>
             </p>
             <div className="row" style={{ marginTop: 14 }}>
-              <button className="btn btn--primary" onClick={load}>Повторить</button>
+              <button className="btn btn--primary" onClick={load}>
+                Повторить
+              </button>
             </div>
           </div>
         </div>
@@ -465,7 +582,9 @@ export function Services() {
             <div className="services-cat__head">
               <div>
                 <div className="services-cat__title">{kindTitle(kind)}</div>
-                <p className="p" style={{ marginTop: 6 }}>{kindDescr(kind)}</p>
+                <p className="p" style={{ marginTop: 6 }}>
+                  {kindDescr(kind)}
+                </p>
               </div>
               <span className="badge">{arr.length}</span>
             </div>
@@ -476,7 +595,17 @@ export function Services() {
                   key={x.userServiceId}
                   s={x}
                   expanded={expandedId === x.userServiceId}
-                  onToggle={() => setExpandedId((cur) => (cur === x.userServiceId ? null : x.userServiceId))}
+                  connectOpen={connectOpenId === x.userServiceId}
+                  onToggle={() => {
+                    setExpandedId((cur) => (cur === x.userServiceId ? null : x.userServiceId))
+                    // если свернули карточку — прячем подключение
+                    setConnectOpenId((cur) => (cur === x.userServiceId ? null : cur))
+                  }}
+                  onToggleConnect={() => {
+                    // открываем connect только внутри раскрытой карточки
+                    setExpandedId(x.userServiceId)
+                    setConnectOpenId((cur) => (cur === x.userServiceId ? null : x.userServiceId))
+                  }}
                   onRefresh={load}
                   onAskDelete={(svc) => {
                     setDeleteError(null)
@@ -498,15 +627,25 @@ export function Services() {
           <div className="services-head">
             <h1 className="services-head__title">Услуги</h1>
             <div className="row" style={{ gap: 10 }}>
-              <button className="btn btn--primary" onClick={() => go('/services/order')}>Заказать</button>
-              <button className="btn" onClick={load} title="Обновить">⟳</button>
+              <button className="btn btn--primary" onClick={() => go('/services/order')}>
+                Заказать
+              </button>
+              <button className="btn" onClick={load} title="Обновить">
+                ⟳
+              </button>
             </div>
           </div>
 
           <div className="services-head__meta">
-            <span className="badge">Активные: <b>{s?.active ?? fallbackActive}</b></span>
-            <span className="badge">Внимание: <b>{(s?.blocked ?? 0) + (s?.notPaid ?? 0) || fallbackAttention}</b></span>
-            <span className="badge">В месяц: <b>{fmtMoney(s?.monthlyCost ?? 0, s?.currency ?? 'RUB')}</b></span>
+            <span className="badge">
+              Активные: <b>{s?.active ?? fallbackActive}</b>
+            </span>
+            <span className="badge">
+              Внимание: <b>{(s?.blocked ?? 0) + (s?.notPaid ?? 0) || fallbackAttention}</b>
+            </span>
+            <span className="badge">
+              В месяц: <b>{fmtMoney(s?.monthlyCost ?? 0, s?.currency ?? 'RUB')}</b>
+            </span>
           </div>
 
           {(s?.expiringSoon ?? 0) > 0 ? (

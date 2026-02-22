@@ -261,17 +261,6 @@ export async function shmGetUserServices(
   });
 }
 
-/**
- * Удаление user-service в SHM:
- * DELETE /shm/v1/user/service?user_service_id=...
- */
-export async function shmDeleteUserService(sessionId: string, user_service_id: number) {
-  return await shmFetch<any>(sessionId, "v1/user/service", {
-    method: "DELETE",
-    query: { user_service_id },
-  });
-}
-
 // =====================
 // SERVICE ORDER
 // =====================
@@ -420,5 +409,78 @@ export async function shmShpunAppReferralsList(
   return await shmShpunAppTemplate<any>(shmSessionId, "referrals.list", {
     limit: opts?.limit ?? 7,
     offset: opts?.offset ?? 0,
+  });
+}
+
+// =====================
+// ROUTERS via ShpunApp template
+// =====================
+
+export type ShpunAppRouterItem = {
+  code?: string;
+  clean_code?: string;
+  status?: string;
+  created_at?: number;
+  last_seen_at?: number;
+};
+
+export type ShpunAppRouterListResp = {
+  ok?: number;
+  ver?: string;
+  action?: string;
+  routers?: ShpunAppRouterItem[];
+  error?: string;
+  [k: string]: any;
+};
+
+export type ShpunAppRouterBindResp = {
+  ok?: number;
+  ver?: string;
+  action?: string;
+  clean_code?: string;
+  pair_key?: string;
+  error?: string;
+  [k: string]: any;
+};
+
+export type ShpunAppRouterUnbindResp = {
+  ok?: number;
+  ver?: string;
+  action?: string;
+  clean_code?: string;
+  unbound?: number;
+  error?: string;
+  [k: string]: any;
+};
+
+export async function shmShpunAppRouterList(shmSessionId: string, usi: number) {
+  return await shmShpunAppTemplate<ShpunAppRouterListResp>(shmSessionId, "router.list", {
+    usi,
+  });
+}
+
+export async function shmShpunAppRouterBind(
+  shmSessionId: string,
+  usi: number,
+  code: string,
+  tg_id?: string | number
+) {
+  return await shmShpunAppTemplate<ShpunAppRouterBindResp>(shmSessionId, "router.bind", {
+    usi,
+    code,
+    ...(tg_id != null ? { tg_id } : {}),
+  });
+}
+
+export async function shmShpunAppRouterUnbind(
+  shmSessionId: string,
+  usi: number,
+  code: string,
+  tg_id?: string | number
+) {
+  return await shmShpunAppTemplate<ShpunAppRouterUnbindResp>(shmSessionId, "router.unbind", {
+    usi,
+    code,
+    ...(tg_id != null ? { tg_id } : {}),
   });
 }
