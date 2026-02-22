@@ -7,6 +7,12 @@ type ApiRouterItem = {
   status?: string
   created_at?: number
   last_seen_at?: number
+
+  // допускаем другие варианты полей (на всякий)
+  cleanCode?: string
+  createdAt?: number
+  lastSeenAt?: number
+  router_code?: string
 }
 
 type Props = {
@@ -22,6 +28,45 @@ function fmtTs(ts?: number) {
   return d.toLocaleString()
 }
 
+function normOne(x: any): ApiRouterItem | null {
+  if (!x || typeof x !== 'object') return null
+  return {
+    code: x.code ?? x.router_code ?? x.routerCode ?? undefined,
+    clean_code: x.clean_code ?? x.cleanCode ?? undefined,
+    status: x.status ?? x.state ?? undefined,
+    created_at: x.created_at ?? x.createdAt ?? undefined,
+    last_seen_at: x.last_seen_at ?? x.lastSeenAt ?? undefined,
+  }
+}
+
+function extractRouters(resp: any): ApiRouterItem[] {
+  const r = resp ?? {}
+
+  // самые частые варианты
+  const arr =
+    r.routers ??
+    r.items ??
+    r.data ??
+    r.list ??
+    r.result ??
+    null
+
+  if (Array.isArray(arr)) {
+    return arr.map(normOne).filter(Boolean) as ApiRouterItem[]
+  }
+
+  // иногда приходит один объект
+  const one =
+    r.router ??
+    r.binding ??
+    r.bound ??
+    r.item ??
+    (r.data && !Array.isArray(r.data) ? r.data : null)
+
+  const n = normOne(one)
+  return n ? [n] : []
+}
+
 export default function ConnectRouter({ usi, onDone }: Props) {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -30,12 +75,22 @@ export default function ConnectRouter({ usi, onDone }: Props) {
   const [routers, setRouters] = useState<ApiRouterItem[]>([])
   const [code, setCode] = useState('')
 
+  const first = routers?.[0]
+  const shownCode = String(first?.clean_code || first?.code || '').trim()
+  const shownStatus = String(first?.status || '').trim()
+
   const hasBound = useMemo(() => {
-    const r = routers?.[0]
-    if (!r) return false
-    const st = String(r.status || '').toLowerCase()
-    return st !== 'unbound' && st !== 'removed' && st !== 'none'
-  }, [routers])
+    if (!first) return false
+    const st = String(first.status || '').toLowerCase()
+    // bound/active/ok считаем привязанным
+    if (st === 'bound' || st === 'active' || st === 'ok') return true
+    // явные не-привязанные
+    if (st === 'unbound' || st === 'removed' || st === 'none' || st === 'new') return false
+    // если статус пустой, но есть код — скорее всего привязан
+    if (!st && shownCode) return true
+    // прочее — считаем привязанным, чтобы не скрывать существующую связку
+    return !!shownCode
+  }, [first, shownCode])
 
   async function load() {
     setLoading(true)
@@ -44,9 +99,17 @@ export default function ConnectRouter({ usi, onDone }: Props) {
       const r = (await apiFetch(`/services/${encodeURIComponent(String(usi))}/router`, {
         method: 'GET',
       })) as any
-      setRouters(Array.isArray(r?.routers) ? r.routers : [])
+
+      // если бэк отдаёт ok:false/0 — покажем ошибку
+      if (r && (r.ok === false || r.ok === 0) && (r.error || r.message)) {
+        throw new Error(String(r.error || r.message))
+      }
+
+      const list = extractRouters(r)
+      setRouters(list)
     } catch (e: any) {
       setError(e?.message || 'Не удалось загрузить состояние роутера')
+      setRouters([])
     } finally {
       setLoading(false)
     }
@@ -58,10 +121,15 @@ export default function ConnectRouter({ usi, onDone }: Props) {
     setBusy(true)
     setError(null)
     try {
-      await apiFetch(`/services/${encodeURIComponent(String(usi))}/router/bind`, {
+      const r = (await apiFetch(`/services/${encodeURIComponent(String(usi))}/router/bind`, {
         method: 'POST',
         body: { code: v },
-      } as any)
+      } as any)) as any
+
+      if (r && (r.ok === false || r.ok === 0) && (r.error || r.message)) {
+        throw new Error(String(r.error || r.message))
+      }
+
       setCode('')
       await load()
       onDone?.()
@@ -73,16 +141,20 @@ export default function ConnectRouter({ usi, onDone }: Props) {
   }
 
   async function unbind() {
-    const current = routers?.[0]
-    const v = String(current?.clean_code || current?.code || '').trim()
+    const v = String(first?.clean_code || first?.code || '').trim()
     if (!v) return
     setBusy(true)
     setError(null)
     try {
-      await apiFetch(`/services/${encodeURIComponent(String(usi))}/router/unbind`, {
+      const r = (await apiFetch(`/services/${encodeURIComponent(String(usi))}/router/unbind`, {
         method: 'POST',
         body: { code: v },
-      } as any)
+      } as any)) as any
+
+      if (r && (r.ok === false || r.ok === 0) && (r.error || r.message)) {
+        throw new Error(String(r.error || r.message))
+      }
+
       await load()
       onDone?.()
     } catch (e: any) {
@@ -113,22 +185,22 @@ export default function ConnectRouter({ usi, onDone }: Props) {
 
       {!loading ? (
         <div className="pre" style={{ marginTop: 10 }}>
-          {routers?.length ? (
+          {first ? (
             <>
               <div>
-                Привязан роутер: <b>{routers[0]?.clean_code || routers[0]?.code || '—'}</b>
+                Привязан роутер: <b>{shownCode || '—'}</b>
               </div>
               <div>
-                Статус: <b>{String(routers[0]?.status || 'unknown')}</b>
+                Статус: <b>{shownStatus || 'unknown'}</b>
               </div>
-              {routers[0]?.created_at ? (
+              {first.created_at ? (
                 <div>
-                  Привязан: <b>{fmtTs(routers[0]?.created_at)}</b>
+                  Привязан: <b>{fmtTs(first.created_at)}</b>
                 </div>
               ) : null}
-              {routers[0]?.last_seen_at ? (
+              {first.last_seen_at ? (
                 <div>
-                  Последний контакт: <b>{fmtTs(routers[0]?.last_seen_at)}</b>
+                  Последний контакт: <b>{fmtTs(first.last_seen_at)}</b>
                 </div>
               ) : null}
             </>
@@ -151,7 +223,7 @@ export default function ConnectRouter({ usi, onDone }: Props) {
           {busy ? 'Подождите…' : 'Привязать роутер'}
         </button>
 
-        {routers?.length ? (
+        {first ? (
           <button className="btn" onClick={unbind} disabled={busy || !hasBound}>
             Отвязать
           </button>
