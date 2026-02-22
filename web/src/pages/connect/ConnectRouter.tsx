@@ -41,28 +41,9 @@ function normOne(x: any): ApiRouterItem | null {
 
 function extractRouters(resp: any): ApiRouterItem[] {
   const r = resp ?? {}
-
-  // самые частые варианты
-  const arr =
-    r.routers ??
-    r.items ??
-    r.data ??
-    r.list ??
-    r.result ??
-    null
-
-  if (Array.isArray(arr)) {
-    return arr.map(normOne).filter(Boolean) as ApiRouterItem[]
-  }
-
-  // иногда приходит один объект
-  const one =
-    r.router ??
-    r.binding ??
-    r.bound ??
-    r.item ??
-    (r.data && !Array.isArray(r.data) ? r.data : null)
-
+  const arr = r.routers ?? r.items ?? r.data ?? r.list ?? r.result ?? null
+  if (Array.isArray(arr)) return arr.map(normOne).filter(Boolean) as ApiRouterItem[]
+  const one = r.router ?? r.binding ?? r.bound ?? r.item ?? (r.data && !Array.isArray(r.data) ? r.data : null)
   const n = normOne(one)
   return n ? [n] : []
 }
@@ -75,6 +56,9 @@ export default function ConnectRouter({ usi, onDone }: Props) {
   const [routers, setRouters] = useState<ApiRouterItem[]>([])
   const [code, setCode] = useState('')
 
+  const [debug, setDebug] = useState<any>(null)
+  const [debugOpen, setDebugOpen] = useState(false)
+
   const first = routers?.[0]
   const shownCode = String(first?.clean_code || first?.code || '').trim()
   const shownStatus = String(first?.status || '').trim()
@@ -82,34 +66,32 @@ export default function ConnectRouter({ usi, onDone }: Props) {
   const hasBound = useMemo(() => {
     if (!first) return false
     const st = String(first.status || '').toLowerCase()
-    // bound/active/ok считаем привязанным
     if (st === 'bound' || st === 'active' || st === 'ok') return true
-    // явные не-привязанные
     if (st === 'unbound' || st === 'removed' || st === 'none' || st === 'new') return false
-    // если статус пустой, но есть код — скорее всего привязан
     if (!st && shownCode) return true
-    // прочее — считаем привязанным, чтобы не скрывать существующую связку
     return !!shownCode
   }, [first, shownCode])
 
-  async function load() {
+  async function load(opts?: { debug?: boolean }) {
     setLoading(true)
     setError(null)
     try {
-      const r = (await apiFetch(`/services/${encodeURIComponent(String(usi))}/router`, {
+      const q = opts?.debug ? '?debug=1' : ''
+      const r = (await apiFetch(`/services/${encodeURIComponent(String(usi))}/router${q}`, {
         method: 'GET',
       })) as any
 
-      // если бэк отдаёт ok:false/0 — покажем ошибку
       if (r && (r.ok === false || r.ok === 0) && (r.error || r.message)) {
         throw new Error(String(r.error || r.message))
       }
 
+      setDebug(r?.debug ?? null)
       const list = extractRouters(r)
       setRouters(list)
     } catch (e: any) {
       setError(e?.message || 'Не удалось загрузить состояние роутера')
       setRouters([])
+      setDebug(null)
     } finally {
       setLoading(false)
     }
@@ -131,7 +113,7 @@ export default function ConnectRouter({ usi, onDone }: Props) {
       }
 
       setCode('')
-      await load()
+      await load({ debug: debugOpen })
       onDone?.()
     } catch (e: any) {
       setError(e?.message || 'Не удалось привязать роутер')
@@ -155,7 +137,7 @@ export default function ConnectRouter({ usi, onDone }: Props) {
         throw new Error(String(r.error || r.message))
       }
 
-      await load()
+      await load({ debug: debugOpen })
       onDone?.()
     } catch (e: any) {
       setError(e?.message || 'Не удалось отвязать роутер')
@@ -229,14 +211,40 @@ export default function ConnectRouter({ usi, onDone }: Props) {
           </button>
         ) : null}
 
-        <button className="btn" onClick={load} disabled={busy}>
+        <button
+          className="btn"
+          onClick={async () => {
+            await load({ debug: debugOpen })
+          }}
+          disabled={busy}
+        >
           Обновить
+        </button>
+
+        <button
+          className="btn"
+          onClick={async () => {
+            const next = !debugOpen
+            setDebugOpen(next)
+            await load({ debug: next })
+          }}
+          disabled={busy}
+          title="Показать диагностическую информацию (без секретов)"
+        >
+          {debugOpen ? 'Скрыть диагностику' : 'Диагностика'}
         </button>
       </div>
 
       {hasBound ? (
         <div style={{ marginTop: 10, opacity: 0.82, fontSize: 12 }}>
           Один роутер может быть привязан к услуге одновременно.
+        </div>
+      ) : null}
+
+      {debugOpen && debug ? (
+        <div className="pre" style={{ marginTop: 10, whiteSpace: 'pre-wrap' }}>
+          <div style={{ opacity: 0.82, marginBottom: 6 }}>Диагностика:</div>
+          {JSON.stringify(debug, null, 2)}
         </div>
       ) : null}
     </div>
