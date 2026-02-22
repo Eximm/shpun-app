@@ -261,6 +261,17 @@ export async function shmGetUserServices(
   });
 }
 
+/**
+ * Удаление user-service в SHM:
+ * DELETE /shm/v1/user/service?user_service_id=...
+ */
+export async function shmDeleteUserService(sessionId: string, user_service_id: number) {
+  return await shmFetch<any>(sessionId, "v1/user/service", {
+    method: "DELETE",
+    query: { user_service_id },
+  });
+}
+
 // =====================
 // SERVICE ORDER
 // =====================

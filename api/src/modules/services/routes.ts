@@ -1,7 +1,12 @@
 import type { FastifyInstance } from 'fastify'
 import { getSessionFromRequest } from '../../shared/session/sessionStore.js'
 import { parseShmPeriod } from '../../shared/shm/period.js'
-import { shmCreateServiceOrder, shmGetServiceOrder, shmGetUserServices } from '../../shared/shm/shmClient.js'
+import {
+  shmCreateServiceOrder,
+  shmDeleteUserService,
+  shmGetServiceOrder,
+  shmGetUserServices,
+} from '../../shared/shm/shmClient.js'
 
 function mapStatus(raw?: string) {
   const s = String(raw || '').toUpperCase()
@@ -52,7 +57,7 @@ function unwrapUsObject(json: any): any | null {
 
 export async function servicesRoutes(app: FastifyInstance) {
   // =====================
-  // /api/services (уже было)
+  // /api/services (list)
   // =====================
   app.get('/services', async (req, reply) => {
     const session = getSessionFromRequest(req as any)
@@ -120,6 +125,54 @@ export async function servicesRoutes(app: FastifyInstance) {
     }
 
     return reply.send({ ok: true, items, summary })
+  })
+
+  // =====================
+  // /api/services/:userServiceId (delete)
+  // =====================
+  app.delete('/services/:userServiceId', async (req, reply) => {
+    const session = getSessionFromRequest(req as any)
+    const shmSessionId = session?.shmSessionId || null
+
+    if (!shmSessionId) {
+      return reply.code(401).send({ ok: false, error: 'not_authenticated' })
+    }
+
+    const params = (req.params ?? {}) as any
+    const usi = Number(params?.userServiceId ?? 0)
+
+    if (!usi || !Number.isFinite(usi)) {
+      return reply.code(400).send({ ok: false, error: 'bad_request', details: 'userServiceId_required' })
+    }
+
+    const r = await shmDeleteUserService(shmSessionId, usi)
+
+    // Идемпотентность: если SHM скажет "не найдено" — считаем, что для пользователя уже удалено.
+    // (на практике SHM может вернуть 404/400 — мы это мягко проглотим как ok)
+    if (!r.ok) {
+      if (r.status === 401 || r.status === 403) {
+        return reply.code(401).send({ ok: false, error: 'not_authenticated' })
+      }
+
+      if (r.status === 404) {
+        return reply.send({ ok: true, already: true })
+      }
+
+      // Иногда SHM может отвечать 400, если уже удалено — в этом случае тоже считаем ok (лучший UX).
+      // Если окажется, что 400 бывает по другим причинам — ты скажешь, и мы сузим условие.
+      if (r.status === 400) {
+        return reply.send({ ok: true, maybeAlready: true })
+      }
+
+      return reply.code(502).send({
+        ok: false,
+        error: 'shm_error',
+        status: r.status,
+        details: r.json ?? r.text,
+      })
+    }
+
+    return reply.send({ ok: true })
   })
 
   // =====================

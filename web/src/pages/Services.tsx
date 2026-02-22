@@ -125,16 +125,134 @@ function statusSortWeight(s: UiStatus) {
   }
 }
 
+function canDeleteStatus(s: UiStatus) {
+  // Как договорились: "то что в процессе — не удалять"
+  if (s === 'pending' || s === 'init') return false
+  if (s === 'removed') return false
+  return true
+}
+
+function deleteConfirmText(s: ApiServiceItem) {
+  switch (s.status) {
+    case 'active':
+      return 'Удалить активную услугу? Доступ может прекратиться после удаления.'
+    case 'not_paid':
+      return 'Удалить неоплаченный заказ? Он исчезнет из списка.'
+    case 'blocked':
+      return 'Удалить услугу? Она исчезнет из списка.'
+    case 'error':
+      return 'Удалить услугу? Она исчезнет из списка.'
+    default:
+      return 'Удалить услугу?'
+  }
+}
+
+function Modal({
+  title,
+  open,
+  children,
+  confirmText = 'Удалить',
+  cancelText = 'Отмена',
+  loading,
+  error,
+  onClose,
+  onConfirm,
+}: {
+  title: string
+  open: boolean
+  children: React.ReactNode
+  confirmText?: string
+  cancelText?: string
+  loading?: boolean
+  error?: string | null
+  onClose: () => void
+  onConfirm: () => void
+}) {
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, onClose])
+
+  if (!open) return null
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.55)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 16,
+        zIndex: 50,
+      }}
+    >
+      <div
+        className="card"
+        style={{
+          width: 'min(560px, 100%)',
+          boxShadow: '0 12px 40px rgba(0,0,0,0.45)',
+        }}
+      >
+        <div className="card__body">
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+            <div className="services-cat__title" style={{ fontSize: 18, lineHeight: 1.2 }}>
+              {title}
+            </div>
+            <button className="btn" onClick={onClose} title="Закрыть" aria-label="Закрыть" disabled={!!loading}>
+              ✕
+            </button>
+          </div>
+
+          <div style={{ marginTop: 10 }}>{children}</div>
+
+          {error ? (
+            <div className="pre" style={{ marginTop: 12 }}>
+              {error}
+            </div>
+          ) : null}
+
+          <div className="row" style={{ marginTop: 14, gap: 10, justifyContent: 'flex-end' }}>
+            <button className="btn" onClick={onClose} disabled={!!loading}>
+              {cancelText}
+            </button>
+            <button className="btn btn--primary" onClick={onConfirm} disabled={!!loading}>
+              {loading ? 'Удаляем…' : confirmText}
+            </button>
+          </div>
+
+          <div style={{ marginTop: 10, opacity: 0.82, fontSize: 12 }}>
+            Если вы сомневаетесь — лучше сначала проверьте статус услуги или обратитесь в поддержку.
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ServiceCard({
   s,
   expanded,
   onToggle,
   onRefresh,
+  onAskDelete,
 }: {
   s: ApiServiceItem
   expanded: boolean
   onToggle: () => void
   onRefresh: () => void
+  onAskDelete: (s: ApiServiceItem) => void
 }) {
   const until = s.expireAt ? fmtDate(s.expireAt) : ''
   const kind = detectKind(s.category)
@@ -144,6 +262,8 @@ function ServiceCard({
   const orderUrl = `/services/order`
   const payUrl = `/payments?reason=service&usi=${encodeURIComponent(String(s.userServiceId))}`
   const supportUrl = `/support?topic=service&usi=${encodeURIComponent(String(s.userServiceId))}`
+
+  const allowDelete = canDeleteStatus(s.status)
 
   return (
     <div className="kv__item svc">
@@ -212,6 +332,14 @@ function ServiceCard({
               <button className="btn btn--primary" onClick={() => go(orderUrl)}>Заказать снова</button>
             </div>
           ) : null}
+
+          {allowDelete ? (
+            <div className="actions actions--1" style={{ marginTop: 10 }}>
+              <button className="btn" onClick={() => onAskDelete(s)} title="Удалить услугу">
+                🗑️ Удалить услугу
+              </button>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -225,6 +353,10 @@ export function Services() {
   const [summary, setSummary] = useState<ApiSummary | null>(null)
   const [expandedId, setExpandedId] = useState<number | null>(null)
 
+  const [deleteTarget, setDeleteTarget] = useState<ApiServiceItem | null>(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
   async function load() {
     setLoading(true)
     setError(null)
@@ -236,6 +368,27 @@ export function Services() {
       setError(e?.message || 'Failed to load services')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function deleteService(userServiceId: number) {
+    await apiFetch(`/services/${encodeURIComponent(String(userServiceId))}`, { method: 'DELETE' })
+  }
+
+  async function onConfirmDelete() {
+    if (!deleteTarget || deleteBusy) return
+    setDeleteBusy(true)
+    setDeleteError(null)
+    try {
+      const usi = deleteTarget.userServiceId
+      await deleteService(usi)
+      setDeleteTarget(null)
+      setExpandedId((cur) => (cur === usi ? null : cur))
+      await load()
+    } catch (e: any) {
+      setDeleteError(e?.message || 'Не удалось удалить услугу. Попробуйте ещё раз или обратитесь в поддержку.')
+    } finally {
+      setDeleteBusy(false)
     }
   }
 
@@ -325,6 +478,10 @@ export function Services() {
                   expanded={expandedId === x.userServiceId}
                   onToggle={() => setExpandedId((cur) => (cur === x.userServiceId ? null : x.userServiceId))}
                   onRefresh={load}
+                  onAskDelete={(svc) => {
+                    setDeleteError(null)
+                    setDeleteTarget(svc)
+                  }}
                 />
               ))}
             </div>
@@ -364,6 +521,45 @@ export function Services() {
       <Section kind="marzban" />
       <Section kind="marzban_router" />
       <Section kind="unknown" />
+
+      <Modal
+        title={deleteTarget ? `Удалить услугу «${deleteTarget.title}»?` : 'Удалить услугу?'}
+        open={!!deleteTarget}
+        loading={deleteBusy}
+        error={deleteError}
+        onClose={() => {
+          if (deleteBusy) return
+          setDeleteTarget(null)
+          setDeleteError(null)
+        }}
+        onConfirm={onConfirmDelete}
+        confirmText="Удалить"
+        cancelText="Отмена"
+      >
+        {deleteTarget ? (
+          <>
+            <p className="p" style={{ marginTop: 0 }}>
+              {deleteConfirmText(deleteTarget)}
+            </p>
+            <div className="pre" style={{ marginTop: 10 }}>
+              <div>
+                Статус: <b>{statusLabel(deleteTarget.status)}</b>
+              </div>
+              <div>
+                Тип: <b>{kindTitle(detectKind(deleteTarget.category))}</b>
+              </div>
+              <div>
+                Тариф: <b>{fmtMoney(deleteTarget.price, deleteTarget.currency)}</b> / {deleteTarget.periodMonths || 1}м
+              </div>
+              {deleteTarget.expireAt ? (
+                <div>
+                  Действует до: <b>{fmtDate(deleteTarget.expireAt)}</b>
+                </div>
+              ) : null}
+            </div>
+          </>
+        ) : null}
+      </Modal>
     </div>
   )
 }
