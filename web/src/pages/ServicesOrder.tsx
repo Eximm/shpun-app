@@ -92,8 +92,37 @@ function kindDescr(k: Kind) {
   }
 }
 
-function safeOpen(url: string) {
-  window.open(url, '_blank', 'noopener,noreferrer')
+function buildPayUrl(base: string, amount: number) {
+  const a = Math.max(1, Math.ceil(nnum(amount, 1)))
+  if (base.includes('{amount}')) return base.replace('{amount}', String(a))
+  return `${base}${a}`
+}
+
+function getTelegramWebApp(): any | null {
+  const w = window as any
+  return w?.Telegram?.WebApp || null
+}
+
+async function copyToClipboard(text: string) {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    try {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.style.position = 'fixed'
+      ta.style.top = '-1000px'
+      document.body.appendChild(ta)
+      ta.focus()
+      ta.select()
+      const ok = document.execCommand('copy')
+      document.body.removeChild(ta)
+      return ok
+    } catch {
+      return false
+    }
+  }
 }
 
 export function ServicesOrder() {
@@ -123,6 +152,13 @@ export function ServicesOrder() {
 
   const [waitMsg, setWaitMsg] = useState<string | null>(null)
 
+  // ✅ для стабильной оплаты/фоллбеков
+  const [lastPayUrl, setLastPayUrl] = useState<string | null>(null)
+  const [lastPayAmount, setLastPayAmount] = useState<number>(0)
+  const [openingPay, setOpeningPay] = useState(false)
+  const [payOpenError, setPayOpenError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+
   async function loadPaysystems() {
     const ps = await apiFetch<PaysystemsResp>('/payments/paysystems', { method: 'GET' })
     const items = ps?.items || []
@@ -149,7 +185,6 @@ export function ServicesOrder() {
   }
 
   async function hardRefresh() {
-    // ✅ обновим и тарифы, и me (баланс/бонусы)
     await Promise.all([loadTariffs(), Promise.resolve(refetch?.())])
   }
 
@@ -200,7 +235,6 @@ export function ServicesOrder() {
       // UX: сворачиваем details и показываем оплату
       setDetailsCollapsed(true)
 
-      // если not_paid или не хватает — сразу тянем способы оплаты
       if (String(r.item?.status || '').toLowerCase() === 'not_paid' || needTopup > 0) {
         await loadPaysystems()
         setWaitMsg('Выберите способ оплаты ниже.')
@@ -214,22 +248,67 @@ export function ServicesOrder() {
     }
   }
 
-  function startPay(ps: PaySystem) {
-    if (!ps?.shm_url) return
+  async function tryOpenPayment(url: string) {
+    const tg = getTelegramWebApp()
+    if (tg?.openLink) {
+      try {
+        tg.openLink(url)
+        return true
+      } catch {
+        return false
+      }
+    }
 
-    // ✅ платим недостающее, с учётом бонусов
-    const toPay = needTopup > 0 ? needTopup : Math.max(1, Math.ceil(nnum(selected?.price, 0) - available))
-    safeOpen(`${ps.shm_url}${toPay}`)
+    try {
+      const w = window.open(url, '_blank', 'noopener,noreferrer')
+      return !!w
+    } catch {
+      return false
+    }
+  }
+
+  async function startPay(ps: PaySystem) {
+    setCopied(false)
+    setPayOpenError(null)
+
+    if (!ps?.shm_url) {
+      setPayOpenError('У этого способа оплаты нет ссылки.')
+      setOverlayOpen(true)
+      return
+    }
+
+    const toPay =
+      needTopup > 0 ? needTopup : Math.max(1, Math.ceil(nnum(selected?.price, 0) - available))
+
+    const url = buildPayUrl(ps.shm_url, toPay)
+    setLastPayUrl(url)
+    setLastPayAmount(toPay)
+
+    setOpeningPay(true)
+    const opened = await tryOpenPayment(url)
+    setOpeningPay(false)
 
     setOverlayOpen(true)
-    setWaitMsg('Окно оплаты открыто. Мы перевели вас в раздел услуг — там статус обновится после оплаты.')
 
-    // ✅ ключевой момент: уходим на /services и не “перезагружаемся по кругу” здесь
-    window.location.assign('/services')
+    if (opened) {
+      setWaitMsg('Окно оплаты открыто. После оплаты нажмите “Я оплатил — проверить” или перейдите в “Услуги”.')
+    } else {
+      setPayOpenError('Не удалось открыть оплату (вкладка могла быть заблокирована). Откройте ссылку вручную.')
+      setWaitMsg('Откройте ссылку оплаты и завершите оплату. Затем вернитесь сюда и нажмите “Я оплатил — проверить”.')
+    }
+  }
+
+  async function retryOpenLast() {
+    if (!lastPayUrl) return
+    setCopied(false)
+    setPayOpenError(null)
+    setOpeningPay(true)
+    const opened = await tryOpenPayment(lastPayUrl)
+    setOpeningPay(false)
+    if (!opened) setPayOpenError('Не удалось открыть оплату. Откройте ссылку вручную.')
   }
 
   async function pollOnce() {
-    // ручная проверка — без лупа
     try {
       await Promise.resolve(refetch?.())
     } catch {
@@ -260,6 +339,19 @@ export function ServicesOrder() {
     setErr(null)
     setOverlayOpen(false)
     setDetailsCollapsed(false)
+
+    setLastPayUrl(null)
+    setLastPayAmount(0)
+    setPayOpenError(null)
+    setOpeningPay(false)
+    setCopied(false)
+  }
+
+  async function handleCopyLink() {
+    if (!lastPayUrl) return
+    const ok = await copyToClipboard(lastPayUrl)
+    setCopied(ok)
+    if (!ok) setPayOpenError('Не получилось скопировать ссылку автоматически. Скопируйте вручную из строки ниже.')
   }
 
   if (loading || meLoading) {
@@ -283,11 +375,44 @@ export function ServicesOrder() {
         <div className="overlay" onClick={() => setOverlayOpen(false)}>
           <div className="card overlay__card" onClick={(e) => e.stopPropagation()}>
             <div className="card__body">
-              <div className="overlay__title">Окно оплаты открыто ✅</div>
-              <p className="p so__mt8">Завершите оплату во вкладке. Затем откройте “Услуги” — статус обновится.</p>
+              <div className="overlay__title">{payOpenError ? 'Оплата не открылась' : 'Окно оплаты'}</div>
+
+              <p className="p so__mt8">
+                {payOpenError
+                  ? 'Если вы в Telegram или браузер блокирует всплывающие окна — откройте ссылку вручную.'
+                  : 'Завершите оплату в открывшемся окне. Затем вернитесь сюда и проверьте статус.'}
+              </p>
+
+              {payOpenError ? <div className="pre so__mt12">Причина: {payOpenError}</div> : null}
+
+              {lastPayUrl ? (
+                <div className="pre so__mt12" style={{ userSelect: 'text' }}>
+                  {lastPayUrl}
+                </div>
+              ) : null}
+
+              {copied ? <div className="pre so__mt12">✅ Ссылка скопирована</div> : null}
+
               <div className="actions actions--1 so__mt12">
-                <button className="btn" onClick={() => window.location.assign('/services')}>Перейти в услуги</button>
-                <button className="btn" onClick={() => setOverlayOpen(false)}>Закрыть</button>
+                <button className="btn btn--primary" onClick={retryOpenLast} disabled={!lastPayUrl || openingPay}>
+                  {openingPay ? 'Открываем…' : 'Открыть ещё раз'}
+                </button>
+
+                <button className="btn" onClick={handleCopyLink} disabled={!lastPayUrl}>
+                  Скопировать ссылку
+                </button>
+
+                <button className="btn" onClick={pollOnce}>
+                  Я оплатил — проверить
+                </button>
+
+                <button className="btn" onClick={() => window.location.assign('/services')}>
+                  Перейти в услуги
+                </button>
+
+                <button className="btn" onClick={() => setOverlayOpen(false)}>
+                  Закрыть
+                </button>
               </div>
             </div>
           </div>
@@ -307,7 +432,9 @@ export function ServicesOrder() {
                 Доступно: <b>{fmtMoney(available, currency)}</b>
               </div>
             </div>
-            <button className="btn" onClick={hardRefresh} title="Обновить">⟳</button>
+            <button className="btn" onClick={hardRefresh} title="Обновить">
+              ⟳
+            </button>
           </div>
 
           {waitMsg ? <div className="pre so__mt12">{waitMsg}</div> : null}
@@ -348,7 +475,9 @@ export function ServicesOrder() {
                   <div className="h1 so__h18">{kindTitle(kind)}</div>
                   <p className="p">{kindDescr(kind)}</p>
                 </div>
-                <button className="btn" onClick={() => setKind(null)}>⇦ Назад</button>
+                <button className="btn" onClick={() => setKind(null)}>
+                  ⇦ Назад
+                </button>
               </div>
 
               <div className="kv so__mt12">
@@ -378,32 +507,47 @@ export function ServicesOrder() {
                   <div className="h1 so__h18">{selected.title}</div>
                   <p className="p">{selected.descr || '—'}</p>
                 </div>
-                <button className="btn" onClick={resetSelection}>⇦ Назад</button>
+                <button className="btn" onClick={resetSelection}>
+                  ⇦ Назад
+                </button>
               </div>
 
               {/* Details block: collapsible */}
               <div className={`so__details ${detailsCollapsed ? 'is-collapsed' : ''}`}>
-                <div className="kv so__mt12">
+                {/* ✅ компактный блок вместо “простыни” */}
+                <div
+                  style={{
+                    marginTop: 12,
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                    gap: 10,
+                  }}
+                >
                   <div className="kv__item">
                     <div className="kv__k">Стоимость</div>
                     <div className="kv__v">{fmtMoney(nnum(selected.price, 0), selected.currency)}</div>
                   </div>
+
                   <div className="kv__item">
                     <div className="kv__k">Период</div>
                     <div className="kv__v">{selected.periodHuman}</div>
                   </div>
+
                   <div className="kv__item">
                     <div className="kv__k">Баланс</div>
                     <div className="kv__v">{fmtMoney(balanceAmount, currency)}</div>
                   </div>
+
                   <div className="kv__item">
                     <div className="kv__k">Бонусы</div>
                     <div className="kv__v">{bonus}</div>
                   </div>
+
                   <div className="kv__item">
                     <div className="kv__k">Доступно</div>
                     <div className="kv__v">{fmtMoney(available, currency)}</div>
                   </div>
+
                   <div className="kv__item">
                     <div className="kv__k">Не хватает</div>
                     <div className="kv__v">{needTopup > 0 ? fmtMoney(needTopup, currency) : '—'}</div>
@@ -429,7 +573,9 @@ export function ServicesOrder() {
                   <div className="card so__cardFlat">
                     <div className="card__body">
                       <div className="h1 so__h18">Оплата</div>
-                      <p className="p">Выберите способ оплаты. Откроется в новой вкладке и вы перейдёте в “Услуги”.</p>
+                      <p className="p">
+                        Выберите способ оплаты. Мы откроем оплату, а вы сможете вернуться и проверить статус.
+                      </p>
 
                       {paySystems.length === 0 ? (
                         <div className="pre">Способы оплаты не найдены.</div>
@@ -446,9 +592,11 @@ export function ServicesOrder() {
                                 <button
                                   className="btn btn--primary so__btnFull"
                                   onClick={() => startPay(ps)}
-                                  disabled={!ps.shm_url}
+                                  disabled={!ps.shm_url || openingPay}
                                 >
-                                  Оплатить {fmtMoney(needTopup > 0 ? needTopup : 1, currency)}
+                                  {openingPay
+                                    ? 'Открываем…'
+                                    : `Оплатить ${fmtMoney(needTopup > 0 ? needTopup : 1, currency)}`}
                                 </button>
                               </div>
                             </div>
@@ -457,11 +605,19 @@ export function ServicesOrder() {
                       )}
 
                       <div className="actions actions--1 so__mt12">
-                        <button className="btn so__btnFull" onClick={pollOnce}>Я оплатил — проверить</button>
+                        <button className="btn so__btnFull" onClick={pollOnce}>
+                          Я оплатил — проверить
+                        </button>
                         <button className="btn so__btnFull" onClick={() => window.location.assign('/services')}>
                           Перейти в услуги
                         </button>
                       </div>
+
+                      {lastPayUrl ? (
+                        <div className="pre so__mt12" style={{ opacity: 0.85 }}>
+                          Последняя ссылка оплаты (на {Math.max(1, Math.ceil(lastPayAmount || 1))}): {lastPayUrl}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 </div>

@@ -271,6 +271,20 @@ export async function shmGetUserServices(
 }
 
 /**
+ * ✅ Swagger: POST /shm/v1/user/service/stop
+ * Заблокировать (остановить) услугу пользователя.
+ *
+ * Обычно после stop услуга переходит в BLOCKED/STOPPED статус в биллинге.
+ */
+export async function shmStopUserService(sessionId: string, user_service_id: number) {
+  const usi = Number(user_service_id ?? 0);
+  return await shmFetch<any>(sessionId, "v1/user/service/stop", {
+    method: "POST",
+    body: { user_service_id: usi },
+  });
+}
+
+/**
  * ✅ Swagger: DELETE /shm/v1/user/service?user_service_id=<number>
  * Удалить услугу пользователя.
  */

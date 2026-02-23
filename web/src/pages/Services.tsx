@@ -150,16 +150,18 @@ function statusSortWeight(s: UiStatus) {
 }
 
 function canDeleteStatus(s: UiStatus) {
-  // Как договорились: "то что в процессе — не удалять"
   if (s === 'pending' || s === 'init') return false
   if (s === 'removed') return false
+  if (s === 'active') return false // active удаляем только после stop
   return true
+}
+
+function canStopStatus(s: UiStatus) {
+  return s === 'active'
 }
 
 function deleteConfirmText(s: ApiServiceItem) {
   switch (s.status) {
-    case 'active':
-      return 'Удалить активную услугу? Доступ может прекратиться после удаления.'
     case 'not_paid':
       return 'Удалить неоплаченный заказ? Он исчезнет из списка.'
     case 'blocked':
@@ -175,10 +177,11 @@ function Modal({
   title,
   open,
   children,
-  confirmText = 'Удалить',
+  confirmText = 'Подтвердить',
   cancelText = 'Отмена',
   loading,
   error,
+  confirmClassName = 'btn btn--primary',
   onClose,
   onConfirm,
 }: {
@@ -189,6 +192,7 @@ function Modal({
   cancelText?: string
   loading?: boolean
   error?: string | null
+  confirmClassName?: string
   onClose: () => void
   onConfirm: () => void
 }) {
@@ -205,64 +209,38 @@ function Modal({
 
   return (
     <div
+      className="modal"
       role="dialog"
       aria-modal="true"
       aria-label={title}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose()
       }}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        // ✅ более плотный оверлей + блюр — не “шумит” фон
-        background: 'rgba(0,0,0,0.72)',
-        backdropFilter: 'blur(6px)',
-        WebkitBackdropFilter: 'blur(6px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 16,
-        zIndex: 50,
-      }}
     >
-      <div
-        className="card"
-        style={{
-          width: 'min(560px, 100%)',
-          boxShadow: '0 12px 40px rgba(0,0,0,0.45)',
-          // ✅ уплотняем саму карточку, если card полупрозрачная в теме
-          background: 'rgba(18, 18, 20, 0.92)',
-          border: '1px solid rgba(255,255,255,0.08)',
-        }}
-      >
+      <div className="card modal__card">
         <div className="card__body">
-          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
-            <div className="services-cat__title" style={{ fontSize: 18, lineHeight: 1.2 }}>
-              {title}
-            </div>
-            <button className="btn" onClick={onClose} title="Закрыть" aria-label="Закрыть" disabled={!!loading}>
+          <div className="modal__head">
+            <div className="modal__title">{title}</div>
+            <button className="btn modal__close" onClick={onClose} aria-label="Закрыть" disabled={!!loading}>
               ✕
             </button>
           </div>
 
-          <div style={{ marginTop: 10 }}>{children}</div>
+          <div className="modal__content">{children}</div>
 
-          {error ? (
-            <div className="pre" style={{ marginTop: 12 }}>
-              {error}
-            </div>
-          ) : null}
+          {error ? <div className="pre">{error}</div> : null}
 
-          <div className="row" style={{ marginTop: 14, gap: 10, justifyContent: 'flex-end' }}>
+          <div className="actions actions--2">
             <button className="btn" onClick={onClose} disabled={!!loading}>
               {cancelText}
             </button>
-            <button className="btn btn--primary" onClick={onConfirm} disabled={!!loading}>
-              {loading ? 'Удаляем…' : confirmText}
+
+            <button className={confirmClassName} onClick={onConfirm} disabled={!!loading}>
+              {loading ? 'Подождите…' : confirmText}
             </button>
           </div>
 
-          <div style={{ marginTop: 10, opacity: 0.82, fontSize: 12 }}>
+          <div className="p">
             Если вы сомневаетесь — лучше сначала проверьте статус услуги или обратитесь в поддержку.
           </div>
         </div>
@@ -273,7 +251,6 @@ function Modal({
 
 /**
  * "Дополнительные страницы" (лениво), которые мы рендерим ВНУТРИ карточки.
- * Важно: код/данные подтягиваются только при открытии блока подключения.
  */
 const ConnectAmneziaWG = React.lazy(() => import('./connect/ConnectAmneziaWG'))
 const ConnectMarzban = React.lazy(() => import('./connect/ConnectMarzban.tsx'))
@@ -289,21 +266,13 @@ function ConnectInline({
   onDone?: () => void
 }) {
   return (
-    <div
-      style={{
-        marginTop: 10,
-        paddingTop: 10,
-        borderTop: '1px solid rgba(255,255,255,0.08)',
-      }}
-    >
-      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-        <div className="services-cat__title" style={{ fontSize: 14 }}>
-          Подключение
-        </div>
+    <div className="svc__connect">
+      <div className="row svc__connectHead">
+        <div className="services-cat__title svc__connectTitle">Подключение</div>
         <span className="badge">{kindTitle(kind)}</span>
       </div>
 
-      <div style={{ marginTop: 10 }}>
+      <div className="svc__connectBody">
         <Suspense fallback={<div className="p">Загрузка…</div>}>
           {kind === 'amneziawg' ? (
             <ConnectAmneziaWG usi={service.userServiceId} service={service} onDone={onDone} />
@@ -317,9 +286,7 @@ function ConnectInline({
             <ConnectRouter usi={service.userServiceId} service={service} onDone={onDone} />
           ) : null}
 
-          {kind === 'unknown' ? (
-            <div className="pre">Для этого типа услуги пока нет помощника подключения.</div>
-          ) : null}
+          {kind === 'unknown' ? <div className="pre">Для этого типа услуги пока нет помощника подключения.</div> : null}
         </Suspense>
       </div>
     </div>
@@ -334,6 +301,7 @@ function ServiceCard({
   onToggleConnect,
   onRefresh,
   onAskDelete,
+  onAskStop,
 }: {
   s: ApiServiceItem
   expanded: boolean
@@ -342,6 +310,7 @@ function ServiceCard({
   onToggleConnect: () => void
   onRefresh: () => void
   onAskDelete: (s: ApiServiceItem) => void
+  onAskStop: (s: ApiServiceItem) => void
 }) {
   const until = s.expireAt ? fmtDate(s.expireAt) : ''
   const kind = detectKind(s.category)
@@ -352,6 +321,7 @@ function ServiceCard({
   const supportUrl = `/support?topic=service&usi=${encodeURIComponent(String(s.userServiceId))}`
 
   const allowDelete = canDeleteStatus(s.status)
+  const allowStop = canStopStatus(s.status)
 
   const canShowConnect = kind !== 'unknown' && s.status === 'active'
 
@@ -448,8 +418,16 @@ function ServiceCard({
 
           {connectOpen && canShowConnect ? <ConnectInline kind={kind} service={s} onDone={onRefresh} /> : null}
 
+          {allowStop ? (
+            <div className="actions actions--1">
+              <button className="btn" onClick={() => onAskStop(s)} title="Заблокировать услугу">
+                🛑 Заблокировать
+              </button>
+            </div>
+          ) : null}
+
           {allowDelete ? (
-            <div className="actions actions--1" style={{ marginTop: 10 }}>
+            <div className="actions actions--1">
               <button className="btn" onClick={() => onAskDelete(s)} title="Удалить услугу">
                 🗑️ Удалить услугу
               </button>
@@ -474,6 +452,10 @@ export function Services() {
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
+  const [stopTarget, setStopTarget] = useState<ApiServiceItem | null>(null)
+  const [stopBusy, setStopBusy] = useState(false)
+  const [stopError, setStopError] = useState<string | null>(null)
+
   async function load() {
     setLoading(true)
     setError(null)
@@ -488,8 +470,29 @@ export function Services() {
     }
   }
 
+  async function stopService(userServiceId: number) {
+    await apiFetch(`/services/${encodeURIComponent(String(userServiceId))}/stop`, { method: 'POST' })
+  }
+
   async function deleteService(userServiceId: number) {
     await apiFetch(`/services/${encodeURIComponent(String(userServiceId))}`, { method: 'DELETE' })
+  }
+
+  async function onConfirmStop() {
+    if (!stopTarget || stopBusy) return
+    setStopBusy(true)
+    setStopError(null)
+    try {
+      const usi = stopTarget.userServiceId
+      await stopService(usi)
+      setStopTarget(null)
+      setExpandedId(usi)
+      await load()
+    } catch (e: any) {
+      setStopError(e?.message || 'Не удалось заблокировать услугу. Попробуйте ещё раз или обратитесь в поддержку.')
+    } finally {
+      setStopBusy(false)
+    }
   }
 
   async function onConfirmDelete() {
@@ -556,10 +559,9 @@ export function Services() {
           <div className="card__body">
             <h1 className="h1">Услуги</h1>
             <p className="p">
-              Ошибка загрузки данных:{' '}
-              <span style={{ color: 'rgba(255,255,255,0.82)' }}>{error}</span>
+              Ошибка загрузки данных: <span>{error}</span>
             </p>
-            <div className="row" style={{ marginTop: 14 }}>
+            <div className="actions actions--1">
               <button className="btn btn--primary" onClick={load}>
                 Повторить
               </button>
@@ -585,9 +587,7 @@ export function Services() {
             <div className="services-cat__head">
               <div>
                 <div className="services-cat__title">{kindTitle(kind)}</div>
-                <p className="p" style={{ marginTop: 6 }}>
-                  {kindDescr(kind)}
-                </p>
+                <p className="p">{kindDescr(kind)}</p>
               </div>
               <span className="badge">{arr.length}</span>
             </div>
@@ -612,6 +612,10 @@ export function Services() {
                     setDeleteError(null)
                     setDeleteTarget(svc)
                   }}
+                  onAskStop={(svc) => {
+                    setStopError(null)
+                    setStopTarget(svc)
+                  }}
                 />
               ))}
             </div>
@@ -627,7 +631,7 @@ export function Services() {
         <div className="card__body">
           <div className="services-head">
             <h1 className="services-head__title">Услуги</h1>
-            <div className="row" style={{ gap: 10 }}>
+            <div className="row">
               <button className="btn btn--primary" onClick={() => go('/services/order')}>
                 Заказать
               </button>
@@ -662,6 +666,58 @@ export function Services() {
       <Section kind="marzban_router" />
       <Section kind="unknown" />
 
+      {/* STOP modal */}
+      <Modal
+        title={stopTarget ? `Заблокировать услугу «${stopTarget.title}»?` : 'Заблокировать услугу?'}
+        open={!!stopTarget}
+        loading={stopBusy}
+        error={stopError}
+        onClose={() => {
+          if (stopBusy) return
+          setStopTarget(null)
+          setStopError(null)
+        }}
+        onConfirm={onConfirmStop}
+        confirmText="Заблокировать"
+        cancelText="Отмена"
+        confirmClassName="btn btn--primary"
+      >
+        {stopTarget ? (
+          <>
+            <div className="p">
+              <b>Что произойдёт:</b>
+            </div>
+
+            <div className="p">
+              Мы заблокируем услугу <b>«{stopTarget.title}»</b>. После этого она перестанет работать.
+            </div>
+
+            <div className="pre">
+              <div>⚠️ Разблокировка самостоятельно недоступна.</div>
+              <div>Если потребуется вернуть доступ — только через техподдержку.</div>
+            </div>
+
+            <div className="pre">
+              <div>
+                Статус: <b>{statusLabel(stopTarget.status)}</b>
+              </div>
+              <div>
+                Тип: <b>{kindTitle(detectKind(stopTarget.category))}</b>
+              </div>
+              <div>
+                Тариф: <b>{fmtMoney(stopTarget.price, stopTarget.currency)}</b> / {stopTarget.periodMonths || 1}м
+              </div>
+              {stopTarget.expireAt ? (
+                <div>
+                  Действует до: <b>{fmtDate(stopTarget.expireAt)}</b>
+                </div>
+              ) : null}
+            </div>
+          </>
+        ) : null}
+      </Modal>
+
+      {/* DELETE modal */}
       <Modal
         title={deleteTarget ? `Удалить услугу «${deleteTarget.title}»?` : 'Удалить услугу?'}
         open={!!deleteTarget}
@@ -675,13 +731,17 @@ export function Services() {
         onConfirm={onConfirmDelete}
         confirmText="Удалить"
         cancelText="Отмена"
+        confirmClassName="btn btn--primary"
       >
         {deleteTarget ? (
           <>
-            <p className="p" style={{ marginTop: 0 }}>
-              {deleteConfirmText(deleteTarget)}
-            </p>
-            <div className="pre" style={{ marginTop: 10 }}>
+            <div className="p">
+              <b>Подтверждение удаления</b>
+            </div>
+
+            <div className="p">{deleteConfirmText(deleteTarget)}</div>
+
+            <div className="pre">
               <div>
                 Статус: <b>{statusLabel(deleteTarget.status)}</b>
               </div>

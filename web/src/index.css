@@ -1616,3 +1616,78 @@ button, a { -webkit-tap-highlight-color: transparent; }
   font-size: 12px;
   line-height: 1.35;
 }
+/* ============================================================
+   Services: Modal (no inline styles)
+   ============================================================ */
+
+.modal{
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  padding: 16px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  background: rgba(0,0,0,0.72);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.modal__card{
+  width: min(560px, 100%);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+
+  /* чуть плотнее чем обычная card, чтобы не “терялась” на фоне */
+  background: rgba(18, 18, 20, 0.92);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.modal__head{
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.modal__title{
+  font-size: 18px;
+  line-height: 1.2;
+  font-weight: 950;
+  letter-spacing: 0.1px;
+}
+
+.modal__close{
+  flex: 0 0 auto;
+  width: var(--tap);
+  min-width: var(--tap);
+  padding: 0;
+}
+
+.modal__content{
+  margin-top: 12px;
+}
+
+/* ============================================================
+   Services: Inline connect block (inside service card)
+   ============================================================ */
+
+.svc__connect{
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+.svc__connectHead{
+  justify-content: space-between;
+  align-items: center;
+}
+
+.svc__connectTitle{
+  font-size: 14px;
+}
+
+.svc__connectBody{
+  margin-top: 10px;
+}
