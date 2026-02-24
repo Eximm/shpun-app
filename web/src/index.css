@@ -1807,3 +1807,84 @@ button, a { -webkit-tap-highlight-color: transparent; }
   opacity: 0.6;
   margin: 0 2px;
 }
+/* select для темной темы: чтобы в дропдауне не пропадал текст */
+.so__select{
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(148,163,184,.35);
+  background: rgba(255,255,255,.04);
+  color: inherit;
+  outline: none;
+}
+.so__select:disabled{ opacity: .6; }
+
+/* мягкая “подкрашенная” кнопка (если у тебя нет btn--soft) */
+.btn--soft{
+  border: 1px solid rgba(99,102,241,.35);
+  background: rgba(99,102,241,.12);
+}
+
+/* строка “Устройство:” (чуть аккуратнее, без инлайнов) */
+.cawg__rowTop{
+  margin-top: 12px;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+.cawg__label{
+  margin: 0;
+  opacity: .85;
+}
+.cawg__deviceBtn{
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(148,163,184,.35);
+  background: rgba(255,255,255,.04);
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cawg__pickItem.is-active{
+  border-color: rgba(99,102,241,.55);
+  box-shadow: inset 3px 0 0 rgba(99,102,241,.55);
+}
+/* если нет в проекте */
+.so__btnFull{ width: 100%; }
+
+/* мягкая “подкрашенная” кнопка */
+.btn--soft{
+  border: 1px solid rgba(99,102,241,.35);
+  background: rgba(99,102,241,.12);
+}
+
+/* строка “Устройство:” */
+.cawg__rowTop{
+  margin-top: 12px;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+.cawg__label{
+  margin: 0;
+  opacity: .85;
+}
+
+/* кнопка выбора устройства */
+.cawg__deviceBtn{
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(148,163,184,.35);
+  background: rgba(255,255,255,.04);
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* подсветка выбранного в списке */
+.cawg__pickItem.is-active{
+  border-color: rgba(99,102,241,.55);
+  box-shadow: inset 3px 0 0 rgba(99,102,241,.55);
+}

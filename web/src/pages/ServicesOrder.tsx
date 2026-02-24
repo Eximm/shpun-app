@@ -524,16 +524,19 @@ export function ServicesOrder() {
         <div className="section">
           <div className="card">
             <div className="card__body">
+              {/* шапка: кнопка всегда справа вверху */}
               <div className="row so__spaceBetween">
-                <div>
-                  <div className="h1 so__h18">Выберите тип услуги</div>
-                  <p className="p">Подберём подходящий вариант под ваше устройство.</p>
+                <div className="h1 so__h18" style={{ fontWeight: 800, letterSpacing: '-0.01em' }}>
+                  Выберите тип услуги
                 </div>
-
                 <button className="btn" onClick={() => navigate(-1)}>
                   ⇦ Назад
                 </button>
               </div>
+
+              <p className="p so__mt6" style={{ opacity: 0.8 }}>
+                Подберём подходящий вариант под ваше устройство.
+              </p>
 
               <div className="kv so__mt12">
                 {(['marzban', 'marzban_router', 'amneziawg'] as Kind[]).map((k) => (
@@ -543,20 +546,24 @@ export function ServicesOrder() {
                     onClick={() => setKind(k)}
                     type="button"
                     title="Выбрать"
-                    style={{
-                      textAlign: 'left',
-                      display: 'block',
-                    }}
+                    style={{ textAlign: 'left', display: 'block' }}
                   >
-                    {/* верхний левый бейдж с количеством */}
-                    <div className="row" style={{ justifyContent: 'flex-start', gap: 8 }}>
-                      <span className="badge">{grouped[k].length} тарифов</span>
+                    <div className="row so__spaceBetween" style={{ alignItems: 'flex-start', gap: 10 }}>
+                      <div className="services-cat__headLeft">
+                        <div className="services-cat__titleRow">
+                          <div className="services-cat__title">{kindTitle(k)}</div>
+                        </div>
+
+                        {/* спокойный текст как на главной странице услуг */}
+                        <p className="p so__mt6" style={{ opacity: 0.8 }}>
+                          {kindDescrShort(k)}
+                        </p>
+                      </div>
+
+                      <span className="badge" style={{ whiteSpace: 'nowrap' }}>
+                        {grouped[k].length}
+                      </span>
                     </div>
-
-                    <div className="kv__k so__mt10">{kindTitle(k)}</div>
-                    <div className="kv__v so__mt6">{kindDescrShort(k)}</div>
-
-                    {/* визуальная “кнопка выбора” по центру (кликается вся карточка) */}
                     <div className="actions actions--1 so__mt12" style={{ pointerEvents: 'none' }}>
                       <span className="btn btn--primary so__btnFull" style={{ textAlign: 'center' }}>
                         Выбрать
@@ -577,15 +584,23 @@ export function ServicesOrder() {
             <div className="card__body">
               {/* единая шапка как везде: заголовок слева, “назад” справа */}
               <div className="row so__spaceBetween">
-                <div className="h1 so__h18">{kindTitle(kind)}</div>
+                <div className="h1 so__h18" style={{ fontWeight: 800, letterSpacing: '-0.01em' }}>
+                  {kindTitle(kind)}
+                </div>
 
                 <button className="btn" onClick={() => setKind(null)}>
                   ⇦ Назад
                 </button>
               </div>
 
-              {/* описание — на всю ширину, с бортиком */}
-              <div className="pre so__mt12" style={{ border: '1px solid rgba(148,163,184,.35)', opacity: 0.95 }}>
+              {/* как на Services: описание спокойнее, но можно оставить “обводку” */}
+              <div
+                className="pre so__mt12"
+                style={{
+                  border: '1px solid rgba(148,163,184,.35)',
+                  opacity: 0.82,
+                }}
+              >
                 {kindDescr(kind)}
               </div>
 
@@ -602,12 +617,18 @@ export function ServicesOrder() {
                 {grouped[kind].map((t) => (
                   <button key={t.serviceId} className="kv__item" onClick={() => setSelected(t)} type="button">
                     <div className="row so__spaceBetween">
-                      <div className="kv__k">{t.title}</div>
+                      <div className="kv__k" style={{ fontWeight: 700 }}>
+                        {t.title}
+                      </div>
                       <span className="badge">
                         {fmtMoney(t.price, t.currency)} / {t.periodHuman}
                       </span>
                     </div>
-                    {t.descr ? <div className="kv__v so__mt6">{t.descr}</div> : null}
+                    {t.descr ? (
+                      <div className="kv__v so__mt6" style={{ opacity: 0.82 }}>
+                        {t.descr}
+                      </div>
+                    ) : null}
                   </button>
                 ))}
               </div>
@@ -623,8 +644,12 @@ export function ServicesOrder() {
             <div className="card__body">
               <div className="row so__spaceBetween">
                 <div>
-                  <div className="h1 so__h18">{selected.title}</div>
-                  <p className="p">{selected.descr || '—'}</p>
+                  <div className="h1 so__h18" style={{ fontWeight: 800, letterSpacing: '-0.01em' }}>
+                    {selected.title}
+                  </div>
+                  <p className="p" style={{ opacity: 0.82 }}>
+                    {selected.descr || '—'}
+                  </p>
                 </div>
                 <button className="btn" onClick={resetSelection}>
                   ⇦ Назад
@@ -688,8 +713,12 @@ export function ServicesOrder() {
                 <div className="so__pay so__mt12">
                   <div className="card so__cardFlat">
                     <div className="card__body">
-                      <div className="h1 so__h18">Оплата</div>
-                      <p className="p">Выберите способ оплаты. Мы откроем оплату, а вы сможете вернуться и проверить статус.</p>
+                      <div className="h1 so__h18" style={{ fontWeight: 800, letterSpacing: '-0.01em' }}>
+                        Оплата
+                      </div>
+                      <p className="p" style={{ opacity: 0.82 }}>
+                        Выберите способ оплаты. Мы откроем оплату, а вы сможете вернуться и проверить статус.
+                      </p>
 
                       {paySystems.length === 0 ? (
                         <div className="pre">Способы оплаты не найдены.</div>
@@ -698,7 +727,9 @@ export function ServicesOrder() {
                           {paySystems.map((ps, idx) => (
                             <div className="kv__item" key={ps.shm_url || idx}>
                               <div className="row so__spaceBetween">
-                                <div className="kv__k">{ps.name || 'Payment method'}</div>
+                                <div className="kv__k" style={{ fontWeight: 700 }}>
+                                  {ps.name || 'Payment method'}
+                                </div>
                                 <span className="badge">{ps.recurring ? 'recurring' : 'one-time'}</span>
                               </div>
 
@@ -708,7 +739,9 @@ export function ServicesOrder() {
                                   onClick={() => startPay(ps)}
                                   disabled={!ps.shm_url || openingPay}
                                 >
-                                  {openingPay ? 'Открываем…' : `Оплатить ${fmtMoney(needTopup > 0 ? needTopup : 1, currency)}`}
+                                  {openingPay
+                                    ? 'Открываем…'
+                                    : `Оплатить ${fmtMoney(needTopup > 0 ? needTopup : 1, currency)}`}
                                 </button>
                               </div>
                             </div>

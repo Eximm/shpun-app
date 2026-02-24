@@ -11,29 +11,46 @@ type Props = {
 type Platform = 'android' | 'ios' | 'windows' | 'mac' | 'linux'
 type Chip = 'auto' | Platform
 
-const CLIENT_LINKS = {
+const IOS_HIDDIFY_URL = 'https://apps.apple.com/us/app/hiddify-proxy-vpn/id6596777532'
+
+/**
+ * Ссылки на клиент.
+ * Важно: iOS — строго Hiddify по ссылке выше.
+ */
+const CLIENT_LINKS: Record<
+  Platform,
+  { title: string; market: string; direct?: string; storeLabel: string }
+> = {
   android: {
-    market: 'https://play.google.com/store/apps/details?id=app.hiddify.com',
-    apk: 'https://github.com/hiddify/hiddify-app/releases/latest/download/Hiddify-Android-arm64.apk',
     title: 'Hiddify',
+    market: 'https://play.google.com/store/apps/details?id=app.hiddify.com',
+    direct: 'https://github.com/hiddify/hiddify-app/releases/latest/download/Hiddify-Android-arm64.apk',
+    storeLabel: 'Google Play',
   },
   ios: {
-    market: 'https://apps.apple.com/ru/app/v2raytun/id6476628951?platform=iphone',
-    title: 'V2rayTun',
+    title: 'Hiddify',
+    market: IOS_HIDDIFY_URL,
+    storeLabel: 'App Store',
   },
   windows: {
-    market: 'https://github.com/hiddify/hiddify-app/releases',
     title: 'Hiddify',
+    market: 'https://github.com/hiddify/hiddify-app/releases',
+    storeLabel: 'страницу скачивания',
   },
   mac: {
-    market: 'https://github.com/hiddify/hiddify-app/releases/latest/download/Hiddify-MacOS.dmg',
     title: 'Hiddify',
+    market: 'https://github.com/hiddify/hiddify-app/releases',
+    // если хочешь прямой dmg — можешь вернуть direct:
+    direct: 'https://github.com/hiddify/hiddify-app/releases/latest/download/Hiddify-MacOS.dmg',
+    storeLabel: 'страницу скачивания',
   },
   linux: {
-    market: 'https://github.com/hiddify/hiddify-app/releases/latest/download/Hiddify-Linux-x64.AppImage',
     title: 'Hiddify',
+    market: 'https://github.com/hiddify/hiddify-app/releases',
+    direct: 'https://github.com/hiddify/hiddify-app/releases/latest/download/Hiddify-Linux-x64.AppImage',
+    storeLabel: 'страницу скачивания',
   },
-} as const
+}
 
 function detectOS(): Platform {
   const ua = navigator.userAgent || navigator.vendor || (window as any).opera || ''
@@ -62,7 +79,6 @@ function isMobile(p: Platform) {
 
 function openLinkSafe(url: string) {
   try {
-    // если внутри Telegram WebApp
     const tg: any = (window as any).Telegram?.WebApp
     if (tg && typeof tg.openLink === 'function') {
       tg.openLink(url)
@@ -74,18 +90,46 @@ function openLinkSafe(url: string) {
   window.open(url, '_blank', 'noopener,noreferrer')
 }
 
-async function copyText(text: string) {
+async function copyToClipboard(text: string) {
   try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text)
-      alert('Ссылка скопирована ✅')
-      return
-    }
+    await navigator.clipboard.writeText(text)
+    return true
   } catch {
-    // ignore
+    try {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.style.position = 'fixed'
+      ta.style.top = '-1000px'
+      document.body.appendChild(ta)
+      ta.focus()
+      ta.select()
+      const ok = document.execCommand('copy')
+      document.body.removeChild(ta)
+      return ok
+    } catch {
+      return false
+    }
   }
-  // fallback
-  prompt('Скопируйте ссылку вручную:', text)
+}
+
+/**
+ * Deep-link автодобавления подписки.
+ * Мы делаем одинаково: авто-импорт для Android/iOS/Windows.
+ *
+ * Важно:
+ * - для Android/iOS работает Hiddify scheme
+ * - для Windows тоже используем hiddify:// (в хиддифи он поддерживается)
+ */
+function buildAutoImportLink(platform: Platform, subscriptionUrl: string) {
+  // Hiddify использует install-sub/?url=...
+  // (Этот формат у тебя уже был для android)
+  const u = encodeURIComponent(subscriptionUrl)
+
+  if (platform === 'android' || platform === 'ios' || platform === 'windows' || platform === 'mac' || platform === 'linux') {
+    return `hiddify://install-sub/?url=${u}`
+  }
+
+  return `hiddify://install-sub/?url=${u}`
 }
 
 export default function ConnectMarzban({ usi }: Props) {
@@ -94,10 +138,15 @@ export default function ConnectMarzban({ usi }: Props) {
 
   const autoPlatform = useMemo(() => detectOS(), [])
   const [chip, setChip] = useState<Chip>('auto')
-
   const platform: Platform = chip === 'auto' ? autoPlatform : chip
 
+  const [platformPickerOpen, setPlatformPickerOpen] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
+
   const [subscriptionUrl, setSubscriptionUrl] = useState<string>('')
+
+  const [copied, setCopied] = useState(false)
+
   const [qrOpen, setQrOpen] = useState(false)
   const [qrDataUrl, setQrDataUrl] = useState<string>('')
 
@@ -129,54 +178,20 @@ export default function ConnectMarzban({ usi }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usi])
 
-  // 2 главных кнопки: (1) скачать клиент (2) подключить
-  const clientTitle = CLIENT_LINKS[platform].title
-  const downloadUrl = CLIENT_LINKS[platform].market
-
-  const connectAction = useMemo(() => {
-    // android/ios: deep link import
-    if (!subscriptionUrl) return { label: 'Подключить', onClick: () => {}, disabled: true as const }
-
-    if (platform === 'android') {
-      const href = `hiddify://install-sub/?url=${encodeURIComponent(subscriptionUrl)}`
-      return {
-        label: 'Добавить подписку',
-        onClick: () => openLinkSafe(href),
-        disabled: false as const,
-      }
-    }
-
-    if (platform === 'ios') {
-      const href = `v2ray://install-sub/?url=${encodeURIComponent(subscriptionUrl)}`
-      return {
-        label: 'Добавить подписку',
-        onClick: () => openLinkSafe(href),
-        disabled: false as const,
-      }
-    }
-
-    // desktop: copy
-    return {
-      label: 'Скопировать ссылку',
-      onClick: () => copyText(subscriptionUrl),
-      disabled: false as const,
-    }
-  }, [platform, subscriptionUrl])
+  const ready = !loading && !error && !!subscriptionUrl
 
   const topHint = useMemo(() => {
     const pName = platformLabel(platform)
     if (loading) return `Готовим подключение для: ${pName}…`
     if (error) return `Не удалось подготовить подключение для: ${pName}.`
-    if (isMobile(platform)) {
-      return `Устройство: ${pName}. Обычно достаточно: 1) установить клиент 2) добавить подписку.`
-    }
-    return `Устройство: ${pName}. Обычно достаточно: 1) установить клиент 2) вставить ссылку подписки.`
+    if (isMobile(platform)) return `Устройство: ${pName}. Шаги ниже помогут установить приложение и добавить подписку.`
+    return `Устройство: ${pName}. Шаги ниже помогут установить приложение и добавить подписку.`
   }, [platform, loading, error])
 
   async function openQr() {
     if (!subscriptionUrl) return
     try {
-      const dataUrl = await QRCode.toDataURL(subscriptionUrl, { margin: 1, width: 320 })
+      const dataUrl = await QRCode.toDataURL(subscriptionUrl, { margin: 2, width: 360 })
       setQrDataUrl(dataUrl)
       setQrOpen(true)
     } catch {
@@ -184,100 +199,239 @@ export default function ConnectMarzban({ usi }: Props) {
     }
   }
 
-  const chips: Array<{ id: Chip; label: string; icon: string }> = [
-    { id: 'auto', label: 'Текущее', icon: '✨' },
-    { id: 'android', label: 'Android', icon: '🤖' },
-    { id: 'ios', label: 'iOS', icon: '🧩' },
-    { id: 'windows', label: 'Windows', icon: '🖥️' },
-    { id: 'mac', label: 'macOS', icon: '💻' },
-    { id: 'linux', label: 'Linux', icon: '🐧' },
-  ]
+  async function copySub() {
+    if (!subscriptionUrl) return
+    const ok = await copyToClipboard(subscriptionUrl)
+    setCopied(ok)
+    if (ok) setTimeout(() => setCopied(false), 1500)
+    if (!ok) alert('Не удалось скопировать. Скопируйте вручную из ссылки подписки.')
+  }
+
+  const client = CLIENT_LINKS[platform]
+  const autoImportHref = ready ? buildAutoImportLink(platform, subscriptionUrl) : ''
 
   return (
     <div className="cm">
       <div className="pre" style={{ marginTop: 0 }}>
-        ✅ Подписка готова. {topHint}
+        {ready ? '✅ Подписка готова. ' : error ? '⚠️ Подписка не готова. ' : '… '}
+        {topHint}
       </div>
 
-      {error ? (
+      {!loading && error ? (
         <div className="pre" style={{ marginTop: 10 }}>
           {String(error)}
           <div style={{ marginTop: 10 }}>
-            <button className="btn" onClick={load}>
+            <button className="btn" onClick={load} type="button">
               Повторить
             </button>
           </div>
         </div>
       ) : null}
 
-      <div className="p" style={{ marginTop: 10 }}>
-        Выберите устройство:
-      </div>
+      {/* устройство: кнопка -> overlay (как в AmneziaWG) */}
+      <div className="row cawg__rowTop">
+        <div className="p cawg__label">Устройство:</div>
 
-      <div className="device-row" style={{ marginTop: 8 }}>
-        {chips.map((c) => (
-          <button
-            key={c.id}
-            className={`device-chip ${chip === c.id ? 'active' : ''}`}
-            onClick={() => setChip(c.id)}
-            type="button"
-            disabled={loading}
-          >
-            <span className="icon">{c.icon}</span>
-            <span>{c.label}</span>
-          </button>
-        ))}
-      </div>
-
-      <div className="cr__actionsGrid cr__actionsGrid--2" style={{ marginTop: 12 }}>
         <button
-          className="btn cr__btnFull"
-          onClick={() => openLinkSafe(downloadUrl)}
+          className="btn cawg__deviceBtn"
+          type="button"
+          onClick={() => setPlatformPickerOpen(true)}
           disabled={loading}
-          type="button"
+          aria-label="Выбор устройства"
         >
-          Скачать {clientTitle}
-        </button>
-
-        <button
-          className="btn btn--primary cr__btnFull"
-          onClick={connectAction.onClick}
-          disabled={loading || connectAction.disabled}
-          type="button"
-        >
-          {loading ? 'Подождите…' : connectAction.label}
+          {chip === 'auto' ? `✨ Текущее (${platformLabel(autoPlatform)})` : platformLabel(platform)}{' '}
+          <span aria-hidden>▾</span>
         </button>
       </div>
 
-      {/* альтернативный способ — маленькой ссылкой */}
-      {!error && !loading && subscriptionUrl ? (
-        <div className="p" style={{ marginTop: 10 }}>
-          Нужен другой способ?{' '}
-          <button className="btn btn--link" type="button" onClick={openQr}>
-            Показать QR-код
-          </button>
-        </div>
-      ) : null}
+      {/* Шаг 1 */}
+      <div className="card" style={{ marginTop: 12 }}>
+        <div className="card__body">
+          <div className="services-cat__title">1) Установите приложение</div>
 
-      {platform === 'android' ? (
-        <div className="p" style={{ marginTop: 6, opacity: 0.85 }}>
-          Нет Google Play?{' '}
-          <button className="btn btn--link" type="button" onClick={() => openLinkSafe(CLIENT_LINKS.android.apk)}>
-            Скачать APK
-          </button>
-        </div>
-      ) : null}
+          <p className="p" style={{ opacity: 0.82, marginTop: 6 }}>
+            Установите <b>{client.title}</b> для {platformLabel(platform)}.
+          </p>
 
-      {/* QR modal */}
-      {qrOpen ? (
-        <div className="modal" role="dialog" aria-modal="true" onClick={() => setQrOpen(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-title">QR-код подписки</div>
-            <div className="modal-sub">Откройте клиент на другом устройстве и импортируйте через QR.</div>
-            {qrDataUrl ? <img src={qrDataUrl} alt="QR Code" loading="lazy" decoding="async" /> : null}
-            <button className="btn btn-secondary" onClick={() => setQrOpen(false)} type="button">
-              Закрыть
+          <div className="actions actions--2" style={{ marginTop: 10 }}>
+            <button
+              className="btn btn--primary"
+              onClick={() => openLinkSafe(client.market)}
+              disabled={loading}
+              type="button"
+            >
+              Открыть {client.storeLabel}
             </button>
+
+            {platform === 'android' && client.direct ? (
+              <button className="btn" onClick={() => openLinkSafe(client.direct!)} disabled={loading} type="button">
+                Скачать APK
+              </button>
+            ) : client.direct ? (
+              <button className="btn" onClick={() => openLinkSafe(client.direct!)} disabled={loading} type="button">
+                Скачать напрямую
+              </button>
+            ) : (
+              <button className="btn" onClick={() => openLinkSafe(client.market)} disabled={loading} type="button">
+                Скачать напрямую
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Шаг 2 */}
+      <div className="card" style={{ marginTop: 12 }}>
+        <div className="card__body">
+          <div className="services-cat__title">2) Добавьте подписку</div>
+
+          <p className="p" style={{ opacity: 0.82, marginTop: 6 }}>
+            Нажмите “Добавить подписку” — мы откроем приложение и импортируем подписку автоматически.
+          </p>
+
+          <div className="actions actions--2" style={{ marginTop: 10 }}>
+            <button
+              className="btn btn--primary"
+              onClick={() => openLinkSafe(autoImportHref)}
+              disabled={!ready}
+              type="button"
+              title={!ready ? 'Подписка ещё не готова' : undefined}
+            >
+              {loading ? 'Подождите…' : 'Добавить подписку'}
+            </button>
+
+            <button className="btn" onClick={() => setMoreOpen((v) => !v)} disabled={!ready} type="button">
+              {moreOpen ? 'Скрыть способы' : 'Другие способы'}
+            </button>
+          </div>
+
+          {/* Другие способы: копировать + QR */}
+          {moreOpen && ready ? (
+            <div style={{ marginTop: 10 }}>
+              <div className="pre" style={{ opacity: 0.95 }}>
+                <div className="actions actions--1" style={{ marginTop: 0 }}>
+                  <button className="btn btn--soft so__btnFull" type="button" onClick={copySub}>
+                    {copied ? '✅ Ссылка скопирована' : 'Скопировать ссылку подписки'}
+                  </button>
+                </div>
+
+                <div className="actions actions--1" style={{ marginTop: 10 }}>
+                  <button className="btn so__btnFull" type="button" onClick={openQr}>
+                    Показать QR
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      {/* platform picker overlay */}
+      {platformPickerOpen ? (
+        <div className="overlay" role="dialog" aria-modal="true" onClick={() => setPlatformPickerOpen(false)}>
+          <div className="card overlay__card" onClick={(e) => e.stopPropagation()}>
+            <div className="card__body">
+              <div className="row so__spaceBetween" style={{ alignItems: 'center' }}>
+                <div className="overlay__title">Выберите устройство</div>
+                <button className="btn" type="button" onClick={() => setPlatformPickerOpen(false)} aria-label="Закрыть">
+                  ✕
+                </button>
+              </div>
+
+              <div className="kv so__mt12">
+                <button
+                  className={`kv__item cawg__pickItem ${chip === 'auto' ? 'is-active' : ''}`}
+                  type="button"
+                  onClick={() => {
+                    setChip('auto')
+                    setPlatformPickerOpen(false)
+                  }}
+                >
+                  <div className="row so__spaceBetween">
+                    <div className="kv__k" style={{ fontWeight: 700 }}>
+                      ✨ Текущее
+                    </div>
+                    <span className="badge">{platformLabel(autoPlatform)}</span>
+                  </div>
+                </button>
+
+                {(['android', 'ios', 'windows', 'mac', 'linux'] as Platform[]).map((p) => (
+                  <button
+                    key={p}
+                    className={`kv__item cawg__pickItem ${chip === p ? 'is-active' : ''}`}
+                    type="button"
+                    onClick={() => {
+                      setChip(p)
+                      setPlatformPickerOpen(false)
+                    }}
+                  >
+                    <div className="row so__spaceBetween">
+                      <div className="kv__k" style={{ fontWeight: 700 }}>
+                        {platformLabel(p)}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              <div className="actions actions--1 so__mt12">
+                <button className="btn so__btnFull" type="button" onClick={() => setPlatformPickerOpen(false)}>
+                  Закрыть
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* QR overlay */}
+      {qrOpen ? (
+        <div className="overlay" role="dialog" aria-modal="true" onClick={() => setQrOpen(false)}>
+          <div className="card overlay__card" onClick={(e) => e.stopPropagation()}>
+            <div className="card__body">
+              <div className="row so__spaceBetween" style={{ alignItems: 'center' }}>
+                <div className="overlay__title">QR-код подписки</div>
+
+                <button className="btn" type="button" onClick={() => setQrOpen(false)} aria-label="Закрыть">
+                  ✕
+                </button>
+              </div>
+
+              <p className="p so__mt8" style={{ opacity: 0.82 }}>
+                Откройте клиент на другом устройстве и импортируйте подписку через QR.
+              </p>
+
+              <div
+                className="pre so__mt12"
+                style={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  padding: 12,
+                  overflow: 'hidden',
+                }}
+              >
+                {qrDataUrl ? (
+                  <img
+                    src={qrDataUrl}
+                    alt="QR Code"
+                    loading="lazy"
+                    decoding="async"
+                    style={{
+                      width: 360,
+                      maxWidth: '100%',
+                      height: 'auto',
+                      borderRadius: 14,
+                    }}
+                  />
+                ) : null}
+              </div>
+
+              <div className="actions actions--1 so__mt12">
+                <button className="btn btn--primary so__btnFull" onClick={() => setQrOpen(false)} type="button">
+                  Закрыть
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       ) : null}

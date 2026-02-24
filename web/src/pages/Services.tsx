@@ -98,6 +98,30 @@ function statusLabel(s: UiStatus) {
   }
 }
 
+/**
+ * Лёгкая подкраска карточек по статусу — как на Home.
+ * Важно: очень мягко, без “кислотных” цветов.
+ */
+function statusTint(s: UiStatus) {
+  switch (s) {
+    case 'active':
+      return { bg: 'rgba(34,197,94,.08)', border: 'rgba(34,197,94,.28)', stripe: 'rgba(34,197,94,.45)' }
+    case 'pending':
+    case 'init':
+      return { bg: 'rgba(59,130,246,.08)', border: 'rgba(59,130,246,.28)', stripe: 'rgba(59,130,246,.45)' }
+    case 'not_paid':
+      return { bg: 'rgba(245,158,11,.08)', border: 'rgba(245,158,11,.28)', stripe: 'rgba(245,158,11,.45)' }
+    case 'blocked':
+      return { bg: 'rgba(245,158,11,.10)', border: 'rgba(245,158,11,.32)', stripe: 'rgba(245,158,11,.55)' }
+    case 'error':
+      return { bg: 'rgba(239,68,68,.08)', border: 'rgba(239,68,68,.28)', stripe: 'rgba(239,68,68,.50)' }
+    case 'removed':
+      return { bg: 'rgba(148,163,184,.06)', border: 'rgba(148,163,184,.22)', stripe: 'rgba(148,163,184,.28)' }
+    default:
+      return { bg: 'rgba(255,255,255,.02)', border: 'rgba(148,163,184,.22)', stripe: 'rgba(148,163,184,.22)' }
+  }
+}
+
 function fmtDate(iso: string | null) {
   if (!iso) return ''
   const d = new Date(iso)
@@ -334,8 +358,19 @@ function ServiceCard({
     )
   })()
 
+  const tint = statusTint(s.status)
+
   return (
-    <div className="kv__item svc svc--compact">
+    <div
+      className="kv__item svc svc--compact"
+      style={{
+        // лёгкий оттенок + аккуратный бордер по статусу
+        background: `linear-gradient(180deg, ${tint.bg}, rgba(0,0,0,0))`,
+        borderColor: tint.border,
+        // тонкая “полоска статуса” слева — даёт мгновенную читабельность
+        boxShadow: `inset 3px 0 0 ${tint.stripe}`,
+      }}
+    >
       <button type="button" className="svc__btn" onClick={onToggle} aria-expanded={expanded}>
         <div className="svc__row">
           <div className="svc__left">

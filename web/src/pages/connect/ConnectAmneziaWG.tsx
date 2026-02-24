@@ -105,6 +105,10 @@ export default function ConnectAmneziaWG({ usi }: Props) {
   const [chip, setChip] = useState<Chip>('auto')
   const platform: Platform = chip === 'auto' ? autoPlatform : chip
 
+  const [platformPickerOpen, setPlatformPickerOpen] = useState(false)
+
+  const [moreOpen, setMoreOpen] = useState(false)
+
   const [qrOpen, setQrOpen] = useState(false)
   const [qrDataUrl, setQrDataUrl] = useState<string>('')
 
@@ -138,18 +142,20 @@ export default function ConnectAmneziaWG({ usi }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usi])
 
+  const ready = !loading && !error && !!configText
+
   const topHint = useMemo(() => {
     const pName = platformLabel(platform)
     if (loading) return `Готовим подключение для: ${pName}…`
     if (error) return `Не удалось подготовить подключение для: ${pName}.`
-    if (isMobile(platform)) return `Устройство: ${pName}. 1) Установить AmneziaWG  2) Импортировать по QR.`
-    return `Устройство: ${pName}. 1) Установить AmneziaWG  2) Импортировать из файла .conf.`
+    if (isMobile(platform)) return `Устройство: ${pName}. Шаги ниже помогут установить приложение и импортировать по QR.`
+    return `Устройство: ${pName}. Шаги ниже помогут установить приложение и импортировать .conf.`
   }, [platform, loading, error])
 
   async function openQr() {
     if (!configText) return
     try {
-      const dataUrl = await QRCode.toDataURL(configText, { margin: 1, width: 320 })
+      const dataUrl = await QRCode.toDataURL(configText, { margin: 2, width: 360 })
       setQrDataUrl(dataUrl)
       setQrOpen(true)
     } catch {
@@ -162,19 +168,16 @@ export default function ConnectAmneziaWG({ usi }: Props) {
     downloadTextFile(configName || `vpn${usi}.conf`, configText)
   }
 
-  const main2Label = isMobile(platform) ? 'Показать QR' : 'Скачать конфиг'
+  // Главный шаг 2: мобила => QR, десктоп => файл
+  const main2Label = isMobile(platform) ? 'Показать QR' : 'Скачать конфиг (.conf)'
   const main2Action = isMobile(platform) ? openQr : downloadConf
 
-  const devices: Array<{ id: Chip; label: string }> = [
-    { id: 'auto', label: '✨ Текущее' },
-    { id: 'android', label: '🤖 Android' },
-    { id: 'ios', label: '📱 iOS' },
-    { id: 'windows', label: '🖥️ Windows' },
-    { id: 'mac', label: '💻 macOS' },
-    { id: 'linux', label: '🐧 Linux' },
-  ]
-
-  const ready = !loading && !error && !!configText
+  const storeLabel =
+    platform === 'android'
+      ? 'Google Play'
+      : platform === 'ios' || platform === 'mac'
+        ? 'App Store'
+        : 'страницу скачивания'
 
   return (
     <div className="cawg">
@@ -194,62 +197,202 @@ export default function ConnectAmneziaWG({ usi }: Props) {
         </div>
       ) : null}
 
-      <div className="p" style={{ marginTop: 12 }}>Выберите устройство:</div>
+      {/* устройство: кнопка -> overlay (вместо select) */}
+      <div className="row cawg__rowTop">
+        <div className="p cawg__label">Устройство:</div>
 
-      <div className="cr__actionsGrid cr__actionsGrid--2" style={{ marginTop: 8 }}>
-        {devices.map((d) => {
-          const active = chip === d.id
-          return (
+        <button
+          className="btn cawg__deviceBtn"
+          type="button"
+          onClick={() => setPlatformPickerOpen(true)}
+          disabled={loading}
+          aria-label="Выбор устройства"
+        >
+          {chip === 'auto' ? `✨ Текущее (${platformLabel(autoPlatform)})` : platformLabel(platform)}{' '}
+          <span aria-hidden>▾</span>
+        </button>
+      </div>
+
+      {/* Шаг 1 */}
+      <div className="card" style={{ marginTop: 12 }}>
+        <div className="card__body">
+          <div className="services-cat__title">1) Установите приложение</div>
+
+          <p className="p" style={{ opacity: 0.82, marginTop: 6 }}>
+            Установите <b>AmneziaWG</b> для {platformLabel(platform)}.
+          </p>
+
+          <div className="actions actions--2" style={{ marginTop: 10 }}>
             <button
-              key={d.id}
-              className={`btn cr__btnFull ${active ? 'btn--primary' : ''}`}
-              onClick={() => setChip(d.id)}
+              className="btn btn--primary"
+              onClick={() => openLinkSafe(APP_LINKS[platform])}
               disabled={loading}
               type="button"
             >
-              {d.label}
+              Открыть {storeLabel}
             </button>
-          )
-        })}
+
+            {platform === 'android' ? (
+              <button className="btn" onClick={() => openLinkSafe(APK_LINK)} disabled={loading} type="button">
+                Скачать APK
+              </button>
+            ) : (
+              <button className="btn" onClick={() => openLinkSafe(APP_LINKS[platform])} disabled={loading} type="button">
+                Скачать напрямую
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
-      <div className="cr__actionsGrid cr__actionsGrid--2" style={{ marginTop: 12 }}>
-        <button className="btn cr__btnFull" onClick={() => openLinkSafe(APP_LINKS[platform])} disabled={loading} type="button">
-          Скачать AmneziaWG
-        </button>
+      {/* Шаг 2 */}
+      <div className="card" style={{ marginTop: 12 }}>
+        <div className="card__body">
+          <div className="services-cat__title">2) Добавьте профиль</div>
 
-        <button className="btn btn--primary cr__btnFull" onClick={main2Action} disabled={!ready} type="button">
-          {loading ? 'Подождите…' : main2Label}
-        </button>
+          <p className="p" style={{ opacity: 0.82, marginTop: 6 }}>
+            {isMobile(platform)
+              ? 'Откройте AmneziaWG и импортируйте профиль по QR-коду.'
+              : 'Скачайте .conf и импортируйте файл в AmneziaWG.'}
+          </p>
+
+          <div className="actions actions--2" style={{ marginTop: 10 }}>
+            <button
+              className="btn btn--primary"
+              onClick={main2Action}
+              disabled={!ready}
+              type="button"
+              title={!ready ? 'Профиль ещё не готов' : undefined}
+            >
+              {loading ? 'Подождите…' : main2Label}
+            </button>
+
+            <button className="btn" onClick={() => setMoreOpen((v) => !v)} disabled={!ready} type="button">
+              {moreOpen ? 'Скрыть способы' : 'Другие способы'}
+            </button>
+          </div>
+
+          {/* Другие способы: только QR, во всю ширину и “мягко” */}
+          {moreOpen && ready ? (
+            <div style={{ marginTop: 10 }}>
+              <div className="pre" style={{ opacity: 0.95 }}>
+                <div className="actions actions--1" style={{ marginTop: 0 }}>
+                  <button className="btn btn--soft so__btnFull" type="button" onClick={openQr}>
+                    Показать QR
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </div>
       </div>
 
-      {ready ? (
-        <div className="p" style={{ marginTop: 10 }}>
-          Другой способ:{' '}
-          <button className="btn btn--link" type="button" onClick={isMobile(platform) ? downloadConf : openQr}>
-            {isMobile(platform) ? 'Скачать конфиг' : 'Показать QR'}
-          </button>
+      {/* picker overlay */}
+      {platformPickerOpen ? (
+        <div className="overlay" role="dialog" aria-modal="true" onClick={() => setPlatformPickerOpen(false)}>
+          <div className="card overlay__card" onClick={(e) => e.stopPropagation()}>
+            <div className="card__body">
+              <div className="row so__spaceBetween" style={{ alignItems: 'center' }}>
+                <div className="overlay__title">Выберите устройство</div>
+                <button className="btn" type="button" onClick={() => setPlatformPickerOpen(false)} aria-label="Закрыть">
+                  ✕
+                </button>
+              </div>
+
+              <div className="kv so__mt12">
+                <button
+                  className={`kv__item cawg__pickItem ${chip === 'auto' ? 'is-active' : ''}`}
+                  type="button"
+                  onClick={() => {
+                    setChip('auto')
+                    setPlatformPickerOpen(false)
+                  }}
+                >
+                  <div className="row so__spaceBetween">
+                    <div className="kv__k" style={{ fontWeight: 700 }}>
+                      ✨ Текущее
+                    </div>
+                    <span className="badge">{platformLabel(autoPlatform)}</span>
+                  </div>
+                </button>
+
+                {(['android', 'ios', 'windows', 'mac', 'linux'] as Platform[]).map((p) => (
+                  <button
+                    key={p}
+                    className={`kv__item cawg__pickItem ${chip === p ? 'is-active' : ''}`}
+                    type="button"
+                    onClick={() => {
+                      setChip(p)
+                      setPlatformPickerOpen(false)
+                    }}
+                  >
+                    <div className="row so__spaceBetween">
+                      <div className="kv__k" style={{ fontWeight: 700 }}>
+                        {platformLabel(p)}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              <div className="actions actions--1 so__mt12">
+                <button className="btn so__btnFull" type="button" onClick={() => setPlatformPickerOpen(false)}>
+                  Закрыть
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       ) : null}
 
-      {platform === 'android' ? (
-        <div className="p" style={{ marginTop: 6, opacity: 0.85 }}>
-          Нет Google Play?{' '}
-          <button className="btn btn--link" type="button" onClick={() => openLinkSafe(APK_LINK)}>
-            Открыть APK releases
-          </button>
-        </div>
-      ) : null}
-
+      {/* QR overlay */}
       {qrOpen ? (
-        <div className="modal" role="dialog" aria-modal="true" onClick={() => setQrOpen(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-title">QR-код профиля</div>
-            <div className="modal-sub">В AmneziaWG выберите импорт по QR и наведите камеру.</div>
-            {qrDataUrl ? <img src={qrDataUrl} alt="QR Code" loading="lazy" decoding="async" /> : null}
-            <button className="btn btn-secondary" onClick={() => setQrOpen(false)} type="button">
-              Закрыть
-            </button>
+        <div className="overlay" role="dialog" aria-modal="true" onClick={() => setQrOpen(false)}>
+          <div className="card overlay__card" onClick={(e) => e.stopPropagation()}>
+            <div className="card__body">
+              <div className="row so__spaceBetween" style={{ alignItems: 'center' }}>
+                <div className="overlay__title">QR-код профиля</div>
+
+                <button className="btn" type="button" onClick={() => setQrOpen(false)} aria-label="Закрыть">
+                  ✕
+                </button>
+              </div>
+
+              <p className="p so__mt8" style={{ opacity: 0.82 }}>
+                В AmneziaWG выберите импорт по QR и наведите камеру.
+              </p>
+
+              <div
+                className="pre so__mt12"
+                style={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  padding: 12,
+                  overflow: 'hidden',
+                }}
+              >
+                {qrDataUrl ? (
+                  <img
+                    src={qrDataUrl}
+                    alt="QR Code"
+                    loading="lazy"
+                    decoding="async"
+                    style={{
+                      width: 360,
+                      maxWidth: '100%',
+                      height: 'auto',
+                      borderRadius: 14,
+                    }}
+                  />
+                ) : null}
+              </div>
+
+              <div className="actions actions--1 so__mt12">
+                <button className="btn btn--primary so__btnFull" onClick={() => setQrOpen(false)} type="button">
+                  Закрыть
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       ) : null}
