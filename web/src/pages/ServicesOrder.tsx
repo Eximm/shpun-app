@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { apiFetch } from '../shared/api/client'
 import { useMe } from '../app/auth/useMe'
 
-// ✅ NEW: toast + mood
+// ✅ toast + mood (ONLY payment_* keys are allowed by types)
 import { toast } from '../shared/ui/toast'
 import { getMood } from '../shared/payments-mood'
 
@@ -75,7 +75,6 @@ function kindFromCategory(cat: string): Kind {
   return 'marzban_router'
 }
 
-/** названия — как в твоих скринах/боте */
 function kindTitle(k: Kind) {
   switch (k) {
     case 'marzban':
@@ -87,7 +86,6 @@ function kindTitle(k: Kind) {
   }
 }
 
-/** длинные описания — внутри категории */
 function kindDescr(k: Kind) {
   switch (k) {
     case 'marzban':
@@ -99,7 +97,6 @@ function kindDescr(k: Kind) {
   }
 }
 
-/** короткие описания — на карточках выбора типа */
 function kindDescrShort(k: Kind) {
   switch (k) {
     case 'marzban':
@@ -164,7 +161,7 @@ function saveAmneziaWarnDismissed() {
 export function ServicesOrder() {
   const navigate = useNavigate()
 
-  // ✅ единый источник денег, как на Home
+  // ✅ единый источник денег
   const { me, loading: meLoading, error: meError, refetch } = useMe()
 
   const balanceAmount = nnum(me?.balance?.amount, 0)
@@ -185,20 +182,58 @@ export function ServicesOrder() {
   const [paySystems, setPaySystems] = useState<PaySystem[]>([])
   const [overlayOpen, setOverlayOpen] = useState(false)
 
-  // UX: сворачиваем details после "Заказать"
   const [detailsCollapsed, setDetailsCollapsed] = useState(false)
-
   const [waitMsg, setWaitMsg] = useState<string | null>(null)
 
-  // ✅ для стабильной оплаты/фоллбеков
   const [lastPayUrl, setLastPayUrl] = useState<string | null>(null)
   const [lastPayAmount, setLastPayAmount] = useState<number>(0)
   const [openingPay, setOpeningPay] = useState(false)
   const [payOpenError, setPayOpenError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
 
-  // ✅ предупреждение Amnezia (1 раз)
   const [amneziaWarnOpen, setAmneziaWarnOpen] = useState(false)
+
+  const grouped = useMemo(() => {
+    const m: Record<Kind, Tariff[]> = { amneziawg: [], marzban: [], marzban_router: [] }
+    for (const t of tariffs) {
+      m[kindFromCategory(String(t.category || ''))].push({
+        ...t,
+        price: nnum((t as any).price, 0),
+      })
+    }
+    for (const k of Object.keys(m) as Kind[]) {
+      m[k].sort((a, b) => nnum(a.price, 0) - nnum(b.price, 0))
+    }
+    return m
+  }, [tariffs])
+
+  const needTopup = useMemo(() => {
+    if (!selected) return 0
+    const price = nnum(selected.price, 0)
+    const diff = price - available
+    return diff > 0 ? Math.ceil(diff) : 0
+  }, [selected, available])
+
+  const shouldShowPay = useMemo(() => {
+    if (!created) return false
+    if (needTopup > 0) return true
+    return String(created.status || '').toLowerCase() === 'not_paid'
+  }, [created, needTopup])
+
+  // ✅ one place to compute how much to pay (fallback >=1)
+  const toPay = useMemo(() => {
+    if (!selected) return 0
+    if (needTopup > 0) return Math.max(1, Math.ceil(needTopup))
+    const diff = Math.ceil(nnum(selected.price, 0) - available)
+    return Math.max(1, diff)
+  }, [selected, needTopup, available])
+
+  // ✅ mood helpers (typed keys only)
+  const moodChecking = (seed: string) =>
+    getMood('payment_checking', { seed }) ?? 'Пара секунд…'
+
+  const moodSuccess = (seed: string, amount?: number) =>
+    getMood('payment_success', { seed, amount }) ?? 'Принято.'
 
   async function loadPaysystems() {
     const ps = await apiFetch<PaysystemsResp>('/payments/paysystems', { method: 'GET' })
@@ -238,36 +273,8 @@ export function ServicesOrder() {
     } catch {
       // ignore
     }
-
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  const grouped = useMemo(() => {
-    const m: Record<Kind, Tariff[]> = { amneziawg: [], marzban: [], marzban_router: [] }
-    for (const t of tariffs) {
-      m[kindFromCategory(String(t.category || ''))].push({
-        ...t,
-        price: nnum((t as any).price, 0),
-      })
-    }
-    for (const k of Object.keys(m) as Kind[]) {
-      m[k].sort((a, b) => nnum(a.price, 0) - nnum(b.price, 0))
-    }
-    return m
-  }, [tariffs])
-
-  const needTopup = useMemo(() => {
-    if (!selected) return 0
-    const price = nnum(selected.price, 0)
-    const diff = price - available
-    return diff > 0 ? Math.ceil(diff) : 0
-  }, [selected, available])
-
-  const shouldShowPay = useMemo(() => {
-    if (!created) return false
-    if (needTopup > 0) return true
-    return String(created.status || '').toLowerCase() === 'not_paid'
-  }, [created, needTopup])
 
   async function createOrder() {
     if (!selected) return
@@ -279,36 +286,30 @@ export function ServicesOrder() {
         method: 'PUT',
         body: JSON.stringify({ service_id: selected.serviceId }),
       })
-      setCreated(r.item)
 
-      // UX: сворачиваем details и показываем оплату
+      setCreated(r.item)
       setDetailsCollapsed(true)
 
       const orderId = String(r.item?.userServiceId || '')
-      const amount = nnum(selected?.price, 0)
+      const status = String(r.item?.status || '').toLowerCase()
 
-      if (String(r.item?.status || '').toLowerCase() === 'not_paid' || needTopup > 0) {
+      if (status === 'not_paid' || needTopup > 0) {
         await loadPaysystems()
         setWaitMsg('Выберите способ оплаты ниже.')
 
         toast.info('Заказ создан', {
-          description:
-            getMood('payment_checking', { seed: orderId }) ??
-            'Выберите способ оплаты ниже.',
+          description: moodChecking(orderId) ?? 'Выберите способ оплаты ниже.',
         })
       } else {
         setWaitMsg('✅ Услуга создана. Можно перейти в раздел услуг.')
 
         toast.success('Готово', {
-          description:
-            getMood('service_activated', { seed: orderId }) ??
-            'Услуга создана и активируется.',
+          description: 'Услуга создана и активируется.',
         })
-        // иногда оплата проходит мгновенно — можно и так:
-        toast.success('Оплата прошла', {
-          description:
-            getMood('payment_success', { amount, seed: orderId }) ??
-            'Принято.',
+
+        // иногда реально “мгновенно” — покажем мягко
+        toast.success('Оплата принята', {
+          description: moodSuccess(orderId, nnum(selected?.price, 0)) ?? 'Принято.',
         })
       }
     } catch (e: any) {
@@ -350,8 +351,6 @@ export function ServicesOrder() {
       return
     }
 
-    const toPay = needTopup > 0 ? needTopup : Math.max(1, Math.ceil(nnum(selected?.price, 0) - available))
-
     const url = buildPayUrl(ps.shm_url, toPay)
     setLastPayUrl(url)
     setLastPayAmount(toPay)
@@ -368,17 +367,14 @@ export function ServicesOrder() {
       setWaitMsg('Окно оплаты открыто. После оплаты нажмите “Я оплатил — проверить” или перейдите в “Услуги”.')
 
       toast.info('Окно оплаты открыто', {
-        description:
-          getMood('payment_checking', { seed }) ??
-          'После оплаты нажмите “Я оплатил — проверить”.',
+        description: moodChecking(seed) ?? 'После оплаты нажмите “Я оплатил — проверить”.',
       })
     } else {
       setPayOpenError('Не удалось открыть оплату (вкладка могла быть заблокирована). Откройте ссылку вручную.')
       setWaitMsg('Откройте ссылку оплаты и завершите оплату. Затем вернитесь сюда и нажмите “Я оплатил — проверить”.')
 
       toast.error('Не удалось открыть оплату', {
-        description:
-          'Вкладка могла быть заблокирована. Откройте ссылку вручную.',
+        description: 'Вкладка могла быть заблокирована. Откройте ссылку вручную.',
       })
     }
   }
@@ -404,7 +400,7 @@ export function ServicesOrder() {
     const seed = String(created?.userServiceId || '') || String(selected?.serviceId || '')
 
     toast.info('Проверяем платёж', {
-      description: getMood('payment_checking', { seed }) ?? 'Пара секунд…',
+      description: moodChecking(seed) ?? 'Пара секунд…',
     })
 
     try {
@@ -414,21 +410,21 @@ export function ServicesOrder() {
     }
 
     if (!created?.userServiceId) return false
+
     try {
       const s = await apiFetch<ApiServicesResponse>('/services')
       const it = (s.items || []).find((x) => x.userServiceId === created.userServiceId)
+
       if (it && (it.status === 'active' || it.status === 'pending')) {
         setCreated((cur) => (cur ? { ...cur, status: it.status, statusRaw: it.statusRaw || cur.statusRaw } : cur))
         setWaitMsg('✅ Услуга активируется / активна. Можно перейти в раздел услуг.')
 
         toast.success('Готово', {
-          description: getMood('service_activated', { seed }) ?? 'Услуга активирована.',
+          description: 'Услуга активирована.',
         })
 
-        // если хочешь — можно показать и “оплата прошла”, но без спама:
-        const amount = needTopup > 0 ? needTopup : nnum(selected?.price, 0)
-        toast.success('Оплата прошла', {
-          description: getMood('payment_success', { amount, seed }) ?? 'Принято.',
+        toast.success('Оплата принята', {
+          description: moodSuccess(seed, toPay) ?? 'Принято.',
         })
 
         return true
@@ -440,7 +436,7 @@ export function ServicesOrder() {
     setWaitMsg('Пока не вижу обновления статуса. Попробуйте ещё раз через несколько секунд.')
 
     toast.info('Пока не подтверждено', {
-      description: getMood('payment_failed', { seed }) ?? 'Попробуйте ещё раз через несколько секунд.',
+      description: 'Попробуйте ещё раз через несколько секунд.',
     })
 
     return false
@@ -474,7 +470,7 @@ export function ServicesOrder() {
     }
   }
 
-  // ✅ показываем предупреждение при заходе в категорию AmneziaWG (только 1 раз)
+  // ✅ предупреждение при заходе в AmneziaWG (только 1 раз)
   useEffect(() => {
     if (kind !== 'amneziawg') return
     if (readAmneziaWarnDismissed()) return
@@ -810,9 +806,7 @@ export function ServicesOrder() {
                                   onClick={() => startPay(ps)}
                                   disabled={!ps.shm_url || openingPay}
                                 >
-                                  {openingPay
-                                    ? 'Открываем…'
-                                    : `Оплатить ${fmtMoney(needTopup > 0 ? needTopup : 1, currency)}`}
+                                  {openingPay ? 'Открываем…' : `Оплатить ${fmtMoney(toPay || 1, currency)}`}
                                 </button>
                               </div>
                             </div>

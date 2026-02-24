@@ -70,30 +70,6 @@ async function writeJson(file: string, data: any) {
   await fs.writeFile(file, JSON.stringify(data, null, 2), 'utf8')
 }
 
-/**
- * Fastify-multipart иногда отдаёт fields по-разному:
- * - fields.amount.value
- * - fields.amount = { value, ... }
- * - fields.amount = [ { value }, ... ]
- * - fields.amount = "123"
- */
-function getMultipartField(mp: any, name: string): string {
-  const f = mp?.fields?.[name]
-  if (f == null) return ''
-
-  const x = Array.isArray(f) ? f[0] : f
-
-  if (typeof x === 'string' || typeof x === 'number' || typeof x === 'boolean') {
-    return String(x)
-  }
-
-  if (x && typeof x === 'object') {
-    if ('value' in x) return String((x as any).value ?? '')
-  }
-
-  return ''
-}
-
 async function sendTelegramDocument(params: {
   botToken: string
   chatId: string | number
@@ -157,6 +133,7 @@ function pickObj(x: any, keys: string[]) {
 
 /**
  * ✅ Private template call (auth ONLY via header "session-id")
+ * SHM отвечает 401 если пытаться авторизоваться через query.
  */
 async function shmPrivateTemplateGet(sessionId: string, name: string, params?: Record<string, any>) {
   const cleanName = String(name || '').trim()
@@ -236,7 +213,6 @@ export async function paymentsRoutes(app: FastifyInstance) {
         updated_at: toStr((item as any)?.updated_at || j?.updated_at || j?.ts || ''),
       }
 
-      // Минимум: получатель и/или карта
       const hasAny = Boolean(requisites.holder || requisites.card)
       if (!hasAny) return reply.send({ ok: false, error: 'requisites_not_configured', raw: j })
 
@@ -276,7 +252,7 @@ export async function paymentsRoutes(app: FastifyInstance) {
     return reply.send({ ok: true, items: list })
   })
 
-  // POST /api/payments/receipt (multipart/form-data)
+  // POST /api/payments/receipt  (multipart/form-data)
   app.post('/payments/receipt', async (req, reply) => {
     const s = requireSession(req, reply)
     if (!s) return
@@ -284,20 +260,38 @@ export async function paymentsRoutes(app: FastifyInstance) {
     const userId = requireUserId(s, reply)
     if (!userId) return
 
-    const mp: any = await (req as any).file()
-    if (!mp) return reply.code(400).send({ ok: false, error: 'file_required' })
+    // ✅ Robust multipart parse via parts()
+    let amountRaw = ''
+    let filePart: any = null
 
-    // ✅ FIX: robust amount read
-    const amountRaw =
-      getMultipartField(mp, 'amount').trim() ||
-      String((req as any)?.body?.amount ?? '').trim()
+    const parts = (req as any).parts?.()
+    if (!parts || typeof parts[Symbol.asyncIterator] !== 'function') {
+      // fallback: old codepath
+      const mp: any = await (req as any).file()
+      if (!mp) return reply.code(400).send({ ok: false, error: 'file_required' })
+
+      amountRaw = String(mp?.fields?.amount?.value ?? '').trim()
+      filePart = mp
+    } else {
+      for await (const part of parts) {
+        if (part?.type === 'file' && !filePart) {
+          filePart = part
+          continue
+        }
+        if (part?.type === 'field' && String(part?.fieldname) === 'amount') {
+          amountRaw = String(part?.value ?? '').trim()
+        }
+      }
+    }
 
     const amount = Math.round(Number(String(amountRaw).replace(',', '.')))
     if (!Number.isFinite(amount) || amount < 1) {
       return reply.code(400).send({ ok: false, error: 'bad_amount' })
     }
 
-    const mime = String(mp.mimetype || 'application/octet-stream')
+    if (!filePart) return reply.code(400).send({ ok: false, error: 'file_required' })
+
+    const mime = String(filePart.mimetype || 'application/octet-stream')
     const ext = safeExtFromMime(mime)
     const id = crypto.randomBytes(12).toString('hex')
 
@@ -307,10 +301,12 @@ export async function paymentsRoutes(app: FastifyInstance) {
     const filename = `receipt_${id}.${ext}`
     const filePath = path.join(userDir, filename)
 
+    // filePart can be from req.parts() or from req.file()
     await new Promise<void>((resolve, reject) => {
       const ws = fssync.createWriteStream(filePath)
-      mp.file.pipe(ws)
-      mp.file.on('error', reject)
+      const stream = filePart.file ?? filePart
+      stream.pipe(ws)
+      stream.on('error', reject)
       ws.on('error', reject)
       ws.on('finish', () => resolve())
     })
@@ -332,9 +328,7 @@ export async function paymentsRoutes(app: FastifyInstance) {
     try {
       const me = await shmGetMe(s.shmSessionId)
       if (me.ok) shmUser = me.json?.data?.[0] ?? null
-    } catch {
-      // ignore
-    }
+    } catch {}
 
     const fullName = String(shmUser?.full_name || 'Client')
     const login = String(shmUser?.login || '')
@@ -346,7 +340,6 @@ export async function paymentsRoutes(app: FastifyInstance) {
     const adminThreadIdRaw = String(process.env.RECEIPTS_THREAD_ID || '').trim()
     const adminThreadId = adminThreadIdRaw ? Number(adminThreadIdRaw) : undefined
 
-    // ---- SEND ADMIN ----
     try {
       if (botToken && adminChatId) {
         const captionAdmin =
@@ -382,7 +375,6 @@ export async function paymentsRoutes(app: FastifyInstance) {
       record.error = e?.message || 'telegram_admin_exception'
     }
 
-    // ---- SEND USER (optional) ----
     try {
       if (botToken && tgId) {
         const captionUser =
