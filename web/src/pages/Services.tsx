@@ -1,7 +1,7 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { apiFetch } from '../shared/api/client'
 
-// ✅ NEW: toast + mood
+// ✅ toast + typed mood (only allowed keys)
 import { toast } from '../shared/ui/toast'
 import { getMood } from '../shared/payments-mood'
 
@@ -102,10 +102,7 @@ function statusLabel(s: UiStatus) {
   }
 }
 
-/**
- * Лёгкая подкраска карточек по статусу — как на Home.
- * Важно: очень мягко, без “кислотных” цветов.
- */
+/** мягкий оттенок по статусу */
 function statusTint(s: UiStatus) {
   switch (s) {
     case 'active':
@@ -506,7 +503,15 @@ function saveGroupsState(v: Record<ServiceKind, boolean>) {
 
 function normStatus(s: any): UiStatus {
   const v = String(s || '').toLowerCase()
-  if (v === 'active' || v === 'blocked' || v === 'pending' || v === 'not_paid' || v === 'removed' || v === 'error' || v === 'init') {
+  if (
+    v === 'active' ||
+    v === 'blocked' ||
+    v === 'pending' ||
+    v === 'not_paid' ||
+    v === 'removed' ||
+    v === 'error' ||
+    v === 'init'
+  ) {
     return v as UiStatus
   }
   return 'error'
@@ -529,7 +534,6 @@ export function Services() {
   const [stopBusy, setStopBusy] = useState(false)
   const [stopError, setStopError] = useState<string | null>(null)
 
-  // ✅ по умолчанию всё свернуто + читаем из localStorage
   const [openGroups, setOpenGroups] = useState<Record<ServiceKind, boolean>>(() => {
     return (
       readGroupsState() ?? {
@@ -545,15 +549,19 @@ export function Services() {
     saveGroupsState(openGroups)
   }, [openGroups])
 
-  // ✅ toasts: watcher of status transitions (no spam, no first render)
+  // ✅ track status transitions (no first-render spam)
   const prevStatusesRef = useRef<Map<number, UiStatus> | null>(null)
   const statusInitRef = useRef(false)
 
-  async function load(opts?: { silent?: boolean }) {
+  async function load(opts?: { silent?: boolean; toastOnSuccess?: boolean }) {
     const silent = !!opts?.silent
+    const toastOnSuccess = !!opts?.toastOnSuccess
 
-    setLoading(true)
+    if (!silent) {
+      setLoading(true)
+    }
     setError(null)
+
     try {
       const r = (await apiFetch('/services', { method: 'GET' })) as ApiServicesResponse
       const newItems = r.items || []
@@ -561,9 +569,9 @@ export function Services() {
       setItems(newItems)
       setSummary(r.summary || null)
 
-      if (!silent) {
-        toast.info('Услуги обновлены', {
-          description: getMood('service_status_updated') ?? 'Проверили — всё актуально.',
+      if (toastOnSuccess) {
+        toast.info('Обновлено', {
+          description: getMood('payment_checking', { seed: String(newItems.length) }) ?? 'Статусы услуг обновлены.',
         })
       }
     } catch (e: any) {
@@ -571,7 +579,7 @@ export function Services() {
       setError(msg)
       if (!silent) toast.error('Не удалось обновить', { description: msg })
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
@@ -589,7 +597,6 @@ export function Services() {
     setStopError(null)
 
     const usi = stopTarget.userServiceId
-    const seed = String(usi)
 
     try {
       await stopService(usi)
@@ -597,7 +604,7 @@ export function Services() {
       setExpandedId(usi)
 
       toast.success('Заблокировано', {
-        description: getMood('service_removed', { seed }) ?? 'Готово.',
+        description: getMood('payment_success', { seed: String(usi) }) ?? 'Услуга заблокирована.',
       })
 
       await load({ silent: true })
@@ -616,7 +623,6 @@ export function Services() {
     setDeleteError(null)
 
     const usi = deleteTarget.userServiceId
-    const seed = String(usi)
 
     try {
       await deleteService(usi)
@@ -625,28 +631,26 @@ export function Services() {
       setConnectOpenId((cur) => (cur === usi ? null : cur))
 
       toast.success('Услуга удалена', {
-        description: getMood('service_removed', { seed }) ?? 'Готово. Услуга отключена.',
+        description: getMood('payment_success', { seed: String(usi) }) ?? 'Готово. Услуга удалена из списка.',
       })
 
       await load({ silent: true })
     } catch (e: any) {
       const msg = e?.message || 'Не удалось удалить услугу. Попробуйте ещё раз или обратитесь в поддержку.'
       setDeleteError(msg)
-      toast.error('Не удалось удалить', {
-        description: getMood('service_remove_failed', { seed }) ?? msg,
-      })
+      toast.error('Не удалось удалить', { description: msg })
     } finally {
       setDeleteBusy(false)
     }
   }
 
   useEffect(() => {
-    // первичная загрузка — тихая (без тоста)
-    load({ silent: true })
+    // первичная загрузка — без тостов
+    load({ silent: false, toastOnSuccess: false })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // статусные тосты на переходы
+  // status transition toasts
   useEffect(() => {
     const cur = new Map<number, UiStatus>()
     for (const it of items || []) cur.set(it.userServiceId, normStatus(it.status))
@@ -666,24 +670,23 @@ export function Services() {
 
       if (!before || !after || before === after) continue
 
-      const seed = String(id)
       const title = it.title ? it.title : `Услуга #${id}`
+      const seed = String(id)
 
       if (after === 'blocked') {
-        toast.error(title, {
-          description: getMood('service_blocked', { seed }) ?? 'Услуга заблокирована. Нужны действия.',
-        })
+        toast.error(title, { description: 'Услуга заблокирована. Нужны действия.' })
       } else if (after === 'not_paid') {
-        toast.info(title, {
-          description: 'Требуется оплата.',
-        })
-      } else if (after === 'active' && (before === 'pending' || before === 'not_paid' || before === 'blocked' || before === 'init')) {
+        toast.info(title, { description: 'Требуется оплата.' })
+      } else if (
+        after === 'active' &&
+        (before === 'pending' || before === 'not_paid' || before === 'blocked' || before === 'init')
+      ) {
         toast.success(title, {
-          description: getMood('service_activated', { seed }) ?? 'Услуга активирована.',
+          description: getMood('payment_success', { seed }) ?? 'Услуга активирована.',
         })
       } else if (after === 'removed') {
         toast.success(title, {
-          description: getMood('service_removed', { seed }) ?? 'Услуга удалена.',
+          description: getMood('payment_success', { seed }) ?? 'Услуга завершена.',
         })
       }
     }
@@ -735,7 +738,7 @@ export function Services() {
               Ошибка загрузки данных: <span>{error}</span>
             </p>
             <div className="actions actions--1">
-              <button className="btn btn--primary" onClick={() => load()}>
+              <button className="btn btn--primary" onClick={() => load({ silent: false, toastOnSuccess: false })}>
                 Повторить
               </button>
             </div>
@@ -798,7 +801,7 @@ export function Services() {
                       setExpandedId(x.userServiceId)
                       setConnectOpenId((cur) => (cur === x.userServiceId ? null : x.userServiceId))
                     }}
-                    onRefresh={() => load()}
+                    onRefresh={() => load({ silent: false, toastOnSuccess: false })}
                     onAskDelete={(svc) => {
                       setDeleteError(null)
                       setDeleteTarget(svc)
@@ -845,7 +848,11 @@ export function Services() {
               Заказать
             </button>
 
-            <button className="btn services-head__cta" onClick={() => load()}>
+            <button
+              className="btn services-head__cta"
+              onClick={() => load({ silent: false, toastOnSuccess: true })}
+              title="Обновить статусы"
+            >
               Обновить
             </button>
           </div>

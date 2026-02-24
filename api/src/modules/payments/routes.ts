@@ -32,6 +32,18 @@ function nowIso() {
   return new Date().toISOString()
 }
 
+function fmtRu(iso: string) {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleString('ru-RU', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
 function safeExtFromMime(mime: string) {
   const m = (mime || '').toLowerCase()
   if (m.includes('pdf')) return 'pdf'
@@ -56,6 +68,30 @@ async function readJson<T>(file: string, fallback: T): Promise<T> {
 async function writeJson(file: string, data: any) {
   await ensureDir(path.dirname(file))
   await fs.writeFile(file, JSON.stringify(data, null, 2), 'utf8')
+}
+
+/**
+ * Fastify-multipart иногда отдаёт fields по-разному:
+ * - fields.amount.value
+ * - fields.amount = { value, ... }
+ * - fields.amount = [ { value }, ... ]
+ * - fields.amount = "123"
+ */
+function getMultipartField(mp: any, name: string): string {
+  const f = mp?.fields?.[name]
+  if (f == null) return ''
+
+  const x = Array.isArray(f) ? f[0] : f
+
+  if (typeof x === 'string' || typeof x === 'number' || typeof x === 'boolean') {
+    return String(x)
+  }
+
+  if (x && typeof x === 'object') {
+    if ('value' in x) return String((x as any).value ?? '')
+  }
+
+  return ''
 }
 
 async function sendTelegramDocument(params: {
@@ -121,7 +157,6 @@ function pickObj(x: any, keys: string[]) {
 
 /**
  * ✅ Private template call (auth ONLY via header "session-id")
- * SHM отвечает 401 если пытаться авторизоваться через query.
  */
 async function shmPrivateTemplateGet(sessionId: string, name: string, params?: Record<string, any>) {
   const cleanName = String(name || '').trim()
@@ -134,12 +169,6 @@ async function shmPrivateTemplateGet(sessionId: string, name: string, params?: R
       ...(params ?? {}),
     },
   })
-}
-
-function fmtRu(tsIso: string) {
-  const d = new Date(tsIso)
-  if (Number.isNaN(d.getTime())) return tsIso
-  return d.toLocaleString('ru-RU', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
 export async function paymentsRoutes(app: FastifyInstance) {
@@ -207,6 +236,7 @@ export async function paymentsRoutes(app: FastifyInstance) {
         updated_at: toStr((item as any)?.updated_at || j?.updated_at || j?.ts || ''),
       }
 
+      // Минимум: получатель и/или карта
       const hasAny = Boolean(requisites.holder || requisites.card)
       if (!hasAny) return reply.send({ ok: false, error: 'requisites_not_configured', raw: j })
 
@@ -246,7 +276,7 @@ export async function paymentsRoutes(app: FastifyInstance) {
     return reply.send({ ok: true, items: list })
   })
 
-  // POST /api/payments/receipt  (multipart/form-data)
+  // POST /api/payments/receipt (multipart/form-data)
   app.post('/payments/receipt', async (req, reply) => {
     const s = requireSession(req, reply)
     if (!s) return
@@ -257,7 +287,11 @@ export async function paymentsRoutes(app: FastifyInstance) {
     const mp: any = await (req as any).file()
     if (!mp) return reply.code(400).send({ ok: false, error: 'file_required' })
 
-    const amountRaw = String(mp?.fields?.amount?.value ?? '').trim()
+    // ✅ FIX: robust amount read
+    const amountRaw =
+      getMultipartField(mp, 'amount').trim() ||
+      String((req as any)?.body?.amount ?? '').trim()
+
     const amount = Math.round(Number(String(amountRaw).replace(',', '.')))
     if (!Number.isFinite(amount) || amount < 1) {
       return reply.code(400).send({ ok: false, error: 'bad_amount' })
@@ -298,7 +332,9 @@ export async function paymentsRoutes(app: FastifyInstance) {
     try {
       const me = await shmGetMe(s.shmSessionId)
       if (me.ok) shmUser = me.json?.data?.[0] ?? null
-    } catch {}
+    } catch {
+      // ignore
+    }
 
     const fullName = String(shmUser?.full_name || 'Client')
     const login = String(shmUser?.login || '')
@@ -310,9 +346,9 @@ export async function paymentsRoutes(app: FastifyInstance) {
     const adminThreadIdRaw = String(process.env.RECEIPTS_THREAD_ID || '').trim()
     const adminThreadId = adminThreadIdRaw ? Number(adminThreadIdRaw) : undefined
 
+    // ---- SEND ADMIN ----
     try {
       if (botToken && adminChatId) {
-        // ✅ UPDATED: nicer caption + source tag, no ISO
         const captionAdmin =
           `🧾 Перевод по реквизитам\n` +
           `📱 Отправлено из Shpun App\n\n` +
@@ -346,6 +382,7 @@ export async function paymentsRoutes(app: FastifyInstance) {
       record.error = e?.message || 'telegram_admin_exception'
     }
 
+    // ---- SEND USER (optional) ----
     try {
       if (botToken && tgId) {
         const captionUser =
