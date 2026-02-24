@@ -6,10 +6,12 @@ import {
   shmDeleteUserService,
   shmGetServiceOrder,
   shmGetUserServices,
+  shmShpunAppConnectGet,
   shmShpunAppRouterBind,
   shmShpunAppRouterList,
   shmShpunAppRouterUnbind,
   shmStopUserService,
+  shmStorageManageGetText,
 } from '../../shared/shm/shmClient.js'
 
 function mapStatus(raw?: string) {
@@ -83,6 +85,16 @@ function isDebug(req: any) {
   return v === '1' || v.toLowerCase() === 'true' || v.toLowerCase() === 'yes'
 }
 
+function normalizeProfileText(text: string) {
+  if (!text) return ''
+  let t = text
+  // remove BOM
+  if (t.charCodeAt(0) === 0xfeff) t = t.slice(1)
+  // normalize newlines
+  t = t.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim()
+  return t
+}
+
 export async function servicesRoutes(app: FastifyInstance) {
   app.get('/services', async (req, reply) => {
     const shmSessionId = ensureAuthed(req, reply)
@@ -148,7 +160,7 @@ export async function servicesRoutes(app: FastifyInstance) {
   })
 
   /**
-   * ✅ STOP / BLOCK service (для удаления активных услуг — сначала stop, потом delete)
+   * ✅ STOP / BLOCK service
    * POST /api/services/:usi/stop
    */
   app.post('/services/:usi/stop', async (req, reply) => {
@@ -176,7 +188,6 @@ export async function servicesRoutes(app: FastifyInstance) {
     const statusRaw = String(svc.item?.status ?? '')
     const statusUi = mapStatus(statusRaw)
 
-    // То, что "в процессе" — не трогаем
     if (statusUi === 'pending' || statusUi === 'init') {
       return reply.code(409).send({
         ok: false,
@@ -185,17 +196,14 @@ export async function servicesRoutes(app: FastifyInstance) {
       })
     }
 
-    // removed уже нечего останавливать
     if (statusUi === 'removed') {
       return reply.send({ ok: true, stopped: false, already: 'removed', usi })
     }
 
-    // Если уже blocked/not_paid/error — считаем, что stop “и так”
     if (statusUi === 'blocked' || statusUi === 'not_paid' || statusUi === 'error') {
       return reply.send({ ok: true, stopped: false, already: statusUi, usi })
     }
 
-    // ACTIVE -> stop
     const r = await shmStopUserService(shmSessionId, usi)
 
     if (!r.ok) {
@@ -253,6 +261,131 @@ export async function servicesRoutes(app: FastifyInstance) {
   })
 
   // ---------------------
+  // CONNECT (Marzban / AmneziaWG)
+  // ---------------------
+
+  /**
+   * Универсальная ручка: вернуть данные для подключения услуги.
+   * GET /api/services/:usi/connect/:kind
+   * kind: marzban | amneziawg
+   */
+  app.get('/services/:usi/connect/:kind', async (req, reply) => {
+    const shmSessionId = ensureAuthed(req, reply)
+    if (!shmSessionId) return
+
+    const debug = isDebug(req)
+
+    const usi = Number((req.params as any)?.usi ?? 0)
+    const kind = String((req.params as any)?.kind ?? '').trim().toLowerCase()
+
+    if (!usi || !Number.isFinite(usi)) {
+      return reply.code(400).send({ ok: false, error: 'bad_request', details: 'usi_required' })
+    }
+    if (!kind) return reply.code(400).send({ ok: false, error: 'bad_request', details: 'kind_required' })
+
+    // валидируем, что услуга существует
+    const svc = await loadUserServiceByUsi(shmSessionId, usi)
+    if (!svc.ok) {
+      return reply.code(502).send({ ok: false, error: 'shm_error', status: svc.status, details: svc.json ?? svc.text })
+    }
+    if (!svc.item) return reply.code(404).send({ ok: false, error: 'service_not_found' })
+
+    const statusRaw = String(svc.item?.status ?? '')
+    const category = String(svc.item?.service?.category ?? svc.item?.category ?? '')
+
+    if (String(statusRaw).toUpperCase() !== 'ACTIVE') {
+      return reply.code(409).send({ ok: false, error: 'service_not_ready', status: statusRaw })
+    }
+
+    // kind=marzban — через TT2 шаблон (нужно добавить action connect.get в биллинге)
+    if (kind === 'marzban') {
+      const r = await shmShpunAppConnectGet(shmSessionId, usi, 'marzban')
+      const j: any = r.json ?? {}
+
+      if (!r.ok) {
+        return reply.code(502).send({
+          ok: false,
+          error: 'shm_template_failed',
+          status: r.status,
+          details: debug ? { text: r.text, json: r.json } : undefined,
+        })
+      }
+      if ((j?.ok ?? 0) !== 1) {
+        return reply.code(400).send({ ok: false, error: j?.error || 'connect_get_failed', details: debug ? j : undefined })
+      }
+
+      const subscriptionUrl = String(j?.subscription_url ?? '').trim()
+      if (!subscriptionUrl) {
+        return reply.code(502).send({
+          ok: false,
+          error: 'connect_payload_empty',
+          details: debug ? { kind, category, template_response: j } : undefined,
+        })
+      }
+
+      if (debug) {
+        return reply.send({
+          ok: true,
+          kind,
+          usi,
+          category,
+          subscriptionUrl,
+          debug: { template_response: j },
+        })
+      }
+
+      return reply.send({ ok: true, kind, subscriptionUrl })
+    }
+
+    // kind=amneziawg — читаем storage "vpn{usi}" как в miniapp
+    if (kind === 'amneziawg') {
+      const storageName = `vpn${usi}`
+      const r = await shmStorageManageGetText(shmSessionId, storageName)
+
+      if (!r.ok) {
+        if (r.status === 401 || r.status === 403) return reply.code(401).send({ ok: false, error: 'not_authenticated' })
+        return reply.code(502).send({
+          ok: false,
+          error: 'shm_storage_failed',
+          status: r.status,
+          details: debug ? { text: r.text, json: r.json } : undefined,
+        })
+      }
+
+      const configText = normalizeProfileText(String(r.text ?? ''))
+      if (!configText) {
+        return reply.code(502).send({
+          ok: false,
+          error: 'config_empty',
+          details: debug ? { storageName } : undefined,
+        })
+      }
+
+      // “скачивание” сделаем на фронте через Blob (не гоняем session_id в URL)
+      if (debug) {
+        return reply.send({
+          ok: true,
+          kind,
+          usi,
+          category,
+          storageName,
+          configName: `${storageName}.conf`,
+          configText,
+        })
+      }
+
+      return reply.send({
+        ok: true,
+        kind,
+        configName: `${storageName}.conf`,
+        configText,
+      })
+    }
+
+    return reply.code(400).send({ ok: false, error: 'unknown_kind', details: kind })
+  })
+
+  // ---------------------
   // ROUTERS
   // ---------------------
 
@@ -267,7 +400,6 @@ export async function servicesRoutes(app: FastifyInstance) {
       return reply.code(400).send({ ok: false, error: 'bad_request', details: 'usi_required' })
     }
 
-    // (валидация услуги оставляем как была)
     const svc = await loadUserServiceByUsi(shmSessionId, usi)
     if (!svc.ok) {
       return reply.code(502).send({ ok: false, error: 'shm_error', status: svc.status, details: svc.json ?? svc.text })
