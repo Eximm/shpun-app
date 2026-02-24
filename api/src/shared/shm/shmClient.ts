@@ -1,6 +1,4 @@
-﻿// api/src/shared/shm/shmClient.ts
-
-/**
+﻿/**
  * Важно:
  * SHM_BASE должен указывать на /shm/ (с любым количеством слешей на конце — мы нормализуем)
  * Пример:
@@ -398,6 +396,19 @@ export async function shmShpunAppReferralsList(shmSessionId: string, opts?: { li
     limit: opts?.limit ?? 7,
     offset: opts?.offset ?? 0,
   })
+}
+
+/**
+ * ✅ NEW: Payments requisites via shpun_app template (private, authed)
+ *
+ * В TT2 шапке shpun_app нужно реализовать action: "payments.requisites"
+ * который вернёт JSON с ok=1 и данными реквизитов.
+ *
+ * Пример ожидаемого ответа:
+ * { ok:1, requisites:{ bank, holder, card, comment, title, updated_at } }
+ */
+export async function shmShpunAppPaymentsRequisites(shmSessionId: string) {
+  return await shmShpunAppTemplate<any>(shmSessionId, 'payments.requisites')
 }
 
 // =====================

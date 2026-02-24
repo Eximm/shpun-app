@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { apiFetch } from '../shared/api/client'
 
 type PaySystem = {
@@ -10,6 +11,19 @@ type PaySystem = {
 
 type PaysystemsResp = { ok: true; items: PaySystem[]; raw?: any }
 type ForecastResp = { ok: true; raw: any }
+
+type RequisitesResp = {
+  ok: boolean
+  requisites?: {
+    title?: string
+    holder?: string
+    bank?: string
+    card?: string
+    comment?: string
+    updated_at?: string
+  }
+  raw?: any
+}
 
 function fmtMoney(n: number, cur = 'RUB') {
   const v = Number(n || 0)
@@ -31,8 +45,22 @@ function isStars(ps: PaySystem) {
 }
 
 function safeOpen(url: string) {
-  // PWA / browser
   window.open(url, '_blank', 'noopener,noreferrer')
+}
+
+function copyText(text: string) {
+  if (!text) return
+  navigator.clipboard?.writeText(text).catch(() => {})
+}
+
+function digitsOnly(s: string) {
+  return String(s || '').replace(/[^\d]/g, '')
+}
+
+function formatCardPretty(card?: string) {
+  const d = digitsOnly(card || '')
+  if (!d) return ''
+  return d.replace(/(.{4})/g, '$1 ').trim()
 }
 
 export function Payments() {
@@ -40,16 +68,20 @@ export function Payments() {
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
 
-  const [amount, setAmount] = useState<string>('') // пользователь вводит
+  const [amount, setAmount] = useState<string>('')
   const [paySystems, setPaySystems] = useState<PaySystem[]>([])
   const [forecast, setForecast] = useState<any>(null)
 
-  // overlay как в miniapp
+  // card requisites
+  const [reqLoading, setReqLoading] = useState(false)
+  const [reqError, setReqError] = useState<string | null>(null)
+  const [requisites, setRequisites] = useState<RequisitesResp['requisites'] | null>(null)
+
+  // overlay
   const [overlay, setOverlay] = useState<{
     open: boolean
     title: string
     text: string
-    spinner?: boolean
   } | null>(null)
 
   // receipt upload
@@ -65,11 +97,10 @@ export function Payments() {
     setLoading(true)
     setErr(null)
     try {
-      // paysystems
       const ps = (await apiFetch('/payments/paysystems', { method: 'GET' })) as PaysystemsResp
       const rawItems = ps?.items || []
 
-      // фильтр "старых" Stars из miniapp можно оставить прямо тут
+      // фильтр старых Stars из miniapp
       const filtered = rawItems.filter((x) => {
         const n = String(x?.name || '')
         if (n === 'Telegram Stars Rescue') return false
@@ -79,7 +110,7 @@ export function Payments() {
 
       setPaySystems(filtered)
 
-      // forecast (не обязательно, но вкусно)
+      // forecast (dev only)
       try {
         const fc = (await apiFetch('/payments/forecast', { method: 'GET' })) as ForecastResp
         setForecast(fc?.raw ?? null)
@@ -87,7 +118,6 @@ export function Payments() {
         setForecast(null)
       }
 
-      // если сумма не задана — попробуем подставить дефолт
       if (!amount) {
         const fallback = filtered.find((x) => Number(x?.amount || 0) > 0)?.amount
         if (fallback) setAmount(String(Math.round(Number(fallback))))
@@ -99,18 +129,38 @@ export function Payments() {
     }
   }
 
+  async function loadRequisites() {
+    setReqLoading(true)
+    setReqError(null)
+    try {
+      const r = (await apiFetch('/payments/requisites', { method: 'GET' })) as RequisitesResp
+      if (!r?.ok) throw new Error('Не удалось загрузить реквизиты')
+      setRequisites(r.requisites ?? null)
+    } catch (e: any) {
+      setRequisites(null)
+      setReqError(e?.message || 'Не удалось загрузить реквизиты')
+    } finally {
+      setReqLoading(false)
+    }
+  }
+
   useEffect(() => {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (page === 'card') loadRequisites()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page])
 
   function openOverlayForExternalPay() {
     setOverlay({
       open: true,
       title: 'Окно оплаты открыто ✅',
       text:
-        'Если оплата открылась в новой вкладке — завершите её там и вернитесь сюда.<br>' +
-        'После оплаты можно просто закрыть вкладку и нажать “Обновить”.',
+        'Если оплата открылась в новой вкладке — завершите её там и вернитесь сюда.\n' +
+        'После оплаты можно закрыть вкладку и нажать “Обновить статус”.',
     })
   }
 
@@ -120,10 +170,7 @@ export function Payments() {
       setUploadMsg('Введите корректную сумму.')
       return
     }
-
     const fullUrl = `${ps.shm_url}${amountNumber}`
-
-    // В PWA stars — это просто внешний линк
     safeOpen(fullUrl)
     openOverlayForExternalPay()
   }
@@ -144,7 +191,6 @@ export function Payments() {
       setUploadMsg('Сначала введите сумму (в рублях).')
       return
     }
-
     if (file.size > 2 * 1024 * 1024) {
       setUploadMsg('Файл слишком большой. Максимум 2MB.')
       return
@@ -158,7 +204,6 @@ export function Payments() {
       fd.append('file', file)
       fd.append('amount', String(amountNumber))
 
-      // apiFetch у тебя JSON-ориентированный; для FormData проще напрямую:
       const res = await fetch('/api/payments/receipt', {
         method: 'POST',
         body: fd,
@@ -191,8 +236,10 @@ export function Payments() {
       <div className="section">
         <div className="card">
           <div className="card__body">
-            <h1 className="h1">Оплата</h1>
-            <p className="p">Загрузка…</p>
+            <div className="h1">Оплата</div>
+            <div className="p" style={{ marginTop: 6 }}>
+              Загрузка…
+            </div>
           </div>
         </div>
       </div>
@@ -204,14 +251,17 @@ export function Payments() {
       <div className="section">
         <div className="card">
           <div className="card__body">
-            <h1 className="h1">Оплата</h1>
-            <p className="p">
-              Ошибка: <span style={{ color: 'rgba(255,255,255,0.82)' }}>{err}</span>
-            </p>
-            <div className="row" style={{ marginTop: 14 }}>
+            <div className="h1">Оплата</div>
+            <div className="p" style={{ marginTop: 6 }}>
+              Ошибка: <span style={{ opacity: 0.9 }}>{err}</span>
+            </div>
+            <div className="actions actions--2" style={{ marginTop: 12 }}>
               <button className="btn btn--primary" onClick={load}>
                 Повторить
               </button>
+              <Link className="btn" to="/">
+                На главную
+              </Link>
             </div>
           </div>
         </div>
@@ -223,30 +273,15 @@ export function Payments() {
     <div className="section">
       {/* Overlay */}
       {overlay?.open ? (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.62)',
-            backdropFilter: 'blur(10px)',
-            zIndex: 50,
-            padding: 16,
-          }}
-          onClick={() => setOverlay(null)}
-        >
-          <div
-            className="card"
-            style={{
-              maxWidth: 620,
-              margin: '10vh auto 0',
-              boxShadow: '0 30px 80px rgba(0,0,0,0.65)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div className="overlay" onClick={() => setOverlay(null)}>
+          <div className="overlay__card card" onClick={(e) => e.stopPropagation()}>
             <div className="card__body">
-              <div style={{ fontSize: 18, fontWeight: 1000 }}>{overlay.title}</div>
-              <div className="p" style={{ marginTop: 8 }} dangerouslySetInnerHTML={{ __html: overlay.text }} />
-              <div className="row" style={{ marginTop: 12, flexWrap: 'wrap' }}>
+              <div style={{ fontSize: 18, fontWeight: 900 }}>{overlay.title}</div>
+              <div className="p" style={{ marginTop: 8, whiteSpace: 'pre-line' }}>
+                {overlay.text}
+              </div>
+
+              <div className="actions actions--2" style={{ marginTop: 12 }}>
                 <button
                   className="btn btn--primary"
                   onClick={() => {
@@ -268,22 +303,18 @@ export function Payments() {
       {/* Header */}
       <div className="card">
         <div className="card__body">
-          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div className="home-block-head">
             <div>
-              <h1 className="h1">Оплата</h1>
-              <p className="p">
-                Введите сумму и выберите способ. Квитанции принимаем через приложение — это не зависит от доступности
-                Telegram у клиента.
-              </p>
+              <div className="h1">Оплата</div>
+              <div className="p" style={{ marginTop: 6 }}>
+                Введите сумму и выберите способ — пополнение баланса происходит автоматически после успешной оплаты.
+              </div>
             </div>
-            <button className="btn" onClick={load}>
-              ⟳ Обновить
-            </button>
           </div>
 
-          {forecast ? (
-            <div className="pre" style={{ marginTop: 14 }}>
-              <b>Прогноз (сырой):</b>
+          {(import.meta as any)?.env?.DEV && forecast ? (
+            <div className="pre" style={{ marginTop: 12 }}>
+              <b>Forecast (dev only):</b>
               <div style={{ height: 8 }} />
               {JSON.stringify(forecast, null, 2)}
             </div>
@@ -298,7 +329,9 @@ export function Payments() {
             <div className="h1" style={{ fontSize: 18 }}>
               Сумма
             </div>
-            <p className="p">Сумма обычно подставляется автоматически. Если нет — просто впишите.</p>
+            <div className="p" style={{ marginTop: 6 }}>
+              Если сумма не подставилась автоматически — впишите вручную.
+            </div>
 
             <input
               className="input"
@@ -324,14 +357,11 @@ export function Payments() {
               ))}
             </div>
 
-            <div className="p" style={{ marginTop: 10, fontSize: 12, opacity: 0.85 }}>
-              Текущая сумма:{' '}
-              <span style={{ color: 'rgba(255,255,255,0.88)', fontWeight: 900 }}>
-                {amountNumber ? fmtMoney(amountNumber, 'RUB') : '—'}
-              </span>
-            </div>
-
-            {uploadMsg ? <div className="pre" style={{ marginTop: 12 }}>{uploadMsg}</div> : null}
+            {uploadMsg ? (
+              <div className="pre" style={{ marginTop: 12 }}>
+                {uploadMsg}
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -342,13 +372,16 @@ export function Payments() {
           <div className="card">
             <div className="card__body">
               <div className="h1" style={{ fontSize: 18 }}>
-                Оплата
+                Способы оплаты
               </div>
-              <p className="p">Выберите способ оплаты. Внешние оплаты откроются в новой вкладке.</p>
+              <div className="p" style={{ marginTop: 6 }}>
+                Внешние оплаты откроются в новой вкладке.
+              </div>
 
-              <div className="row" style={{ marginTop: 12 }}>
+              <div className="actions actions--1" style={{ marginTop: 12 }}>
                 <button
                   className="btn"
+                  style={{ width: '100%' }}
                   onClick={() => {
                     if (!amountNumber) {
                       setUploadMsg('Введите сумму.')
@@ -357,7 +390,7 @@ export function Payments() {
                     setPage('card')
                   }}
                 >
-                  Перевод на карту РФ 💳
+                  Перевод по реквизитам 💳
                 </button>
               </div>
 
@@ -371,11 +404,7 @@ export function Payments() {
                     <div className="kv__item" key={ps.shm_url || idx}>
                       <div className="row" style={{ justifyContent: 'space-between' }}>
                         <div className="kv__k">
-                          {ps.recurring
-                            ? 'Автоплатёж'
-                            : isStars(ps)
-                            ? 'Stars / внешняя'
-                            : 'Внешняя оплата'}
+                          {ps.recurring ? 'Автоплатёж' : isStars(ps) ? 'Stars / внешняя' : 'Внешняя оплата'}
                         </div>
                         <span className="badge">{ps.recurring ? 'recurring' : 'one-time'}</span>
                       </div>
@@ -384,107 +413,190 @@ export function Payments() {
                         {ps.name || 'Payment method'}
                       </div>
 
-                      <div className="row" style={{ marginTop: 10, flexWrap: 'wrap' }}>
-                        <button className="btn btn--primary" onClick={() => handlePay(ps)}>
+                      <div className="actions actions--1" style={{ marginTop: 10 }}>
+                        <button className="btn btn--primary" style={{ width: '100%' }} onClick={() => handlePay(ps)}>
                           Оплатить {amountNumber ? `· ${fmtMoney(amountNumber, 'RUB')}` : ''}
                         </button>
+                      </div>
 
-                        {ps.recurring ? (
+                      {ps.recurring ? (
+                        <div className="actions actions--1" style={{ marginTop: 10 }}>
                           <button
                             className="btn btn--danger"
+                            style={{ width: '100%' }}
                             onClick={removeAutopayment}
                             title="Отвязать автоплатёж"
                           >
                             Отвязать
                           </button>
-                        ) : null}
-                      </div>
+                        </div>
+                      ) : null}
                     </div>
                   ))}
                 </div>
               )}
 
               <div className="p" style={{ marginTop: 12, fontSize: 12, opacity: 0.85 }}>
-                Если Telegram у пользователя заблокирован — это не мешает оплате и отправке квитанции: всё идёт через наш
-                сервер.
+                Если Telegram у пользователя заблокирован — это не мешает оплате и отправке квитанции: всё идёт через наш сервер.
               </div>
             </div>
           </div>
         </div>
       ) : (
-        /* Card transfer page */
+        /* Card transfer page — clean */
         <div className="section">
           <div className="card">
             <div className="card__body">
-              <div className="row" style={{ justifyContent: 'space-between' }}>
+              <div className="home-block-head">
                 <div>
-                  <div className="h1" style={{ fontSize: 18 }}>
-                    Перевод на карту
+                  <div className="h1">Перевод по реквизитам</div>
+                  <div className="p" style={{ marginTop: 6 }}>
+                    Сделайте перевод и отправьте квитанцию. Проверка — вручную.
                   </div>
-                  <p className="p">Сделайте перевод и отправьте квитанцию.</p>
                 </div>
-                <button className="btn" onClick={() => setPage('main')}>
-                  ⇦ Назад
-                </button>
               </div>
 
+              {/* Amount */}
+              <div className="kv" style={{ marginTop: 12 }}>
+                <div className="kv__item">
+                  <div className="kv__k">Сумма к переводу</div>
+                  <div className="kv__v" style={{ fontSize: 20, fontWeight: 900 }}>
+                    {amountNumber ? fmtMoney(amountNumber, 'RUB') : '—'}
+                  </div>
+                </div>
+              </div>
+
+              {/* IMPORTANT */}
+              <div
+                className="card"
+                style={{
+                  marginTop: 12,
+                  boxShadow: 'none',
+                  border: '1px solid rgba(255, 100, 100, 0.25)',
+                  background: 'rgba(255, 100, 100, 0.10)',
+                }}
+              >
+                <div className="card__body" style={{ padding: 12 }}>
+                  <div style={{ fontWeight: 900 }}>Важно</div>
+                  <div className="p" style={{ marginTop: 6, opacity: 0.95 }}>
+                    Квитанция обязательна. Без квитанции перевод не будет зачислен — это ручная проверка.
+                  </div>
+                </div>
+              </div>
+
+              {/* Requisites */}
               <div className="card" style={{ marginTop: 12, boxShadow: 'none' }}>
                 <div className="card__body">
-                  <div className="kv">
-                    <div className="kv__item">
-                      <div className="kv__k">Сумма к переводу</div>
-                      <div className="kv__v">{amountNumber ? fmtMoney(amountNumber, 'RUB') : '—'}</div>
-                    </div>
-                    <div className="kv__item">
-                      <div className="kv__k">Квитанция</div>
-                      <div className="kv__v">{uploading ? 'Отправляем…' : 'Готово к загрузке'}</div>
-                    </div>
-                    <div className="kv__item">
-                      <div className="kv__k">Важно</div>
-                      <div className="kv__v">Квитанция обязательна</div>
-                    </div>
+                  <div className="h1" style={{ fontSize: 18 }}>
+                    Реквизиты
                   </div>
 
-                  <div className="pre" style={{ marginTop: 12 }}>
-                    Без квитанции перевод не будет зачислен — это ручная проверка.
-                  </div>
+                  {reqLoading ? (
+                    <div className="p" style={{ marginTop: 6 }}>
+                      Загрузка реквизитов…
+                    </div>
+                  ) : reqError ? (
+                    <div className="pre" style={{ marginTop: 12 }}>
+                      Реквизиты пока недоступны: {String(reqError)}
+                    </div>
+                  ) : !requisites ? (
+                    <div className="pre" style={{ marginTop: 12 }}>
+                      Реквизиты не заполнены.
+                    </div>
+                  ) : (
+                    (() => {
+                      const holder = String(requisites.holder ?? '').trim()
+                      const cardRaw = String(requisites.card ?? '').trim()
+                      const cardPretty = formatCardPretty(cardRaw) || cardRaw
 
-                  <div className="row" style={{ marginTop: 12, alignItems: 'center' }}>
-                    <label
-                      className="btn btn--primary"
-                      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                    >
-                      {uploading ? '⏳ Отправляем…' : '🧾 Отправить квитанцию'}
-                      <input
-                        type="file"
-                        accept=".jpg,.jpeg,.png,.pdf"
-                        style={{ display: 'none' }}
-                        disabled={uploading}
-                        onChange={(e) => {
-                          const f = e.target.files?.[0]
-                          if (!f) return
-                          uploadReceipt(f)
-                          e.currentTarget.value = ''
-                        }}
-                      />
-                    </label>
+                      return (
+                        <>
+                          <div className="kv" style={{ marginTop: 12 }}>
+                            {holder ? (
+                              <div className="kv__item">
+                                <div className="kv__k">Получатель</div>
+                                <div className="kv__v" style={{ fontWeight: 900 }}>
+                                  {holder}
+                                </div>
+                              </div>
+                            ) : null}
 
-                    <button className="btn" onClick={() => setPage('main')} disabled={uploading}>
-                      Вернуться
-                    </button>
-                  </div>
+                            {cardPretty ? (
+                              <div className="kv__item">
+                                <div className="kv__k">Номер карты</div>
+                                <div className="kv__v" style={{ fontSize: 18, fontWeight: 900, letterSpacing: 0.4 }}>
+                                  {cardPretty}
+                                </div>
+                                <div className="row" style={{ marginTop: 8, gap: 8, alignItems: 'center' }}>
+                                  <span className="badge">МИР</span>
+                                </div>
+                              </div>
+                            ) : null}
+                          </div>
 
-                  {uploadMsg ? <div className="pre" style={{ marginTop: 12 }}>{uploadMsg}</div> : null}
+                          <div className="actions actions--2" style={{ marginTop: 12 }}>
+                            <button className="btn btn--primary" onClick={() => copyText(cardRaw)} disabled={!cardRaw}>
+                              Скопировать карту
+                            </button>
+
+                            <label className="btn" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                              {uploading ? '⏳ Отправляем…' : '🧾 Отправить квитанцию'}
+                              <input
+                                type="file"
+                                accept=".jpg,.jpeg,.png,.pdf"
+                                style={{ display: 'none' }}
+                                disabled={uploading}
+                                onChange={(e) => {
+                                  const f = e.target.files?.[0]
+                                  if (!f) return
+                                  uploadReceipt(f)
+                                  e.currentTarget.value = ''
+                                }}
+                              />
+                            </label>
+                          </div>
+
+                          {uploadMsg ? (
+                            <div className="pre" style={{ marginTop: 12 }}>
+                              {uploadMsg}
+                            </div>
+                          ) : null}
+
+                          <div className="p" style={{ marginTop: 10, fontSize: 12, opacity: 0.85 }}>
+                            Поддерживаются JPG/PNG/PDF до 2MB.
+                          </div>
+                        </>
+                      )
+                    })()
+                  )}
                 </div>
-              </div>
-
-              <div className="p" style={{ marginTop: 12, fontSize: 12, opacity: 0.85 }}>
-                Поддерживаются JPG/PNG/PDF до 2MB.
               </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* Secondary navigation — bottom */}
+      <div className="section">
+        <div className="card">
+          <div className="card__body">
+            <div className="h1" style={{ fontSize: 18 }}>
+              История
+            </div>
+            <div className="p" style={{ marginTop: 6 }}>
+              Если нужно проверить операции или посмотреть отправленные квитанции — откройте разделы ниже.
+            </div>
+            <div className="actions actions--2" style={{ marginTop: 12 }}>
+              <Link className="btn" to="/payments/history">
+                История операций
+              </Link>
+              <Link className="btn" to="/payments/receipts">
+                Квитанции
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

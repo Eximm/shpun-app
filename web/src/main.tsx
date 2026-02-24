@@ -1,6 +1,4 @@
-﻿// web/src/main.tsx
-
-import React from "react";
+﻿import React from "react";
 import ReactDOM from "react-dom/client";
 import {
   BrowserRouter,
@@ -22,6 +20,10 @@ import { Profile } from "./pages/Profile";
 import { SetPassword } from "./pages/SetPassword";
 import { Transfer } from "./pages/Transfer";
 import { Referrals } from "./pages/Referrals";
+
+// ✅ NEW: payments mini-pages
+import { PaymentsHistory } from "./pages/PaymentsHistory";
+import { PaymentsReceipts } from "./pages/PaymentsReceipts";
 
 // ✅ NEW: help page (Router VPN / Shpun Router)
 import { ServicesRouter } from "./pages/help/ServicesRouter";
@@ -160,6 +162,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               }
             />
 
+            {/* Payments */}
             <Route
               path="/payments"
               element={
@@ -168,6 +171,25 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                 </Authed>
               }
             />
+
+            {/* ✅ Payments mini-pages */}
+            <Route
+              path="/payments/history"
+              element={
+                <Authed>
+                  <PaymentsHistory />
+                </Authed>
+              }
+            />
+            <Route
+              path="/payments/receipts"
+              element={
+                <Authed>
+                  <PaymentsReceipts />
+                </Authed>
+              }
+            />
+
             <Route
               path="/profile"
               element={
