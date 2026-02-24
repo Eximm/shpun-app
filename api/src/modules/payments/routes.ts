@@ -76,7 +76,7 @@ async function sendTelegramDocument(params: {
 
   const buf = await fs.readFile(filePath)
   const blob = new Blob([new Uint8Array(buf)])
-  // @ts-ignore - filename supported by undici FormData
+  // @ts-ignore
   fd.append('document', blob, filename)
 
   const res = await fetch(url, { method: 'POST', body: fd as any })
@@ -120,23 +120,7 @@ function pickObj(x: any, keys: string[]) {
 }
 
 /**
- * multipart fields in fastify-multipart can appear as:
- * - mp.fields.amount.value
- * - mp.fields.amount (string)
- * - req.body.amount (string/number) depending on config
- */
-function readFormField(mp: any, req: FastifyRequest, name: string): string {
-  const v =
-    mp?.fields?.[name]?.value ??
-    mp?.fields?.[name] ??
-    (req as any)?.body?.[name] ??
-    ''
-  return String(v ?? '').trim()
-}
-
-/**
  * ✅ Private template call (auth ONLY via header "session-id")
- * SHM отвечает 401 если пытаться авторизоваться через query.
  */
 async function shmPrivateTemplateGet(sessionId: string, name: string, params?: Record<string, any>) {
   const cleanName = String(name || '').trim()
@@ -152,7 +136,6 @@ async function shmPrivateTemplateGet(sessionId: string, name: string, params?: R
 }
 
 export async function paymentsRoutes(app: FastifyInstance) {
-  // GET /api/payments/paysystems
   app.get('/payments/paysystems', async (req, reply) => {
     const s = requireSession(req, reply)
     if (!s) return
@@ -170,7 +153,6 @@ export async function paymentsRoutes(app: FastifyInstance) {
     return reply.send({ ok: true, items, raw: r.json })
   })
 
-  // GET /api/payments/forecast
   app.get('/payments/forecast', async (req, reply) => {
     const s = requireSession(req, reply)
     if (!s) return
@@ -187,7 +169,6 @@ export async function paymentsRoutes(app: FastifyInstance) {
     return reply.send({ ok: true, raw: r.json })
   })
 
-  // ✅ GET /api/payments/requisites (private, via separate billing template)
   app.get('/payments/requisites', async (req, reply) => {
     const s = requireSession(req, reply)
     if (!s) return
@@ -225,21 +206,15 @@ export async function paymentsRoutes(app: FastifyInstance) {
     }
   })
 
-  // DELETE /api/payments/autopayment
   app.delete('/payments/autopayment', async (req, reply) => {
     const s = requireSession(req, reply)
     if (!s) return
 
     const r = await shmFetch<any>(s.shmSessionId, 'v1/user/autopayment', { method: 'DELETE' })
-
-    if (!r.ok) {
-      return reply.code(r.status).send({ ok: false, error: 'shm_error', raw: r.json ?? r.text })
-    }
-
+    if (!r.ok) return reply.code(r.status).send({ ok: false, error: 'shm_error', raw: r.json ?? r.text })
     return reply.send({ ok: true })
   })
 
-  // GET /api/payments/receipts
   app.get('/payments/receipts', async (req, reply) => {
     const s = requireSession(req, reply)
     if (!s) return
@@ -253,7 +228,7 @@ export async function paymentsRoutes(app: FastifyInstance) {
     return reply.send({ ok: true, items: list })
   })
 
-  // POST /api/payments/receipt  (multipart/form-data)
+  // ✅ FIXED: parse multipart via req.parts()
   app.post('/payments/receipt', async (req, reply) => {
     const s = requireSession(req, reply)
     if (!s) return
@@ -261,17 +236,29 @@ export async function paymentsRoutes(app: FastifyInstance) {
     const userId = requireUserId(s, reply)
     if (!userId) return
 
-    const mp: any = await (req as any).file()
-    if (!mp) return reply.code(400).send({ ok: false, error: 'file_required' })
+    let amountRaw = ''
+    let filePart: any = null
 
-    // ✅ FIX: read amount robustly
-    const amountRaw = readFormField(mp, req, 'amount')
+    // iterate parts reliably
+    const parts = (req as any).parts()
+    for await (const part of parts) {
+      if (part.type === 'file' && part.fieldname === 'file' && !filePart) {
+        filePart = part
+        continue
+      }
+      if (part.type === 'field' && part.fieldname === 'amount') {
+        amountRaw = String(part.value ?? '').trim()
+      }
+    }
+
+    if (!filePart) return reply.code(400).send({ ok: false, error: 'file_required' })
+
     const amount = Math.round(Number(String(amountRaw).replace(',', '.')))
     if (!Number.isFinite(amount) || amount < 1) {
       return reply.code(400).send({ ok: false, error: 'bad_amount' })
     }
 
-    const mime = String(mp.mimetype || 'application/octet-stream')
+    const mime = String(filePart.mimetype || 'application/octet-stream')
     const ext = safeExtFromMime(mime)
     const id = crypto.randomBytes(12).toString('hex')
 
@@ -283,8 +270,8 @@ export async function paymentsRoutes(app: FastifyInstance) {
 
     await new Promise<void>((resolve, reject) => {
       const ws = fssync.createWriteStream(filePath)
-      mp.file.pipe(ws)
-      mp.file.on('error', reject)
+      filePart.file.pipe(ws)
+      filePart.file.on('error', reject)
       ws.on('error', reject)
       ws.on('finish', () => resolve())
     })

@@ -1,9 +1,12 @@
 // web/src/pages/Home.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMe } from "../app/auth/useMe";
 import { useI18n } from "../shared/i18n";
 import { apiFetch } from "../shared/api/client";
+
+// ✅ NEW: toast
+import { toast } from "../shared/ui/toast";
 
 /* ========================================================================
    UTIL: Money formatting
@@ -261,6 +264,68 @@ export function Home() {
   }, [svcSummary]);
 
   /* ======================================================================
+     ✅ TOASTS: react to bonus / balance changes (no spam, no first render)
+     ====================================================================== */
+
+  const prevBonusRef = useRef<number | null>(null);
+  const prevBalRef = useRef<number | null>(null);
+  const initializedRef = useRef(false);
+
+  useEffect(() => {
+    const curBonus =
+      typeof (me as any)?.bonus === "number" ? Number((me as any).bonus) : null;
+
+    const curBal =
+      typeof balance?.amount === "number" ? Number(balance.amount) : null;
+
+    // wait until we have at least something stable
+    if (curBonus == null && curBal == null) return;
+
+    // first paint: remember baseline, do not notify
+    if (!initializedRef.current) {
+      prevBonusRef.current = curBonus;
+      prevBalRef.current = curBal;
+      initializedRef.current = true;
+      return;
+    }
+
+    // bonus delta
+    if (curBonus != null && prevBonusRef.current != null && curBonus !== prevBonusRef.current) {
+      const delta = curBonus - prevBonusRef.current;
+
+      if (delta > 0) {
+        toast.success("🎁 Бонусы начислены", { description: `+${delta}` });
+      } else {
+        toast.info("🎁 Бонусы изменились", { description: `${delta}` }); // already has "-"
+      }
+
+      prevBonusRef.current = curBonus;
+    } else if (curBonus != null && prevBonusRef.current == null) {
+      prevBonusRef.current = curBonus;
+    }
+
+    // balance delta (полезно после оплаты)
+    if (curBal != null && prevBalRef.current != null && curBal !== prevBalRef.current) {
+      const delta = curBal - prevBalRef.current;
+
+      if (delta > 0) {
+        const cur = String(balance?.currency || "RUB");
+        toast.success("💰 Баланс пополнен", {
+          description: `+${fmtMoney(delta, cur)}`,
+        });
+      } else {
+        // списания можно не показывать, чтобы не шуметь
+        // toast.info("💰 Баланс изменился", { description: fmtMoney(delta, String(balance?.currency || "RUB")) })
+      }
+
+      prevBalRef.current = curBal;
+    } else if (curBal != null && prevBalRef.current == null) {
+      prevBalRef.current = curBal;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bonusValue, balance?.amount, balance?.currency, me?.ok]);
+
+  /* ======================================================================
      DATA: load services + payments forecast
      ====================================================================== */
 
@@ -299,8 +364,6 @@ export function Home() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me?.ok]);
-
-   
 
   /* ======================================================================
      ACTION: promo stub
@@ -442,9 +505,6 @@ export function Home() {
                 Аккаунт и услуги — самое важное. Плитки ведут в нужные разделы.
               </div>
             </div>
-
-            {/* “акцентная” вторичная кнопка */}
-            
           </div>
 
           <div className="home-tiles">
@@ -599,7 +659,6 @@ export function Home() {
               </Link>
             </div>
 
-            {/* ✅ unified CTA */}
             <div className="home-cta">
               <Link className="btn btn--accent home-cta__btn" to="/feed">
                 {t("home.news.open", "Открыть")}
@@ -610,7 +669,7 @@ export function Home() {
       </div>
 
       {/* ==================================================================
-         MODULE: Referrals (premium card-first + equal action buttons)
+         MODULE: Referrals
          ================================================================== */}
       <div className="section">
         <div className="card home-refcard">
@@ -641,7 +700,6 @@ export function Home() {
             </div>
 
             <div className="home-refactions">
-              {/* ВАЖНО: равномерные кнопки по ширине */}
               <div className="actions actions--3 home-refactions__grid">
                 <Link className="btn" to="/referrals#link">
                   Скопировать ссылку
@@ -654,19 +712,18 @@ export function Home() {
                 </Link>
               </div>
 
-              {/* ✅ unified CTA like News */}
               <div className="home-cta">
                 <Link className="btn btn--accent home-cta__btn" to="/referrals">
                   Открыть
                 </Link>
               </div>
-              </div>
+            </div>
           </div>
         </div>
       </div>
 
       {/* ==================================================================
-         MODULE: Promo codes (input + unified button under input)
+         MODULE: Promo codes
          ================================================================== */}
       <div className="section">
         <div className="card home-promocard">
