@@ -1348,6 +1348,33 @@ button, a { -webkit-tap-highlight-color: transparent; }
    Services page (centralized, no inline)
    ============================================================ */
 
+/* Services header layout (meta + actions) */
+.services-head__meta--wide {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* На широких экранах бейджи не прижимаем влево: распределяем по ширине */
+@media (min-width: 768px) {
+  .services-head__meta--wide {
+    justify-content: space-between;
+  }
+}
+
+/* CTA/Refresh под бейджами */
+.services-head__actions {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.services-head__cta,
+.services-head__refresh {
+  width: 100%;
+}
+
 .services-head {
   display: flex;
   align-items: center;
@@ -1690,4 +1717,93 @@ button, a { -webkit-tap-highlight-color: transparent; }
 
 .svc__connectBody{
   margin-top: 10px;
+}
+/* Services top header — в стиле Home (левый блок + кнопка справа) */
+.services-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.services-top__title {
+  font-weight: 700;
+  font-size: 20px;
+}
+
+.services-top__sub {
+  opacity: 0.75;
+  margin-top: 4px;
+  font-size: 13px;
+}
+
+/* meta badges layout */
+.services-head__meta--wide {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+@media (min-width: 768px) {
+  .services-head__meta--wide {
+    justify-content: space-between;
+  }
+}
+
+/* single CTA */
+.services-head__actions {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.services-head__cta {
+  width: 100%;
+}
+
+/* Collapsible category header */
+.services-cat__head--toggle {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.services-cat__headLeft {
+  min-width: 0;
+}
+
+.services-cat__titleRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.services-cat__chev {
+  opacity: 0.75;
+  font-size: 12px;
+}
+
+/* Compact service cards */
+.svc--compact .svc__row {
+  align-items: flex-start;
+}
+
+.svc--compact .svc__status {
+  margin-bottom: 2px;
+}
+
+.svc__sub--compact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.svc__dot {
+  opacity: 0.6;
+  margin: 0 2px;
 }

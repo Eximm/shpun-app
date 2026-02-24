@@ -55,9 +55,9 @@ function kindTitle(k: ServiceKind) {
     case 'amneziawg':
       return 'AmneziaWG'
     case 'marzban':
-      return 'Marzban (все устройства)'
+      return 'Marzban'
     case 'marzban_router':
-      return 'Marzban (роутеры)'
+      return 'Shpun Router VPN'
     default:
       return 'Другое'
   }
@@ -68,9 +68,9 @@ function kindDescr(k: ServiceKind) {
     case 'amneziawg':
       return 'VPN-протокол AmneziaWG.'
     case 'marzban':
-      return 'Подписка Marzban для всех устройств.'
+      return 'Подписка Marzban.'
     case 'marzban_router':
-      return 'Подписка Marzban для роутеров.'
+      return 'Подписка для роутера.'
     default:
       return 'Прочие услуги.'
   }
@@ -240,9 +240,7 @@ function Modal({
             </button>
           </div>
 
-          <div className="p">
-            Если вы сомневаетесь — лучше сначала проверьте статус услуги или обратитесь в поддержку.
-          </div>
+          <div className="p">Если вы сомневаетесь — лучше сначала проверьте статус услуги или обратитесь в поддержку.</div>
         </div>
       </div>
     </div>
@@ -278,9 +276,7 @@ function ConnectInline({
             <ConnectAmneziaWG usi={service.userServiceId} service={service} onDone={onDone} />
           ) : null}
 
-          {kind === 'marzban' ? (
-            <ConnectMarzban usi={service.userServiceId} service={service} onDone={onDone} />
-          ) : null}
+          {kind === 'marzban' ? <ConnectMarzban usi={service.userServiceId} service={service} onDone={onDone} /> : null}
 
           {kind === 'marzban_router' ? (
             <ConnectRouter usi={service.userServiceId} service={service} onDone={onDone} />
@@ -316,7 +312,6 @@ function ServiceCard({
   const kind = detectKind(s.category)
   const hint = hintText(s)
 
-  const orderUrl = `/services/order`
   const payUrl = `/payments?reason=service&usi=${encodeURIComponent(String(s.userServiceId))}`
   const supportUrl = `/support?topic=service&usi=${encodeURIComponent(String(s.userServiceId))}`
 
@@ -325,14 +320,33 @@ function ServiceCard({
 
   const canShowConnect = kind !== 'unknown' && s.status === 'active'
 
+  const compactMeta = (() => {
+    const parts: React.ReactNode[] = []
+    if (until) parts.push(<>До: <b>{until}</b></>)
+    if (hint) parts.push(<>{hint}</>)
+    if (parts.length === 0) return '—'
+    return (
+      <>
+        {parts.map((p, i) => (
+          <React.Fragment key={i}>
+            {i > 0 ? <span className="svc__dot">·</span> : null}
+            <span className="svc__metaItem">{p}</span>
+          </React.Fragment>
+        ))}
+      </>
+    )
+  })()
+
   return (
-    <div className="kv__item svc">
+    <div className="kv__item svc svc--compact">
       <button type="button" className="svc__btn" onClick={onToggle} aria-expanded={expanded}>
         <div className="svc__row">
           <div className="svc__left">
             <div className="svc__status">{statusLabel(s.status)}</div>
-            <div className="svc__title">{s.title}</div>
-            <div className="svc__sub">{until ? <>До: <b>{until}</b></> : 'Без даты окончания'}</div>
+            <div className="svc__title">
+              #{s.userServiceId} — {s.title}
+            </div>
+            <div className="svc__sub svc__sub--compact">{compactMeta}</div>
           </div>
 
           <div className="svc__right">
@@ -340,7 +354,6 @@ function ServiceCard({
             <span className="badge">
               {fmtMoney(s.price, s.currency)} / {s.periodMonths || 1}м
             </span>
-            <div className="svc__hint">{hint || '\u00A0'}</div>
           </div>
         </div>
 
@@ -352,7 +365,7 @@ function ServiceCard({
       {expanded ? (
         <div className="svc__details">
           {s.status === 'active' ? (
-            <div className="actions actions--2">
+            <div className="actions actions--1">
               <button
                 className="btn btn--primary"
                 onClick={onToggleConnect}
@@ -360,9 +373,6 @@ function ServiceCard({
                 title={!canShowConnect ? 'Подключение доступно только для активной услуги' : 'Открыть подключение'}
               >
                 {connectOpen ? 'Скрыть подключение' : 'Подключение'}
-              </button>
-              <button className="btn" onClick={() => go(orderUrl)}>
-                Заказать ещё
               </button>
             </div>
           ) : null}
@@ -372,8 +382,8 @@ function ServiceCard({
               <button className="btn btn--primary" onClick={() => go(payUrl)}>
                 Оплатить / пополнить
               </button>
-              <button className="btn" onClick={() => go(orderUrl)}>
-                Выбрать тариф
+              <button className="btn" onClick={onRefresh}>
+                ⟳ Обновить
               </button>
             </div>
           ) : null}
@@ -381,7 +391,7 @@ function ServiceCard({
           {(s.status === 'pending' || s.status === 'init') ? (
             <div className="actions actions--1">
               <button className="btn btn--primary" onClick={onRefresh}>
-                Обновить статус
+                ⟳ Обновить статус
               </button>
             </div>
           ) : null}
@@ -400,18 +410,10 @@ function ServiceCard({
           {s.status === 'error' ? (
             <div className="actions actions--2">
               <button className="btn btn--primary" onClick={onRefresh}>
-                Обновить
+                ⟳ Обновить
               </button>
               <button className="btn" onClick={() => go(supportUrl)}>
                 В поддержку
-              </button>
-            </div>
-          ) : null}
-
-          {s.status === 'removed' ? (
-            <div className="actions actions--1">
-              <button className="btn btn--primary" onClick={() => go(orderUrl)}>
-                Заказать снова
               </button>
             </div>
           ) : null}
@@ -455,6 +457,13 @@ export function Services() {
   const [stopTarget, setStopTarget] = useState<ApiServiceItem | null>(null)
   const [stopBusy, setStopBusy] = useState(false)
   const [stopError, setStopError] = useState<string | null>(null)
+
+  const [openGroups, setOpenGroups] = useState<Record<ServiceKind, boolean>>({
+    amneziawg: true,
+    marzban: true,
+    marzban_router: true,
+    unknown: false,
+  })
 
   async function load() {
     setLoading(true)
@@ -576,49 +585,68 @@ export function Services() {
   const fallbackActive = items.filter((x) => x.status === 'active').length
   const fallbackAttention = items.filter((x) => x.status === 'blocked' || x.status === 'not_paid').length
 
+  const toggleGroup = (kind: ServiceKind) => {
+    setOpenGroups((cur) => ({ ...cur, [kind]: !cur[kind] }))
+  }
+
   const Section = ({ kind }: { kind: ServiceKind }) => {
     const arr = groups[kind]
     if (!arr || arr.length === 0) return null
+
+    const open = !!openGroups[kind]
 
     return (
       <div className="section">
         <div className="card">
           <div className="card__body">
-            <div className="services-cat__head">
-              <div>
-                <div className="services-cat__title">{kindTitle(kind)}</div>
+            <button
+              type="button"
+              className="services-cat__head services-cat__head--toggle"
+              onClick={() => toggleGroup(kind)}
+              aria-expanded={open}
+            >
+              <div className="services-cat__headLeft">
+                <div className="services-cat__titleRow">
+                  <div className="services-cat__title">{kindTitle(kind)}</div>
+                  <span className="services-cat__chev" aria-hidden>
+                    {open ? '▲' : '▼'}
+                  </span>
+                </div>
                 <p className="p">{kindDescr(kind)}</p>
               </div>
-              <span className="badge">{arr.length}</span>
-            </div>
 
-            <div className="kv">
-              {arr.map((x) => (
-                <ServiceCard
-                  key={x.userServiceId}
-                  s={x}
-                  expanded={expandedId === x.userServiceId}
-                  connectOpen={connectOpenId === x.userServiceId}
-                  onToggle={() => {
-                    setExpandedId((cur) => (cur === x.userServiceId ? null : x.userServiceId))
-                    setConnectOpenId((cur) => (cur === x.userServiceId ? null : cur))
-                  }}
-                  onToggleConnect={() => {
-                    setExpandedId(x.userServiceId)
-                    setConnectOpenId((cur) => (cur === x.userServiceId ? null : x.userServiceId))
-                  }}
-                  onRefresh={load}
-                  onAskDelete={(svc) => {
-                    setDeleteError(null)
-                    setDeleteTarget(svc)
-                  }}
-                  onAskStop={(svc) => {
-                    setStopError(null)
-                    setStopTarget(svc)
-                  }}
-                />
-              ))}
-            </div>
+              <span className="badge">{arr.length}</span>
+            </button>
+
+            {open ? (
+              <div className="kv">
+                {arr.map((x) => (
+                  <ServiceCard
+                    key={x.userServiceId}
+                    s={x}
+                    expanded={expandedId === x.userServiceId}
+                    connectOpen={connectOpenId === x.userServiceId}
+                    onToggle={() => {
+                      setExpandedId((cur) => (cur === x.userServiceId ? null : x.userServiceId))
+                      setConnectOpenId((cur) => (cur === x.userServiceId ? null : cur))
+                    }}
+                    onToggleConnect={() => {
+                      setExpandedId(x.userServiceId)
+                      setConnectOpenId((cur) => (cur === x.userServiceId ? null : x.userServiceId))
+                    }}
+                    onRefresh={load}
+                    onAskDelete={(svc) => {
+                      setDeleteError(null)
+                      setDeleteTarget(svc)
+                    }}
+                    onAskStop={(svc) => {
+                      setStopError(null)
+                      setStopTarget(svc)
+                    }}
+                  />
+                ))}
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -629,19 +657,20 @@ export function Services() {
     <div className="section">
       <div className="card">
         <div className="card__body">
-          <div className="services-head">
-            <h1 className="services-head__title">Услуги</h1>
-            <div className="row">
-              <button className="btn btn--primary" onClick={() => go('/services/order')}>
-                Заказать
-              </button>
-              <button className="btn" onClick={load} title="Обновить">
-                ⟳
-              </button>
+          {/* header — как на Home */}
+          <div className="services-top">
+            <div className="services-top__left">
+              <div className="services-top__title">Услуги</div>
+              <div className="services-top__sub">Список ключей и статусы.</div>
             </div>
+
+            <button className="btn btn--accent" onClick={load} title="⟳ Обновить">
+              ⟳ Обновить
+            </button>
           </div>
 
-          <div className="services-head__meta">
+          {/* бейджи */}
+          <div className="services-head__meta services-head__meta--wide">
             <span className="badge">
               Активные: <b>{s?.active ?? fallbackActive}</b>
             </span>
@@ -653,11 +682,12 @@ export function Services() {
             </span>
           </div>
 
-          {(s?.expiringSoon ?? 0) > 0 ? (
-            <div className="pre">
-              Есть услуги, которые скоро истекают (≤ 7 дней): <b>{s?.expiringSoon}</b>.
-            </div>
-          ) : null}
+          {/* единый CTA */}
+          <div className="services-head__actions">
+            <button className="btn btn--primary services-head__cta" onClick={() => go('/services/order')}>
+              Заказать
+            </button>
+          </div>
         </div>
       </div>
 
