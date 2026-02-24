@@ -2,6 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { apiFetch } from '../shared/api/client'
 
+// ✅ NEW: toast + mood
+import { toast } from '../shared/ui/toast'
+import { getMood } from '../shared/payments-mood'
+
 type PaySystem = {
   name?: string
   shm_url?: string
@@ -123,7 +127,9 @@ export function Payments() {
         if (fallback) setAmount(String(Math.round(Number(fallback))))
       }
     } catch (e: any) {
-      setErr(e?.message || 'Failed to load payments')
+      const msg = e?.message || 'Failed to load payments'
+      setErr(msg)
+      toast.error('Не удалось загрузить оплату', { description: msg })
     } finally {
       setLoading(false)
     }
@@ -138,7 +144,9 @@ export function Payments() {
       setRequisites(r.requisites ?? null)
     } catch (e: any) {
       setRequisites(null)
-      setReqError(e?.message || 'Не удалось загрузить реквизиты')
+      const msg = e?.message || 'Не удалось загрузить реквизиты'
+      setReqError(msg)
+      toast.error('Реквизиты недоступны', { description: msg })
     } finally {
       setReqLoading(false)
     }
@@ -154,7 +162,7 @@ export function Payments() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page])
 
-  function openOverlayForExternalPay() {
+  function openOverlayForExternalPay(seed: string) {
     setOverlay({
       open: true,
       title: 'Окно оплаты открыто ✅',
@@ -162,17 +170,29 @@ export function Payments() {
         'Если оплата открылась в новой вкладке — завершите её там и вернитесь сюда.\n' +
         'После оплаты можно закрыть вкладку и нажать “Обновить статус”.',
     })
+
+    toast.info('Окно оплаты открыто', {
+      description: getMood('payment_checking', { seed }) ?? 'После оплаты нажмите “Обновить статус”.',
+    })
   }
 
   async function handlePay(ps: PaySystem) {
-    if (!ps?.shm_url) return
-    if (!amountNumber || amountNumber < 1) {
-      setUploadMsg('Введите корректную сумму.')
+    if (!ps?.shm_url) {
+      toast.error('Оплата недоступна', { description: 'У этого способа оплаты нет ссылки.' })
       return
     }
+
+    if (!amountNumber || amountNumber < 1) {
+      setUploadMsg('Введите корректную сумму.')
+      toast.error('Введите сумму', { description: 'Нужна сумма больше 0.' })
+      return
+    }
+
+    const seed = `${ps.shm_url}|${amountNumber}`
     const fullUrl = `${ps.shm_url}${amountNumber}`
+
     safeOpen(fullUrl)
-    openOverlayForExternalPay()
+    openOverlayForExternalPay(seed)
   }
 
   async function removeAutopayment() {
@@ -181,23 +201,30 @@ export function Payments() {
     try {
       await apiFetch('/payments/autopayment', { method: 'DELETE' })
       setUploadMsg('Автоплатёж удалён.')
+      toast.success('Готово', { description: 'Автоплатёж удалён.' })
     } catch (e: any) {
-      setUploadMsg(e?.message || 'Не удалось удалить автоплатёж')
+      const msg = e?.message || 'Не удалось удалить автоплатёж'
+      setUploadMsg(msg)
+      toast.error('Не удалось отвязать', { description: msg })
     }
   }
 
   async function uploadReceipt(file: File) {
     if (!amountNumber || amountNumber < 1) {
       setUploadMsg('Сначала введите сумму (в рублях).')
+      toast.error('Введите сумму', { description: 'Перед отправкой квитанции нужна сумма.' })
       return
     }
     if (file.size > 2 * 1024 * 1024) {
       setUploadMsg('Файл слишком большой. Максимум 2MB.')
+      toast.error('Файл слишком большой', { description: 'Максимум 2MB.' })
       return
     }
 
     setUploading(true)
     setUploadMsg(null)
+
+    toast.info('Отправляем квитанцию', { description: 'Пара секунд…' })
 
     try {
       const fd = new FormData()
@@ -221,9 +248,15 @@ export function Payments() {
       }
 
       setUploadMsg('✅ Квитанция отправлена на проверку.')
+      toast.success('Квитанция отправлена', {
+        description: 'Принято. Проверка — вручную.',
+      })
+
       setTimeout(() => setUploadMsg(null), 5000)
     } catch (e: any) {
-      setUploadMsg(e?.message || 'Ошибка при отправке квитанции')
+      const msg = e?.message || 'Ошибка при отправке квитанции'
+      setUploadMsg(msg)
+      toast.error('Не удалось отправить', { description: msg })
     } finally {
       setUploading(false)
     }
@@ -286,6 +319,7 @@ export function Payments() {
                   className="btn btn--primary"
                   onClick={() => {
                     setOverlay(null)
+                    toast.info('Обновляем статус', { description: 'Проверяем данные…' })
                     load()
                   }}
                 >
@@ -385,6 +419,7 @@ export function Payments() {
                   onClick={() => {
                     if (!amountNumber) {
                       setUploadMsg('Введите сумму.')
+                      toast.error('Введите сумму', { description: 'Нужна сумма для перевода по реквизитам.' })
                       return
                     }
                     setPage('card')
@@ -535,11 +570,23 @@ export function Payments() {
                           </div>
 
                           <div className="actions actions--2" style={{ marginTop: 12 }}>
-                            <button className="btn btn--primary" onClick={() => copyText(cardRaw)} disabled={!cardRaw}>
+                            <button
+                              className="btn btn--primary"
+                              onClick={() => {
+                                if (cardRaw) {
+                                  copyText(cardRaw)
+                                  toast.success('Скопировано', { description: 'Номер карты в буфере обмена.' })
+                                }
+                              }}
+                              disabled={!cardRaw}
+                            >
                               Скопировать карту
                             </button>
 
-                            <label className="btn" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <label
+                              className="btn"
+                              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                            >
                               {uploading ? '⏳ Отправляем…' : '🧾 Отправить квитанцию'}
                               <input
                                 type="file"
@@ -570,6 +617,12 @@ export function Payments() {
                     })()
                   )}
                 </div>
+              </div>
+
+              <div className="actions actions--1" style={{ marginTop: 12 }}>
+                <button className="btn" style={{ width: '100%' }} onClick={() => setPage('main')}>
+                  ⇦ Назад к способам оплаты
+                </button>
               </div>
             </div>
           </div>
