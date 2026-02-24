@@ -7,8 +7,7 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 
 import { getSessionFromRequest } from '../../shared/session/sessionStore.js'
-import { shmFetch, shmGetMe, toFormUrlEncoded } from '../../shared/shm/shmClient.js'
-import { shmShpunAppStatus } from '../../shared/shm/shmClient.js'
+import { shmFetch, shmGetMe } from '../../shared/shm/shmClient.js'
 
 type ReceiptRecord = {
   id: string
@@ -120,91 +119,36 @@ function pickObj(x: any, keys: string[]) {
   return null
 }
 
-function pickFirstNumber(...vals: any[]): number | null {
-  for (const v of vals) {
-    const n = Number(v ?? 0)
-    if (Number.isFinite(n) && n > 0) return n
-  }
-  return null
+/**
+ * multipart fields in fastify-multipart can appear as:
+ * - mp.fields.amount.value
+ * - mp.fields.amount (string)
+ * - req.body.amount (string/number) depending on config
+ */
+function readFormField(mp: any, req: FastifyRequest, name: string): string {
+  const v =
+    mp?.fields?.[name]?.value ??
+    mp?.fields?.[name] ??
+    (req as any)?.body?.[name] ??
+    ''
+  return String(v ?? '').trim()
 }
 
 /**
- * ✅ Private template call for billing requisites
- * IMPORTANT: call like shpun_app does: POST form with session_id
+ * ✅ Private template call (auth ONLY via header "session-id")
+ * SHM отвечает 401 если пытаться авторизоваться через query.
  */
-async function shmBillingRequisitesTemplate(sessionId: string, name: string) {
+async function shmPrivateTemplateGet(sessionId: string, name: string, params?: Record<string, any>) {
   const cleanName = String(name || '').trim()
   if (!cleanName) throw new Error('bad_template_name')
 
-  const body = toFormUrlEncoded({ session_id: sessionId })
-
-  return await shmFetch<any>(null, `v1/template/${encodeURIComponent(cleanName)}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Accept: 'application/json',
+  return await shmFetch<any>(sessionId, `v1/template/${encodeURIComponent(cleanName)}`, {
+    method: 'GET',
+    query: {
+      format: 'json',
+      ...(params ?? {}),
     },
-    body,
   })
-}
-
-/**
- * ✅ Resolve Telegram user id for sending receipt back to user
- * Priority:
- * 1) /v1/user settings.telegram.*
- * 2) shpun_app status auth.telegram_id / tg_id / etc.
- */
-async function resolveTelegramUserId(sessionId: string): Promise<number | null> {
-  // 1) via /v1/user
-  try {
-    const me = await shmGetMe(sessionId)
-    if (me.ok) {
-      const u = me.json?.data?.[0] ?? null
-      const t = u?.settings?.telegram ?? null
-
-      const n = pickFirstNumber(
-        t?.id,
-        t?.user_id,
-        t?.telegram_id,
-        u?.telegram_id,
-        u?.tg_id
-      )
-      if (n) return n
-    }
-  } catch {
-    // ignore
-  }
-
-  // 2) via shpun_app status
-  try {
-    const st: any = await shmShpunAppStatus(sessionId)
-    const ok = isOkFlag(st?.ok)
-    if (ok) {
-      // most common shapes:
-      // { ok:1, auth:{ telegram_id: 123 } }
-      // { ok:1, data:{ auth:{ telegram_id: 123 } } }
-      // { ok:1, status:{ auth:{ telegram_id: 123 } } }
-      const auth =
-        st?.auth ||
-        st?.data?.auth ||
-        st?.status?.auth ||
-        st?.result?.auth ||
-        null
-
-      const n = pickFirstNumber(
-        auth?.telegram_id,
-        auth?.tg_id,
-        auth?.id,
-        st?.telegram_id,
-        st?.tg_id
-      )
-      if (n) return n
-    }
-  } catch {
-    // ignore
-  }
-
-  return null
 }
 
 export async function paymentsRoutes(app: FastifyInstance) {
@@ -243,25 +187,19 @@ export async function paymentsRoutes(app: FastifyInstance) {
     return reply.send({ ok: true, raw: r.json })
   })
 
-  // GET /api/payments/requisites
+  // ✅ GET /api/payments/requisites (private, via separate billing template)
   app.get('/payments/requisites', async (req, reply) => {
     const s = requireSession(req, reply)
     if (!s) return
 
     try {
-      const r = await shmBillingRequisitesTemplate(s.shmSessionId, REQUISITES_TEMPLATE)
-
+      const r = await shmPrivateTemplateGet(s.shmSessionId, REQUISITES_TEMPLATE)
       if (!r.ok) {
         return reply.code(r.status || 502).send({ ok: false, error: 'shm_error', raw: r.json ?? r.text })
       }
 
-      if (r.json === undefined) {
-        return reply.send({ ok: false, error: 'template_not_json', raw: r.text })
-      }
-
       const j: any = r.json ?? {}
-      const okFlag = isOkFlag(j?.ok) || isOkFlag(j?.status)
-      if (!okFlag) {
+      if (!isOkFlag(j?.ok)) {
         const err = toStr(j?.error || j?.message, 'requisites_not_configured')
         return reply.send({ ok: false, error: err, raw: j })
       }
@@ -292,9 +230,7 @@ export async function paymentsRoutes(app: FastifyInstance) {
     const s = requireSession(req, reply)
     if (!s) return
 
-    const r = await shmFetch<any>(s.shmSessionId, 'v1/user/autopayment', {
-      method: 'DELETE',
-    })
+    const r = await shmFetch<any>(s.shmSessionId, 'v1/user/autopayment', { method: 'DELETE' })
 
     if (!r.ok) {
       return reply.code(r.status).send({ ok: false, error: 'shm_error', raw: r.json ?? r.text })
@@ -328,7 +264,8 @@ export async function paymentsRoutes(app: FastifyInstance) {
     const mp: any = await (req as any).file()
     if (!mp) return reply.code(400).send({ ok: false, error: 'file_required' })
 
-    const amountRaw = String(mp?.fields?.amount?.value ?? '').trim()
+    // ✅ FIX: read amount robustly
+    const amountRaw = readFormField(mp, req, 'amount')
     const amount = Math.round(Number(String(amountRaw).replace(',', '.')))
     if (!Number.isFinite(amount) || amount < 1) {
       return reply.code(400).send({ ok: false, error: 'bad_amount' })
@@ -365,7 +302,6 @@ export async function paymentsRoutes(app: FastifyInstance) {
       status: 'RECEIVED',
     }
 
-    // ---- enrich info for captions ----
     let shmUser: any = null
     try {
       const me = await shmGetMe(s.shmSessionId)
@@ -374,15 +310,14 @@ export async function paymentsRoutes(app: FastifyInstance) {
 
     const fullName = String(shmUser?.full_name || 'Client')
     const login = String(shmUser?.login || '')
-    const tgLogin = String(shmUser?.settings?.telegram?.login || '')
+    const tgId = shmUser?.settings?.telegram?.id || shmUser?.settings?.telegram?.user_id || null
+    const tgLogin = shmUser?.settings?.telegram?.login || ''
 
-    // ---- env ----
     const botToken = String(process.env.TG_BOT_TOKEN || '').trim()
     const adminChatId = String(process.env.RECEIPTS_CHAT_ID || '').trim()
     const adminThreadIdRaw = String(process.env.RECEIPTS_THREAD_ID || '').trim()
     const adminThreadId = adminThreadIdRaw ? Number(adminThreadIdRaw) : undefined
 
-    // ---- send to admin chat ----
     try {
       if (botToken && adminChatId) {
         const captionAdmin =
@@ -417,48 +352,33 @@ export async function paymentsRoutes(app: FastifyInstance) {
       record.error = e?.message || 'telegram_admin_exception'
     }
 
-    // ---- send back to user (best-effort) ----
     try {
-      if (botToken) {
-        const tgId =
-          pickFirstNumber(
-            shmUser?.settings?.telegram?.id,
-            shmUser?.settings?.telegram?.user_id,
-            shmUser?.settings?.telegram?.telegram_id
-          ) ?? (await resolveTelegramUserId(s.shmSessionId))
+      if (botToken && tgId) {
+        const captionUser =
+          `🧾 Квитанция отправлена на проверку\n` +
+          `Сумма: ${amount} ₽\n\n` +
+          `Мы уведомим, когда платеж будет зачислен.`
 
-        if (tgId) {
-          const captionUser =
-            `🧾 Квитанция отправлена на проверку\n` +
-            `Сумма: ${amount} ₽\n\n` +
-            `Мы уведомим, когда платеж будет зачислен.`
+        const tgResU = await sendTelegramDocument({
+          botToken,
+          chatId: tgId,
+          caption: captionUser,
+          filePath,
+          filename,
+        })
 
-          const tgResU = await sendTelegramDocument({
-            botToken,
-            chatId: tgId,
-            caption: captionUser,
-            filePath,
-            filename,
-          })
-
-          record.tg_user = {
-            ok: !!tgResU?.ok,
-            message_id: tgResU?.result?.message_id,
-            description: tgResU?.description,
-          }
-
-          if (tgResU?.ok && record.status !== 'ERROR') record.status = 'SENT_USER'
-          if (!tgResU?.ok && record.status !== 'ERROR') {
-            // не фейлим запись целиком — просто фиксируем
-            record.error = record.error || tgResU?.description || 'telegram_user_failed'
-          }
+        record.tg_user = {
+          ok: !!tgResU?.ok,
+          message_id: tgResU?.result?.message_id,
+          description: tgResU?.description,
         }
+
+        if (tgResU?.ok && record.status !== 'ERROR') record.status = 'SENT_USER'
       }
     } catch {
       // ignore
     }
 
-    // ---- persist ----
     const idxFile = path.join(userDir, 'index.json')
     const list = await readJson<ReceiptRecord[]>(idxFile, [])
     list.push(record)

@@ -3,6 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { apiFetch } from '../shared/api/client'
 import { useMe } from '../app/auth/useMe'
 
+// ✅ NEW: toast + mood
+import { toast } from '../shared/ui/toast'
+import { getMood } from '../shared/payments-mood'
+
 type Tariff = {
   serviceId: number
   category: string
@@ -280,14 +284,37 @@ export function ServicesOrder() {
       // UX: сворачиваем details и показываем оплату
       setDetailsCollapsed(true)
 
+      const orderId = String(r.item?.userServiceId || '')
+      const amount = nnum(selected?.price, 0)
+
       if (String(r.item?.status || '').toLowerCase() === 'not_paid' || needTopup > 0) {
         await loadPaysystems()
         setWaitMsg('Выберите способ оплаты ниже.')
+
+        toast.info('Заказ создан', {
+          description:
+            getMood('payment_checking', { seed: orderId }) ??
+            'Выберите способ оплаты ниже.',
+        })
       } else {
         setWaitMsg('✅ Услуга создана. Можно перейти в раздел услуг.')
+
+        toast.success('Готово', {
+          description:
+            getMood('service_activated', { seed: orderId }) ??
+            'Услуга создана и активируется.',
+        })
+        // иногда оплата проходит мгновенно — можно и так:
+        toast.success('Оплата прошла', {
+          description:
+            getMood('payment_success', { amount, seed: orderId }) ??
+            'Принято.',
+        })
       }
     } catch (e: any) {
-      setErr(e?.message || 'Failed to create service')
+      const msg = e?.message || 'Failed to create service'
+      setErr(msg)
+      toast.error('Не удалось создать услугу', { description: msg })
     } finally {
       setCreating(false)
     }
@@ -319,6 +346,7 @@ export function ServicesOrder() {
     if (!ps?.shm_url) {
       setPayOpenError('У этого способа оплаты нет ссылки.')
       setOverlayOpen(true)
+      toast.error('Оплата недоступна', { description: 'У этого способа оплаты нет ссылки.' })
       return
     }
 
@@ -334,11 +362,24 @@ export function ServicesOrder() {
 
     setOverlayOpen(true)
 
+    const seed = String(created?.userServiceId || '') || String(selected?.serviceId || '')
+
     if (opened) {
       setWaitMsg('Окно оплаты открыто. После оплаты нажмите “Я оплатил — проверить” или перейдите в “Услуги”.')
+
+      toast.info('Окно оплаты открыто', {
+        description:
+          getMood('payment_checking', { seed }) ??
+          'После оплаты нажмите “Я оплатил — проверить”.',
+      })
     } else {
       setPayOpenError('Не удалось открыть оплату (вкладка могла быть заблокирована). Откройте ссылку вручную.')
       setWaitMsg('Откройте ссылку оплаты и завершите оплату. Затем вернитесь сюда и нажмите “Я оплатил — проверить”.')
+
+      toast.error('Не удалось открыть оплату', {
+        description:
+          'Вкладка могла быть заблокирована. Откройте ссылку вручную.',
+      })
     }
   }
 
@@ -349,10 +390,23 @@ export function ServicesOrder() {
     setOpeningPay(true)
     const opened = await tryOpenPayment(lastPayUrl)
     setOpeningPay(false)
-    if (!opened) setPayOpenError('Не удалось открыть оплату. Откройте ссылку вручную.')
+    if (!opened) {
+      setPayOpenError('Не удалось открыть оплату. Откройте ссылку вручную.')
+      toast.error('Не удалось открыть оплату', { description: 'Откройте ссылку вручную.' })
+    } else {
+      toast.info('Окно оплаты открыто', {
+        description: 'Завершите оплату и вернитесь для проверки.',
+      })
+    }
   }
 
   async function pollOnce() {
+    const seed = String(created?.userServiceId || '') || String(selected?.serviceId || '')
+
+    toast.info('Проверяем платёж', {
+      description: getMood('payment_checking', { seed }) ?? 'Пара секунд…',
+    })
+
     try {
       await Promise.resolve(refetch?.())
     } catch {
@@ -366,12 +420,29 @@ export function ServicesOrder() {
       if (it && (it.status === 'active' || it.status === 'pending')) {
         setCreated((cur) => (cur ? { ...cur, status: it.status, statusRaw: it.statusRaw || cur.statusRaw } : cur))
         setWaitMsg('✅ Услуга активируется / активна. Можно перейти в раздел услуг.')
+
+        toast.success('Готово', {
+          description: getMood('service_activated', { seed }) ?? 'Услуга активирована.',
+        })
+
+        // если хочешь — можно показать и “оплата прошла”, но без спама:
+        const amount = needTopup > 0 ? needTopup : nnum(selected?.price, 0)
+        toast.success('Оплата прошла', {
+          description: getMood('payment_success', { amount, seed }) ?? 'Принято.',
+        })
+
         return true
       }
     } catch {
       // ignore
     }
+
     setWaitMsg('Пока не вижу обновления статуса. Попробуйте ещё раз через несколько секунд.')
+
+    toast.info('Пока не подтверждено', {
+      description: getMood('payment_failed', { seed }) ?? 'Попробуйте ещё раз через несколько секунд.',
+    })
+
     return false
   }
 
@@ -395,7 +466,12 @@ export function ServicesOrder() {
     if (!lastPayUrl) return
     const ok = await copyToClipboard(lastPayUrl)
     setCopied(ok)
-    if (!ok) setPayOpenError('Не получилось скопировать ссылку автоматически. Скопируйте вручную из строки ниже.')
+    if (!ok) {
+      setPayOpenError('Не получилось скопировать ссылку автоматически. Скопируйте вручную из строки ниже.')
+      toast.error('Не удалось скопировать', { description: 'Скопируйте ссылку вручную.' })
+    } else {
+      toast.success('Ссылка скопирована', { description: 'Можно вставлять в браузер или отправить себе.' })
+    }
   }
 
   // ✅ показываем предупреждение при заходе в категорию AmneziaWG (только 1 раз)
@@ -524,7 +600,6 @@ export function ServicesOrder() {
         <div className="section">
           <div className="card">
             <div className="card__body">
-              {/* шапка: кнопка всегда справа вверху */}
               <div className="row so__spaceBetween">
                 <div className="h1 so__h18" style={{ fontWeight: 800, letterSpacing: '-0.01em' }}>
                   Выберите тип услуги
@@ -554,7 +629,6 @@ export function ServicesOrder() {
                           <div className="services-cat__title">{kindTitle(k)}</div>
                         </div>
 
-                        {/* спокойный текст как на главной странице услуг */}
                         <p className="p so__mt6" style={{ opacity: 0.8 }}>
                           {kindDescrShort(k)}
                         </p>
@@ -582,7 +656,6 @@ export function ServicesOrder() {
         <div className="section">
           <div className="card">
             <div className="card__body">
-              {/* единая шапка как везде: заголовок слева, “назад” справа */}
               <div className="row so__spaceBetween">
                 <div className="h1 so__h18" style={{ fontWeight: 800, letterSpacing: '-0.01em' }}>
                   {kindTitle(kind)}
@@ -593,7 +666,6 @@ export function ServicesOrder() {
                 </button>
               </div>
 
-              {/* как на Services: описание спокойнее, но можно оставить “обводку” */}
               <div
                 className="pre so__mt12"
                 style={{
@@ -604,7 +676,6 @@ export function ServicesOrder() {
                 {kindDescr(kind)}
               </div>
 
-              {/* Router VPN: отдельная страница инструкции */}
               {kind === 'marzban_router' ? (
                 <div className="actions actions--1 so__mt12">
                   <button className="btn so__btnFull" onClick={() => navigate('/help/router')}>
