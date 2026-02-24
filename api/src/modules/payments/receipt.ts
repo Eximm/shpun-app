@@ -70,10 +70,10 @@ export async function paymentsReceiptRoutes(app: FastifyInstance) {
     const mime = mp.mimetype || 'application/octet-stream'
 
     const captionAdmin =
-      `🧾 Квитанция из Shpun App\n` +
+      `🧾 Перевод по реквизитам\n` +
+      `📱 Отправлено из ShpunApp\n\n` +
       `Сумма: ${safeAmount} ₽\n` +
-      `Время: ${fmtTs()}\n` +
-      `Источник: PWA`
+      `Время: ${fmtTs()}`
 
     let tgOk = false
     let tgError: string | null = null
