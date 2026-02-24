@@ -1,5 +1,9 @@
-import React, { Suspense, useEffect, useMemo, useState } from 'react'
+import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { apiFetch } from '../shared/api/client'
+
+// ✅ NEW: toast + mood
+import { toast } from '../shared/ui/toast'
+import { getMood } from '../shared/payments-mood'
 
 type UiStatus = 'active' | 'blocked' | 'pending' | 'not_paid' | 'removed' | 'error' | 'init'
 
@@ -364,10 +368,8 @@ function ServiceCard({
     <div
       className="kv__item svc svc--compact"
       style={{
-        // лёгкий оттенок + аккуратный бордер по статусу
         background: `linear-gradient(180deg, ${tint.bg}, rgba(0,0,0,0))`,
         borderColor: tint.border,
-        // тонкая “полоска статуса” слева — даёт мгновенную читабельность
         boxShadow: `inset 3px 0 0 ${tint.stripe}`,
       }}
     >
@@ -502,6 +504,14 @@ function saveGroupsState(v: Record<ServiceKind, boolean>) {
   }
 }
 
+function normStatus(s: any): UiStatus {
+  const v = String(s || '').toLowerCase()
+  if (v === 'active' || v === 'blocked' || v === 'pending' || v === 'not_paid' || v === 'removed' || v === 'error' || v === 'init') {
+    return v as UiStatus
+  }
+  return 'error'
+}
+
 export function Services() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -535,15 +545,31 @@ export function Services() {
     saveGroupsState(openGroups)
   }, [openGroups])
 
-  async function load() {
+  // ✅ toasts: watcher of status transitions (no spam, no first render)
+  const prevStatusesRef = useRef<Map<number, UiStatus> | null>(null)
+  const statusInitRef = useRef(false)
+
+  async function load(opts?: { silent?: boolean }) {
+    const silent = !!opts?.silent
+
     setLoading(true)
     setError(null)
     try {
       const r = (await apiFetch('/services', { method: 'GET' })) as ApiServicesResponse
-      setItems(r.items || [])
+      const newItems = r.items || []
+
+      setItems(newItems)
       setSummary(r.summary || null)
+
+      if (!silent) {
+        toast.info('Услуги обновлены', {
+          description: getMood('service_status_updated') ?? 'Проверили — всё актуально.',
+        })
+      }
     } catch (e: any) {
-      setError(e?.message || 'Failed to load services')
+      const msg = e?.message || 'Failed to load services'
+      setError(msg)
+      if (!silent) toast.error('Не удалось обновить', { description: msg })
     } finally {
       setLoading(false)
     }
@@ -561,14 +587,24 @@ export function Services() {
     if (!stopTarget || stopBusy) return
     setStopBusy(true)
     setStopError(null)
+
+    const usi = stopTarget.userServiceId
+    const seed = String(usi)
+
     try {
-      const usi = stopTarget.userServiceId
       await stopService(usi)
       setStopTarget(null)
       setExpandedId(usi)
-      await load()
+
+      toast.success('Заблокировано', {
+        description: getMood('service_removed', { seed }) ?? 'Готово.',
+      })
+
+      await load({ silent: true })
     } catch (e: any) {
-      setStopError(e?.message || 'Не удалось заблокировать услугу. Попробуйте ещё раз или обратитесь в поддержку.')
+      const msg = e?.message || 'Не удалось заблокировать услугу. Попробуйте ещё раз или обратитесь в поддержку.'
+      setStopError(msg)
+      toast.error('Не удалось заблокировать', { description: msg })
     } finally {
       setStopBusy(false)
     }
@@ -578,24 +614,82 @@ export function Services() {
     if (!deleteTarget || deleteBusy) return
     setDeleteBusy(true)
     setDeleteError(null)
+
+    const usi = deleteTarget.userServiceId
+    const seed = String(usi)
+
     try {
-      const usi = deleteTarget.userServiceId
       await deleteService(usi)
       setDeleteTarget(null)
       setExpandedId((cur) => (cur === usi ? null : cur))
       setConnectOpenId((cur) => (cur === usi ? null : cur))
-      await load()
+
+      toast.success('Услуга удалена', {
+        description: getMood('service_removed', { seed }) ?? 'Готово. Услуга отключена.',
+      })
+
+      await load({ silent: true })
     } catch (e: any) {
-      setDeleteError(e?.message || 'Не удалось удалить услугу. Попробуйте ещё раз или обратитесь в поддержку.')
+      const msg = e?.message || 'Не удалось удалить услугу. Попробуйте ещё раз или обратитесь в поддержку.'
+      setDeleteError(msg)
+      toast.error('Не удалось удалить', {
+        description: getMood('service_remove_failed', { seed }) ?? msg,
+      })
     } finally {
       setDeleteBusy(false)
     }
   }
 
   useEffect(() => {
-    load()
+    // первичная загрузка — тихая (без тоста)
+    load({ silent: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // статусные тосты на переходы
+  useEffect(() => {
+    const cur = new Map<number, UiStatus>()
+    for (const it of items || []) cur.set(it.userServiceId, normStatus(it.status))
+
+    if (!statusInitRef.current) {
+      prevStatusesRef.current = cur
+      statusInitRef.current = true
+      return
+    }
+
+    const prev = prevStatusesRef.current || new Map<number, UiStatus>()
+
+    for (const it of items || []) {
+      const id = it.userServiceId
+      const before = prev.get(id)
+      const after = cur.get(id)
+
+      if (!before || !after || before === after) continue
+
+      const seed = String(id)
+      const title = it.title ? it.title : `Услуга #${id}`
+
+      if (after === 'blocked') {
+        toast.error(title, {
+          description: getMood('service_blocked', { seed }) ?? 'Услуга заблокирована. Нужны действия.',
+        })
+      } else if (after === 'not_paid') {
+        toast.info(title, {
+          description: 'Требуется оплата.',
+        })
+      } else if (after === 'active' && (before === 'pending' || before === 'not_paid' || before === 'blocked' || before === 'init')) {
+        toast.success(title, {
+          description: getMood('service_activated', { seed }) ?? 'Услуга активирована.',
+        })
+      } else if (after === 'removed') {
+        toast.success(title, {
+          description: getMood('service_removed', { seed }) ?? 'Услуга удалена.',
+        })
+      }
+    }
+
+    prevStatusesRef.current = cur
+  }, [items])
 
   const groups = useMemo(() => {
     const byKind: Record<ServiceKind, ApiServiceItem[]> = {
@@ -641,7 +735,7 @@ export function Services() {
               Ошибка загрузки данных: <span>{error}</span>
             </p>
             <div className="actions actions--1">
-              <button className="btn btn--primary" onClick={load}>
+              <button className="btn btn--primary" onClick={() => load()}>
                 Повторить
               </button>
             </div>
@@ -704,7 +798,7 @@ export function Services() {
                       setExpandedId(x.userServiceId)
                       setConnectOpenId((cur) => (cur === x.userServiceId ? null : x.userServiceId))
                     }}
-                    onRefresh={load}
+                    onRefresh={() => load()}
                     onAskDelete={(svc) => {
                       setDeleteError(null)
                       setDeleteTarget(svc)
@@ -749,6 +843,10 @@ export function Services() {
           <div className="services-head__actions">
             <button className="btn btn--primary services-head__cta" onClick={() => go('/services/order')}>
               Заказать
+            </button>
+
+            <button className="btn services-head__cta" onClick={() => load()}>
+              Обновить
             </button>
           </div>
         </div>
