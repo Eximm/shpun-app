@@ -1,6 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import QRCode from 'qrcode'
 import { apiFetch } from '../../shared/api/client'
+
+// ✅ toasts + mood (типизированные ключи — только из payments-mood)
+import { toast } from '../../shared/ui/toast'
+import { getMood } from '../../shared/payments-mood'
 
 type Props = {
   usi: number
@@ -78,6 +82,28 @@ function downloadTextFile(filename: string, text: string) {
   setTimeout(() => URL.revokeObjectURL(url), 5000)
 }
 
+async function copyToClipboard(text: string) {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    try {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.style.position = 'fixed'
+      ta.style.top = '-1000px'
+      document.body.appendChild(ta)
+      ta.focus()
+      ta.select()
+      const ok = document.execCommand('copy')
+      document.body.removeChild(ta)
+      return ok
+    } catch {
+      return false
+    }
+  }
+}
+
 function pickConfig(resp: any): { text: string; name: string } {
   const name =
     String(resp?.configName ?? resp?.filename ?? resp?.fileName ?? resp?.name ?? '').trim() || 'vpn.conf'
@@ -106,11 +132,13 @@ export default function ConnectAmneziaWG({ usi }: Props) {
   const platform: Platform = chip === 'auto' ? autoPlatform : chip
 
   const [platformPickerOpen, setPlatformPickerOpen] = useState(false)
-
   const [moreOpen, setMoreOpen] = useState(false)
 
   const [qrOpen, setQrOpen] = useState(false)
   const [qrDataUrl, setQrDataUrl] = useState<string>('')
+
+  // ✅ prevent “profile ready” toast from repeating
+  const didToastReadyRef = useRef(false)
 
   async function load() {
     setLoading(true)
@@ -129,15 +157,29 @@ export default function ConnectAmneziaWG({ usi }: Props) {
 
       setConfigText(picked.text)
       setConfigName(picked.name || `vpn${usi}.conf`)
+
+      // ✅ small toast once
+      if (!didToastReadyRef.current) {
+        didToastReadyRef.current = true
+        toast.success('Профиль готов', {
+          description: getMood('payment_success', { seed: String(usi) }) ?? 'Можно импортировать в AmneziaWG.',
+        })
+      }
     } catch (e: any) {
       setConfigText('')
-      setError(e?.message || 'Не удалось загрузить конфигурацию')
+      const msg = e?.message || 'Не удалось загрузить конфигурацию'
+      setError(msg)
+
+      toast.error('Не удалось подготовить профиль', {
+        description: msg === 'profile_missing' ? 'Профиль пока недоступен. Попробуйте чуть позже.' : String(msg),
+      })
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
+    didToastReadyRef.current = false
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usi])
@@ -158,17 +200,41 @@ export default function ConnectAmneziaWG({ usi }: Props) {
       const dataUrl = await QRCode.toDataURL(configText, { margin: 2, width: 360 })
       setQrDataUrl(dataUrl)
       setQrOpen(true)
-    } catch {
-      alert('Не удалось построить QR-код')
+
+      toast.info('QR-код готов', {
+        description: getMood('payment_checking', { seed: String(usi) }) ?? 'Откройте AmneziaWG и импортируйте по QR.',
+      })
+    } catch (e: any) {
+      toast.error('Не удалось построить QR', {
+        description: String(e?.message || 'Попробуйте ещё раз.'),
+      })
     }
   }
 
   function downloadConf() {
     if (!configText) return
     downloadTextFile(configName || `vpn${usi}.conf`, configText)
+
+    toast.success('Скачивание началось', {
+      description: getMood('payment_success', { seed: String(usi) }) ?? 'Файл .conf сохранится в загрузках.',
+    })
   }
 
-  // Главный шаг 2: мобила => QR, десктоп => файл
+  async function copyConf() {
+    if (!configText) return
+    const ok = await copyToClipboard(configText)
+    if (ok) {
+      toast.success('Скопировано', {
+        description: getMood('payment_success', { seed: String(usi) }) ?? 'Профиль в буфере обмена.',
+      })
+    } else {
+      toast.error('Не удалось скопировать', {
+        description: 'Браузер запретил копирование. Попробуйте другой способ.',
+      })
+    }
+  }
+
+  // Main step 2: mobile => QR, desktop => file
   const main2Label = isMobile(platform) ? 'Показать QR' : 'Скачать конфиг (.conf)'
   const main2Action = isMobile(platform) ? openQr : downloadConf
 
@@ -197,7 +263,7 @@ export default function ConnectAmneziaWG({ usi }: Props) {
         </div>
       ) : null}
 
-      {/* устройство: кнопка -> overlay (вместо select) */}
+      {/* device picker */}
       <div className="row cawg__rowTop">
         <div className="p cawg__label">Устройство:</div>
 
@@ -213,7 +279,7 @@ export default function ConnectAmneziaWG({ usi }: Props) {
         </button>
       </div>
 
-      {/* Шаг 1 */}
+      {/* Step 1 */}
       <div className="card" style={{ marginTop: 12 }}>
         <div className="card__body">
           <div className="services-cat__title">1) Установите приложение</div>
@@ -245,7 +311,7 @@ export default function ConnectAmneziaWG({ usi }: Props) {
         </div>
       </div>
 
-      {/* Шаг 2 */}
+      {/* Step 2 */}
       <div className="card" style={{ marginTop: 12 }}>
         <div className="card__body">
           <div className="services-cat__title">2) Добавьте профиль</div>
@@ -272,13 +338,25 @@ export default function ConnectAmneziaWG({ usi }: Props) {
             </button>
           </div>
 
-          {/* Другие способы: только QR, во всю ширину и “мягко” */}
+          {/* More ways */}
           {moreOpen && ready ? (
             <div style={{ marginTop: 10 }}>
               <div className="pre" style={{ opacity: 0.95 }}>
                 <div className="actions actions--1" style={{ marginTop: 0 }}>
                   <button className="btn btn--soft so__btnFull" type="button" onClick={openQr}>
                     Показать QR
+                  </button>
+                </div>
+
+                <div className="actions actions--1" style={{ marginTop: 10 }}>
+                  <button className="btn btn--soft so__btnFull" type="button" onClick={downloadConf}>
+                    Скачать .conf
+                  </button>
+                </div>
+
+                <div className="actions actions--1" style={{ marginTop: 10 }}>
+                  <button className="btn btn--soft so__btnFull" type="button" onClick={copyConf}>
+                    Скопировать конфиг
                   </button>
                 </div>
               </div>

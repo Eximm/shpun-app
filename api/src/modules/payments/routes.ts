@@ -136,6 +136,12 @@ async function shmPrivateTemplateGet(sessionId: string, name: string, params?: R
   })
 }
 
+function fmtRu(tsIso: string) {
+  const d = new Date(tsIso)
+  if (Number.isNaN(d.getTime())) return tsIso
+  return d.toLocaleString('ru-RU', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+}
+
 export async function paymentsRoutes(app: FastifyInstance) {
   // GET /api/payments/paysystems
   app.get('/payments/paysystems', async (req, reply) => {
@@ -215,8 +221,14 @@ export async function paymentsRoutes(app: FastifyInstance) {
     const s = requireSession(req, reply)
     if (!s) return
 
-    const r = await shmFetch<any>(s.shmSessionId, 'v1/user/autopayment', { method: 'DELETE' })
-    if (!r.ok) return reply.code(r.status).send({ ok: false, error: 'shm_error', raw: r.json ?? r.text })
+    const r = await shmFetch<any>(s.shmSessionId, 'v1/user/autopayment', {
+      method: 'DELETE',
+    })
+
+    if (!r.ok) {
+      return reply.code(r.status).send({ ok: false, error: 'shm_error', raw: r.json ?? r.text })
+    }
+
     return reply.send({ ok: true })
   })
 
@@ -234,7 +246,7 @@ export async function paymentsRoutes(app: FastifyInstance) {
     return reply.send({ ok: true, items: list })
   })
 
-  // ✅ POST /api/payments/receipt — fix "hang" by consuming file stream inside parts loop
+  // POST /api/payments/receipt  (multipart/form-data)
   app.post('/payments/receipt', async (req, reply) => {
     const s = requireSession(req, reply)
     if (!s) return
@@ -242,55 +254,32 @@ export async function paymentsRoutes(app: FastifyInstance) {
     const userId = requireUserId(s, reply)
     if (!userId) return
 
-    let amountRaw = ''
+    const mp: any = await (req as any).file()
+    if (!mp) return reply.code(400).send({ ok: false, error: 'file_required' })
 
-    // prepare file save slot
+    const amountRaw = String(mp?.fields?.amount?.value ?? '').trim()
+    const amount = Math.round(Number(String(amountRaw).replace(',', '.')))
+    if (!Number.isFinite(amount) || amount < 1) {
+      return reply.code(400).send({ ok: false, error: 'bad_amount' })
+    }
+
+    const mime = String(mp.mimetype || 'application/octet-stream')
+    const ext = safeExtFromMime(mime)
     const id = crypto.randomBytes(12).toString('hex')
+
     const userDir = path.join(DATA_DIR, String(userId))
     await ensureDir(userDir)
 
-    let filePath = ''
-    let filename = ''
-    let mime = 'application/octet-stream'
+    const filename = `receipt_${id}.${ext}`
+    const filePath = path.join(userDir, filename)
 
-    const parts = (req as any).parts()
-
-    for await (const part of parts) {
-      if (part.type === 'field') {
-        if (part.fieldname === 'amount') amountRaw = String(part.value ?? '').trim()
-        continue
-      }
-
-      if (part.type === 'file' && part.fieldname === 'file') {
-        mime = String(part.mimetype || 'application/octet-stream')
-        const ext = safeExtFromMime(mime)
-
-        filename = `receipt_${id}.${ext}`
-        filePath = path.join(userDir, filename)
-
-        // ✅ IMPORTANT: consume the file stream NOW (otherwise request may hang)
-        await new Promise<void>((resolve, reject) => {
-          const ws = fssync.createWriteStream(filePath)
-          part.file.pipe(ws)
-          part.file.on('error', reject)
-          ws.on('error', reject)
-          ws.on('finish', () => resolve())
-        })
-
-        continue
-      }
-
-      // unknown parts: ignore
-    }
-
-    if (!filePath || !filename) return reply.code(400).send({ ok: false, error: 'file_required' })
-
-    const amount = Math.round(Number(String(amountRaw).replace(',', '.')))
-    if (!Number.isFinite(amount) || amount < 1) {
-      // cleanup saved file if amount is bad
-      try { await fs.unlink(filePath) } catch {}
-      return reply.code(400).send({ ok: false, error: 'bad_amount' })
-    }
+    await new Promise<void>((resolve, reject) => {
+      const ws = fssync.createWriteStream(filePath)
+      mp.file.pipe(ws)
+      mp.file.on('error', reject)
+      ws.on('error', reject)
+      ws.on('finish', () => resolve())
+    })
 
     const st = await fs.stat(filePath)
 
@@ -323,14 +312,16 @@ export async function paymentsRoutes(app: FastifyInstance) {
 
     try {
       if (botToken && adminChatId) {
+        // ✅ UPDATED: nicer caption + source tag, no ISO
         const captionAdmin =
-          `🧾 Квитанция (перевод по реквизитам)\n` +
-          `Клиент: ${fullName}\n` +
-          `ID: ${userId}\n` +
-          (login ? `Логин: ${login}\n` : '') +
-          (tgLogin ? `TG: @${tgLogin}\n` : '') +
-          `Сумма: ${amount} ₽\n` +
-          `ISO: ${record.created_at}`
+          `🧾 Перевод по реквизитам\n` +
+          `📱 Отправлено из Shpun App\n\n` +
+          `👤 Клиент: ${fullName}\n` +
+          `🆔 ID: ${userId}\n` +
+          (login ? `🔑 Логин: ${login}\n` : '') +
+          (tgLogin ? `💬 TG: @${tgLogin}\n` : '') +
+          `💰 Сумма: ${amount} ₽\n` +
+          `🕒 Время: ${fmtRu(record.created_at)}`
 
         const tgRes = await sendTelegramDocument({
           botToken,
