@@ -23,6 +23,9 @@ import { SetPassword } from "./pages/SetPassword";
 import { Transfer } from "./pages/Transfer";
 import { Referrals } from "./pages/Referrals";
 
+// ✅ NEW: help page (Router VPN / Shpun Router)
+import { ServicesRouter } from "./pages/help/ServicesRouter";
+
 import { AuthGate } from "./app/auth/AuthGate";
 import { BottomNav } from "./app/layout/BottomNav";
 import { I18nProvider, useI18n } from "./shared/i18n";
@@ -143,6 +146,16 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               element={
                 <Authed>
                   <ServicesOrder />
+                </Authed>
+              }
+            />
+
+            {/* ✅ NEW: Router VPN help/instruction page */}
+            <Route
+              path="/help/router"
+              element={
+                <Authed>
+                  <ServicesRouter />
                 </Authed>
               }
             />

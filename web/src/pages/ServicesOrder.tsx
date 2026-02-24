@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { apiFetch } from '../shared/api/client'
 import { useMe } from '../app/auth/useMe'
 
@@ -70,25 +71,39 @@ function kindFromCategory(cat: string): Kind {
   return 'marzban_router'
 }
 
+/** названия — как в твоих скринах/боте */
 function kindTitle(k: Kind) {
   switch (k) {
+    case 'marzban':
+      return 'Marzban'
+    case 'marzban_router':
+      return 'Router VPN'
     case 'amneziawg':
       return 'AmneziaWG'
-    case 'marzban':
-      return 'Marzban (все устройства)'
-    case 'marzban_router':
-      return 'Shpun Router'
   }
 }
 
+/** длинные описания — внутри категории */
 function kindDescr(k: Kind) {
   switch (k) {
-    case 'amneziawg':
-      return 'VPN-протокол AmneziaWG.'
     case 'marzban':
-      return 'Подписка Marzban для всех устройств.'
+      return 'Высокая стабильность и скорость. Подходит для телефонов, ПК и планшетов. Доступ ко всем серверам.'
     case 'marzban_router':
-      return 'Подписка Marzban для роутеров.'
+      return 'Создано специально для прошивки Shpun Router. Протокол Reality — максимально незаметность. Работает на всех устройствах через ваш роутер.'
+    case 'amneziawg':
+      return 'Подключение на один выбранный сервер. Простая настройка и минимум параметров. Может работать нестабильно в ряде регионов.'
+  }
+}
+
+/** короткие описания — на карточках выбора типа */
+function kindDescrShort(k: Kind) {
+  switch (k) {
+    case 'marzban':
+      return 'Стабильно и быстро. Для телефона, ПК и планшета. Все серверы.'
+    case 'marzban_router':
+      return 'VPN на всю домашнюю сеть через роутер. Протокол Reality.'
+    case 'amneziawg':
+      return 'Простой VPN на один сервер. В некоторых регионах бывает нестабильным.'
   }
 }
 
@@ -125,7 +140,26 @@ async function copyToClipboard(text: string) {
   }
 }
 
+/** ====== Amnezia warning (как в боте) ====== */
+const AMNEZIA_WARN_KEY = 'order.amnezia.warn.dismissed.v1'
+function readAmneziaWarnDismissed(): boolean {
+  try {
+    return localStorage.getItem(AMNEZIA_WARN_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+function saveAmneziaWarnDismissed() {
+  try {
+    localStorage.setItem(AMNEZIA_WARN_KEY, '1')
+  } catch {
+    // ignore
+  }
+}
+
 export function ServicesOrder() {
+  const navigate = useNavigate()
+
   // ✅ единый источник денег, как на Home
   const { me, loading: meLoading, error: meError, refetch } = useMe()
 
@@ -159,6 +193,9 @@ export function ServicesOrder() {
   const [payOpenError, setPayOpenError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
 
+  // ✅ предупреждение Amnezia (1 раз)
+  const [amneziaWarnOpen, setAmneziaWarnOpen] = useState(false)
+
   async function loadPaysystems() {
     const ps = await apiFetch<PaysystemsResp>('/payments/paysystems', { method: 'GET' })
     const items = ps?.items || []
@@ -184,12 +221,20 @@ export function ServicesOrder() {
     }
   }
 
-  async function hardRefresh() {
-    await Promise.all([loadTariffs(), Promise.resolve(refetch?.())])
-  }
-
   useEffect(() => {
     loadTariffs()
+
+    // ✅ deep-link: /services/order?kind=marzban_router
+    try {
+      const q = new URLSearchParams(window.location.search)
+      const k = q.get('kind')
+      if (k === 'marzban_router' || k === 'marzban' || k === 'amneziawg') {
+        setKind(k)
+      }
+    } catch {
+      // ignore
+    }
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -277,8 +322,7 @@ export function ServicesOrder() {
       return
     }
 
-    const toPay =
-      needTopup > 0 ? needTopup : Math.max(1, Math.ceil(nnum(selected?.price, 0) - available))
+    const toPay = needTopup > 0 ? needTopup : Math.max(1, Math.ceil(nnum(selected?.price, 0) - available))
 
     const url = buildPayUrl(ps.shm_url, toPay)
     setLastPayUrl(url)
@@ -354,6 +398,18 @@ export function ServicesOrder() {
     if (!ok) setPayOpenError('Не получилось скопировать ссылку автоматически. Скопируйте вручную из строки ниже.')
   }
 
+  // ✅ показываем предупреждение при заходе в категорию AmneziaWG (только 1 раз)
+  useEffect(() => {
+    if (kind !== 'amneziawg') return
+    if (readAmneziaWarnDismissed()) return
+    setAmneziaWarnOpen(true)
+  }, [kind])
+
+  function closeAmneziaWarn() {
+    saveAmneziaWarnDismissed()
+    setAmneziaWarnOpen(false)
+  }
+
   if (loading || meLoading) {
     return (
       <div className="section">
@@ -371,6 +427,7 @@ export function ServicesOrder() {
 
   return (
     <div className="section">
+      {/* ==== overlay оплаты ==== */}
       {overlayOpen ? (
         <div className="overlay" onClick={() => setOverlayOpen(false)}>
           <div className="card overlay__card" onClick={(e) => e.stopPropagation()}>
@@ -419,6 +476,29 @@ export function ServicesOrder() {
         </div>
       ) : null}
 
+      {/* ==== предупреждение AmneziaWG ==== */}
+      {amneziaWarnOpen ? (
+        <div className="overlay" onClick={closeAmneziaWarn}>
+          <div className="card overlay__card" onClick={(e) => e.stopPropagation()}>
+            <div className="card__body">
+              <div className="overlay__title">⚠️ Важно про AmneziaWG</div>
+
+              <div className="p so__mt8">
+                Стабильность AmneziaWG не гарантирована и может зависеть от провайдера. Использование — на свой риск.
+                Для надёжной работы рекомендуем подписку Marzban.
+              </div>
+
+              <div className="actions actions--1 so__mt12">
+                <button className="btn btn--primary" onClick={closeAmneziaWarn}>
+                  OK
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* ==== header ==== */}
       <div className="card">
         <div className="card__body">
           <div className="row so__headerRow">
@@ -432,9 +512,6 @@ export function ServicesOrder() {
                 Доступно: <b>{fmtMoney(available, currency)}</b>
               </div>
             </div>
-            <button className="btn" onClick={hardRefresh} title="Обновить">
-              ⟳
-            </button>
           </div>
 
           {waitMsg ? <div className="pre so__mt12">{waitMsg}</div> : null}
@@ -442,21 +519,48 @@ export function ServicesOrder() {
         </div>
       </div>
 
+      {/* ==== categories ==== */}
       {!kind ? (
         <div className="section">
           <div className="card">
             <div className="card__body">
-              <div className="h1 so__h18">Категории</div>
-              <p className="p">Выберите, что подключаем.</p>
+              <div className="row so__spaceBetween">
+                <div>
+                  <div className="h1 so__h18">Выберите тип услуги</div>
+                  <p className="p">Подберём подходящий вариант под ваше устройство.</p>
+                </div>
+
+                <button className="btn" onClick={() => navigate(-1)}>
+                  ⇦ Назад
+                </button>
+              </div>
 
               <div className="kv so__mt12">
-                {(Object.keys(grouped) as Kind[]).map((k) => (
-                  <button key={k} className="kv__item" onClick={() => setKind(k)} type="button">
-                    <div className="kv__k">{kindTitle(k)}</div>
-                    <div className="kv__v so__mt6">{kindDescr(k)}</div>
-                    <div className="row so__mt10">
+                {(['marzban', 'marzban_router', 'amneziawg'] as Kind[]).map((k) => (
+                  <button
+                    key={k}
+                    className="kv__item"
+                    onClick={() => setKind(k)}
+                    type="button"
+                    title="Выбрать"
+                    style={{
+                      textAlign: 'left',
+                      display: 'block',
+                    }}
+                  >
+                    {/* верхний левый бейдж с количеством */}
+                    <div className="row" style={{ justifyContent: 'flex-start', gap: 8 }}>
                       <span className="badge">{grouped[k].length} тарифов</span>
-                      <span className="badge">Выбрать</span>
+                    </div>
+
+                    <div className="kv__k so__mt10">{kindTitle(k)}</div>
+                    <div className="kv__v so__mt6">{kindDescrShort(k)}</div>
+
+                    {/* визуальная “кнопка выбора” по центру (кликается вся карточка) */}
+                    <div className="actions actions--1 so__mt12" style={{ pointerEvents: 'none' }}>
+                      <span className="btn btn--primary so__btnFull" style={{ textAlign: 'center' }}>
+                        Выбрать
+                      </span>
                     </div>
                   </button>
                 ))}
@@ -466,19 +570,33 @@ export function ServicesOrder() {
         </div>
       ) : null}
 
+      {/* ==== tariffs ==== */}
       {kind && !selected ? (
         <div className="section">
           <div className="card">
             <div className="card__body">
+              {/* единая шапка как везде: заголовок слева, “назад” справа */}
               <div className="row so__spaceBetween">
-                <div>
-                  <div className="h1 so__h18">{kindTitle(kind)}</div>
-                  <p className="p">{kindDescr(kind)}</p>
-                </div>
+                <div className="h1 so__h18">{kindTitle(kind)}</div>
+
                 <button className="btn" onClick={() => setKind(null)}>
                   ⇦ Назад
                 </button>
               </div>
+
+              {/* описание — на всю ширину, с бортиком */}
+              <div className="pre so__mt12" style={{ border: '1px solid rgba(148,163,184,.35)', opacity: 0.95 }}>
+                {kindDescr(kind)}
+              </div>
+
+              {/* Router VPN: отдельная страница инструкции */}
+              {kind === 'marzban_router' ? (
+                <div className="actions actions--1 so__mt12">
+                  <button className="btn so__btnFull" onClick={() => navigate('/help/router')}>
+                    📘 Инструкция Shpun Router
+                  </button>
+                </div>
+              ) : null}
 
               <div className="kv so__mt12">
                 {grouped[kind].map((t) => (
@@ -498,6 +616,7 @@ export function ServicesOrder() {
         </div>
       ) : null}
 
+      {/* ==== selected / checkout ==== */}
       {selected ? (
         <div className="section">
           <div className="card">
@@ -512,9 +631,7 @@ export function ServicesOrder() {
                 </button>
               </div>
 
-              {/* Details block: collapsible */}
               <div className={`so__details ${detailsCollapsed ? 'is-collapsed' : ''}`}>
-                {/* ✅ компактный блок вместо “простыни” */}
                 <div
                   style={{
                     marginTop: 12,
@@ -567,15 +684,12 @@ export function ServicesOrder() {
                 )}
               </div>
 
-              {/* Payment block */}
               {created && shouldShowPay ? (
                 <div className="so__pay so__mt12">
                   <div className="card so__cardFlat">
                     <div className="card__body">
                       <div className="h1 so__h18">Оплата</div>
-                      <p className="p">
-                        Выберите способ оплаты. Мы откроем оплату, а вы сможете вернуться и проверить статус.
-                      </p>
+                      <p className="p">Выберите способ оплаты. Мы откроем оплату, а вы сможете вернуться и проверить статус.</p>
 
                       {paySystems.length === 0 ? (
                         <div className="pre">Способы оплаты не найдены.</div>
@@ -594,9 +708,7 @@ export function ServicesOrder() {
                                   onClick={() => startPay(ps)}
                                   disabled={!ps.shm_url || openingPay}
                                 >
-                                  {openingPay
-                                    ? 'Открываем…'
-                                    : `Оплатить ${fmtMoney(needTopup > 0 ? needTopup : 1, currency)}`}
+                                  {openingPay ? 'Открываем…' : `Оплатить ${fmtMoney(needTopup > 0 ? needTopup : 1, currency)}`}
                                 </button>
                               </div>
                             </div>

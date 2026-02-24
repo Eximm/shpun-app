@@ -57,20 +57,21 @@ function kindTitle(k: ServiceKind) {
     case 'marzban':
       return 'Marzban'
     case 'marzban_router':
-      return 'Shpun Router VPN'
+      return 'Router VPN'
     default:
       return 'Другое'
   }
 }
 
+/** Описание — как в боте */
 function kindDescr(k: ServiceKind) {
   switch (k) {
-    case 'amneziawg':
-      return 'VPN-протокол AmneziaWG.'
     case 'marzban':
-      return 'Подписка Marzban.'
+      return 'Подписка для телефонов, ПК и планшетов.'
     case 'marzban_router':
-      return 'Подписка для роутера.'
+      return 'Отдельные подписки для роутеров (Shpun Router / OpenWrt).'
+    case 'amneziawg':
+      return 'Простой ключ для одного сервера.'
     default:
       return 'Прочие услуги.'
   }
@@ -152,7 +153,7 @@ function statusSortWeight(s: UiStatus) {
 function canDeleteStatus(s: UiStatus) {
   if (s === 'pending' || s === 'init') return false
   if (s === 'removed') return false
-  if (s === 'active') return false // active удаляем только после stop
+  if (s === 'active') return false
   return true
 }
 
@@ -247,9 +248,6 @@ function Modal({
   )
 }
 
-/**
- * "Дополнительные страницы" (лениво), которые мы рендерим ВНУТРИ карточки.
- */
 const ConnectAmneziaWG = React.lazy(() => import('./connect/ConnectAmneziaWG'))
 const ConnectMarzban = React.lazy(() => import('./connect/ConnectMarzban.tsx'))
 const ConnectRouter = React.lazy(() => import('./connect/ConnectRouter'))
@@ -267,7 +265,6 @@ function ConnectInline({
     <div className="svc__connect">
       <div className="row svc__connectHead">
         <div className="services-cat__title svc__connectTitle">Подключение</div>
-        <span className="badge">{kindTitle(kind)}</span>
       </div>
 
       <div className="svc__connectBody">
@@ -350,7 +347,6 @@ function ServiceCard({
           </div>
 
           <div className="svc__right">
-            <span className="badge">{kindTitle(kind)}</span>
             <span className="badge">
               {fmtMoney(s.price, s.currency)} / {s.periodMonths || 1}м
             </span>
@@ -383,7 +379,7 @@ function ServiceCard({
                 Оплатить / пополнить
               </button>
               <button className="btn" onClick={onRefresh}>
-                ⟳ Обновить
+                Обновить
               </button>
             </div>
           ) : null}
@@ -391,7 +387,7 @@ function ServiceCard({
           {(s.status === 'pending' || s.status === 'init') ? (
             <div className="actions actions--1">
               <button className="btn btn--primary" onClick={onRefresh}>
-                ⟳ Обновить статус
+                Обновить статус
               </button>
             </div>
           ) : null}
@@ -410,7 +406,7 @@ function ServiceCard({
           {s.status === 'error' ? (
             <div className="actions actions--2">
               <button className="btn btn--primary" onClick={onRefresh}>
-                ⟳ Обновить
+                Обновить
               </button>
               <button className="btn" onClick={() => go(supportUrl)}>
                 В поддержку
@@ -441,6 +437,36 @@ function ServiceCard({
   )
 }
 
+const STORAGE_KEY = 'services.groups.v1'
+
+function readGroupsState(): Record<ServiceKind, boolean> | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return null
+    const obj = JSON.parse(raw)
+    if (!obj || typeof obj !== 'object') return null
+
+    const pick = (k: ServiceKind, def: boolean) => (typeof obj[k] === 'boolean' ? obj[k] : def)
+
+    return {
+      amneziawg: pick('amneziawg', false),
+      marzban: pick('marzban', false),
+      marzban_router: pick('marzban_router', false),
+      unknown: pick('unknown', false),
+    }
+  } catch {
+    return null
+  }
+}
+
+function saveGroupsState(v: Record<ServiceKind, boolean>) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(v))
+  } catch {
+    // ignore
+  }
+}
+
 export function Services() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -458,12 +484,21 @@ export function Services() {
   const [stopBusy, setStopBusy] = useState(false)
   const [stopError, setStopError] = useState<string | null>(null)
 
-  const [openGroups, setOpenGroups] = useState<Record<ServiceKind, boolean>>({
-    amneziawg: true,
-    marzban: true,
-    marzban_router: true,
-    unknown: false,
+  // ✅ по умолчанию всё свернуто + читаем из localStorage
+  const [openGroups, setOpenGroups] = useState<Record<ServiceKind, boolean>>(() => {
+    return (
+      readGroupsState() ?? {
+        amneziawg: false,
+        marzban: false,
+        marzban_router: false,
+        unknown: false,
+      }
+    )
   })
+
+  useEffect(() => {
+    saveGroupsState(openGroups)
+  }, [openGroups])
 
   async function load() {
     setLoading(true)
@@ -657,19 +692,13 @@ export function Services() {
     <div className="section">
       <div className="card">
         <div className="card__body">
-          {/* header — как на Home */}
           <div className="services-top">
             <div className="services-top__left">
               <div className="services-top__title">Услуги</div>
               <div className="services-top__sub">Список ключей и статусы.</div>
             </div>
-
-            <button className="btn btn--accent" onClick={load} title="⟳ Обновить">
-              ⟳ Обновить
-            </button>
           </div>
 
-          {/* бейджи */}
           <div className="services-head__meta services-head__meta--wide">
             <span className="badge">
               Активные: <b>{s?.active ?? fallbackActive}</b>
@@ -682,7 +711,6 @@ export function Services() {
             </span>
           </div>
 
-          {/* единый CTA */}
           <div className="services-head__actions">
             <button className="btn btn--primary services-head__cta" onClick={() => go('/services/order')}>
               Заказать

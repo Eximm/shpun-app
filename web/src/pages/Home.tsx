@@ -300,10 +300,7 @@ export function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me?.ok]);
 
-  async function hardRefresh() {
-    await Promise.resolve(refetch?.());
-    await Promise.all([loadServicesSummary(), loadPaymentsForecast()]);
-  }
+   
 
   /* ======================================================================
      ACTION: promo stub
@@ -447,13 +444,7 @@ export function Home() {
             </div>
 
             {/* “акцентная” вторичная кнопка */}
-            <button
-              className="btn btn--accent"
-              onClick={hardRefresh}
-              title={t("home.refresh", "⟳ Обновить")}
-            >
-              {t("home.refresh", "⟳ Обновить")}
-            </button>
+            
           </div>
 
           <div className="home-tiles">
