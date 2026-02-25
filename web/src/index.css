@@ -2007,3 +2007,6 @@ button, a { -webkit-tap-highlight-color: transparent; }
   min-width: var(--tap);
   padding: 0;
 }
+.list__item.is-clickable { cursor: pointer; }
+.list__item.is-clickable:hover { filter: brightness(1.04); }
+.list__item.is-clickable:active { filter: brightness(0.98); }

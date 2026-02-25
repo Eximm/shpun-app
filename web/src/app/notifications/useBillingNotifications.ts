@@ -8,6 +8,7 @@ type BillingPushEvent = {
   level?: 'info' | 'success' | 'error'
   title?: string
   message?: string
+  toast?: boolean // ✅ NEW
 }
 
 type Resp = { ok: true; items: BillingPushEvent[]; nextCursor: number }
@@ -54,6 +55,8 @@ export function useBillingNotifications(enabled: boolean) {
         }
 
         for (const ev of r.items || []) {
+          if (ev.toast === false) continue // ✅ NEW: новости и "тихие" события не тостим
+
           const title = ev.title || 'Уведомление'
           const desc = ev.message || ''
           const lvl = ev.level || 'info'
