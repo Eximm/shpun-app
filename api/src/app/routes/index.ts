@@ -7,7 +7,8 @@ import { userRoutes } from '../../modules/user/routes.js'
 import { servicesRoutes } from '../../modules/services/routes.js'
 import { paymentsRoutes } from '../../modules/payments/routes.js'
 import { activityRoutes } from '../../modules/activity/routes.js'
-import { referralsRoutes } from '../../modules/referrals/routes.js' // ← ДОБАВИЛИ
+import { referralsRoutes } from '../../modules/referrals/routes.js'
+import { pushRoutes } from '../../modules/notifications/push.js'
 
 export async function registerRoutes(app: FastifyInstance) {
   await app.register(
@@ -17,7 +18,10 @@ export async function registerRoutes(app: FastifyInstance) {
       await servicesRoutes(api)
       await paymentsRoutes(api)
       await activityRoutes(api)
-      await referralsRoutes(api) // ← ДОБАВИЛИ
+      await referralsRoutes(api)
+
+      // 🔔 Billing HTTP Push + Notifications
+      await pushRoutes(api)
     },
     { prefix: '/api' }
   )

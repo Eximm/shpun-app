@@ -5,6 +5,9 @@ import { apiFetch } from '../shared/api/client'
 import { toast } from '../shared/ui/toast'
 import { getMood } from '../shared/payments-mood'
 
+// ✅ me (discount/balance/bonus)
+import { useMe } from '../app/auth/useMe'
+
 type UiStatus = 'active' | 'blocked' | 'pending' | 'not_paid' | 'removed' | 'error' | 'init'
 
 type ApiServiceItem = {
@@ -517,6 +520,11 @@ function normStatus(s: any): UiStatus {
   return 'error'
 }
 
+function nnum(v: any, def = 0) {
+  const x = typeof v === 'string' ? Number(v.replace(',', '.')) : Number(v)
+  return Number.isFinite(x) ? x : def
+}
+
 export function Services() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -544,6 +552,10 @@ export function Services() {
       }
     )
   })
+
+  // ✅ discount/balance/bonus for header badges
+  const { me } = useMe()
+  const discountPercent = Math.max(0, nnum((me as any)?.discount, 0))
 
   useEffect(() => {
     saveGroupsState(openGroups)
@@ -841,6 +853,12 @@ export function Services() {
             <span className="badge">
               В месяц: <b>{fmtMoney(s?.monthlyCost ?? 0, s?.currency ?? 'RUB')}</b>
             </span>
+
+            {discountPercent > 0 ? (
+              <span className="badge">
+                Скидка: <b>-{Math.round(discountPercent)}%</b>
+              </span>
+            ) : null}
           </div>
 
           <div className="services-head__actions">

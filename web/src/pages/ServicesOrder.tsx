@@ -169,6 +169,10 @@ export function ServicesOrder() {
   const bonus = nnum((me as any)?.bonus, 0)
   const available = balanceAmount + bonus
 
+  // ✅ discount shown only as info (no recalculation on UI)
+  const discountPercent = Math.max(0, nnum((me as any)?.discount, 0))
+  const hasDiscount = discountPercent > 0
+
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
 
@@ -229,11 +233,8 @@ export function ServicesOrder() {
   }, [selected, needTopup, available])
 
   // ✅ mood helpers (typed keys only)
-  const moodChecking = (seed: string) =>
-    getMood('payment_checking', { seed }) ?? 'Пара секунд…'
-
-  const moodSuccess = (seed: string, amount?: number) =>
-    getMood('payment_success', { seed, amount }) ?? 'Принято.'
+  const moodChecking = (seed: string) => getMood('payment_checking', { seed }) ?? 'Пара секунд…'
+  const moodSuccess = (seed: string, amount?: number) => getMood('payment_success', { seed, amount }) ?? 'Принято.'
 
   async function loadPaysystems() {
     const ps = await apiFetch<PaysystemsResp>('/payments/paysystems', { method: 'GET' })
@@ -307,7 +308,6 @@ export function ServicesOrder() {
           description: 'Услуга создана и активируется.',
         })
 
-        // иногда реально “мгновенно” — покажем мягко
         toast.success('Оплата принята', {
           description: moodSuccess(orderId, nnum(selected?.price, 0)) ?? 'Принято.',
         })
@@ -419,13 +419,8 @@ export function ServicesOrder() {
         setCreated((cur) => (cur ? { ...cur, status: it.status, statusRaw: it.statusRaw || cur.statusRaw } : cur))
         setWaitMsg('✅ Услуга активируется / активна. Можно перейти в раздел услуг.')
 
-        toast.success('Готово', {
-          description: 'Услуга активирована.',
-        })
-
-        toast.success('Оплата принята', {
-          description: moodSuccess(seed, toPay) ?? 'Принято.',
-        })
+        toast.success('Готово', { description: 'Услуга активирована.' })
+        toast.success('Оплата принята', { description: moodSuccess(seed, toPay) ?? 'Принято.' })
 
         return true
       }
@@ -434,10 +429,7 @@ export function ServicesOrder() {
     }
 
     setWaitMsg('Пока не вижу обновления статуса. Попробуйте ещё раз через несколько секунд.')
-
-    toast.info('Пока не подтверждено', {
-      description: 'Попробуйте ещё раз через несколько секунд.',
-    })
+    toast.info('Пока не подтверждено', { description: 'Попробуйте ещё раз через несколько секунд.' })
 
     return false
   }
@@ -580,6 +572,12 @@ export function ServicesOrder() {
                 Баланс: <b>{fmtMoney(balanceAmount, currency)}</b>
                 <span className="dot" />
                 Бонусы: <b>{bonus}</b>
+                {hasDiscount ? (
+                  <>
+                    <span className="dot" />
+                    Скидка клиента: <b>-{Math.round(discountPercent)}%</b>
+                  </>
+                ) : null}
                 <span className="dot" />
                 Доступно: <b>{fmtMoney(available, currency)}</b>
               </div>

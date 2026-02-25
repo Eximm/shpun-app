@@ -32,6 +32,12 @@ import { AuthGate } from "./app/auth/AuthGate";
 import { BottomNav } from "./app/layout/BottomNav";
 import { I18nProvider, useI18n } from "./shared/i18n";
 
+// ✅ Toast provider
+import { ToastProvider } from "./shared/ui/toast/ToastProvider";
+
+// ✅ Billing notifications polling (broadcast + per-user later)
+import { useBillingNotifications } from "./app/notifications/useBillingNotifications";
+
 /* ============================================================
    Service Worker (production only)
    ============================================================ */
@@ -56,6 +62,9 @@ function AppShell({ children }: { children: React.ReactNode }) {
 
   const hideNav =
     loc.pathname === "/login" || loc.pathname.startsWith("/transfer");
+
+  // ✅ Enable polling only on authed app screens (not login/transfer)
+  useBillingNotifications(!hideNav);
 
   return (
     <div className="app">
@@ -92,129 +101,131 @@ function Authed({ children }: { children: React.ReactNode }) {
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <I18nProvider>
-      <BrowserRouter>
-        <AppShell>
-          <Routes>
-            {/* Public */}
-            <Route path="/login" element={<Login />} />
-            <Route path="/transfer" element={<Transfer />} />
+      <ToastProvider>
+        <BrowserRouter>
+          <AppShell>
+            <Routes>
+              {/* Public */}
+              <Route path="/login" element={<Login />} />
+              <Route path="/transfer" element={<Transfer />} />
 
-            {/* Authed main sections */}
-            <Route
-              path="/"
-              element={
-                <Authed>
-                  <Home />
-                </Authed>
-              }
-            />
+              {/* Authed main sections */}
+              <Route
+                path="/"
+                element={
+                  <Authed>
+                    <Home />
+                  </Authed>
+                }
+              />
 
-            <Route
-              path="/referrals"
-              element={
-                <Authed>
-                  <Referrals />
-                </Authed>
-              }
-            />
+              <Route
+                path="/referrals"
+                element={
+                  <Authed>
+                    <Referrals />
+                  </Authed>
+                }
+              />
 
-            <Route
-              path="/feed"
-              element={
-                <Authed>
-                  <Feed />
-                </Authed>
-              }
-            />
-            <Route
-              path="/dashboard"
-              element={
-                <Authed>
-                  <Dashboard />
-                </Authed>
-              }
-            />
+              <Route
+                path="/feed"
+                element={
+                  <Authed>
+                    <Feed />
+                  </Authed>
+                }
+              />
+              <Route
+                path="/dashboard"
+                element={
+                  <Authed>
+                    <Dashboard />
+                  </Authed>
+                }
+              />
 
-            <Route
-              path="/services"
-              element={
-                <Authed>
-                  <Services />
-                </Authed>
-              }
-            />
-            <Route
-              path="/services/order"
-              element={
-                <Authed>
-                  <ServicesOrder />
-                </Authed>
-              }
-            />
+              <Route
+                path="/services"
+                element={
+                  <Authed>
+                    <Services />
+                  </Authed>
+                }
+              />
+              <Route
+                path="/services/order"
+                element={
+                  <Authed>
+                    <ServicesOrder />
+                  </Authed>
+                }
+              />
 
-            {/* ✅ NEW: Router VPN help/instruction page */}
-            <Route
-              path="/help/router"
-              element={
-                <Authed>
-                  <ServicesRouter />
-                </Authed>
-              }
-            />
+              {/* ✅ NEW: Router VPN help/instruction page */}
+              <Route
+                path="/help/router"
+                element={
+                  <Authed>
+                    <ServicesRouter />
+                  </Authed>
+                }
+              />
 
-            {/* Payments */}
-            <Route
-              path="/payments"
-              element={
-                <Authed>
-                  <Payments />
-                </Authed>
-              }
-            />
+              {/* Payments */}
+              <Route
+                path="/payments"
+                element={
+                  <Authed>
+                    <Payments />
+                  </Authed>
+                }
+              />
 
-            {/* ✅ Payments mini-pages */}
-            <Route
-              path="/payments/history"
-              element={
-                <Authed>
-                  <PaymentsHistory />
-                </Authed>
-              }
-            />
-            <Route
-              path="/payments/receipts"
-              element={
-                <Authed>
-                  <PaymentsReceipts />
-                </Authed>
-              }
-            />
+              {/* ✅ Payments mini-pages */}
+              <Route
+                path="/payments/history"
+                element={
+                  <Authed>
+                    <PaymentsHistory />
+                  </Authed>
+                }
+              />
+              <Route
+                path="/payments/receipts"
+                element={
+                  <Authed>
+                    <PaymentsReceipts />
+                  </Authed>
+                }
+              />
 
-            <Route
-              path="/profile"
-              element={
-                <Authed>
-                  <Profile />
-                </Authed>
-              }
-            />
-            <Route
-              path="/set-password"
-              element={
-                <Authed>
-                  <SetPassword />
-                </Authed>
-              }
-            />
+              <Route
+                path="/profile"
+                element={
+                  <Authed>
+                    <Profile />
+                  </Authed>
+                }
+              />
+              <Route
+                path="/set-password"
+                element={
+                  <Authed>
+                    <SetPassword />
+                  </Authed>
+                }
+              />
 
-            {/* Clean routing: /home is not used */}
-            <Route path="/home" element={<Navigate to="/" replace />} />
+              {/* Clean routing: /home is not used */}
+              <Route path="/home" element={<Navigate to="/" replace />} />
 
-            {/* Fallback */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </AppShell>
-      </BrowserRouter>
+              {/* Fallback */}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </AppShell>
+        </BrowserRouter>
+      </ToastProvider>
     </I18nProvider>
   </React.StrictMode>
 );

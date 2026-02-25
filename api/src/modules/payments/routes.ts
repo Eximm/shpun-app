@@ -119,6 +119,24 @@ function pickObj(x: any, keys: string[]) {
   return null
 }
 
+function truncateOneLine(s: string, max = 120) {
+  const clean = String(s || '').replace(/\s+/g, ' ').trim()
+  if (!clean) return ''
+  return clean.length > max ? clean.slice(0, max - 1) + '…' : clean
+}
+
+function formatRuTs(isoOrDate?: string | Date) {
+  const d = isoOrDate instanceof Date ? isoOrDate : isoOrDate ? new Date(isoOrDate) : new Date()
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleString('ru-RU', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
 /**
  * ✅ Private template call (auth ONLY via header "session-id")
  * SHM отвечает 401 если пытаться авторизоваться через query.
@@ -288,7 +306,9 @@ export async function paymentsRoutes(app: FastifyInstance) {
     const amount = Math.round(Number(String(amountRaw).replace(',', '.')))
     if (!Number.isFinite(amount) || amount < 1) {
       // cleanup saved file if amount is bad
-      try { await fs.unlink(filePath) } catch {}
+      try {
+        await fs.unlink(filePath)
+      } catch {}
       return reply.code(400).send({ ok: false, error: 'bad_amount' })
     }
 
@@ -314,7 +334,7 @@ export async function paymentsRoutes(app: FastifyInstance) {
     const fullName = String(shmUser?.full_name || 'Client')
     const login = String(shmUser?.login || '')
     const tgId = shmUser?.settings?.telegram?.id || shmUser?.settings?.telegram?.user_id || null
-    const tgLogin = shmUser?.settings?.telegram?.login || ''
+    const tgLogin = String(shmUser?.settings?.telegram?.login || '')
 
     const botToken = String(process.env.TG_BOT_TOKEN || '').trim()
     const adminChatId = String(process.env.RECEIPTS_CHAT_ID || '').trim()
@@ -323,14 +343,17 @@ export async function paymentsRoutes(app: FastifyInstance) {
 
     try {
       if (botToken && adminChatId) {
+        const safeAmount = amount.toLocaleString('ru-RU')
+        const tgLine = tgLogin ? `💬 Telegram: @${tgLogin}\n` : tgId ? `💬 Telegram ID: ${tgId}\n` : ''
+
         const captionAdmin =
-          `🧾 Квитанция (перевод по реквизитам)\n` +
-          `Клиент: ${fullName}\n` +
-          `ID: ${userId}\n` +
-          (login ? `Логин: ${login}\n` : '') +
-          (tgLogin ? `TG: @${tgLogin}\n` : '') +
-          `Сумма: ${amount} ₽\n` +
-          `ISO: ${record.created_at}`
+          `🧾 Перевод по реквизитам\n` +
+          `📱 Shpun App\n\n` +
+          `👤 User ID: ${userId}\n` +
+          (login ? `🔑 Логин: ${login}\n` : '') +
+          tgLine +
+          `💰 Сумма: ${safeAmount} ₽\n` +
+          `🕒 ${formatRuTs(record.created_at)}`
 
         const tgRes = await sendTelegramDocument({
           botToken,
@@ -357,9 +380,11 @@ export async function paymentsRoutes(app: FastifyInstance) {
 
     try {
       if (botToken && tgId) {
+        const safeAmount = amount.toLocaleString('ru-RU')
+
         const captionUser =
           `🧾 Квитанция отправлена на проверку\n` +
-          `Сумма: ${amount} ₽\n\n` +
+          `Сумма: ${safeAmount} ₽\n\n` +
           `Мы уведомим, когда платеж будет зачислен.`
 
         const tgResU = await sendTelegramDocument({
