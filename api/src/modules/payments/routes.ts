@@ -7,7 +7,7 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 
 import { getSessionFromRequest } from '../../shared/session/sessionStore.js'
-import { shmFetch, shmGetMe } from '../../shared/shm/shmClient.js'
+import { shmFetch, shmGetMe, shmGetPays, shmGetWithdraws } from '../../shared/shm/shmClient.js'
 
 type ReceiptRecord = {
   id: string
@@ -137,6 +137,18 @@ function formatRuTs(isoOrDate?: string | Date) {
   })
 }
 
+function clampInt(n: any, def = 1, min = 1, max = 10_000) {
+  const x = Number(n)
+  if (!Number.isFinite(x)) return def
+  const i = Math.trunc(x)
+  return Math.max(min, Math.min(max, i))
+}
+
+function getPage(req: FastifyRequest) {
+  const q: any = (req as any)?.query ?? {}
+  return clampInt(q.page, 1, 1, 10_000)
+}
+
 /**
  * ✅ Private template call (auth ONLY via header "session-id")
  * SHM отвечает 401 если пытаться авторизоваться через query.
@@ -188,6 +200,46 @@ export async function paymentsRoutes(app: FastifyInstance) {
     }
 
     return reply.send({ ok: true, raw: r.json })
+  })
+
+  // ✅ NEW: GET /api/payments/pays?page=1  (как в SHM, постранично, компактно)
+  app.get('/payments/pays', async (req, reply) => {
+    const s = requireSession(req, reply)
+    if (!s) return
+
+    const page = getPage(req)
+    const limit = 25
+    const offset = (page - 1) * limit
+
+    const r = await shmGetPays(s.shmSessionId, { limit, offset })
+    if (!r.ok) {
+      return reply.code(r.status || 502).send({ ok: false, error: 'shm_error', raw: r.json ?? r.text })
+    }
+
+    const items = Array.isArray((r.json as any)?.data) ? ((r.json as any).data as any[]) : []
+    const hasMore = items.length === limit
+
+    return reply.send({ ok: true, items, page, limit, hasMore })
+  })
+
+  // ✅ NEW: GET /api/payments/withdraws?page=1 (как в SHM, постранично, компактно)
+  app.get('/payments/withdraws', async (req, reply) => {
+    const s = requireSession(req, reply)
+    if (!s) return
+
+    const page = getPage(req)
+    const limit = 25
+    const offset = (page - 1) * limit
+
+    const r = await shmGetWithdraws(s.shmSessionId, { limit, offset })
+    if (!r.ok) {
+      return reply.code(r.status || 502).send({ ok: false, error: 'shm_error', raw: r.json ?? r.text })
+    }
+
+    const items = Array.isArray((r.json as any)?.data) ? ((r.json as any).data as any[]) : []
+    const hasMore = items.length === limit
+
+    return reply.send({ ok: true, items, page, limit, hasMore })
   })
 
   // ✅ GET /api/payments/requisites

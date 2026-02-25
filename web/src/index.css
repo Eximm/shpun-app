@@ -1888,3 +1888,122 @@ button, a { -webkit-tap-highlight-color: transparent; }
   border-color: rgba(99,102,241,.55);
   box-shadow: inset 3px 0 0 rgba(99,102,241,.55);
 }
+
+/* Payments page helpers */
+.payments__mt6 { margin-top: 6px; }
+.payments__mt8 { margin-top: 8px; }
+.payments__mt10 { margin-top: 10px; }
+.payments__mt12 { margin-top: 12px; }
+
+.payments__sp8 { height: 8px; }
+
+.payments__h18 { font-size: 18px; }
+.payments__w100 { width: 100%; }
+
+.payments__gap8 { gap: 8px; }
+.payments__alignCenter { align-items: center; }
+.payments__rowBetween { justify-content: space-between; }
+
+.payments__opacity90 { opacity: 0.9; }
+.payments__opacity95 { opacity: 0.95; }
+
+.payments__finePrint { font-size: 12px; opacity: 0.85; }
+
+.payments__overlayTitle { font-size: 18px; font-weight: 900; }
+.payments__preLine { white-space: pre-line; }
+.payments__bold { font-weight: 900; }
+
+.payments__amountInput {
+  margin-top: 12px;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.payments__quickBtn {
+  padding: 8px 12px;
+  min-height: 40px;
+}
+
+.payments__amountBig {
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.payments__flatCard {
+  margin-top: 12px;
+  box-shadow: none;
+}
+
+.payments__warnCard {
+  margin-top: 12px;
+  box-shadow: none;
+  border: 1px solid rgba(255, 100, 100, 0.25);
+  background: rgba(255, 100, 100, 0.10);
+}
+
+.payments__warnBody { padding: 12px; }
+
+.payments__cardNumber {
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 0.4px;
+}
+
+/* File upload label */
+.payments__fileBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.payments__fileInput { display: none; }
+
+/* PaymentsHistory helpers */
+.paymentsHist__mt6 { margin-top: 6px; }
+.paymentsHist__mt10 { margin-top: 10px; }
+.paymentsHist__mt12 { margin-top: 12px; }
+.paymentsHist__h18 { font-size: 18px; }
+
+.paymentsHist__pager { margin-top: 10px; }
+
+.paymentsHist__plus { font-weight: 900; }
+.paymentsHist__minus { font-weight: 900; }
+
+.paymentsHist__date { opacity: 0.7; }
+
+.paymentsHist__dot {
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.25;
+  margin: 0 8px;
+  transform: translateY(-1px);
+}
+
+.paymentsHist__sep { opacity: 0.6; }
+
+/* PaymentsHistory collapse */
+.paymentsHist__collapseRow {
+  margin-top: 10px;
+  display: flex;
+  justify-content: center;
+}
+
+.paymentsHist__collapseBtn {
+  width: 100%;
+}
+/* SetPassword: input + show/hide button */
+.pwdfield {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.pwdfield__btn {
+  width: var(--tap);
+  min-width: var(--tap);
+  padding: 0;
+}

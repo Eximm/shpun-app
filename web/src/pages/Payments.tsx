@@ -270,9 +270,7 @@ export function Payments() {
         <div className="card">
           <div className="card__body">
             <div className="h1">Оплата</div>
-            <div className="p" style={{ marginTop: 6 }}>
-              Загрузка…
-            </div>
+            <div className="p payments__mt6">Загрузка…</div>
           </div>
         </div>
       </div>
@@ -285,10 +283,10 @@ export function Payments() {
         <div className="card">
           <div className="card__body">
             <div className="h1">Оплата</div>
-            <div className="p" style={{ marginTop: 6 }}>
-              Ошибка: <span style={{ opacity: 0.9 }}>{err}</span>
+            <div className="p payments__mt6">
+              Ошибка: <span className="payments__opacity90">{err}</span>
             </div>
-            <div className="actions actions--2" style={{ marginTop: 12 }}>
+            <div className="actions actions--2 payments__mt12">
               <button className="btn btn--primary" onClick={load}>
                 Повторить
               </button>
@@ -303,18 +301,16 @@ export function Payments() {
   }
 
   return (
-    <div className="section">
+    <div className="section payments">
       {/* Overlay */}
       {overlay?.open ? (
         <div className="overlay" onClick={() => setOverlay(null)}>
           <div className="overlay__card card" onClick={(e) => e.stopPropagation()}>
             <div className="card__body">
-              <div style={{ fontSize: 18, fontWeight: 900 }}>{overlay.title}</div>
-              <div className="p" style={{ marginTop: 8, whiteSpace: 'pre-line' }}>
-                {overlay.text}
-              </div>
+              <div className="payments__overlayTitle">{overlay.title}</div>
+              <div className="p payments__mt8 payments__preLine">{overlay.text}</div>
 
-              <div className="actions actions--2" style={{ marginTop: 12 }}>
+              <div className="actions actions--2 payments__mt12">
                 <button
                   className="btn btn--primary"
                   onClick={() => {
@@ -340,16 +336,16 @@ export function Payments() {
           <div className="home-block-head">
             <div>
               <div className="h1">Оплата</div>
-              <div className="p" style={{ marginTop: 6 }}>
+              <div className="p payments__mt6">
                 Введите сумму и выберите способ — пополнение баланса происходит автоматически после успешной оплаты.
               </div>
             </div>
           </div>
 
           {(import.meta as any)?.env?.DEV && forecast ? (
-            <div className="pre" style={{ marginTop: 12 }}>
+            <div className="pre payments__mt12">
               <b>Forecast (dev only):</b>
-              <div style={{ height: 8 }} />
+              <div className="payments__sp8" />
               {JSON.stringify(forecast, null, 2)}
             </div>
           ) : null}
@@ -360,30 +356,24 @@ export function Payments() {
       <div className="section">
         <div className="card">
           <div className="card__body">
-            <div className="h1" style={{ fontSize: 18 }}>
-              Сумма
-            </div>
-            <div className="p" style={{ marginTop: 6 }}>
-              Если сумма не подставилась автоматически — впишите вручную.
-            </div>
+            <div className="h1 payments__h18">Сумма</div>
+            <div className="p payments__mt6">Если сумма не подставилась автоматически — впишите вручную.</div>
 
             <input
-              className="input"
+              className="input payments__amountInput"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="Сумма (₽)"
               inputMode="numeric"
               autoComplete="off"
-              style={{ marginTop: 12, fontSize: 22, fontWeight: 900 }}
             />
 
-            <div className="row" style={{ marginTop: 10 }}>
+            <div className="row payments__mt10 payments__gap8">
               {quickAmounts.map((x) => (
                 <button
                   key={x}
-                  className="btn"
+                  className="btn payments__quickBtn"
                   onClick={() => setAmount(String(x))}
-                  style={{ padding: '8px 12px', minHeight: 40 }}
                   title={fmtMoney(x, 'RUB')}
                 >
                   {fmtMoney(x, 'RUB')}
@@ -392,9 +382,7 @@ export function Payments() {
             </div>
 
             {uploadMsg ? (
-              <div className="pre" style={{ marginTop: 12 }}>
-                {uploadMsg}
-              </div>
+              <div className="pre payments__mt12">{uploadMsg}</div>
             ) : null}
           </div>
         </div>
@@ -405,17 +393,12 @@ export function Payments() {
         <div className="section">
           <div className="card">
             <div className="card__body">
-              <div className="h1" style={{ fontSize: 18 }}>
-                Способы оплаты
-              </div>
-              <div className="p" style={{ marginTop: 6 }}>
-                Внешние оплаты откроются в новой вкладке.
-              </div>
+              <div className="h1 payments__h18">Способы оплаты</div>
+              <div className="p payments__mt6">Внешние оплаты откроются в новой вкладке.</div>
 
-              <div className="actions actions--1" style={{ marginTop: 12 }}>
+              <div className="actions actions--1 payments__mt12">
                 <button
-                  className="btn"
-                  style={{ width: '100%' }}
+                  className="btn payments__w100"
                   onClick={() => {
                     if (!amountNumber) {
                       setUploadMsg('Введите сумму.')
@@ -429,7 +412,7 @@ export function Payments() {
                 </button>
               </div>
 
-              <div style={{ marginTop: 12 }} />
+              <div className="payments__mt12" />
 
               {paySystems.length === 0 ? (
                 <div className="pre">Платёжные способы не найдены.</div>
@@ -437,28 +420,25 @@ export function Payments() {
                 <div className="kv">
                   {paySystems.map((ps, idx) => (
                     <div className="kv__item" key={ps.shm_url || idx}>
-                      <div className="row" style={{ justifyContent: 'space-between' }}>
+                      <div className="row payments__rowBetween">
                         <div className="kv__k">
                           {ps.recurring ? 'Автоплатёж' : isStars(ps) ? 'Stars / внешняя' : 'Внешняя оплата'}
                         </div>
                         <span className="badge">{ps.recurring ? 'recurring' : 'one-time'}</span>
                       </div>
 
-                      <div className="kv__v" style={{ marginTop: 6 }}>
-                        {ps.name || 'Payment method'}
-                      </div>
+                      <div className="kv__v payments__mt6">{ps.name || 'Payment method'}</div>
 
-                      <div className="actions actions--1" style={{ marginTop: 10 }}>
-                        <button className="btn btn--primary" style={{ width: '100%' }} onClick={() => handlePay(ps)}>
+                      <div className="actions actions--1 payments__mt10">
+                        <button className="btn btn--primary payments__w100" onClick={() => handlePay(ps)}>
                           Оплатить {amountNumber ? `· ${fmtMoney(amountNumber, 'RUB')}` : ''}
                         </button>
                       </div>
 
                       {ps.recurring ? (
-                        <div className="actions actions--1" style={{ marginTop: 10 }}>
+                        <div className="actions actions--1 payments__mt10">
                           <button
-                            className="btn btn--danger"
-                            style={{ width: '100%' }}
+                            className="btn btn--danger payments__w100"
                             onClick={removeAutopayment}
                             title="Отвязать автоплатёж"
                           >
@@ -471,8 +451,9 @@ export function Payments() {
                 </div>
               )}
 
-              <div className="p" style={{ marginTop: 12, fontSize: 12, opacity: 0.85 }}>
-                Если Telegram у пользователя заблокирован — это не мешает оплате и отправке квитанции: всё идёт через наш сервер.
+              <div className="p payments__mt12 payments__finePrint">
+                Если Telegram у пользователя заблокирован — это не мешает оплате и отправке квитанции: всё идёт через наш
+                сервер.
               </div>
             </div>
           </div>
@@ -485,59 +466,39 @@ export function Payments() {
               <div className="home-block-head">
                 <div>
                   <div className="h1">Перевод по реквизитам</div>
-                  <div className="p" style={{ marginTop: 6 }}>
-                    Сделайте перевод и отправьте квитанцию. Проверка — вручную.
-                  </div>
+                  <div className="p payments__mt6">Сделайте перевод и отправьте квитанцию. Проверка — вручную.</div>
                 </div>
               </div>
 
               {/* Amount */}
-              <div className="kv" style={{ marginTop: 12 }}>
+              <div className="kv payments__mt12">
                 <div className="kv__item">
                   <div className="kv__k">Сумма к переводу</div>
-                  <div className="kv__v" style={{ fontSize: 20, fontWeight: 900 }}>
-                    {amountNumber ? fmtMoney(amountNumber, 'RUB') : '—'}
-                  </div>
+                  <div className="kv__v payments__amountBig">{amountNumber ? fmtMoney(amountNumber, 'RUB') : '—'}</div>
                 </div>
               </div>
 
               {/* IMPORTANT */}
-              <div
-                className="card"
-                style={{
-                  marginTop: 12,
-                  boxShadow: 'none',
-                  border: '1px solid rgba(255, 100, 100, 0.25)',
-                  background: 'rgba(255, 100, 100, 0.10)',
-                }}
-              >
-                <div className="card__body" style={{ padding: 12 }}>
-                  <div style={{ fontWeight: 900 }}>Важно</div>
-                  <div className="p" style={{ marginTop: 6, opacity: 0.95 }}>
+              <div className="card payments__warnCard">
+                <div className="card__body payments__warnBody">
+                  <div className="payments__bold">Важно</div>
+                  <div className="p payments__mt6 payments__opacity95">
                     Квитанция обязательна. Без квитанции перевод не будет зачислен — это ручная проверка.
                   </div>
                 </div>
               </div>
 
               {/* Requisites */}
-              <div className="card" style={{ marginTop: 12, boxShadow: 'none' }}>
+              <div className="card payments__flatCard">
                 <div className="card__body">
-                  <div className="h1" style={{ fontSize: 18 }}>
-                    Реквизиты
-                  </div>
+                  <div className="h1 payments__h18">Реквизиты</div>
 
                   {reqLoading ? (
-                    <div className="p" style={{ marginTop: 6 }}>
-                      Загрузка реквизитов…
-                    </div>
+                    <div className="p payments__mt6">Загрузка реквизитов…</div>
                   ) : reqError ? (
-                    <div className="pre" style={{ marginTop: 12 }}>
-                      Реквизиты пока недоступны: {String(reqError)}
-                    </div>
+                    <div className="pre payments__mt12">Реквизиты пока недоступны: {String(reqError)}</div>
                   ) : !requisites ? (
-                    <div className="pre" style={{ marginTop: 12 }}>
-                      Реквизиты не заполнены.
-                    </div>
+                    <div className="pre payments__mt12">Реквизиты не заполнены.</div>
                   ) : (
                     (() => {
                       const holder = String(requisites.holder ?? '').trim()
@@ -546,30 +507,26 @@ export function Payments() {
 
                       return (
                         <>
-                          <div className="kv" style={{ marginTop: 12 }}>
+                          <div className="kv payments__mt12">
                             {holder ? (
                               <div className="kv__item">
                                 <div className="kv__k">Получатель</div>
-                                <div className="kv__v" style={{ fontWeight: 900 }}>
-                                  {holder}
-                                </div>
+                                <div className="kv__v payments__bold">{holder}</div>
                               </div>
                             ) : null}
 
                             {cardPretty ? (
                               <div className="kv__item">
                                 <div className="kv__k">Номер карты</div>
-                                <div className="kv__v" style={{ fontSize: 18, fontWeight: 900, letterSpacing: 0.4 }}>
-                                  {cardPretty}
-                                </div>
-                                <div className="row" style={{ marginTop: 8, gap: 8, alignItems: 'center' }}>
+                                <div className="kv__v payments__cardNumber">{cardPretty}</div>
+                                <div className="row payments__mt8 payments__gap8 payments__alignCenter">
                                   <span className="badge">МИР</span>
                                 </div>
                               </div>
                             ) : null}
                           </div>
 
-                          <div className="actions actions--2" style={{ marginTop: 12 }}>
+                          <div className="actions actions--2 payments__mt12">
                             <button
                               className="btn btn--primary"
                               onClick={() => {
@@ -583,15 +540,12 @@ export function Payments() {
                               Скопировать карту
                             </button>
 
-                            <label
-                              className="btn"
-                              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                            >
+                            <label className="btn payments__fileBtn">
                               {uploading ? '⏳ Отправляем…' : '🧾 Отправить квитанцию'}
                               <input
                                 type="file"
                                 accept=".jpg,.jpeg,.png,.pdf"
-                                style={{ display: 'none' }}
+                                className="payments__fileInput"
                                 disabled={uploading}
                                 onChange={(e) => {
                                   const f = e.target.files?.[0]
@@ -603,15 +557,9 @@ export function Payments() {
                             </label>
                           </div>
 
-                          {uploadMsg ? (
-                            <div className="pre" style={{ marginTop: 12 }}>
-                              {uploadMsg}
-                            </div>
-                          ) : null}
+                          {uploadMsg ? <div className="pre payments__mt12">{uploadMsg}</div> : null}
 
-                          <div className="p" style={{ marginTop: 10, fontSize: 12, opacity: 0.85 }}>
-                            Поддерживаются JPG/PNG/PDF до 2MB.
-                          </div>
+                          <div className="p payments__mt10 payments__finePrint">Поддерживаются JPG/PNG/PDF до 2MB.</div>
                         </>
                       )
                     })()
@@ -619,8 +567,8 @@ export function Payments() {
                 </div>
               </div>
 
-              <div className="actions actions--1" style={{ marginTop: 12 }}>
-                <button className="btn" style={{ width: '100%' }} onClick={() => setPage('main')}>
+              <div className="actions actions--1 payments__mt12">
+                <button className="btn payments__w100" onClick={() => setPage('main')}>
                   ⇦ Назад к способам оплаты
                 </button>
               </div>
@@ -633,13 +581,11 @@ export function Payments() {
       <div className="section">
         <div className="card">
           <div className="card__body">
-            <div className="h1" style={{ fontSize: 18 }}>
-              История
-            </div>
-            <div className="p" style={{ marginTop: 6 }}>
+            <div className="h1 payments__h18">История</div>
+            <div className="p payments__mt6">
               Если нужно проверить операции или посмотреть отправленные квитанции — откройте разделы ниже.
             </div>
-            <div className="actions actions--2" style={{ marginTop: 12 }}>
+            <div className="actions actions--2 payments__mt12">
               <Link className="btn" to="/payments/history">
                 История операций
               </Link>
