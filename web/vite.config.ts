@@ -22,6 +22,10 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      strategies: "injectManifest", // ⬅️ ВАЖНО
+      srcDir: "src",
+      filename: "sw.ts",
+
       injectRegister: null,
       registerType: "prompt",
 
@@ -38,7 +42,6 @@ export default defineConfig({
         description:
           "Shpun SDN System — кабинет, баланс, услуги и управление подпиской.",
 
-        // Новый корень приложения
         start_url: "/",
         id: "/",
         scope: "/",
