@@ -115,6 +115,8 @@ type NotifEvent = {
 type Cursor = { ts: number; id: string };
 type FeedResp = { ok: true; items: NotifEvent[]; nextBefore: Cursor };
 
+type Category = "all" | "money" | "services" | "news";
+
 /* ========================================================================
    UTIL: Formatting helpers
    ======================================================================== */
@@ -168,6 +170,32 @@ function fmtFeedDate(tsSec: number) {
 
   if (sameDay) return "today";
   return d.toLocaleDateString(undefined, { month: "short", day: "2-digit" });
+}
+
+/**
+ * ✅ Same categorization idea as Feed:
+ * Home shows ONLY items with category "news"
+ */
+function categoryOf(e: NotifEvent): Category {
+  const t = String(e.type || "").trim().toLowerCase();
+
+  if (t.startsWith("balance.") || t.startsWith("payment.") || t.startsWith("invoice.")) return "money";
+  if (t.startsWith("service.") || t.startsWith("services.")) return "services";
+
+  if (t === "broadcast.news" || t.startsWith("broadcast.news.")) return "news";
+  if (t.startsWith("broadcast.")) return "news";
+  if (t.includes("news")) return "news";
+
+  const text = `${e.title || ""} ${e.message || ""}`.toLowerCase();
+
+  if (text.includes("пополн") || text.includes("оплат") || text.includes("баланс") || text.includes("зачисл"))
+    return "money";
+  if (text.includes("услуг") || text.includes("продл") || text.includes("ключ") || text.includes("блок"))
+    return "services";
+  if (text.includes("работ") || text.includes("новост") || text.includes("перебои") || text.includes("обновлен"))
+    return "news";
+
+  return "all";
 }
 
 /**
@@ -364,8 +392,8 @@ export function Home() {
       const r = await apiFetch<FeedResp>(`/notifications/feed?limit=20`);
       const arr = Array.isArray(r.items) ? r.items : [];
 
-      // Только broadcast.news, самые свежие (они уже DESC)
-      const news = arr.filter((x) => String(x.type || "").trim() === "broadcast.news").slice(0, 3);
+      // ✅ Только новости (как в Feed: categoryOf === "news")
+      const news = arr.filter((x) => categoryOf(x) === "news").slice(0, 3);
       setNewsItems(news);
     } catch {
       setNewsItems([]);

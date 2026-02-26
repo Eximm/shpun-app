@@ -1,5 +1,5 @@
 ﻿// web/src/pages/Feed.tsx
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiFetch } from "../shared/api/client";
 
@@ -33,16 +33,28 @@ function formatDateTime(tsSec: number) {
 function categoryOf(e: NotifEvent): Category {
   const t = String(e.type || "").trim().toLowerCase();
 
+  // money
   if (t.startsWith("balance.") || t.startsWith("payment.") || t.startsWith("invoice.")) return "money";
-  if (t.startsWith("service.") || t.startsWith("services.")) return "services";
-  if (t.startsWith("broadcast.") || t.includes("news")) return "news";
 
+  // services
+  if (t.startsWith("service.") || t.startsWith("services.")) return "services";
+
+  // news (строже: сначала именно broadcast.news)
+  if (t === "broadcast.news" || t.startsWith("broadcast.news.")) return "news";
+  if (t.startsWith("broadcast.")) return "news";
+  if (t.includes("news")) return "news";
+
+  // эвристика по тексту (fallback)
   const text = `${e.title || ""} ${e.message || ""}`.toLowerCase();
+
   if (text.includes("пополн") || text.includes("оплат") || text.includes("баланс") || text.includes("зачисл"))
     return "money";
+
   if (text.includes("услуг") || text.includes("продл") || text.includes("ключ") || text.includes("блок"))
     return "services";
-  if (text.includes("работ") || text.includes("новост") || text.includes("перебои")) return "news";
+
+  if (text.includes("работ") || text.includes("новост") || text.includes("перебои") || text.includes("обновлен"))
+    return "news";
 
   return "all";
 }
@@ -340,3 +352,5 @@ export function Feed() {
     </div>
   );
 }
+
+export default Feed;
