@@ -16,6 +16,10 @@ type Resp = { ok: true; items: BillingPushEvent[]; nextCursor: Cursor };
 
 const CURSOR_KEY = "notif.cursor.v2";
 
+// "shown toast" is per-tab (sessionStorage), so it survives route changes
+// but resets on new tab / browser restart.
+const SHOWN_TOAST_PREFIX = "notif.toast.shown.v1:";
+
 function readCursor(): Cursor {
   try {
     const raw = localStorage.getItem(CURSOR_KEY);
@@ -37,14 +41,38 @@ function saveCursor(c: Cursor) {
   }
 }
 
+function hasShownToast(eventId: string): boolean {
+  const id = String(eventId || "").trim();
+  if (!id) return true; // if no id => never toast (safe)
+  try {
+    return sessionStorage.getItem(SHOWN_TOAST_PREFIX + id) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function markToastShown(eventId: string) {
+  const id = String(eventId || "").trim();
+  if (!id) return;
+  try {
+    sessionStorage.setItem(SHOWN_TOAST_PREFIX + id, "1");
+  } catch {
+    // ignore
+  }
+}
+
 export function useBillingNotifications(enabled: boolean) {
   const cursorRef = useRef<Cursor>(readCursor());
   const timerRef = useRef<number | null>(null);
+
+  // first poll after (re)enable: do NOT show toasts, only advance cursor
+  const warmupRef = useRef<boolean>(true);
 
   useEffect(() => {
     if (!enabled) return;
 
     let stopped = false;
+    warmupRef.current = true;
 
     async function tick() {
       if (stopped) return;
@@ -64,12 +92,31 @@ export function useBillingNotifications(enabled: boolean) {
           saveCursor(nextCursor);
         }
 
-        for (const ev of r.items || []) {
+        const items = r?.items || [];
+
+        // Warmup: we just synced cursor, don't spam toasts for old events.
+        // Next tick will only fetch new events anyway (thanks to cursor).
+        if (warmupRef.current) {
+          warmupRef.current = false;
+          return;
+        }
+
+        for (const ev of items) {
+          if (!ev) continue;
           if (ev.toast === false) continue;
+
+          const eventId = String(ev.event_id ?? "").trim();
+          if (!eventId) continue;
+
+          // Per-tab dedup so route changes don't re-toast the same events
+          if (hasShownToast(eventId)) continue;
 
           const title = ev.title || "Уведомление";
           const desc = ev.message || "";
           const lvl = ev.level || "info";
+
+          // mark first, so even if toast rendering throws, we won't loop spam
+          markToastShown(eventId);
 
           if (lvl === "success") toast.success(title, { description: desc });
           else if (lvl === "error") toast.error(title, { description: desc });

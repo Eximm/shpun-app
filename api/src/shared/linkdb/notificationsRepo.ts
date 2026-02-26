@@ -31,6 +31,18 @@ function parseJson(s: any) {
   }
 }
 
+function normalizeTs(input: any): number {
+  const raw = Number(input);
+  let ts = Number.isFinite(raw) ? raw : Math.floor(Date.now() / 1000);
+
+  // if milliseconds (>= year 2286 in seconds, but practical threshold)
+  if (ts > 10_000_000_000) ts = Math.floor(ts / 1000);
+
+  ts = Math.floor(ts);
+  if (!Number.isFinite(ts) || ts <= 0) ts = Math.floor(Date.now() / 1000);
+  return ts;
+}
+
 function rowToEvent(r: any): NotifEvent {
   return {
     event_id: String(r.event_id),
@@ -115,13 +127,21 @@ const stmtFeed = linkDb.prepare(`
 export function putNotifEvent(
   ev: NotifEvent
 ): { ok: true; dedup: boolean } | { ok: false; error: string } {
-  const id = String(ev?.event_id || "").trim();
+  const id = String(ev?.event_id ?? "").trim();
   if (!id) return { ok: false, error: "missing_event_id" };
 
-  const ts = Number.isFinite(Number(ev.ts)) ? Number(ev.ts) : Math.floor(Date.now() / 1000);
+  const ts = normalizeTs(ev.ts);
 
   const target: NotifTarget = ev.target === "user" ? "user" : "all";
-  const user_id = target === "user" ? (ev.user_id ?? null) : null;
+
+  let user_id: number | null = null;
+  if (target === "user") {
+    const uid = Number(ev.user_id);
+    if (!Number.isFinite(uid) || uid <= 0) {
+      return { ok: false, error: "missing_user_id" };
+    }
+    user_id = uid;
+  }
 
   const info = stmtInsert.run({
     event_id: id,
@@ -146,7 +166,7 @@ export function listNotifAfter(params: {
   userId?: number;
   limit?: number;
 }) {
-  const afterTs = Number.isFinite(Number(params.afterTs)) ? Number(params.afterTs) : 0;
+  const afterTs = normalizeTs(params.afterTs ?? 0);
   const afterId = String(params.afterId ?? "");
   const uid = params.userId ?? 0;
   const limit = Math.min(Math.max(Number(params.limit ?? 200), 1), 500);
@@ -168,7 +188,11 @@ export function listNotifFeed(params: {
   limit?: number;
 }) {
   const uid = params.userId ?? 0;
-  const beforeTs = Number.isFinite(Number(params.beforeTs)) ? Number(params.beforeTs) : 0;
+
+  // beforeTs=0 means "latest", keep it 0 (do NOT normalize to now)
+  const beforeTsRaw = Number(params.beforeTs ?? 0);
+  const beforeTs = Number.isFinite(beforeTsRaw) ? Math.floor(beforeTsRaw) : 0;
+
   const beforeId = String(params.beforeId ?? "\uffff");
   const limit = Math.min(Math.max(Number(params.limit ?? 50), 1), 200);
 
