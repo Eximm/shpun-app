@@ -1,11 +1,11 @@
-// api/src/modules/notifications/inbox.ts
 import {
   putNotifEvent,
   listNotifAfter,
   listNotifFeed,
   type NotifEvent,
+  type NotifCursor,
 } from "../../shared/linkdb/notificationsRepo.js";
-    
+
 export type BillingPushEvent = {
   event_id: string;
   ts?: number;
@@ -36,10 +36,20 @@ export function putEvent(e: BillingPushEvent) {
   return putNotifEvent(ev);
 }
 
-export function listEvents(params: { afterTs?: number; userId?: number; limit?: number }) {
+export function listEvents(params: {
+  afterTs?: number;
+  afterId?: string;
+  userId?: number;
+  limit?: number;
+}): { items: NotifEvent[]; nextCursor: NotifCursor } {
   return listNotifAfter(params);
 }
 
-export function listFeed(params: { userId?: number; beforeTs?: number; limit?: number }) {
+export function listFeed(params: {
+  userId?: number;
+  beforeTs?: number;
+  beforeId?: string;
+  limit?: number;
+}): { items: NotifEvent[]; nextBefore: NotifCursor } {
   return listNotifFeed(params);
 }

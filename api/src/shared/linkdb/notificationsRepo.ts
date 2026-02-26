@@ -1,4 +1,3 @@
-// api/src/shared/linkdb/notificationsRepo.ts
 import { linkDb } from "./db.js";
 
 export type NotifTarget = "all" | "user";
@@ -16,6 +15,8 @@ export type NotifEvent = {
   toast?: boolean;
   meta?: unknown;
 };
+
+export type NotifCursor = { ts: number; id: string };
 
 function asInt(v: any) {
   return v ? 1 : 0;
@@ -79,29 +80,41 @@ const stmtInsert = linkDb.prepare(`
     (@event_id, @ts, @target, @user_id, @type, @level, @title, @message, @toast, @meta_json)
 `);
 
+// Cursor = (ts, event_id) to avoid “missing” events in same second
 const stmtListAfter = linkDb.prepare(`
   SELECT * FROM notif_events
-  WHERE ts > @after
+  WHERE
+    (
+      ts > @afterTs
+      OR (ts = @afterTs AND event_id > @afterId)
+    )
     AND (
       target = 'all'
       OR (target = 'user' AND user_id = @uid AND @uid > 0)
     )
-  ORDER BY ts ASC
+  ORDER BY ts ASC, event_id ASC
   LIMIT @limit
 `);
 
 const stmtFeed = linkDb.prepare(`
   SELECT * FROM notif_events
-  WHERE (@before = 0 OR ts < @before)
+  WHERE
+    (
+      @beforeTs = 0
+      OR ts < @beforeTs
+      OR (ts = @beforeTs AND event_id < @beforeId)
+    )
     AND (
       target = 'all'
       OR (target = 'user' AND user_id = @uid AND @uid > 0)
     )
-  ORDER BY ts DESC
+  ORDER BY ts DESC, event_id DESC
   LIMIT @limit
 `);
 
-export function putNotifEvent(ev: NotifEvent): { ok: true; dedup: boolean } | { ok: false; error: string } {
+export function putNotifEvent(
+  ev: NotifEvent
+): { ok: true; dedup: boolean } | { ok: false; error: string } {
   const id = String(ev?.event_id || "").trim();
   if (!id) return { ok: false, error: "missing_event_id" };
 
@@ -127,26 +140,44 @@ export function putNotifEvent(ev: NotifEvent): { ok: true; dedup: boolean } | { 
   return { ok: true, dedup };
 }
 
-export function listNotifAfter(params: { afterTs?: number; userId?: number; limit?: number }) {
-  const after = Number.isFinite(Number(params.afterTs)) ? Number(params.afterTs) : 0;
+export function listNotifAfter(params: {
+  afterTs?: number;
+  afterId?: string;
+  userId?: number;
+  limit?: number;
+}) {
+  const afterTs = Number.isFinite(Number(params.afterTs)) ? Number(params.afterTs) : 0;
+  const afterId = String(params.afterId ?? "");
   const uid = params.userId ?? 0;
   const limit = Math.min(Math.max(Number(params.limit ?? 200), 1), 500);
 
-  const rows = stmtListAfter.all({ after, uid, limit });
+  const rows = stmtListAfter.all({ afterTs, afterId, uid, limit });
   const items = rows.map(rowToEvent);
 
-  const nextCursor = items.length ? items[items.length - 1].ts : after;
+  const nextCursor: NotifCursor = items.length
+    ? { ts: items[items.length - 1].ts, id: items[items.length - 1].event_id }
+    : { ts: afterTs, id: afterId };
+
   return { items, nextCursor };
 }
 
-export function listNotifFeed(params: { userId?: number; beforeTs?: number; limit?: number }) {
+export function listNotifFeed(params: {
+  userId?: number;
+  beforeTs?: number;
+  beforeId?: string;
+  limit?: number;
+}) {
   const uid = params.userId ?? 0;
-  const before = Number.isFinite(Number(params.beforeTs)) ? Number(params.beforeTs) : 0;
+  const beforeTs = Number.isFinite(Number(params.beforeTs)) ? Number(params.beforeTs) : 0;
+  const beforeId = String(params.beforeId ?? "\uffff");
   const limit = Math.min(Math.max(Number(params.limit ?? 50), 1), 200);
 
-  const rows = stmtFeed.all({ before, uid, limit });
+  const rows = stmtFeed.all({ beforeTs, beforeId, uid, limit });
   const items = rows.map(rowToEvent);
 
-  const nextBefore = items.length ? items[items.length - 1].ts : before;
+  const nextBefore: NotifCursor = items.length
+    ? { ts: items[items.length - 1].ts, id: items[items.length - 1].event_id }
+    : { ts: beforeTs, id: beforeId };
+
   return { items, nextBefore };
 }

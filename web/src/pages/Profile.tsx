@@ -1,8 +1,14 @@
+// web/src/pages/Profile.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMe } from "../app/auth/useMe";
 import { apiFetch } from "../shared/api/client";
 import { useI18n } from "../shared/i18n";
+
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform?: string }>;
+};
 
 async function copyToClipboard(text: string) {
   if (!text) return;
@@ -16,6 +22,29 @@ async function copyToClipboard(text: string) {
 function formatDate(v?: string | null) {
   const s = String(v ?? "").trim();
   return s ? s : "—";
+}
+
+function isStandalonePwa(): boolean {
+  try {
+    const mm = window.matchMedia?.("(display-mode: standalone)");
+    const standalone = Boolean(mm?.matches);
+    const iosStandalone = Boolean((navigator as any)?.standalone);
+    return standalone || iosStandalone;
+  } catch {
+    return false;
+  }
+}
+
+function isIOS(): boolean {
+  const ua = String(navigator.userAgent || "");
+  return /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
+}
+
+function permissionLabel(p: string) {
+  if (p === "granted") return "Разрешены";
+  if (p === "denied") return "Запрещены";
+  if (p === "default") return "Не выбрано";
+  return "Недоступно";
 }
 
 function CardTitle({
@@ -53,6 +82,7 @@ function CardTitle({
     </div>
   );
 }
+
 function Badge({
   text,
   tone = "neutral",
@@ -247,23 +277,9 @@ function Modal({
 
 function Toast({ text }: { text: string }) {
   return (
-    <>
-      <style>{`
-        @keyframes shp_toast_in {
-          from { opacity: 0; transform: translateY(-6px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-      `}</style>
-      <div
-        className="pre"
-        style={{
-          marginTop: 12,
-          animation: "shp_toast_in 140ms ease-out",
-        }}
-      >
-        {text}
-      </div>
-    </>
+    <div className="pre" style={{ marginTop: 12 }}>
+      {text}
+    </div>
   );
 }
 
@@ -446,6 +462,94 @@ export function Profile() {
     nav("/set-password?intent=change&redirect=/profile");
   }
 
+  /* ============================================================
+     PWA install + Notification permission (Profile only)
+     ============================================================ */
+
+  const [standalone, setStandalone] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [iosInstallModal, setIosInstallModal] = useState(false);
+
+  const [notifPerm, setNotifPerm] = useState<string>(() => {
+    try {
+      if (typeof Notification === "undefined") return "unsupported";
+      return Notification.permission;
+    } catch {
+      return "unsupported";
+    }
+  });
+
+  useEffect(() => {
+    setStandalone(isStandalonePwa());
+
+    const onBip = (e: Event) => {
+      e.preventDefault?.();
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
+    };
+
+    const onInstalled = () => {
+      setStandalone(true);
+      setDeferredPrompt(null);
+      showToast("Приложение установлено ✅");
+    };
+
+    window.addEventListener("beforeinstallprompt", onBip as any);
+    window.addEventListener("appinstalled", onInstalled as any);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", onBip as any);
+      window.removeEventListener("appinstalled", onInstalled as any);
+    };
+  }, []);
+
+  async function doInstallPwa() {
+    if (standalone) {
+      showToast("Уже установлено ✅");
+      return;
+    }
+
+    if (isIOS()) {
+      setIosInstallModal(true);
+      return;
+    }
+
+    if (!deferredPrompt) {
+      showToast("Установка доступна через меню браузера (⋮) → «Установить приложение»");
+      return;
+    }
+
+    try {
+      await deferredPrompt.prompt();
+      const choice = await deferredPrompt.userChoice;
+      if (choice?.outcome === "accepted") {
+        showToast("Установка запущена ✅");
+      } else {
+        showToast("Установка отменена");
+      }
+    } catch {
+      showToast("Не удалось запустить установку");
+    } finally {
+      // prompt can be used once
+      setDeferredPrompt(null);
+    }
+  }
+
+  async function requestNotifPermission() {
+    try {
+      if (typeof Notification === "undefined") {
+        showToast("Уведомления не поддерживаются в этом браузере.");
+        return;
+      }
+      const res = await Notification.requestPermission();
+      setNotifPerm(res);
+      if (res === "granted") showToast("Уведомления разрешены ✅");
+      else if (res === "denied") showToast("Уведомления запрещены ❌");
+      else showToast("Разрешение не выбрано");
+    } catch {
+      showToast("Не удалось запросить разрешение");
+    }
+  }
+
   if (loading) {
     return (
       <div className="section">
@@ -492,6 +596,22 @@ export function Profile() {
     <Badge text="Не привязан" />
   );
   const soonBadge = <Badge text="Скоро" tone="soon" />;
+
+  const pwaBadge = standalone ? (
+    <Badge text="Установлено" tone="ok" />
+  ) : (
+    <Badge text="Не установлено" />
+  );
+
+  const permText = permissionLabel(String(notifPerm || "unsupported"));
+  const permBadge =
+    notifPerm === "granted" ? (
+      <Badge text="Разрешены" tone="ok" />
+    ) : notifPerm === "denied" ? (
+      <Badge text="Запрещены" />
+    ) : (
+      <Badge text={permText} />
+    );
 
   return (
     <div className="section">
@@ -704,16 +824,61 @@ export function Profile() {
               />
 
               <RowLine
+                icon="📲"
+                label="Приложение (PWA)"
+                value={standalone ? "Установлено" : "Не установлено"}
+                right={
+                  <>
+                    {pwaBadge}
+                    <button className="btn btn--primary" onClick={doInstallPwa} type="button">
+                      {standalone ? "Открыто" : isIOS() ? "Как установить" : "Установить"}
+                    </button>
+                  </>
+                }
+                hint="Установи на экран телефона — тогда можно включать Push-уведомления."
+              />
+
+              <RowLine
                 icon="🔔"
-                label="Уведомления"
-                value="Скоро"
-                right={soonBadge}
-                hint="Позже добавим управление Push/Telegram уведомлениями."
+                label="Push-уведомления"
+                value={permText}
+                right={
+                  <>
+                    {permBadge}
+                    {notifPerm !== "granted" ? (
+                      <button className="btn" onClick={requestNotifPermission} type="button">
+                        Разрешить
+                      </button>
+                    ) : null}
+                  </>
+                }
+                hint="Сейчас: разрешение. Дальше подключим подписку и реальные push-сообщения."
               />
             </div>
           </div>
         </div>
       </div>
+
+      {/* iOS install modal */}
+      <Modal
+        open={iosInstallModal}
+        title="Установка на iPhone"
+        onClose={() => setIosInstallModal(false)}
+      >
+        <div className="p" style={{ marginTop: 0 }}>
+          iOS устанавливает PWA через меню <b>Поделиться</b>.
+        </div>
+        <div className="pre" style={{ marginTop: 10 }}>
+          1) Открой меню “Поделиться” (иконка квадрат со стрелкой вверх)
+          {"\n"}2) Выбери “На экран Домой”
+          {"\n"}3) Подтверди “Добавить”
+        </div>
+        <div className="row" style={{ marginTop: 12, justifyContent: "flex-end" }}>
+          <button className="btn btn--primary" onClick={() => setIosInstallModal(false)}>
+            Понятно
+          </button>
+        </div>
+      </Modal>
 
       {/* Telegram modal */}
       <Modal

@@ -1,4 +1,3 @@
-// api/src/modules/notifications/format.ts
 import type { BillingPushEvent } from "./inbox.js";
 
 type Level = "info" | "success" | "error";
@@ -22,36 +21,45 @@ function pick(obj: any, path: string): any {
   }
 }
 
-// Главная функция: превращаем входное событие в “готовое для людей”
+function firstForecastItem(meta: any) {
+  const items = pick(meta, "items");
+  if (!Array.isArray(items) || !items.length) return null;
+  // берём первый как “ближайший” (биллинг может сортировать)
+  const it = items[0] ?? {};
+  const id = pick(it, "id") ?? pick(it, "usi") ?? pick(it, "service.id");
+  const name = pick(it, "name") ?? pick(it, "service.name");
+  const expire = pick(it, "expire") ?? pick(it, "expiresAt");
+  const total = pick(it, "next.total") ?? pick(it, "nextTotal") ?? pick(it, "total");
+  return { id, name, expire, total };
+}
+
 export function formatIncoming(e: BillingPushEvent): BillingPushEvent {
   const type = String(e.type || "").trim();
 
-  // level по умолчанию
   const level: Level =
     e.level ||
-    (type === "balance.credited" || type === "service.renewed"
+    (type === "balance.credited" || type === "service.renewed" || type === "service.activated"
       ? "success"
       : type === "service.blocked"
       ? "error"
       : "info");
 
-  // toast policy (MVP)
+  // toast: если биллинг прислал — уважаем. Если нет — дефолты только для базовых событий.
   let toast = e.toast;
   if (toast == null) {
     if (type === "balance.credited") toast = true;
     else if (type === "service.blocked") toast = true;
     else if (type === "service.renewed") toast = true;
-    else if (type === "service.forecast") toast = true; // позже сделаем умнее
-    else if (type === "broadcast.news") toast = false;
+    else if (type === "service.activated") toast = true;
+    else if (type === "service.forecast") toast = false; // forecast лучше контролировать из биллинга
+    else if (type === "broadcast.news") toast = false; // новости: тост только если биллинг выставит toast=true
     else toast = false;
   }
 
-  // meta (если пришло)
   const meta = (e as any).meta || {};
   const serviceId = pick(meta, "service.id") ?? pick(meta, "usi");
   const serviceName = pick(meta, "service.name") ?? pick(meta, "name");
 
-  // ====== Форматирование по типам ======
   let title = e.title || "";
   let message = e.message || "";
 
@@ -65,6 +73,12 @@ export function formatIncoming(e: BillingPushEvent): BillingPushEvent {
     const name = serviceName ? String(serviceName) : "Услуга";
     const idPart = serviceId ? ` #${serviceId}` : "";
     message = `${name}${idPart} · нужно пополнение`;
+  } else if (type === "service.activated") {
+    title = "✅ Активировано";
+    const name = serviceName ? String(serviceName) : "Услуга";
+    const idPart = serviceId ? ` #${serviceId}` : "";
+    const expire = pick(meta, "expire");
+    message = expire ? `${name}${idPart} · до ${String(expire)}` : `${name}${idPart} · активировано`;
   } else if (type === "service.renewed") {
     title = "✅ Продлено";
     const name = serviceName ? String(serviceName) : "Услуга";
@@ -73,18 +87,40 @@ export function formatIncoming(e: BillingPushEvent): BillingPushEvent {
     message = expireNew ? `${name}${idPart} · до ${String(expireNew)}` : `${name}${idPart} · продлено`;
   } else if (type === "service.forecast") {
     title = "⏳ Скоро нужна оплата";
+
     const total = pick(meta, "total");
     const t = rub(total);
+
     const cnt = Number(pick(meta, "items_count") ?? pick(meta, "count"));
-    if (t) message = `Нужно ~${t}${Number.isFinite(cnt) && cnt > 0 ? ` · услуг: ${cnt}` : ""}`;
-    else if (Number.isFinite(cnt) && cnt > 0) message = `Услуг под риском: ${cnt}`;
-    else message = "Проверьте оплату услуг";
+    const balance = pick(meta, "balance");
+    const bonus = pick(meta, "bonus") ?? pick(meta, "get_bonus");
+
+    const b = rub(balance);
+    const bn = rub(bonus);
+
+    const it = firstForecastItem(meta);
+    if (it) {
+      const name = it.name ? String(it.name) : "Услуга";
+      const idPart = it.id ? ` #${it.id}` : "";
+      const ex = it.expire ? `до ${String(it.expire)}` : "";
+      const p = rub(it.total);
+      message = `${name}${idPart}${ex ? ` · ${ex}` : ""}${p ? ` · ~${p}` : ""}`;
+      if (Number.isFinite(cnt) && cnt > 1) message += ` (и ещё ${cnt - 1})`;
+      if (!p && t) message += ` · всего ~${t}`;
+    } else if (t) {
+      message = `Нужно ~${t}`;
+      if (Number.isFinite(cnt) && cnt > 0) message += ` · услуг: ${cnt}`;
+      if (b) message += ` · баланс ${b}`;
+      if (bn) message += ` (+${bn} бонус)`;
+    } else if (Number.isFinite(cnt) && cnt > 0) {
+      message = `Услуг под риском: ${cnt}`;
+    } else {
+      message = "Проверьте оплату услуг";
+    }
   } else if (type === "broadcast.news") {
-    // новости оставляем “как есть”, только подчищаем
     title = title || "📢 Сообщение";
     message = message || "";
   } else {
-    // fallback: просто чистим
     title = title || "Сообщение";
   }
 

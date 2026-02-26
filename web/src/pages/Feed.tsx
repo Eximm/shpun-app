@@ -11,10 +11,11 @@ type NotifEvent = {
   level?: NotifLevel;
   title?: string;
   message?: string;
-  meta?: any; // ✅ важно для маршрутизации (service.id, usi и т.д.)
+  meta?: any; // важно для маршрутизации (service.id, usi и т.д.)
 };
 
-type FeedResp = { ok: true; items: NotifEvent[]; nextBefore: number };
+type Cursor = { ts: number; id: string };
+type FeedResp = { ok: true; items: NotifEvent[]; nextBefore: Cursor };
 
 type Category = "all" | "money" | "services" | "news";
 
@@ -107,10 +108,9 @@ function eventLink(e: NotifEvent): string | null {
   const type = String(e.type || "").trim();
 
   if (type === "balance.credited") return "/payments";
-
   if (type === "service.forecast") return "/services/order";
 
-  if (type === "service.blocked" || type === "service.renewed") {
+  if (type === "service.blocked" || type === "service.renewed" || type === "service.activated") {
     const usi = pick(e.meta, "service.id") ?? pick(e.meta, "usi") ?? pick(e.meta, "service.usi");
     if (usi != null) return `/services?usi=${encodeURIComponent(String(usi))}`;
     return "/services";
@@ -118,7 +118,6 @@ function eventLink(e: NotifEvent): string | null {
 
   if (type === "broadcast.news") return "/help";
 
-  // fallback: по категории
   const c = categoryOf(e);
   if (c === "money") return "/payments";
   if (c === "services") return "/services";
@@ -127,12 +126,27 @@ function eventLink(e: NotifEvent): string | null {
   return null;
 }
 
+function uniqAppend(prev: NotifEvent[], next: NotifEvent[]) {
+  if (!next.length) return prev;
+  const seen = new Set(prev.map((x) => x.event_id));
+  const out = prev.slice();
+  for (const it of next) {
+    if (!it?.event_id) continue;
+    if (seen.has(it.event_id)) continue;
+    seen.add(it.event_id);
+    out.push(it);
+  }
+  return out;
+}
+
+const PAGE_LIMIT = 50;
+
 export function Feed() {
   const nav = useNavigate();
 
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<NotifEvent[]>([]);
-  const [nextBefore, setNextBefore] = useState<number>(0);
+  const [nextBefore, setNextBefore] = useState<Cursor>({ ts: 0, id: "" });
   const [hasMore, setHasMore] = useState(true);
 
   const [cat, setCat] = useState<Category>("all");
@@ -140,11 +154,15 @@ export function Feed() {
   async function loadFirst() {
     setLoading(true);
     try {
-      const r = await apiFetch<FeedResp>(`/notifications/feed?limit=50`);
+      const r = await apiFetch<FeedResp>(`/notifications/feed?limit=${PAGE_LIMIT}`);
       const arr = Array.isArray(r.items) ? r.items : [];
       setItems(arr);
-      setNextBefore(Number(r.nextBefore || 0));
-      setHasMore(arr.length > 0);
+
+      const nb = r?.nextBefore;
+      setNextBefore(nb && Number.isFinite(Number(nb.ts)) ? { ts: Number(nb.ts), id: String(nb.id ?? "") } : { ts: 0, id: "" });
+
+      // hasMore: если пришла “полная” страница — вероятно есть ещё
+      setHasMore(arr.length >= PAGE_LIMIT);
     } finally {
       setLoading(false);
     }
@@ -154,14 +172,35 @@ export function Feed() {
     if (!hasMore || loading) return;
     setLoading(true);
     try {
-      const before = Number(nextBefore || 0);
-      const r = await apiFetch<FeedResp>(
-        `/notifications/feed?limit=50&beforeTs=${encodeURIComponent(String(before))}`
-      );
+      const c = nextBefore || { ts: 0, id: "" };
+
+      // если курсор пустой — дальше грузить бессмысленно
+      if (!c.ts && !c.id) {
+        setHasMore(false);
+        return;
+      }
+
+      const url =
+        `/notifications/feed?limit=${PAGE_LIMIT}` +
+        `&beforeTs=${encodeURIComponent(String(c.ts || 0))}` +
+        `&beforeId=${encodeURIComponent(String(c.id || ""))}`;
+
+      const r = await apiFetch<FeedResp>(url);
       const arr = Array.isArray(r.items) ? r.items : [];
-      setItems((prev) => [...prev, ...arr]);
-      setNextBefore(Number(r.nextBefore || before || 0));
-      if (arr.length === 0) setHasMore(false);
+
+      setItems((prev) => uniqAppend(prev, arr));
+
+      const nb = r?.nextBefore;
+      const nextCursor =
+        nb && Number.isFinite(Number(nb.ts))
+          ? { ts: Number(nb.ts), id: String(nb.id ?? "") }
+          : c;
+
+      // если курсор не двинулся — стоп, иначе можно зациклиться
+      const advanced = nextCursor.ts !== c.ts || nextCursor.id !== c.id;
+      setNextBefore(nextCursor);
+
+      if (arr.length < PAGE_LIMIT || !advanced) setHasMore(false);
     } finally {
       setLoading(false);
     }
@@ -186,7 +225,6 @@ export function Feed() {
           <h1 className="h1">Инфоцентр</h1>
           <p className="p">Здесь всё, что важно.</p>
 
-          {/* 4 фильтра */}
           <div className="actions actions--4" style={{ marginTop: 12 }}>
             <FilterBtn active={cat === "all"} onClick={() => setCat("all")}>Все</FilterBtn>
             <FilterBtn active={cat === "money"} onClick={() => setCat("money")}>Деньги</FilterBtn>
@@ -194,12 +232,10 @@ export function Feed() {
             <FilterBtn active={cat === "news"} onClick={() => setCat("news")}>Новости</FilterBtn>
           </div>
 
-          {/* Маленький статус */}
           <p className="p" style={{ marginTop: 10, opacity: 0.85 }}>
             {catLabel(cat)} · {countText}
           </p>
 
-          {/* Лента */}
           <div className="list" style={{ marginTop: 12 }}>
             {loading && items.length === 0 ? (
               <>
@@ -265,7 +301,6 @@ export function Feed() {
             )}
           </div>
 
-          {/* Загрузить ещё */}
           {filtered.length > 0 ? (
             <div className="actions actions--1" style={{ marginTop: 12 }}>
               <button className="btn btn--accent" onClick={loadMore} disabled={!hasMore || loading} type="button">

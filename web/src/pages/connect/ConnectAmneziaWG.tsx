@@ -46,10 +46,6 @@ function platformLabel(p: Platform) {
   return 'Linux'
 }
 
-function isMobile(p: Platform) {
-  return p === 'android' || p === 'ios'
-}
-
 function openLinkSafe(url: string) {
   try {
     const tg: any = (window as any).Telegram?.WebApp
@@ -190,8 +186,7 @@ export default function ConnectAmneziaWG({ usi }: Props) {
     const pName = platformLabel(platform)
     if (loading) return `Готовим подключение для: ${pName}…`
     if (error) return `Не удалось подготовить подключение для: ${pName}.`
-    if (isMobile(platform)) return `Устройство: ${pName}. Шаги ниже помогут установить приложение и импортировать по QR.`
-    return `Устройство: ${pName}. Шаги ниже помогут установить приложение и импортировать .conf.`
+    return `Устройство: ${pName}. Шаги ниже помогут установить приложение и импортировать профиль (.conf).`
   }, [platform, loading, error])
 
   async function openQr() {
@@ -234,9 +229,9 @@ export default function ConnectAmneziaWG({ usi }: Props) {
     }
   }
 
-  // Main step 2: mobile => QR, desktop => file
-  const main2Label = isMobile(platform) ? 'Показать QR' : 'Скачать конфиг (.conf)'
-  const main2Action = isMobile(platform) ? openQr : downloadConf
+  // Step 2: основной способ всегда — скачать .conf (для всех устройств)
+  const main2Label = 'Скачать конфиг (.conf)'
+  const main2Action = downloadConf
 
   const storeLabel =
     platform === 'android'
@@ -317,9 +312,8 @@ export default function ConnectAmneziaWG({ usi }: Props) {
           <div className="services-cat__title">2) Добавьте профиль</div>
 
           <p className="p" style={{ opacity: 0.82, marginTop: 6 }}>
-            {isMobile(platform)
-              ? 'Откройте AmneziaWG и импортируйте профиль по QR-коду.'
-              : 'Скачайте .conf и импортируйте файл в AmneziaWG.'}
+            Скачайте <b>.conf</b> и импортируйте файл в <b>AmneziaWG</b>.{' '}
+            <span style={{ display: 'inline-block', marginLeft: 6 }}>(QR и копирование — в «Другие способы».)</span>
           </p>
 
           <div className="actions actions--2" style={{ marginTop: 10 }}>
@@ -345,12 +339,6 @@ export default function ConnectAmneziaWG({ usi }: Props) {
                 <div className="actions actions--1" style={{ marginTop: 0 }}>
                   <button className="btn btn--soft so__btnFull" type="button" onClick={openQr}>
                     Показать QR
-                  </button>
-                </div>
-
-                <div className="actions actions--1" style={{ marginTop: 10 }}>
-                  <button className="btn btn--soft so__btnFull" type="button" onClick={downloadConf}>
-                    Скачать .conf
                   </button>
                 </div>
 
