@@ -20,7 +20,7 @@ const APP_LINKS: Record<Platform, string> = {
   mac: 'https://apps.apple.com/app/amneziawg/id6478942365',
   ios: 'https://apps.apple.com/app/amneziawg/id6478942365',
   android: 'https://play.google.com/store/apps/details?id=org.amnezia.awg',
-  linux: 'https://github.com/amnezia-vpn/amneziawg-linux-client/releases',
+  linux: 'https://docs.amnezia.org/documentation/installing-app-on-linux/',
 }
 
 const APK_LINK = 'https://github.com/amnezia-vpn/amneziawg-android/releases/latest'
