@@ -104,25 +104,49 @@ function pick(obj: any, path: string) {
   }
 }
 
+/**
+ * Where should the feed item lead?
+ * Rules:
+ * - service.blocked / activated / renewed -> Services
+ * - service.forecast -> Payments
+ * - broadcast/news -> nowhere
+ *
+ * Also supports meta.action = { kind:"nav", to:"/services", usi?:... } (optional future)
+ */
 function eventLink(e: NotifEvent): string | null {
+  // 0) Optional explicit action from backend
+  const actionTo = pick(e.meta, "action.to");
+  if (typeof actionTo === "string" && actionTo.trim()) {
+    const to = actionTo.trim();
+    const usi = pick(e.meta, "action.usi");
+    if (usi != null && to.startsWith("/services")) {
+      return `/services?usi=${encodeURIComponent(String(usi))}`;
+    }
+    return to;
+  }
+
   const type = String(e.type || "").trim();
 
+  // 1) Money
   if (type === "balance.credited") return "/payments";
-  if (type === "service.forecast") return "/services/order";
 
+  // 2) Forecast -> Payments (your rule)
+  if (type === "service.forecast") return "/payments";
+
+  // 3) Service lifecycle -> Services (your rule)
   if (type === "service.blocked" || type === "service.renewed" || type === "service.activated") {
     const usi = pick(e.meta, "service.id") ?? pick(e.meta, "usi") ?? pick(e.meta, "service.usi");
     if (usi != null) return `/services?usi=${encodeURIComponent(String(usi))}`;
     return "/services";
   }
 
-  if (type === "broadcast.news") return "/help";
+  // 4) News -> nowhere (your rule)
+  if (type === "broadcast.news") return null;
 
+  // 5) Fallback by category: only money/services should navigate, news -> nowhere
   const c = categoryOf(e);
   if (c === "money") return "/payments";
   if (c === "services") return "/services";
-  if (c === "news") return "/help";
-
   return null;
 }
 
@@ -159,9 +183,10 @@ export function Feed() {
       setItems(arr);
 
       const nb = r?.nextBefore;
-      setNextBefore(nb && Number.isFinite(Number(nb.ts)) ? { ts: Number(nb.ts), id: String(nb.id ?? "") } : { ts: 0, id: "" });
+      setNextBefore(
+        nb && Number.isFinite(Number(nb.ts)) ? { ts: Number(nb.ts), id: String(nb.id ?? "") } : { ts: 0, id: "" }
+      );
 
-      // hasMore: если пришла “полная” страница — вероятно есть ещё
       setHasMore(arr.length >= PAGE_LIMIT);
     } finally {
       setLoading(false);
@@ -174,7 +199,6 @@ export function Feed() {
     try {
       const c = nextBefore || { ts: 0, id: "" };
 
-      // если курсор пустой — дальше грузить бессмысленно
       if (!c.ts && !c.id) {
         setHasMore(false);
         return;
@@ -192,11 +216,8 @@ export function Feed() {
 
       const nb = r?.nextBefore;
       const nextCursor =
-        nb && Number.isFinite(Number(nb.ts))
-          ? { ts: Number(nb.ts), id: String(nb.id ?? "") }
-          : c;
+        nb && Number.isFinite(Number(nb.ts)) ? { ts: Number(nb.ts), id: String(nb.id ?? "") } : c;
 
-      // если курсор не двинулся — стоп, иначе можно зациклиться
       const advanced = nextCursor.ts !== c.ts || nextCursor.id !== c.id;
       setNextBefore(nextCursor);
 
@@ -226,10 +247,18 @@ export function Feed() {
           <p className="p">Здесь всё, что важно.</p>
 
           <div className="actions actions--4" style={{ marginTop: 12 }}>
-            <FilterBtn active={cat === "all"} onClick={() => setCat("all")}>Все</FilterBtn>
-            <FilterBtn active={cat === "money"} onClick={() => setCat("money")}>Деньги</FilterBtn>
-            <FilterBtn active={cat === "services"} onClick={() => setCat("services")}>Услуги</FilterBtn>
-            <FilterBtn active={cat === "news"} onClick={() => setCat("news")}>Новости</FilterBtn>
+            <FilterBtn active={cat === "all"} onClick={() => setCat("all")}>
+              Все
+            </FilterBtn>
+            <FilterBtn active={cat === "money"} onClick={() => setCat("money")}>
+              Деньги
+            </FilterBtn>
+            <FilterBtn active={cat === "services"} onClick={() => setCat("services")}>
+              Услуги
+            </FilterBtn>
+            <FilterBtn active={cat === "news"} onClick={() => setCat("news")}>
+              Новости
+            </FilterBtn>
           </div>
 
           <p className="p" style={{ marginTop: 10, opacity: 0.85 }}>
@@ -291,9 +320,7 @@ export function Feed() {
                     </div>
 
                     <div className="list__side">
-                      <span className={`chip chip--${chipKindByLevel(e.level)}`}>
-                        {chipTextByLevel(e.level)}
-                      </span>
+                      <span className={`chip chip--${chipKindByLevel(e.level)}`}>{chipTextByLevel(e.level)}</span>
                     </div>
                   </div>
                 );
