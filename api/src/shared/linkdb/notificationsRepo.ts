@@ -35,7 +35,7 @@ function normalizeTs(input: any): number {
   const raw = Number(input);
   let ts = Number.isFinite(raw) ? raw : Math.floor(Date.now() / 1000);
 
-  // if milliseconds (>= year 2286 in seconds, but practical threshold)
+  // allow ms
   if (ts > 10_000_000_000) ts = Math.floor(ts / 1000);
 
   ts = Math.floor(ts);
@@ -56,16 +56,6 @@ function rowToEvent(r: any): NotifEvent {
     toast: Number(r.toast) === 1,
     meta: parseJson(r.meta_json),
   };
-}
-
-function randHex(n = 8) {
-  // not crypto, just to make ids unique
-  return Math.random().toString(16).slice(2, 2 + n);
-}
-
-function makeUniqueEventId(base: string, ts: number) {
-  // stable prefix + time + random, so repeats don't collide
-  return `${base}:${ts}:${randHex(10)}`;
 }
 
 // ===== schema =====
@@ -95,18 +85,17 @@ CREATE INDEX IF NOT EXISTS idx_notif_events_target_ts
 `);
 
 // ===== statements =====
-const stmtExists = linkDb.prepare(`
-  SELECT 1 FROM notif_events WHERE event_id = ? LIMIT 1
-`);
 
-const stmtInsert = linkDb.prepare(`
-  INSERT INTO notif_events
+// We dedupe by event_id via PK. If the same (event_id) is inserted again -> ignore.
+const stmtInsertOrIgnore = linkDb.prepare(`
+  INSERT OR IGNORE INTO notif_events
     (event_id, ts, target, user_id, type, level, title, message, toast, meta_json)
   VALUES
     (@event_id, @ts, @target, @user_id, @type, @level, @title, @message, @toast, @meta_json)
 `);
 
 // Cursor = (ts, event_id) to avoid “missing” events in same second
+// IMPORTANT: We intentionally return ONLY user-targeted events for current user.
 const stmtListAfter = linkDb.prepare(`
   SELECT * FROM notif_events
   WHERE
@@ -114,10 +103,9 @@ const stmtListAfter = linkDb.prepare(`
       ts > @afterTs
       OR (ts = @afterTs AND event_id > @afterId)
     )
-    AND (
-      target = 'all'
-      OR (target = 'user' AND user_id = @uid AND @uid > 0)
-    )
+    AND target = 'user'
+    AND user_id = @uid
+    AND @uid > 0
   ORDER BY ts ASC, event_id ASC
   LIMIT @limit
 `);
@@ -130,55 +118,35 @@ const stmtFeed = linkDb.prepare(`
       OR ts < @beforeTs
       OR (ts = @beforeTs AND event_id < @beforeId)
     )
-    AND (
-      target = 'all'
-      OR (target = 'user' AND user_id = @uid AND @uid > 0)
-    )
+    AND target = 'user'
+    AND user_id = @uid
+    AND @uid > 0
   ORDER BY ts DESC, event_id DESC
   LIMIT @limit
 `);
 
 export function putNotifEvent(
-  ev: NotifEvent
+  ev: NotifEvent,
 ): { ok: true; dedup: boolean } | { ok: false; error: string } {
-  const baseId = String(ev?.event_id ?? "").trim();
-  if (!baseId) return { ok: false, error: "missing_event_id" };
+  const event_id = String(ev?.event_id ?? "").trim();
+  if (!event_id) return { ok: false, error: "missing_event_id" };
 
   const ts = normalizeTs(ev.ts);
 
-  const target: NotifTarget = ev.target === "user" ? "user" : "all";
+  // We store only per-user events to avoid leaks.
+  const target: NotifTarget = "user";
+  const uid = Number(ev.user_id);
 
-  let user_id: number | null = null;
-  if (target === "user") {
-    const uid = Number(ev.user_id);
-    if (!Number.isFinite(uid) || uid <= 0) {
-      return { ok: false, error: "missing_user_id" };
-    }
-    user_id = uid;
-  }
-
-  // IMPORTANT:
-  // Billing may send the same event_id for the same kind of event (e.g. "service:123:activated").
-  // We must keep ALL events in the feed, even if text/id repeats (daily forecasts etc).
-  // So if event_id already exists, generate a unique one.
-  let event_id = baseId;
-  if (stmtExists.get(event_id)) {
-    event_id = makeUniqueEventId(baseId, ts);
-
-    // extremely unlikely, but keep it safe
-    let guard = 0;
-    while (stmtExists.get(event_id) && guard < 5) {
-      event_id = makeUniqueEventId(baseId, ts);
-      guard++;
-    }
+  if (!Number.isFinite(uid) || uid <= 0) {
+    return { ok: false, error: "missing_user_id" };
   }
 
   try {
-    stmtInsert.run({
+    const res = stmtInsertOrIgnore.run({
       event_id,
       ts,
       target,
-      user_id,
+      user_id: uid,
       type: ev.type ?? null,
       level: ev.level ?? null,
       title: ev.title ?? null,
@@ -186,16 +154,12 @@ export function putNotifEvent(
       toast: asInt(ev.toast),
       meta_json: ev.meta ? JSON.stringify(ev.meta) : null,
     });
-  } catch (e: any) {
-    // if somehow collided again
-    const msg = String(e?.message ?? e);
-    if (msg.includes("UNIQUE") || msg.includes("constraint")) {
-      return { ok: true, dedup: true };
-    }
+
+    const changes = Number((res as any)?.changes ?? 0);
+    return { ok: true, dedup: changes === 0 };
+  } catch {
     return { ok: false, error: "db_insert_failed" };
   }
-
-  return { ok: true, dedup: false };
 }
 
 export function listNotifAfter(params: {
@@ -204,7 +168,10 @@ export function listNotifAfter(params: {
   userId?: number;
   limit?: number;
 }) {
-  const afterTs = normalizeTs(params.afterTs ?? 0);
+  // afterTs=0 means "from the beginning": keep it 0
+  const afterTsRaw = Number(params.afterTs ?? 0);
+  const afterTs = Number.isFinite(afterTsRaw) ? Math.floor(afterTsRaw) : 0;
+
   const afterId = String(params.afterId ?? "");
   const uid = params.userId ?? 0;
   const limit = Math.min(Math.max(Number(params.limit ?? 200), 1), 500);

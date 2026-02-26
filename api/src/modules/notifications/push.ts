@@ -19,32 +19,11 @@ export async function pushRoutes(app: FastifyInstance) {
       const signRaw = (req.headers as any)["x-shpun-sign"];
       const sign = String(signRaw ?? "").trim();
 
-      try {
-        req.log.info(
-          {
-            host: (req.headers as any).host,
-            url: (req as any).url,
-            hasSign: Boolean(sign),
-            signLen: sign.length,
-            hdrs: Object.keys(req.headers || {}),
-          },
-          "billing push auth",
-        );
-      } catch {
-        // ignore
-      }
-
       if (!sign) {
         return reply.code(401).send({ ok: false, error: "missing_signature" });
       }
       if (sign !== secret) {
         return reply.code(401).send({ ok: false, error: "bad_signature" });
-      }
-    } else {
-      try {
-        req.log.warn({ hasSecret: false }, "billing push: BILLING_PUSH_SECRET is empty (auth disabled)");
-      } catch {
-        // ignore
       }
     }
 
@@ -54,15 +33,21 @@ export async function pushRoutes(app: FastifyInstance) {
     const r = putEvent(formatted);
     if (!r.ok) return reply.code(400).send({ ok: false, error: r.error });
 
-    // webpush only for user events
+    // webpush only for personal events (we have concrete user_id)
     try {
       const uid = Number((r.event as any)?.user_id ?? 0);
-      if (uid > 0) await sendWebPushToUser(uid, r.event);
+      if (uid > 0) await sendWebPushToUser(uid, r.event!);
     } catch {
       // ignore
     }
 
-    return reply.send({ ok: true, dedup: r.dedup, event_id: r.event.event_id, ts: r.event.ts });
+    return reply.send({
+      ok: true,
+      dedup: r.dedup,
+      event_id: r.event?.event_id ?? null,
+      ts: r.event?.ts ?? null,
+      delivered: r.delivered ?? null,
+    });
   });
 
   // ===== POST /api/notifications/push/subscribe =====
@@ -106,6 +91,7 @@ export async function pushRoutes(app: FastifyInstance) {
   app.get("/notifications", async (req, reply) => {
     const s = getSessionFromRequest(req);
     const uid = s?.userId ? Number(s.userId) : 0;
+    if (!uid) return reply.code(401).send({ ok: false, error: "unauthorized" });
 
     const q = (req.query ?? {}) as any;
     const afterTs = Number(q.afterTs ?? 0);
@@ -120,6 +106,7 @@ export async function pushRoutes(app: FastifyInstance) {
   app.get("/notifications/feed", async (req, reply) => {
     const s = getSessionFromRequest(req);
     const uid = s?.userId ? Number(s.userId) : 0;
+    if (!uid) return reply.code(401).send({ ok: false, error: "unauthorized" });
 
     const q = (req.query ?? {}) as any;
     const beforeTs = Number(q.beforeTs ?? 0);
