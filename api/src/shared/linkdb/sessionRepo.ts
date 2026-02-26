@@ -1,14 +1,5 @@
 // api/src/shared/linkdb/sessionRepo.ts
-import Database from "better-sqlite3";
-
-export const LINKDB_PATH =
-  process.env.LINKDB_PATH ||
-  process.env.LINK_DB_PATH ||
-  "./data/linkdb.sqlite";
-
-const db = new Database(LINKDB_PATH);
-db.pragma("journal_mode = WAL");
-db.pragma("synchronous = NORMAL");
+import { linkDb as db } from "./db.js";
 
 function ensureSchema(): void {
   db.exec(`

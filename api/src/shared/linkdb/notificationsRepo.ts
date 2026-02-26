@@ -1,3 +1,4 @@
+// api/src/shared/linkdb/notificationsRepo.ts
 import { linkDb } from "./db.js";
 
 export type NotifTarget = "all" | "user";
@@ -209,4 +210,120 @@ export function listNotifFeed(params: {
     : { ts: beforeTs, id: beforeId };
 
   return { items, nextBefore };
+}
+
+/* =========================================================
+   PUSH SUBSCRIPTIONS (SQLite, persistent)
+   ========================================================= */
+
+// ===== push subscriptions schema =====
+linkDb.exec(`
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  user_id     INTEGER NOT NULL,
+  endpoint    TEXT    NOT NULL,
+  p256dh      TEXT    NOT NULL,
+  auth        TEXT    NOT NULL,
+  created_at  INTEGER NOT NULL,
+  updated_at  INTEGER NOT NULL,
+  PRIMARY KEY (user_id, endpoint)
+);
+
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user
+  ON push_subscriptions(user_id);
+`);
+
+// ===== push subscriptions statements =====
+
+// upsert by (user_id, endpoint)
+const stmtPushSubUpsert = linkDb.prepare(`
+  INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, created_at, updated_at)
+  VALUES (@user_id, @endpoint, @p256dh, @auth, @now, @now)
+  ON CONFLICT(user_id, endpoint) DO UPDATE SET
+    p256dh = excluded.p256dh,
+    auth = excluded.auth,
+    updated_at = excluded.updated_at
+`);
+
+const stmtPushSubList = linkDb.prepare(`
+  SELECT endpoint, p256dh, auth, updated_at AS ts
+  FROM push_subscriptions
+  WHERE user_id = @user_id
+  ORDER BY updated_at DESC
+`);
+
+const stmtPushSubRemoveOne = linkDb.prepare(`
+  DELETE FROM push_subscriptions
+  WHERE user_id = @user_id AND endpoint = @endpoint
+`);
+
+const stmtPushSubRemoveAll = linkDb.prepare(`
+  DELETE FROM push_subscriptions
+  WHERE user_id = @user_id
+`);
+
+export type PushSubscriptionRow = {
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+  ts?: number; // unix seconds
+};
+
+export function upsertPushSubscription(params: {
+  userId: number;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+}) {
+  const uid = Number(params.userId);
+  const endpoint = String(params.endpoint ?? "").trim();
+  const p256dh = String(params.p256dh ?? "").trim();
+  const auth = String(params.auth ?? "").trim();
+
+  if (!Number.isFinite(uid) || uid <= 0) return { ok: false as const, error: "bad_user_id" };
+  if (!endpoint) return { ok: false as const, error: "bad_endpoint" };
+  if (!p256dh || !auth) return { ok: false as const, error: "bad_keys" };
+
+  const now = Math.floor(Date.now() / 1000);
+
+  try {
+    stmtPushSubUpsert.run({
+      user_id: uid,
+      endpoint,
+      p256dh,
+      auth,
+      now,
+    });
+    return { ok: true as const };
+  } catch {
+    return { ok: false as const, error: "db_upsert_failed" };
+  }
+}
+
+export function listPushSubscriptions(userId: number): PushSubscriptionRow[] {
+  const uid = Number(userId);
+  if (!Number.isFinite(uid) || uid <= 0) return [];
+
+  const rows = stmtPushSubList.all({ user_id: uid }) as any[];
+  return rows.map((r) => ({
+    endpoint: String(r.endpoint),
+    keys: { p256dh: String(r.p256dh), auth: String(r.auth) },
+    ts: r.ts == null ? undefined : Number(r.ts),
+  }));
+}
+
+export function removePushSubscription(params: { userId: number; endpoint?: string | null }) {
+  const uid = Number(params.userId);
+  if (!Number.isFinite(uid) || uid <= 0) return { ok: false as const, error: "bad_user_id" };
+
+  const endpoint = params.endpoint == null ? null : String(params.endpoint).trim();
+
+  try {
+    if (!endpoint) {
+      stmtPushSubRemoveAll.run({ user_id: uid });
+    } else {
+      stmtPushSubRemoveOne.run({ user_id: uid, endpoint });
+    }
+    return { ok: true as const };
+  } catch {
+    return { ok: false as const, error: "db_delete_failed" };
+  }
 }
