@@ -65,14 +65,18 @@ export function useBillingNotifications(enabled: boolean) {
   const cursorRef = useRef<Cursor>(readCursor());
   const timerRef = useRef<number | null>(null);
 
-  // first poll after (re)enable: do NOT show toasts, only advance cursor
+  // first poll after (re)enable: don't spam old toasts
   const warmupRef = useRef<boolean>(true);
+
+  // ts when hook was enabled (unix seconds)
+  const enabledAtTsRef = useRef<number>(0);
 
   useEffect(() => {
     if (!enabled) return;
 
     let stopped = false;
     warmupRef.current = true;
+    enabledAtTsRef.current = Math.floor(Date.now() / 1000);
 
     async function tick() {
       if (stopped) return;
@@ -85,21 +89,12 @@ export function useBillingNotifications(enabled: boolean) {
 
         const r = await apiFetch<Resp>(`/notifications?${qs}`);
 
-        const next = r?.nextCursor;
-        if (next && Number.isFinite(Number(next.ts))) {
-          const nextCursor = { ts: Number(next.ts), id: String(next.id ?? "") };
-          cursorRef.current = nextCursor;
-          saveCursor(nextCursor);
-        }
-
         const items = r?.items || [];
 
-        // Warmup: we just synced cursor, don't spam toasts for old events.
-        // Next tick will only fetch new events anyway (thanks to cursor).
-        if (warmupRef.current) {
-          warmupRef.current = false;
-          return;
-        }
+        // Show toasts:
+        // - normally: show all items (except toast=false, duplicates)
+        // - during warmup: show only events that are NEW since enable moment
+        const allowFromTs = warmupRef.current ? enabledAtTsRef.current : 0;
 
         for (const ev of items) {
           if (!ev) continue;
@@ -108,20 +103,32 @@ export function useBillingNotifications(enabled: boolean) {
           const eventId = String(ev.event_id ?? "").trim();
           if (!eventId) continue;
 
-          // Per-tab dedup so route changes don't re-toast the same events
+          // during warmup, skip old events (before user opened/enabled app)
+          const evTs = Number(ev.ts ?? 0);
+          if (allowFromTs && Number.isFinite(evTs) && evTs < allowFromTs) continue;
+
           if (hasShownToast(eventId)) continue;
 
           const title = ev.title || "Уведомление";
           const desc = ev.message || "";
           const lvl = ev.level || "info";
 
-          // mark first, so even if toast rendering throws, we won't loop spam
           markToastShown(eventId);
 
           if (lvl === "success") toast.success(title, { description: desc });
           else if (lvl === "error") toast.error(title, { description: desc });
           else toast.info(title, { description: desc });
         }
+
+        // advance cursor AFTER processing items
+        const next = r?.nextCursor;
+        if (next && Number.isFinite(Number(next.ts))) {
+          const nextCursor = { ts: Number(next.ts), id: String(next.id ?? "") };
+          cursorRef.current = nextCursor;
+          saveCursor(nextCursor);
+        }
+
+        if (warmupRef.current) warmupRef.current = false;
       } catch {
         // тихо
       } finally {
