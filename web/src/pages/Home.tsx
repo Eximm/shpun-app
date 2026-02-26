@@ -101,6 +101,20 @@ type ApiServicesResponse = {
 /** ===== Payments forecast ===== */
 type ForecastResp = { ok: true; raw: any };
 
+/** ===== Notifications feed (for Home News) ===== */
+type NotifLevel = "info" | "success" | "error";
+type NotifEvent = {
+  event_id: string;
+  ts: number;
+  type?: string;
+  level?: NotifLevel;
+  title?: string;
+  message?: string;
+  meta?: any;
+};
+type Cursor = { ts: number; id: string };
+type FeedResp = { ok: true; items: NotifEvent[]; nextBefore: Cursor };
+
 /* ========================================================================
    UTIL: Formatting helpers
    ======================================================================== */
@@ -143,21 +157,30 @@ function fmtShortDate(iso: string | null | undefined) {
   });
 }
 
+function fmtFeedDate(tsSec: number) {
+  const d = new Date(tsSec * 1000);
+  const now = new Date();
+
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+
+  if (sameDay) return "today";
+  return d.toLocaleDateString(undefined, { month: "short", day: "2-digit" });
+}
+
 /**
  * ✅ Strictly matches your real payload:
  * raw: { data: [ { total: 117.35, ... } ], date: "Thu Feb ..." }
  */
-function parsePaymentsForecast(
-  raw: any
-): { whenText?: string; amount?: number } | null {
+function parsePaymentsForecast(raw: any): { whenText?: string; amount?: number } | null {
   if (!raw || typeof raw !== "object") return null;
 
   const data0 = Array.isArray(raw.data) && raw.data.length ? raw.data[0] : null;
 
   const amount =
-    typeof data0?.total === "number" && Number.isFinite(data0.total)
-      ? data0.total
-      : null;
+    typeof data0?.total === "number" && Number.isFinite(data0.total) ? data0.total : null;
 
   const whenText =
     typeof raw.date === "string" && raw.date ? fmtShortDate(raw.date) : undefined;
@@ -205,19 +228,11 @@ function Tile({
           <span>{title}</span>
         </div>
 
-        {badge ? (
-          <div className="home-tile__badge">{badge}</div>
-        ) : (
-          <div className="home-tile__chev">→</div>
-        )}
+        {badge ? <div className="home-tile__badge">{badge}</div> : <div className="home-tile__chev">→</div>}
       </div>
 
       <div className="home-tile__value">{value}</div>
-      {sub ? (
-        <div className="home-tile__sub">{sub}</div>
-      ) : (
-        <div className="home-tile__sub home-tile__sub--empty" />
-      )}
+      {sub ? <div className="home-tile__sub">{sub}</div> : <div className="home-tile__sub home-tile__sub--empty" />}
     </Link>
   );
 }
@@ -243,10 +258,11 @@ export function Home() {
 
   // payments forecast
   const [payLoading, setPayLoading] = useState(false);
-  const [payForecast, setPayForecast] = useState<{
-    whenText?: string;
-    amount?: number;
-  } | null>(null);
+  const [payForecast, setPayForecast] = useState<{ whenText?: string; amount?: number } | null>(null);
+
+  // news from notif feed
+  const [newsLoading, setNewsLoading] = useState(false);
+  const [newsItems, setNewsItems] = useState<NotifEvent[]>([]);
 
   const inTelegramMiniApp = hasTelegramInitData();
 
@@ -254,8 +270,7 @@ export function Home() {
   const balance = me?.balance;
   const displayName = profile?.displayName || profile?.login || "";
 
-  const bonusValue =
-    typeof (me as any)?.bonus === "number" ? (me as any).bonus : 0;
+  const bonusValue = typeof (me as any)?.bonus === "number" ? (me as any).bonus : 0;
 
   const attentionCount = useMemo(() => {
     const s = svcSummary;
@@ -272,16 +287,11 @@ export function Home() {
   const initializedRef = useRef(false);
 
   useEffect(() => {
-    const curBonus =
-      typeof (me as any)?.bonus === "number" ? Number((me as any).bonus) : null;
+    const curBonus = typeof (me as any)?.bonus === "number" ? Number((me as any).bonus) : null;
+    const curBal = typeof balance?.amount === "number" ? Number(balance.amount) : null;
 
-    const curBal =
-      typeof balance?.amount === "number" ? Number(balance.amount) : null;
-
-    // wait until we have at least something stable
     if (curBonus == null && curBal == null) return;
 
-    // first paint: remember baseline, do not notify
     if (!initializedRef.current) {
       prevBonusRef.current = curBonus;
       prevBalRef.current = curBal;
@@ -289,33 +299,23 @@ export function Home() {
       return;
     }
 
-    // bonus delta
     if (curBonus != null && prevBonusRef.current != null && curBonus !== prevBonusRef.current) {
       const delta = curBonus - prevBonusRef.current;
 
-      if (delta > 0) {
-        toast.success("🎁 Бонусы начислены", { description: `+${delta}` });
-      } else {
-        toast.info("🎁 Бонусы изменились", { description: `${delta}` }); // already has "-"
-      }
+      if (delta > 0) toast.success("🎁 Бонусы начислены", { description: `+${delta}` });
+      else toast.info("🎁 Бонусы изменились", { description: `${delta}` });
 
       prevBonusRef.current = curBonus;
     } else if (curBonus != null && prevBonusRef.current == null) {
       prevBonusRef.current = curBonus;
     }
 
-    // balance delta (полезно после оплаты)
     if (curBal != null && prevBalRef.current != null && curBal !== prevBalRef.current) {
       const delta = curBal - prevBalRef.current;
 
       if (delta > 0) {
         const cur = String(balance?.currency || "RUB");
-        toast.success("💰 Баланс пополнен", {
-          description: `+${fmtMoney(delta, cur)}`,
-        });
-      } else {
-        // списания можно не показывать, чтобы не шуметь
-        // toast.info("💰 Баланс изменился", { description: fmtMoney(delta, String(balance?.currency || "RUB")) })
+        toast.success("💰 Баланс пополнен", { description: `+${fmtMoney(delta, cur)}` });
       }
 
       prevBalRef.current = curBal;
@@ -326,7 +326,7 @@ export function Home() {
   }, [bonusValue, balance?.amount, balance?.currency, me?.ok]);
 
   /* ======================================================================
-     DATA: load services + payments forecast
+     DATA: load services + payments forecast + news feed
      ====================================================================== */
 
   async function loadServicesSummary() {
@@ -357,10 +357,28 @@ export function Home() {
     }
   }
 
+  async function loadHomeNews() {
+    setNewsLoading(true);
+    try {
+      // Берём одну страницу, без пагинации -> никаких “кругов”
+      const r = await apiFetch<FeedResp>(`/notifications/feed?limit=20`);
+      const arr = Array.isArray(r.items) ? r.items : [];
+
+      // Только broadcast.news, самые свежие (они уже DESC)
+      const news = arr.filter((x) => String(x.type || "").trim() === "broadcast.news").slice(0, 3);
+      setNewsItems(news);
+    } catch {
+      setNewsItems([]);
+    } finally {
+      setNewsLoading(false);
+    }
+  }
+
   useEffect(() => {
     if (me?.ok) {
       loadServicesSummary();
       loadPaymentsForecast();
+      loadHomeNews();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me?.ok]);
@@ -445,17 +463,12 @@ export function Home() {
   const showBlocked = !!s && s.blocked > 0;
 
   const forecastAmountText =
-    typeof payForecast?.amount === "number"
-      ? fmtMoneyForecast(payForecast.amount, currencyFallback)
-      : null;
+    typeof payForecast?.amount === "number" ? fmtMoneyForecast(payForecast.amount, currencyFallback) : null;
 
   const forecastWhenText = payForecast?.whenText || null;
 
   const servicesForecastText =
-    svcForecast &&
-    (svcForecast.nextInDays != null ||
-      svcForecast.nextDate ||
-      svcForecast.nextAmount != null)
+    svcForecast && (svcForecast.nextInDays != null || svcForecast.nextDate || svcForecast.nextAmount != null)
       ? `${
           svcForecast.nextInDays != null
             ? `через ${svcForecast.nextInDays} дн.`
@@ -464,16 +477,12 @@ export function Home() {
             : "—"
         }${
           svcForecast.nextAmount != null
-            ? ` · ~${fmtMoneyForecast(
-                svcForecast.nextAmount,
-                svcForecast.currency || currencyFallback
-              )}`
+            ? ` · ~${fmtMoneyForecast(svcForecast.nextAmount, svcForecast.currency || currencyFallback)}`
             : ""
         }`
       : null;
 
-  const forecastSub =
-    forecastWhenText || servicesForecastText || (payLoading ? "Считаем…" : "—");
+  const forecastSub = forecastWhenText || servicesForecastText || (payLoading ? "Считаем…" : "—");
 
   const attentionSub = (() => {
     if (!s) return svcLoading ? "Проверяем…" : "—";
@@ -490,9 +499,6 @@ export function Home() {
 
   return (
     <div className="section">
-      {/* ==================================================================
-         MODULE: Header + Main tiles
-         ================================================================== */}
       <div className="card">
         <div className="card__body">
           <div className="home-head">
@@ -501,9 +507,7 @@ export function Home() {
                 {t("home.hello", "Привет")}
                 {displayName ? `, ${displayName}` : ""} 👋
               </div>
-              <div className="home-head__sub">
-                Аккаунт и услуги — самое важное. Плитки ведут в нужные разделы.
-              </div>
+              <div className="home-head__sub">Аккаунт и услуги — самое важное. Плитки ведут в нужные разделы.</div>
             </div>
           </div>
 
@@ -533,11 +537,7 @@ export function Home() {
               value={svcLoading ? "…" : s ? attentionCount : "—"}
               sub={attentionSub}
               tone={attentionCount > 0 ? "warn" : "ok"}
-              badge={
-                showBlocked ? (
-                  <span className="home-badge home-badge--danger">есть блок</span>
-                ) : null
-              }
+              badge={showBlocked ? <span className="home-badge home-badge--danger">есть блок</span> : null}
             />
 
             <Tile
@@ -549,14 +549,7 @@ export function Home() {
               tone="default"
             />
 
-            <Tile
-              to="/payments"
-              icon="🎁"
-              title="Бонусы"
-              value={bonusValue}
-              sub="Начисления и списания"
-              tone="default"
-            />
+            <Tile to="/payments" icon="🎁" title="Бонусы" value={bonusValue} sub="Начисления и списания" tone="default" />
 
             <Tile
               to="/payments"
@@ -568,17 +561,10 @@ export function Home() {
             />
           </div>
 
-          {svcError ? (
-            <div className="muted" style={{ marginTop: 10 }}>
-              Не удалось обновить статусы услуг.
-            </div>
-          ) : null}
+          {svcError ? <div className="muted" style={{ marginTop: 10 }}>Не удалось обновить статусы услуг.</div> : null}
         </div>
       </div>
 
-      {/* ==================================================================
-         MODULE: Install CTA (only inside Telegram mini-app)
-         ================================================================== */}
       {inTelegramMiniApp ? (
         <div className="section">
           <div className="card home-install">
@@ -586,16 +572,11 @@ export function Home() {
             <div className="card__body">
               <div className="home-install__copy">
                 <div className="home-install__title">🚀 Установить ShpunApp</div>
-                <div className="home-install__sub">
-                  Откроем приложение во внешнем браузере для входа через Telegram Widget.
-                </div>
+                <div className="home-install__sub">Откроем приложение во внешнем браузере для входа через Telegram Widget.</div>
               </div>
 
               <div className="home-install__btnwrap">
-                <button
-                  className="btn btn--primary home-install__btn"
-                  onClick={openExternalAuthPage}
-                >
+                <button className="btn btn--primary home-install__btn" onClick={openExternalAuthPage}>
                   Открыть в браузере
                 </button>
               </div>
@@ -605,7 +586,7 @@ export function Home() {
       ) : null}
 
       {/* ==================================================================
-         MODULE: News (single CTA button)
+         MODULE: News (REAL from notif feed)
          ================================================================== */}
       <div className="section">
         <div className="card">
@@ -613,50 +594,43 @@ export function Home() {
             <div className="home-block-head">
               <div>
                 <div className="h1">{t("home.news.title", "Новости")}</div>
-                <div className="p">
-                  {t("home.news.subtitle", "Коротко и по делу. Полная лента — в “Новости”.")}
-                </div>
+                <div className="p">{t("home.news.subtitle", "Коротко и по делу. Полная лента — в Инфоцентре.")}</div>
               </div>
             </div>
 
             <div className="list home-newsList">
-              <Link to="/feed" className="home-link">
-                <div className="list__item">
-                  <div className="list__main">
-                    <div className="list__title">
-                      {t("home.news.item1.title", "✅ Система стабильна — всё работает")}
+              {newsLoading ? (
+                <>
+                  <div className="skeleton h1" />
+                  <div className="skeleton p" />
+                </>
+              ) : newsItems.length ? (
+                newsItems.map((n) => (
+                  <Link key={n.event_id} to="/feed" className="home-link">
+                    <div className="list__item">
+                      <div className="list__main">
+                        <div className="list__title">{n.title || "📢 Сообщение"}</div>
+                        {n.message ? <div className="list__sub">{n.message}</div> : null}
+                      </div>
+                      <div className="list__side">
+                        <span className="chip chip--soft">{fmtFeedDate(n.ts)}</span>
+                      </div>
                     </div>
-                    <div className="list__sub">
-                      {t(
-                        "home.news.item1.sub",
-                        "Если видишь “Can’t connect” — просто обнови страницу."
-                      )}
+                  </Link>
+                ))
+              ) : (
+                <Link to="/feed" className="home-link">
+                  <div className="list__item">
+                    <div className="list__main">
+                      <div className="list__title">📢 Пока новостей нет</div>
+                      <div className="list__sub">Как только появятся обновления — они будут здесь и в Инфоцентре.</div>
                     </div>
-                  </div>
-                  <div className="list__side">
-                    <span className="chip chip--ok">today</span>
-                  </div>
-                </div>
-              </Link>
-
-              <Link to="/feed" className="home-link">
-                <div className="list__item">
-                  <div className="list__main">
-                    <div className="list__title">
-                      {t("home.news.item2.title", "🧭 Лента — в “Новости”")}
-                    </div>
-                    <div className="list__sub">
-                      {t(
-                        "home.news.item2.sub",
-                        "Главная — витрина. Новости — лента. Дальше подключим реальные данные."
-                      )}
+                    <div className="list__side">
+                      <span className="chip chip--soft">—</span>
                     </div>
                   </div>
-                  <div className="list__side">
-                    <span className="chip chip--soft">new</span>
-                  </div>
-                </div>
-              </Link>
+                </Link>
+              )}
             </div>
 
             <div className="home-cta">
@@ -678,8 +652,7 @@ export function Home() {
               <div>
                 <div className="h1">🤝 Реферальная программа</div>
                 <div className="p">
-                  Пригласи друзей — и получай бонусы с их пополнений.
-                  <span className="dot" /> Это реально “пассивка”.
+                  Пригласи друзей — и получай бонусы с их пополнений.<span className="dot" /> Это реально “пассивка”.
                 </div>
               </div>
             </div>
@@ -701,21 +674,13 @@ export function Home() {
 
             <div className="home-refactions">
               <div className="actions actions--3 home-refactions__grid">
-                <Link className="btn" to="/referrals#link">
-                  Скопировать ссылку
-                </Link>
-                <Link className="btn" to="/referrals#list">
-                  Список
-                </Link>
-                <Link className="btn" to="/referrals#rules">
-                  Правила
-                </Link>
+                <Link className="btn" to="/referrals#link">Скопировать ссылку</Link>
+                <Link className="btn" to="/referrals#list">Список</Link>
+                <Link className="btn" to="/referrals#rules">Правила</Link>
               </div>
 
               <div className="home-cta">
-                <Link className="btn btn--accent home-cta__btn" to="/referrals">
-                  Открыть
-                </Link>
+                <Link className="btn btn--accent home-cta__btn" to="/referrals">Открыть</Link>
               </div>
             </div>
           </div>
@@ -740,11 +705,7 @@ export function Home() {
                 className="input"
                 value={promo.code}
                 onChange={(e) =>
-                  setPromo((p) => ({
-                    ...p,
-                    code: e.target.value,
-                    state: { status: "idle" },
-                  }))
+                  setPromo((p) => ({ ...p, code: e.target.value, state: { status: "idle" } }))
                 }
                 placeholder="Например: SHPUN-2026"
                 autoCapitalize="characters"
@@ -759,12 +720,9 @@ export function Home() {
                 {promo.state.status === "applying" ? "Применяем…" : "Применить"}
               </button>
             </div>
-            {promo.state.status === "done" && (
-              <div className="home-alert home-alert--ok">{promo.state.message}</div>
-            )}
-            {promo.state.status === "error" && (
-              <div className="home-alert home-alert--danger">{promo.state.message}</div>
-            )}
+
+            {promo.state.status === "done" && <div className="home-alert home-alert--ok">{promo.state.message}</div>}
+            {promo.state.status === "error" && <div className="home-alert home-alert--danger">{promo.state.message}</div>}
           </div>
         </div>
       </div>
