@@ -31,23 +31,23 @@ function normalizeTs(v: any): number {
   return ts;
 }
 
+function randHex(n = 10) {
+  return Math.random().toString(16).slice(2, 2 + n);
+}
+
 function normalizeEventId(base: any, ts: number): string {
   const raw = String(base ?? "").trim();
   const b = raw || "evt";
 
-  // If billing sends constant ids like "service-block-1731-" (no suffix),
-  // make it unique by adding ts. This also fixes empty/invalid ids.
-  const needsSuffix =
-    !raw ||
-    raw.endsWith("-") ||
-    raw.endsWith("_") ||
-    raw.length < 8 ||
-    !/[0-9a-zA-Z]/.test(raw);
-
-  return needsSuffix ? `${b}${b.endsWith("-") ? "" : "-"}${ts}` : b;
+  // Billing may send non-unique ids. We must keep ALL events in feed.
+  // Add unique suffix always (ts + random) while keeping original prefix for search/debug.
+  const sep = b.endsWith("-") || b.endsWith("_") ? "" : "-";
+  return `${b}${sep}${ts}-${randHex()}`;
 }
 
-export function putEvent(e: BillingPushEvent) {
+export function putEvent(e: BillingPushEvent):
+  | { ok: true; dedup: boolean; event: NotifEvent }
+  | { ok: false; error: string } {
   const ts = normalizeTs(e.ts);
   const event_id = normalizeEventId(e.event_id, ts);
 
@@ -64,7 +64,10 @@ export function putEvent(e: BillingPushEvent) {
     meta: e.meta,
   };
 
-  return putNotifEvent(ev);
+  const r = putNotifEvent(ev);
+  if (!r.ok) return r;
+
+  return { ok: true, dedup: r.dedup, event: ev };
 }
 
 export function listEvents(params: {

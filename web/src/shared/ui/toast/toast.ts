@@ -31,7 +31,6 @@ export const toastStore = {
     listeners.add(listener);
     listener(toasts);
 
-    // IMPORTANT: React effect cleanup must return void, not boolean
     return () => {
       listeners.delete(listener);
     };
@@ -39,7 +38,11 @@ export const toastStore = {
 
   push(item: Omit<ToastItem, "id">) {
     const id = uid();
-    toasts = [...toasts, { ...item, id }];
+
+    // IMPORTANT:
+    // Put newest toasts on top so bursts don't "disappear" below the fold.
+    toasts = [{ ...item, id }, ...toasts];
+
     emit();
     return id;
   },

@@ -15,15 +15,10 @@ export async function pushRoutes(app: FastifyInstance) {
   app.post("/billing/push", async (req, reply) => {
     const secret = envStr("BILLING_PUSH_SECRET", "");
 
-    // --- auth / signature check (diagnostic version) ---
-    // IMPORTANT:
-    // - if secret is set => signature is REQUIRED
-    // - helps distinguish: missing header vs wrong header value
     if (secret) {
       const signRaw = (req.headers as any)["x-shpun-sign"];
       const sign = String(signRaw ?? "").trim();
 
-      // tiny log (no secrets)
       try {
         req.log.info(
           {
@@ -46,8 +41,6 @@ export async function pushRoutes(app: FastifyInstance) {
         return reply.code(401).send({ ok: false, error: "bad_signature" });
       }
     } else {
-      // if you want STRICT mode (recommended later), replace this with 500
-      // return reply.code(500).send({ ok: false, error: "server_misconfigured" });
       try {
         req.log.warn({ hasSecret: false }, "billing push: BILLING_PUSH_SECRET is empty (auth disabled)");
       } catch {
@@ -63,13 +56,13 @@ export async function pushRoutes(app: FastifyInstance) {
 
     // webpush only for user events
     try {
-      const uid = Number((formatted as any)?.user_id ?? (formatted as any)?.userId ?? 0);
-      if (uid > 0) await sendWebPushToUser(uid, formatted);
+      const uid = Number((r.event as any)?.user_id ?? 0);
+      if (uid > 0) await sendWebPushToUser(uid, r.event);
     } catch {
       // ignore
     }
 
-    return reply.send({ ok: true, dedup: r.dedup });
+    return reply.send({ ok: true, dedup: r.dedup, event_id: r.event.event_id, ts: r.event.ts });
   });
 
   // ===== POST /api/notifications/push/subscribe =====

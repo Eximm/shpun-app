@@ -9,6 +9,13 @@
   gap: 10px;
 
   max-width: min(460px, calc(100vw - 32px));
+
+  /* IMPORTANT:
+     Don't let a burst of toasts go below the screen with no way to see them */
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px; /* tiny space for scrollbar */
 }
 
 .toast-card{

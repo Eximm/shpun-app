@@ -58,6 +58,16 @@ function rowToEvent(r: any): NotifEvent {
   };
 }
 
+function randHex(n = 8) {
+  // not crypto, just to make ids unique
+  return Math.random().toString(16).slice(2, 2 + n);
+}
+
+function makeUniqueEventId(base: string, ts: number) {
+  // stable prefix + time + random, so repeats don't collide
+  return `${base}:${ts}:${randHex(10)}`;
+}
+
 // ===== schema =====
 linkDb.exec(`
 CREATE TABLE IF NOT EXISTS notif_events (
@@ -85,8 +95,12 @@ CREATE INDEX IF NOT EXISTS idx_notif_events_target_ts
 `);
 
 // ===== statements =====
+const stmtExists = linkDb.prepare(`
+  SELECT 1 FROM notif_events WHERE event_id = ? LIMIT 1
+`);
+
 const stmtInsert = linkDb.prepare(`
-  INSERT OR IGNORE INTO notif_events
+  INSERT INTO notif_events
     (event_id, ts, target, user_id, type, level, title, message, toast, meta_json)
   VALUES
     (@event_id, @ts, @target, @user_id, @type, @level, @title, @message, @toast, @meta_json)
@@ -127,8 +141,8 @@ const stmtFeed = linkDb.prepare(`
 export function putNotifEvent(
   ev: NotifEvent
 ): { ok: true; dedup: boolean } | { ok: false; error: string } {
-  const id = String(ev?.event_id ?? "").trim();
-  if (!id) return { ok: false, error: "missing_event_id" };
+  const baseId = String(ev?.event_id ?? "").trim();
+  if (!baseId) return { ok: false, error: "missing_event_id" };
 
   const ts = normalizeTs(ev.ts);
 
@@ -143,21 +157,45 @@ export function putNotifEvent(
     user_id = uid;
   }
 
-  const info = stmtInsert.run({
-    event_id: id,
-    ts,
-    target,
-    user_id,
-    type: ev.type ?? null,
-    level: ev.level ?? null,
-    title: ev.title ?? null,
-    message: ev.message ?? null,
-    toast: asInt(ev.toast),
-    meta_json: ev.meta ? JSON.stringify(ev.meta) : null,
-  });
+  // IMPORTANT:
+  // Billing may send the same event_id for the same kind of event (e.g. "service:123:activated").
+  // We must keep ALL events in the feed, even if text/id repeats (daily forecasts etc).
+  // So if event_id already exists, generate a unique one.
+  let event_id = baseId;
+  if (stmtExists.get(event_id)) {
+    event_id = makeUniqueEventId(baseId, ts);
 
-  const dedup = info.changes === 0;
-  return { ok: true, dedup };
+    // extremely unlikely, but keep it safe
+    let guard = 0;
+    while (stmtExists.get(event_id) && guard < 5) {
+      event_id = makeUniqueEventId(baseId, ts);
+      guard++;
+    }
+  }
+
+  try {
+    stmtInsert.run({
+      event_id,
+      ts,
+      target,
+      user_id,
+      type: ev.type ?? null,
+      level: ev.level ?? null,
+      title: ev.title ?? null,
+      message: ev.message ?? null,
+      toast: asInt(ev.toast),
+      meta_json: ev.meta ? JSON.stringify(ev.meta) : null,
+    });
+  } catch (e: any) {
+    // if somehow collided again
+    const msg = String(e?.message ?? e);
+    if (msg.includes("UNIQUE") || msg.includes("constraint")) {
+      return { ok: true, dedup: true };
+    }
+    return { ok: false, error: "db_insert_failed" };
+  }
+
+  return { ok: true, dedup: false };
 }
 
 export function listNotifAfter(params: {
