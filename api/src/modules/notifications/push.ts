@@ -14,9 +14,45 @@ export async function pushRoutes(app: FastifyInstance) {
   // ===== POST /api/billing/push =====
   app.post("/billing/push", async (req, reply) => {
     const secret = envStr("BILLING_PUSH_SECRET", "");
+
+    // --- auth / signature check (diagnostic version) ---
+    // IMPORTANT:
+    // - if secret is set => signature is REQUIRED
+    // - helps distinguish: missing header vs wrong header value
     if (secret) {
-      const sign = String(req.headers["x-shpun-sign"] ?? "").trim();
-      if (sign !== secret) return reply.code(401).send({ ok: false, error: "bad_signature" });
+      const signRaw = (req.headers as any)["x-shpun-sign"];
+      const sign = String(signRaw ?? "").trim();
+
+      // tiny log (no secrets)
+      try {
+        req.log.info(
+          {
+            host: (req.headers as any).host,
+            url: (req as any).url,
+            hasSign: Boolean(sign),
+            signLen: sign.length,
+            hdrs: Object.keys(req.headers || {}),
+          },
+          "billing push auth",
+        );
+      } catch {
+        // ignore
+      }
+
+      if (!sign) {
+        return reply.code(401).send({ ok: false, error: "missing_signature" });
+      }
+      if (sign !== secret) {
+        return reply.code(401).send({ ok: false, error: "bad_signature" });
+      }
+    } else {
+      // if you want STRICT mode (recommended later), replace this with 500
+      // return reply.code(500).send({ ok: false, error: "server_misconfigured" });
+      try {
+        req.log.warn({ hasSecret: false }, "billing push: BILLING_PUSH_SECRET is empty (auth disabled)");
+      } catch {
+        // ignore
+      }
     }
 
     const body = (req.body ?? {}) as BillingPushEvent;
