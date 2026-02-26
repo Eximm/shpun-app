@@ -1,4 +1,3 @@
-import { linkDb } from "../../shared/linkdb/db.js";
 import {
   putNotifEvent,
   listNotifAfter,
@@ -14,6 +13,7 @@ export type BillingPushEvent = {
   level?: "info" | "success" | "error";
   title?: string;
   message?: string;
+  // target больше не используем (биллинг решает сам)
   target?: "all" | "user";
   user_id?: number;
   toast?: boolean;
@@ -24,7 +24,6 @@ function normalizeTs(v: any): number {
   const raw = Number(v);
   let ts = Number.isFinite(raw) ? raw : Math.floor(Date.now() / 1000);
 
-  // allow ms
   if (ts > 10_000_000_000) ts = Math.floor(ts / 1000);
 
   ts = Math.floor(ts);
@@ -37,95 +36,39 @@ function normalizeBaseEventId(base: any): string {
   return raw || "evt";
 }
 
-function isBroadcast(e: BillingPushEvent): boolean {
-  const t = String(e.type ?? "").trim();
-  if (e.target === "all") return true;
-  if (t === "broadcast.news") return true;
-  return false;
-}
-
-// Pull distinct users known to the app.
-// NOTE: account_links has shm_user_id; this is our "user id" across the app.
-const stmtListAllUserIds = linkDb.prepare(`
-  SELECT DISTINCT shm_user_id AS uid
-  FROM account_links
-  WHERE shm_user_id IS NOT NULL AND shm_user_id > 0
-`);
-
-/**
- * Event id rules:
- * - Broadcast: MUST be stable per user, so it dedupes (1 per user).
- *   => "u:<uid>:b:<baseEventId>"
- *
- * - User events (forecast, service.* etc): allow multiple occurrences.
- *   We scope to user and include ts so repeated pushes are kept.
- *   => "u:<uid>:e:<baseEventId>:<ts>"
- *
- * This keeps:
- * - no cross-user PK collisions
- * - forecast can be triggered often (each ts -> new row)
- * - broadcast does not multiply (same baseEventId -> only one per user)
- */
-function buildUserEventId(uid: number, baseEventId: string, ts: number): string {
-  return `u:${uid}:e:${baseEventId}:${ts}`;
-}
-
 function buildBroadcastEventId(uid: number, baseEventId: string): string {
+  // 1 новость = 1 запись на пользователя (повтор по тому же event_id дедупится)
   return `u:${uid}:b:${baseEventId}`;
+}
+
+function buildUserEventId(uid: number, baseEventId: string, ts: number): string {
+  // обычные события могут приходить много раз — включаем ts
+  return `u:${uid}:e:${baseEventId}:${ts}`;
 }
 
 export function putEvent(
   e: BillingPushEvent,
 ):
-  | { ok: true; dedup: boolean; event?: NotifEvent; delivered?: { total: number; inserted: number } }
+  | { ok: true; dedup: boolean; event: NotifEvent }
   | { ok: false; error: string } {
   const ts = normalizeTs(e.ts);
   const baseEventId = normalizeBaseEventId(e.event_id);
 
-  // ===== broadcast => expand to all users =====
-  if (isBroadcast(e)) {
-    const rows = stmtListAllUserIds.all() as Array<{ uid: number }>;
-    const uids = rows.map((r) => Number(r.uid)).filter((x) => Number.isFinite(x) && x > 0);
-
-    let inserted = 0;
-    let anyDedup = false;
-
-    for (const uid of uids) {
-      const ev: NotifEvent = {
-        event_id: buildBroadcastEventId(uid, baseEventId),
-        ts,
-        type: e.type,
-        level: e.level,
-        title: e.title,
-        message: e.message,
-        target: "user",
-        user_id: uid,
-        toast: e.toast,
-        meta: e.meta,
-      };
-
-      const r = putNotifEvent(ev);
-      if (!r.ok) return r;
-
-      if (r.dedup) anyDedup = true;
-      else inserted++;
-    }
-
-    return {
-      ok: true,
-      dedup: anyDedup && inserted === 0,
-      delivered: { total: uids.length, inserted },
-    };
-  }
-
-  // ===== personal event => must have user_id =====
   const uid = Number(e.user_id ?? 0);
   if (!Number.isFinite(uid) || uid <= 0) {
+    // strict: всё только на конкретного пользователя
     return { ok: false, error: "missing_user_id" };
   }
 
+  const type = String(e.type ?? "").trim();
+
+  // broadcast.news -> стабильно дедупим (1 раз на пользователя)
+  const event_id = type === "broadcast.news"
+    ? buildBroadcastEventId(uid, baseEventId)
+    : buildUserEventId(uid, baseEventId, ts);
+
   const ev: NotifEvent = {
-    event_id: buildUserEventId(uid, baseEventId, ts),
+    event_id,
     ts,
     type: e.type,
     level: e.level,
