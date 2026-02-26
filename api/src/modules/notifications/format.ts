@@ -24,7 +24,6 @@ function pick(obj: any, path: string): any {
 function firstForecastItem(meta: any) {
   const items = pick(meta, "items");
   if (!Array.isArray(items) || !items.length) return null;
-  // берём первый как “ближайший” (биллинг может сортировать)
   const it = items[0] ?? {};
   const id = pick(it, "id") ?? pick(it, "usi") ?? pick(it, "service.id");
   const name = pick(it, "name") ?? pick(it, "service.name");
@@ -33,26 +32,45 @@ function firstForecastItem(meta: any) {
   return { id, name, expire, total };
 }
 
+// IMPORTANT: billing may send toast as "", "1", 1, "true", true, etc.
+function parseToast(v: any): boolean | undefined {
+  if (v == null) return undefined; // not provided
+
+  if (typeof v === "boolean") return v;
+  if (typeof v === "number") return Number.isFinite(v) ? v !== 0 : undefined;
+
+  const s = String(v).trim().toLowerCase();
+  if (!s) return false;
+
+  if (s === "1" || s === "true" || s === "yes" || s === "y" || s === "on") return true;
+  if (s === "0" || s === "false" || s === "no" || s === "n" || s === "off") return false;
+
+  // fallback: any non-empty garbage -> true (safer for "show notifications")
+  return true;
+}
+
 export function formatIncoming(e: BillingPushEvent): BillingPushEvent {
   const type = String(e.type || "").trim();
 
   const level: Level =
-    e.level ||
+    (e.level as any) ||
     (type === "balance.credited" || type === "service.renewed" || type === "service.activated"
       ? "success"
       : type === "service.blocked"
       ? "error"
       : "info");
 
-  // toast: если биллинг прислал — уважаем. Если нет — дефолты только для базовых событий.
-  let toast = e.toast;
-  if (toast == null) {
+  // toast:
+  // - if billing provided toast (in any form) -> normalize and respect
+  // - else -> defaults
+  let toast = parseToast((e as any).toast);
+  if (toast === undefined) {
     if (type === "balance.credited") toast = true;
     else if (type === "service.blocked") toast = true;
     else if (type === "service.renewed") toast = true;
     else if (type === "service.activated") toast = true;
-    else if (type === "service.forecast") toast = false; // forecast лучше контролировать из биллинга
-    else if (type === "broadcast.news") toast = false; // новости: тост только если биллинг выставит toast=true
+    else if (type === "service.forecast") toast = false; // controlled by billing
+    else if (type === "broadcast.news") toast = false; // only if billing sets toast=true
     else toast = false;
   }
 
@@ -60,8 +78,8 @@ export function formatIncoming(e: BillingPushEvent): BillingPushEvent {
   const serviceId = pick(meta, "service.id") ?? pick(meta, "usi");
   const serviceName = pick(meta, "service.name") ?? pick(meta, "name");
 
-  let title = e.title || "";
-  let message = e.message || "";
+  let title = (e as any).title || "";
+  let message = (e as any).message || "";
 
   if (type === "balance.credited") {
     const amount = pick(meta, "amount") ?? pick(meta, "money") ?? pick(meta, "sum");
@@ -131,7 +149,7 @@ export function formatIncoming(e: BillingPushEvent): BillingPushEvent {
     ...e,
     type: type || e.type,
     level,
-    toast,
+    toast, // now ALWAYS boolean
     title,
     message,
   };
