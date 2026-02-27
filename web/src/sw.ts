@@ -1,54 +1,50 @@
 /// <reference lib="webworker" />
 
-import { clientsClaim, skipWaiting } from "workbox-core";
+import { clientsClaim } from "workbox-core";
 import { precacheAndRoute, createHandlerBoundToURL } from "workbox-precaching";
 import { registerRoute } from "workbox-routing";
 import { NetworkFirst } from "workbox-strategies";
 
 declare let self: ServiceWorkerGlobalScope;
 
-// Быстрее подхватываем новую версию SW без “закройте все вкладки”
-skipWaiting();
 clientsClaim();
 
 // Workbox injects manifest here
 precacheAndRoute(self.__WB_MANIFEST || []);
 
 /**
- * ВАЖНО:
- * Если отдавать navigation (SPA) из precache cache-first,
- * можно получить старый index.html со старыми хэшами ассетов после деплоя.
- *
- * Решение:
- * - navigation: NetworkFirst (в онлайне всегда свежий HTML)
- * - fallback: precached /index.html (для офлайна/плохой сети)
+ * Fix for "stuck old index.html" after deploy:
+ * - navigation requests must be NetworkFirst (not cache-first from precache)
+ * - fallback to precached /index.html if network fails
  */
 const appShellHandler = createHandlerBoundToURL("/index.html");
 
 const htmlNetworkFirst = new NetworkFirst({
   cacheName: "html-pages",
-  networkTimeoutSeconds: 3, // Telegram WebView часто вялый, не ждём бесконечно
+  networkTimeoutSeconds: 3,
 });
 
 registerRoute(
-  // match: только навигации (переходы по страницам SPA)
-  ({ request }) => request.mode === "navigate",
-  // handler
-  async (opts) => {
+  ({ request, url }) => {
+    if (request.mode !== "navigate") return false;
+    if (url.pathname.startsWith("/api/")) return false;
+    if (url.pathname.startsWith("/assets/")) return false;
+    if (url.pathname.startsWith("/icons/")) return false;
+    return true;
+  },
+  async ({ event, request, url }) => {
     try {
-      // opts.event в этом маршруте обычно FetchEvent, но типы Workbox местами “шире”
       const response = await htmlNetworkFirst.handle({
-        event: opts.event as FetchEvent,
-        request: opts.request,
+        event: event as FetchEvent,
+        request,
       });
-
       if (response) return response;
     } catch {
-      // ignore and fallback
+      // ignore
     }
 
-    // Фолбэк: прекаченный index.html
-    return appShellHandler(opts);
+    // IMPORTANT: appShellHandler expects RouteHandlerCallbackOptions, including `url`
+    return appShellHandler({ event, request, url } as any);
   },
 );
 
