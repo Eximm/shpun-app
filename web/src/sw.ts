@@ -64,12 +64,20 @@ self.addEventListener("push", (event) => {
 
   const title = String(data?.title || "ShpunApp").slice(0, 80);
   const body = String(data?.body || "").slice(0, 160);
-  const link = data?.data?.link || "/feed";
 
+  // link must always be a string (avoid objects/null)
+  const linkRaw = data?.data?.link;
+  const link = typeof linkRaw === "string" && linkRaw.length ? linkRaw : "/feed";
+
+  /**
+   * Android/Chrome:
+   * - `badge` is commonly used as the small status-bar icon.
+   * - It must be a simple monochrome (white) shape on transparent background.
+   */
   const options: NotificationOptions = {
     body,
     icon: "/icons/icon-192.png",
-    badge: "/icons/icon-192.png",
+    badge: "/icons/badge-96.png",
     data: { link },
     tag: data?.data?.event_id || undefined,
     silent: false,
