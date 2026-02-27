@@ -1,7 +1,10 @@
 .toast-viewport{
   position: fixed;
-  top: 16px;
-  right: 16px;
+
+  /* safe-area friendly */
+  top: calc(16px + env(safe-area-inset-top, 0px));
+  right: calc(16px + env(safe-area-inset-right, 0px));
+
   z-index: 9999;
 
   display: flex;
@@ -12,10 +15,13 @@
 
   /* IMPORTANT:
      Don't let a burst of toasts go below the screen with no way to see them */
-  max-height: calc(100vh - 32px);
+  max-height: calc(100vh - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
   overflow-y: auto;
   overscroll-behavior: contain;
   padding-right: 2px; /* tiny space for scrollbar */
+
+  /* Allow clicks through empty space of viewport */
+  pointer-events: none;
 }
 
 .toast-card{
@@ -33,6 +39,9 @@
 
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
+
+  /* Enable interaction on the toast itself */
+  pointer-events: auto;
 }
 
 .toast-bar{ width: 6px; height: 100%; }

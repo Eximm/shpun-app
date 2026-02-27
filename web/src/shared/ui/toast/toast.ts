@@ -19,6 +19,8 @@ type Listener = (toasts: ToastItem[]) => void;
 let toasts: ToastItem[] = [];
 const listeners = new Set<Listener>();
 
+const MAX_TOASTS = 7;
+
 function emit() {
   for (const l of listeners) l(toasts);
 }
@@ -80,8 +82,8 @@ export const toastStore = {
     // звук по умолчанию включён
     if (opts?.sound !== false) playCry();
 
-    // Newest on top
-    toasts = [{ ...item, id }, ...toasts];
+    // Newest on top + cap list length
+    toasts = [{ ...item, id }, ...toasts].slice(0, MAX_TOASTS);
 
     emit();
     return id;

@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { apiFetch } from '../../shared/api/client'
 
+// ✅ toasts + mood (типизированные ключи — только из payments-mood)
+import { toast } from '../../shared/ui/toast'
+import { getMood } from '../../shared/payments-mood'
+
 type ApiRouterItem = {
   code?: string
   clean_code?: string
@@ -99,9 +103,11 @@ export default function ConnectRouter({ usi, onDone }: Props) {
     return !!(shownClean || shownCode)
   }, [first, shownClean, shownCode])
 
-  async function load() {
+  async function load(opts?: { silent?: boolean }) {
+    const silent = !!opts?.silent
     setLoading(true)
     setError(null)
+
     try {
       const r = (await apiFetch(`/services/${encodeURIComponent(String(usi))}/router`, {
         method: 'GET',
@@ -112,9 +118,21 @@ export default function ConnectRouter({ usi, onDone }: Props) {
       }
 
       setRouters(extractRouters(r))
+
+      // ✅ не спамим тостом на mount
+      if (!silent) {
+        toast.info('Обновлено', {
+          description: getMood('payment_checking', { seed: String(usi) }) ?? 'Статус роутера обновлён.',
+        })
+      }
     } catch (e: any) {
-      setError(e?.message || 'Не удалось загрузить состояние роутера')
+      const msg = e?.message || 'Не удалось загрузить состояние роутера'
+      setError(msg)
       setRouters([])
+
+      if (!silent) {
+        toast.error('Не удалось обновить', { description: msg })
+      }
     } finally {
       setLoading(false)
     }
@@ -126,27 +144,43 @@ export default function ConnectRouter({ usi, onDone }: Props) {
 
     if (!clean) return
     if (clean.length !== 8) {
-      setError('Код должен быть в формате XXXX-XXXX (латинские буквы и цифры).')
+      const msg = 'Код должен быть в формате XXXX-XXXX (латинские буквы и цифры).'
+      setError(msg)
+      toast.error('Неверный код', { description: msg })
       return
     }
 
     setBusy(true)
     setError(null)
+
+    toast.info('Привязываем роутер', {
+      description: getMood('payment_checking', { seed: String(usi) }) ?? 'Пара секунд…',
+    })
+
     try {
-      const r = (await apiFetch(`/services/${encodeURIComponent(String(usi))}/router/bind`, {
-        method: 'POST',
-        body: { code: pretty },
-      } as any)) as any
+      const r = (await apiFetch(
+        `/services/${encodeURIComponent(String(usi))}/router/bind`,
+        {
+          method: 'POST',
+          body: { code: pretty },
+        } as any
+      )) as any
 
       if (r && (r.ok === false || r.ok === 0) && (r.error || r.message)) {
         throw new Error(String(r.error || r.message))
       }
 
       setCode('')
-      await load()
+      await load({ silent: true })
       onDone?.()
+
+      toast.success('Роутер привязан', {
+        description: getMood('payment_success', { seed: String(usi) }) ?? 'Готово.',
+      })
     } catch (e: any) {
-      setError(e?.message || 'Не удалось привязать роутер')
+      const msg = e?.message || 'Не удалось привязать роутер'
+      setError(msg)
+      toast.error('Не удалось привязать', { description: msg })
     } finally {
       setBusy(false)
     }
@@ -159,27 +193,42 @@ export default function ConnectRouter({ usi, onDone }: Props) {
 
     setBusy(true)
     setError(null)
+
+    toast.info('Отвязываем роутер', {
+      description: getMood('payment_checking', { seed: String(usi) }) ?? 'Пара секунд…',
+    })
+
     try {
-      const r = (await apiFetch(`/services/${encodeURIComponent(String(usi))}/router/unbind`, {
-        method: 'POST',
-        body: { code: clean },
-      } as any)) as any
+      const r = (await apiFetch(
+        `/services/${encodeURIComponent(String(usi))}/router/unbind`,
+        {
+          method: 'POST',
+          body: { code: clean },
+        } as any
+      )) as any
 
       if (r && (r.ok === false || r.ok === 0) && (r.error || r.message)) {
         throw new Error(String(r.error || r.message))
       }
 
-      await load()
+      await load({ silent: true })
       onDone?.()
+
+      toast.success('Роутер отвязан', {
+        description: getMood('payment_success', { seed: String(usi) }) ?? 'Готово.',
+      })
     } catch (e: any) {
-      setError(e?.message || 'Не удалось отвязать роутер')
+      const msg = e?.message || 'Не удалось отвязать роутер'
+      setError(msg)
+      toast.error('Не удалось отвязать', { description: msg })
     } finally {
       setBusy(false)
     }
   }
 
   useEffect(() => {
-    load()
+    // ✅ первичная загрузка без тостов
+    load({ silent: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usi])
 
@@ -190,7 +239,7 @@ export default function ConnectRouter({ usi, onDone }: Props) {
   const statusToneClass =
     st.tone === 'good' ? 'cr__badge--good' : st.tone === 'bad' ? 'cr__badge--bad' : 'cr__badge--muted'
 
-  const actionsCols = hasBound ? 'cr__actionsGrid--2' : 'cr__actionsGrid--2'
+  const actionsCols = 'cr__actionsGrid--2'
 
   return (
     <div className="cr">
@@ -269,7 +318,7 @@ export default function ConnectRouter({ usi, onDone }: Props) {
           </button>
         )}
 
-        <button className="btn cr__btnFull" onClick={load} disabled={busy}>
+        <button className="btn cr__btnFull" onClick={() => load({ silent: false })} disabled={busy}>
           Обновить
         </button>
       </div>

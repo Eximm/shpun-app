@@ -11,49 +11,23 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const remaining = useRef<Record<string, number>>({});
   const startedAt = useRef<Record<string, number>>({});
 
-  useEffect(() => {
-    const unsub = toastStore.subscribe(setItems);
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-    // start timers for newly added toasts
-    for (const t of items) {
-      if (timers.current[t.id]) continue;
-
-      remaining.current[t.id] = t.durationMs;
-      startedAt.current[t.id] = Date.now();
-
-      timers.current[t.id] = window.setTimeout(() => {
-        toastStore.remove(t.id);
-        cleanup(t.id);
-      }, t.durationMs);
-    }
-
-    // cleanup timers for removed toasts
-    const ids = new Set(items.map(i => i.id));
-    for (const id of Object.keys(timers.current)) {
-      if (!ids.has(id)) cleanup(id);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items]);
-
   function cleanup(id: string) {
     const timer = timers.current[id];
-    if (timer) clearTimeout(timer);
+    if (timer != null) clearTimeout(timer);
     delete timers.current[id];
     delete remaining.current[id];
     delete startedAt.current[id];
   }
 
   function close(id: string) {
-    toastStore.remove(id);
+    // cleanup first -> avoids race when timer fires around the same moment
     cleanup(id);
+    toastStore.remove(id);
   }
 
   function pause(id: string) {
     const timer = timers.current[id];
-    if (!timer) return;
+    if (timer == null) return;
 
     const start = startedAt.current[id] ?? Date.now();
     const elapsed = Date.now() - start;
@@ -64,7 +38,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   }
 
   function resume(id: string) {
-    if (timers.current[id]) return;
+    if (timers.current[id] != null) return;
 
     const ms = remaining.current[id] ?? 0;
     if (ms <= 0) {
@@ -74,16 +48,47 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
     startedAt.current[id] = Date.now();
     timers.current[id] = window.setTimeout(() => {
-      toastStore.remove(id);
-      cleanup(id);
+      close(id);
     }, ms);
   }
+
+  useEffect(() => {
+    const unsub = toastStore.subscribe(setItems);
+
+    return () => {
+      unsub();
+      // IMPORTANT: clear all timers on unmount (StrictMode/dev + fast navigations)
+      for (const id of Object.keys(timers.current)) cleanup(id);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    // start timers for newly added toasts
+    for (const t of items) {
+      if (timers.current[t.id] != null) continue;
+
+      remaining.current[t.id] = t.durationMs;
+      startedAt.current[t.id] = Date.now();
+
+      timers.current[t.id] = window.setTimeout(() => {
+        close(t.id);
+      }, t.durationMs);
+    }
+
+    // cleanup timers for removed toasts
+    const ids = new Set(items.map((i) => i.id));
+    for (const id of Object.keys(timers.current)) {
+      if (!ids.has(id)) cleanup(id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items]);
 
   return (
     <>
       {children}
       <div className="toast-viewport" aria-live="polite" aria-relevant="additions removals">
-        {items.map(t => (
+        {items.map((t) => (
           <div
             key={t.id}
             className={`toast-card toast-${t.variant}`}
