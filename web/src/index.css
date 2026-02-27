@@ -2102,8 +2102,8 @@ button, a { -webkit-tap-highlight-color: transparent; }
   border-radius: 12px;
   min-width: 0;
 }
-/* RowLine right controls (e.g., Telegram: badge + button) */
-.rowline__right > * {
+/* RowLine right controls: stretch ONLY when we use grid (badge + button) */
+.rowline__right--grid > * {
   width: 100%;
   justify-content: center;
 }

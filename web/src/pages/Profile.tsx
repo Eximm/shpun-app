@@ -1,5 +1,5 @@
 // web/src/pages/Profile.tsx
-import { useEffect, useMemo, useState } from "react";
+import { Children, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMe } from "../app/auth/useMe";
 import { apiFetch } from "../shared/api/client";
@@ -91,34 +91,12 @@ function Badge({
   text: string;
   tone?: "ok" | "soon" | "neutral";
 }) {
-  const bg =
-    tone === "ok"
-      ? "rgba(46, 204, 113, .14)"
-      : tone === "soon"
-      ? "rgba(241, 196, 15, .14)"
-      : "rgba(255,255,255,.08)";
+  let className = "badge";
 
-  const bd =
-    tone === "ok"
-      ? "rgba(46, 204, 113, .35)"
-      : tone === "soon"
-      ? "rgba(241, 196, 15, .35)"
-      : "rgba(255,255,255,.12)";
+  if (tone === "ok") className += " chip--ok";
+  if (tone === "soon") className += " chip--warn";
 
-  return (
-    <span
-      style={{
-        fontSize: 12,
-        padding: "4px 8px",
-        borderRadius: 999,
-        border: `1px solid ${bd}`,
-        background: bg,
-        whiteSpace: "nowrap",
-      }}
-    >
-      {text}
-    </span>
-  );
+  return <span className={className}>{text}</span>;
 }
 
 function RowLine({
@@ -134,6 +112,8 @@ function RowLine({
   right?: any;
   hint?: any;
 }) {
+  const rightCount = right ? Children.count(right) : 0;
+
   return (
     <div
       style={{
@@ -206,21 +186,29 @@ function RowLine({
           </div>
         </div>
 
-{right ? (
-  <div
-    className="rowline__right"
-    style={{
-      display: "grid",
-      gridAutoFlow: "column",
-      gridAutoColumns: "120px",
-      gap: 10,
-      alignItems: "center",
-      justifyContent: "end",
-    }}
-  >
-    {right}
-  </div>
-) : null}
+        {right ? (
+          rightCount <= 1 ? (
+            // ОДИН элемент справа (например "Скоро") — компактно
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {right}
+            </div>
+          ) : (
+            // ДВА элемента справа (badge + button) — одинаковая ширина
+            <div
+              className="rowline__right rowline__right--grid"
+              style={{
+                display: "grid",
+                gridAutoFlow: "column",
+                gridAutoColumns: "120px",
+                gap: 10,
+                alignItems: "center",
+                justifyContent: "end",
+              }}
+            >
+              {right}
+            </div>
+          )
+        ) : null}
       </div>
 
       {hint ? (
@@ -499,7 +487,7 @@ export function Profile() {
     nav("/set-password?intent=change&redirect=/profile");
   }
 
-  // ===== PWA install (как было) =====
+  // ===== PWA install =====
   const [standalone, setStandalone] = useState(false);
   const [deferredPrompt, setDeferredPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
@@ -561,7 +549,7 @@ export function Profile() {
     }
   }
 
-  // ===== Push (полная замена: реальное включение/выключение) =====
+  // ===== Push state + toggle =====
   const [pushLoading, setPushLoading] = useState(false);
   const [pushState, setPushState] = useState<{
     supported: boolean;
@@ -602,7 +590,6 @@ export function Profile() {
         const ok = await enablePush();
         if (ok) showToast("Уведомления включены ✅");
         else {
-          // enablePush() сам учитывает standalone + permission + vapid
           if (!pushState.standalone) showToast("Для push установи приложение (PWA) 📲");
           else if (pushState.permission === "denied")
             showToast("Уведомления запрещены в браузере");
@@ -685,7 +672,6 @@ export function Profile() {
     ? "Установи на экран телефона — будет удобнее и стабильнее."
     : "Если кнопка установки не появилась — открой меню браузера (⋮) и выбери «Установить приложение».";
 
-  // Push UI computed
   const pushPermText = permissionLabel(String(pushState.permission));
   const pushEnabled =
     pushState.permission === "granted" && pushState.hasSubscription;
@@ -1011,7 +997,6 @@ export function Profile() {
         </div>
       </div>
 
-      {/* iOS install modal */}
       <Modal
         open={iosInstallModal}
         title="Установка на iPhone"
@@ -1038,7 +1023,6 @@ export function Profile() {
         </div>
       </Modal>
 
-      {/* TG modal */}
       <Modal
         open={tgModal}
         title={telegramLogin ? "Изменить Telegram" : "Привязать Telegram"}
