@@ -12,6 +12,7 @@ build/
 .env
 .env.*
 !.env.example
+.env.local
 
 # ================================
 # OS / Editor junk
@@ -32,14 +33,21 @@ pnpm-debug.log*
 # ================================
 # SQLite runtime files (CRITICAL)
 # ================================
+# Global transient files (in case they appear anywhere)
+*.sqlite-wal
+*.sqlite-shm
+*.db-wal
+*.db-shm
+*.wal
+*.shm
+
+# Project-specific DB location — never commit
 api/data/*.sqlite
 api/data/*.sqlite-*
 api/data/*.db
 api/data/*.db-*
-api/data/*.wal
-api/data/*.shm
 
 # ================================
-# Docker
+# Docker / local data dirs
 # ================================
 docker-data/
