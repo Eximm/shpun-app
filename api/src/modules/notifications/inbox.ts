@@ -3,6 +3,7 @@ import {
   putNotifEvent,
   listNotifAfter,
   listNotifFeed,
+  listNotifNewsFeed,
   type NotifEvent,
   type NotifCursor,
 } from "../../shared/linkdb/notificationsRepo.js";
@@ -167,4 +168,13 @@ export function listFeed(params: {
   limit?: number;
 }): { items: NotifEvent[]; nextBefore: NotifCursor } {
   return listNotifFeed(params);
+}
+
+export function listNewsFeed(params: {
+  userId?: number;
+  beforeTs?: number;
+  beforeId?: string;
+  limit?: number;
+}): { items: NotifEvent[]; nextBefore: NotifCursor } {
+  return listNotifNewsFeed(params);
 }

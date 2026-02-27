@@ -83,6 +83,10 @@ CREATE INDEX IF NOT EXISTS idx_notif_events_user_ts
 
 CREATE INDEX IF NOT EXISTS idx_notif_events_target_ts
   ON notif_events(target, ts);
+
+-- Helpful for feed filtering by broadcast/type:
+CREATE INDEX IF NOT EXISTS idx_notif_events_user_type_ts
+  ON notif_events(user_id, type, ts);
 `);
 
 // ===== statements =====
@@ -122,6 +126,26 @@ const stmtFeed = linkDb.prepare(`
     AND target = 'user'
     AND user_id = @uid
     AND @uid > 0
+  ORDER BY ts DESC, event_id DESC
+  LIMIT @limit
+`);
+
+const stmtFeedNews = linkDb.prepare(`
+  SELECT * FROM notif_events
+  WHERE
+    (
+      @beforeTs = 0
+      OR ts < @beforeTs
+      OR (ts = @beforeTs AND event_id < @beforeId)
+    )
+    AND target = 'user'
+    AND user_id = @uid
+    AND @uid > 0
+    AND (
+      type = 'broadcast.news'
+      OR type LIKE 'broadcast.news.%'
+      OR type LIKE 'broadcast.%'
+    )
   ORDER BY ts DESC, event_id DESC
   LIMIT @limit
 `);
@@ -203,6 +227,31 @@ export function listNotifFeed(params: {
   const limit = Math.min(Math.max(Number(params.limit ?? 50), 1), 200);
 
   const rows = stmtFeed.all({ beforeTs, beforeId, uid, limit });
+  const items = rows.map(rowToEvent);
+
+  const nextBefore: NotifCursor = items.length
+    ? { ts: items[items.length - 1].ts, id: items[items.length - 1].event_id }
+    : { ts: beforeTs, id: beforeId };
+
+  return { items, nextBefore };
+}
+
+export function listNotifNewsFeed(params: {
+  userId?: number;
+  beforeTs?: number;
+  beforeId?: string;
+  limit?: number;
+}) {
+  const uid = params.userId ?? 0;
+
+  // beforeTs=0 means "latest", keep it 0 (do NOT normalize to now)
+  const beforeTsRaw = Number(params.beforeTs ?? 0);
+  const beforeTs = Number.isFinite(beforeTsRaw) ? Math.floor(beforeTsRaw) : 0;
+
+  const beforeId = String(params.beforeId ?? "\uffff");
+  const limit = Math.min(Math.max(Number(params.limit ?? 10), 1), 200);
+
+  const rows = stmtFeedNews.all({ beforeTs, beforeId, uid, limit });
   const items = rows.map(rowToEvent);
 
   const nextBefore: NotifCursor = items.length

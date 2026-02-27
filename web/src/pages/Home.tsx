@@ -388,12 +388,12 @@ export function Home() {
   async function loadHomeNews() {
     setNewsLoading(true);
     try {
-      // Берём одну страницу, без пагинации -> никаких “кругов”
-      const r = await apiFetch<FeedResp>(`/notifications/feed?limit=20`);
+      // ✅ Now server-side filtered: only broadcast/news items (independent of other event noise)
+      const r = await apiFetch<FeedResp>(`/notifications/feed?onlyNews=1&limit=5`);
       const arr = Array.isArray(r.items) ? r.items : [];
 
-      // ✅ Только новости (как в Feed: categoryOf === "news")
-      const news = arr.filter((x) => categoryOf(x) === "news").slice(0, 3);
+      // defensive: keep the same categorizer, but feed should already be news
+      const news = arr.filter((x) => categoryOf(x) === "news").slice(0, 5);
       setNewsItems(news);
     } catch {
       setNewsItems([]);

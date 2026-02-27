@@ -1,7 +1,7 @@
 ﻿// api/src/modules/notifications/push.ts
 import type { FastifyInstance } from "fastify";
 import { getSessionFromRequest } from "../../shared/session/sessionStore.js";
-import { listEvents, listFeed, putEvent, type BillingPushEvent } from "./inbox.js";
+import { listEvents, listFeed, listNewsFeed, putEvent, type BillingPushEvent } from "./inbox.js";
 import { formatIncoming } from "./format.js";
 import { putSubscription, removeSubscription } from "./subscriptions.js";
 import { sendWebPushToUser } from "./webpush.js";
@@ -9,6 +9,12 @@ import { sendWebPushToUser } from "./webpush.js";
 function envStr(name: string, def = "") {
   const v = String(process.env[name] ?? "").trim();
   return v || def;
+}
+
+function parseBool(v: any): boolean {
+  const s = String(v ?? "").trim().toLowerCase();
+  if (!s) return false;
+  return s === "1" || s === "true" || s === "yes" || s === "on";
 }
 
 export async function pushRoutes(app: FastifyInstance) {
@@ -124,6 +130,9 @@ export async function pushRoutes(app: FastifyInstance) {
   });
 
   // ===== GET /api/notifications/feed =====
+  // Supports:
+  // - default: full feed (all types)
+  // - onlyNews=1: broadcast/news-only feed for Home "Новости"
   app.get("/notifications/feed", async (req, reply) => {
     const s = getSessionFromRequest(req);
     const uid = s?.userId ? Number(s.userId) : 0;
@@ -134,7 +143,12 @@ export async function pushRoutes(app: FastifyInstance) {
     const beforeId = String(q.beforeId ?? "");
     const limit = Number(q.limit ?? 50);
 
-    const { items, nextBefore } = listFeed({ userId: uid, beforeTs, beforeId, limit });
+    const onlyNews = parseBool(q.onlyNews);
+
+    const { items, nextBefore } = onlyNews
+      ? listNewsFeed({ userId: uid, beforeTs, beforeId, limit })
+      : listFeed({ userId: uid, beforeTs, beforeId, limit });
+
     return reply.send({ ok: true, items, nextBefore });
   });
 }
