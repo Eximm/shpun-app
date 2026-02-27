@@ -1,4 +1,5 @@
-﻿import type { FastifyInstance } from "fastify";
+﻿// api/src/modules/notifications/push.ts
+import type { FastifyInstance } from "fastify";
 import { getSessionFromRequest } from "../../shared/session/sessionStore.js";
 import { listEvents, listFeed, putEvent, type BillingPushEvent } from "./inbox.js";
 import { formatIncoming } from "./format.js";
@@ -47,9 +48,29 @@ export async function pushRoutes(app: FastifyInstance) {
 
   // ===== POST /api/notifications/push/subscribe =====
   app.post("/notifications/push/subscribe", async (req, reply) => {
+    const sidCookie = (req.cookies as any)?.sid;
+    const sidHdr = req.headers["x-app-sid"];
+
+    // входной лог — чтобы увидеть, приходит ли cookie/ct вообще
+    app.log.info(
+      {
+        cookieHeader: Boolean((req.headers as any)?.cookie),
+        sidCookie: typeof sidCookie === "string" ? sidCookie.slice(0, 8) : null,
+        sidHdr: typeof sidHdr === "string" ? sidHdr.slice(0, 8) : null,
+        ct: req.headers["content-type"],
+      },
+      "push_subscribe_in",
+    );
+
     const s = getSessionFromRequest(req);
     const uid = s?.userId ? Number(s.userId) : 0;
-    if (!uid) return reply.code(401).send({ ok: false, error: "unauthorized" });
+    if (!uid) {
+      app.log.warn(
+        { hasSidCookie: typeof sidCookie === "string", hasSidHdr: typeof sidHdr === "string" },
+        "push_subscribe_unauthorized",
+      );
+      return reply.code(401).send({ ok: false, error: "unauthorized" });
+    }
 
     const sub = (req.body ?? {}) as any;
     const endpoint = String(sub?.endpoint ?? "").trim();
@@ -57,6 +78,10 @@ export async function pushRoutes(app: FastifyInstance) {
     const auth = String(sub?.keys?.auth ?? "").trim();
 
     if (!endpoint || !p256dh || !auth) {
+      app.log.warn(
+        { uid, hasEndpoint: !!endpoint, hasP256dh: !!p256dh, hasAuth: !!auth },
+        "push_subscribe_bad_subscription",
+      );
       return reply.code(400).send({ ok: false, error: "bad_subscription" });
     }
 
@@ -66,6 +91,7 @@ export async function pushRoutes(app: FastifyInstance) {
       ts: Math.floor(Date.now() / 1000),
     });
 
+    app.log.info({ uid }, "push_subscribe_ok");
     return reply.send({ ok: true });
   });
 
