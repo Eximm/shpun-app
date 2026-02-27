@@ -42,10 +42,44 @@ import { useBillingNotifications } from "./app/notifications/useBillingNotificat
    Service Worker (production only)
    ============================================================ */
 
+/**
+ * Важно для Telegram WebView:
+ * - регистрируем SW сразу (immediate)
+ * - просим SW обновиться при старте
+ * - если новый SW готов — делаем ОДИН мягкий reload, чтобы не сидеть на старом app-shell
+ */
 if (import.meta.env.PROD) {
   import("virtual:pwa-register")
     .then(({ registerSW }) => {
-      registerSW({ immediate: true });
+      // защита от циклических reload
+      const RELOAD_KEY = "pwa:sw-reloaded";
+      const alreadyReloaded = sessionStorage.getItem(RELOAD_KEY) === "1";
+
+      const updateSW = registerSW({
+        immediate: true,
+        onNeedRefresh() {
+          // Новый SW установлен, но еще не активирован/не применён к странице.
+          // В Telegram prompt часто бесполезен, поэтому делаем мягкий reload один раз.
+          if (!alreadyReloaded) {
+            sessionStorage.setItem(RELOAD_KEY, "1");
+            // попросим SW примениться (внутри плагина это отправит SKIP_WAITING)
+            updateSW(true);
+            // и перезагрузим страницу, чтобы подхватить новый index.html + чанки
+            window.location.reload();
+          }
+        },
+        onOfflineReady() {
+          // можно ничего не делать
+        },
+      });
+
+      // Дополнительно: при старте попросим проверить обновление
+      // (актуально если WebView долго держит процесс)
+      try {
+        updateSW(false);
+      } catch {
+        /* ignore */
+      }
     })
     .catch(() => {
       /* ignore */

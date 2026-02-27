@@ -22,12 +22,23 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      strategies: "injectManifest", // ⬅️ ВАЖНО
+      // Мы используем свой SW (src/sw.ts) и Workbox injectManifest
+      strategies: "injectManifest",
       srcDir: "src",
+
+      // ВАЖНО: исходник SW
       filename: "sw.ts",
 
+      // ВАЖНО: итоговый файл на проде должен быть /sw.js
+      injectManifest: {
+        swDest: "sw.js",
+      },
+
+      // SW регистрируешь сам в коде — оставляем null
       injectRegister: null,
-      registerType: "prompt",
+
+      // Для Telegram лучше autoUpdate, а не prompt
+      registerType: "autoUpdate",
 
       includeAssets: [
         "icons/icon-192.png",
@@ -39,8 +50,7 @@ export default defineConfig({
       manifest: {
         name: "ShpunApp",
         short_name: "ShpunApp",
-        description:
-          "Shpun SDN System — кабинет, баланс, услуги и управление подпиской.",
+        description: "Shpun SDN System — кабинет, баланс, услуги и управление подпиской.",
 
         start_url: "/",
         id: "/",
@@ -64,11 +74,7 @@ export default defineConfig({
       },
 
       workbox: {
-        navigateFallback: "/index.html",
-        navigateFallbackDenylist: [/^\/api\//, /^\/shm\//, /^\/\.well-known\//],
         cleanupOutdatedCaches: true,
-        clientsClaim: true,
-        skipWaiting: true,
       },
 
       devOptions: {
