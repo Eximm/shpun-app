@@ -283,6 +283,37 @@ function Toast({ text }: { text: string }) {
   );
 }
 
+function Segmented({
+  value,
+  onChange,
+}: {
+  value: "ru" | "en";
+  onChange: (v: "ru" | "en") => void;
+}) {
+  return (
+    <div className="seg" role="tablist" aria-label="Language">
+      <button
+        type="button"
+        className={`btn seg__btn ${value === "ru" ? "btn--primary" : ""}`}
+        onClick={() => onChange("ru")}
+        role="tab"
+        aria-selected={value === "ru"}
+      >
+        RU
+      </button>
+      <button
+        type="button"
+        className={`btn seg__btn ${value === "en" ? "btn--primary" : ""}`}
+        onClick={() => onChange("en")}
+        role="tab"
+        aria-selected={value === "en"}
+      >
+        EN
+      </button>
+    </div>
+  );
+}
+
 export function Profile() {
   const nav = useNavigate();
   const { me, loading, error, refetch } = useMe() as any;
@@ -300,14 +331,12 @@ export function Profile() {
   const created = profile?.created ?? null;
   const lastLogin = profile?.lastLogin ?? null;
 
-  // Toast
   const [toast, setToast] = useState<string | null>(null);
   function showToast(msg: string) {
     setToast(msg);
     window.setTimeout(() => setToast(null), 1800);
   }
 
-  // Personal
   const [editPersonal, setEditPersonal] = useState(false);
   const [savingPersonal, setSavingPersonal] = useState(false);
   const [personalError, setPersonalError] = useState<string | null>(null);
@@ -367,7 +396,6 @@ export function Profile() {
     setPhone(savedPhone);
   }
 
-  // Telegram binding
   const [telegramLocal, setTelegramLocal] = useState<any>(null);
   const telegramRaw = telegramLocal ?? me?.telegram ?? null;
 
@@ -436,7 +464,6 @@ export function Profile() {
     }
   }
 
-  // Copy login
   const [copied, setCopied] = useState(false);
   async function doCopyLogin() {
     if (!loginText) return;
@@ -445,7 +472,6 @@ export function Profile() {
     window.setTimeout(() => setCopied(false), 1200);
   }
 
-  // Logout / password
   const [loggingOut, setLoggingOut] = useState(false);
 
   async function logout() {
@@ -462,12 +488,9 @@ export function Profile() {
     nav("/set-password?intent=change&redirect=/profile");
   }
 
-  /* ============================================================
-     PWA install + Notification permission (Profile only)
-     ============================================================ */
-
   const [standalone, setStandalone] = useState(false);
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [deferredPrompt, setDeferredPrompt] =
+    useState<BeforeInstallPromptEvent | null>(null);
   const [iosInstallModal, setIosInstallModal] = useState(false);
 
   const [notifPerm, setNotifPerm] = useState<string>(() => {
@@ -529,7 +552,6 @@ export function Profile() {
     } catch {
       showToast("Не удалось запустить установку");
     } finally {
-      // prompt can be used once
       setDeferredPrompt(null);
     }
   }
@@ -597,6 +619,7 @@ export function Profile() {
   );
   const soonBadge = <Badge text="Скоро" tone="soon" />;
 
+  const pwaText = standalone ? "Установлено" : "Не установлено";
   const pwaBadge = standalone ? (
     <Badge text="Установлено" tone="ok" />
   ) : (
@@ -612,6 +635,27 @@ export function Profile() {
     ) : (
       <Badge text={permText} />
     );
+
+  const pwaBtnText = standalone
+    ? "Установлено"
+    : isIOS()
+    ? "Как установить"
+    : deferredPrompt
+    ? "Установить"
+    : "Через меню";
+
+  const pwaHint = standalone
+    ? "Приложение уже на экране — отлично."
+    : isIOS()
+    ? "iPhone: установка через «Поделиться» → «На экран Домой»."
+    : deferredPrompt
+    ? "Установи на экран телефона — будет удобнее и стабильнее."
+    : "Если кнопка установки не появилась — открой меню браузера (⋮) и выбери «Установить приложение».";
+
+  const pushHint =
+    notifPerm === "denied"
+      ? "Разрешение запрещено в браузере — включи уведомления в настройках сайта."
+      : "Сейчас: только разрешение. Дальше подключим подписку и реальные push-сообщения.";
 
   return (
     <div className="section">
@@ -798,68 +842,80 @@ export function Profile() {
           <div className="card__body">
             <CardTitle icon="⚙️">Настройки</CardTitle>
 
-            <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-              <RowLine
-                icon="🌍"
-                label="Язык интерфейса"
-                value={lang === "ru" ? "Русский" : "English"}
-                right={
-                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                    <button
-                      type="button"
-                      className={`btn ${lang === "ru" ? "btn--primary" : ""}`}
-                      onClick={() => setLang("ru")}
-                    >
-                      Русский
-                    </button>
-                    <button
-                      type="button"
-                      className={`btn ${lang === "en" ? "btn--primary" : ""}`}
-                      onClick={() => setLang("en")}
-                    >
-                      English
-                    </button>
+            <div className="profile-list">
+              <div className="profile-row">
+                <div className="profile-row__main">
+                  <div className="profile-row__label">
+                    <span aria-hidden="true">🌍</span>
+                    <span>Язык интерфейса</span>
                   </div>
-                }
-              />
+                  <div className="profile-row__value">
+                    {lang === "ru" ? "Русский" : "English"}
+                  </div>
+                  <div className="profile-row__hint">
+                    Меняется мгновенно и сохраняется для следующих запусков.
+                  </div>
+                </div>
 
-              <RowLine
-                icon="📲"
-                label="Приложение (PWA)"
-                value={standalone ? "Установлено" : "Не установлено"}
-                right={
-                  <>
-                    {pwaBadge}
-                    <button className="btn btn--primary" onClick={doInstallPwa} type="button">
-                      {standalone ? "Открыто" : isIOS() ? "Как установить" : "Установить"}
+                <div className="profile-row__right">
+                  <Segmented value={(lang as any) === "en" ? "en" : "ru"} onChange={setLang as any} />
+                </div>
+              </div>
+
+              <div className="profile-row">
+                <div className="profile-row__main">
+                  <div className="profile-row__label">
+                    <span aria-hidden="true">📲</span>
+                    <span>Приложение (PWA)</span>
+                  </div>
+                  <div className="profile-row__value">{pwaText}</div>
+                  <div className="profile-row__hint">{pwaHint}</div>
+                </div>
+
+                <div className="profile-row__right">
+                  {pwaBadge}
+                  <button
+                    className={`btn ${standalone ? "" : "btn--primary"}`}
+                    onClick={() => {
+                      if (standalone) showToast("Уже установлено ✅");
+                      else doInstallPwa();
+                    }}
+                    type="button"
+                    disabled={standalone}
+                  >
+                    {pwaBtnText}
+                  </button>
+                </div>
+              </div>
+
+              <div className="profile-row">
+                <div className="profile-row__main">
+                  <div className="profile-row__label">
+                    <span aria-hidden="true">🔔</span>
+                    <span>Push-уведомления</span>
+                  </div>
+                  <div className="profile-row__value">{permText}</div>
+                  <div className="profile-row__hint">{pushHint}</div>
+                </div>
+
+                <div className="profile-row__right">
+                  {permBadge}
+                  {notifPerm !== "granted" ? (
+                    <button className="btn btn--primary" onClick={requestNotifPermission} type="button">
+                      Разрешить
                     </button>
-                  </>
-                }
-                hint="Установи на экран телефона — тогда можно включать Push-уведомления."
-              />
-
-              <RowLine
-                icon="🔔"
-                label="Push-уведомления"
-                value={permText}
-                right={
-                  <>
-                    {permBadge}
-                    {notifPerm !== "granted" ? (
-                      <button className="btn" onClick={requestNotifPermission} type="button">
-                        Разрешить
-                      </button>
-                    ) : null}
-                  </>
-                }
-                hint="Сейчас: разрешение. Дальше подключим подписку и реальные push-сообщения."
-              />
+                  ) : (
+                    <button className="btn" type="button" disabled>
+                      Включено
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* iOS install modal */}
       <Modal
         open={iosInstallModal}
         title="Установка на iPhone"
@@ -880,7 +936,6 @@ export function Profile() {
         </div>
       </Modal>
 
-      {/* Telegram modal */}
       <Modal
         open={tgModal}
         title={telegramLogin ? "Изменить Telegram" : "Привязать Telegram"}
