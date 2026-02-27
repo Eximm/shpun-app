@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useMe } from "../app/auth/useMe";
 import { apiFetch } from "../shared/api/client";
 import { useI18n } from "../shared/i18n";
+import { disablePush, enablePush, getPushState } from "../app/notifications/push";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -205,11 +206,21 @@ function RowLine({
           </div>
         </div>
 
-        {right ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            {right}
-          </div>
-        ) : null}
+{right ? (
+  <div
+    className="rowline__right"
+    style={{
+      display: "grid",
+      gridAutoFlow: "column",
+      gridAutoColumns: "120px",
+      gap: 10,
+      alignItems: "center",
+      justifyContent: "end",
+    }}
+  >
+    {right}
+  </div>
+) : null}
       </div>
 
       {hint ? (
@@ -488,19 +499,11 @@ export function Profile() {
     nav("/set-password?intent=change&redirect=/profile");
   }
 
+  // ===== PWA install (как было) =====
   const [standalone, setStandalone] = useState(false);
   const [deferredPrompt, setDeferredPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
   const [iosInstallModal, setIosInstallModal] = useState(false);
-
-  const [notifPerm, setNotifPerm] = useState<string>(() => {
-    try {
-      if (typeof Notification === "undefined") return "unsupported";
-      return Notification.permission;
-    } catch {
-      return "unsupported";
-    }
-  });
 
   useEffect(() => {
     setStandalone(isStandalonePwa());
@@ -537,7 +540,9 @@ export function Profile() {
     }
 
     if (!deferredPrompt) {
-      showToast("Установка доступна через меню браузера (⋮) → «Установить приложение»");
+      showToast(
+        "Установка доступна через меню браузера (⋮) → «Установить приложение»"
+      );
       return;
     }
 
@@ -556,19 +561,57 @@ export function Profile() {
     }
   }
 
-  async function requestNotifPermission() {
+  // ===== Push (полная замена: реальное включение/выключение) =====
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushState, setPushState] = useState<{
+    supported: boolean;
+    permission: NotificationPermission | "unsupported";
+    hasSubscription: boolean;
+    standalone: boolean;
+  }>({
+    supported: false,
+    permission: "unsupported",
+    hasSubscription: false,
+    standalone: false,
+  });
+
+  async function refreshPush() {
     try {
-      if (typeof Notification === "undefined") {
-        showToast("Уведомления не поддерживаются в этом браузере.");
-        return;
-      }
-      const res = await Notification.requestPermission();
-      setNotifPerm(res);
-      if (res === "granted") showToast("Уведомления разрешены ✅");
-      else if (res === "denied") showToast("Уведомления запрещены ❌");
-      else showToast("Разрешение не выбрано");
+      const s = await getPushState();
+      setPushState(s);
     } catch {
-      showToast("Не удалось запросить разрешение");
+      // ignore
+    }
+  }
+
+  useEffect(() => {
+    refreshPush();
+  }, []);
+
+  async function togglePush() {
+    if (pushLoading) return;
+    setPushLoading(true);
+    try {
+      const enabled =
+        pushState.permission === "granted" && pushState.hasSubscription;
+
+      if (enabled) {
+        await disablePush();
+        showToast("Уведомления выключены");
+      } else {
+        const ok = await enablePush();
+        if (ok) showToast("Уведомления включены ✅");
+        else {
+          // enablePush() сам учитывает standalone + permission + vapid
+          if (!pushState.standalone) showToast("Для push установи приложение (PWA) 📲");
+          else if (pushState.permission === "denied")
+            showToast("Уведомления запрещены в браузере");
+          else showToast("Не удалось включить уведомления");
+        }
+      }
+    } finally {
+      setPushLoading(false);
+      await refreshPush();
     }
   }
 
@@ -626,16 +669,6 @@ export function Profile() {
     <Badge text="Не установлено" />
   );
 
-  const permText = permissionLabel(String(notifPerm || "unsupported"));
-  const permBadge =
-    notifPerm === "granted" ? (
-      <Badge text="Разрешены" tone="ok" />
-    ) : notifPerm === "denied" ? (
-      <Badge text="Запрещены" />
-    ) : (
-      <Badge text={permText} />
-    );
-
   const pwaBtnText = standalone
     ? "Установлено"
     : isIOS()
@@ -652,10 +685,31 @@ export function Profile() {
     ? "Установи на экран телефона — будет удобнее и стабильнее."
     : "Если кнопка установки не появилась — открой меню браузера (⋮) и выбери «Установить приложение».";
 
-  const pushHint =
-    notifPerm === "denied"
-      ? "Разрешение запрещено в браузере — включи уведомления в настройках сайта."
-      : "Сейчас: только разрешение. Дальше подключим подписку и реальные push-сообщения.";
+  // Push UI computed
+  const pushPermText = permissionLabel(String(pushState.permission));
+  const pushEnabled =
+    pushState.permission === "granted" && pushState.hasSubscription;
+
+  const pushBadge =
+    pushState.permission === "granted" ? (
+      <Badge text="Разрешены" tone="ok" />
+    ) : pushState.permission === "denied" ? (
+      <Badge text="Запрещены" />
+    ) : (
+      <Badge text={pushPermText} />
+    );
+
+  const pushHint = !pushState.supported
+    ? "Push недоступны в этом браузере."
+    : pushState.permission === "denied"
+    ? "Разрешение запрещено в браузере — включи уведомления в настройках сайта."
+    : !pushState.standalone
+    ? "Для push установи приложение (PWA) — особенно важно на iPhone."
+    : pushState.permission === "default"
+    ? "Нажми «Включить», чтобы запросить разрешение и подписаться."
+    : pushEnabled
+    ? "Push включены — можно присылать важные уведомления."
+    : "Разрешение есть, но подписка выключена — нажми «Включить».";
 
   return (
     <div className="section">
@@ -682,7 +736,11 @@ export function Profile() {
           {toast ? <Toast text={toast} /> : null}
 
           <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
-            <button className="btn" onClick={goChangePassword} style={{ width: "100%" }}>
+            <button
+              className="btn"
+              onClick={goChangePassword}
+              style={{ width: "100%" }}
+            >
               🔐 {t("profile.change_password")}
             </button>
 
@@ -718,7 +776,11 @@ export function Profile() {
                     >
                       {savingPersonal ? "…" : "Сохранить"}
                     </button>
-                    <button className="btn" onClick={cancelPersonal} disabled={savingPersonal}>
+                    <button
+                      className="btn"
+                      onClick={cancelPersonal}
+                      disabled={savingPersonal}
+                    >
                       Отмена
                     </button>
                   </div>
@@ -801,7 +863,11 @@ export function Profile() {
                 <RowLine icon="📅" label="Создан" value={formatDate(created)} />
               </div>
 
-              <RowLine icon="🕒" label="Последний вход" value={formatDate(lastLogin)} />
+              <RowLine
+                icon="🕒"
+                label="Последний вход"
+                value={formatDate(lastLogin)}
+              />
             </div>
           </div>
         </div>
@@ -843,6 +909,7 @@ export function Profile() {
             <CardTitle icon="⚙️">Настройки</CardTitle>
 
             <div className="profile-list">
+              {/* Language */}
               <div className="profile-row">
                 <div className="profile-row__main">
                   <div className="profile-row__label">
@@ -858,10 +925,14 @@ export function Profile() {
                 </div>
 
                 <div className="profile-row__right">
-                  <Segmented value={(lang as any) === "en" ? "en" : "ru"} onChange={setLang as any} />
+                  <Segmented
+                    value={(lang as any) === "en" ? "en" : "ru"}
+                    onChange={setLang as any}
+                  />
                 </div>
               </div>
 
+              {/* PWA */}
               <div className="profile-row">
                 <div className="profile-row__main">
                   <div className="profile-row__label">
@@ -888,25 +959,49 @@ export function Profile() {
                 </div>
               </div>
 
+              {/* Push */}
               <div className="profile-row">
                 <div className="profile-row__main">
                   <div className="profile-row__label">
                     <span aria-hidden="true">🔔</span>
                     <span>Push-уведомления</span>
                   </div>
-                  <div className="profile-row__value">{permText}</div>
+
+                  <div className="profile-row__value">
+                    {pushEnabled ? "Включены" : "Выключены"} • {pushPermText}
+                  </div>
+
                   <div className="profile-row__hint">{pushHint}</div>
                 </div>
 
                 <div className="profile-row__right">
-                  {permBadge}
-                  {notifPerm !== "granted" ? (
-                    <button className="btn btn--primary" onClick={requestNotifPermission} type="button">
-                      Разрешить
+                  {pushBadge}
+
+                  {!pushState.supported ? (
+                    <button className="btn" type="button" disabled>
+                      Недоступно
+                    </button>
+                  ) : pushState.permission === "denied" ? (
+                    <button className="btn" type="button" disabled>
+                      В настройках
+                    </button>
+                  ) : !pushState.standalone ? (
+                    <button
+                      className="btn btn--primary"
+                      type="button"
+                      onClick={doInstallPwa}
+                      disabled={pushLoading || standalone}
+                    >
+                      Установить
                     </button>
                   ) : (
-                    <button className="btn" type="button" disabled>
-                      Включено
+                    <button
+                      className={`btn ${pushEnabled ? "" : "btn--primary"}`}
+                      type="button"
+                      onClick={togglePush}
+                      disabled={pushLoading}
+                    >
+                      {pushLoading ? "…" : pushEnabled ? "Выключить" : "Включить"}
                     </button>
                   )}
                 </div>
@@ -916,6 +1011,7 @@ export function Profile() {
         </div>
       </div>
 
+      {/* iOS install modal */}
       <Modal
         open={iosInstallModal}
         title="Установка на iPhone"
@@ -929,13 +1025,20 @@ export function Profile() {
           {"\n"}2) Выбери “На экран Домой”
           {"\n"}3) Подтверди “Добавить”
         </div>
-        <div className="row" style={{ marginTop: 12, justifyContent: "flex-end" }}>
-          <button className="btn btn--primary" onClick={() => setIosInstallModal(false)}>
+        <div
+          className="row"
+          style={{ marginTop: 12, justifyContent: "flex-end" }}
+        >
+          <button
+            className="btn btn--primary"
+            onClick={() => setIosInstallModal(false)}
+          >
             Понятно
           </button>
         </div>
       </Modal>
 
+      {/* TG modal */}
       <Modal
         open={tgModal}
         title={telegramLogin ? "Изменить Telegram" : "Привязать Telegram"}
@@ -959,11 +1062,22 @@ export function Profile() {
           </div>
         ) : null}
 
-        <div className="row" style={{ marginTop: 12, justifyContent: "flex-end" }}>
-          <button className="btn" onClick={() => setTgModal(false)} disabled={savingTg}>
+        <div
+          className="row"
+          style={{ marginTop: 12, justifyContent: "flex-end" }}
+        >
+          <button
+            className="btn"
+            onClick={() => setTgModal(false)}
+            disabled={savingTg}
+          >
             Отмена
           </button>
-          <button className="btn btn--primary" onClick={saveTelegramLogin} disabled={savingTg}>
+          <button
+            className="btn btn--primary"
+            onClick={saveTelegramLogin}
+            disabled={savingTg}
+          >
             {savingTg ? "…" : "Сохранить"}
           </button>
         </div>
