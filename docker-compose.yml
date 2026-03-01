@@ -26,6 +26,12 @@ services:
     build:
       context: ./web
       dockerfile: Dockerfile
+      args:
+        VITE_TG_BOT_USERNAME: ${VITE_TG_BOT_USERNAME}
+        VITE_TG_APP_SHORTNAME: ${VITE_TG_APP_SHORTNAME}
+        VITE_TG_STARTAPP: ${VITE_TG_STARTAPP}
+        VITE_API_BASE: ${VITE_API_BASE}
+        VITE_VAPID_PUBLIC_KEY: ${VITE_VAPID_PUBLIC_KEY}
     image: shpun-app-shpun-app-web
     container_name: shpun-app-web
     restart: unless-stopped
@@ -33,6 +39,8 @@ services:
       - shpun-app-api
     ports:
       - "127.0.0.1:8090:80"
+    env_file:
+      - /opt/shpun-app/.env
     networks:
       - shpun-app
 

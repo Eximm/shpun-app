@@ -1033,7 +1033,7 @@ export function Profile() {
           className="input"
           value={tgLoginDraft}
           onChange={(e) => setTgLoginDraft(e.target.value)}
-          placeholder="например: nivats"
+          placeholder="например: shpunbest"
           style={{ width: "100%", marginTop: 8 }}
         />
 
