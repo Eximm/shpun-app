@@ -2107,3 +2107,110 @@ button, a { -webkit-tap-highlight-color: transparent; }
   width: 100%;
   justify-content: center;
 }
+/* ============================================================
+   Profile: Settings — mobile visual cleanup
+   ============================================================ */
+
+/* Row layout: left text, right controls, hint below */
+.profile-row{
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "main right"
+    "hint hint";
+  gap: 8px 12px;
+  align-items: start;
+}
+
+/* Main (title + value) */
+.profile-row__main{
+  grid-area: main;
+  min-width: 0; /* prevent overflow */
+}
+
+/* Right controls (buttons / toggles / badges) */
+.profile-row__right{
+  grid-area: right;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+
+  /* override previous fixed column sizing */
+  grid-auto-flow: initial;
+  grid-auto-columns: initial;
+}
+
+/* Do not force full width for children */
+.profile-row__right > *{
+  width: auto;
+}
+
+/* Segmented control sizing */
+.profile-row__right .seg{
+  width: auto;
+  min-width: 128px;
+}
+
+/* Buttons and badges in right column */
+.profile-row__right .btn,
+.profile-row__right .badge{
+  min-width: 120px;
+}
+
+/* Hint text (secondary description) */
+.profile-row__hint{
+  grid-area: hint;
+  margin-top: 0;
+
+  font-size: 12px;
+  line-height: 1.3;
+  opacity: 0.78;
+
+  overflow: hidden;
+
+  /* Standard property */
+  line-clamp: 2;
+
+  /* WebKit support */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+
+  /* Fallback for older browsers */
+  max-height: calc(2 * 1.3em);
+}
+
+/* =========================
+   Mobile adjustments
+   ========================= */
+@media (max-width: 520px){
+
+  .profile-row{
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "main"
+      "right"
+      "hint";
+  }
+
+  .profile-row__right{
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .profile-row__right .btn,
+  .profile-row__right .badge,
+  .profile-row__right .seg{
+    width: 100%;
+    min-width: 0;
+  }
+
+  .profile-row__value{
+    font-size: 13px;
+  }
+
+  .profile-row__label{
+    font-size: 12px;
+  }
+}

@@ -529,7 +529,7 @@ export function Profile() {
 
     if (!deferredPrompt) {
       showToast(
-        "Установка доступна через меню браузера (⋮) → «Установить приложение»"
+        "Установка через меню браузера (⋮) → «Установить приложение»"
       );
       return;
     }
@@ -590,7 +590,7 @@ export function Profile() {
         const ok = await enablePush();
         if (ok) showToast("Уведомления включены ✅");
         else {
-          if (!pushState.standalone) showToast("Для push установи приложение (PWA) 📲");
+          if (!pushState.standalone) showToast("Для push установи PWA 📲");
           else if (pushState.permission === "denied")
             showToast("Уведомления запрещены в браузере");
           else showToast("Не удалось включить уведомления");
@@ -649,6 +649,9 @@ export function Profile() {
   );
   const soonBadge = <Badge text="Скоро" tone="soon" />;
 
+  // --- Settings: compact hints (mobile-friendly)
+  const langHint = "Сохраняется автоматически.";
+
   const pwaText = standalone ? "Установлено" : "Не установлено";
   const pwaBadge = standalone ? (
     <Badge text="Установлено" tone="ok" />
@@ -656,21 +659,19 @@ export function Profile() {
     <Badge text="Не установлено" />
   );
 
-  const pwaBtnText = standalone
-    ? "Установлено"
-    : isIOS()
+  const pwaBtnText = isIOS()
     ? "Как установить"
     : deferredPrompt
     ? "Установить"
     : "Через меню";
 
   const pwaHint = standalone
-    ? "Приложение уже на экране — отлично."
+    ? "Есть на экране."
     : isIOS()
-    ? "iPhone: установка через «Поделиться» → «На экран Домой»."
+    ? "iPhone: «Поделиться» → «На экран Домой»."
     : deferredPrompt
-    ? "Установи на экран телефона — будет удобнее и стабильнее."
-    : "Если кнопка установки не появилась — открой меню браузера (⋮) и выбери «Установить приложение».";
+    ? "Рекомендуем установить на экран."
+    : "Открой меню (⋮) → «Установить приложение».";
 
   const pushPermText = permissionLabel(String(pushState.permission));
   const pushEnabled =
@@ -686,16 +687,16 @@ export function Profile() {
     );
 
   const pushHint = !pushState.supported
-    ? "Push недоступны в этом браузере."
+    ? "Недоступно в этом браузере."
     : pushState.permission === "denied"
-    ? "Разрешение запрещено в браузере — включи уведомления в настройках сайта."
+    ? "Разреши уведомления в настройках сайта."
     : !pushState.standalone
-    ? "Для push установи приложение (PWA) — особенно важно на iPhone."
+    ? "Для push нужно установить PWA."
     : pushState.permission === "default"
-    ? "Нажми «Включить», чтобы запросить разрешение и подписаться."
+    ? "Нажми «Включить», чтобы запросить доступ."
     : pushEnabled
-    ? "Push включены — можно присылать важные уведомления."
-    : "Разрешение есть, но подписка выключена — нажми «Включить».";
+    ? "Можно присылать важные уведомления."
+    : "Разрешение есть — включи подписку.";
 
   return (
     <div className="section">
@@ -905,9 +906,7 @@ export function Profile() {
                   <div className="profile-row__value">
                     {lang === "ru" ? "Русский" : "English"}
                   </div>
-                  <div className="profile-row__hint">
-                    Меняется мгновенно и сохраняется для следующих запусков.
-                  </div>
+                  <div className="profile-row__hint">{langHint}</div>
                 </div>
 
                 <div className="profile-row__right">
@@ -931,17 +930,15 @@ export function Profile() {
 
                 <div className="profile-row__right">
                   {pwaBadge}
-                  <button
-                    className={`btn ${standalone ? "" : "btn--primary"}`}
-                    onClick={() => {
-                      if (standalone) showToast("Уже установлено ✅");
-                      else doInstallPwa();
-                    }}
-                    type="button"
-                    disabled={standalone}
-                  >
-                    {pwaBtnText}
-                  </button>
+                  {!standalone ? (
+                    <button
+                      className="btn btn--primary"
+                      onClick={doInstallPwa}
+                      type="button"
+                    >
+                      {pwaBtnText}
+                    </button>
+                  ) : null}
                 </div>
               </div>
 
