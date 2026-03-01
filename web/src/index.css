@@ -2223,3 +2223,141 @@ button, a { -webkit-tap-highlight-color: transparent; }
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }
+/* ============================================================
+   Global App Loader (fullscreen, used in AuthGate)
+   ============================================================ */
+
+.app-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  background:
+    radial-gradient(900px 500px at 50% -10%, rgba(124,92,255,0.25), transparent 60%),
+    linear-gradient(180deg, #070a10, var(--bg));
+
+  backdrop-filter: blur(10px);
+}
+
+.app-loader__dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  box-shadow: 0 0 40px rgba(124,92,255,0.6);
+  animation: loaderPulse 1.4s ease-in-out infinite;
+}
+
+.app-loader__text {
+  margin-top: 16px;
+  font-size: 14px;
+  font-weight: 800;
+  color: rgba(255,255,255,0.75);
+  letter-spacing: 0.2px;
+}
+
+@keyframes loaderPulse {
+  0%   { transform: scale(1); opacity: 0.7; }
+  50%  { transform: scale(1.4); opacity: 1; }
+  100% { transform: scale(1); opacity: 0.7; }
+}
+/* ============================================================
+   Top progress bar (navigation feedback)
+   ============================================================ */
+
+.top-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  width: 100%;
+  z-index: 120;
+  pointer-events: none;
+}
+
+.top-progress__bar {
+  height: 100%;
+  width: 30%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  box-shadow: 0 0 12px rgba(124,92,255,0.6);
+  animation: topProgress 700ms ease-out forwards;
+}
+
+@keyframes topProgress {
+  0%   { width: 0%; opacity: 0.9; }
+  70%  { width: 80%; opacity: 1; }
+  100% { width: 100%; opacity: 0; }
+}
+/* ============================================================
+   Login page (styles moved from inline + small fixes)
+   ============================================================ */
+
+.login__headerCard {
+  margin-top: 10px;
+  background: linear-gradient(135deg, rgba(124,92,255,0.14), rgba(77,215,255,0.08));
+  border: 1px solid rgba(255,255,255,0.10);
+}
+
+.login__whatTitle {
+  font-weight: 900;
+  margin-bottom: 8px;
+}
+
+.login__whatList {
+  display: grid;
+  gap: 6px;
+  opacity: 0.92;
+}
+
+/* Divider spacing helper */
+.login__dividerMt14 {
+  margin-top: 14px;
+}
+
+/* Generic spacing helpers used on Login */
+.login__preMt12 { margin-top: 12px; }
+.login__preMb10 { margin-bottom: 10px; }
+
+/* Telegram widget container */
+.login__widgetBox {
+  display: grid;
+  justify-items: center;
+  padding: 12px 0;
+}
+
+/* Password form internal title */
+.login__formTitle {
+  font-weight: 900;
+  letter-spacing: 0.1px;
+  margin-bottom: 10px;
+}
+
+/* Switch login/register block */
+.login__switchWrap {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.10);
+}
+
+.login__switchBtn {
+  width: 100%;
+  background: rgba(255,255,255,0.03);
+  border-color: rgba(255,255,255,0.12);
+  font-weight: 900;
+}
+
+/* Full-width buttons inside flex containers (auth__actions is flex) */
+.login__btnFull {
+  width: 100%;
+  flex: 1 0 100%;
+}
+
+/* Providers: ensure buttons stretch full width */
+.login__providerBtn {
+  width: 100%;
+}

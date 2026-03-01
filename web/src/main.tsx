@@ -20,70 +20,43 @@ import { Profile } from "./pages/Profile";
 import { SetPassword } from "./pages/SetPassword";
 import { Transfer } from "./pages/Transfer";
 import { Referrals } from "./pages/Referrals";
-
-// ✅ NEW: payments mini-pages
 import { PaymentsHistory } from "./pages/PaymentsHistory";
 import { PaymentsReceipts } from "./pages/PaymentsReceipts";
-
-// ✅ NEW: help page (Router VPN / Shpun Router)
 import { ServicesRouter } from "./pages/help/ServicesRouter";
 
 import { AuthGate } from "./app/auth/AuthGate";
 import { BottomNav } from "./app/layout/BottomNav";
 import { I18nProvider, useI18n } from "./shared/i18n";
-
-// ✅ Toast provider
 import { ToastProvider } from "./shared/ui/toast/ToastProvider";
-
-// ✅ Billing notifications polling (broadcast + per-user later)
 import { useBillingNotifications } from "./app/notifications/useBillingNotifications";
 
 /* ============================================================
    Service Worker (production only)
    ============================================================ */
 
-/**
- * Важно для Telegram WebView:
- * - регистрируем SW сразу (immediate)
- * - просим SW обновиться при старте
- * - если новый SW готов — делаем ОДИН мягкий reload, чтобы не сидеть на старом app-shell
- */
 if (import.meta.env.PROD) {
   import("virtual:pwa-register")
     .then(({ registerSW }) => {
-      // защита от циклических reload
       const RELOAD_KEY = "pwa:sw-reloaded";
       const alreadyReloaded = sessionStorage.getItem(RELOAD_KEY) === "1";
 
       const updateSW = registerSW({
         immediate: true,
         onNeedRefresh() {
-          // Новый SW установлен, но еще не активирован/не применён к странице.
-          // В Telegram prompt часто бесполезен, поэтому делаем мягкий reload один раз.
           if (!alreadyReloaded) {
             sessionStorage.setItem(RELOAD_KEY, "1");
-            // попросим SW примениться (внутри плагина это отправит SKIP_WAITING)
             updateSW(true);
-            // и перезагрузим страницу, чтобы подхватить новый index.html + чанки
             window.location.reload();
           }
         },
-        onOfflineReady() {
-          // можно ничего не делать
-        },
+        onOfflineReady() {},
       });
 
-      // Дополнительно: при старте попросим проверить обновление
-      // (актуально если WebView долго держит процесс)
       try {
         updateSW(false);
-      } catch {
-        /* ignore */
-      }
+      } catch {}
     })
-    .catch(() => {
-      /* ignore */
-    });
+    .catch(() => {});
 }
 
 /* ============================================================
@@ -97,7 +70,6 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const hideNav =
     loc.pathname === "/login" || loc.pathname.startsWith("/transfer");
 
-  // ✅ Enable polling only on authed app screens (not login/transfer)
   useBillingNotifications(!hideNav);
 
   return (
@@ -129,6 +101,40 @@ function Authed({ children }: { children: React.ReactNode }) {
 }
 
 /* ============================================================
+   Page transition wrapper
+   ============================================================ */
+
+function PageContainer({ children }: { children: React.ReactNode }) {
+  const loc = useLocation();
+  const [showProgress, setShowProgress] = React.useState(false);
+
+  React.useEffect(() => {
+    // запускаем прогресс при смене пути
+    setShowProgress(true);
+
+    const t = window.setTimeout(() => {
+      setShowProgress(false);
+    }, 700); // совпадает с анимацией CSS
+
+    return () => clearTimeout(t);
+  }, [loc.pathname]);
+
+  return (
+    <>
+      {showProgress && (
+        <div className="top-progress">
+          <div className="top-progress__bar" />
+        </div>
+      )}
+
+      <div key={loc.pathname} className="page">
+        {children}
+      </div>
+    </>
+  );
+}
+
+/* ============================================================
    Render
    ============================================================ */
 
@@ -138,125 +144,125 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       <ToastProvider>
         <BrowserRouter>
           <AppShell>
-            <Routes>
-              {/* Public */}
-              <Route path="/login" element={<Login />} />
-              <Route path="/transfer" element={<Transfer />} />
+            <PageContainer>
+              <Routes>
+                {/* Public */}
+                <Route path="/login" element={<Login />} />
+                <Route path="/transfer" element={<Transfer />} />
 
-              {/* Authed main sections */}
-              <Route
-                path="/"
-                element={
-                  <Authed>
-                    <Home />
-                  </Authed>
-                }
-              />
+                {/* Authed main */}
+                <Route
+                  path="/"
+                  element={
+                    <Authed>
+                      <Home />
+                    </Authed>
+                  }
+                />
 
-              <Route
-                path="/referrals"
-                element={
-                  <Authed>
-                    <Referrals />
-                  </Authed>
-                }
-              />
+                <Route
+                  path="/referrals"
+                  element={
+                    <Authed>
+                      <Referrals />
+                    </Authed>
+                  }
+                />
 
-              <Route
-                path="/feed"
-                element={
-                  <Authed>
-                    <Feed />
-                  </Authed>
-                }
-              />
-              <Route
-                path="/dashboard"
-                element={
-                  <Authed>
-                    <Dashboard />
-                  </Authed>
-                }
-              />
+                <Route
+                  path="/feed"
+                  element={
+                    <Authed>
+                      <Feed />
+                    </Authed>
+                  }
+                />
 
-              <Route
-                path="/services"
-                element={
-                  <Authed>
-                    <Services />
-                  </Authed>
-                }
-              />
-              <Route
-                path="/services/order"
-                element={
-                  <Authed>
-                    <ServicesOrder />
-                  </Authed>
-                }
-              />
+                <Route
+                  path="/dashboard"
+                  element={
+                    <Authed>
+                      <Dashboard />
+                    </Authed>
+                  }
+                />
 
-              {/* ✅ NEW: Router VPN help/instruction page */}
-              <Route
-                path="/help/router"
-                element={
-                  <Authed>
-                    <ServicesRouter />
-                  </Authed>
-                }
-              />
+                <Route
+                  path="/services"
+                  element={
+                    <Authed>
+                      <Services />
+                    </Authed>
+                  }
+                />
 
-              {/* Payments */}
-              <Route
-                path="/payments"
-                element={
-                  <Authed>
-                    <Payments />
-                  </Authed>
-                }
-              />
+                <Route
+                  path="/services/order"
+                  element={
+                    <Authed>
+                      <ServicesOrder />
+                    </Authed>
+                  }
+                />
 
-              {/* ✅ Payments mini-pages */}
-              <Route
-                path="/payments/history"
-                element={
-                  <Authed>
-                    <PaymentsHistory />
-                  </Authed>
-                }
-              />
-              <Route
-                path="/payments/receipts"
-                element={
-                  <Authed>
-                    <PaymentsReceipts />
-                  </Authed>
-                }
-              />
+                <Route
+                  path="/help/router"
+                  element={
+                    <Authed>
+                      <ServicesRouter />
+                    </Authed>
+                  }
+                />
 
-              <Route
-                path="/profile"
-                element={
-                  <Authed>
-                    <Profile />
-                  </Authed>
-                }
-              />
-              <Route
-                path="/set-password"
-                element={
-                  <Authed>
-                    <SetPassword />
-                  </Authed>
-                }
-              />
+                <Route
+                  path="/payments"
+                  element={
+                    <Authed>
+                      <Payments />
+                    </Authed>
+                  }
+                />
 
-              {/* Clean routing: /home is not used */}
-              <Route path="/home" element={<Navigate to="/" replace />} />
+                <Route
+                  path="/payments/history"
+                  element={
+                    <Authed>
+                      <PaymentsHistory />
+                    </Authed>
+                  }
+                />
 
-              {/* Fallback */}
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
+                <Route
+                  path="/payments/receipts"
+                  element={
+                    <Authed>
+                      <PaymentsReceipts />
+                    </Authed>
+                  }
+                />
+
+                <Route
+                  path="/profile"
+                  element={
+                    <Authed>
+                      <Profile />
+                    </Authed>
+                  }
+                />
+
+                <Route
+                  path="/set-password"
+                  element={
+                    <Authed>
+                      <SetPassword />
+                    </Authed>
+                  }
+                />
+
+                <Route path="/home" element={<Navigate to="/" replace />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </PageContainer>
           </AppShell>
         </BrowserRouter>
       </ToastProvider>

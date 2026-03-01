@@ -13,24 +13,31 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const notifiedRef = useRef(false);
   const [redirecting, setRedirecting] = useState(false);
 
+  /* ============================================================
+     Enable push after auth
+     ============================================================ */
   useEffect(() => {
     if (me) {
       enablePush().catch(() => {});
     }
   }, [me]);
 
+  /* ============================================================
+     Session expired handling
+     ============================================================ */
   useEffect(() => {
     if (!authRequired) return;
     if (notifiedRef.current) return;
 
     notifiedRef.current = true;
-    toast.info("Нужно войти заново", {
-      description: "Сессия истекла или была обновлена. Авторизуйтесь снова.",
+
+    toast.error("Сессия истекла", {
+      description: "Пожалуйста, авторизуйтесь снова.",
       durationMs: 3500,
     });
 
     setRedirecting(true);
-    // небольшой “мягкий” промежуток, чтобы пользователь увидел экран
+
     window.setTimeout(() => {
       nav("/login", {
         replace: true,
@@ -39,49 +46,37 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     }, 450);
   }, [authRequired, nav, loc.pathname, loc.search]);
 
+  /* ============================================================
+     Global loading screen
+     ============================================================ */
   if (loading) {
     return (
-      <div className="section">
-        <div className="card">
-          <div className="card__body">
-            <div className="skeleton h1" style={{ width: "54%" }} />
-            <div className="skeleton p" style={{ width: "78%", marginTop: 12 }} />
-            <div className="skeleton p" style={{ width: "62%", marginTop: 8 }} />
-            <div className="skeleton p" style={{ width: "70%", marginTop: 18, height: 44 }} />
-          </div>
-        </div>
+      <div className="app-loader">
+        <div className="app-loader__dot" />
+        <div className="app-loader__text">Проверяем авторизацию…</div>
       </div>
     );
   }
 
+  /* ============================================================
+     Not authenticated
+     ============================================================ */
   if (!me) {
-    // если это не authRequired — просто уводим на login (редкий кейс)
     if (!authRequired) {
-      return <Navigate to="/login" replace state={{ from: loc.pathname + (loc.search || "") }} />;
+      return (
+        <Navigate
+          to="/login"
+          replace
+          state={{ from: loc.pathname + (loc.search || "") }}
+        />
+      );
     }
 
     return (
-      <div className="section">
-        <div className="card">
-          <div className="card__body">
-            <h1 className="h1">Нужен вход</h1>
-            <p className="p">Мы обновили сессию. Сейчас откроем страницу авторизации.</p>
-
-            <div className="pre" style={{ marginTop: 12 }}>
-              {redirecting ? "Переходим…" : "—"}
-            </div>
-
-            <div className="row" style={{ marginTop: 14 }}>
-              <button
-                className="btn btn--primary"
-                onClick={() =>
-                  nav("/login", { replace: true, state: { from: loc.pathname + (loc.search || "") } })
-                }
-              >
-                Войти
-              </button>
-            </div>
-          </div>
+      <div className="app-loader">
+        <div className="app-loader__dot" />
+        <div className="app-loader__text">
+          {redirecting ? "Переходим…" : "Требуется вход"}
         </div>
       </div>
     );

@@ -45,7 +45,6 @@ function getAuthRedirectUrl(): string {
 function looksLikeCode(s: string) {
   const v = String(s || "").trim();
   if (!v) return false;
-  // "login_and_password_required", "not_authenticated", "shm_*"
   return /^[a-z0-9_:.|-]+$/i.test(v) && !/\s/.test(v);
 }
 
@@ -71,7 +70,6 @@ function mapAuthError(raw: string, t: (k: string, fb?: string) => string): strin
   const code = String(raw || "").trim();
   if (!code) return t("login.err.unknown", "Не удалось выполнить вход. Попробуйте ещё раз.");
 
-  // если это уже “человеческий” текст — возвращаем как есть
   if (!looksLikeCode(code)) return code;
 
   switch (code) {
@@ -134,7 +132,6 @@ export function Login() {
   function toastError(raw: string) {
     const msg = mapAuthError(raw, t);
     const now = Date.now();
-
     if (lastToastRef.current.msg === msg && now - lastToastRef.current.at < 1200) return;
     lastToastRef.current = { msg, at: now };
 
@@ -160,6 +157,14 @@ export function Login() {
       return;
     }
 
+    // ✅ SUCCESS TOAST — только при реальном успешном логине
+    toast.success(t("login.toast.success_title", "Вход выполнен"), {
+      description: t("login.toast.success_desc", "Добро пожаловать в Shpun App."),
+      durationMs: 2800,
+      // при желании можно сделать success без звука:
+      // sound: false,
+    });
+
     const nextRaw = String((r as any).next ?? "home").trim();
     const next = nextRaw || "home";
     const loginFromApi = String((r as any).login ?? "").trim();
@@ -172,7 +177,7 @@ export function Login() {
       return;
     }
 
-    const to = String(loc?.state?.from ?? "").trim() || "/app";
+    const to = String(loc?.state?.from ?? "").trim() || "/";
     nav(to, { replace: true });
   }
 
@@ -198,7 +203,6 @@ export function Login() {
 
   async function passwordRegister() {
     if (!canPasswordRegister) {
-      // подсветка/валидация остаётся на форме, но тост тоже полезен
       if (!login.trim() || !password) toastError("login_and_password_required");
       else if (!passwordsMatch) toastError(t("login.password.mismatch", "Пароли не совпадают."));
       return;
@@ -251,9 +255,6 @@ export function Login() {
 
     const msg = mapRedirectError(e, t);
     if (msg) toastError(msg);
-
-    // можно почистить URL, чтобы не висело ?e=...
-    // nav("/login", { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loc?.search]);
 
@@ -296,7 +297,6 @@ export function Login() {
     if (!container) return;
 
     container.innerHTML = "";
-
     if (!botUsername) return;
 
     const script = document.createElement("script");
@@ -316,17 +316,10 @@ export function Login() {
   }, [mode, botUsername]);
 
   const headerCard = (
-    <div
-      className="pre"
-      style={{
-        marginTop: 10,
-        background: "linear-gradient(135deg, rgba(124,92,255,0.14), rgba(77,215,255,0.08))",
-        border: "1px solid rgba(255,255,255,0.10)",
-      }}
-    >
-      <div style={{ fontWeight: 900, marginBottom: 8 }}>{t("login.what.title", "Что это такое")}</div>
+    <div className="pre login__headerCard">
+      <div className="login__whatTitle">{t("login.what.title", "Что это такое")}</div>
 
-      <div style={{ display: "grid", gap: 6, opacity: 0.92 }}>
+      <div className="login__whatList">
         <div>
           ✅{" "}
           {t("login.what.1", "Shpun App — кабинет Shpun SDN System: баланс, услуги и управление подпиской.")}
@@ -350,7 +343,7 @@ export function Login() {
           else passwordRegister();
         }}
       >
-        <div style={{ fontWeight: 900, letterSpacing: 0.1, marginBottom: 10 }}>
+        <div className="login__formTitle">
           {passMode === "login"
             ? t("login.password.summary", "Войти по логину и паролю")
             : t("login.password.register_title", "Регистрация по логину и паролю")}
@@ -400,16 +393,13 @@ export function Login() {
         </div>
 
         {passMode === "register" && password2.length > 0 && !passwordsMatch && (
-          <div className="pre" style={{ marginTop: 12 }}>
-            {t("login.password.mismatch", "Пароли не совпадают.")}
-          </div>
+          <div className="pre login__preMt12">{t("login.password.mismatch", "Пароли не совпадают.")}</div>
         )}
 
         <div className="auth__actions">
           <button
             type="submit"
-            className="btn btn--primary"
-            style={{ width: "100%" }}
+            className="btn btn--primary login__btnFull"
             disabled={loading || (passMode === "login" ? !canPasswordLogin : !canPasswordRegister)}
           >
             {loading
@@ -422,16 +412,10 @@ export function Login() {
           </button>
         </div>
 
-        <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.10)" }}>
+        <div className="login__switchWrap">
           <button
             type="button"
-            className="btn"
-            style={{
-              width: "100%",
-              background: "rgba(255,255,255,0.03)",
-              borderColor: "rgba(255,255,255,0.12)",
-              fontWeight: 900,
-            }}
+            className="btn login__switchBtn"
             disabled={loading}
             onClick={() => {
               if (passMode === "login") {
@@ -448,7 +432,7 @@ export function Login() {
           </button>
         </div>
 
-        <div className="pre" style={{ marginTop: 12 }}>
+        <div className="pre login__preMt12">
           {passMode === "login"
             ? t("login.password.tip", "Пароль — резервный способ. Основной вход — через Telegram.")
             : t("login.password.register_tip", "Регистрация — резервный способ. Основной вход — через Telegram.")}
@@ -479,57 +463,46 @@ export function Login() {
           {headerCard}
 
           {/* Основной вход: Telegram */}
-          <div className="auth__divider" style={{ marginTop: 14 }}>
+          <div className="auth__divider login__dividerMt14">
             <span>{t("login.divider.telegram", "Основной вход")}</span>
           </div>
 
           {mode === "telegram" ? (
-            <div className="auth__actions" style={{ marginTop: 12 }}>
-              <button
-                type="button"
-                className="btn btn--primary"
-                onClick={telegramLoginMiniApp}
-                disabled={loading}
-                style={{ width: "100%" }}
-              >
+            <div className="auth__actions login__dividerMt14">
+              <button type="button" className="btn btn--primary login__btnFull" onClick={telegramLoginMiniApp} disabled={loading}>
                 {loading ? t("login.tg.cta_loading", "Входим…") : t("login.tg.cta", "Войти через Telegram")}
               </button>
             </div>
           ) : (
-            <div ref={widgetWrapRef} style={{ marginTop: 12 }}>
-              <div className="pre" style={{ marginBottom: 10, borderColor: "rgba(255,255,255,0.10)" }}>
-                {t("login.widget.tip", "Нажмите кнопку ниже — это официальный вход через Telegram.")}
-              </div>
+            <div ref={widgetWrapRef} className="login__dividerMt14">
+              <div className="pre login__preMb10">{t("login.widget.tip", "Нажмите кнопку ниже — это официальный вход через Telegram.")}</div>
 
               {!botUsername ? (
-                <div className="pre">
-                  {t("login.widget.env_missing", "Не настроен VITE_TG_BOT_USERNAME — виджет Telegram недоступен.")}
-                </div>
+                <div className="pre">{t("login.widget.env_missing", "Не настроен VITE_TG_BOT_USERNAME — виджет Telegram недоступен.")}</div>
               ) : (
-                <div id="tg-widget-container" style={{ display: "grid", justifyItems: "center", padding: "12px 0" }} />
+                <div id="tg-widget-container" className="login__widgetBox" />
               )}
             </div>
           )}
 
           {/* Резервный вход: password */}
-          <div className="auth__divider" style={{ marginTop: 14 }}>
+          <div className="auth__divider login__dividerMt14">
             <span>{t("login.divider.password", "Вход по логину и паролю")}</span>
           </div>
 
           {passwordDetails}
 
           {/* Другие способы */}
-          <div className="auth__divider" style={{ marginTop: 14 }}>
+          <div className="auth__divider login__dividerMt14">
             <span>{t("login.divider.providers", "Или другой способ")}</span>
           </div>
 
           <div className="auth__providers">
             <button
-              className="btn auth__provider"
+              className="btn auth__provider login__providerBtn"
               onClick={mode === "telegram" ? telegramLoginMiniApp : focusWidget}
               disabled={loading}
               type="button"
-              style={{ width: "100%" }}
             >
               <span className="auth__providerIcon">✈️</span>
               <span className="auth__providerText">
@@ -544,10 +517,9 @@ export function Login() {
             </button>
 
             <button
-              className="btn auth__provider"
+              className="btn auth__provider login__providerBtn"
               disabled={true}
               type="button"
-              style={{ width: "100%" }}
               title={t("login.providers.soon", "Скоро")}
             >
               <span className="auth__providerIcon">🟦</span>
@@ -559,10 +531,9 @@ export function Login() {
             </button>
 
             <button
-              className="btn auth__provider"
+              className="btn auth__provider login__providerBtn"
               disabled={true}
               type="button"
-              style={{ width: "100%" }}
               title={t("login.providers.soon", "Скоро")}
             >
               <span className="auth__providerIcon">🟨</span>
@@ -573,8 +544,6 @@ export function Login() {
               <span className="auth__providerRight">🔒</span>
             </button>
           </div>
-
-          {/* ❌ Блок ошибок внизу убрали — теперь все ошибки уходят в тост */}
         </div>
       </div>
     </div>
