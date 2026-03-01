@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   shpun-app-api:
     image: shpun-app-shpun-app-api
