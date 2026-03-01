@@ -1,6 +1,6 @@
 ﻿// web/src/app/auth/useMe.ts
 import { useEffect, useState } from "react";
-import { apiFetch } from "../../shared/api/client";
+import { apiFetch, isNotAuthenticated } from "../../shared/api/client";
 
 export type MeResponse = {
   ok: true;
@@ -21,38 +21,106 @@ export type MeResponse = {
     status?: string | null;
   } | null;
 
-  // остаётся для других экранов
   balance: { amount: number; currency: string };
   bonus: number;
   discount: number;
 
   shm?: { status?: number };
-  meRaw?: any; // только в dev, бэк сам решает
+  meRaw?: any;
 };
 
-export function useMe() {
-  const [me, setMe] = useState<MeResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+type State = {
+  me: MeResponse | null;
+  loading: boolean;
+  error: Error | null;
+  authRequired: boolean;
+  lastFetchedAt: number;
+};
 
-  async function refetch() {
-    setLoading(true);
-    setError(null);
+let state: State = {
+  me: null,
+  loading: true,
+  error: null,
+  authRequired: false,
+  lastFetchedAt: 0,
+};
+
+type Listener = (s: State) => void;
+const listeners = new Set<Listener>();
+
+function emit() {
+  for (const l of listeners) l(state);
+}
+
+function setState(patch: Partial<State>) {
+  state = { ...state, ...patch };
+  emit();
+}
+
+let inFlight: Promise<void> | null = null;
+
+async function doFetchMe() {
+  // дедуп запросов
+  if (inFlight) return inFlight;
+
+  inFlight = (async () => {
+    setState({ loading: true, error: null });
+
     try {
-      const data = await apiFetch<MeResponse>("/me");
-      setMe(data);
+      const data = await apiFetch<MeResponse>("/me", { method: "GET" });
+      setState({
+        me: data,
+        loading: false,
+        error: null,
+        authRequired: false,
+        lastFetchedAt: Date.now(),
+      });
     } catch (e: any) {
-      setMe(null);
-      setError(e instanceof Error ? e : new Error(String(e?.message || "me_failed")));
+      const authRequired = isNotAuthenticated(e);
+      const err: Error =
+        e instanceof Error ? e : new Error(String(e?.message || "me_failed"));
+
+      setState({
+        me: null,
+        loading: false,
+        error: err,
+        authRequired,
+        lastFetchedAt: Date.now(),
+      });
     } finally {
-      setLoading(false);
+      inFlight = null;
     }
-  }
+  })();
+
+  return inFlight;
+}
+
+export function refetchMe() {
+  return doFetchMe();
+}
+
+export function useMe() {
+  const [snap, setSnap] = useState<State>(state);
 
   useEffect(() => {
-    refetch();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const onChange = (s: State) => setSnap(s);
+    listeners.add(onChange);
+
+    // первый раз — грузим, если ещё не грузили
+    if (state.loading && state.lastFetchedAt === 0) {
+      doFetchMe().catch(() => {});
+    }
+
+    return () => {
+      listeners.delete(onChange);
+    };
   }, []);
 
-  return { me, loading, error, refetch };
+  return {
+    me: snap.me,
+    loading: snap.loading,
+    error: snap.error,
+    authRequired: snap.authRequired,
+    refetch: refetchMe,
+  };
 }

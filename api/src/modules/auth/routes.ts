@@ -72,6 +72,35 @@ function dbg(req: any, label: string, extra?: Record<string, any>) {
   console.log(JSON.stringify({ level: "debug", time: Date.now(), auth: payload }));
 }
 
+/**
+ * Read JSON body safely.
+ * - If Fastify parsed it as object -> return it
+ * - If body is a string (e.g. text/plain with JSON stringified payload) -> try JSON.parse
+ * - Otherwise -> {}
+ */
+function readJsonBody(req: any): any {
+  const b = (req as any)?.body;
+
+  if (!b) return {};
+  if (typeof b === "object") return b;
+
+  if (typeof b === "string") {
+    const s = b.trim();
+    if (!s) return {};
+    const looksJson =
+      (s.startsWith("{") && s.endsWith("}")) || (s.startsWith("[") && s.endsWith("]"));
+    if (!looksJson) return {};
+    try {
+      const j = JSON.parse(s);
+      return j && typeof j === "object" ? j : {};
+    } catch {
+      return {};
+    }
+  }
+
+  return {};
+}
+
 async function shmGetUserIdentity(sessionId: string): Promise<{
   userId: number;
   login: string;
@@ -294,7 +323,7 @@ export async function authRoutes(app: FastifyInstance) {
      1) Telegram Mini App (initData)
   =============================== */
   app.post("/auth/telegram", async (req, reply) => {
-    const body = (req.body ?? {}) as any;
+    const body = readJsonBody(req);
     const initData = String(body.initData ?? "").trim();
 
     if (!initData) {
@@ -540,7 +569,7 @@ export async function authRoutes(app: FastifyInstance) {
      3) Password login / register
   =============================== */
   app.post("/auth/password", async (req, reply) => {
-    const body = (req.body ?? {}) as any;
+    const body = readJsonBody(req);
     const modeRaw = String(body?.mode ?? "login").trim().toLowerCase();
     const mode = modeRaw === "register" ? "register" : "login";
 
@@ -588,7 +617,8 @@ export async function authRoutes(app: FastifyInstance) {
      4) Set password
   =============================== */
   app.post("/auth/password/set", async (req, reply) => {
-    const password = String((req.body as any)?.password ?? "");
+    const body = readJsonBody(req);
+    const password = String(body?.password ?? "");
     const sid = String((req.cookies as any)?.sid ?? "").trim();
     const session = getSessionFromRequest(req) as any;
 

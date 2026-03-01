@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { apiFetch } from "../shared/api/client";
 import type { AuthResponse } from "../shared/api/types";
 import { useI18n } from "../shared/i18n";
+import { toast } from "../shared/ui/toast";
 
 type TgWebApp = {
   initData?: string;
@@ -37,10 +38,15 @@ type Mode = "telegram" | "web";
 type PassMode = "login" | "register";
 
 function getAuthRedirectUrl(): string {
-  // ВАЖНО: не хардкодим домен. Берём текущий origin страницы.
-  // Тогда будет работать и на app.shpyn.online, и на app.sdnonline.online, и на dev-доменах.
   const origin = window.location.origin;
   return `${origin}/api/auth/telegram_widget_redirect`;
+}
+
+function looksLikeCode(s: string) {
+  const v = String(s || "").trim();
+  if (!v) return false;
+  // "login_and_password_required", "not_authenticated", "shm_*"
+  return /^[a-z0-9_:.|-]+$/i.test(v) && !/\s/.test(v);
 }
 
 function mapRedirectError(e: string, t: (k: string, fb?: string) => string): string {
@@ -61,19 +67,58 @@ function mapRedirectError(e: string, t: (k: string, fb?: string) => string): str
   }
 }
 
+function mapAuthError(raw: string, t: (k: string, fb?: string) => string): string {
+  const code = String(raw || "").trim();
+  if (!code) return t("login.err.unknown", "Не удалось выполнить вход. Попробуйте ещё раз.");
+
+  // если это уже “человеческий” текст — возвращаем как есть
+  if (!looksLikeCode(code)) return code;
+
+  switch (code) {
+    // password flow
+    case "login_and_password_required":
+      return t("login.err.login_and_password_required", "Введите логин и пароль.");
+    case "login_required":
+      return t("login.err.login_required", "Введите логин.");
+    case "password_required":
+      return t("login.err.password_required", "Введите пароль.");
+    case "invalid_credentials":
+      return t("login.err.invalid_credentials", "Неверный логин или пароль.");
+    case "password_too_short":
+    case "password_too_short_or_weak":
+      return t("login.err.password_too_short", "Пароль слишком короткий (минимум 8 символов).");
+    case "login_taken":
+    case "user_exists":
+      return t("login.err.login_taken", "Такой логин уже занят.");
+
+    // auth/session
+    case "not_authenticated":
+      return t("login.err.not_authenticated", "Нужна авторизация. Войдите заново.");
+    case "no_shm_session":
+      return t("login.err.no_shm_session", "Сессия не была создана. Попробуйте ещё раз.");
+
+    // telegram
+    case "init_data_required":
+      return t("login.err.init_data_required", "Откройте приложение внутри Telegram, чтобы войти.");
+    case "shm_telegram_auth_failed":
+    case "shm_telegram_widget_auth_failed":
+      return t("login.err.tg_failed", "Telegram-вход не сработал. Попробуйте ещё раз.");
+
+    default:
+      return t("login.err.generic", "Не удалось выполнить вход. Попробуйте ещё раз.");
+  }
+}
+
 export function Login() {
   const { t } = useI18n();
   const nav = useNavigate();
   const loc: any = useLocation();
 
-  // Telegram-mode только когда реально есть initData
   const initDataNow = getTelegramInitData();
   const mode: Mode = initDataNow ? "telegram" : "web";
 
   const [tgInitData, setTgInitData] = useState<string | null>(initDataNow);
-
   const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
 
   // Password fallback + registration
   const [passMode, setPassMode] = useState<PassMode>("login");
@@ -83,6 +128,18 @@ export function Login() {
 
   const autoLoginStarted = useRef(false);
   const widgetWrapRef = useRef<HTMLDivElement | null>(null);
+
+  // антиспам тостов одинаковыми сообщениями
+  const lastToastRef = useRef<{ msg: string; at: number }>({ msg: "", at: 0 });
+  function toastError(raw: string) {
+    const msg = mapAuthError(raw, t);
+    const now = Date.now();
+
+    if (lastToastRef.current.msg === msg && now - lastToastRef.current.at < 1200) return;
+    lastToastRef.current = { msg, at: now };
+
+    toast.error(t("login.toast.error_title", "Ошибка"), { description: msg });
+  }
 
   const canPasswordLogin = login.trim().length > 0 && password.length > 0;
   const passwordsMatch = password2.length === 0 ? true : password === password2;
@@ -96,9 +153,10 @@ export function Login() {
 
   function goAfterAuth(r?: AuthResponse) {
     const ok = !!r && (r as any).ok === true;
+
     if (!ok) {
-      const msg = (r as any)?.error;
-      if (msg) setErr(String(msg));
+      const msg = String((r as any)?.error ?? "").trim();
+      toastError(msg || "login_failed");
       return;
     }
 
@@ -119,36 +177,42 @@ export function Login() {
   }
 
   async function passwordLogin() {
-    if (!canPasswordLogin) return;
+    if (!canPasswordLogin) {
+      toastError("login_and_password_required");
+      return;
+    }
 
     setLoading(true);
-    setErr(null);
     try {
       const r = await apiFetch<AuthResponse>("/auth/password", {
         method: "POST",
-        body: JSON.stringify({ login: login.trim(), password, mode: "login" }),
+        body: { login: login.trim(), password, mode: "login" },
       });
       goAfterAuth(r);
     } catch (e: any) {
-      setErr(e?.message || t("error.password_login_failed", "Не удалось войти по паролю"));
+      toastError(String(e?.message || t("error.password_login_failed", "Не удалось войти по паролю")));
     } finally {
       setLoading(false);
     }
   }
 
   async function passwordRegister() {
-    if (!canPasswordRegister) return;
+    if (!canPasswordRegister) {
+      // подсветка/валидация остаётся на форме, но тост тоже полезен
+      if (!login.trim() || !password) toastError("login_and_password_required");
+      else if (!passwordsMatch) toastError(t("login.password.mismatch", "Пароли не совпадают."));
+      return;
+    }
 
     setLoading(true);
-    setErr(null);
     try {
       const r = await apiFetch<AuthResponse>("/auth/password", {
         method: "POST",
-        body: JSON.stringify({ login: login.trim(), password, mode: "register" }),
+        body: { login: login.trim(), password, mode: "register" },
       });
       goAfterAuth(r);
     } catch (e: any) {
-      setErr(e?.message || t("error.password_login_failed", "Не удалось выполнить регистрацию"));
+      toastError(String(e?.message || t("error.password_login_failed", "Не удалось выполнить регистрацию")));
     } finally {
       setLoading(false);
     }
@@ -157,20 +221,19 @@ export function Login() {
   async function telegramLoginMiniApp() {
     const initData = tgInitData || getTelegramInitData();
     if (!initData) {
-      setErr(t("error.open_in_tg", "Откройте это приложение внутри Telegram, чтобы войти."));
+      toastError(t("error.open_in_tg", "Откройте это приложение внутри Telegram, чтобы войти."));
       return;
     }
 
     setLoading(true);
-    setErr(null);
     try {
       const r = await apiFetch<AuthResponse>("/auth/telegram", {
         method: "POST",
-        body: JSON.stringify({ initData }),
+        body: { initData },
       });
       goAfterAuth(r);
     } catch (e: any) {
-      setErr(e?.message || t("error.telegram_login_failed", "Не удалось войти через Telegram"));
+      toastError(String(e?.message || t("error.telegram_login_failed", "Не удалось войти через Telegram")));
     } finally {
       setLoading(false);
     }
@@ -186,9 +249,10 @@ export function Login() {
     const e = sp.get("e") ?? "";
     if (!e) return;
 
-    setErr(mapRedirectError(e, t));
+    const msg = mapRedirectError(e, t);
+    if (msg) toastError(msg);
 
-    // можно почистить URL, чтобы не висело ?e=... (опционально)
+    // можно почистить URL, чтобы не висело ?e=...
     // nav("/login", { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loc?.search]);
@@ -231,7 +295,6 @@ export function Login() {
     const container = document.getElementById(containerId);
     if (!container) return;
 
-    // каждый раз аккуратно очищаем контейнер
     container.innerHTML = "";
 
     if (!botUsername) return;
@@ -243,14 +306,11 @@ export function Login() {
     script.setAttribute("data-size", "large");
     script.setAttribute("data-userpic", "false");
     script.setAttribute("data-request-access", "write");
-
-    // ✅ Канон: redirect-flow и без хардкода домена
     script.setAttribute("data-auth-url", getAuthRedirectUrl());
 
     container.appendChild(script);
 
     return () => {
-      // cleanup для StrictMode/HMR
       container.innerHTML = "";
     };
   }, [mode, botUsername]);
@@ -264,45 +324,23 @@ export function Login() {
         border: "1px solid rgba(255,255,255,0.10)",
       }}
     >
-      <div style={{ fontWeight: 900, marginBottom: 8 }}>
-        {t("login.what.title", "Что это такое")}
-      </div>
+      <div style={{ fontWeight: 900, marginBottom: 8 }}>{t("login.what.title", "Что это такое")}</div>
 
       <div style={{ display: "grid", gap: 6, opacity: 0.92 }}>
         <div>
           ✅{" "}
-          {t(
-            "login.what.1",
-            "Shpun App — кабинет Shpun SDN System: баланс, услуги и управление подпиской."
-          )}
+          {t("login.what.1", "Shpun App — кабинет Shpun SDN System: баланс, услуги и управление подпиской.")}
         </div>
-        <div>
-          ⚡{" "}
-          {t(
-            "login.what.2",
-            "Самый быстрый вход — через Telegram: без паролей и лишних действий."
-          )}
-        </div>
-        <div>
-          🔒{" "}
-          {t("login.what.3", "Пароль — резервный способ входа (если нужно зайти из браузера).")}
-        </div>
-        <div>
-          🧩{" "}
-          {t(
-            "login.what.4",
-            "Google/Yandex появятся позже — сейчас всё уже работает через Telegram + пароль."
-          )}
-        </div>
+        <div>⚡ {t("login.what.2", "Самый быстрый вход — через Telegram: без паролей и лишних действий.")}</div>
+        <div>🔒 {t("login.what.3", "Пароль — резервный способ входа (если нужно зайти из браузера).")}</div>
+        <div>🧩 {t("login.what.4", "Google/Yandex появятся позже — сейчас всё уже работает через Telegram + пароль.")}</div>
       </div>
     </div>
   );
 
   const passwordDetails = (
     <details className="auth__details">
-      <summary className="auth__detailsSummary">
-        {t("login.password.summary", "Войти по логину и паролю")}
-      </summary>
+      <summary className="auth__detailsSummary">{t("login.password.summary", "Войти по логину и паролю")}</summary>
 
       <form
         className="auth__form"
@@ -384,13 +422,7 @@ export function Login() {
           </button>
         </div>
 
-        <div
-          style={{
-            marginTop: 12,
-            paddingTop: 12,
-            borderTop: "1px solid rgba(255,255,255,0.10)",
-          }}
-        >
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.10)" }}>
           <button
             type="button"
             className="btn"
@@ -402,7 +434,6 @@ export function Login() {
             }}
             disabled={loading}
             onClick={() => {
-              setErr(null);
               if (passMode === "login") {
                 setPassMode("register");
               } else {
@@ -434,13 +465,9 @@ export function Login() {
             <div>
               <h1 className="h1">{t("login.title", "Вход в Shpun App")}</h1>
               {mode === "telegram" ? (
-                <p className="p">
-                  {t("login.desc.tg", "Мы распознали Telegram Mini App — можно войти в один тап.")}
-                </p>
+                <p className="p">{t("login.desc.tg", "Мы распознали Telegram Mini App — можно войти в один тап.")}</p>
               ) : (
-                <p className="p">
-                  {t("login.desc.web", "Войдите через Telegram-виджет или используйте логин и пароль.")}
-                </p>
+                <p className="p">{t("login.desc.web", "Войдите через Telegram-виджет или используйте логин и пароль.")}</p>
               )}
             </div>
 
@@ -547,12 +574,7 @@ export function Login() {
             </button>
           </div>
 
-          {err && (
-            <div className="auth__error" style={{ marginTop: 12 }}>
-              <div className="auth__errorTitle">{t("setpwd.err.title", "Ошибка")}</div>
-              <div className="auth__errorText">{err}</div>
-            </div>
-          )}
+          {/* ❌ Блок ошибок внизу убрали — теперь все ошибки уходят в тост */}
         </div>
       </div>
     </div>
