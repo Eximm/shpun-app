@@ -1,5 +1,8 @@
 services:
   shpun-app-api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
     image: shpun-app-shpun-app-api
     container_name: shpun-app-api
     restart: unless-stopped
@@ -20,6 +23,9 @@ services:
       - shm_default
 
   shpun-app-web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
     image: shpun-app-shpun-app-web
     container_name: shpun-app-web
     restart: unless-stopped
