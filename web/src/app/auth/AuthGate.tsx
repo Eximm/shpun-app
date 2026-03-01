@@ -51,10 +51,22 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
      ============================================================ */
   if (loading) {
     return (
-      <div className="app-loader">
-        <div className="app-loader__dot" />
+    <div className="app-loader">
+      <div className="app-loader__card">
+        <div className="app-loader__shine" />
+        <div className="app-loader__brandRow">
+          <div className="app-loader__mark" />
+          <div className="app-loader__title">Shpun App</div>
+        </div>
         <div className="app-loader__text">Проверяем авторизацию…</div>
-      </div>
+
+        <div className="app-loader__skeleton">
+          <div className="skeleton p" style={{ width: "72%" }} />
+          <div className="skeleton p" style={{ width: "54%" }} />
+          <div className="skeleton p" style={{ width: "64%" }} />
+        </div>
+  </div>
+</div>
     );
   }
 
