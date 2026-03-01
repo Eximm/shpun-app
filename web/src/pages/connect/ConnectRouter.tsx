@@ -139,7 +139,6 @@ export default function ConnectRouter({ usi, onDone }: Props) {
   }
 
   async function bind() {
-    const pretty = toPretty9(code)
     const clean = toClean8(code)
 
     if (!clean) return
@@ -162,7 +161,7 @@ export default function ConnectRouter({ usi, onDone }: Props) {
         `/services/${encodeURIComponent(String(usi))}/router/bind`,
         {
           method: 'POST',
-          body: { code: pretty },
+          body: { code: clean },
         } as any
       )) as any
 
