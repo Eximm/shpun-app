@@ -7,15 +7,6 @@ function getTelegramWebApp(): any | null {
   return (window as any)?.Telegram?.WebApp ?? null;
 }
 
-function base64UrlEncode(input: string): string {
-  // UTF-8 → base64url (без =)
-  const bytes = new TextEncoder().encode(input);
-  let bin = "";
-  for (const b of bytes) bin += String.fromCharCode(b);
-  const b64 = btoa(bin);
-  return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
 function fmtDate(iso: string) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -59,6 +50,20 @@ type RefListResp = {
   };
 };
 
+type RefLinkResp = {
+  ok: number | boolean;
+  data?: {
+    referrals?: {
+      enabled?: number;
+      kind?: string;
+      partner_id?: number;
+      income_percent?: number;
+      telegram_link?: string;
+      web_link?: string;
+    };
+  };
+};
+
 function toNum(v: any, def = 0) {
   const n = Number(v);
   return Number.isFinite(n) ? n : def;
@@ -72,24 +77,23 @@ function toStr(v: any, def = "") {
 export function Referrals() {
   const { me, loading, error } = useMe();
 
-  const botUsername =
-    String((import.meta as any)?.env?.VITE_TG_BOT_USERNAME ?? "").trim() ||
-    "shpunvpn_bot";
+  // links (server-driven)
+  const [refLoading, setRefLoading] = useState(false);
+  const [refError, setRefError] = useState<string | null>(null);
+  const [telegramLink, setTelegramLink] = useState<string>("");
+  const [webLink, setWebLink] = useState<string>("");
+  const [partnerId, setPartnerId] = useState<number>(0);
 
-  const userId =
-    // максимально “устойчиво” к структуре me
-    toNum((me as any)?.profile?.userId ?? (me as any)?.userId ?? (me as any)?.id ?? 0, 0);
-
-  const startPayload = useMemo(() => {
-    if (!userId) return "";
-    // как в боте: toBase64Url(toQueryString(partner_id=user.id))
-    return base64UrlEncode(`partner_id=${userId}`);
-  }, [userId]);
+  function isTelegramMiniApp() {
+    return !!getTelegramWebApp();
+  }
 
   const referralUrl = useMemo(() => {
-    if (!botUsername || !startPayload) return "";
-    return `https://t.me/${botUsername}?start=${startPayload}`;
-  }, [botUsername, startPayload]);
+    const tg = telegramLink.trim();
+    const web = webLink.trim();
+    if (isTelegramMiniApp()) return tg || web;
+    return web || tg;
+  }, [telegramLink, webLink]);
 
   const shareUrl = useMemo(() => {
     if (!referralUrl) return "";
@@ -150,10 +154,30 @@ export function Referrals() {
     }
   }
 
+  async function loadLink() {
+    setRefLoading(true);
+    setRefError(null);
+    try {
+      const r = (await (await fetch(`/api/referrals/link`, { method: "GET" })).json()) as RefLinkResp;
+      const refs = (r as any)?.data?.referrals ?? {};
+      setTelegramLink(toStr(refs.telegram_link, ""));
+      setWebLink(toStr(refs.web_link, ""));
+      setPartnerId(toNum(refs.partner_id, 0));
+    } catch (e: any) {
+      setRefError(e?.message || "Failed to load link");
+      setTelegramLink("");
+      setWebLink("");
+      setPartnerId(0);
+    } finally {
+      setRefLoading(false);
+    }
+  }
+
   useEffect(() => {
     if ((me as any)?.ok) {
       loadStatus();
       loadList(0);
+      loadLink();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [(me as any)?.ok]);
@@ -251,7 +275,7 @@ export function Referrals() {
             </div>
 
             <div className="pre" style={{ marginTop: 0, userSelect: "text" }}>
-              {referralUrl || "Ссылка недоступна (bot username или userId не определены)"}
+              {referralUrl || "Ссылка недоступна (не удалось получить из биллинга)"}
             </div>
 
             <div className="actions actions--2" style={{ marginTop: 10 }}>
@@ -263,9 +287,24 @@ export function Referrals() {
               </button>
             </div>
 
+            {refLoading ? (
+              <div style={{ marginTop: 10, fontSize: 12, opacity: 0.72 }}>Генерируем ссылку…</div>
+            ) : refError ? (
+              <div style={{ marginTop: 10, fontSize: 12, opacity: 0.72 }}>
+                Не удалось получить ссылку. Обнови страницу.
+              </div>
+            ) : null}
+
             {stError ? (
               <div style={{ marginTop: 10, fontSize: 12, opacity: 0.72 }}>
                 Не удалось загрузить статус. Обнови страницу или нажми “⟳” на главной.
+              </div>
+            ) : null}
+
+            {/* optional: keep for quick debugging, can remove later */}
+            {partnerId ? (
+              <div style={{ marginTop: 8, fontSize: 12, opacity: 0.5 }}>
+                Partner ID: {partnerId}
               </div>
             ) : null}
           </div>
@@ -290,11 +329,7 @@ export function Referrals() {
               <div>
                 <div className="h1">📃 Список приглашённых</div>
                 <div className="p" style={{ marginTop: 6 }}>
-                  {listLoading
-                    ? "Загрузка…"
-                    : total
-                    ? `Всего: ${total}`
-                    : "Пока никого нет — поделись ссылкой 🙂"}
+                  {listLoading ? "Загрузка…" : total ? `Всего: ${total}` : "Пока никого нет — поделись ссылкой 🙂"}
                 </div>
               </div>
             </div>
@@ -330,9 +365,7 @@ export function Referrals() {
                             </span>
                           ) : null}
                         </div>
-                        <div className="list__sub">
-                          {created ? `Присоединился: ${fmtDate(created)}` : "—"}
-                        </div>
+                        <div className="list__sub">{created ? `Присоединился: ${fmtDate(created)}` : "—"}</div>
                       </div>
 
                       {/* ✅ ID intentionally not shown */}
@@ -351,18 +384,10 @@ export function Referrals() {
 
             {/* Pagination */}
             <div className="actions actions--2" style={{ marginTop: 12 }}>
-              <button
-                className="btn"
-                disabled={!hasPrev || listLoading}
-                onClick={() => loadList(Math.max(0, offset - limit))}
-              >
+              <button className="btn" disabled={!hasPrev || listLoading} onClick={() => loadList(Math.max(0, offset - limit))}>
                 ⬅️ Назад
               </button>
-              <button
-                className="btn"
-                disabled={!hasNext || listLoading}
-                onClick={() => loadList(offset + limit)}
-              >
+              <button className="btn" disabled={!hasNext || listLoading} onClick={() => loadList(offset + limit)}>
                 Ещё ➡️
               </button>
             </div>

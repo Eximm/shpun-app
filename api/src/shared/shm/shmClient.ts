@@ -369,7 +369,11 @@ export async function shmStorageManageGetText(sessionId: string, name: string) {
 // TEMPLATE: ShpunApp
 // =====================
 
-export async function shmShpunAppTemplate<T = any>(shmSessionId: string, action: string, extraParams?: Record<string, any>) {
+export async function shmShpunAppTemplate<T = any>(
+  shmSessionId: string,
+  action: string,
+  extraParams?: Record<string, any>
+) {
   const flat: Record<string, any> = {
     session_id: shmSessionId,
     action,
@@ -391,11 +395,18 @@ export async function shmShpunAppReferralsStatus(shmSessionId: string) {
   return await shmShpunAppTemplate<any>(shmSessionId, 'referrals.status')
 }
 
-export async function shmShpunAppReferralsList(shmSessionId: string, opts?: { limit?: number; offset?: number }) {
+export async function shmShpunAppReferralsList(
+  shmSessionId: string,
+  opts?: { limit?: number; offset?: number }
+) {
   return await shmShpunAppTemplate<any>(shmSessionId, 'referrals.list', {
     limit: opts?.limit ?? 7,
     offset: opts?.offset ?? 0,
   })
+}
+
+export async function shmShpunAppReferralsLink(shmSessionId: string) {
+  return await shmShpunAppTemplate<any>(shmSessionId, 'referrals.link')
 }
 
 /**
