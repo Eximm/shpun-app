@@ -82,7 +82,7 @@ export function Referrals() {
   const [refError, setRefError] = useState<string | null>(null);
   const [telegramLink, setTelegramLink] = useState<string>("");
   const [webLink, setWebLink] = useState<string>("");
-  const [partnerId, setPartnerId] = useState<number>(0);
+  const [, setPartnerId] = useState<number>(0); // partner id is fetched but not shown
 
   function isTelegramMiniApp() {
     return !!getTelegramWebApp();
@@ -300,13 +300,6 @@ export function Referrals() {
                 Не удалось загрузить статус. Обнови страницу или нажми “⟳” на главной.
               </div>
             ) : null}
-
-            {/* optional: keep for quick debugging, can remove later */}
-            {partnerId ? (
-              <div style={{ marginTop: 8, fontSize: 12, opacity: 0.5 }}>
-                Partner ID: {partnerId}
-              </div>
-            ) : null}
           </div>
 
           {/* Stats row */}
@@ -384,7 +377,11 @@ export function Referrals() {
 
             {/* Pagination */}
             <div className="actions actions--2" style={{ marginTop: 12 }}>
-              <button className="btn" disabled={!hasPrev || listLoading} onClick={() => loadList(Math.max(0, offset - limit))}>
+              <button
+                className="btn"
+                disabled={!hasPrev || listLoading}
+                onClick={() => loadList(Math.max(0, offset - limit))}
+              >
                 ⬅️ Назад
               </button>
               <button className="btn" disabled={!hasNext || listLoading} onClick={() => loadList(offset + limit)}>
