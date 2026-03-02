@@ -37,9 +37,33 @@ function getTelegramBotUsername(): string {
 type Mode = "telegram" | "web";
 type PassMode = "login" | "register";
 
-function getAuthRedirectUrl(): string {
+const PARTNER_LS_KEY = "partner_id_pending";
+
+function readPendingPartnerId(): number {
+  try {
+    const v = String(localStorage.getItem(PARTNER_LS_KEY) ?? "").trim();
+    if (!v) return 0;
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? Math.trunc(n) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function clearPendingPartnerId() {
+  try {
+    localStorage.removeItem(PARTNER_LS_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+function getAuthRedirectUrl(partnerId?: number): string {
   const origin = window.location.origin;
-  return `${origin}/api/auth/telegram_widget_redirect`;
+  const base = `${origin}/api/auth/telegram_widget_redirect`;
+  const pid = Number(partnerId ?? 0);
+  if (!Number.isFinite(pid) || pid <= 0) return base;
+  return `${base}?partner_id=${encodeURIComponent(String(Math.trunc(pid)))}`;
 }
 
 function looksLikeCode(s: string) {
@@ -124,6 +148,9 @@ export function Login() {
   const [password, setPassword] = useState("");
   const [password2, setPassword2] = useState("");
 
+  // partner_id captured earlier in AuthGate (or may be missing)
+  const partnerId = useMemo(() => readPendingPartnerId(), []);
+
   const autoLoginStarted = useRef(false);
   const widgetWrapRef = useRef<HTMLDivElement | null>(null);
 
@@ -157,12 +184,13 @@ export function Login() {
       return;
     }
 
+    // ✅ при успешном входе — считаем, что реф. линк “использован”
+    clearPendingPartnerId();
+
     // ✅ SUCCESS TOAST — только при реальном успешном логине
     toast.success(t("login.toast.success_title", "Вход выполнен"), {
       description: t("login.toast.success_desc", "Добро пожаловать в Shpun App."),
       durationMs: 2800,
-      // при желании можно сделать success без звука:
-      // sound: false,
     });
 
     const nextRaw = String((r as any).next ?? "home").trim();
@@ -191,7 +219,12 @@ export function Login() {
     try {
       const r = await apiFetch<AuthResponse>("/auth/password", {
         method: "POST",
-        body: { login: login.trim(), password, mode: "login" },
+        body: {
+          login: login.trim(),
+          password,
+          mode: "login",
+          ...(partnerId ? { partner_id: partnerId } : {}),
+        },
       });
       goAfterAuth(r);
     } catch (e: any) {
@@ -212,7 +245,12 @@ export function Login() {
     try {
       const r = await apiFetch<AuthResponse>("/auth/password", {
         method: "POST",
-        body: { login: login.trim(), password, mode: "register" },
+        body: {
+          login: login.trim(),
+          password,
+          mode: "register",
+          ...(partnerId ? { partner_id: partnerId } : {}),
+        },
       });
       goAfterAuth(r);
     } catch (e: any) {
@@ -233,7 +271,10 @@ export function Login() {
     try {
       const r = await apiFetch<AuthResponse>("/auth/telegram", {
         method: "POST",
-        body: { initData },
+        body: {
+          initData,
+          ...(partnerId ? { partner_id: partnerId } : {}),
+        },
       });
       goAfterAuth(r);
     } catch (e: any) {
@@ -306,14 +347,14 @@ export function Login() {
     script.setAttribute("data-size", "large");
     script.setAttribute("data-userpic", "false");
     script.setAttribute("data-request-access", "write");
-    script.setAttribute("data-auth-url", getAuthRedirectUrl());
+    script.setAttribute("data-auth-url", getAuthRedirectUrl(partnerId));
 
     container.appendChild(script);
 
     return () => {
       container.innerHTML = "";
     };
-  }, [mode, botUsername]);
+  }, [mode, botUsername, partnerId]);
 
   const headerCard = (
     <div className="pre login__headerCard">
@@ -469,16 +510,25 @@ export function Login() {
 
           {mode === "telegram" ? (
             <div className="auth__actions login__dividerMt14">
-              <button type="button" className="btn btn--primary login__btnFull" onClick={telegramLoginMiniApp} disabled={loading}>
+              <button
+                type="button"
+                className="btn btn--primary login__btnFull"
+                onClick={telegramLoginMiniApp}
+                disabled={loading}
+              >
                 {loading ? t("login.tg.cta_loading", "Входим…") : t("login.tg.cta", "Войти через Telegram")}
               </button>
             </div>
           ) : (
             <div ref={widgetWrapRef} className="login__dividerMt14">
-              <div className="pre login__preMb10">{t("login.widget.tip", "Нажмите кнопку ниже — это официальный вход через Telegram.")}</div>
+              <div className="pre login__preMb10">
+                {t("login.widget.tip", "Нажмите кнопку ниже — это официальный вход через Telegram.")}
+              </div>
 
               {!botUsername ? (
-                <div className="pre">{t("login.widget.env_missing", "Не настроен VITE_TG_BOT_USERNAME — виджет Telegram недоступен.")}</div>
+                <div className="pre">
+                  {t("login.widget.env_missing", "Не настроен VITE_TG_BOT_USERNAME — виджет Telegram недоступен.")}
+                </div>
               ) : (
                 <div id="tg-widget-container" className="login__widgetBox" />
               )}
