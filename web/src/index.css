@@ -1,5 +1,22 @@
 /* web/src/index.css */
 
+/* ============================================================
+   INDEX.CSS — structure
+   1) Design tokens
+   2) Reset / base
+   3) Safe-area helpers
+   4) App layout (topbar/container/main)
+   5) UI atoms (card/typography/inputs/buttons/badges/lists/grids)
+   6) Bottom navigation
+   7) Auth / Login
+   8) Home
+   9) Services / ServicesOrder / ConnectRouter / Modals
+   10) Payments
+   11) Profile
+   12) Animations & loaders
+   ============================================================ */
+
+
 /* 1) Design tokens */
 :root {
   color-scheme: dark;
@@ -1349,31 +1366,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
    ============================================================ */
 
 /* Services header layout (meta + actions) */
-.services-head__meta--wide {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
 
-/* На широких экранах бейджи не прижимаем влево: распределяем по ширине */
-@media (min-width: 768px) {
-  .services-head__meta--wide {
-    justify-content: space-between;
-  }
-}
-
-/* CTA/Refresh под бейджами */
-.services-head__actions {
-  margin-top: 12px;
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
-}
-
-.services-head__cta,
-.services-head__refresh {
-  width: 100%;
-}
 
 .services-head {
   display: flex;
@@ -1479,8 +1472,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
    ============================================================ */
 
 /* ServicesOrder: buttons full width when needed */
-
-   .so__btnFull { width: 100%; }
+.so__btnFull { width: 100%; }
 .so__mt6 { margin-top: 6px; }
 .so__mt8 { margin-top: 8px; }
 .so__mt10 { margin-top: 10px; }
@@ -1763,6 +1755,11 @@ button, a { -webkit-tap-highlight-color: transparent; }
   width: 100%;
 }
 
+.services-head__refresh {
+  width: 100%;
+}
+
+
 /* Collapsible category header */
 .services-cat__head--toggle {
   width: 100%;
@@ -1850,45 +1847,6 @@ button, a { -webkit-tap-highlight-color: transparent; }
   border-color: rgba(99,102,241,.55);
   box-shadow: inset 3px 0 0 rgba(99,102,241,.55);
 }
-/* если нет в проекте */
-.so__btnFull{ width: 100%; }
-
-/* мягкая “подкрашенная” кнопка */
-.btn--soft{
-  border: 1px solid rgba(99,102,241,.35);
-  background: rgba(99,102,241,.12);
-}
-
-/* строка “Устройство:” */
-.cawg__rowTop{
-  margin-top: 12px;
-  gap: 10px;
-  align-items: center;
-  justify-content: space-between;
-}
-.cawg__label{
-  margin: 0;
-  opacity: .85;
-}
-
-/* кнопка выбора устройства */
-.cawg__deviceBtn{
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(148,163,184,.35);
-  background: rgba(255,255,255,.04);
-  color: inherit;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* подсветка выбранного в списке */
-.cawg__pickItem.is-active{
-  border-color: rgba(99,102,241,.55);
-  box-shadow: inset 3px 0 0 rgba(99,102,241,.55);
-}
-
 /* Payments page helpers */
 .payments__mt6 { margin-top: 6px; }
 .payments__mt8 { margin-top: 8px; }
@@ -2010,79 +1968,6 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .list__item.is-clickable { cursor: pointer; }
 .list__item.is-clickable:hover { filter: brightness(1.04); }
 .list__item.is-clickable:active { filter: brightness(0.98); }
-/* Profile: Settings */
-.profile-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 12px;
-}
-
-.profile-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-
-  padding: 12px;
-  border-radius: 16px;
-  background: rgba(255,255,255,0.035);
-  border: 1px solid rgba(255,255,255,0.08);
-  transition: filter 140ms ease, border-color 140ms ease, transform 140ms ease;
-}
-
-.profile-row:hover {
-  filter: brightness(1.04);
-  border-color: rgba(255,255,255,0.12);
-}
-
-.profile-row:active {
-  transform: translateY(1px);
-}
-
-.profile-row__main {
-  min-width: 0;
-}
-
-.profile-row__label {
-  font-size: 12px;
-  color: rgba(255,255,255,0.70);
-  font-weight: 850;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.profile-row__value {
-  margin-top: 6px;
-  font-size: 14px;
-  font-weight: 900;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.profile-row__hint {
-  margin-top: 6px;
-  font-size: 12px;
-  color: rgba(255,255,255,0.62);
-  line-height: 1.35;
-}
-
-.profile-row__right{
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: 120px; /* одна ширина для badge и для кнопки */
-  gap: 10px;
-  align-items: center;
-  justify-content: end;
-}
-
-.profile-row__right > *{
-  width: 100%;
-  justify-content: center;
-}
-
 /* Segmented switch (fill cell, no empty sides) */
 .seg{
   display: flex;                 
@@ -2108,11 +1993,18 @@ button, a { -webkit-tap-highlight-color: transparent; }
   justify-content: center;
 }
 /* ============================================================
-   Profile: Settings — mobile visual cleanup
+   Profile: Settings
    ============================================================ */
 
-/* Row layout: left text, right controls, hint below */
-.profile-row{
+.profile-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+/* Row layout: main text + right controls, hint below */
+.profile-row {
   display: grid;
   grid-template-columns: 1fr auto;
   grid-template-areas:
@@ -2120,51 +2012,53 @@ button, a { -webkit-tap-highlight-color: transparent; }
     "hint hint";
   gap: 8px 12px;
   align-items: start;
+
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.035);
+  border: 1px solid rgba(255,255,255,0.08);
+  transition: filter 140ms ease, border-color 140ms ease, transform 140ms ease;
 }
 
-/* Main (title + value) */
-.profile-row__main{
+.profile-row:hover {
+  filter: brightness(1.04);
+  border-color: rgba(255,255,255,0.12);
+}
+
+.profile-row:active {
+  transform: translateY(1px);
+}
+
+.profile-row__main {
   grid-area: main;
-  min-width: 0; /* prevent overflow */
+  min-width: 0;
 }
 
-/* Right controls (buttons / toggles / badges) */
-.profile-row__right{
-  grid-area: right;
+.profile-row__label {
+  font-size: 12px;
+  color: rgba(255,255,255,0.70);
+  font-weight: 850;
   display: flex;
-  gap: 10px;
   align-items: center;
-  justify-content: flex-end;
-
-  /* override previous fixed column sizing */
-  grid-auto-flow: initial;
-  grid-auto-columns: initial;
+  gap: 8px;
 }
 
-/* Do not force full width for children */
-.profile-row__right > *{
-  width: auto;
+.profile-row__value {
+  margin-top: 6px;
+  font-size: 14px;
+  font-weight: 900;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* Segmented control sizing */
-.profile-row__right .seg{
-  width: auto;
-  min-width: 128px;
-}
-
-/* Buttons and badges in right column */
-.profile-row__right .btn,
-.profile-row__right .badge{
-  min-width: 120px;
-}
-
-/* Hint text (secondary description) */
-.profile-row__hint{
+.profile-row__hint {
   grid-area: hint;
   margin-top: 0;
 
   font-size: 12px;
-  line-height: 1.3;
+  color: rgba(255,255,255,0.62);
+  line-height: 1.35;
   opacity: 0.78;
 
   overflow: hidden;
@@ -2181,12 +2075,28 @@ button, a { -webkit-tap-highlight-color: transparent; }
   max-height: calc(2 * 1.3em);
 }
 
-/* =========================
-   Mobile adjustments
-   ========================= */
-@media (max-width: 520px){
+.profile-row__right {
+  grid-area: right;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+}
 
-  .profile-row{
+/* Right column controls */
+.profile-row__right .seg {
+  width: auto;
+  min-width: 128px;
+}
+
+.profile-row__right .btn,
+.profile-row__right .badge {
+  min-width: 120px;
+}
+
+/* Mobile: stack right controls below main */
+@media (max-width: 520px) {
+  .profile-row {
     grid-template-columns: 1fr;
     grid-template-areas:
       "main"
@@ -2194,26 +2104,28 @@ button, a { -webkit-tap-highlight-color: transparent; }
       "hint";
   }
 
-  .profile-row__right{
+  .profile-row__right {
     justify-content: flex-start;
     flex-wrap: wrap;
   }
 
   .profile-row__right .btn,
   .profile-row__right .badge,
-  .profile-row__right .seg{
+  .profile-row__right .seg {
     width: 100%;
     min-width: 0;
   }
 
-  .profile-row__value{
+  .profile-row__value {
     font-size: 13px;
   }
 
-  .profile-row__label{
+  .profile-row__label {
     font-size: 12px;
   }
 }
+
+
 /* Page enter animation (soft) */
 .page {
   animation: pageIn 220ms ease-out both;
