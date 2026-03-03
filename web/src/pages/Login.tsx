@@ -5,6 +5,7 @@ import { refetchMe } from "../app/auth/useMe";
 import type { AuthResponse } from "../shared/api/types";
 import { useI18n } from "../shared/i18n";
 import { toast } from "../shared/ui/toast";
+import { normalizeError } from "../shared/api/errorText";
 
 type TgWebApp = {
   initData?: string;
@@ -107,6 +108,7 @@ function mapAuthError(raw: string, t: (k: string, fb?: string) => string): strin
   const code = String(raw || "").trim();
   if (!code) return t("login.err.unknown", "Не удалось выполнить вход. Попробуйте ещё раз.");
 
+  // If it's a human sentence, keep it
   if (!looksLikeCode(code)) return code;
 
   switch (code) {
@@ -142,6 +144,42 @@ function mapAuthError(raw: string, t: (k: string, fb?: string) => string): strin
     default:
       return t("login.err.generic", "Не удалось выполнить вход. Попробуйте ещё раз.");
   }
+}
+
+/**
+ * Turn unknown error into a "raw" token for mapAuthError:
+ * - If backend returned { error: "some_code" } — use it
+ * - Else if normalizeError knows it's SHM/network/auth — return stable tokens
+ * - Else return a human fallback string
+ */
+function errorToAuthRaw(e: unknown, fallback: string): string {
+  // if it's already a string (e.g. "invalid_credentials") — keep
+  if (typeof e === "string") return e;
+
+  // If it's a plain object with {error:"..."} — prefer that
+  if (e && typeof e === "object") {
+    const any = e as any;
+    const code = typeof any.error === "string" ? any.error : typeof any.code === "string" ? any.code : "";
+    if (code) return code;
+    // sometimes apiFetch throws { status, json: {error} }
+    const nested = any?.json?.error || any?.data?.error || any?.body?.error;
+    if (typeof nested === "string" && nested) return nested;
+  }
+
+  const n = normalizeError(e);
+
+  // If normalizeError detects auth — return stable token so mapAuthError shows correct text
+  if (n.status === 401 || n.status === 403 || n.code === "not_authenticated") return "not_authenticated";
+
+  // If SHM/upstream — never leak shm_error; show generic login failure
+  if ((n.code || "").toLowerCase().startsWith("shm_") || (n.code || "").toLowerCase() === "shm_error") {
+    return "login_failed";
+  }
+
+  // if we have a decent human description — use it (mapAuthError will keep it)
+  if (n.description && !looksLikeCode(n.description)) return n.description;
+
+  return fallback;
 }
 
 export function Login() {
@@ -197,7 +235,7 @@ export function Login() {
     // mark pending success toast (centralized in AuthGate)
     setAuthPending(provider || "auth");
 
-      // ✅ ВАЖНО: обновляем глобальный /me-store после логина
+    // ✅ ВАЖНО: обновляем глобальный /me-store после логина
     refetchMe().catch(() => {});
 
     // ✅ при успешном входе — считаем, что реф. линк “использован”
@@ -239,8 +277,8 @@ export function Login() {
         },
       });
       goAfterAuth(r, "password");
-    } catch (e: any) {
-      toastError(String(e?.message || t("error.password_login_failed", "Не удалось войти по паролю")));
+    } catch (e: unknown) {
+      toastError(errorToAuthRaw(e, t("error.password_login_failed", "Не удалось войти по паролю")));
     } finally {
       setLoading(false);
     }
@@ -267,8 +305,8 @@ export function Login() {
         },
       });
       goAfterAuth(r, "password");
-    } catch (e: any) {
-      toastError(String(e?.message || t("error.password_login_failed", "Не удалось выполнить регистрацию")));
+    } catch (e: unknown) {
+      toastError(errorToAuthRaw(e, t("error.password_login_failed", "Не удалось выполнить регистрацию")));
     } finally {
       setLoading(false);
     }
@@ -293,8 +331,8 @@ export function Login() {
         },
       });
       goAfterAuth(r, "telegram");
-    } catch (e: any) {
-      toastError(String(e?.message || t("error.telegram_login_failed", "Не удалось войти через Telegram")));
+    } catch (e: unknown) {
+      toastError(errorToAuthRaw(e, t("error.telegram_login_failed", "Не удалось войти через Telegram")));
     } finally {
       setLoading(false);
     }
@@ -525,7 +563,9 @@ export function Login() {
               )}
             </div>
 
-            <span className="badge">{mode === "telegram" ? t("login.badge.tg", "Telegram") : t("login.badge.web", "Веб-режим")}</span>
+            <span className="badge">
+              {mode === "telegram" ? t("login.badge.tg", "Telegram") : t("login.badge.web", "Веб-режим")}
+            </span>
           </div>
 
           {headerCard}

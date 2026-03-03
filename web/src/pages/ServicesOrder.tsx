@@ -1,477 +1,483 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { apiFetch } from '../shared/api/client'
-import { useMe } from '../app/auth/useMe'
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { apiFetch } from "../shared/api/client";
+import { useMe } from "../app/auth/useMe";
 
 // ✅ toast + mood (ONLY payment_* keys are allowed by types)
-import { toast } from '../shared/ui/toast'
-import { getMood } from '../shared/payments-mood'
+import { toast } from "../shared/ui/toast";
+import { toastApiError } from "../shared/ui/toast/toastApiError";
+import { normalizeError } from "../shared/api/errorText";
+import { getMood } from "../shared/payments-mood";
 
 type Tariff = {
-  serviceId: number
-  category: string
-  title: string
-  descr: string
-  price: number
-  currency: string
-  periodRaw?: string
-  periodHuman: string
-  flags?: { orderOnlyOnce?: boolean }
-}
+  serviceId: number;
+  category: string;
+  title: string;
+  descr: string;
+  price: number;
+  currency: string;
+  periodRaw?: string;
+  periodHuman: string;
+  flags?: { orderOnlyOnce?: boolean };
+};
 
-type OrderResp = { ok: true; items: Tariff[] }
+type OrderResp = { ok: true; items: Tariff[] };
 
 type PaySystem = {
-  name?: string
-  shm_url?: string
-  recurring?: string | number
-  amount?: number
-}
+  name?: string;
+  shm_url?: string;
+  recurring?: string | number;
+  amount?: number;
+};
 
-type PaysystemsResp = { ok: true; items: PaySystem[] }
+type PaysystemsResp = { ok: true; items: PaySystem[] };
 
 type CreateResp = {
-  ok: true
+  ok: true;
   item: {
-    userServiceId: number
-    serviceId: number
-    status: string
-    statusRaw: string
-  }
-  raw?: any
-}
+    userServiceId: number;
+    serviceId: number;
+    status: string;
+    statusRaw: string;
+  };
+  raw?: any;
+};
 
-type UiStatus = 'active' | 'blocked' | 'pending' | 'not_paid' | 'removed' | 'error' | 'init'
+type UiStatus = "active" | "blocked" | "pending" | "not_paid" | "removed" | "error" | "init";
 type ApiServiceItem = {
-  userServiceId: number
-  status: UiStatus
-  statusRaw: string
-}
-type ApiServicesResponse = { ok: true; items: ApiServiceItem[]; summary: any }
+  userServiceId: number;
+  status: UiStatus;
+  statusRaw: string;
+};
+type ApiServicesResponse = { ok: true; items: ApiServiceItem[]; summary: any };
 
-type Kind = 'amneziawg' | 'marzban' | 'marzban_router'
+type Kind = "amneziawg" | "marzban" | "marzban_router";
 
 function nnum(v: any, def = 0) {
-  const x = typeof v === 'string' ? Number(v.replace(',', '.')) : Number(v)
-  return Number.isFinite(x) ? x : def
+  const x = typeof v === "string" ? Number(v.replace(",", ".")) : Number(v);
+  return Number.isFinite(x) ? x : def;
 }
 
 function fmtMoney(n: number, cur: string) {
-  const v = nnum(n, 0)
+  const v = nnum(n, 0);
   try {
     return new Intl.NumberFormat(undefined, {
-      style: 'currency',
-      currency: cur || 'RUB',
+      style: "currency",
+      currency: cur || "RUB",
       maximumFractionDigits: 0,
-    }).format(v)
+    }).format(v);
   } catch {
-    return `${v} ${cur || 'RUB'}`
+    return `${v} ${cur || "RUB"}`;
   }
 }
 
 function kindFromCategory(cat: string): Kind {
-  if (cat.startsWith('vpn-')) return 'amneziawg'
-  if (cat === 'marzban') return 'marzban'
-  return 'marzban_router'
+  if (cat.startsWith("vpn-")) return "amneziawg";
+  if (cat === "marzban") return "marzban";
+  return "marzban_router";
 }
 
 function kindTitle(k: Kind) {
   switch (k) {
-    case 'marzban':
-      return 'Marzban'
-    case 'marzban_router':
-      return 'Router VPN'
-    case 'amneziawg':
-      return 'AmneziaWG'
+    case "marzban":
+      return "Marzban";
+    case "marzban_router":
+      return "Router VPN";
+    case "amneziawg":
+      return "AmneziaWG";
   }
 }
 
 function kindDescr(k: Kind) {
   switch (k) {
-    case 'marzban':
-      return 'Высокая стабильность и скорость. Подходит для телефонов, ПК и планшетов. Доступ ко всем серверам.'
-    case 'marzban_router':
-      return 'Создано специально для прошивки Shpun Router. Протокол Reality — максимально незаметность. Работает на всех устройствах через ваш роутер.'
-    case 'amneziawg':
-      return 'Подключение на один выбранный сервер. Простая настройка и минимум параметров. Может работать нестабильно в ряде регионов.'
+    case "marzban":
+      return "Высокая стабильность и скорость. Подходит для телефонов, ПК и планшетов. Доступ ко всем серверам.";
+    case "marzban_router":
+      return "Создано специально для прошивки Shpun Router. Протокол Reality — максимально незаметность. Работает на всех устройствах через ваш роутер.";
+    case "amneziawg":
+      return "Подключение на один выбранный сервер. Простая настройка и минимум параметров. Может работать нестабильно в ряде регионов.";
   }
 }
 
 function kindDescrShort(k: Kind) {
   switch (k) {
-    case 'marzban':
-      return 'Стабильно и быстро. Для телефона, ПК и планшета. Все серверы.'
-    case 'marzban_router':
-      return 'VPN на всю домашнюю сеть через роутер. Протокол Reality.'
-    case 'amneziawg':
-      return 'Простой VPN на один сервер. В некоторых регионах бывает нестабильным.'
+    case "marzban":
+      return "Стабильно и быстро. Для телефона, ПК и планшета. Все серверы.";
+    case "marzban_router":
+      return "VPN на всю домашнюю сеть через роутер. Протокол Reality.";
+    case "amneziawg":
+      return "Простой VPN на один сервер. В некоторых регионах бывает нестабильным.";
   }
 }
 
 function buildPayUrl(base: string, amount: number) {
-  const a = Math.max(1, Math.ceil(nnum(amount, 1)))
-  if (base.includes('{amount}')) return base.replace('{amount}', String(a))
-  return `${base}${a}`
+  const a = Math.max(1, Math.ceil(nnum(amount, 1)));
+  if (base.includes("{amount}")) return base.replace("{amount}", String(a));
+  return `${base}${a}`;
 }
 
 function getTelegramWebApp(): any | null {
-  const w = window as any
-  return w?.Telegram?.WebApp || null
+  const w = window as any;
+  return w?.Telegram?.WebApp || null;
 }
 
 async function copyToClipboard(text: string) {
   try {
-    await navigator.clipboard.writeText(text)
-    return true
+    await navigator.clipboard.writeText(text);
+    return true;
   } catch {
     try {
-      const ta = document.createElement('textarea')
-      ta.value = text
-      ta.style.position = 'fixed'
-      ta.style.top = '-1000px'
-      document.body.appendChild(ta)
-      ta.focus()
-      ta.select()
-      const ok = document.execCommand('copy')
-      document.body.removeChild(ta)
-      return ok
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.top = "-1000px";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return ok;
     } catch {
-      return false
+      return false;
     }
   }
 }
 
 /** ====== Amnezia warning (как в боте) ====== */
-const AMNEZIA_WARN_KEY = 'order.amnezia.warn.dismissed.v1'
+const AMNEZIA_WARN_KEY = "order.amnezia.warn.dismissed.v1";
 function readAmneziaWarnDismissed(): boolean {
   try {
-    return localStorage.getItem(AMNEZIA_WARN_KEY) === '1'
+    return localStorage.getItem(AMNEZIA_WARN_KEY) === "1";
   } catch {
-    return false
+    return false;
   }
 }
 function saveAmneziaWarnDismissed() {
   try {
-    localStorage.setItem(AMNEZIA_WARN_KEY, '1')
+    localStorage.setItem(AMNEZIA_WARN_KEY, "1");
   } catch {
     // ignore
   }
 }
 
 export function ServicesOrder() {
-  const navigate = useNavigate()
+  const navigate = useNavigate();
 
   // ✅ единый источник денег
-  const { me, loading: meLoading, error: meError, refetch } = useMe()
+  const { me, loading: meLoading, error: meError, refetch } = useMe();
 
-  const balanceAmount = nnum(me?.balance?.amount, 0)
-  const currency = String(me?.balance?.currency || 'RUB')
-  const bonus = nnum((me as any)?.bonus, 0)
-  const available = balanceAmount + bonus
+  const balanceAmount = nnum(me?.balance?.amount, 0);
+  const currency = String(me?.balance?.currency || "RUB");
+  const bonus = nnum((me as any)?.bonus, 0);
+  const available = balanceAmount + bonus;
 
   // ✅ discount shown only as info (no recalculation on UI)
-  const discountPercent = Math.max(0, nnum((me as any)?.discount, 0))
-  const hasDiscount = discountPercent > 0
+  const discountPercent = Math.max(0, nnum((me as any)?.discount, 0));
+  const hasDiscount = discountPercent > 0;
 
-  const [loading, setLoading] = useState(true)
-  const [err, setErr] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
 
-  const [tariffs, setTariffs] = useState<Tariff[]>([])
-  const [kind, setKind] = useState<Kind | null>(null)
-  const [selected, setSelected] = useState<Tariff | null>(null)
+  const [tariffs, setTariffs] = useState<Tariff[]>([]);
+  const [kind, setKind] = useState<Kind | null>(null);
+  const [selected, setSelected] = useState<Tariff | null>(null);
 
-  const [creating, setCreating] = useState(false)
-  const [created, setCreated] = useState<CreateResp['item'] | null>(null)
+  const [creating, setCreating] = useState(false);
+  const [created, setCreated] = useState<CreateResp["item"] | null>(null);
 
-  const [paySystems, setPaySystems] = useState<PaySystem[]>([])
-  const [overlayOpen, setOverlayOpen] = useState(false)
+  const [paySystems, setPaySystems] = useState<PaySystem[]>([]);
+  const [overlayOpen, setOverlayOpen] = useState(false);
 
-  const [detailsCollapsed, setDetailsCollapsed] = useState(false)
-  const [waitMsg, setWaitMsg] = useState<string | null>(null)
+  const [detailsCollapsed, setDetailsCollapsed] = useState(false);
+  const [waitMsg, setWaitMsg] = useState<string | null>(null);
 
-  const [lastPayUrl, setLastPayUrl] = useState<string | null>(null)
-  const [lastPayAmount, setLastPayAmount] = useState<number>(0)
-  const [openingPay, setOpeningPay] = useState(false)
-  const [payOpenError, setPayOpenError] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
+  const [lastPayUrl, setLastPayUrl] = useState<string | null>(null);
+  const [lastPayAmount, setLastPayAmount] = useState<number>(0);
+  const [openingPay, setOpeningPay] = useState(false);
+  const [payOpenError, setPayOpenError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
-  const [amneziaWarnOpen, setAmneziaWarnOpen] = useState(false)
+  const [amneziaWarnOpen, setAmneziaWarnOpen] = useState(false);
 
   const grouped = useMemo(() => {
-    const m: Record<Kind, Tariff[]> = { amneziawg: [], marzban: [], marzban_router: [] }
+    const m: Record<Kind, Tariff[]> = { amneziawg: [], marzban: [], marzban_router: [] };
     for (const t of tariffs) {
-      m[kindFromCategory(String(t.category || ''))].push({
+      m[kindFromCategory(String(t.category || ""))].push({
         ...t,
         price: nnum((t as any).price, 0),
-      })
+      });
     }
     for (const k of Object.keys(m) as Kind[]) {
-      m[k].sort((a, b) => nnum(a.price, 0) - nnum(b.price, 0))
+      m[k].sort((a, b) => nnum(a.price, 0) - nnum(b.price, 0));
     }
-    return m
-  }, [tariffs])
+    return m;
+  }, [tariffs]);
 
   const needTopup = useMemo(() => {
-    if (!selected) return 0
-    const price = nnum(selected.price, 0)
-    const diff = price - available
-    return diff > 0 ? Math.ceil(diff) : 0
-  }, [selected, available])
+    if (!selected) return 0;
+    const price = nnum(selected.price, 0);
+    const diff = price - available;
+    return diff > 0 ? Math.ceil(diff) : 0;
+  }, [selected, available]);
 
   const shouldShowPay = useMemo(() => {
-    if (!created) return false
-    if (needTopup > 0) return true
-    return String(created.status || '').toLowerCase() === 'not_paid'
-  }, [created, needTopup])
+    if (!created) return false;
+    if (needTopup > 0) return true;
+    return String(created.status || "").toLowerCase() === "not_paid";
+  }, [created, needTopup]);
 
   // ✅ one place to compute how much to pay (fallback >=1)
   const toPay = useMemo(() => {
-    if (!selected) return 0
-    if (needTopup > 0) return Math.max(1, Math.ceil(needTopup))
-    const diff = Math.ceil(nnum(selected.price, 0) - available)
-    return Math.max(1, diff)
-  }, [selected, needTopup, available])
+    if (!selected) return 0;
+    if (needTopup > 0) return Math.max(1, Math.ceil(needTopup));
+    const diff = Math.ceil(nnum(selected.price, 0) - available);
+    return Math.max(1, diff);
+  }, [selected, needTopup, available]);
 
   // ✅ mood helpers (typed keys only)
-  const moodChecking = (seed: string) => getMood('payment_checking', { seed }) ?? 'Пара секунд…'
-  const moodSuccess = (seed: string, amount?: number) => getMood('payment_success', { seed, amount }) ?? 'Принято.'
+  const moodChecking = (seed: string) => getMood("payment_checking", { seed }) ?? "Пара секунд…";
+  const moodSuccess = (seed: string, amount?: number) =>
+    getMood("payment_success", { seed, amount }) ?? "Принято.";
 
   async function loadPaysystems() {
-    const ps = await apiFetch<PaysystemsResp>('/payments/paysystems', { method: 'GET' })
-    const items = ps?.items || []
+    const ps = await apiFetch<PaysystemsResp>("/payments/paysystems", { method: "GET" });
+    const items = ps?.items || [];
     const filtered = items.filter((x) => {
-      const n = String(x?.name || '')
-      if (n === 'Telegram Stars Rescue') return false
-      if (n === 'Telegram Stars Karlson') return false
-      return true
-    })
-    setPaySystems(filtered)
+      const n = String(x?.name || "");
+      if (n === "Telegram Stars Rescue") return false;
+      if (n === "Telegram Stars Karlson") return false;
+      return true;
+    });
+    setPaySystems(filtered);
   }
 
   async function loadTariffs() {
-    setLoading(true)
-    setErr(null)
+    setLoading(true);
+    setErr(null);
     try {
-      const o = await apiFetch<OrderResp>('/services/order')
-      setTariffs(o.items || [])
-    } catch (e: any) {
-      setErr(e?.message || 'Failed to load tariffs')
+      const o = await apiFetch<OrderResp>("/services/order");
+      setTariffs(o.items || []);
+    } catch (e: unknown) {
+      const n = normalizeError(e);
+      setErr(n.description || "Не удалось загрузить тарифы. Попробуйте ещё раз.");
+      // тост тут опционален — но если хочешь, можно показать “мягко”
+      toastApiError(e, { title: "Не удалось загрузить тарифы" });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
   useEffect(() => {
-    loadTariffs()
+    loadTariffs();
 
     // ✅ deep-link: /services/order?kind=marzban_router
     try {
-      const q = new URLSearchParams(window.location.search)
-      const k = q.get('kind')
-      if (k === 'marzban_router' || k === 'marzban' || k === 'amneziawg') {
-        setKind(k)
+      const q = new URLSearchParams(window.location.search);
+      const k = q.get("kind");
+      if (k === "marzban_router" || k === "marzban" || k === "amneziawg") {
+        setKind(k);
       }
     } catch {
       // ignore
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, []);
 
   async function createOrder() {
-    if (!selected) return
-    setCreating(true)
-    setErr(null)
+    if (!selected) return;
+    setCreating(true);
+    setErr(null);
 
     try {
-      const r = await apiFetch<CreateResp>('/services/order', {
-        method: 'PUT',
+      const r = await apiFetch<CreateResp>("/services/order", {
+        method: "PUT",
         body: JSON.stringify({ service_id: selected.serviceId }),
-      })
+      });
 
-      setCreated(r.item)
-      setDetailsCollapsed(true)
+      setCreated(r.item);
+      setDetailsCollapsed(true);
 
-      const orderId = String(r.item?.userServiceId || '')
-      const status = String(r.item?.status || '').toLowerCase()
+      const orderId = String(r.item?.userServiceId || "");
+      const status = String(r.item?.status || "").toLowerCase();
 
-      if (status === 'not_paid' || needTopup > 0) {
-        await loadPaysystems()
-        setWaitMsg('Выберите способ оплаты ниже.')
+      if (status === "not_paid" || needTopup > 0) {
+        await loadPaysystems();
+        setWaitMsg("Выберите способ оплаты ниже.");
 
-        toast.info('Заказ создан', {
-          description: moodChecking(orderId) ?? 'Выберите способ оплаты ниже.',
-        })
+        toast.info("Заказ создан", {
+          description: moodChecking(orderId) ?? "Выберите способ оплаты ниже.",
+        });
       } else {
-        setWaitMsg('✅ Услуга создана. Можно перейти в раздел услуг.')
+        setWaitMsg("✅ Услуга создана. Можно перейти в раздел услуг.");
 
-        toast.success('Готово', {
-          description: 'Услуга создана и активируется.',
-        })
+        toast.success("Готово", {
+          description: "Услуга создана и активируется.",
+        });
 
-        toast.success('Оплата принята', {
-          description: moodSuccess(orderId, nnum(selected?.price, 0)) ?? 'Принято.',
-        })
+        toast.success("Оплата принята", {
+          description: moodSuccess(orderId, nnum(selected?.price, 0)) ?? "Принято.",
+        });
       }
-    } catch (e: any) {
-      const msg = e?.message || 'Failed to create service'
-      setErr(msg)
-      toast.error('Не удалось создать услугу', { description: msg })
+    } catch (e: unknown) {
+      const n = normalizeError(e);
+      setErr(n.description || "Не удалось создать услугу. Попробуйте ещё раз.");
+      toastApiError(e, { title: "Не удалось создать услугу" });
     } finally {
-      setCreating(false)
+      setCreating(false);
     }
   }
 
   async function tryOpenPayment(url: string) {
-    const tg = getTelegramWebApp()
+    const tg = getTelegramWebApp();
     if (tg?.openLink) {
       try {
-        tg.openLink(url)
-        return true
+        tg.openLink(url);
+        return true;
       } catch {
-        return false
+        return false;
       }
     }
 
     try {
-      const w = window.open(url, '_blank', 'noopener,noreferrer')
-      return !!w
+      const w = window.open(url, "_blank", "noopener,noreferrer");
+      return !!w;
     } catch {
-      return false
+      return false;
     }
   }
 
   async function startPay(ps: PaySystem) {
-    setCopied(false)
-    setPayOpenError(null)
+    setCopied(false);
+    setPayOpenError(null);
 
     if (!ps?.shm_url) {
-      setPayOpenError('У этого способа оплаты нет ссылки.')
-      setOverlayOpen(true)
-      toast.error('Оплата недоступна', { description: 'У этого способа оплаты нет ссылки.' })
-      return
+      setPayOpenError("У этого способа оплаты нет ссылки.");
+      setOverlayOpen(true);
+      toast.error("Оплата недоступна", { description: "У этого способа оплаты нет ссылки." });
+      return;
     }
 
-    const url = buildPayUrl(ps.shm_url, toPay)
-    setLastPayUrl(url)
-    setLastPayAmount(toPay)
+    const url = buildPayUrl(ps.shm_url, toPay);
+    setLastPayUrl(url);
+    setLastPayAmount(toPay);
 
-    setOpeningPay(true)
-    const opened = await tryOpenPayment(url)
-    setOpeningPay(false)
+    setOpeningPay(true);
+    const opened = await tryOpenPayment(url);
+    setOpeningPay(false);
 
-    setOverlayOpen(true)
+    setOverlayOpen(true);
 
-    const seed = String(created?.userServiceId || '') || String(selected?.serviceId || '')
+    const seed = String(created?.userServiceId || "") || String(selected?.serviceId || "");
 
     if (opened) {
-      setWaitMsg('Окно оплаты открыто. После оплаты нажмите “Я оплатил — проверить” или перейдите в “Услуги”.')
+      setWaitMsg("Окно оплаты открыто. После оплаты нажмите “Я оплатил — проверить” или перейдите в “Услуги”.");
 
-      toast.info('Окно оплаты открыто', {
-        description: moodChecking(seed) ?? 'После оплаты нажмите “Я оплатил — проверить”.',
-      })
+      toast.info("Окно оплаты открыто", {
+        description: moodChecking(seed) ?? "После оплаты нажмите “Я оплатил — проверить”.",
+      });
     } else {
-      setPayOpenError('Не удалось открыть оплату (вкладка могла быть заблокирована). Откройте ссылку вручную.')
-      setWaitMsg('Откройте ссылку оплаты и завершите оплату. Затем вернитесь сюда и нажмите “Я оплатил — проверить”.')
+      setPayOpenError("Не удалось открыть оплату (вкладка могла быть заблокирована). Откройте ссылку вручную.");
+      setWaitMsg("Откройте ссылку оплаты и завершите оплату. Затем вернитесь сюда и нажмите “Я оплатил — проверить”.");
 
-      toast.error('Не удалось открыть оплату', {
-        description: 'Вкладка могла быть заблокирована. Откройте ссылку вручную.',
-      })
+      toast.error("Не удалось открыть оплату", {
+        description: "Вкладка могла быть заблокирована. Откройте ссылку вручную.",
+      });
     }
   }
 
   async function retryOpenLast() {
-    if (!lastPayUrl) return
-    setCopied(false)
-    setPayOpenError(null)
-    setOpeningPay(true)
-    const opened = await tryOpenPayment(lastPayUrl)
-    setOpeningPay(false)
+    if (!lastPayUrl) return;
+    setCopied(false);
+    setPayOpenError(null);
+    setOpeningPay(true);
+    const opened = await tryOpenPayment(lastPayUrl);
+    setOpeningPay(false);
     if (!opened) {
-      setPayOpenError('Не удалось открыть оплату. Откройте ссылку вручную.')
-      toast.error('Не удалось открыть оплату', { description: 'Откройте ссылку вручную.' })
+      setPayOpenError("Не удалось открыть оплату. Откройте ссылку вручную.");
+      toast.error("Не удалось открыть оплату", { description: "Откройте ссылку вручную." });
     } else {
-      toast.info('Окно оплаты открыто', {
-        description: 'Завершите оплату и вернитесь для проверки.',
-      })
+      toast.info("Окно оплаты открыто", {
+        description: "Завершите оплату и вернитесь для проверки.",
+      });
     }
   }
 
   async function pollOnce() {
-    const seed = String(created?.userServiceId || '') || String(selected?.serviceId || '')
+    const seed = String(created?.userServiceId || "") || String(selected?.serviceId || "");
 
-    toast.info('Проверяем платёж', {
-      description: moodChecking(seed) ?? 'Пара секунд…',
-    })
+    toast.info("Проверяем платёж", {
+      description: moodChecking(seed) ?? "Пара секунд…",
+    });
 
     try {
-      await Promise.resolve(refetch?.())
+      await Promise.resolve(refetch?.());
     } catch {
       // ignore
     }
 
-    if (!created?.userServiceId) return false
+    if (!created?.userServiceId) return false;
 
     try {
-      const s = await apiFetch<ApiServicesResponse>('/services')
-      const it = (s.items || []).find((x) => x.userServiceId === created.userServiceId)
+      const s = await apiFetch<ApiServicesResponse>("/services");
+      const it = (s.items || []).find((x) => x.userServiceId === created.userServiceId);
 
-      if (it && (it.status === 'active' || it.status === 'pending')) {
-        setCreated((cur) => (cur ? { ...cur, status: it.status, statusRaw: it.statusRaw || cur.statusRaw } : cur))
-        setWaitMsg('✅ Услуга активируется / активна. Можно перейти в раздел услуг.')
+      if (it && (it.status === "active" || it.status === "pending")) {
+        setCreated((cur) => (cur ? { ...cur, status: it.status, statusRaw: it.statusRaw || cur.statusRaw } : cur));
+        setWaitMsg("✅ Услуга активируется / активна. Можно перейти в раздел услуг.");
 
-        toast.success('Готово', { description: 'Услуга активирована.' })
-        toast.success('Оплата принята', { description: moodSuccess(seed, toPay) ?? 'Принято.' })
+        toast.success("Готово", { description: "Услуга активирована." });
+        toast.success("Оплата принята", { description: moodSuccess(seed, toPay) ?? "Принято." });
 
-        return true
+        return true;
       }
     } catch {
       // ignore
     }
 
-    setWaitMsg('Пока не вижу обновления статуса. Попробуйте ещё раз через несколько секунд.')
-    toast.info('Пока не подтверждено', { description: 'Попробуйте ещё раз через несколько секунд.' })
+    setWaitMsg("Пока не вижу обновления статуса. Попробуйте ещё раз через несколько секунд.");
+    toast.info("Пока не подтверждено", { description: "Попробуйте ещё раз через несколько секунд." });
 
-    return false
+    return false;
   }
 
   function resetSelection() {
-    setSelected(null)
-    setCreated(null)
-    setPaySystems([])
-    setWaitMsg(null)
-    setErr(null)
-    setOverlayOpen(false)
-    setDetailsCollapsed(false)
+    setSelected(null);
+    setCreated(null);
+    setPaySystems([]);
+    setWaitMsg(null);
+    setErr(null);
+    setOverlayOpen(false);
+    setDetailsCollapsed(false);
 
-    setLastPayUrl(null)
-    setLastPayAmount(0)
-    setPayOpenError(null)
-    setOpeningPay(false)
-    setCopied(false)
+    setLastPayUrl(null);
+    setLastPayAmount(0);
+    setPayOpenError(null);
+    setOpeningPay(false);
+    setCopied(false);
   }
 
   async function handleCopyLink() {
-    if (!lastPayUrl) return
-    const ok = await copyToClipboard(lastPayUrl)
-    setCopied(ok)
+    if (!lastPayUrl) return;
+    const ok = await copyToClipboard(lastPayUrl);
+    setCopied(ok);
     if (!ok) {
-      setPayOpenError('Не получилось скопировать ссылку автоматически. Скопируйте вручную из строки ниже.')
-      toast.error('Не удалось скопировать', { description: 'Скопируйте ссылку вручную.' })
+      setPayOpenError("Не получилось скопировать ссылку автоматически. Скопируйте вручную из строки ниже.");
+      toast.error("Не удалось скопировать", { description: "Скопируйте ссылку вручную." });
     } else {
-      toast.success('Ссылка скопирована', { description: 'Можно вставлять в браузер или отправить себе.' })
+      toast.success("Ссылка скопирована", { description: "Можно вставлять в браузер или отправить себе." });
     }
   }
 
   // ✅ предупреждение при заходе в AmneziaWG (только 1 раз)
   useEffect(() => {
-    if (kind !== 'amneziawg') return
-    if (readAmneziaWarnDismissed()) return
-    setAmneziaWarnOpen(true)
-  }, [kind])
+    if (kind !== "amneziawg") return;
+    if (readAmneziaWarnDismissed()) return;
+    setAmneziaWarnOpen(true);
+  }, [kind]);
 
   function closeAmneziaWarn() {
-    saveAmneziaWarnDismissed()
-    setAmneziaWarnOpen(false)
+    saveAmneziaWarnDismissed();
+    setAmneziaWarnOpen(false);
   }
 
   if (loading || meLoading) {
@@ -484,10 +490,10 @@ export function ServicesOrder() {
           </div>
         </div>
       </div>
-    )
+    );
   }
 
-  const topError = err || (meError ? String((meError as any).message || meError) : null)
+  const topError = err || (meError ? String((meError as any).message || meError) : null);
 
   return (
     <div className="section">
@@ -496,18 +502,18 @@ export function ServicesOrder() {
         <div className="overlay" onClick={() => setOverlayOpen(false)}>
           <div className="card overlay__card" onClick={(e) => e.stopPropagation()}>
             <div className="card__body">
-              <div className="overlay__title">{payOpenError ? 'Оплата не открылась' : 'Окно оплаты'}</div>
+              <div className="overlay__title">{payOpenError ? "Оплата не открылась" : "Окно оплаты"}</div>
 
               <p className="p so__mt8">
                 {payOpenError
-                  ? 'Если вы в Telegram или браузер блокирует всплывающие окна — откройте ссылку вручную.'
-                  : 'Завершите оплату в открывшемся окне. Затем вернитесь сюда и проверьте статус.'}
+                  ? "Если вы в Telegram или браузер блокирует всплывающие окна — откройте ссылку вручную."
+                  : "Завершите оплату в открывшемся окне. Затем вернитесь сюда и проверьте статус."}
               </p>
 
               {payOpenError ? <div className="pre so__mt12">Причина: {payOpenError}</div> : null}
 
               {lastPayUrl ? (
-                <div className="pre so__mt12" style={{ userSelect: 'text' }}>
+                <div className="pre so__mt12" style={{ userSelect: "text" }}>
                   {lastPayUrl}
                 </div>
               ) : null}
@@ -516,7 +522,7 @@ export function ServicesOrder() {
 
               <div className="actions actions--1 so__mt12">
                 <button className="btn btn--primary" onClick={retryOpenLast} disabled={!lastPayUrl || openingPay}>
-                  {openingPay ? 'Открываем…' : 'Открыть ещё раз'}
+                  {openingPay ? "Открываем…" : "Открыть ещё раз"}
                 </button>
 
                 <button className="btn" onClick={handleCopyLink} disabled={!lastPayUrl}>
@@ -527,7 +533,7 @@ export function ServicesOrder() {
                   Я оплатил — проверить
                 </button>
 
-                <button className="btn" onClick={() => window.location.assign('/services')}>
+                <button className="btn" onClick={() => window.location.assign("/services")}>
                   Перейти в услуги
                 </button>
 
@@ -548,8 +554,8 @@ export function ServicesOrder() {
               <div className="overlay__title">⚠️ Важно про AmneziaWG</div>
 
               <div className="p so__mt8">
-                Стабильность AmneziaWG не гарантирована и может зависеть от провайдера. Использование — на свой риск.
-                Для надёжной работы рекомендуем подписку Marzban.
+                Стабильность AmneziaWG не гарантирована и может зависеть от провайдера. Использование — на свой риск. Для
+                надёжной работы рекомендуем подписку Marzban.
               </div>
 
               <div className="actions actions--1 so__mt12">
@@ -595,7 +601,7 @@ export function ServicesOrder() {
           <div className="card">
             <div className="card__body">
               <div className="row so__spaceBetween">
-                <div className="h1 so__h18" style={{ fontWeight: 800, letterSpacing: '-0.01em' }}>
+                <div className="h1 so__h18" style={{ fontWeight: 800, letterSpacing: "-0.01em" }}>
                   Выберите тип услуги
                 </div>
                 <button className="btn" onClick={() => navigate(-1)}>
@@ -608,16 +614,16 @@ export function ServicesOrder() {
               </p>
 
               <div className="kv so__mt12">
-                {(['marzban', 'marzban_router', 'amneziawg'] as Kind[]).map((k) => (
+                {(["marzban", "marzban_router", "amneziawg"] as Kind[]).map((k) => (
                   <button
                     key={k}
                     className="kv__item"
                     onClick={() => setKind(k)}
                     type="button"
                     title="Выбрать"
-                    style={{ textAlign: 'left', display: 'block' }}
+                    style={{ textAlign: "left", display: "block" }}
                   >
-                    <div className="row so__spaceBetween" style={{ alignItems: 'flex-start', gap: 10 }}>
+                    <div className="row so__spaceBetween" style={{ alignItems: "flex-start", gap: 10 }}>
                       <div className="services-cat__headLeft">
                         <div className="services-cat__titleRow">
                           <div className="services-cat__title">{kindTitle(k)}</div>
@@ -628,12 +634,12 @@ export function ServicesOrder() {
                         </p>
                       </div>
 
-                      <span className="badge" style={{ whiteSpace: 'nowrap' }}>
+                      <span className="badge" style={{ whiteSpace: "nowrap" }}>
                         {grouped[k].length}
                       </span>
                     </div>
-                    <div className="actions actions--1 so__mt12" style={{ pointerEvents: 'none' }}>
-                      <span className="btn btn--primary so__btnFull" style={{ textAlign: 'center' }}>
+                    <div className="actions actions--1 so__mt12" style={{ pointerEvents: "none" }}>
+                      <span className="btn btn--primary so__btnFull" style={{ textAlign: "center" }}>
                         Выбрать
                       </span>
                     </div>
@@ -651,7 +657,7 @@ export function ServicesOrder() {
           <div className="card">
             <div className="card__body">
               <div className="row so__spaceBetween">
-                <div className="h1 so__h18" style={{ fontWeight: 800, letterSpacing: '-0.01em' }}>
+                <div className="h1 so__h18" style={{ fontWeight: 800, letterSpacing: "-0.01em" }}>
                   {kindTitle(kind)}
                 </div>
 
@@ -663,16 +669,16 @@ export function ServicesOrder() {
               <div
                 className="pre so__mt12"
                 style={{
-                  border: '1px solid rgba(148,163,184,.35)',
+                  border: "1px solid rgba(148,163,184,.35)",
                   opacity: 0.82,
                 }}
               >
                 {kindDescr(kind)}
               </div>
 
-              {kind === 'marzban_router' ? (
+              {kind === "marzban_router" ? (
                 <div className="actions actions--1 so__mt12">
-                  <button className="btn so__btnFull" onClick={() => navigate('/help/router')}>
+                  <button className="btn so__btnFull" onClick={() => navigate("/help/router")}>
                     📘 Инструкция Shpun Router
                   </button>
                 </div>
@@ -709,11 +715,11 @@ export function ServicesOrder() {
             <div className="card__body">
               <div className="row so__spaceBetween">
                 <div>
-                  <div className="h1 so__h18" style={{ fontWeight: 800, letterSpacing: '-0.01em' }}>
+                  <div className="h1 so__h18" style={{ fontWeight: 800, letterSpacing: "-0.01em" }}>
                     {selected.title}
                   </div>
                   <p className="p" style={{ opacity: 0.82 }}>
-                    {selected.descr || '—'}
+                    {selected.descr || "—"}
                   </p>
                 </div>
                 <button className="btn" onClick={resetSelection}>
@@ -721,12 +727,12 @@ export function ServicesOrder() {
                 </button>
               </div>
 
-              <div className={`so__details ${detailsCollapsed ? 'is-collapsed' : ''}`}>
+              <div className={`so__details ${detailsCollapsed ? "is-collapsed" : ""}`}>
                 <div
                   style={{
                     marginTop: 12,
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
                     gap: 10,
                   }}
                 >
@@ -757,14 +763,14 @@ export function ServicesOrder() {
 
                   <div className="kv__item">
                     <div className="kv__k">Не хватает</div>
-                    <div className="kv__v">{needTopup > 0 ? fmtMoney(needTopup, currency) : '—'}</div>
+                    <div className="kv__v">{needTopup > 0 ? fmtMoney(needTopup, currency) : "—"}</div>
                   </div>
                 </div>
 
                 {!created ? (
                   <div className="actions actions--1 so__mt12">
                     <button className="btn btn--primary so__btnFull" onClick={createOrder} disabled={creating}>
-                      {creating ? 'Создаём…' : needTopup > 0 ? 'Заказать и оплатить' : 'Подключить'}
+                      {creating ? "Создаём…" : needTopup > 0 ? "Заказать и оплатить" : "Подключить"}
                     </button>
                   </div>
                 ) : (
@@ -778,7 +784,7 @@ export function ServicesOrder() {
                 <div className="so__pay so__mt12">
                   <div className="card so__cardFlat">
                     <div className="card__body">
-                      <div className="h1 so__h18" style={{ fontWeight: 800, letterSpacing: '-0.01em' }}>
+                      <div className="h1 so__h18" style={{ fontWeight: 800, letterSpacing: "-0.01em" }}>
                         Оплата
                       </div>
                       <p className="p" style={{ opacity: 0.82 }}>
@@ -793,9 +799,9 @@ export function ServicesOrder() {
                             <div className="kv__item" key={ps.shm_url || idx}>
                               <div className="row so__spaceBetween">
                                 <div className="kv__k" style={{ fontWeight: 700 }}>
-                                  {ps.name || 'Payment method'}
+                                  {ps.name || "Payment method"}
                                 </div>
-                                <span className="badge">{ps.recurring ? 'recurring' : 'one-time'}</span>
+                                <span className="badge">{ps.recurring ? "recurring" : "one-time"}</span>
                               </div>
 
                               <div className="actions actions--1 so__mt10">
@@ -804,7 +810,7 @@ export function ServicesOrder() {
                                   onClick={() => startPay(ps)}
                                   disabled={!ps.shm_url || openingPay}
                                 >
-                                  {openingPay ? 'Открываем…' : `Оплатить ${fmtMoney(toPay || 1, currency)}`}
+                                  {openingPay ? "Открываем…" : `Оплатить ${fmtMoney(toPay || 1, currency)}`}
                                 </button>
                               </div>
                             </div>
@@ -816,7 +822,7 @@ export function ServicesOrder() {
                         <button className="btn so__btnFull" onClick={pollOnce}>
                           Я оплатил — проверить
                         </button>
-                        <button className="btn so__btnFull" onClick={() => window.location.assign('/services')}>
+                        <button className="btn so__btnFull" onClick={() => window.location.assign("/services")}>
                           Перейти в услуги
                         </button>
                       </div>
@@ -833,7 +839,7 @@ export function ServicesOrder() {
 
               {created && !shouldShowPay ? (
                 <div className="actions actions--1 so__mt12">
-                  <button className="btn btn--primary so__btnFull" onClick={() => window.location.assign('/services')}>
+                  <button className="btn btn--primary so__btnFull" onClick={() => window.location.assign("/services")}>
                     Перейти в услуги
                   </button>
                 </div>
@@ -843,5 +849,5 @@ export function ServicesOrder() {
         </div>
       ) : null}
     </div>
-  )
+  );
 }

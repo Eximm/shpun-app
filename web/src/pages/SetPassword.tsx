@@ -5,6 +5,8 @@ import { apiFetch } from "../shared/api/client";
 import type { MeResponse, PasswordSetResponse } from "../shared/api/types";
 import { useI18n } from "../shared/i18n";
 import { toast } from "../shared/ui/toast";
+import { toastApiError } from "../shared/ui/toast/toastApiError";
+import { normalizeError } from "../shared/api/errorText";
 
 function pwdScore(p: string) {
   let s = 0;
@@ -109,11 +111,12 @@ export function SetPassword() {
         if (!alive) return;
         setGate({ status: "blocked" });
         nav("/app", { replace: true });
-      } catch (e: any) {
+      } catch (e: unknown) {
         if (!alive) return;
+        const n = normalizeError(e);
         setGate({
           status: "error",
-          message: e?.message || t("setpwd.need_login.text", "Нужен вход"),
+          message: n.description || t("setpwd.need_login.text", "Нужен вход"),
         });
       }
     }
@@ -137,7 +140,11 @@ export function SetPassword() {
         body: { password: password.trim() },
       });
 
-      if (!res.ok) throw new Error((res as any).error || "Failed to set password");
+      if (!res.ok) {
+        // чтобы toastApiError корректно показал “человеческое”,
+        // генерим ошибку с кодом, но НЕ показываем её напрямую пользователю
+        throw new Error(String((res as any).error || "password_set_failed"));
+      }
 
       toast.success(isChange ? "Пароль изменён ✅" : "Пароль установлен ✅", {
         description: "Теперь можно входить по логину и паролю.",
@@ -155,10 +162,12 @@ export function SetPassword() {
         replace: true,
         state: { from: redirectTo },
       });
-    } catch (e: any) {
-      const msg = e?.message || t("setpwd.err.generic", "Не удалось сохранить пароль");
+    } catch (e: unknown) {
+      const n = normalizeError(e);
+      const msg = n.description || t("setpwd.err.generic", "Не удалось сохранить пароль");
+
       setErr(msg);
-      toast.error("Не удалось сохранить пароль", { description: msg });
+      toastApiError(e, { title: t("setpwd.err.generic", "Не удалось сохранить пароль") });
     } finally {
       setLoading(false);
     }

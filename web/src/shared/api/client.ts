@@ -20,11 +20,11 @@ export class ApiError extends Error {
 }
 
 export function isAuthError(e: unknown): boolean {
-  return e instanceof ApiError && e.status === 401;
+  return e instanceof ApiError && (e.status === 401 || e.status === 403);
 }
 
 export function isNotAuthenticated(e: unknown): boolean {
-  return e instanceof ApiError && e.status === 401 && e.code === "not_authenticated";
+  return e instanceof ApiError && (e.status === 401 || e.status === 403) && e.code === "not_authenticated";
 }
 
 // ✅ Our own init type: allow body to be an object (we will serialize it)
@@ -56,6 +56,52 @@ function looksLikeJsonString(s: string): boolean {
   return (t.startsWith("{") && t.endsWith("}")) || (t.startsWith("[") && t.endsWith("]"));
 }
 
+function isObj(v: unknown): v is Record<string, any> {
+  return typeof v === "object" && v !== null;
+}
+
+function looksLikeTechGarbage(s?: string) {
+  const t = String(s || "").trim();
+  if (!t) return false;
+
+  // pure tokens/codes → not for user
+  if (
+    /^shm[_-][a-z0-9_]+$/i.test(t) ||
+    /^not_authenticated$/i.test(t) ||
+    /^bad_session$/i.test(t) ||
+    /^unauthorized$/i.test(t)
+  ) {
+    return true;
+  }
+
+  // screaming snake / opaque codes
+  if (/^[A-Z0-9_]{6,}$/.test(t)) return true;
+
+  // typical fetch noisy strings
+  if (/^fetch failed/i.test(t)) return true;
+
+  if (/status code\s+\d{3}/i.test(t)) return true;
+
+  return false;
+}
+
+function defaultMessageByStatus(status: number) {
+  if (status === 401 || status === 403) return "Нужно войти заново.";
+  if (status === 404) return "Не найдено.";
+  if (status >= 500) return "Ошибка сервера. Попробуйте ещё раз чуть позже.";
+  return "Не удалось выполнить действие. Попробуйте ещё раз.";
+}
+
+function pickUserMessage(data: any, fallback: string) {
+  // We NEVER use `data.error` as a user-visible message (it's a code)
+  const m1 = isObj(data) && typeof data.message === "string" ? data.message.trim() : "";
+  const m2 = isObj(data) && typeof data.details === "string" ? data.details.trim() : "";
+  const m = m1 || m2;
+
+  if (m && !looksLikeTechGarbage(m)) return m;
+  return fallback;
+}
+
 export async function apiFetch<T = unknown>(path: string, init: ApiFetchInit = {}): Promise<T> {
   const headers = new Headers(init.headers || {});
   let body: BodyInit | null | undefined;
@@ -80,7 +126,6 @@ export async function apiFetch<T = unknown>(path: string, init: ApiFetchInit = {
   }
 
   // DEV helper: catch accidental JSON.stringify usage early
-  // (won't affect prod build if import.meta.env.DEV is replaced by bundler)
   try {
     // @ts-ignore
     if (import.meta?.env?.DEV && typeof rawBody === "string" && looksLikeJsonString(rawBody)) {
@@ -91,12 +136,23 @@ export async function apiFetch<T = unknown>(path: string, init: ApiFetchInit = {
     // ignore
   }
 
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    body,
-    headers,
-    credentials: "include",
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      ...init,
+      body,
+      headers,
+      credentials: "include",
+    });
+  } catch (e: any) {
+    // network-level errors (no HTTP response)
+    // Do NOT leak "Failed to fetch" etc to UI by default.
+    throw new ApiError("Проблема с соединением. Проверьте интернет и попробуйте ещё раз.", {
+      status: 0,
+      code: "network_error",
+      data: { cause: String(e?.message || e) },
+    });
+  }
 
   if (res.status === 204) return null as T;
 
@@ -107,22 +163,29 @@ export async function apiFetch<T = unknown>(path: string, init: ApiFetchInit = {
     try {
       data = JSON.parse(text);
     } catch {
+      // keep plain text, but wrap
       data = { message: text };
     }
   }
 
-  if (!res.ok) {
-    const errMsg =
-      data && typeof data === "object"
-        ? (data.error as string | undefined) || (data.message as string | undefined)
-        : undefined;
+  // Some APIs may return 200 with { ok:false, error:"..." }
+  const logicalOk = !(isObj(data) && data.ok === false);
 
-    // нормализуем код ошибки (важно для UX)
+  if (!res.ok || !logicalOk) {
+    const status = res.status;
+    const fallback = defaultMessageByStatus(status);
+
     const code =
-      data && typeof data === "object" && typeof data.error === "string" ? String(data.error) : undefined;
+      isObj(data) && typeof data.error === "string"
+        ? String(data.error).trim()
+        : isObj(data) && typeof data.code === "string"
+          ? String(data.code).trim()
+          : undefined;
 
-    throw new ApiError(errMsg || `Request failed: ${res.status}`, {
-      status: res.status,
+    const userMsg = pickUserMessage(data, fallback);
+
+    throw new ApiError(userMsg, {
+      status,
       code,
       data,
     });
