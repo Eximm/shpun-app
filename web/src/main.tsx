@@ -1,12 +1,6 @@
 ﻿import React from "react";
 import ReactDOM from "react-dom/client";
-import {
-  BrowserRouter,
-  Routes,
-  Route,
-  Navigate,
-  useLocation,
-} from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import "./index.css";
 
 import { Login } from "./pages/Login";
@@ -67,8 +61,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const { t } = useI18n();
   const loc = useLocation();
 
-  const hideNav =
-    loc.pathname === "/login" || loc.pathname.startsWith("/transfer");
+  const hideNav = loc.pathname === "/login" || loc.pathname.startsWith("/transfer");
 
   useBillingNotifications(!hideNav);
 
@@ -101,6 +94,15 @@ function Authed({ children }: { children: React.ReactNode }) {
 }
 
 /* ============================================================
+   Redirect helper: /app -> / (preserve search/hash)
+   ============================================================ */
+
+function AppPathRedirect() {
+  const loc = useLocation();
+  return <Navigate to={{ pathname: "/", search: loc.search }} replace />;
+}
+
+/* ============================================================
    Page transition wrapper
    ============================================================ */
 
@@ -109,13 +111,8 @@ function PageContainer({ children }: { children: React.ReactNode }) {
   const [showProgress, setShowProgress] = React.useState(false);
 
   React.useEffect(() => {
-    // запускаем прогресс при смене пути
     setShowProgress(true);
-
-    const t = window.setTimeout(() => {
-      setShowProgress(false);
-    }, 700); // совпадает с анимацией CSS
-
+    const t = window.setTimeout(() => setShowProgress(false), 700);
     return () => clearTimeout(t);
   }, [loc.pathname]);
 
@@ -126,6 +123,15 @@ function PageContainer({ children }: { children: React.ReactNode }) {
           <div className="top-progress__bar" />
         </div>
       )}
+
+      {/* Soft frost overlay on navigation */}
+      <div
+        className="page-frost"
+        style={{
+          opacity: showProgress ? 1 : 0,
+          pointerEvents: "none",
+        }}
+      />
 
       <div key={loc.pathname} className="page">
         {children}
@@ -149,6 +155,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                 {/* Public */}
                 <Route path="/login" element={<Login />} />
                 <Route path="/transfer" element={<Transfer />} />
+
+                {/* Compatibility: backend redirects to /app */}
+                <Route path="/app" element={<AppPathRedirect />} />
 
                 {/* Authed main */}
                 <Route

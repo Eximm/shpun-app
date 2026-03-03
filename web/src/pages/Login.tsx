@@ -1,7 +1,7 @@
-﻿// web/src/pages/Login.tsx
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { apiFetch } from "../shared/api/client";
+import { refetchMe } from "../app/auth/useMe";
 import type { AuthResponse } from "../shared/api/types";
 import { useI18n } from "../shared/i18n";
 import { toast } from "../shared/ui/toast";
@@ -38,6 +38,19 @@ type Mode = "telegram" | "web";
 type PassMode = "login" | "register";
 
 const PARTNER_LS_KEY = "partner_id_pending";
+
+// auth markers
+const AUTH_PENDING_KEY = "auth:pending";
+const AUTH_PENDING_AT_KEY = "auth:pending_at";
+
+function setAuthPending(provider: string) {
+  try {
+    sessionStorage.setItem(AUTH_PENDING_KEY, provider);
+    sessionStorage.setItem(AUTH_PENDING_AT_KEY, String(Date.now()));
+  } catch {
+    // ignore
+  }
+}
 
 function readPendingPartnerId(): number {
   try {
@@ -168,14 +181,11 @@ export function Login() {
   const canPasswordLogin = login.trim().length > 0 && password.length > 0;
   const passwordsMatch = password2.length === 0 ? true : password === password2;
   const canPasswordRegister =
-    login.trim().length > 0 &&
-    password.length > 0 &&
-    password2.length > 0 &&
-    password === password2;
+    login.trim().length > 0 && password.length > 0 && password2.length > 0 && password === password2;
 
   const botUsername = useMemo(() => getTelegramBotUsername(), []);
 
-  function goAfterAuth(r?: AuthResponse) {
+  function goAfterAuth(r?: AuthResponse, provider?: string) {
     const ok = !!r && (r as any).ok === true;
 
     if (!ok) {
@@ -184,14 +194,14 @@ export function Login() {
       return;
     }
 
+    // mark pending success toast (centralized in AuthGate)
+    setAuthPending(provider || "auth");
+
+      // ✅ ВАЖНО: обновляем глобальный /me-store после логина
+    refetchMe().catch(() => {});
+
     // ✅ при успешном входе — считаем, что реф. линк “использован”
     clearPendingPartnerId();
-
-    // ✅ SUCCESS TOAST — только при реальном успешном логине
-    toast.success(t("login.toast.success_title", "Вход выполнен"), {
-      description: t("login.toast.success_desc", "Добро пожаловать в Shpun App."),
-      durationMs: 2800,
-    });
 
     const nextRaw = String((r as any).next ?? "home").trim();
     const next = nextRaw || "home";
@@ -215,6 +225,8 @@ export function Login() {
       return;
     }
 
+    setAuthPending("password");
+
     setLoading(true);
     try {
       const r = await apiFetch<AuthResponse>("/auth/password", {
@@ -226,7 +238,7 @@ export function Login() {
           ...(partnerId ? { partner_id: partnerId } : {}),
         },
       });
-      goAfterAuth(r);
+      goAfterAuth(r, "password");
     } catch (e: any) {
       toastError(String(e?.message || t("error.password_login_failed", "Не удалось войти по паролю")));
     } finally {
@@ -241,6 +253,8 @@ export function Login() {
       return;
     }
 
+    setAuthPending("password");
+
     setLoading(true);
     try {
       const r = await apiFetch<AuthResponse>("/auth/password", {
@@ -252,7 +266,7 @@ export function Login() {
           ...(partnerId ? { partner_id: partnerId } : {}),
         },
       });
-      goAfterAuth(r);
+      goAfterAuth(r, "password");
     } catch (e: any) {
       toastError(String(e?.message || t("error.password_login_failed", "Не удалось выполнить регистрацию")));
     } finally {
@@ -267,6 +281,8 @@ export function Login() {
       return;
     }
 
+    setAuthPending("telegram");
+
     setLoading(true);
     try {
       const r = await apiFetch<AuthResponse>("/auth/telegram", {
@@ -276,7 +292,7 @@ export function Login() {
           ...(partnerId ? { partner_id: partnerId } : {}),
         },
       });
-      goAfterAuth(r);
+      goAfterAuth(r, "telegram");
     } catch (e: any) {
       toastError(String(e?.message || t("error.telegram_login_failed", "Не удалось войти через Telegram")));
     } finally {
@@ -287,6 +303,22 @@ export function Login() {
   function focusWidget() {
     widgetWrapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
+
+  // Если вдруг попали на /login с success-marker (на будущее / для совместимости)
+  useEffect(() => {
+    const sp = new URLSearchParams(String(loc?.search ?? ""));
+    const a = String(sp.get("a") ?? "").trim().toLowerCase();
+    const p = String(sp.get("p") ?? "").trim().toLowerCase();
+    if (a === "auth_ok") {
+      setAuthPending(p || "auth");
+      sp.delete("a");
+      sp.delete("p");
+      const nextSearch = sp.toString();
+      const nextUrl = window.location.pathname + (nextSearch ? `?${nextSearch}` : "") + window.location.hash;
+      window.history.replaceState(null, "", nextUrl);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loc?.search]);
 
   // Пришли после redirect-flow: /login?e=...
   useEffect(() => {
@@ -361,10 +393,7 @@ export function Login() {
       <div className="login__whatTitle">{t("login.what.title", "Что это такое")}</div>
 
       <div className="login__whatList">
-        <div>
-          ✅{" "}
-          {t("login.what.1", "Shpun App — кабинет Shpun SDN System: баланс, услуги и управление подпиской.")}
-        </div>
+        <div>✅ {t("login.what.1", "Shpun App — кабинет Shpun SDN System: баланс, услуги и управление подпиской.")}</div>
         <div>⚡ {t("login.what.2", "Самый быстрый вход — через Telegram: без паролей и лишних действий.")}</div>
         <div>🔒 {t("login.what.3", "Пароль — резервный способ входа (если нужно зайти из браузера).")}</div>
         <div>🧩 {t("login.what.4", "Google/Yandex появятся позже — сейчас всё уже работает через Telegram + пароль.")}</div>
@@ -496,9 +525,7 @@ export function Login() {
               )}
             </div>
 
-            <span className="badge">
-              {mode === "telegram" ? t("login.badge.tg", "Telegram") : t("login.badge.web", "Веб-режим")}
-            </span>
+            <span className="badge">{mode === "telegram" ? t("login.badge.tg", "Telegram") : t("login.badge.web", "Веб-режим")}</span>
           </div>
 
           {headerCard}
@@ -510,25 +537,16 @@ export function Login() {
 
           {mode === "telegram" ? (
             <div className="auth__actions login__dividerMt14">
-              <button
-                type="button"
-                className="btn btn--primary login__btnFull"
-                onClick={telegramLoginMiniApp}
-                disabled={loading}
-              >
+              <button type="button" className="btn btn--primary login__btnFull" onClick={telegramLoginMiniApp} disabled={loading}>
                 {loading ? t("login.tg.cta_loading", "Входим…") : t("login.tg.cta", "Войти через Telegram")}
               </button>
             </div>
           ) : (
             <div ref={widgetWrapRef} className="login__dividerMt14">
-              <div className="pre login__preMb10">
-                {t("login.widget.tip", "Нажмите кнопку ниже — это официальный вход через Telegram.")}
-              </div>
+              <div className="pre login__preMb10">{t("login.widget.tip", "Нажмите кнопку ниже — это официальный вход через Telegram.")}</div>
 
               {!botUsername ? (
-                <div className="pre">
-                  {t("login.widget.env_missing", "Не настроен VITE_TG_BOT_USERNAME — виджет Telegram недоступен.")}
-                </div>
+                <div className="pre">{t("login.widget.env_missing", "Не настроен VITE_TG_BOT_USERNAME — виджет Telegram недоступен.")}</div>
               ) : (
                 <div id="tg-widget-container" className="login__widgetBox" />
               )}
@@ -566,12 +584,7 @@ export function Login() {
               <span className="auth__providerRight">→</span>
             </button>
 
-            <button
-              className="btn auth__provider login__providerBtn"
-              disabled={true}
-              type="button"
-              title={t("login.providers.soon", "Скоро")}
-            >
+            <button className="btn auth__provider login__providerBtn" disabled={true} type="button" title={t("login.providers.soon", "Скоро")}>
               <span className="auth__providerIcon">🟦</span>
               <span className="auth__providerText">
                 Google
@@ -580,12 +593,7 @@ export function Login() {
               <span className="auth__providerRight">🔒</span>
             </button>
 
-            <button
-              className="btn auth__provider login__providerBtn"
-              disabled={true}
-              type="button"
-              title={t("login.providers.soon", "Скоро")}
-            >
+            <button className="btn auth__provider login__providerBtn" disabled={true} type="button" title={t("login.providers.soon", "Скоро")}>
               <span className="auth__providerIcon">🟨</span>
               <span className="auth__providerText">
                 Yandex

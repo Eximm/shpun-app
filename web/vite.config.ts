@@ -6,18 +6,10 @@ import { VitePWA } from "vite-plugin-pwa";
 export default defineConfig({
   base: "/",
 
-  resolve: {
-    dedupe: ["react", "react-dom"],
-  },
+  resolve: { dedupe: ["react", "react-dom"] },
+  optimizeDeps: { include: ["react", "react-dom"] },
 
-  optimizeDeps: {
-    include: ["react", "react-dom"],
-  },
-
-  build: {
-    sourcemap: false,
-    minify: "esbuild",
-  },
+  build: { sourcemap: false, minify: "esbuild" },
 
   plugins: [
     react(),
@@ -26,6 +18,7 @@ export default defineConfig({
       srcDir: "src",
       filename: "sw.ts",
 
+      // регистрация SW — только из кода (main.tsx)
       injectRegister: null,
       registerType: "autoUpdate",
 
@@ -63,13 +56,12 @@ export default defineConfig({
         ],
       },
 
-      // В injectManifest стратегия кэша управляется в src/sw.ts
-      workbox: {
-        cleanupOutdatedCaches: true,
-      },
+      workbox: { cleanupOutdatedCaches: true },
 
+   
       devOptions: {
-        enabled: false,
+        enabled: true,
+        type: "module",
       },
     }),
   ],

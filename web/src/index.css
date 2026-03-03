@@ -2127,14 +2127,18 @@ button, a { -webkit-tap-highlight-color: transparent; }
 
 
 /* Page enter animation (soft) */
+/* IMPORTANT:
+   Do NOT use transform/filter on .page because it breaks position:fixed overlays
+   (app-loader, toasts, modals) by creating a new containing block. */
 .page {
   animation: pageIn 220ms ease-out both;
 }
 
 @keyframes pageIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
+
 /* ============================================================
    Global App Loader (premium)
    ============================================================ */
@@ -2144,13 +2148,17 @@ button, a { -webkit-tap-highlight-color: transparent; }
   inset: 0;
   z-index: 100;
 
-  display: grid;
-  place-items: center;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+
+  padding-top: 110px;
 
   background:
     radial-gradient(900px 500px at 50% -10%, rgba(124,92,255,0.26), transparent 60%),
     radial-gradient(700px 420px at 10% 10%, rgba(77,215,255,0.16), transparent 60%),
     linear-gradient(180deg, #070a10, var(--bg));
+
   backdrop-filter: blur(10px);
 }
 
@@ -2235,11 +2243,13 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .app-loader__skeleton .skeleton {
   border-radius: 12px;
 }
+
 @keyframes loaderPulse {
   0%   { transform: scale(1); opacity: 0.7; }
   50%  { transform: scale(1.4); opacity: 1; }
   100% { transform: scale(1); opacity: 0.7; }
 }
+
 /* ============================================================
    Page transition overlay (native-like)
    ============================================================ */
@@ -2259,6 +2269,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
   35% { background: rgba(10, 14, 22, 0.16); backdrop-filter: blur(6px); opacity: 1; }
   100% { background: rgba(10, 14, 22, 0.0); backdrop-filter: blur(0px); opacity: 0; }
 }
+
 /* ============================================================
    Top progress bar (navigation feedback)
    ============================================================ */
@@ -2353,4 +2364,151 @@ button, a { -webkit-tap-highlight-color: transparent; }
 /* Providers: ensure buttons stretch full width */
 .login__providerBtn {
   width: 100%;
+}
+/* ===== BottomNav micro-animations + active indicator ===== */
+
+.tab {
+  position: relative;
+}
+
+.tab__indicator {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 6px;
+  height: 3px;
+  border-radius: 999px;
+
+  background: currentColor;
+  opacity: 0;
+
+  transform: translateY(6px) scaleX(0.55);
+  transform-origin: 50% 50%;
+
+  transition:
+    opacity 180ms ease,
+    transform 220ms cubic-bezier(.2,.9,.2,1);
+}
+
+/* Active underline / pill */
+.tab--active .tab__indicator {
+  opacity: 0.9;
+  transform: translateY(0) scaleX(1);
+}
+
+/* Soft "pop" for active icon/text */
+.tab__icon,
+.tab__label {
+  transition: transform 220ms cubic-bezier(.2,.9,.2,1), opacity 180ms ease;
+}
+
+.tab--active .tab__icon {
+  transform: translateY(-1px) scale(1.06);
+}
+
+.tab--active .tab__label {
+  transform: translateY(-0.5px);
+}
+
+/* Reduce motion */
+@media (prefers-reduced-motion: reduce) {
+  .tab__indicator,
+  .tab__icon,
+  .tab__label {
+    transition: none !important;
+  }
+}
+/* ============================================================
+   Page status card (mini, like AuthGate loader)
+   ============================================================ */
+
+.page-status {
+  width: 100%;
+  margin-top: 18px;
+
+  display: flex;
+  justify-content: center;
+}
+
+/* ✅ Centered variant for page loading states */
+.page-status--center{
+  margin-top: 0;
+  min-height: calc(100vh - 64px - 72px); /* topbar ~64 + bottomnav ~72 */
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+}
+
+.page-status__card{
+  width: min(680px, 100%);
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.04);
+  box-shadow:
+    0 20px 80px rgba(0,0,0,0.35),
+    0 1px 0 rgba(255,255,255,0.06) inset;
+  padding: 16px 16px 14px;
+  overflow: hidden;
+  position: relative;
+}
+
+.page-status__shine{
+  position: absolute;
+  inset: -40% -30%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.10), transparent);
+  transform: rotate(20deg);
+  animation: pageStatusShine 1.25s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes pageStatusShine{
+  0% { transform: translateX(-35%) rotate(20deg); opacity: 0; }
+  25% { opacity: 1; }
+  100% { transform: translateX(35%) rotate(20deg); opacity: 0; }
+}
+
+.page-status__row{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.page-status__mark{
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  box-shadow: 0 0 40px rgba(124,92,255,0.55);
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.page-status__mark::after{
+  content: "";
+  position: absolute;
+  inset: -10px;
+  border-radius: 999px;
+  border: 1px solid rgba(124,92,255,0.25);
+  animation: pageStatusOrb 1.35s ease-in-out infinite;
+}
+
+@keyframes pageStatusOrb{
+  0% { transform: scale(0.9); opacity: 0.35; }
+  50% { transform: scale(1.45); opacity: 0.65; }
+  100% { transform: scale(0.9); opacity: 0.35; }
+}
+
+.page-status__title{
+  font-weight: 950;
+  letter-spacing: 0.2px;
+  color: rgba(255,255,255,0.92);
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.page-status__text{
+  margin-top: 4px;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: rgba(255,255,255,0.62);
 }

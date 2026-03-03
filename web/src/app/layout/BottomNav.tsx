@@ -13,15 +13,15 @@ function Tab({
   end?: boolean;
 }) {
   return (
-    <NavLink
-      to={to}
-      end={end}
-      className={({ isActive }) => "tab" + (isActive ? " tab--active" : "")}
-    >
+    <NavLink to={to} end={end} className={({ isActive }) => "tab" + (isActive ? " tab--active" : "")}>
       <span className="tab__icon" aria-hidden="true">
         {icon}
       </span>
+
       <span className="tab__label">{label}</span>
+
+      {/* Active indicator (animated via CSS). Always rendered -> smooth layout */}
+      <span className="tab__indicator" aria-hidden="true" />
     </NavLink>
   );
 }
@@ -51,12 +51,7 @@ export function BottomNav() {
           label="Новости"
           icon={
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M6 7h12M6 12h12M6 17h9"
-                stroke="currentColor"
-                strokeWidth="1.7"
-                strokeLinecap="round"
-              />
+              <path d="M6 7h12M6 12h12M6 17h9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
               <path
                 d="M4 6a2 2 0 0 1 2-2h11a3 3 0 0 1 3 3v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6Z"
                 stroke="currentColor"
@@ -72,12 +67,7 @@ export function BottomNav() {
           label="Услуги"
           icon={
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M7 7h10M7 12h10M7 17h10"
-                stroke="currentColor"
-                strokeWidth="1.7"
-                strokeLinecap="round"
-              />
+              <path d="M7 7h10M7 12h10M7 17h10" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
             </svg>
           }
         />
@@ -87,17 +77,8 @@ export function BottomNav() {
           label="Оплата"
           icon={
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7Z"
-                stroke="currentColor"
-                strokeWidth="1.7"
-              />
-              <path
-                d="M4 9h16"
-                stroke="currentColor"
-                strokeWidth="1.7"
-                strokeLinecap="round"
-              />
+              <path d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7Z" stroke="currentColor" strokeWidth="1.7" />
+              <path d="M4 9h16" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
             </svg>
           }
         />
@@ -107,17 +88,8 @@ export function BottomNav() {
           label="Профиль"
           icon={
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z"
-                stroke="currentColor"
-                strokeWidth="1.7"
-              />
-              <path
-                d="M4.5 20a7.5 7.5 0 0 1 15 0"
-                stroke="currentColor"
-                strokeWidth="1.7"
-                strokeLinecap="round"
-              />
+              <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" stroke="currentColor" strokeWidth="1.7" />
+              <path d="M4.5 20a7.5 7.5 0 0 1 15 0" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
             </svg>
           }
         />
