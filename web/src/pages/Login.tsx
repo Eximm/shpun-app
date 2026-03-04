@@ -342,21 +342,39 @@ export function Login() {
     widgetWrapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  // Если вдруг попали на /login с success-marker (на будущее / для совместимости)
-  useEffect(() => {
-    const sp = new URLSearchParams(String(loc?.search ?? ""));
-    const a = String(sp.get("a") ?? "").trim().toLowerCase();
-    const p = String(sp.get("p") ?? "").trim().toLowerCase();
-    if (a === "auth_ok") {
-      setAuthPending(p || "auth");
-      sp.delete("a");
-      sp.delete("p");
-      const nextSearch = sp.toString();
-      const nextUrl = window.location.pathname + (nextSearch ? `?${nextSearch}` : "") + window.location.hash;
-      window.history.replaceState(null, "", nextUrl);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loc?.search]);
+// Если вдруг попали на /login с success-marker (на будущее / для совместимости)
+useEffect(() => {
+  const sp = new URLSearchParams(String(loc?.search ?? ""));
+  const a = String(sp.get("a") ?? "").trim().toLowerCase();
+  const p = String(sp.get("p") ?? "").trim().toLowerCase();
+
+  if (a === "auth_ok") {
+    const provider = p || "auth";
+
+    // ставим маркер успешной авторизации
+    setAuthPending(provider);
+
+    // обновляем /me чтобы AuthGate увидел пользователя
+    refetchMe().catch(() => {});
+
+    // чистим URL
+    sp.delete("a");
+    sp.delete("p");
+
+    const nextSearch = sp.toString();
+    const nextUrl =
+      window.location.pathname +
+      (nextSearch ? `?${nextSearch}` : "") +
+      window.location.hash;
+
+    window.history.replaceState(null, "", nextUrl);
+
+    // отправляем пользователя в приложение
+    nav("/", { replace: true });
+  }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [loc?.search]);
 
   // Пришли после redirect-flow: /login?e=...
   useEffect(() => {
