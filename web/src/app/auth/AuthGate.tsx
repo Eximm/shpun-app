@@ -6,6 +6,10 @@ import { toast } from "../../shared/ui/toast";
 
 const PARTNER_LS_KEY = "partner_id_pending";
 
+// success-login markers (ставятся в Login.tsx)
+const AUTH_PENDING_KEY = "auth:pending";
+const AUTH_PENDING_AT_KEY = "auth:pending_at";
+
 function parsePartnerIdFromUrl(): number {
   try {
     const direct = new URLSearchParams(window.location.search || "");
@@ -49,6 +53,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const nav = useNavigate();
 
   const notifiedRef = useRef(false);
+  const successShownRef = useRef(false);
 
   // === Loader visibility state ===
   const [showLoader, setShowLoader] = useState(true);
@@ -62,6 +67,37 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   /* Enable push after auth */
   useEffect(() => {
     if (me) enablePush().catch(() => {});
+  }, [me]);
+
+  /* Success toast after login */
+  useEffect(() => {
+    if (!me) return;
+    if (successShownRef.current) return;
+
+    try {
+      const provider = sessionStorage.getItem(AUTH_PENDING_KEY);
+      const ts = Number(sessionStorage.getItem(AUTH_PENDING_AT_KEY) || "0");
+
+      if (!provider) return;
+
+      // защита от старых маркеров (10 секунд)
+      if (ts && Date.now() - ts > 10000) {
+        sessionStorage.removeItem(AUTH_PENDING_KEY);
+        sessionStorage.removeItem(AUTH_PENDING_AT_KEY);
+        return;
+      }
+
+      successShownRef.current = true;
+
+      toast.success("Вы успешно вошли", {
+        description: "Добро пожаловать в Shpun App.",
+      });
+
+      sessionStorage.removeItem(AUTH_PENDING_KEY);
+      sessionStorage.removeItem(AUTH_PENDING_AT_KEY);
+    } catch {
+      // ignore
+    }
   }, [me]);
 
   /* Session expired */
@@ -90,12 +126,11 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // loading finished → fade out
     setFadeOut(true);
 
     const t = setTimeout(() => {
       setShowLoader(false);
-    }, 180); // совпадает с CSS transition
+    }, 180);
 
     return () => clearTimeout(t);
   }, [loading]);

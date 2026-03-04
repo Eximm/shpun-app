@@ -5,6 +5,7 @@ import { useMe } from "../app/auth/useMe";
 import { apiFetch } from "../shared/api/client";
 import { useI18n } from "../shared/i18n";
 import { disablePush, enablePush, getPushState } from "../app/notifications/push";
+import { PageStatusCard } from "../shared/ui/PageStatusCard";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -605,11 +606,8 @@ export function Profile() {
   if (loading) {
     return (
       <div className="section">
-        <div className="card">
-          <div className="card__body">
-            <h1 className="h1">{t("profile.title")}</h1>
-            <p className="p">Загрузка…</p>
-          </div>
+        <div className="page-status">
+          <PageStatusCard title="Услуги" text="Загрузка..." />
         </div>
       </div>
     );

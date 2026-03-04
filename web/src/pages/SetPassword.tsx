@@ -147,7 +147,7 @@ export function SetPassword() {
       }
 
       toast.success(isChange ? "Пароль изменён ✅" : "Пароль установлен ✅", {
-        description: "Теперь можно входить по логину и паролю.",
+        description: "Пароль успешно изменен.",
         durationMs: 2500,
       });
 
