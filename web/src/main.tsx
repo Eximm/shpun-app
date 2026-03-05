@@ -56,7 +56,7 @@ if (import.meta.env.PROD) {
 }
 
 /* ============================================================
-   Small UI: Push Onboarding Modal
+   Push Onboarding Modal
    ============================================================ */
 
 function PushOnboardingModal({
@@ -64,26 +64,40 @@ function PushOnboardingModal({
   busy,
   standalone,
   permission,
+  telegramMiniApp,
   onAccept,
-  onDismiss
+  onDismiss,
 }: {
-  open: boolean
-  busy: boolean
-  standalone: boolean
-  permission: string
-  onAccept: () => void
-  onDismiss: () => void
+  open: boolean;
+  busy: boolean;
+  standalone: boolean;
+  permission: string;
+  telegramMiniApp: boolean;
+  onAccept: () => void;
+  onDismiss: () => void;
 }) {
-  if (!open) return null
+  if (!open) return null;
 
-  const hint =
-    permission === "denied"
-      ? "Уведомления отключены в настройках браузера."
-      : !standalone
-      ? "Установите приложение чтобы получать уведомления."
-      : "Включите уведомления чтобы получать важные события."
+  let title = "🔔 Уведомления";
+  let hint = "Включите уведомления, чтобы получать важные события.";
+  let primaryText = "Включить";
 
-  const primaryText = !standalone ? "Ок" : "Включить"
+  if (telegramMiniApp) {
+    title = "📲 Уведомления в приложении";
+    hint =
+      "В Telegram mini app системные push не работают. Пока мини-приложение открыто, вы увидите тосты. Для push-уведомлений откройте Shpun App в браузере и установите приложение на устройство.";
+    primaryText = "Понятно";
+  } else if (permission === "denied") {
+    hint = "Уведомления отключены в настройках браузера. Их можно разрешить позже в настройках сайта или в профиле.";
+    primaryText = "Понятно";
+  } else if (!standalone) {
+    title = "📲 Установите приложение";
+    hint = "Установите Shpun App на устройство, чтобы потом получать push-уведомления о балансе, оплате и услугах.";
+    primaryText = "Ок";
+  } else {
+    hint = "Включите уведомления, чтобы получать важные события о балансе, оплате и услугах даже когда приложение закрыто.";
+    primaryText = "Включить";
+  }
 
   return (
     <div
@@ -93,25 +107,21 @@ function PushOnboardingModal({
       style={{
         position: "fixed",
         inset: 0,
-
         background: "rgba(0,0,0,.65)",
-
         backdropFilter: "blur(6px)",
         WebkitBackdropFilter: "blur(6px)",
-
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-
         padding: 16,
-        zIndex: 9999
+        zIndex: 9999,
       }}
     >
       <div
         className="card"
         onMouseDown={(e) => e.stopPropagation()}
         style={{
-          width: "min(520px, 92vw)"
+          width: "min(520px, 92vw)",
         }}
       >
         <div className="card__body">
@@ -119,16 +129,16 @@ function PushOnboardingModal({
             className="h1"
             style={{
               fontSize: 18,
-              margin: 0
+              margin: 0,
             }}
           >
-            🔔 Уведомления
+            {title}
           </div>
 
           <p
             className="p"
             style={{
-              marginTop: 8
+              marginTop: 8,
             }}
           >
             {hint}
@@ -139,32 +149,23 @@ function PushOnboardingModal({
             style={{
               marginTop: 16,
               justifyContent: "flex-end",
-              gap: 10
+              gap: 10,
             }}
           >
-            <button
-              className="btn"
-              type="button"
-              onClick={onDismiss}
-              disabled={busy}
-            >
+            <button className="btn" type="button" onClick={onDismiss} disabled={busy}>
               Не сейчас
             </button>
 
-            <button
-              className="btn btn--primary"
-              type="button"
-              onClick={onAccept}
-              disabled={busy}
-            >
+            <button className="btn btn--primary" type="button" onClick={onAccept} disabled={busy}>
               {busy ? "..." : primaryText}
             </button>
           </div>
         </div>
       </div>
     </div>
-  )
+  );
 }
+
 /* ============================================================
    AppShell
    ============================================================ */
@@ -174,9 +175,6 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const loc = useLocation();
 
   const hideNav = loc.pathname === "/login" || loc.pathname.startsWith("/transfer");
-
-  // Toasts + polling only when in main app UI (as before)
-  useBillingNotifications(!hideNav);
 
   return (
     <div className="app">
@@ -203,10 +201,13 @@ function AppShell({ children }: { children: React.ReactNode }) {
 }
 
 function Authed({ children }: { children: React.ReactNode }) {
-  // ✅ Push subscription auto-restore for authed area (independent from hideNav)
+  const loc = useLocation();
+
   usePushAutoregister(true);
 
-  // ✅ Onboarding prompt right after auth (in-app modal + user-gesture button)
+  const hide = loc.pathname === "/login" || loc.pathname.startsWith("/transfer");
+  useBillingNotifications(!hide);
+
   const po = usePushOnboarding(true);
 
   return (
@@ -218,6 +219,7 @@ function Authed({ children }: { children: React.ReactNode }) {
         busy={po.busy}
         standalone={po.state.standalone}
         permission={String(po.state.permission)}
+        telegramMiniApp={po.telegramMiniApp}
         onAccept={po.accept}
         onDismiss={po.dismiss}
       />
@@ -226,7 +228,7 @@ function Authed({ children }: { children: React.ReactNode }) {
 }
 
 /* ============================================================
-   Redirect helper: /app -> / (preserve search/hash)
+   Redirect helper: /app -> /
    ============================================================ */
 
 function AppPathRedirect() {
@@ -283,14 +285,11 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <AppShell>
             <PageContainer>
               <Routes>
-                {/* Public */}
                 <Route path="/login" element={<Login />} />
                 <Route path="/transfer" element={<Transfer />} />
 
-                {/* Compatibility: backend redirects to /app */}
                 <Route path="/app" element={<AppPathRedirect />} />
 
-                {/* Authed main */}
                 <Route
                   path="/"
                   element={
@@ -407,5 +406,5 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         </BrowserRouter>
       </ToastProvider>
     </I18nProvider>
-  </React.StrictMode>
+  </React.StrictMode>,
 );
