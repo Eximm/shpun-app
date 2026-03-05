@@ -72,6 +72,14 @@ registerRoute(
    PUSH HANDLER
    ========================================================= */
 
+function pickLink(data: any): string {
+  const a = data?.url;
+  const b = data?.link;
+  const c = data?.data?.link;
+  const linkRaw = typeof a === "string" && a ? a : typeof b === "string" && b ? b : typeof c === "string" && c ? c : "";
+  return linkRaw || "/feed";
+}
+
 self.addEventListener("push", (event) => {
   if (!event.data) return;
 
@@ -83,18 +91,15 @@ self.addEventListener("push", (event) => {
   }
 
   const title = String(data?.title || "ShpunApp").slice(0, 80);
-  const body = String(data?.body || "").slice(0, 160);
-
-  // link must always be a string (avoid objects/null)
-  const linkRaw = data?.data?.link;
-  const link = typeof linkRaw === "string" && linkRaw.length ? linkRaw : "/feed";
+  const body = String(data?.body ?? data?.message ?? "").slice(0, 160);
+  const link = pickLink(data);
 
   const options: NotificationOptions = {
     body,
     icon: "/icons/icon-192.png",
     badge: "/icons/badge-96.png",
     data: { link },
-    tag: data?.data?.event_id || undefined,
+    tag: data?.tag || data?.data?.event_id || undefined,
     silent: false,
   };
 
@@ -108,7 +113,7 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
-  const link = event.notification?.data?.link || "/";
+  const link = String(event.notification?.data?.link || "/");
 
   event.waitUntil(
     (async () => {
@@ -117,14 +122,34 @@ self.addEventListener("notificationclick", (event) => {
         includeUncontrolled: true,
       });
 
+      // Try to focus existing window and navigate it
       for (const client of allClients) {
-        if ("focus" in client) {
-          client.postMessage({ type: "NAVIGATE", link });
-          return client.focus();
+        const wc = client as WindowClient;
+
+        try {
+          if (typeof wc.navigate === "function") {
+            await wc.navigate(link);
+          }
+          await wc.focus();
+          return;
+        } catch {
+          // ignore and continue
+        }
+
+        try {
+          await wc.focus();
+          return;
+        } catch {
+          // ignore
         }
       }
 
-      return self.clients.openWindow(link);
+      // Otherwise open a new window
+      try {
+        await self.clients.openWindow(link);
+      } catch {
+        // ignore
+      }
     })(),
   );
 });

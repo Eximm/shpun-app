@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { ensurePushSubscribed, isPushSupported } from "./push";
+import { ensurePushSubscribed, isPushDisabledByUser, isPushSupported } from "./push";
 
 // backoff между попытками
 const RETRY_MS = 10 * 60 * 1000;
@@ -17,6 +17,7 @@ export function usePushAutoregister(enabled: boolean) {
       if (stopped) return;
       if (inFlightRef.current) return;
       if (!isPushSupported()) return;
+      if (isPushDisabledByUser()) return;
 
       const now = Date.now();
       if (now - lastAttemptAtRef.current < RETRY_MS) return;

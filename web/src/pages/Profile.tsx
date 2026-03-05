@@ -122,20 +122,15 @@ function RowLine({
         borderRadius: 14,
         border: "1px solid rgba(255,255,255,.08)",
         background: "rgba(255,255,255,.02)",
-        transition:
-          "transform 120ms ease, background 120ms ease, border-color 120ms ease",
+        transition: "transform 120ms ease, background 120ms ease, border-color 120ms ease",
       }}
       onMouseEnter={(e) => {
-        (e.currentTarget as HTMLDivElement).style.background =
-          "rgba(255,255,255,.04)";
-        (e.currentTarget as HTMLDivElement).style.borderColor =
-          "rgba(255,255,255,.14)";
+        (e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,.04)";
+        (e.currentTarget as HTMLDivElement).style.borderColor = "rgba(255,255,255,.14)";
       }}
       onMouseLeave={(e) => {
-        (e.currentTarget as HTMLDivElement).style.background =
-          "rgba(255,255,255,.02)";
-        (e.currentTarget as HTMLDivElement).style.borderColor =
-          "rgba(255,255,255,.08)";
+        (e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,.02)";
+        (e.currentTarget as HTMLDivElement).style.borderColor = "rgba(255,255,255,.08)";
       }}
     >
       <div
@@ -190,9 +185,7 @@ function RowLine({
         {right ? (
           rightCount <= 1 ? (
             // ОДИН элемент справа (например "Скоро") — компактно
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              {right}
-            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>{right}</div>
           ) : (
             // ДВА элемента справа (badge + button) — одинаковая ширина
             <div
@@ -212,9 +205,7 @@ function RowLine({
         ) : null}
       </div>
 
-      {hint ? (
-        <div style={{ marginTop: 6, fontSize: 12, opacity: 0.7 }}>{hint}</div>
-      ) : null}
+      {hint ? <div style={{ marginTop: 6, fontSize: 12, opacity: 0.7 }}>{hint}</div> : null}
     </div>
   );
 }
@@ -247,11 +238,7 @@ function Modal({
         zIndex: 9999,
       }}
     >
-      <div
-        className="card"
-        onMouseDown={(e) => e.stopPropagation()}
-        style={{ width: "min(680px, 100%)" }}
-      >
+      <div className="card" onMouseDown={(e) => e.stopPropagation()} style={{ width: "min(680px, 100%)" }}>
         <div className="card__body">
           <div
             style={{
@@ -347,21 +334,14 @@ export function Profile() {
   const [savedPhone, setSavedPhone] = useState<string>("");
 
   useEffect(() => {
-    const fn = String(
-      profile?.fullName ?? profile?.full_name ?? profile?.displayName ?? ""
-    ).trim();
+    const fn = String(profile?.fullName ?? profile?.full_name ?? profile?.displayName ?? "").trim();
     const ph = String(profile?.phone ?? "").trim();
     setFullName(fn);
     setPhone(ph);
     setSavedFullName(fn);
     setSavedPhone(ph);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    profile?.fullName,
-    profile?.full_name,
-    profile?.displayName,
-    profile?.phone,
-  ]);
+  }, [profile?.fullName, profile?.full_name, profile?.displayName, profile?.phone]);
 
   async function savePersonal() {
     setPersonalError(null);
@@ -374,8 +354,7 @@ export function Profile() {
 
       await apiFetch("/user/profile", {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
+        body: payload, // ✅ no JSON.stringify (apiFetch serializes objects)
       });
 
       setSavedFullName(payload.full_name);
@@ -439,8 +418,7 @@ export function Profile() {
     try {
       const resp = await apiFetch<any>("/user/telegram", {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ login: clean }),
+        body: { login: clean }, // ✅ no JSON.stringify
       });
 
       const tg = resp?.telegram ?? null;
@@ -490,8 +468,7 @@ export function Profile() {
 
   // ===== PWA install =====
   const [standalone, setStandalone] = useState(false);
-  const [deferredPrompt, setDeferredPrompt] =
-    useState<BeforeInstallPromptEvent | null>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [iosInstallModal, setIosInstallModal] = useState(false);
 
   useEffect(() => {
@@ -529,9 +506,7 @@ export function Profile() {
     }
 
     if (!deferredPrompt) {
-      showToast(
-        "Установка через меню браузера (⋮) → «Установить приложение»"
-      );
+      showToast("Установка через меню браузера (⋮) → «Установить приложение»");
       return;
     }
 
@@ -581,8 +556,7 @@ export function Profile() {
     if (pushLoading) return;
     setPushLoading(true);
     try {
-      const enabled =
-        pushState.permission === "granted" && pushState.hasSubscription;
+      const enabled = pushState.permission === "granted" && pushState.hasSubscription;
 
       if (enabled) {
         await disablePush();
@@ -592,8 +566,7 @@ export function Profile() {
         if (ok) showToast("Уведомления включены ✅");
         else {
           if (!pushState.standalone) showToast("Для push установи PWA 📲");
-          else if (pushState.permission === "denied")
-            showToast("Уведомления запрещены в браузере");
+          else if (pushState.permission === "denied") showToast("Уведомления запрещены в браузере");
           else showToast("Не удалось включить уведомления");
         }
       }
@@ -624,11 +597,7 @@ export function Profile() {
               <button className="btn btn--primary" onClick={() => refetch?.()}>
                 Повторить
               </button>
-              <button
-                className="btn btn--danger"
-                onClick={logout}
-                disabled={loggingOut}
-              >
+              <button className="btn btn--danger" onClick={logout} disabled={loggingOut}>
                 {loggingOut ? "…" : t("profile.logout")}
               </button>
             </div>
@@ -640,40 +609,27 @@ export function Profile() {
 
   const personalNameView = savedFullName || profile?.displayName || "—";
   const personalPhoneView = savedPhone || "—";
-  const telegramStatusBadge = telegramLogin ? (
-    <Badge text="Привязан" tone="ok" />
-  ) : (
-    <Badge text="Не привязан" />
-  );
+  const telegramStatusBadge = telegramLogin ? <Badge text="Привязан" tone="ok" /> : <Badge text="Не привязан" />;
   const soonBadge = <Badge text="Скоро" tone="soon" />;
 
   // --- Settings: compact hints (mobile-friendly)
   const langHint = "Сохраняется автоматически.";
 
   const pwaText = standalone ? "Установлено" : "Не установлено";
-  const pwaBadge = standalone ? (
-    <Badge text="Установлено" tone="ok" />
-  ) : (
-    <Badge text="Не установлено" />
-  );
+  const pwaBadge = standalone ? <Badge text="Установлено" tone="ok" /> : <Badge text="Не установлено" />;
 
-  const pwaBtnText = isIOS()
-    ? "Как установить"
-    : deferredPrompt
-    ? "Установить"
-    : "Через меню";
+  const pwaBtnText = isIOS() ? "Как установить" : deferredPrompt ? "Установить" : "Через меню";
 
   const pwaHint = standalone
     ? "Есть на экране."
     : isIOS()
-    ? "iPhone: «Поделиться» → «На экран Домой»."
-    : deferredPrompt
-    ? "Рекомендуем установить на экран."
-    : "Открой меню (⋮) → «Установить приложение».";
+      ? "iPhone: «Поделиться» → «На экран Домой»."
+      : deferredPrompt
+        ? "Рекомендуем установить на экран."
+        : "Открой меню (⋮) → «Установить приложение».";
 
   const pushPermText = permissionLabel(String(pushState.permission));
-  const pushEnabled =
-    pushState.permission === "granted" && pushState.hasSubscription;
+  const pushEnabled = pushState.permission === "granted" && pushState.hasSubscription;
 
   const pushBadge =
     pushState.permission === "granted" ? (
@@ -687,14 +643,14 @@ export function Profile() {
   const pushHint = !pushState.supported
     ? "Недоступно в этом браузере."
     : pushState.permission === "denied"
-    ? "Разреши уведомления в настройках сайта."
-    : !pushState.standalone
-    ? "Для push нужно установить PWA."
-    : pushState.permission === "default"
-    ? "Нажми «Включить», чтобы запросить доступ."
-    : pushEnabled
-    ? "Можно присылать важные уведомления."
-    : "Разрешение есть — включи подписку.";
+      ? "Разреши уведомления в настройках сайта."
+      : !pushState.standalone
+        ? "Для push нужно установить PWA."
+        : pushState.permission === "default"
+          ? "Нажми «Включить», чтобы запросить доступ."
+          : pushEnabled
+            ? "Можно присылать важные уведомления."
+            : "Разрешение есть — включи подписку.";
 
   return (
     <div className="section">
@@ -704,11 +660,7 @@ export function Profile() {
           <CardTitle
             icon="👤"
             right={
-              <button
-                className="btn"
-                onClick={() => refetch?.()}
-                title={t("profile.refresh")}
-              >
+              <button className="btn" onClick={() => refetch?.()} title={t("profile.refresh")}>
                 {t("profile.refresh")}
               </button>
             }
@@ -721,11 +673,7 @@ export function Profile() {
           {toast ? <Toast text={toast} /> : null}
 
           <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
-            <button
-              className="btn"
-              onClick={goChangePassword}
-              style={{ width: "100%" }}
-            >
+            <button className="btn" onClick={goChangePassword} style={{ width: "100%" }}>
               🔐 {t("profile.change_password")}
             </button>
 
@@ -754,18 +702,10 @@ export function Profile() {
                   </button>
                 ) : (
                   <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                    <button
-                      className="btn btn--primary"
-                      onClick={savePersonal}
-                      disabled={savingPersonal}
-                    >
+                    <button className="btn btn--primary" onClick={savePersonal} disabled={savingPersonal}>
                       {savingPersonal ? "…" : "Сохранить"}
                     </button>
-                    <button
-                      className="btn"
-                      onClick={cancelPersonal}
-                      disabled={savingPersonal}
-                    >
+                    <button className="btn" onClick={cancelPersonal} disabled={savingPersonal}>
                       Отмена
                     </button>
                   </div>
@@ -819,7 +759,7 @@ export function Profile() {
               />
 
               <RowLine
-                icon="🆔"
+                icon="🔢"
                 label="Логин"
                 value={loginText || "—"}
                 right={
@@ -844,15 +784,11 @@ export function Profile() {
                   gap: 10,
                 }}
               >
-                <RowLine icon="🔢" label="ID" value={profile?.id ?? "—"} />
+                <RowLine icon="🆔" label="ID" value={profile?.id ?? "—"} />
                 <RowLine icon="📅" label="Создан" value={formatDate(created)} />
               </div>
 
-              <RowLine
-                icon="🕒"
-                label="Последний вход"
-                value={formatDate(lastLogin)}
-              />
+              <RowLine icon="🕒" label="Последний вход" value={formatDate(lastLogin)} />
             </div>
           </div>
         </div>
@@ -901,17 +837,12 @@ export function Profile() {
                     <span aria-hidden="true">🌍</span>
                     <span>Язык интерфейса</span>
                   </div>
-                  <div className="profile-row__value">
-                    {lang === "ru" ? "Русский" : "English"}
-                  </div>
+                  <div className="profile-row__value">{lang === "ru" ? "Русский" : "English"}</div>
                   <div className="profile-row__hint">{langHint}</div>
                 </div>
 
                 <div className="profile-row__right">
-                  <Segmented
-                    value={(lang as any) === "en" ? "en" : "ru"}
-                    onChange={setLang as any}
-                  />
+                  <Segmented value={(lang as any) === "en" ? "en" : "ru"} onChange={setLang as any} />
                 </div>
               </div>
 
@@ -929,11 +860,7 @@ export function Profile() {
                 <div className="profile-row__right">
                   {pwaBadge}
                   {!standalone ? (
-                    <button
-                      className="btn btn--primary"
-                      onClick={doInstallPwa}
-                      type="button"
-                    >
+                    <button className="btn btn--primary" onClick={doInstallPwa} type="button">
                       {pwaBtnText}
                     </button>
                   ) : null}
@@ -992,11 +919,7 @@ export function Profile() {
         </div>
       </div>
 
-      <Modal
-        open={iosInstallModal}
-        title="Установка на iPhone"
-        onClose={() => setIosInstallModal(false)}
-      >
+      <Modal open={iosInstallModal} title="Установка на iPhone" onClose={() => setIosInstallModal(false)}>
         <div className="p" style={{ marginTop: 0 }}>
           iOS устанавливает PWA через меню <b>Поделиться</b>.
         </div>
@@ -1005,14 +928,8 @@ export function Profile() {
           {"\n"}2) Выбери “На экран Домой”
           {"\n"}3) Подтверди “Добавить”
         </div>
-        <div
-          className="row"
-          style={{ marginTop: 12, justifyContent: "flex-end" }}
-        >
-          <button
-            className="btn btn--primary"
-            onClick={() => setIosInstallModal(false)}
-          >
+        <div className="row" style={{ marginTop: 12, justifyContent: "flex-end" }}>
+          <button className="btn btn--primary" onClick={() => setIosInstallModal(false)}>
             Понятно
           </button>
         </div>
@@ -1041,22 +958,11 @@ export function Profile() {
           </div>
         ) : null}
 
-        <div
-          className="row"
-          style={{ marginTop: 12, justifyContent: "flex-end" }}
-        >
-          <button
-            className="btn"
-            onClick={() => setTgModal(false)}
-            disabled={savingTg}
-          >
+        <div className="row" style={{ marginTop: 12, justifyContent: "flex-end" }}>
+          <button className="btn" onClick={() => setTgModal(false)} disabled={savingTg}>
             Отмена
           </button>
-          <button
-            className="btn btn--primary"
-            onClick={saveTelegramLogin}
-            disabled={savingTg}
-          >
+          <button className="btn btn--primary" onClick={saveTelegramLogin} disabled={savingTg}>
             {savingTg ? "…" : "Сохранить"}
           </button>
         </div>

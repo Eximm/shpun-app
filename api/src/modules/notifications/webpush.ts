@@ -1,4 +1,3 @@
-// api/src/modules/notifications/webpush.ts
 import webpush from "web-push";
 import { listSubscriptions, removeSubscription, type PushSub } from "./subscriptions.js";
 
@@ -8,34 +7,37 @@ function envStr(name: string, def = "") {
 }
 
 let vapidConfigured = false;
+let vapidOk = false;
 
-function ensureVapid() {
-  if (vapidConfigured) return;
+function ensureVapid(): boolean {
+  if (vapidConfigured) return vapidOk;
 
   const pub = envStr("VAPID_PUBLIC_KEY", "");
   const priv = envStr("VAPID_PRIVATE_KEY", "");
   const subj = envStr("VAPID_SUBJECT", "mailto:support@shpyn.online");
 
   if (!pub || !priv) {
-    // без VAPID просто ничего не отправим
     console.warn("WEBPUSH_VAPID_MISSING", {
       hasPub: Boolean(pub),
       hasPriv: Boolean(priv),
       subj,
     });
     vapidConfigured = true;
-    return;
+    vapidOk = false;
+    return false;
   }
 
   webpush.setVapidDetails(subj, pub, priv);
   vapidConfigured = true;
+  vapidOk = true;
   console.info("WEBPUSH_VAPID_OK", { subj });
+  return true;
 }
 
 // делаем короткий payload, чтобы notification выглядело аккуратно
 function buildPushPayload(ev: any) {
   const title = String(ev?.title || "ShpunApp").slice(0, 80);
-  const body = String(ev?.message || "").slice(0, 160);
+  const body = String(ev?.body ?? ev?.message ?? "").slice(0, 160);
   const type = String(ev?.type || "").trim();
 
   let link = "/feed";
@@ -74,15 +76,10 @@ async function sendToSub(sub: PushSub, payload: string) {
 }
 
 export async function sendWebPushToUser(userId: number, formattedEvent: any) {
-  ensureVapid();
-
-  const pub = envStr("VAPID_PUBLIC_KEY", "");
-  const priv = envStr("VAPID_PRIVATE_KEY", "");
-  if (!pub || !priv) return { ok: false, error: "vapid_missing" };
+  if (!ensureVapid()) return { ok: false, error: "vapid_missing" };
 
   const subs = listSubscriptions(userId);
   if (!subs.length) {
-    console.info("WEBPUSH_NO_SUBS", { userId });
     return { ok: true, sent: 0, failed: 0, removed: 0 };
   }
 
@@ -97,18 +94,14 @@ export async function sendWebPushToUser(userId: number, formattedEvent: any) {
 
     try {
       const res: any = await sendToSub(sub, payload);
-
-      // web-push обычно возвращает { statusCode, body, headers }
       const statusCode = Number(res?.statusCode ?? 0);
+      // OK лог оставляем умеренно, можно потом под debug
       console.info("WEBPUSH_OK", { userId, host, statusCode });
-
       sent += 1;
     } catch (e: any) {
       const code = Number(e?.statusCode || e?.status || 0);
       const msg = String(e?.message || "");
-      const body = e?.body ?? e?.response?.body ?? null;
-
-      console.warn("WEBPUSH_FAIL", { userId, host, code, msg, body });
+      console.warn("WEBPUSH_FAIL", { userId, host, code, msg });
 
       // 404/410 => подписка умерла, удаляем
       if (code === 404 || code === 410) {
