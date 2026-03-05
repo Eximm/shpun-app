@@ -45,7 +45,7 @@ export const RU: Dict = {
     'Вход без регистрации: Telegram подписывает запрос, сервер проверяет подпись и создаёт защищённую сессию.',
 
   'login.divider.providers': 'или другой способ',
-  'login.providers.telegram.hint.web': 'Доступна через Widget',
+  'login.providers.telegram.hint.web': 'Доступно через Telegram Widget',
   'login.providers.telegram.hint.tg': 'Быстрый вход в WebApp',
   'login.providers.google.hint': 'Скоро',
   'login.providers.yandex.hint': 'Скоро',

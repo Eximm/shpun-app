@@ -18,12 +18,18 @@ function ensureVapid() {
 
   if (!pub || !priv) {
     // без VAPID просто ничего не отправим
+    console.warn("WEBPUSH_VAPID_MISSING", {
+      hasPub: Boolean(pub),
+      hasPriv: Boolean(priv),
+      subj,
+    });
     vapidConfigured = true;
     return;
   }
 
   webpush.setVapidDetails(subj, pub, priv);
   vapidConfigured = true;
+  console.info("WEBPUSH_VAPID_OK", { subj });
 }
 
 // делаем короткий payload, чтобы notification выглядело аккуратно
@@ -32,8 +38,6 @@ function buildPushPayload(ev: any) {
   const body = String(ev?.message || "").slice(0, 160);
   const type = String(ev?.type || "").trim();
 
-  // можно сразу класть deep-link, у вас на фронте уже есть eventLink логика —
-  // позже синхронизируем её с бэком, а пока сделаем простые правила
   let link = "/feed";
   if (type.startsWith("balance.") || type.startsWith("payment.") || type.startsWith("invoice.")) link = "/payments";
   else if (type.startsWith("service.") || type.startsWith("services.")) link = "/services";
@@ -51,13 +55,21 @@ function buildPushPayload(ev: any) {
   });
 }
 
+function endpointHost(endpoint: string) {
+  try {
+    return new URL(endpoint).host;
+  } catch {
+    return "bad-endpoint";
+  }
+}
+
 async function sendToSub(sub: PushSub, payload: string) {
   return webpush.sendNotification(
     {
       endpoint: sub.endpoint,
       keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth },
     } as any,
-    payload
+    payload,
   );
 }
 
@@ -66,24 +78,57 @@ export async function sendWebPushToUser(userId: number, formattedEvent: any) {
 
   const pub = envStr("VAPID_PUBLIC_KEY", "");
   const priv = envStr("VAPID_PRIVATE_KEY", "");
-  if (!pub || !priv) return; // тихо игнорим, пока не настроено
+  if (!pub || !priv) return { ok: false, error: "vapid_missing" };
 
   const subs = listSubscriptions(userId);
-  if (!subs.length) return;
+  if (!subs.length) {
+    console.info("WEBPUSH_NO_SUBS", { userId });
+    return { ok: true, sent: 0, failed: 0, removed: 0 };
+  }
 
   const payload = buildPushPayload(formattedEvent);
 
+  let sent = 0;
+  let failed = 0;
+  let removed = 0;
+
   for (const sub of subs) {
+    const host = endpointHost(sub.endpoint);
+
     try {
-      await sendToSub(sub, payload);
+      const res: any = await sendToSub(sub, payload);
+
+      // web-push обычно возвращает { statusCode, body, headers }
+      const statusCode = Number(res?.statusCode ?? 0);
+      console.info("WEBPUSH_OK", { userId, host, statusCode });
+
+      sent += 1;
     } catch (e: any) {
       const code = Number(e?.statusCode || e?.status || 0);
+      const msg = String(e?.message || "");
+      const body = e?.body ?? e?.response?.body ?? null;
+
+      console.warn("WEBPUSH_FAIL", { userId, host, code, msg, body });
 
       // 404/410 => подписка умерла, удаляем
       if (code === 404 || code === 410) {
-        removeSubscription(userId, sub.endpoint);
+        try {
+          removeSubscription(userId, sub.endpoint);
+          removed += 1;
+          console.warn("WEBPUSH_SUB_REMOVED", { userId, host, code });
+        } catch (rmErr: any) {
+          console.warn("WEBPUSH_SUB_REMOVE_FAIL", {
+            userId,
+            host,
+            code,
+            msg: String(rmErr?.message || rmErr || ""),
+          });
+        }
       }
-      // остальные ошибки не роняем
+
+      failed += 1;
     }
   }
+
+  return { ok: true, sent, failed, removed };
 }
