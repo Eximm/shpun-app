@@ -1,5 +1,4 @@
-﻿// FILE: web/src/main.tsx
-import React from "react";
+﻿import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import "./index.css";
@@ -25,6 +24,7 @@ import { I18nProvider, useI18n } from "./shared/i18n";
 import { ToastProvider } from "./shared/ui/toast/ToastProvider";
 import { useBillingNotifications } from "./app/notifications/useBillingNotifications";
 import { usePushAutoregister } from "./app/notifications/usePushAutoregister";
+import { usePushOnboarding } from "./app/notifications/usePushOnboarding";
 
 /* ============================================================
    Service Worker (production only)
@@ -56,6 +56,77 @@ if (import.meta.env.PROD) {
 }
 
 /* ============================================================
+   Small UI: Push Onboarding Modal
+   ============================================================ */
+
+function PushOnboardingModal({
+  open,
+  busy,
+  standalone,
+  permission,
+  onAccept,
+  onDismiss,
+}: {
+  open: boolean;
+  busy: boolean;
+  standalone: boolean;
+  permission: string;
+  onAccept: () => void;
+  onDismiss: () => void;
+}) {
+  if (!open) return null;
+
+  const hint =
+    permission === "denied"
+      ? "Уведомления запрещены в браузере. Разреши их в настройках сайта."
+      : !standalone
+        ? "Для push нужно установить приложение (PWA)."
+        : "Включи уведомления, чтобы получать баланс и продления даже когда приложение закрыто.";
+
+  const primaryText = !standalone ? "Ок" : "Включить";
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      onMouseDown={onDismiss}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,.55)",
+        display: "flex",
+        alignItems: "flex-end",
+        justifyContent: "center",
+        padding: 16,
+        zIndex: 9999,
+      }}
+    >
+      <div className="card" onMouseDown={(e) => e.stopPropagation()} style={{ width: "min(680px, 100%)" }}>
+        <div className="card__body">
+          <div className="h1" style={{ fontSize: 18, margin: 0 }}>
+            🔔 Уведомления
+          </div>
+
+          <p className="p" style={{ marginTop: 8 }}>
+            {hint}
+          </p>
+
+          <div className="row" style={{ marginTop: 12, justifyContent: "flex-end", gap: 10 }}>
+            <button className="btn" type="button" onClick={onDismiss} disabled={busy}>
+              Не сейчас
+            </button>
+
+            <button className="btn btn--primary" type="button" onClick={onAccept} disabled={busy}>
+              {busy ? "…" : primaryText}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
    AppShell
    ============================================================ */
 
@@ -64,6 +135,9 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const loc = useLocation();
 
   const hideNav = loc.pathname === "/login" || loc.pathname.startsWith("/transfer");
+
+  // Toasts + polling only when in main app UI (as before)
+  useBillingNotifications(!hideNav);
 
   return (
     <div className="app">
@@ -90,18 +164,26 @@ function AppShell({ children }: { children: React.ReactNode }) {
 }
 
 function Authed({ children }: { children: React.ReactNode }) {
-  const loc = useLocation();
-
-  // only inside authenticated routes:
-  // - push auto-restore (no permission prompt)
-  // - billing notifications polling + toasts
+  // ✅ Push subscription auto-restore for authed area (independent from hideNav)
   usePushAutoregister(true);
 
-  // toasts + polling only when in main app UI (exclude /transfer and /login even if routed here by mistake)
-  const hide = loc.pathname === "/login" || loc.pathname.startsWith("/transfer");
-  useBillingNotifications(!hide);
+  // ✅ Onboarding prompt right after auth (in-app modal + user-gesture button)
+  const po = usePushOnboarding(true);
 
-  return <AuthGate>{children}</AuthGate>;
+  return (
+    <>
+      <AuthGate>{children}</AuthGate>
+
+      <PushOnboardingModal
+        open={po.open}
+        busy={po.busy}
+        standalone={po.state.standalone}
+        permission={String(po.state.permission)}
+        onAccept={po.accept}
+        onDismiss={po.dismiss}
+      />
+    </>
+  );
 }
 
 /* ============================================================
@@ -286,5 +368,5 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         </BrowserRouter>
       </ToastProvider>
     </I18nProvider>
-  </React.StrictMode>,
+  </React.StrictMode>
 );
