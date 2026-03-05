@@ -65,25 +65,25 @@ function PushOnboardingModal({
   standalone,
   permission,
   onAccept,
-  onDismiss,
+  onDismiss
 }: {
-  open: boolean;
-  busy: boolean;
-  standalone: boolean;
-  permission: string;
-  onAccept: () => void;
-  onDismiss: () => void;
+  open: boolean
+  busy: boolean
+  standalone: boolean
+  permission: string
+  onAccept: () => void
+  onDismiss: () => void
 }) {
-  if (!open) return null;
+  if (!open) return null
 
   const hint =
     permission === "denied"
-      ? "Уведомления запрещены в браузере. Разреши их в настройках сайта."
+      ? "Уведомления отключены в настройках браузера."
       : !standalone
-        ? "Для push нужно установить приложение (PWA)."
-        : "Включи уведомления, чтобы получать баланс и продления даже когда приложение закрыто.";
+      ? "Установите приложение чтобы получать уведомления."
+      : "Включите уведомления чтобы получать важные события."
 
-  const primaryText = !standalone ? "Ок" : "Включить";
+  const primaryText = !standalone ? "Ок" : "Включить"
 
   return (
     <div
@@ -93,39 +93,78 @@ function PushOnboardingModal({
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(0,0,0,.55)",
+
+        background: "rgba(0,0,0,.65)",
+
+        backdropFilter: "blur(6px)",
+        WebkitBackdropFilter: "blur(6px)",
+
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
+
         padding: 16,
-        zIndex: 9999,
+        zIndex: 9999
       }}
     >
-      <div className="card" onMouseDown={(e) => e.stopPropagation()} style={{ width: "min(680px, 100%)" }}>
+      <div
+        className="card"
+        onMouseDown={(e) => e.stopPropagation()}
+        style={{
+          width: "min(520px, 92vw)"
+        }}
+      >
         <div className="card__body">
-          <div className="h1" style={{ fontSize: 18, margin: 0 }}>
+          <div
+            className="h1"
+            style={{
+              fontSize: 18,
+              margin: 0
+            }}
+          >
             🔔 Уведомления
           </div>
 
-          <p className="p" style={{ marginTop: 8 }}>
+          <p
+            className="p"
+            style={{
+              marginTop: 8
+            }}
+          >
             {hint}
           </p>
 
-          <div className="row" style={{ marginTop: 12, justifyContent: "flex-end", gap: 10 }}>
-            <button className="btn" type="button" onClick={onDismiss} disabled={busy}>
+          <div
+            className="row"
+            style={{
+              marginTop: 16,
+              justifyContent: "flex-end",
+              gap: 10
+            }}
+          >
+            <button
+              className="btn"
+              type="button"
+              onClick={onDismiss}
+              disabled={busy}
+            >
               Не сейчас
             </button>
 
-            <button className="btn btn--primary" type="button" onClick={onAccept} disabled={busy}>
-              {busy ? "…" : primaryText}
+            <button
+              className="btn btn--primary"
+              type="button"
+              onClick={onAccept}
+              disabled={busy}
+            >
+              {busy ? "..." : primaryText}
             </button>
           </div>
         </div>
       </div>
     </div>
-  );
+  )
 }
-
 /* ============================================================
    AppShell
    ============================================================ */

@@ -49,7 +49,7 @@ self.addEventListener("push", (event) => {
   const options: NotificationOptions = {
     body,
     icon: "/icons/icon-192.png",
-    badge: "/icons/icon-192.png",
+    badge: "/icons/badge-96.png",
     data: payload.data || {},
   };
 
