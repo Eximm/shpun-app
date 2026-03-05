@@ -23,6 +23,7 @@ import { BottomNav } from "./app/layout/BottomNav";
 import { I18nProvider, useI18n } from "./shared/i18n";
 import { ToastProvider } from "./shared/ui/toast/ToastProvider";
 import { useBillingNotifications } from "./app/notifications/useBillingNotifications";
+import { usePushAutoregister } from "./app/notifications/usePushAutoregister";
 
 /* ============================================================
    Service Worker (production only)
@@ -63,6 +64,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
 
   const hideNav = loc.pathname === "/login" || loc.pathname.startsWith("/transfer");
 
+  // Toasts + polling only when in main app UI (as before)
   useBillingNotifications(!hideNav);
 
   return (
@@ -90,6 +92,10 @@ function AppShell({ children }: { children: React.ReactNode }) {
 }
 
 function Authed({ children }: { children: React.ReactNode }) {
+  // ✅ Push subscription auto-restore for authed area (independent from hideNav)
+  // Runs only when user is in authenticated routes (so /subscribe won't 401).
+  usePushAutoregister(true);
+
   return <AuthGate>{children}</AuthGate>;
 }
 
