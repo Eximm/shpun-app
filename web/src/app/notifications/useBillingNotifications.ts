@@ -1,6 +1,8 @@
-import { useEffect, useRef } from "react";
+// FILE: web/src/app/notifications/useBillingNotifications.ts
+import { useEffect, useMemo, useRef } from "react";
 import { apiFetch } from "../../shared/api/client";
 import { toast } from "../../shared/ui/toast";
+import { useMe } from "../auth/useMe";
 
 type BillingPushEvent = {
   event_id: string;
@@ -14,29 +16,34 @@ type BillingPushEvent = {
 type Cursor = { ts: number; id: string };
 type Resp = { ok: true; items: BillingPushEvent[]; nextCursor: Cursor };
 
-const CURSOR_KEY = "notif.cursor.v2";
+const POLL_MS = 8000;
+const HIDDEN_POLL_MS = 30000;
 
-// We store "shown toast" in localStorage so it survives Telegram WebView re-creates.
-// TTL prevents storage growth and allows repeating rare important notices after time.
-const SHOWN_KEY_PREFIX = "notif.toast.shown.v2:";
 const SHOWN_TTL_DAYS = 7;
 const SHOWN_TTL_MS = SHOWN_TTL_DAYS * 24 * 60 * 60 * 1000;
 
-// Keep at most N shown keys cleanup per run (cheap + safe)
 const SHOWN_CLEANUP_LIMIT = 300;
 
-// Poll interval
-const POLL_MS = 8000;
-// When tab is hidden, poll slower (or effectively pause)
-const HIDDEN_POLL_MS = 30000;
+function nowUnix(): number {
+  return Math.floor(Date.now() / 1000);
+}
 
 /* =========================================================
-   Cursor
+   Cursor (scoped by user)
    ========================================================= */
 
-function readCursor(): Cursor {
+function cursorKeyFor(uid: number): string {
+  return `notif.cursor.v2:u:${uid}`;
+}
+
+function shownPrefixFor(uid: number): string {
+  return `notif.toast.shown.v2:u:${uid}:`;
+}
+
+function readCursor(uid: number): Cursor {
+  if (!uid) return { ts: 0, id: "" };
   try {
-    const raw = localStorage.getItem(CURSOR_KEY);
+    const raw = localStorage.getItem(cursorKeyFor(uid));
     if (!raw) return { ts: 0, id: "" };
     const v = JSON.parse(raw);
     const ts = Number(v?.ts ?? 0);
@@ -47,9 +54,10 @@ function readCursor(): Cursor {
   }
 }
 
-function saveCursor(c: Cursor) {
+function saveCursor(uid: number, c: Cursor) {
+  if (!uid) return;
   try {
-    localStorage.setItem(CURSOR_KEY, JSON.stringify({ ts: c.ts || 0, id: c.id || "" }));
+    localStorage.setItem(cursorKeyFor(uid), JSON.stringify({ ts: c.ts || 0, id: c.id || "" }));
   } catch {
     // ignore
   }
@@ -59,13 +67,11 @@ function saveCursor(c: Cursor) {
    Dedupe / Shown logic
    ========================================================= */
 
-// small stable hash (djb2) for semantic key
 function hashDjb2(s: string): string {
   let h = 5381;
   for (let i = 0; i < s.length; i++) {
     h = ((h << 5) + h) ^ s.charCodeAt(i);
   }
-  // unsigned 32-bit
   return (h >>> 0).toString(16);
 }
 
@@ -73,30 +79,27 @@ function normalize(s: string) {
   return String(s ?? "").trim().replace(/\s+/g, " ");
 }
 
-// Prefer event_id when it exists, but also add a semantic fallback.
-// This protects from backends that generate new event_id for the same condition.
 function makeShownKey(ev: BillingPushEvent): string | null {
   const eventId = normalize(ev.event_id);
   const lvl = normalize(ev.level || "info");
   const title = normalize(ev.title || "");
   const msg = normalize(ev.message || "");
 
-  // if we have a stable event_id — use it
   if (eventId) return `id:${eventId}`;
 
-  // if no id, use semantic key
   if (!title && !msg) return null;
   const semantic = `${lvl}|${title}|${msg}`;
   return `sem:${hashDjb2(semantic)}`;
 }
 
-function getShownStorageKey(shownKey: string) {
-  return SHOWN_KEY_PREFIX + shownKey;
+function getShownStorageKey(uid: number, shownKey: string) {
+  return shownPrefixFor(uid) + shownKey;
 }
 
-function hasShownToast(shownKey: string): boolean {
+function hasShownToast(uid: number, shownKey: string): boolean {
+  if (!uid) return false;
   try {
-    const raw = localStorage.getItem(getShownStorageKey(shownKey));
+    const raw = localStorage.getItem(getShownStorageKey(uid, shownKey));
     if (!raw) return false;
 
     const v = JSON.parse(raw) as { shownAt?: number };
@@ -104,8 +107,7 @@ function hasShownToast(shownKey: string): boolean {
     if (!Number.isFinite(shownAt) || shownAt <= 0) return false;
 
     if (Date.now() - shownAt > SHOWN_TTL_MS) {
-      // expired -> drop
-      localStorage.removeItem(getShownStorageKey(shownKey));
+      localStorage.removeItem(getShownStorageKey(uid, shownKey));
       return false;
     }
 
@@ -115,24 +117,26 @@ function hasShownToast(shownKey: string): boolean {
   }
 }
 
-function markToastShown(shownKey: string) {
+function markToastShown(uid: number, shownKey: string) {
+  if (!uid) return;
   try {
-    localStorage.setItem(getShownStorageKey(shownKey), JSON.stringify({ shownAt: Date.now() }));
+    localStorage.setItem(getShownStorageKey(uid, shownKey), JSON.stringify({ shownAt: Date.now() }));
   } catch {
     // ignore
   }
 }
 
-function cleanupShownKeys() {
+function cleanupShownKeys(uid: number) {
+  if (!uid) return;
+  const prefix = shownPrefixFor(uid);
+
   try {
     const now = Date.now();
     let checked = 0;
 
-    // IMPORTANT: localStorage.length can change when we remove keys.
-    // We'll just do bounded scan; it's fine if we skip some keys.
     for (let i = 0; i < localStorage.length && checked < SHOWN_CLEANUP_LIMIT; i++) {
       const k = localStorage.key(i);
-      if (!k || !k.startsWith(SHOWN_KEY_PREFIX)) continue;
+      if (!k || !k.startsWith(prefix)) continue;
 
       checked++;
 
@@ -146,7 +150,6 @@ function cleanupShownKeys() {
           localStorage.removeItem(k);
         }
       } catch {
-        // broken json — remove
         localStorage.removeItem(k);
       }
     }
@@ -160,17 +163,20 @@ function cleanupShownKeys() {
    ========================================================= */
 
 export function useBillingNotifications(enabled: boolean) {
-  const cursorRef = useRef<Cursor>(readCursor());
+  const { me } = useMe() as any;
+
+  const uid = useMemo(() => {
+    const n = Number(me?.profile?.id ?? me?.profile?.user_id ?? me?.id ?? 0);
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+  }, [me?.profile?.id, me?.profile?.user_id, me?.id]);
+
+  const cursorRef = useRef<Cursor>({ ts: 0, id: "" });
   const timerRef = useRef<number | null>(null);
 
-  // first poll after (re)enable: don't spam old toasts
   const warmupRef = useRef<boolean>(true);
-
-  // ts when hook was enabled (unix seconds)
   const enabledAtTsRef = useRef<number>(0);
-
-  // prevent overlapping requests (if one tick is slow)
   const inFlightRef = useRef<boolean>(false);
+  const lastUidRef = useRef<number>(0);
 
   function clearTimer() {
     if (timerRef.current != null) window.clearTimeout(timerRef.current);
@@ -183,7 +189,7 @@ export function useBillingNotifications(enabled: boolean) {
   }
 
   useEffect(() => {
-    if (!enabled) {
+    if (!enabled || !uid) {
       clearTimer();
       inFlightRef.current = false;
       return;
@@ -191,22 +197,24 @@ export function useBillingNotifications(enabled: boolean) {
 
     let stopped = false;
 
-    // re-read cursor every time we enable (important for Telegram WebView re-create / multi tabs)
-    cursorRef.current = readCursor();
+    if (lastUidRef.current !== uid) {
+      lastUidRef.current = uid;
+      cursorRef.current = readCursor(uid);
+      cleanupShownKeys(uid);
+    } else {
+      cursorRef.current = readCursor(uid);
+      cleanupShownKeys(uid);
+    }
 
     warmupRef.current = true;
-    enabledAtTsRef.current = Math.floor(Date.now() / 1000);
-
-    cleanupShownKeys();
+    enabledAtTsRef.current = nowUnix();
 
     const tick = async () => {
       if (stopped) return;
 
-      // if tab is hidden, poll slower (and also avoid bursts)
-      const hidden = typeof document !== "undefined" && document.visibilityState === "hidden";
+      const hidden = document.visibilityState === "hidden";
       const nextDelay = hidden ? HIDDEN_POLL_MS : POLL_MS;
 
-      // no overlap
       if (inFlightRef.current) {
         scheduleNext(nextDelay, () => void tick());
         return;
@@ -221,79 +229,69 @@ export function useBillingNotifications(enabled: boolean) {
           `&afterId=${encodeURIComponent(String(c.id || ""))}`;
 
         const r = await apiFetch<Resp>(`/notifications?${qs}`);
-        const items = r?.items || [];
+        const items = Array.isArray((r as any)?.items) ? (r as any).items : [];
 
-        // Show toasts:
-        // - normally: show all items (except toast=false, duplicates)
-        // - during warmup: show only events that are NEW since enable moment
         const allowFromTs = warmupRef.current ? enabledAtTsRef.current : 0;
 
-        for (const ev of items) {
+        for (const ev of items as BillingPushEvent[]) {
           if (!ev) continue;
           if (ev.toast === false) continue;
 
-          const evTs = Number(ev.ts ?? 0);
+          const evTs = Number((ev as any).ts ?? 0);
           if (allowFromTs && Number.isFinite(evTs) && evTs < allowFromTs) continue;
 
           const shownKey = makeShownKey(ev);
           if (!shownKey) continue;
-          if (hasShownToast(shownKey)) continue;
+          if (hasShownToast(uid, shownKey)) continue;
 
           const title = ev.title || "Уведомление";
           const desc = ev.message || "";
           const lvl = ev.level || "info";
 
-          // mark as shown BEFORE showing to avoid duplicate bursts on re-render/re-poll
-          markToastShown(shownKey);
+          markToastShown(uid, shownKey);
 
           if (lvl === "success") toast.success(title, { description: desc });
           else if (lvl === "error") toast.error(title, { description: desc });
           else toast.info(title, { description: desc });
         }
 
-        // advance cursor AFTER processing items
-        const next = r?.nextCursor;
+        const next = (r as any)?.nextCursor;
         if (next && Number.isFinite(Number(next.ts))) {
           const nextCursor = { ts: Number(next.ts), id: String(next.id ?? "") };
           cursorRef.current = nextCursor;
-          saveCursor(nextCursor);
+          saveCursor(uid, nextCursor);
         }
 
         if (warmupRef.current) warmupRef.current = false;
       } catch {
-        // тихо
+        // silent
       } finally {
         inFlightRef.current = false;
         if (!stopped) scheduleNext(nextDelay, () => void tick());
       }
     };
 
-    // run now
     void tick();
 
-    // if visibility changes, reschedule faster when back
     const onVis = () => {
       if (stopped) return;
-      if (document.visibilityState === "visible") {
-        scheduleNext(200, () => void tick());
-      }
+      if (document.visibilityState === "visible") scheduleNext(200, () => void tick());
     };
 
-    try {
-      document.addEventListener("visibilitychange", onVis);
-    } catch {
-      // ignore
-    }
+    const onOnline = () => {
+      if (stopped) return;
+      scheduleNext(200, () => void tick());
+    };
+
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("online", onOnline);
 
     return () => {
       stopped = true;
       clearTimer();
       inFlightRef.current = false;
-      try {
-        document.removeEventListener("visibilitychange", onVis);
-      } catch {
-        // ignore
-      }
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("online", onOnline);
     };
-  }, [enabled]);
+  }, [enabled, uid]);
 }

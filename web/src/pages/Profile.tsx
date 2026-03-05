@@ -1,10 +1,15 @@
-// web/src/pages/Profile.tsx
+// FILE: web/src/pages/Profile.tsx
 import { Children, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMe } from "../app/auth/useMe";
 import { apiFetch } from "../shared/api/client";
 import { useI18n } from "../shared/i18n";
-import { disablePush, enablePushByUserGesture, getPushState } from "../app/notifications/push";
+import {
+  disablePush,
+  enablePushByUserGesture,
+  getPushState,
+  isPushDisabledByUser,
+} from "../app/notifications/push";
 import { PageStatusCard } from "../shared/ui/PageStatusCard";
 
 type BeforeInstallPromptEvent = Event & {
@@ -184,10 +189,8 @@ function RowLine({
 
         {right ? (
           rightCount <= 1 ? (
-            // ОДИН элемент справа (например "Скоро") — компактно
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>{right}</div>
           ) : (
-            // ДВА элемента справа (badge + button) — одинаковая ширина
             <div
               className="rowline__right rowline__right--grid"
               style={{
@@ -238,7 +241,11 @@ function Modal({
         zIndex: 9999,
       }}
     >
-      <div className="card" onMouseDown={(e) => e.stopPropagation()} style={{ width: "min(680px, 100%)" }}>
+      <div
+        className="card"
+        onMouseDown={(e) => e.stopPropagation()}
+        style={{ width: "min(680px, 100%)" }}
+      >
         <div className="card__body">
           <div
             style={{
@@ -354,7 +361,7 @@ export function Profile() {
 
       await apiFetch("/user/profile", {
         method: "POST",
-        body: payload, // ✅ no JSON.stringify (apiFetch serializes objects)
+        body: payload,
       });
 
       setSavedFullName(payload.full_name);
@@ -418,7 +425,7 @@ export function Profile() {
     try {
       const resp = await apiFetch<any>("/user/telegram", {
         method: "POST",
-        body: { login: clean }, // ✅ no JSON.stringify
+        body: { login: clean },
       });
 
       const tg = resp?.telegram ?? null;
@@ -513,11 +520,8 @@ export function Profile() {
     try {
       await deferredPrompt.prompt();
       const choice = await deferredPrompt.userChoice;
-      if (choice?.outcome === "accepted") {
-        showToast("Установка запущена ✅");
-      } else {
-        showToast("Установка отменена");
-      }
+      if (choice?.outcome === "accepted") showToast("Установка запущена ✅");
+      else showToast("Установка отменена");
     } catch {
       showToast("Не удалось запустить установку");
     } finally {
@@ -532,17 +536,22 @@ export function Profile() {
     permission: NotificationPermission | "unsupported";
     hasSubscription: boolean;
     standalone: boolean;
+    disabledByUser: boolean;
   }>({
     supported: false,
     permission: "unsupported",
     hasSubscription: false,
     standalone: false,
+    disabledByUser: false,
   });
 
   async function refreshPush() {
     try {
       const s = await getPushState();
-      setPushState(s);
+      setPushState({
+        ...s,
+        disabledByUser: isPushDisabledByUser(),
+      });
     } catch {
       // ignore
     }
@@ -556,17 +565,26 @@ export function Profile() {
     if (pushLoading) return;
     setPushLoading(true);
     try {
-      const enabled = pushState.permission === "granted" && pushState.hasSubscription;
+      const enabled =
+        pushState.permission === "granted" &&
+        pushState.hasSubscription &&
+        !pushState.disabledByUser;
 
       if (enabled) {
         await disablePush();
         showToast("Уведомления выключены");
       } else {
+        // iOS требует установленной PWA, остальные браузеры — нет
+        if (isIOS() && !standalone) {
+          showToast("Для push на iPhone нужно установить приложение (PWA) 📲");
+          setIosInstallModal(true);
+          return;
+        }
+
         const ok = await enablePushByUserGesture();
         if (ok) showToast("Уведомления включены ✅");
         else {
-          if (!pushState.standalone) showToast("Для push установи PWA 📲");
-          else if (pushState.permission === "denied") showToast("Уведомления запрещены в браузере");
+          if (pushState.permission === "denied") showToast("Уведомления запрещены в браузере");
           else showToast("Не удалось включить уведомления");
         }
       }
@@ -612,7 +630,6 @@ export function Profile() {
   const telegramStatusBadge = telegramLogin ? <Badge text="Привязан" tone="ok" /> : <Badge text="Не привязан" />;
   const soonBadge = <Badge text="Скоро" tone="soon" />;
 
-  // --- Settings: compact hints (mobile-friendly)
   const langHint = "Сохраняется автоматически.";
 
   const pwaText = standalone ? "Установлено" : "Не установлено";
@@ -629,13 +646,18 @@ export function Profile() {
         : "Открой меню (⋮) → «Установить приложение».";
 
   const pushPermText = permissionLabel(String(pushState.permission));
-  const pushEnabled = pushState.permission === "granted" && pushState.hasSubscription;
+  const pushEnabled =
+    pushState.permission === "granted" &&
+    pushState.hasSubscription &&
+    !pushState.disabledByUser;
 
   const pushBadge =
-    pushState.permission === "granted" ? (
-      <Badge text="Разрешены" tone="ok" />
+    pushEnabled ? (
+      <Badge text="Включены" tone="ok" />
     ) : pushState.permission === "denied" ? (
       <Badge text="Запрещены" />
+    ) : pushState.permission === "granted" ? (
+      <Badge text="Разрешены" tone="ok" />
     ) : (
       <Badge text={pushPermText} />
     );
@@ -644,13 +666,15 @@ export function Profile() {
     ? "Недоступно в этом браузере."
     : pushState.permission === "denied"
       ? "Разреши уведомления в настройках сайта."
-      : !pushState.standalone
-        ? "Для push нужно установить PWA."
-        : pushState.permission === "default"
-          ? "Нажми «Включить», чтобы запросить доступ."
-          : pushEnabled
-            ? "Можно присылать важные уведомления."
-            : "Разрешение есть — включи подписку.";
+      : isIOS() && !standalone
+        ? "Для push на iPhone нужно установить приложение (PWA)."
+        : pushEnabled
+          ? "Можно присылать важные уведомления."
+          : pushState.permission === "default"
+            ? "Нажми «Включить», чтобы запросить доступ."
+            : pushState.permission === "granted" && pushState.disabledByUser
+              ? "Выключено вручную — нажми «Включить»."
+              : "Разрешение есть — включи подписку.";
 
   return (
     <div className="section">
@@ -893,13 +917,8 @@ export function Profile() {
                     <button className="btn" type="button" disabled>
                       В настройках
                     </button>
-                  ) : !pushState.standalone ? (
-                    <button
-                      className="btn btn--primary"
-                      type="button"
-                      onClick={doInstallPwa}
-                      disabled={pushLoading || standalone}
-                    >
+                  ) : isIOS() && !standalone ? (
+                    <button className="btn btn--primary" type="button" onClick={doInstallPwa} disabled={pushLoading}>
                       Установить
                     </button>
                   ) : (

@@ -1,4 +1,5 @@
-﻿import React from "react";
+﻿// FILE: web/src/main.tsx
+import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import "./index.css";
@@ -64,9 +65,6 @@ function AppShell({ children }: { children: React.ReactNode }) {
 
   const hideNav = loc.pathname === "/login" || loc.pathname.startsWith("/transfer");
 
-  // Toasts + polling only when in main app UI (as before)
-  useBillingNotifications(!hideNav);
-
   return (
     <div className="app">
       <header className="topbar">
@@ -92,9 +90,16 @@ function AppShell({ children }: { children: React.ReactNode }) {
 }
 
 function Authed({ children }: { children: React.ReactNode }) {
-  // ✅ Push subscription auto-restore for authed area (independent from hideNav)
-  // Runs only when user is in authenticated routes (so /subscribe won't 401).
+  const loc = useLocation();
+
+  // only inside authenticated routes:
+  // - push auto-restore (no permission prompt)
+  // - billing notifications polling + toasts
   usePushAutoregister(true);
+
+  // toasts + polling only when in main app UI (exclude /transfer and /login even if routed here by mistake)
+  const hide = loc.pathname === "/login" || loc.pathname.startsWith("/transfer");
+  useBillingNotifications(!hide);
 
   return <AuthGate>{children}</AuthGate>;
 }
@@ -130,7 +135,6 @@ function PageContainer({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      {/* Soft frost overlay on navigation */}
       <div
         className="page-frost"
         style={{
@@ -282,5 +286,5 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         </BrowserRouter>
       </ToastProvider>
     </I18nProvider>
-  </React.StrictMode>
+  </React.StrictMode>,
 );

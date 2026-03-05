@@ -1,32 +1,129 @@
-import React from "react";
-import { NavLink } from "react-router-dom";
+// FILE: web/src/app/layout/BottomNav.tsx
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { NavLink, useLocation } from "react-router-dom";
+import { useMe } from "../auth/useMe";
+import { hasNewNotifications } from "../notifications/notifyState";
 
 function Tab({
   to,
   label,
   icon,
   end,
+  badge,
 }: {
   to: string;
   label: string;
   icon: React.ReactNode;
   end?: boolean;
+  badge?: React.ReactNode;
 }) {
   return (
     <NavLink to={to} end={end} className={({ isActive }) => "tab" + (isActive ? " tab--active" : "")}>
-      <span className="tab__icon" aria-hidden="true">
+      <span className="tab__icon" aria-hidden="true" style={{ position: "relative" }}>
         {icon}
+        {badge}
       </span>
 
       <span className="tab__label">{label}</span>
 
-      {/* Active indicator (animated via CSS). Always rendered -> smooth layout */}
       <span className="tab__indicator" aria-hidden="true" />
     </NavLink>
   );
 }
 
+function Dot() {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        position: "absolute",
+        top: -2,
+        right: -2,
+        width: 8,
+        height: 8,
+        borderRadius: 99,
+        background: "currentColor",
+        boxShadow: "0 0 0 2px rgba(0,0,0,.35)",
+      }}
+    />
+  );
+}
+
+const CHECK_MS = 60_000;
+
 export function BottomNav() {
+  const loc = useLocation();
+  const { me } = useMe() as any;
+
+  const uid = useMemo(() => {
+    const n = Number(me?.profile?.id ?? me?.profile?.user_id ?? me?.id ?? 0);
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+  }, [me?.profile?.id, me?.profile?.user_id, me?.id]);
+
+  const [hasNew, setHasNew] = useState(false);
+  const inFlightRef = useRef(false);
+  const timerRef = useRef<number | null>(null);
+
+  const onFeed = loc.pathname === "/feed";
+
+  function clearTimer() {
+    if (timerRef.current != null) window.clearInterval(timerRef.current);
+    timerRef.current = null;
+  }
+
+  async function check() {
+    if (!uid) return;
+    if (inFlightRef.current) return;
+
+    // если мы уже на /feed — badge не нужен
+    if (onFeed) {
+      setHasNew(false);
+      return;
+    }
+
+    inFlightRef.current = true;
+    try {
+      const ok = await hasNewNotifications(uid);
+      setHasNew(ok);
+    } catch {
+      // ignore
+    } finally {
+      inFlightRef.current = false;
+    }
+  }
+
+  useEffect(() => {
+    if (!uid) {
+      setHasNew(false);
+      clearTimer();
+      return;
+    }
+
+    // initial
+    void check();
+
+    // periodic
+    clearTimer();
+    timerRef.current = window.setInterval(() => void check(), CHECK_MS);
+
+    const onVis = () => {
+      if (document.visibilityState === "visible") void check();
+    };
+
+    document.addEventListener("visibilitychange", onVis);
+
+    return () => {
+      clearTimer();
+      document.removeEventListener("visibilitychange", onVis);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uid, onFeed]);
+
+  // также: когда пользователь открыл /feed, сразу убираем точку
+  useEffect(() => {
+    if (onFeed) setHasNew(false);
+  }, [onFeed]);
+
   return (
     <nav className="bottomnav" role="navigation" aria-label="App navigation">
       <div className="bottomnav__inner">
@@ -49,6 +146,7 @@ export function BottomNav() {
         <Tab
           to="/feed"
           label="Новости"
+          badge={hasNew ? <Dot /> : null}
           icon={
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
               <path d="M6 7h12M6 12h12M6 17h9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />

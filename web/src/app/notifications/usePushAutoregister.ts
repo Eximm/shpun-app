@@ -1,3 +1,4 @@
+// FILE: web/src/app/notifications/usePushAutoregister.ts
 import { useEffect, useRef } from "react";
 import { ensurePushSubscribed, isPushDisabledByUser, isPushSupported } from "./push";
 
@@ -10,23 +11,25 @@ export function usePushAutoregister(enabled: boolean) {
 
   useEffect(() => {
     if (!enabled) return;
+    if (!isPushSupported()) return;
+    if (isPushDisabledByUser()) return;
 
     let stopped = false;
 
     const run = async () => {
       if (stopped) return;
       if (inFlightRef.current) return;
-      if (!isPushSupported()) return;
-      if (isPushDisabledByUser()) return;
+
+      // "по учебнику": permission запрашивается только по user gesture в UI
+      if (Notification.permission !== "granted") return;
 
       const now = Date.now();
       if (now - lastAttemptAtRef.current < RETRY_MS) return;
 
-      lastAttemptAtRef.current = now;
       inFlightRef.current = true;
+      lastAttemptAtRef.current = now;
 
       try {
-        // ✅ без permission prompt
         await ensurePushSubscribed();
       } catch {
         // ignore
@@ -35,23 +38,24 @@ export function usePushAutoregister(enabled: boolean) {
       }
     };
 
-    // 1) сразу
+    // сразу после входа
     void run();
 
-    // 2) при возвращении в приложение/вкладку
     const onVis = () => {
       if (document.visibilityState === "visible") void run();
     };
 
-    try {
-      document.addEventListener("visibilitychange", onVis);
-    } catch {}
+    const onOnline = () => {
+      void run();
+    };
+
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("online", onOnline);
 
     return () => {
       stopped = true;
-      try {
-        document.removeEventListener("visibilitychange", onVis);
-      } catch {}
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("online", onOnline);
     };
   }, [enabled]);
 }

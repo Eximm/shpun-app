@@ -1,155 +1,79 @@
 /// <reference lib="webworker" />
 
 import { clientsClaim } from "workbox-core";
-import { precacheAndRoute, createHandlerBoundToURL } from "workbox-precaching";
-import { registerRoute } from "workbox-routing";
-import { NetworkFirst } from "workbox-strategies";
+import { precacheAndRoute } from "workbox-precaching";
+import { registerRoute, NavigationRoute } from "workbox-routing";
+import { createHandlerBoundToURL } from "workbox-precaching";
 
 declare let self: ServiceWorkerGlobalScope;
 
-// ✅ IMPORTANT: activate new SW ASAP (avoid waiting forever in Telegram/WebView)
-self.skipWaiting();
 clientsClaim();
+self.skipWaiting();
 
-// ✅ Allow virtual:pwa-register -> updateSW(true) to force activation
-self.addEventListener("message", (event) => {
-  if (event.data && event.data.type === "SKIP_WAITING") {
-    self.skipWaiting();
-  }
+/* ===============================
+   Precache
+================================ */
+
+precacheAndRoute(self.__WB_MANIFEST || []);
+
+/* ===============================
+   SPA navigation fallback
+================================ */
+
+const handler = createHandlerBoundToURL("/index.html");
+
+const navigationRoute = new NavigationRoute(handler, {
+  denylist: [/^\/api\//],
 });
 
-// Workbox injects manifest here
-// ✅ Do NOT precache index.html (it's the main source of "week-old app shell")
-const manifest = (self.__WB_MANIFEST || []).filter((e: any) => e?.url !== "index.html");
-precacheAndRoute(manifest);
+registerRoute(navigationRoute);
 
-/**
- * Fix for "stuck old index.html" after deploy:
- * - navigation requests must be NetworkFirst (not cache-first from precache)
- * - fallback to cached /index.html only if network truly fails
- */
-const appShellHandler = createHandlerBoundToURL("/index.html");
-
-const htmlNetworkFirst = new NetworkFirst({
-  cacheName: "html-pages",
-  // Telegram WebView can be slow; 3s often triggers fallback too early -> "old version"
-  networkTimeoutSeconds: 10,
-});
-
-registerRoute(
-  ({ request, url }) => {
-    if (request.mode !== "navigate") return false;
-    if (url.pathname.startsWith("/api/")) return false;
-    if (url.pathname.startsWith("/assets/")) return false;
-    if (url.pathname.startsWith("/icons/")) return false;
-    return true;
-  },
-  async ({ event, request, url }) => {
-    try {
-      const response = await htmlNetworkFirst.handle({
-        event: event as FetchEvent,
-        request,
-      });
-      if (response) return response;
-    } catch {
-      // ignore
-    }
-
-    // ✅ Before falling back to cached app-shell, try to get a fresh index.html from network
-    try {
-      const fresh = await fetch("/index.html", { cache: "no-store" });
-      if (fresh) return fresh;
-    } catch {
-      // ignore
-    }
-
-    // Fallback: cached app shell (only when network really fails)
-    return appShellHandler({ event, request, url } as any);
-  },
-);
-
-/* =========================================================
-   PUSH HANDLER
-   ========================================================= */
-
-function pickLink(data: any): string {
-  const a = data?.url;
-  const b = data?.link;
-  const c = data?.data?.link;
-  const linkRaw = typeof a === "string" && a ? a : typeof b === "string" && b ? b : typeof c === "string" && c ? c : "";
-  return linkRaw || "/feed";
-}
+/* ===============================
+   Push
+================================ */
 
 self.addEventListener("push", (event) => {
   if (!event.data) return;
 
-  let data: any = {};
+  let payload: any = {};
+
   try {
-    data = event.data.json();
+    payload = event.data.json();
   } catch {
-    return;
+    payload = { body: event.data.text() };
   }
 
-  const title = String(data?.title || "ShpunApp").slice(0, 80);
-  const body = String(data?.body ?? data?.message ?? "").slice(0, 160);
-  const link = pickLink(data);
+  const title = payload.title || "ShpunApp";
+  const body = payload.body || "";
 
   const options: NotificationOptions = {
     body,
     icon: "/icons/icon-192.png",
-    badge: "/icons/badge-96.png",
-    data: { link },
-    tag: data?.tag || data?.data?.event_id || undefined,
-    silent: false,
+    badge: "/icons/icon-192.png",
+    data: payload.data || {},
   };
 
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
-/* =========================================================
-   CLICK HANDLER
-   ========================================================= */
+/* ===============================
+   Notification click
+================================ */
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
-  const link = String(event.notification?.data?.link || "/");
+  const link = event.notification.data?.link || "/";
 
   event.waitUntil(
-    (async () => {
-      const allClients = await self.clients.matchAll({
-        type: "window",
-        includeUncontrolled: true,
-      });
-
-      // Try to focus existing window and navigate it
-      for (const client of allClients) {
-        const wc = client as WindowClient;
-
-        try {
-          if (typeof wc.navigate === "function") {
-            await wc.navigate(link);
-          }
-          await wc.focus();
-          return;
-        } catch {
-          // ignore and continue
-        }
-
-        try {
-          await wc.focus();
-          return;
-        } catch {
-          // ignore
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        if ("focus" in client) {
+          client.navigate(link);
+          return client.focus();
         }
       }
-
-      // Otherwise open a new window
-      try {
-        await self.clients.openWindow(link);
-      } catch {
-        // ignore
-      }
-    })(),
+      return self.clients.openWindow(link);
+    })
   );
 });

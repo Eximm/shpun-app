@@ -1,3 +1,4 @@
+// FILE: api/src/modules/notifications/inbox.ts
 import { linkDb } from "../../shared/linkdb/db.js";
 import {
   putNotifEvent,
@@ -80,7 +81,7 @@ export function putEvent(
       ok: true;
       dedup: boolean;
       event?: NotifEvent;
-      delivered?: { total: number; inserted: number };
+      delivered?: { total: number; inserted: number; userIds?: number[] };
     }
   | { ok: false; error: string } {
   const ts = normalizeTs(e.ts);
@@ -96,6 +97,9 @@ export function putEvent(
 
     let inserted = 0;
     let anyDedup = false;
+
+    // важно: возвращаем список uid, чтобы роут мог сделать webpush fanout
+    const deliveredUserIds: number[] = [];
 
     for (const u of uids) {
       const ev: NotifEvent = {
@@ -114,14 +118,18 @@ export function putEvent(
       const r = putNotifEvent(ev);
       if (!r.ok) return r;
 
-      if (r.dedup) anyDedup = true;
-      else inserted++;
+      if (r.dedup) {
+        anyDedup = true;
+      } else {
+        inserted++;
+        deliveredUserIds.push(u);
+      }
     }
 
     return {
       ok: true,
       dedup: anyDedup && inserted === 0,
-      delivered: { total: uids.length, inserted },
+      delivered: { total: uids.length, inserted, userIds: deliveredUserIds },
     };
   }
 

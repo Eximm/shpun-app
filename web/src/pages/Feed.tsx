@@ -1,5 +1,5 @@
-﻿// web/src/pages/Feed.tsx
-import React, { useEffect, useMemo, useState } from "react";
+﻿// FILE: web/src/pages/Feed.tsx
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiFetch } from "../shared/api/client";
 
@@ -11,13 +11,15 @@ type NotifEvent = {
   level?: NotifLevel;
   title?: string;
   message?: string;
-  meta?: any; // важно для маршрутизации (service.id, usi и т.д.)
+  meta?: any; // для маршрутизации (service.id, usi и т.д.)
 };
 
 type Cursor = { ts: number; id: string };
 type FeedResp = { ok: true; items: NotifEvent[]; nextBefore: Cursor };
 
 type Category = "all" | "money" | "services" | "news";
+
+const PAGE_LIMIT = 50;
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
@@ -26,35 +28,25 @@ function pad2(n: number) {
 function formatDateTime(tsSec: number) {
   const d = new Date(tsSec * 1000);
   return `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.${d.getFullYear()} ${pad2(d.getHours())}:${pad2(
-    d.getMinutes()
+    d.getMinutes(),
   )}`;
 }
 
+function normalizeType(t: any) {
+  return String(t ?? "").trim().toLowerCase();
+}
+
+/**
+ * STRICT категоризация — только по type, без эвристик по тексту.
+ */
 function categoryOf(e: NotifEvent): Category {
-  const t = String(e.type || "").trim().toLowerCase();
+  const t = normalizeType(e.type);
 
-  // money
   if (t.startsWith("balance.") || t.startsWith("payment.") || t.startsWith("invoice.")) return "money";
-
-  // services
   if (t.startsWith("service.") || t.startsWith("services.")) return "services";
 
-  // news (строже: сначала именно broadcast.news)
-  if (t === "broadcast.news" || t.startsWith("broadcast.news.")) return "news";
-  if (t.startsWith("broadcast.")) return "news";
-  if (t.includes("news")) return "news";
-
-  // эвристика по тексту (fallback)
-  const text = `${e.title || ""} ${e.message || ""}`.toLowerCase();
-
-  if (text.includes("пополн") || text.includes("оплат") || text.includes("баланс") || text.includes("зачисл"))
-    return "money";
-
-  if (text.includes("услуг") || text.includes("продл") || text.includes("ключ") || text.includes("блок"))
-    return "services";
-
-  if (text.includes("работ") || text.includes("новост") || text.includes("перебои") || text.includes("обновлен"))
-    return "news";
+  // broadcast.* => news
+  if (t === "broadcast.news" || t.startsWith("broadcast.news.") || t.startsWith("broadcast.")) return "news";
 
   return "all";
 }
@@ -117,16 +109,15 @@ function pick(obj: any, path: string) {
 }
 
 /**
- * Where should the feed item lead?
- * Rules:
- * - service.blocked / activated / renewed -> Services
- * - service.forecast -> Payments
- * - broadcast/news -> nowhere
+ * STRICT навигация:
+ * - деньги -> /payments
+ * - услуги -> /services (+ usi если нашли)
+ * - broadcast/news -> null
+ * - всё остальное -> null
  *
- * Also supports meta.action = { kind:"nav", to:"/services", usi?:... } (optional future)
+ * Дополнительно поддерживаем meta.action.to (явная команда бэка).
  */
 function eventLink(e: NotifEvent): string | null {
-  // 0) Optional explicit action from backend
   const actionTo = pick(e.meta, "action.to");
   if (typeof actionTo === "string" && actionTo.trim()) {
     const to = actionTo.trim();
@@ -137,28 +128,21 @@ function eventLink(e: NotifEvent): string | null {
     return to;
   }
 
-  const type = String(e.type || "").trim();
+  const t = normalizeType(e.type);
 
-  // 1) Money
-  if (type === "balance.credited") return "/payments";
+  // broadcast/news: никуда
+  if (t === "broadcast.news" || t.startsWith("broadcast.news.") || t.startsWith("broadcast.")) return null;
 
-  // 2) Forecast -> Payments (your rule)
-  if (type === "service.forecast") return "/payments";
+  // деньги
+  if (t.startsWith("balance.") || t.startsWith("payment.") || t.startsWith("invoice.")) return "/payments";
 
-  // 3) Service lifecycle -> Services (your rule)
-  if (type === "service.blocked" || type === "service.renewed" || type === "service.activated") {
+  // услуги
+  if (t.startsWith("service.") || t.startsWith("services.")) {
     const usi = pick(e.meta, "service.id") ?? pick(e.meta, "usi") ?? pick(e.meta, "service.usi");
     if (usi != null) return `/services?usi=${encodeURIComponent(String(usi))}`;
     return "/services";
   }
 
-  // 4) News -> nowhere (your rule)
-  if (type === "broadcast.news") return null;
-
-  // 5) Fallback by category: only money/services should navigate, news -> nowhere
-  const c = categoryOf(e);
-  if (c === "money") return "/payments";
-  if (c === "services") return "/services";
   return null;
 }
 
@@ -175,7 +159,27 @@ function uniqAppend(prev: NotifEvent[], next: NotifEvent[]) {
   return out;
 }
 
-const PAGE_LIMIT = 50;
+/**
+ * Сервер умеет фильтровать новости через onlyNews=1.
+ * Для остальных категорий фильтруем клиентом (строго по type).
+ */
+function buildFeedUrl(cat: Category, cursor?: Cursor | null) {
+  const limit = PAGE_LIMIT;
+  const onlyNews = cat === "news" ? 1 : 0;
+
+  const c = cursor || { ts: 0, id: "" };
+  const hasCursor = Boolean(c.ts) || Boolean(c.id);
+
+  let url = `/notifications/feed?limit=${encodeURIComponent(String(limit))}`;
+  if (onlyNews) url += `&onlyNews=1`;
+
+  if (hasCursor) {
+    url += `&beforeTs=${encodeURIComponent(String(c.ts || 0))}`;
+    url += `&beforeId=${encodeURIComponent(String(c.id || ""))}`;
+  }
+
+  return url;
+}
 
 export function Feed() {
   const nav = useNavigate();
@@ -187,16 +191,16 @@ export function Feed() {
 
   const [cat, setCat] = useState<Category>("all");
 
-  async function loadFirst() {
+  async function loadFirst(activeCat: Category) {
     setLoading(true);
     try {
-      const r = await apiFetch<FeedResp>(`/notifications/feed?limit=${PAGE_LIMIT}`);
+      const r = await apiFetch<FeedResp>(buildFeedUrl(activeCat, null));
       const arr = Array.isArray(r.items) ? r.items : [];
       setItems(arr);
 
       const nb = r?.nextBefore;
       setNextBefore(
-        nb && Number.isFinite(Number(nb.ts)) ? { ts: Number(nb.ts), id: String(nb.id ?? "") } : { ts: 0, id: "" }
+        nb && Number.isFinite(Number(nb.ts)) ? { ts: Number(nb.ts), id: String(nb.id ?? "") } : { ts: 0, id: "" },
       );
 
       setHasMore(arr.length >= PAGE_LIMIT);
@@ -210,25 +214,18 @@ export function Feed() {
     setLoading(true);
     try {
       const c = nextBefore || { ts: 0, id: "" };
-
       if (!c.ts && !c.id) {
         setHasMore(false);
         return;
       }
 
-      const url =
-        `/notifications/feed?limit=${PAGE_LIMIT}` +
-        `&beforeTs=${encodeURIComponent(String(c.ts || 0))}` +
-        `&beforeId=${encodeURIComponent(String(c.id || ""))}`;
-
-      const r = await apiFetch<FeedResp>(url);
+      const r = await apiFetch<FeedResp>(buildFeedUrl(cat, c));
       const arr = Array.isArray(r.items) ? r.items : [];
 
       setItems((prev) => uniqAppend(prev, arr));
 
       const nb = r?.nextBefore;
-      const nextCursor =
-        nb && Number.isFinite(Number(nb.ts)) ? { ts: Number(nb.ts), id: String(nb.id ?? "") } : c;
+      const nextCursor = nb && Number.isFinite(Number(nb.ts)) ? { ts: Number(nb.ts), id: String(nb.id ?? "") } : c;
 
       const advanced = nextCursor.ts !== c.ts || nextCursor.id !== c.id;
       setNextBefore(nextCursor);
@@ -239,12 +236,20 @@ export function Feed() {
     }
   }
 
+  // initial
   useEffect(() => {
-    loadFirst();
+    void loadFirst(cat);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // reload when category changes (news uses server filter; others cheap reload for consistent UX)
+  useEffect(() => {
+    void loadFirst(cat);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cat]);
+
   const filtered = useMemo(() => {
+    if (cat === "news") return items; // already server-filtered
     if (cat === "all") return items;
     return items.filter((e) => categoryOf(e) === cat);
   }, [items, cat]);

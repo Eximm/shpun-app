@@ -1,16 +1,11 @@
-﻿// api/src/modules/notifications/push.ts
+﻿// FILE: api/src/modules/notifications/push.ts
 import type { FastifyInstance } from "fastify";
 import { getSessionFromRequest } from "../../shared/session/sessionStore.js";
-import {
-  listEvents,
-  listFeed,
-  listNewsFeed,
-  putEvent,
-  type BillingPushEvent,
-} from "./inbox.js";
+import { listEvents, listFeed, listNewsFeed, putEvent, type BillingPushEvent } from "./inbox.js";
 import { formatIncoming } from "./format.js";
 import { putSubscription, removeSubscription } from "./subscriptions.js";
 import { sendWebPushToUser } from "./webpush.js";
+import { linkDb } from "../../shared/linkdb/db.js";
 
 function envStr(name: string, def = "") {
   const v = String(process.env[name] ?? "").trim();
@@ -36,6 +31,24 @@ function pickKeys(body: any): { endpoint: string; p256dh: string; auth: string }
   return { endpoint, p256dh, auth };
 }
 
+// === broadcast fanout list (same source as inbox.ts fanout eligibility) ===
+const stmtListAllUserIds = linkDb.prepare(`
+  SELECT DISTINCT shm_user_id AS uid
+  FROM account_links
+  WHERE shm_user_id IS NOT NULL AND shm_user_id > 0
+`);
+
+function isBroadcast(ev: BillingPushEvent): boolean {
+  const t = String(ev?.type ?? "").trim();
+  if (ev?.target === "all") return true;
+  if (t === "broadcast.news") return true;
+  if (t.startsWith("broadcast.")) return true;
+  return false;
+}
+
+// Safety cap: do not try to push to infinite audience in one HTTP request
+const BROADCAST_PUSH_CAP = 300;
+
 export async function pushRoutes(app: FastifyInstance) {
   // ===== POST /api/billing/push =====
   app.post("/billing/push", async (req, reply) => {
@@ -54,9 +67,33 @@ export async function pushRoutes(app: FastifyInstance) {
     const r = putEvent(formatted);
     if (!r.ok) return reply.code(400).send({ ok: false, error: r.error });
 
+    // === WebPush delivery (best-effort) ===
+    // 1) personal (has user_id in stored event)
+    // 2) broadcast without user_id: push fanout to users (capped)
     try {
-      const uid = Number((r.event as any)?.user_id ?? 0);
-      if (uid > 0) await sendWebPushToUser(uid, r.event!);
+      const incomingIsBroadcast = isBroadcast(formatted);
+
+      const storedUid = Number((r.event as any)?.user_id ?? 0);
+
+      if (storedUid > 0) {
+        // personal or broadcast-as-user (when billing sent user_id)
+        await sendWebPushToUser(storedUid, (r.event as any) ?? formatted);
+      } else if (incomingIsBroadcast) {
+        const rows = stmtListAllUserIds.all() as Array<{ uid: number }>;
+        const uids = rows.map((x) => Number(x.uid)).filter((n) => Number.isFinite(n) && n > 0);
+
+        let attempted = 0;
+        for (const uid of uids) {
+          attempted++;
+          if (attempted > BROADCAST_PUSH_CAP) break;
+          try {
+            // NOTE: stored per-user event_id differs, but payload is built from type/title/message anyway.
+            await sendWebPushToUser(uid, formatted as any);
+          } catch {
+            // ignore per-user push failures
+          }
+        }
+      }
     } catch {
       // ignore push errors
     }

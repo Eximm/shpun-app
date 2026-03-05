@@ -1,3 +1,4 @@
+// FILE: web/src/app/notifications/push.ts
 import { apiFetch } from "../../shared/api/client";
 
 function urlBase64ToUint8Array(base64String: string) {
@@ -18,7 +19,10 @@ const LS_DISABLED = "push_disabled_by_user";
 
 function isIOS(): boolean {
   const ua = navigator.userAgent || "";
-  return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && (navigator as any).maxTouchPoints > 1);
+  return (
+    /iPad|iPhone|iPod/.test(ua) ||
+    (navigator.platform === "MacIntel" && (navigator as any).maxTouchPoints > 1)
+  );
 }
 
 export function isStandalonePwa(): boolean {
@@ -62,7 +66,14 @@ export async function getPushState(): Promise<PushState> {
   const supported = isPushSupported();
   const standalone = isStandalonePwa();
 
-  if (!supported) return { supported: false, permission: "unsupported", hasSubscription: false, standalone };
+  if (!supported) {
+    return {
+      supported: false,
+      permission: "unsupported",
+      hasSubscription: false,
+      standalone,
+    };
+  }
 
   let permission: NotificationPermission | "unsupported" = "unsupported";
   try {
@@ -87,8 +98,15 @@ function subToJson(sub: PushSubscription): any {
   try {
     // @ts-ignore
     if (typeof sub.toJSON === "function") return sub.toJSON();
-  } catch {}
+  } catch {
+    // ignore
+  }
   return sub as any;
+}
+
+function normalizeEndpoint(endpoint: unknown): string | null {
+  const s = String(endpoint ?? "").trim();
+  return s ? s : null;
 }
 
 async function postSubscribe(sub: PushSubscription) {
@@ -113,19 +131,27 @@ async function ensureServiceWorkerReady(): Promise<ServiceWorkerRegistration> {
   return await navigator.serviceWorker.ready;
 }
 
+function getVapidPublicKeyFromEnv(): string | null {
+  const k = (import.meta as any).env?.VITE_VAPID_PUBLIC_KEY;
+  const s = String(k ?? "").trim();
+  return s ? s : null;
+}
+
 async function subscribeAndSync(reg: ServiceWorkerRegistration): Promise<boolean> {
+  // 1) если подписка уже есть — просто синхронизируем на сервер
   const existing = await reg.pushManager.getSubscription();
   if (existing) {
     await postSubscribe(existing);
     return true;
   }
 
-  const vapidPublicKey = (import.meta as any).env.VITE_VAPID_PUBLIC_KEY;
+  // 2) новая подписка
+  const vapidPublicKey = getVapidPublicKeyFromEnv();
   if (!vapidPublicKey) return false;
 
   const sub = await reg.pushManager.subscribe({
     userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(String(vapidPublicKey)),
+    applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
   });
 
   await postSubscribe(sub);
@@ -157,6 +183,8 @@ export async function ensurePushSubscribed(): Promise<boolean> {
  */
 export async function enablePushByUserGesture(): Promise<boolean> {
   if (!isPushSupported()) return false;
+
+  // iOS: только установленная PWA
   if (isIOS() && !isStandalonePwa()) return false;
 
   const permission = await Notification.requestPermission();
@@ -183,22 +211,29 @@ export async function disablePush(): Promise<boolean> {
     sub = null;
   }
 
+  // даже если локальной подписки нет — серверу полезно знать, что пользователь отключил пуши
   if (!sub) {
     try {
       await postUnsubscribe(null);
-    } catch {}
+    } catch {
+      // ignore
+    }
     return true;
   }
 
-  const endpoint = String(sub.endpoint || "").trim() || null;
+  const endpoint = normalizeEndpoint(sub.endpoint);
 
   try {
     await sub.unsubscribe();
-  } catch {}
+  } catch {
+    // ignore
+  }
 
   try {
     await postUnsubscribe(endpoint);
-  } catch {}
+  } catch {
+    // ignore
+  }
 
   return true;
 }
