@@ -9,21 +9,21 @@ import {
   isStandalonePwa,
 } from "./push";
 
-const LS_BROWSER_INSTALL_SEEN = "push.onboarding.browser_install.seen.v1";
-const LS_PWA_PUSH_SEEN = "push.onboarding.pwa_push.seen.v1";
+const SS_BROWSER_DISMISSED = "push.onboarding.browser.dismissed.session.v1";
+const SS_PWA_DISMISSED = "push.onboarding.pwa.dismissed.session.v1";
 
-function readBool(key: string): boolean {
+function readSessionFlag(key: string): boolean {
   try {
-    return localStorage.getItem(key) === "1";
+    return sessionStorage.getItem(key) === "1";
   } catch {
     return false;
   }
 }
 
-function writeBool(key: string, v: boolean) {
+function writeSessionFlag(key: string, value: boolean) {
   try {
-    if (v) localStorage.setItem(key, "1");
-    else localStorage.removeItem(key);
+    if (value) sessionStorage.setItem(key, "1");
+    else sessionStorage.removeItem(key);
   } catch {
     // ignore
   }
@@ -94,11 +94,9 @@ export function usePushOnboarding(enabled: boolean) {
     };
 
     const onAppInstalled = () => {
-      // После установки PWA:
-      // - browser invite больше не нужен
-      // - push invite можно показывать
-      writeBool(LS_BROWSER_INSTALL_SEEN, true);
-      writeBool(LS_PWA_PUSH_SEEN, false);
+      // После установки браузерного варианта сразу даём шанс показать PWA prompt
+      writeSessionFlag(SS_BROWSER_DISMISSED, false);
+      writeSessionFlag(SS_PWA_DISMISSED, false);
       void refresh();
     };
 
@@ -116,18 +114,29 @@ export function usePushOnboarding(enabled: boolean) {
   const shouldShow = useMemo(() => {
     if (!enabled) return false;
     if (telegramMiniApp) return false;
+
+    // в браузере / PWA feature должен поддерживаться
     if (!isPushSupported()) return false;
+
+    // если пользователь руками выключил push в профиле — onboarding не навязываем
     if (isPushDisabledByUser()) return false;
-    if (state.permission === "denied") return false;
+
+    // если уже включено — ничего не показываем
     if (enabledNow) return false;
 
-    // Обычный браузер: только мягкое приглашение установить приложение
+    // если браузер уже запретил permission — не показываем onboarding,
+    // дальше только через профиль / настройки сайта
+    if (state.permission === "denied") return false;
+
+    // Обычный браузер: мягко предлагаем установить приложение,
+    // но не долбим в одной и той же вкладке бесконечно
     if (!standalone) {
-      return !readBool(LS_BROWSER_INSTALL_SEEN);
+      return !readSessionFlag(SS_BROWSER_DISMISSED);
     }
 
-    // Установленная PWA: только предложение включить уведомления
-    return !readBool(LS_PWA_PUSH_SEEN);
+    // Установленная PWA: если push не включен, предлагаем при каждом запуске приложения.
+    // Внутри одной сессии можно закрыть один раз.
+    return !readSessionFlag(SS_PWA_DISMISSED);
   }, [enabled, telegramMiniApp, standalone, state.permission, enabledNow]);
 
   useEffect(() => {
@@ -145,7 +154,7 @@ export function usePushOnboarding(enabled: boolean) {
     setBusy(true);
 
     try {
-      // Обычный браузер: мягко зовём установить PWA
+      // Обычный браузер: мягкое приглашение установить PWA
       if (!isStandalonePwa()) {
         toast.info("Установите приложение", {
           description:
@@ -153,12 +162,12 @@ export function usePushOnboarding(enabled: boolean) {
           durationMs: 4000,
         });
 
-        writeBool(LS_BROWSER_INSTALL_SEEN, true);
+        writeSessionFlag(SS_BROWSER_DISMISSED, true);
         setOpen(false);
         return;
       }
 
-      // PWA: включаем push
+      // Установленная PWA: просим permission по клику
       const ok = await enablePushByUserGesture();
 
       if (ok) {
@@ -166,7 +175,7 @@ export function usePushOnboarding(enabled: boolean) {
         toast.success("Уведомления включены ✅", {
           description: "Теперь вы будете получать важные события.",
         });
-        writeBool(LS_PWA_PUSH_SEEN, true);
+        writeSessionFlag(SS_PWA_DISMISSED, true);
         setOpen(false);
         await refresh();
       } else {
@@ -174,7 +183,7 @@ export function usePushOnboarding(enabled: boolean) {
           description: "Их можно включить позже в профиле.",
           durationMs: 2500,
         });
-        writeBool(LS_PWA_PUSH_SEEN, true);
+        writeSessionFlag(SS_PWA_DISMISSED, true);
         setOpen(false);
         await refresh();
       }
@@ -185,9 +194,9 @@ export function usePushOnboarding(enabled: boolean) {
 
   function dismiss() {
     if (!standalone) {
-      writeBool(LS_BROWSER_INSTALL_SEEN, true);
+      writeSessionFlag(SS_BROWSER_DISMISSED, true);
     } else {
-      writeBool(LS_PWA_PUSH_SEEN, true);
+      writeSessionFlag(SS_PWA_DISMISSED, true);
     }
     setOpen(false);
   }
