@@ -1,7 +1,11 @@
 import { useEffect, useRef } from "react";
 import { enablePush, getPushState, isPushSupported } from "./push";
 
+// backoff между попытками
 const RETRY_MS = 10 * 60 * 1000;
+
+// чтобы не доставать пользователя бесконечными prompt'ами
+const PROMPT_ONCE_KEY = "push.prompted.once.v1";
 
 export function usePushAutoregister(enabled: boolean) {
   const lastAttemptAtRef = useRef(0);
@@ -25,10 +29,22 @@ export function usePushAutoregister(enabled: boolean) {
 
       try {
         const st = await getPushState();
-        if (st.permission !== "granted") return; // не дёргаем системный prompt тут
-        if (st.hasSubscription) return;
 
-        await enablePush(); // создаст subscription и отправит на сервер
+        // Если уже есть подписка — ок
+        if (st.permission === "granted" && st.hasSubscription) return;
+
+        // Если denied — ничего не сделать автоматически
+        if (st.permission === "denied") return;
+
+        // Если permission default — один раз попробуем запросить и подписаться
+        if (st.permission === "default") {
+          const alreadyPrompted = localStorage.getItem(PROMPT_ONCE_KEY) === "1";
+          if (alreadyPrompted) return;
+          localStorage.setItem(PROMPT_ONCE_KEY, "1");
+        }
+
+        // Создаст subscription (если можно) и отправит на сервер /subscribe
+        await enablePush();
       } catch {
         // ignore
       } finally {
@@ -36,9 +52,10 @@ export function usePushAutoregister(enabled: boolean) {
       }
     };
 
-    // один раз при маунте + при возвращении во вкладку
+    // 1) сразу
     void run();
 
+    // 2) при возвращении на вкладку/в приложение
     const onVis = () => {
       if (document.visibilityState === "visible") void run();
     };
