@@ -16,7 +16,6 @@ export type PushState = {
 
 function isIOS(): boolean {
   const ua = navigator.userAgent || "";
-  // iOS Safari/WebKit (включая iPadOS)
   return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && (navigator as any).maxTouchPoints > 1);
 }
 
@@ -71,7 +70,7 @@ async function postSubscribe(sub: PushSubscription) {
   await apiFetch("/notifications/push/subscribe", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(sub),
+    body: sub,
   });
 }
 
@@ -79,16 +78,15 @@ async function postUnsubscribe(sub: PushSubscription | null) {
   await apiFetch("/notifications/push/unsubscribe", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({
+    body: {
       endpoint: sub?.endpoint ?? null,
       subscription: sub ?? null,
-    }),
+    },
   });
 }
 
 // Гарантируем регистрацию SW даже если авто-регистрация сломалась
 async function ensureServiceWorkerReady(): Promise<ServiceWorkerRegistration> {
-  // если уже есть регистрация/контроллер — просто ждём ready
   try {
     const ready = await navigator.serviceWorker.ready;
     if (ready) return ready;
@@ -96,7 +94,6 @@ async function ensureServiceWorkerReady(): Promise<ServiceWorkerRegistration> {
     // ignore
   }
 
-  // пробуем явно зарегистрировать (module -> sw.mjs, fallback -> sw.js)
   let reg: ServiceWorkerRegistration | undefined;
 
   try {
@@ -112,19 +109,7 @@ async function ensureServiceWorkerReady(): Promise<ServiceWorkerRegistration> {
   return await navigator.serviceWorker.ready;
 }
 
-export async function enablePush(): Promise<boolean> {
-  if (!isPushSupported()) return false;
-
-  // iOS: webpush работает только для установленных PWA — сохраняем требование.
-  // Android: НЕ блокируем подписку standalone-проверкой (она может ложно возвращать false).
-  if (isIOS() && !isStandalonePwa()) return false;
-
-  const permission = await Notification.requestPermission();
-  if (permission !== "granted") return false;
-
-  const reg = await ensureServiceWorkerReady();
-
-  // Уже включено?
+async function subscribeAndSync(reg: ServiceWorkerRegistration): Promise<boolean> {
   const existing = await reg.pushManager.getSubscription();
   if (existing) {
     await postSubscribe(existing);
@@ -143,6 +128,42 @@ export async function enablePush(): Promise<boolean> {
   return true;
 }
 
+/**
+ * Автовосстановление подписки БЕЗ запроса permission.
+ * Безопасно вызывать из useEffect/хуков.
+ */
+export async function ensurePushSubscribed(): Promise<boolean> {
+  if (!isPushSupported()) return false;
+
+  // iOS: только установленная PWA (иначе всё равно не работает)
+  if (isIOS() && !isStandalonePwa()) return false;
+
+  // Важно: НИКАКОГО requestPermission тут.
+  if (Notification.permission !== "granted") return false;
+
+  const reg = await ensureServiceWorkerReady();
+  return await subscribeAndSync(reg);
+}
+
+/**
+ * Включение пушей ПО КНОПКЕ (user gesture).
+ * Тут можно запрашивать permission.
+ */
+export async function enablePushByUserGesture(): Promise<boolean> {
+  if (!isPushSupported()) return false;
+
+  if (isIOS() && !isStandalonePwa()) return false;
+
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") return false;
+
+  const reg = await ensureServiceWorkerReady();
+  return await subscribeAndSync(reg);
+}
+
+// ✅ Совместимость со старым импортом (не использовать из эффектов!)
+export const enablePush = enablePushByUserGesture;
+
 export async function disablePush(): Promise<boolean> {
   if (!isPushSupported()) return false;
 
@@ -152,23 +173,17 @@ export async function disablePush(): Promise<boolean> {
   if (!sub) {
     try {
       await postUnsubscribe(null);
-    } catch {
-      // ignore
-    }
+    } catch {}
     return true;
   }
 
   try {
     await sub.unsubscribe();
-  } catch {
-    // ignore
-  }
+  } catch {}
 
   try {
     await postUnsubscribe(sub);
-  } catch {
-    // ignore
-  }
+  } catch {}
 
   return true;
 }

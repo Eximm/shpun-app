@@ -1,7 +1,7 @@
 ﻿import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { useMe } from "./useMe";
-import { enablePush } from "../notifications/push";
+import { ensurePushSubscribed } from "../notifications/push";
 import { toast } from "../../shared/ui/toast";
 
 const PARTNER_LS_KEY = "partner_id_pending";
@@ -64,9 +64,9 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     rememberPartnerIdFromUrl();
   }, []);
 
-  /* Enable push after auth */
+  /* Ensure push subscription after auth (NO prompt) */
   useEffect(() => {
-    if (me) enablePush().catch(() => {});
+    if (me) ensurePushSubscribed().catch(() => {});
   }, [me]);
 
   /* Success toast after login */
@@ -136,13 +136,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }, [loading]);
 
   if (!me && !loading && !authRequired) {
-    return (
-      <Navigate
-        to="/login"
-        replace
-        state={{ from: loc.pathname + (loc.search || "") }}
-      />
-    );
+    return <Navigate to="/login" replace state={{ from: loc.pathname + (loc.search || "") }} />;
   }
 
   return (

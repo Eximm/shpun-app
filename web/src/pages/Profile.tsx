@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useMe } from "../app/auth/useMe";
 import { apiFetch } from "../shared/api/client";
 import { useI18n } from "../shared/i18n";
-import { disablePush, enablePush, getPushState } from "../app/notifications/push";
+import { disablePush, enablePushByUserGesture, getPushState } from "../app/notifications/push";
 import { PageStatusCard } from "../shared/ui/PageStatusCard";
 
 type BeforeInstallPromptEvent = Event & {
@@ -588,7 +588,7 @@ export function Profile() {
         await disablePush();
         showToast("Уведомления выключены");
       } else {
-        const ok = await enablePush();
+        const ok = await enablePushByUserGesture();
         if (ok) showToast("Уведомления включены ✅");
         else {
           if (!pushState.standalone) showToast("Для push установи PWA 📲");

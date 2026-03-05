@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 import { apiFetch } from "../../shared/api/client";
 import { toast } from "../../shared/ui/toast";
-import { enablePush, getPushState, isPushSupported } from "./push";
 
 type BillingPushEvent = {
   event_id: string;
@@ -30,9 +29,6 @@ const SHOWN_CLEANUP_LIMIT = 300;
 const POLL_MS = 8000;
 // When tab is hidden, poll slower (or effectively pause)
 const HIDDEN_POLL_MS = 30000;
-
-// Push re-subscribe backoff (avoid loops if platform blocks it)
-const PUSH_RETRY_MS = 10 * 60 * 1000;
 
 /* =========================================================
    Cursor
@@ -160,45 +156,6 @@ function cleanupShownKeys() {
 }
 
 /* =========================================================
-   Push auto-resubscribe (after 410 / reinstall / cleanup)
-   ========================================================= */
-
-async function ensurePushSubscription(
-  lastAttemptAtRef: { current: number },
-  inFlightRef: { current: boolean },
-) {
-  // avoid overlapping attempts
-  if (inFlightRef.current) return;
-
-  // platform not supported
-  if (!isPushSupported()) return;
-
-  const now = Date.now();
-  if (now - (lastAttemptAtRef.current || 0) < PUSH_RETRY_MS) return;
-
-  lastAttemptAtRef.current = now;
-  inFlightRef.current = true;
-
-  try {
-    const st = await getPushState();
-
-    // If permission is not granted — don't bother.
-    // (enablePush() will ask permission, but we don't want silent prompts on background ticks)
-    if (st.permission !== "granted") return;
-
-    // subscription exists -> nothing to do
-    if (st.hasSubscription) return;
-
-    // try to re-create subscription + sync with server
-    await enablePush();
-  } catch {
-    // ignore
-  } finally {
-    inFlightRef.current = false;
-  }
-}
-
-/* =========================================================
    Hook
    ========================================================= */
 
@@ -214,10 +171,6 @@ export function useBillingNotifications(enabled: boolean) {
 
   // prevent overlapping requests (if one tick is slow)
   const inFlightRef = useRef<boolean>(false);
-
-  // push resubscribe throttling
-  const pushAttemptAtRef = useRef<number>(0);
-  const pushInFlightRef = useRef<boolean>(false);
 
   function clearTimer() {
     if (timerRef.current != null) window.clearTimeout(timerRef.current);
@@ -245,9 +198,6 @@ export function useBillingNotifications(enabled: boolean) {
     enabledAtTsRef.current = Math.floor(Date.now() / 1000);
 
     cleanupShownKeys();
-
-    // 🔥 attempt to restore push subscription once on enable
-    void ensurePushSubscription(pushAttemptAtRef, pushInFlightRef);
 
     const tick = async () => {
       if (stopped) return;
@@ -324,10 +274,7 @@ export function useBillingNotifications(enabled: boolean) {
     // if visibility changes, reschedule faster when back
     const onVis = () => {
       if (stopped) return;
-
       if (document.visibilityState === "visible") {
-        // when coming back, also try to restore push once (e.g. after 410 cleanup)
-        void ensurePushSubscription(pushAttemptAtRef, pushInFlightRef);
         scheduleNext(200, () => void tick());
       }
     };
