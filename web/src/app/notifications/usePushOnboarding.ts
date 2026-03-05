@@ -9,20 +9,21 @@ import {
   isStandalonePwa,
 } from "./push";
 
-const LS_SEEN_KEY = "push.onboarding.seen.v4";
+const LS_BROWSER_INSTALL_SEEN = "push.onboarding.browser_install.seen.v1";
+const LS_PWA_PUSH_SEEN = "push.onboarding.pwa_push.seen.v1";
 
-function readSeen(): boolean {
+function readBool(key: string): boolean {
   try {
-    return localStorage.getItem(LS_SEEN_KEY) === "1";
+    return localStorage.getItem(key) === "1";
   } catch {
     return false;
   }
 }
 
-function writeSeen(v: boolean) {
+function writeBool(key: string, v: boolean) {
   try {
-    if (v) localStorage.setItem(LS_SEEN_KEY, "1");
-    else localStorage.removeItem(LS_SEEN_KEY);
+    if (v) localStorage.setItem(key, "1");
+    else localStorage.removeItem(key);
   } catch {
     // ignore
   }
@@ -54,21 +55,8 @@ export function usePushOnboarding(enabled: boolean) {
   });
 
   const telegramMiniApp = useMemo(() => isTelegramMiniApp(), []);
+  const standalone = state.standalone;
   const enabledNow = state.permission === "granted" && state.hasSubscription;
-
-  const shouldShow = useMemo(() => {
-    if (!enabled) return false;
-    if (telegramMiniApp) return false; // в Telegram Mini App onboarding не показываем вообще
-    if (readSeen()) return false;
-    if (!isPushSupported()) return false;
-    if (isPushDisabledByUser()) return false;
-    if (enabledNow) return false;
-    if (state.permission === "denied") return false;
-
-    // В браузере покажем мягкое приглашение установить приложение,
-    // в PWA покажем предложение включить уведомления.
-    return true;
-  }, [enabled, telegramMiniApp, enabledNow, state.permission]);
 
   async function refresh() {
     try {
@@ -106,9 +94,11 @@ export function usePushOnboarding(enabled: boolean) {
     };
 
     const onAppInstalled = () => {
-      // после установки PWA onboarding можно показать снова,
-      // чтобы уже предложить включить уведомления
-      writeSeen(false);
+      // После установки PWA:
+      // - browser invite больше не нужен
+      // - push invite можно показывать
+      writeBool(LS_BROWSER_INSTALL_SEEN, true);
+      writeBool(LS_PWA_PUSH_SEEN, false);
       void refresh();
     };
 
@@ -123,6 +113,23 @@ export function usePushOnboarding(enabled: boolean) {
     };
   }, [enabled, telegramMiniApp]);
 
+  const shouldShow = useMemo(() => {
+    if (!enabled) return false;
+    if (telegramMiniApp) return false;
+    if (!isPushSupported()) return false;
+    if (isPushDisabledByUser()) return false;
+    if (state.permission === "denied") return false;
+    if (enabledNow) return false;
+
+    // Обычный браузер: только мягкое приглашение установить приложение
+    if (!standalone) {
+      return !readBool(LS_BROWSER_INSTALL_SEEN);
+    }
+
+    // Установленная PWA: только предложение включить уведомления
+    return !readBool(LS_PWA_PUSH_SEEN);
+  }, [enabled, telegramMiniApp, standalone, state.permission, enabledNow]);
+
   useEffect(() => {
     if (!enabled || telegramMiniApp) return;
 
@@ -131,25 +138,27 @@ export function usePushOnboarding(enabled: boolean) {
     }, 800);
 
     return () => window.clearTimeout(t);
-  }, [enabled, telegramMiniApp, shouldShow, state.standalone, state.permission, state.hasSubscription]);
+  }, [enabled, telegramMiniApp, shouldShow]);
 
   async function accept() {
     if (busy) return;
     setBusy(true);
 
     try {
-      // В обычном браузере мягко предлагаем установить приложение.
-      // Не считаем onboarding завершённым, чтобы после установки спросить про уведомления снова.
+      // Обычный браузер: мягко зовём установить PWA
       if (!isStandalonePwa()) {
         toast.info("Установите приложение", {
           description:
             "Откройте меню браузера и выберите «Установить приложение». После установки мы предложим включить уведомления.",
           durationMs: 4000,
         });
+
+        writeBool(LS_BROWSER_INSTALL_SEEN, true);
         setOpen(false);
         return;
       }
 
+      // PWA: включаем push
       const ok = await enablePushByUserGesture();
 
       if (ok) {
@@ -157,7 +166,7 @@ export function usePushOnboarding(enabled: boolean) {
         toast.success("Уведомления включены ✅", {
           description: "Теперь вы будете получать важные события.",
         });
-        writeSeen(true);
+        writeBool(LS_PWA_PUSH_SEEN, true);
         setOpen(false);
         await refresh();
       } else {
@@ -165,7 +174,7 @@ export function usePushOnboarding(enabled: boolean) {
           description: "Их можно включить позже в профиле.",
           durationMs: 2500,
         });
-        writeSeen(true);
+        writeBool(LS_PWA_PUSH_SEEN, true);
         setOpen(false);
         await refresh();
       }
@@ -175,7 +184,11 @@ export function usePushOnboarding(enabled: boolean) {
   }
 
   function dismiss() {
-    writeSeen(true);
+    if (!standalone) {
+      writeBool(LS_BROWSER_INSTALL_SEEN, true);
+    } else {
+      writeBool(LS_PWA_PUSH_SEEN, true);
+    }
     setOpen(false);
   }
 
