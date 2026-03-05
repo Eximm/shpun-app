@@ -3,7 +3,6 @@ import { apiFetch } from "../../shared/api/client";
 function urlBase64ToUint8Array(base64String: string) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/\-/g, "+").replace(/_/g, "/");
-
   const rawData = window.atob(base64);
   return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
 }
@@ -14,6 +13,12 @@ export type PushState = {
   hasSubscription: boolean;
   standalone: boolean;
 };
+
+function isIOS(): boolean {
+  const ua = navigator.userAgent || "";
+  // iOS Safari/WebKit (включая iPadOS)
+  return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && (navigator as any).maxTouchPoints > 1);
+}
 
 export function isStandalonePwa(): boolean {
   try {
@@ -40,12 +45,7 @@ export async function getPushState(): Promise<PushState> {
   const standalone = isStandalonePwa();
 
   if (!supported) {
-    return {
-      supported: false,
-      permission: "unsupported",
-      hasSubscription: false,
-      standalone,
-    };
+    return { supported: false, permission: "unsupported", hasSubscription: false, standalone };
   }
 
   let permission: NotificationPermission | "unsupported" = "unsupported";
@@ -76,9 +76,6 @@ async function postSubscribe(sub: PushSubscription) {
 }
 
 async function postUnsubscribe(sub: PushSubscription | null) {
-  // IMPORTANT:
-  // Не знаем наверняка, что именно ждёт бэк.
-  // Поэтому отправляем минимум (endpoint) + сам sub (если есть) — безопасно и удобно.
   await apiFetch("/notifications/push/unsubscribe", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -89,31 +86,53 @@ async function postUnsubscribe(sub: PushSubscription | null) {
   });
 }
 
+// Гарантируем регистрацию SW даже если авто-регистрация сломалась
+async function ensureServiceWorkerReady(): Promise<ServiceWorkerRegistration> {
+  // если уже есть регистрация/контроллер — просто ждём ready
+  try {
+    const ready = await navigator.serviceWorker.ready;
+    if (ready) return ready;
+  } catch {
+    // ignore
+  }
+
+  // пробуем явно зарегистрировать (module -> sw.mjs, fallback -> sw.js)
+  let reg: ServiceWorkerRegistration | undefined;
+
+  try {
+    reg = await navigator.serviceWorker.register("/sw.mjs", { type: "module" as any });
+  } catch {
+    // ignore
+  }
+
+  if (!reg) {
+    reg = await navigator.serviceWorker.register("/sw.js");
+  }
+
+  return await navigator.serviceWorker.ready;
+}
+
 export async function enablePush(): Promise<boolean> {
   if (!isPushSupported()) return false;
 
-  // На iOS WebPush работает только для установленных PWA.
-  // На Android тоже логично требовать standalone, чтобы не путать пользователя.
-  if (!isStandalonePwa()) return false;
+  // iOS: webpush работает только для установленных PWA — сохраняем требование.
+  // Android: НЕ блокируем подписку standalone-проверкой (она может ложно возвращать false).
+  if (isIOS() && !isStandalonePwa()) return false;
 
   const permission = await Notification.requestPermission();
   if (permission !== "granted") return false;
 
-  const reg = await navigator.serviceWorker.ready;
+  const reg = await ensureServiceWorkerReady();
 
   // Уже включено?
   const existing = await reg.pushManager.getSubscription();
   if (existing) {
-    // На всякий случай синхронизируем с сервером
     await postSubscribe(existing);
     return true;
   }
 
   const vapidPublicKey = (import.meta as any).env.VITE_VAPID_PUBLIC_KEY;
-  if (!vapidPublicKey) {
-    console.warn("VAPID public key missing");
-    return false;
-  }
+  if (!vapidPublicKey) return false;
 
   const sub = await reg.pushManager.subscribe({
     userVisibleOnly: true,
@@ -127,12 +146,10 @@ export async function enablePush(): Promise<boolean> {
 export async function disablePush(): Promise<boolean> {
   if (!isPushSupported()) return false;
 
-  const reg = await navigator.serviceWorker.ready;
+  const reg = await ensureServiceWorkerReady();
   const sub = await reg.pushManager.getSubscription();
 
-  // Если подписки нет — всё ок, считаем выключенным
   if (!sub) {
-    // синхронизация с сервером “на всякий случай”
     try {
       await postUnsubscribe(null);
     } catch {
@@ -141,20 +158,17 @@ export async function disablePush(): Promise<boolean> {
     return true;
   }
 
-  // 1) удаляем на устройстве
-  let ok = false;
   try {
-    ok = await sub.unsubscribe();
+    await sub.unsubscribe();
   } catch {
-    ok = false;
+    // ignore
   }
 
-  // 2) удаляем на сервере (даже если unsubscribe вернул false — серверу всё равно лучше сказать)
   try {
     await postUnsubscribe(sub);
   } catch {
     // ignore
   }
 
-  return ok || true;
+  return true;
 }
