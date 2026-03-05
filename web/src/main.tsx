@@ -64,7 +64,6 @@ function PushOnboardingModal({
   busy,
   standalone,
   permission,
-  telegramMiniApp,
   onAccept,
   onDismiss,
 }: {
@@ -72,7 +71,6 @@ function PushOnboardingModal({
   busy: boolean;
   standalone: boolean;
   permission: string;
-  telegramMiniApp: boolean;
   onAccept: () => void;
   onDismiss: () => void;
 }) {
@@ -82,12 +80,7 @@ function PushOnboardingModal({
   let hint = "Включите уведомления, чтобы получать важные события.";
   let primaryText = "Включить";
 
-  if (telegramMiniApp) {
-    title = "📲 Уведомления в приложении";
-    hint =
-      "В Telegram mini app системные push не работают. Пока мини-приложение открыто, вы увидите тосты. Для push-уведомлений откройте Shpun App в браузере и установите приложение на устройство.";
-    primaryText = "Понятно";
-  } else if (permission === "denied") {
+  if (permission === "denied") {
     hint = "Уведомления отключены в настройках браузера. Их можно разрешить позже в настройках сайта или в профиле.";
     primaryText = "Понятно";
   } else if (!standalone) {
@@ -219,7 +212,6 @@ function Authed({ children }: { children: React.ReactNode }) {
         busy={po.busy}
         standalone={po.state.standalone}
         permission={String(po.state.permission)}
-        telegramMiniApp={po.telegramMiniApp}
         onAccept={po.accept}
         onDismiss={po.dismiss}
       />

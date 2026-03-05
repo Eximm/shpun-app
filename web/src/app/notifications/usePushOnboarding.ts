@@ -9,7 +9,7 @@ import {
   isStandalonePwa,
 } from "./push";
 
-const LS_SEEN_KEY = "push.onboarding.seen.v3";
+const LS_SEEN_KEY = "push.onboarding.seen.v4";
 
 function readSeen(): boolean {
   try {
@@ -58,16 +58,15 @@ export function usePushOnboarding(enabled: boolean) {
 
   const shouldShow = useMemo(() => {
     if (!enabled) return false;
+    if (telegramMiniApp) return false; // в Telegram Mini App onboarding не показываем вообще
     if (readSeen()) return false;
-
-    // Telegram mini app: push там не включаем, но onboarding-подсказку показать полезно
-    if (telegramMiniApp) return true;
-
     if (!isPushSupported()) return false;
     if (isPushDisabledByUser()) return false;
     if (enabledNow) return false;
     if (state.permission === "denied") return false;
 
+    // В браузере покажем мягкое приглашение установить приложение,
+    // в PWA покажем предложение включить уведомления.
     return true;
   }, [enabled, telegramMiniApp, enabledNow, state.permission]);
 
@@ -96,7 +95,7 @@ export function usePushOnboarding(enabled: boolean) {
   }, [enabled]);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || telegramMiniApp) return;
 
     const onVis = () => {
       if (document.visibilityState === "visible") void refresh();
@@ -107,7 +106,8 @@ export function usePushOnboarding(enabled: boolean) {
     };
 
     const onAppInstalled = () => {
-      // После установки PWA onboarding можно показать снова
+      // после установки PWA onboarding можно показать снова,
+      // чтобы уже предложить включить уведомления
       writeSeen(false);
       void refresh();
     };
@@ -121,35 +121,24 @@ export function usePushOnboarding(enabled: boolean) {
       window.removeEventListener("focus", onFocus);
       window.removeEventListener("appinstalled", onAppInstalled as EventListener);
     };
-  }, [enabled]);
+  }, [enabled, telegramMiniApp]);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || telegramMiniApp) return;
 
     const t = window.setTimeout(() => {
       setOpen(shouldShow);
     }, 800);
 
     return () => window.clearTimeout(t);
-  }, [enabled, shouldShow, state.standalone, state.permission, state.hasSubscription]);
+  }, [enabled, telegramMiniApp, shouldShow, state.standalone, state.permission, state.hasSubscription]);
 
   async function accept() {
     if (busy) return;
     setBusy(true);
 
     try {
-      if (telegramMiniApp) {
-        toast.info("Уведомления доступны в приложении", {
-          description:
-            "В Telegram mini app системные push не работают. Откройте Shpun App в браузере и установите приложение на устройство.",
-          durationMs: 4500,
-        });
-        writeSeen(true);
-        setOpen(false);
-        return;
-      }
-
-      // Если ещё не standalone — только подсказываем установить PWA.
+      // В обычном браузере мягко предлагаем установить приложение.
       // Не считаем onboarding завершённым, чтобы после установки спросить про уведомления снова.
       if (!isStandalonePwa()) {
         toast.info("Установите приложение", {
