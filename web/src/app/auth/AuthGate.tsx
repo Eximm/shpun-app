@@ -1,13 +1,8 @@
 ﻿// FILE: web/src/app/auth/AuthGate.tsx
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMe } from "./useMe";
-import {
-  ensurePushSubscribed,
-  enablePushByUserGesture,
-  getPushState,
-  isPushSupported,
-} from "../notifications/push";
+import { ensurePushSubscribed, enablePushByUserGesture, getPushState, isPushDisabledByUser, isPushSupported } from "../notifications/push";
 import { toast } from "../../shared/ui/toast";
 
 const PARTNER_LS_KEY = "partner_id_pending";
@@ -16,9 +11,96 @@ const PARTNER_LS_KEY = "partner_id_pending";
 const AUTH_PENDING_KEY = "auth:pending";
 const AUTH_PENDING_AT_KEY = "auth:pending_at";
 
-// UI marker: чтобы не дёргать пользователя повторно каждый заход
-const PUSH_PROMPT_DISMISSED_KEY = "push:prompt_dismissed_at";
-const PUSH_PROMPT_DISMISS_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 дней
+/* =========================================================
+   Push onboarding prompt (post-auth)
+   ========================================================= */
+
+const PUSH_PROMPT_DISMISS_MS = 7 * 24 * 60 * 60 * 1000;
+
+function pushPromptKey(uid: number) {
+  return `push.prompt.dismissed_until:u:${uid}`;
+}
+
+function readDismissUntil(uid: number): number {
+  if (!uid) return 0;
+  try {
+    const raw = localStorage.getItem(pushPromptKey(uid));
+    const n = Number(raw ?? 0);
+    return Number.isFinite(n) ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function writeDismissUntil(uid: number, untilMs: number) {
+  if (!uid) return;
+  try {
+    localStorage.setItem(pushPromptKey(uid), String(untilMs));
+  } catch {
+    // ignore
+  }
+}
+
+function PushPrompt({
+  open,
+  onEnable,
+  onLater,
+  loading,
+}: {
+  open: boolean;
+  onEnable: () => void;
+  onLater: () => void;
+  loading: boolean;
+}) {
+  if (!open) return null;
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        left: 0,
+        right: 0,
+        bottom: 0,
+        padding: "12px 12px calc(12px + env(safe-area-inset-bottom))",
+        zIndex: 9999,
+        display: "flex",
+        justifyContent: "center",
+        pointerEvents: "none",
+      }}
+    >
+      <div
+        className="card"
+        style={{
+          width: "min(680px, 100%)",
+          pointerEvents: "auto",
+          boxShadow: "0 12px 40px rgba(0,0,0,.55)",
+        }}
+      >
+        <div className="card__body">
+          <div className="h1" style={{ fontSize: 16, margin: 0 }}>
+            🔔 Включить уведомления?
+          </div>
+          <div className="p" style={{ marginTop: 6, marginBottom: 0, opacity: 0.85 }}>
+            Будем присылать только важное: пополнения, блокировки, продления и новости сервиса.
+          </div>
+
+          <div className="row" style={{ marginTop: 12, justifyContent: "flex-end", gap: 10 }}>
+            <button className="btn" type="button" onClick={onLater} disabled={loading}>
+              Позже
+            </button>
+            <button className="btn btn--primary" type="button" onClick={onEnable} disabled={loading}>
+              {loading ? "…" : "Включить"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================
+   Partner capture
+   ========================================================= */
 
 function parsePartnerIdFromUrl(): number {
   try {
@@ -57,24 +139,6 @@ function rememberPartnerIdFromUrl() {
   } catch {}
 }
 
-function wasPushPromptDismissedRecently(): boolean {
-  try {
-    const ts = Number(localStorage.getItem(PUSH_PROMPT_DISMISSED_KEY) || "0");
-    if (!ts) return false;
-    return Date.now() - ts < PUSH_PROMPT_DISMISS_TTL_MS;
-  } catch {
-    return false;
-  }
-}
-
-function markPushPromptDismissedNow() {
-  try {
-    localStorage.setItem(PUSH_PROMPT_DISMISSED_KEY, String(Date.now()));
-  } catch {
-    // ignore
-  }
-}
-
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const { me, loading, authRequired } = useMe();
   const loc = useLocation();
@@ -87,11 +151,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const [showLoader, setShowLoader] = useState(true);
   const [fadeOut, setFadeOut] = useState(false);
 
-  // === Push prompt state ===
-  const [pushUiReady, setPushUiReady] = useState(false);
-  const [pushUiVisible, setPushUiVisible] = useState(false);
-  const [pushUiBusy, setPushUiBusy] = useState(false);
-
   /* Capture partner_id early */
   useEffect(() => {
     rememberPartnerIdFromUrl();
@@ -101,89 +160,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (me) ensurePushSubscribed().catch(() => {});
   }, [me]);
-
-  /* Decide whether to show push enable UI after auth */
-  useEffect(() => {
-    let stopped = false;
-
-    const run = async () => {
-      if (!me) {
-        setPushUiReady(false);
-        setPushUiVisible(false);
-        return;
-      }
-
-      // не показываем, если не поддерживается
-      if (!isPushSupported()) {
-        setPushUiReady(true);
-        setPushUiVisible(false);
-        return;
-      }
-
-      // если пользователь недавно закрыл — не трогаем
-      if (wasPushPromptDismissedRecently()) {
-        setPushUiReady(true);
-        setPushUiVisible(false);
-        return;
-      }
-
-      try {
-        const s = await getPushState();
-
-        // если уже включено — не показываем
-        const enabled = s.permission === "granted" && s.hasSubscription;
-        if (stopped) return;
-
-        setPushUiReady(true);
-
-        // показываем только если не включено и permission ещё не denied
-        if (!enabled && s.permission !== "denied") setPushUiVisible(true);
-        else setPushUiVisible(false);
-      } catch {
-        if (stopped) return;
-        setPushUiReady(true);
-        setPushUiVisible(false);
-      }
-    };
-
-    void run();
-
-    return () => {
-      stopped = true;
-    };
-  }, [me]);
-
-  async function onEnablePushClick() {
-    if (pushUiBusy) return;
-    setPushUiBusy(true);
-
-    try {
-      const ok = await enablePushByUserGesture();
-      if (ok) {
-        toast.success("Уведомления включены ✅", {
-          description: "Теперь важные события будут приходить даже если вкладка закрыта.",
-          durationMs: 2800,
-        });
-        setPushUiVisible(false);
-      } else {
-        // если пользователь отказал — просто скрываем, чтобы не раздражать
-        markPushPromptDismissedNow();
-        setPushUiVisible(false);
-
-        toast.info("Уведомления не включены", {
-          description: "Можно включить позже в профиле → Push-уведомления.",
-          durationMs: 2800,
-        });
-      }
-    } finally {
-      setPushUiBusy(false);
-    }
-  }
-
-  function onDismissPushClick() {
-    markPushPromptDismissedNow();
-    setPushUiVisible(false);
-  }
 
   /* Success toast after login */
   useEffect(() => {
@@ -251,81 +227,100 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     return () => clearTimeout(t);
   }, [loading]);
 
+  // =========================================================
+  // Push prompt after auth (user gesture required)
+  // =========================================================
+
+  const uid = useMemo(() => {
+    const n = Number((me as any)?.profile?.id ?? (me as any)?.profile?.user_id ?? (me as any)?.id ?? 0);
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+  }, [me]);
+
+  const [pushPromptOpen, setPushPromptOpen] = useState(false);
+  const [pushPromptLoading, setPushPromptLoading] = useState(false);
+  const promptCheckedRef = useRef(false);
+
+  useEffect(() => {
+    if (!uid) {
+      setPushPromptOpen(false);
+      promptCheckedRef.current = false;
+      return;
+    }
+
+    // проверяем один раз на сессию (не спамим)
+    if (promptCheckedRef.current) return;
+    promptCheckedRef.current = true;
+
+    // показываем только когда UI уже появился (не под лоадером)
+    if (showLoader) return;
+
+    // если пользователь уже отключал push — не навязываем
+    if (isPushDisabledByUser()) return;
+
+    // если недавно нажали "позже" — не показываем
+    const until = readDismissUntil(uid);
+    if (until && until > Date.now()) return;
+
+    // если пуши вообще недоступны — не показываем
+    if (!isPushSupported()) return;
+
+    (async () => {
+      try {
+        const s = await getPushState();
+
+        // уже есть permission или подписка — промпт не нужен
+        if (s.permission === "granted" && s.hasSubscription) return;
+
+        // если уже "denied" — бессмысленно предлагать тут (только через настройки браузера)
+        if (s.permission === "denied") return;
+
+        // по задаче: спрашиваем сразу после авторизации, но requestPermission только по кнопке
+        if (s.permission === "default") {
+          setPushPromptOpen(true);
+        }
+      } catch {
+        // ignore
+      }
+    })();
+  }, [uid, showLoader]);
+
+  async function onPushLater() {
+    if (!uid) return;
+    writeDismissUntil(uid, Date.now() + PUSH_PROMPT_DISMISS_MS);
+    setPushPromptOpen(false);
+  }
+
+  async function onPushEnable() {
+    if (pushPromptLoading) return;
+    setPushPromptLoading(true);
+
+    try {
+      const ok = await enablePushByUserGesture();
+      if (ok) {
+        setPushPromptOpen(false);
+        toast.success("Уведомления включены ✅", { description: "Теперь будем присылать важные события." });
+      } else {
+        // если пользователь отказал — не спамим повторно сразу
+        writeDismissUntil(uid, Date.now() + PUSH_PROMPT_DISMISS_MS);
+        setPushPromptOpen(false);
+        toast.info("Уведомления не включены", { description: "Можно включить позже в Профиле." });
+      }
+    } catch {
+      toast.error("Не удалось включить уведомления", { description: "Попробуйте позже в Профиле." });
+    } finally {
+      setPushPromptLoading(false);
+    }
+  }
+
   if (!me && !loading && !authRequired) {
     return <Navigate to="/login" replace state={{ from: loc.pathname + (loc.search || "") }} />;
   }
 
   return (
     <>
-      {/* Push prompt (after auth, user gesture) */}
-      {me && pushUiReady && pushUiVisible ? (
-        <div
-          style={{
-            position: "fixed",
-            left: 12,
-            right: 12,
-            bottom: 72,
-            zIndex: 9998,
-          }}
-        >
-          <div
-            className="card"
-            style={{
-              border: "1px solid rgba(255,255,255,.10)",
-              background: "rgba(20,20,22,.92)",
-              backdropFilter: "blur(10px)",
-            }}
-          >
-            <div className="card__body" style={{ padding: 12 }}>
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-                <div
-                  aria-hidden="true"
-                  style={{
-                    width: 34,
-                    height: 34,
-                    borderRadius: 12,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    background: "rgba(255,255,255,.06)",
-                    flex: "0 0 auto",
-                  }}
-                >
-                  🔔
-                </div>
-
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: 14 }}>Включить уведомления?</div>
-                  <div style={{ marginTop: 2, fontSize: 12, opacity: 0.75, lineHeight: 1.25 }}>
-                    Будем присылать важные события из биллинга даже если вкладка закрыта.
-                  </div>
-
-                  <div style={{ display: "flex", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
-                    <button
-                      type="button"
-                      className="btn btn--primary"
-                      onClick={onEnablePushClick}
-                      disabled={pushUiBusy}
-                    >
-                      {pushUiBusy ? "…" : "Включить"}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={onDismissPushClick}
-                      disabled={pushUiBusy}
-                    >
-                      Не сейчас
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
       {children}
+
+      <PushPrompt open={pushPromptOpen} onEnable={onPushEnable} onLater={onPushLater} loading={pushPromptLoading} />
 
       {showLoader && (
         <div

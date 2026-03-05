@@ -11,16 +11,16 @@ export function usePushAutoregister(enabled: boolean) {
 
   useEffect(() => {
     if (!enabled) return;
-    if (!isPushSupported()) return;
-    if (isPushDisabledByUser()) return;
 
     let stopped = false;
 
     const run = async () => {
       if (stopped) return;
       if (inFlightRef.current) return;
+      if (!isPushSupported()) return;
+      if (isPushDisabledByUser()) return;
 
-      // "по учебнику": permission запрашивается только по user gesture в UI
+      // "по учебнику": без user gesture permission НЕ спрашиваем.
       if (Notification.permission !== "granted") return;
 
       const now = Date.now();
@@ -38,24 +38,19 @@ export function usePushAutoregister(enabled: boolean) {
       }
     };
 
-    // сразу после входа
     void run();
 
     const onVis = () => {
       if (document.visibilityState === "visible") void run();
     };
 
-    const onOnline = () => {
-      void run();
-    };
-
+    window.addEventListener("online", run as any);
     document.addEventListener("visibilitychange", onVis);
-    window.addEventListener("online", onOnline);
 
     return () => {
       stopped = true;
+      window.removeEventListener("online", run as any);
       document.removeEventListener("visibilitychange", onVis);
-      window.removeEventListener("online", onOnline);
     };
   }, [enabled]);
 }
