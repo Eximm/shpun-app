@@ -1,8 +1,13 @@
-﻿// FILE: web/src/app/auth/AuthGate.tsx
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+﻿import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMe } from "./useMe";
-import { ensurePushSubscribed, enablePushByUserGesture, getPushState, isPushDisabledByUser, isPushSupported } from "../notifications/push";
+import {
+  enablePushByUserGesture,
+  ensurePushSubscribed,
+  getPushState,
+  isPushSupported,
+  isStandalonePwa,
+} from "../notifications/push";
 import { toast } from "../../shared/ui/toast";
 
 const PARTNER_LS_KEY = "partner_id_pending";
@@ -11,85 +16,113 @@ const PARTNER_LS_KEY = "partner_id_pending";
 const AUTH_PENDING_KEY = "auth:pending";
 const AUTH_PENDING_AT_KEY = "auth:pending_at";
 
-/* =========================================================
-   Push onboarding prompt (post-auth)
-   ========================================================= */
-
-const PUSH_PROMPT_DISMISS_MS = 7 * 24 * 60 * 60 * 1000;
-
-function pushPromptKey(uid: number) {
-  return `push.prompt.dismissed_until:u:${uid}`;
-}
-
-function readDismissUntil(uid: number): number {
-  if (!uid) return 0;
+function isTelegramMiniApp(): boolean {
   try {
-    const raw = localStorage.getItem(pushPromptKey(uid));
-    const n = Number(raw ?? 0);
-    return Number.isFinite(n) ? n : 0;
+    const w = window as any;
+    return Boolean(w?.Telegram?.WebApp?.initData || w?.Telegram?.WebApp?.initDataUnsafe);
   } catch {
-    return 0;
+    return false;
   }
 }
 
-function writeDismissUntil(uid: number, untilMs: number) {
-  if (!uid) return;
+function sessionDismissKey(uid: number, mode: "browser" | "pwa") {
+  return `push.onboarding.dismissed:${mode}:u:${uid}`;
+}
+
+function readDismissed(key: string): boolean {
   try {
-    localStorage.setItem(pushPromptKey(uid), String(untilMs));
+    return sessionStorage.getItem(key) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeDismissed(key: string) {
+  try {
+    sessionStorage.setItem(key, "1");
   } catch {
     // ignore
   }
 }
 
-function PushPrompt({
+function PushOnboardingModal({
   open,
-  onEnable,
-  onLater,
-  loading,
+  busy,
+  standalone,
+  permission,
+  onAccept,
+  onDismiss,
 }: {
   open: boolean;
-  onEnable: () => void;
-  onLater: () => void;
-  loading: boolean;
+  busy: boolean;
+  standalone: boolean;
+  permission: string;
+  onAccept: () => void;
+  onDismiss: () => void;
 }) {
   if (!open) return null;
 
+  let title = "🔔 Уведомления";
+  let hint = "Включите уведомления, чтобы получать важные события.";
+  let primaryText = "Включить";
+
+  if (!standalone) {
+    title = "📲 Установите приложение";
+    hint =
+      "Установите Shpun App на устройство. В установленном приложении мы предложим включить уведомления о балансе, оплате и услугах.";
+    primaryText = "Понятно";
+  } else if (permission === "denied") {
+    title = "🔔 Уведомления";
+    hint =
+      "Уведомления отключены в настройках браузера. Их можно разрешить позже в настройках сайта или в профиле.";
+    primaryText = "Понятно";
+  } else {
+    title = "🔔 Включите уведомления";
+    hint = "Получайте важные события о балансе, оплате и услугах даже когда приложение закрыто.";
+    primaryText = "Включить";
+  }
+
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      onMouseDown={onDismiss}
       style={{
         position: "fixed",
-        left: 0,
-        right: 0,
-        bottom: 0,
-        padding: "12px 12px calc(12px + env(safe-area-inset-bottom))",
-        zIndex: 9999,
+        inset: 0,
+        background: "rgba(0,0,0,.65)",
+        backdropFilter: "blur(6px)",
+        WebkitBackdropFilter: "blur(6px)",
         display: "flex",
+        alignItems: "center",
         justifyContent: "center",
-        pointerEvents: "none",
+        padding: 16,
+        zIndex: 9999,
       }}
     >
       <div
         className="card"
+        onMouseDown={(e) => e.stopPropagation()}
         style={{
-          width: "min(680px, 100%)",
-          pointerEvents: "auto",
-          boxShadow: "0 12px 40px rgba(0,0,0,.55)",
+          width: "min(520px, 92vw)",
         }}
       >
         <div className="card__body">
-          <div className="h1" style={{ fontSize: 16, margin: 0 }}>
-            🔔 Включить уведомления?
-          </div>
-          <div className="p" style={{ marginTop: 6, marginBottom: 0, opacity: 0.85 }}>
-            Будем присылать только важное: пополнения, блокировки, продления и новости сервиса.
+          <div className="h1" style={{ fontSize: 18, margin: 0 }}>
+            {title}
           </div>
 
-          <div className="row" style={{ marginTop: 12, justifyContent: "flex-end", gap: 10 }}>
-            <button className="btn" type="button" onClick={onLater} disabled={loading}>
-              Позже
+          <p className="p" style={{ marginTop: 8 }}>
+            {hint}
+          </p>
+
+          <div className="row" style={{ marginTop: 16, justifyContent: "flex-end", gap: 10 }}>
+            <button className="btn" type="button" onClick={onDismiss} disabled={busy}>
+              Не сейчас
             </button>
-            <button className="btn btn--primary" type="button" onClick={onEnable} disabled={loading}>
-              {loading ? "…" : "Включить"}
+
+            <button className="btn btn--primary" type="button" onClick={onAccept} disabled={busy}>
+              {busy ? "..." : primaryText}
             </button>
           </div>
         </div>
@@ -97,10 +130,6 @@ function PushPrompt({
     </div>
   );
 }
-
-/* =========================================================
-   Partner capture
-   ========================================================= */
 
 function parsePartnerIdFromUrl(): number {
   try {
@@ -147,21 +176,40 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const notifiedRef = useRef(false);
   const successShownRef = useRef(false);
 
-  // === Loader visibility state ===
   const [showLoader, setShowLoader] = useState(true);
   const [fadeOut, setFadeOut] = useState(false);
 
-  /* Capture partner_id early */
+  // onboarding
+  const [pushPromptOpen, setPushPromptOpen] = useState(false);
+  const [pushPromptBusy, setPushPromptBusy] = useState(false);
+  const [pushState, setPushState] = useState<{
+    supported: boolean;
+    permission: NotificationPermission | "unsupported";
+    hasSubscription: boolean;
+    standalone: boolean;
+  }>({
+    supported: false,
+    permission: "unsupported",
+    hasSubscription: false,
+    standalone: false,
+  });
+
+  const telegramMiniApp = useMemo(() => isTelegramMiniApp(), []);
+  const uid = useMemo(() => {
+    const n = Number((me as any)?.profile?.id ?? (me as any)?.profile?.user_id ?? (me as any)?.id ?? 0);
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+  }, [me]);
+
+  const onboardingCheckedRef = useRef<string>("");
+
   useEffect(() => {
     rememberPartnerIdFromUrl();
   }, []);
 
-  /* Ensure push subscription after auth (NO prompt) */
   useEffect(() => {
     if (me) ensurePushSubscribed().catch(() => {});
   }, [me]);
 
-  /* Success toast after login */
   useEffect(() => {
     if (!me) return;
     if (successShownRef.current) return;
@@ -172,7 +220,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
       if (!provider) return;
 
-      // защита от старых маркеров (10 секунд)
       if (ts && Date.now() - ts > 10000) {
         sessionStorage.removeItem(AUTH_PENDING_KEY);
         sessionStorage.removeItem(AUTH_PENDING_AT_KEY);
@@ -192,7 +239,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     }
   }, [me]);
 
-  /* Session expired */
   useEffect(() => {
     if (!authRequired) return;
     if (notifiedRef.current) return;
@@ -210,7 +256,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     });
   }, [authRequired, nav, loc.pathname, loc.search]);
 
-  /* Loader lifecycle */
   useEffect(() => {
     if (loading) {
       setShowLoader(true);
@@ -227,89 +272,125 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     return () => clearTimeout(t);
   }, [loading]);
 
-  // =========================================================
-  // Push prompt after auth (user gesture required)
-  // =========================================================
-
-  const uid = useMemo(() => {
-    const n = Number((me as any)?.profile?.id ?? (me as any)?.profile?.user_id ?? (me as any)?.id ?? 0);
-    return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
-  }, [me]);
-
-  const [pushPromptOpen, setPushPromptOpen] = useState(false);
-  const [pushPromptLoading, setPushPromptLoading] = useState(false);
-  const promptCheckedRef = useRef(false);
-
+  // ===== onboarding after successful auth =====
   useEffect(() => {
-    if (!uid) {
+    if (!me || loading) return;
+    if (telegramMiniApp) {
       setPushPromptOpen(false);
-      promptCheckedRef.current = false;
       return;
     }
+    if (!uid) return;
 
-    // проверяем один раз на сессию (не спамим)
-    if (promptCheckedRef.current) return;
-    promptCheckedRef.current = true;
+    const checkKey = `${uid}:${loc.pathname}`;
+    if (onboardingCheckedRef.current === checkKey) return;
+    onboardingCheckedRef.current = checkKey;
 
-    // показываем только когда UI уже появился (не под лоадером)
-    if (showLoader) return;
+    const browserDismissKey = sessionDismissKey(uid, "browser");
+    const pwaDismissKey = sessionDismissKey(uid, "pwa");
 
-    // если пользователь уже отключал push — не навязываем
-    if (isPushDisabledByUser()) return;
+    let cancelled = false;
 
-    // если недавно нажали "позже" — не показываем
-    const until = readDismissUntil(uid);
-    if (until && until > Date.now()) return;
-
-    // если пуши вообще недоступны — не показываем
-    if (!isPushSupported()) return;
-
-    (async () => {
+    const run = async () => {
       try {
         const s = await getPushState();
+        if (cancelled) return;
 
-        // уже есть permission или подписка — промпт не нужен
-        if (s.permission === "granted" && s.hasSubscription) return;
+        setPushState(s);
 
-        // если уже "denied" — бессмысленно предлагать тут (только через настройки браузера)
-        if (s.permission === "denied") return;
+        // browser mode -> always soft invite to install, unless dismissed in this login session
+        if (!s.standalone) {
+          if (!readDismissed(browserDismissKey)) {
+            setPushPromptOpen(true);
+          }
+          return;
+        }
 
-        // по задаче: спрашиваем сразу после авторизации, но requestPermission только по кнопке
-        if (s.permission === "default") {
+        // PWA mode
+        if (!isPushSupported()) return;
+
+        const pushEnabled = s.permission === "granted" && s.hasSubscription;
+        if (pushEnabled) return;
+
+        if (!readDismissed(pwaDismissKey)) {
           setPushPromptOpen(true);
         }
       } catch {
         // ignore
       }
-    })();
-  }, [uid, showLoader]);
+    };
 
-  async function onPushLater() {
-    if (!uid) return;
-    writeDismissUntil(uid, Date.now() + PUSH_PROMPT_DISMISS_MS);
-    setPushPromptOpen(false);
-  }
+    const t = window.setTimeout(() => {
+      void run();
+    }, 600);
 
-  async function onPushEnable() {
-    if (pushPromptLoading) return;
-    setPushPromptLoading(true);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [me, loading, telegramMiniApp, uid, loc.pathname]);
+
+  async function onPushPromptAccept() {
+    if (!uid || pushPromptBusy) return;
+
+    const browserDismissKey = sessionDismissKey(uid, "browser");
+    const pwaDismissKey = sessionDismissKey(uid, "pwa");
+
+    setPushPromptBusy(true);
 
     try {
-      const ok = await enablePushByUserGesture();
-      if (ok) {
+      if (!isStandalonePwa()) {
+        toast.info("Установите приложение", {
+          description:
+            "Откройте меню браузера и выберите «Установить приложение». В установленном приложении мы предложим включить уведомления.",
+          durationMs: 4000,
+        });
+        writeDismissed(browserDismissKey);
         setPushPromptOpen(false);
-        toast.success("Уведомления включены ✅", { description: "Теперь будем присылать важные события." });
-      } else {
-        // если пользователь отказал — не спамим повторно сразу
-        writeDismissUntil(uid, Date.now() + PUSH_PROMPT_DISMISS_MS);
-        setPushPromptOpen(false);
-        toast.info("Уведомления не включены", { description: "Можно включить позже в Профиле." });
+        return;
       }
-    } catch {
-      toast.error("Не удалось включить уведомления", { description: "Попробуйте позже в Профиле." });
+
+      const ok = await enablePushByUserGesture();
+
+      if (ok) {
+        await ensurePushSubscribed().catch(() => {});
+        const s = await getPushState().catch(() => null);
+        if (s) setPushState(s);
+
+        toast.success("Уведомления включены ✅", {
+          description: "Теперь вы будете получать важные события.",
+        });
+
+        writeDismissed(pwaDismissKey);
+        setPushPromptOpen(false);
+      } else {
+        const s = await getPushState().catch(() => null);
+        if (s) setPushState(s);
+
+        toast.info("Уведомления не включены", {
+          description: "Их можно включить позже в профиле.",
+          durationMs: 2500,
+        });
+
+        writeDismissed(pwaDismissKey);
+        setPushPromptOpen(false);
+      }
     } finally {
-      setPushPromptLoading(false);
+      setPushPromptBusy(false);
     }
+  }
+
+  function onPushPromptDismiss() {
+    if (!uid) {
+      setPushPromptOpen(false);
+      return;
+    }
+
+    const key = pushState.standalone
+      ? sessionDismissKey(uid, "pwa")
+      : sessionDismissKey(uid, "browser");
+
+    writeDismissed(key);
+    setPushPromptOpen(false);
   }
 
   if (!me && !loading && !authRequired) {
@@ -320,7 +401,14 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     <>
       {children}
 
-      <PushPrompt open={pushPromptOpen} onEnable={onPushEnable} onLater={onPushLater} loading={pushPromptLoading} />
+      <PushOnboardingModal
+        open={pushPromptOpen}
+        busy={pushPromptBusy}
+        standalone={pushState.standalone}
+        permission={String(pushState.permission)}
+        onAccept={onPushPromptAccept}
+        onDismiss={onPushPromptDismiss}
+      />
 
       {showLoader && (
         <div

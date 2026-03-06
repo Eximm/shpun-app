@@ -24,7 +24,6 @@ import { I18nProvider, useI18n } from "./shared/i18n";
 import { ToastProvider } from "./shared/ui/toast/ToastProvider";
 import { useBillingNotifications } from "./app/notifications/useBillingNotifications";
 import { usePushAutoregister } from "./app/notifications/usePushAutoregister";
-import { usePushOnboarding } from "./app/notifications/usePushOnboarding";
 
 /* ============================================================
    Service Worker (production only)
@@ -53,110 +52,6 @@ if (import.meta.env.PROD) {
       } catch {}
     })
     .catch(() => {});
-}
-
-/* ============================================================
-   Push Onboarding Modal
-   ============================================================ */
-
-function PushOnboardingModal({
-  open,
-  busy,
-  standalone,
-  permission,
-  onAccept,
-  onDismiss,
-}: {
-  open: boolean;
-  busy: boolean;
-  standalone: boolean;
-  permission: string;
-  onAccept: () => void;
-  onDismiss: () => void;
-}) {
-  if (!open) return null;
-
-  let title = "🔔 Уведомления";
-  let hint = "Включите уведомления, чтобы получать важные события.";
-  let primaryText = "Включить";
-
-  if (permission === "denied") {
-    hint = "Уведомления отключены в настройках браузера. Их можно разрешить позже в настройках сайта или в профиле.";
-    primaryText = "Понятно";
-  } else if (!standalone) {
-    title = "📲 Установите приложение";
-    hint = "Установите Shpun App на устройство, чтобы потом получать push-уведомления о балансе, оплате и услугах.";
-    primaryText = "Ок";
-  } else {
-    hint = "Включите уведомления, чтобы получать важные события о балансе, оплате и услугах даже когда приложение закрыто.";
-    primaryText = "Включить";
-  }
-
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      onMouseDown={onDismiss}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,.65)",
-        backdropFilter: "blur(6px)",
-        WebkitBackdropFilter: "blur(6px)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 16,
-        zIndex: 9999,
-      }}
-    >
-      <div
-        className="card"
-        onMouseDown={(e) => e.stopPropagation()}
-        style={{
-          width: "min(520px, 92vw)",
-        }}
-      >
-        <div className="card__body">
-          <div
-            className="h1"
-            style={{
-              fontSize: 18,
-              margin: 0,
-            }}
-          >
-            {title}
-          </div>
-
-          <p
-            className="p"
-            style={{
-              marginTop: 8,
-            }}
-          >
-            {hint}
-          </p>
-
-          <div
-            className="row"
-            style={{
-              marginTop: 16,
-              justifyContent: "flex-end",
-              gap: 10,
-            }}
-          >
-            <button className="btn" type="button" onClick={onDismiss} disabled={busy}>
-              Не сейчас
-            </button>
-
-            <button className="btn btn--primary" type="button" onClick={onAccept} disabled={busy}>
-              {busy ? "..." : primaryText}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 /* ============================================================
@@ -201,22 +96,7 @@ function Authed({ children }: { children: React.ReactNode }) {
   const hide = loc.pathname === "/login" || loc.pathname.startsWith("/transfer");
   useBillingNotifications(!hide);
 
-  const po = usePushOnboarding(true);
-
-  return (
-    <>
-      <AuthGate>{children}</AuthGate>
-
-      <PushOnboardingModal
-        open={po.open}
-        busy={po.busy}
-        standalone={po.state.standalone}
-        permission={String(po.state.permission)}
-        onAccept={po.accept}
-        onDismiss={po.dismiss}
-      />
-    </>
-  );
+  return <AuthGate>{children}</AuthGate>;
 }
 
 /* ============================================================
