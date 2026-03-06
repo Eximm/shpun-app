@@ -45,6 +45,23 @@ function writeDismissed(key: string) {
   }
 }
 
+function clearDismissed(key: string) {
+  try {
+    sessionStorage.removeItem(key);
+  } catch {
+    // ignore
+  }
+}
+
+function clearAllOnboardingDismissedForUid(uid: number) {
+  clearDismissed(sessionDismissKey(uid, "browser"));
+  clearDismissed(sessionDismissKey(uid, "pwa"));
+
+  // legacy keys, если где-то остались старые записи
+  clearDismissed(`push.onboarding.dismissed.browser.${uid}`);
+  clearDismissed(`push.onboarding.dismissed.pwa.${uid}`);
+}
+
 function PushOnboardingModal({
   open,
   busy,
@@ -204,9 +221,11 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
   }, [me]);
 
-  // важно: проверку onboarding нужно уметь запускать заново после нового логина.
-  // старый код запоминал uid:path и не сбрасывался корректно между logout/login.
+  // onboarding check не должен залипать между logout/login
   const onboardingCheckedForUidRef = useRef<number>(0);
+
+  // новый успешный логин должен начинать новую onboarding-сессию
+  const onboardingSessionPreparedForUidRef = useRef<number>(0);
 
   useEffect(() => {
     rememberPartnerIdFromUrl();
@@ -278,16 +297,27 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     return () => clearTimeout(t);
   }, [loading]);
 
-  // сбрасываем внутренний guard, когда пользователь разлогинен
-  // или uid еще не определен. Это и позволяет корректно показать
-  // баннер снова после следующего логина.
+  // когда пользователь разлогинен — сбрасываем внутренние guard'ы
   useEffect(() => {
     if (!me || !uid) {
       onboardingCheckedForUidRef.current = 0;
+      onboardingSessionPreparedForUidRef.current = 0;
       setPushPromptOpen(false);
       setPushPromptBusy(false);
     }
   }, [me, uid]);
+
+  // новый успешный логин = новая onboarding-сессия для uid
+  // убираем dismiss-ключи, чтобы после перелогина можно было снова спросить пользователя
+  useEffect(() => {
+    if (!me || loading || !uid) return;
+    if (telegramMiniApp) return;
+
+    if (onboardingSessionPreparedForUidRef.current === uid) return;
+    onboardingSessionPreparedForUidRef.current = uid;
+
+    clearAllOnboardingDismissedForUid(uid);
+  }, [me, loading, uid, telegramMiniApp]);
 
   // ===== onboarding after successful auth =====
   useEffect(() => {
@@ -300,7 +330,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
     if (!uid) return;
 
-    // один раз на текущую авторизованную сессию пользователя
+    // один раз на текущую auth-сессию пользователя
     if (onboardingCheckedForUidRef.current === uid) return;
     onboardingCheckedForUidRef.current = uid;
 
@@ -317,7 +347,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         setPushState(s);
 
         // Обычный браузер: предлагаем установить приложение.
-        // Если в этой login-session уже отказались — больше не показываем.
+        // Если в этой auth-сессии уже отказались — больше не показываем.
         if (!s.standalone) {
           if (!readDismissed(browserDismissKey)) {
             setPushPromptOpen(true);
