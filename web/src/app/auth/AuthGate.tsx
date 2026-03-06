@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMe } from "./useMe";
 import {
   enablePushByUserGesture,
-  ensurePushSubscribed,
   getPushState,
   isPushSupported,
   isStandalonePwa,
@@ -223,10 +222,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (me) ensurePushSubscribed().catch(() => {});
-  }, [me]);
-
-  useEffect(() => {
     if (!me) return;
     if (successShownRef.current) return;
 
@@ -341,10 +336,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
         if (!isPushSupported()) return;
 
-        const pushEnabled =
-          !s.disabledByUser &&
-          s.permission === "granted" &&
-          s.hasSubscription;
+        const pushEnabled = !s.disabledByUser && s.permission === "granted" && s.hasSubscription;
 
         if (pushEnabled) return;
 
@@ -390,7 +382,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       const ok = await enablePushByUserGesture();
 
       if (ok) {
-        await ensurePushSubscribed().catch(() => {});
         const s = await getPushState().catch(() => null);
         if (s) setPushState(s);
 

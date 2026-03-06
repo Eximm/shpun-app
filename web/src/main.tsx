@@ -30,7 +30,7 @@ import { BottomNav } from "./app/layout/BottomNav";
 import { I18nProvider, useI18n } from "./shared/i18n";
 import { ToastProvider } from "./shared/ui/toast/ToastProvider";
 import { useBillingNotifications } from "./app/notifications/useBillingNotifications";
-import { usePushAutoregister } from "./app/notifications/usePushAutoregister";
+
 
 /* ============================================================
    Service Worker (production only)
@@ -103,8 +103,6 @@ function AppShell({ children }: { children: React.ReactNode }) {
 
 function AuthedLayout() {
   const loc = useLocation();
-
-  usePushAutoregister(true);
 
   const hide = loc.pathname === "/login" || loc.pathname.startsWith("/transfer");
   useBillingNotifications(!hide);
