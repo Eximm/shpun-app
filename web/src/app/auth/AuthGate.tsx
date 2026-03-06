@@ -151,7 +151,9 @@ function parsePartnerIdFromUrl(): number {
         if (Number.isFinite(n) && n > 0) return Math.trunc(n);
       }
     }
-  } catch {}
+  } catch {
+    // ignore
+  }
 
   return 0;
 }
@@ -165,7 +167,9 @@ function rememberPartnerIdFromUrl() {
 
   try {
     localStorage.setItem(PARTNER_LS_KEY, String(pid));
-  } catch {}
+  } catch {
+    // ignore
+  }
 }
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
@@ -200,7 +204,9 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
   }, [me]);
 
-  const onboardingCheckedRef = useRef<string>("");
+  // важно: проверку onboarding нужно уметь запускать заново после нового логина.
+  // старый код запоминал uid:path и не сбрасывался корректно между logout/login.
+  const onboardingCheckedForUidRef = useRef<number>(0);
 
   useEffect(() => {
     rememberPartnerIdFromUrl();
@@ -272,18 +278,31 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     return () => clearTimeout(t);
   }, [loading]);
 
+  // сбрасываем внутренний guard, когда пользователь разлогинен
+  // или uid еще не определен. Это и позволяет корректно показать
+  // баннер снова после следующего логина.
+  useEffect(() => {
+    if (!me || !uid) {
+      onboardingCheckedForUidRef.current = 0;
+      setPushPromptOpen(false);
+      setPushPromptBusy(false);
+    }
+  }, [me, uid]);
+
   // ===== onboarding after successful auth =====
   useEffect(() => {
     if (!me || loading) return;
+
     if (telegramMiniApp) {
       setPushPromptOpen(false);
       return;
     }
+
     if (!uid) return;
 
-    const checkKey = `${uid}:${loc.pathname}`;
-    if (onboardingCheckedRef.current === checkKey) return;
-    onboardingCheckedRef.current = checkKey;
+    // один раз на текущую авторизованную сессию пользователя
+    if (onboardingCheckedForUidRef.current === uid) return;
+    onboardingCheckedForUidRef.current = uid;
 
     const browserDismissKey = sessionDismissKey(uid, "browser");
     const pwaDismissKey = sessionDismissKey(uid, "pwa");
@@ -297,7 +316,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
         setPushState(s);
 
-        // browser mode -> always soft invite to install, unless dismissed in this login session
+        // Обычный браузер: предлагаем установить приложение.
+        // Если в этой login-session уже отказались — больше не показываем.
         if (!s.standalone) {
           if (!readDismissed(browserDismissKey)) {
             setPushPromptOpen(true);
@@ -305,7 +325,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
           return;
         }
 
-        // PWA mode
+        // Установленная PWA: предлагаем включить push, если еще не включены.
         if (!isPushSupported()) return;
 
         const pushEnabled = s.permission === "granted" && s.hasSubscription;
@@ -327,7 +347,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       cancelled = true;
       window.clearTimeout(t);
     };
-  }, [me, loading, telegramMiniApp, uid, loc.pathname]);
+  }, [me, loading, telegramMiniApp, uid]);
 
   async function onPushPromptAccept() {
     if (!uid || pushPromptBusy) return;
@@ -344,6 +364,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
             "Откройте меню браузера и выберите «Установить приложение». В установленном приложении мы предложим включить уведомления.",
           durationMs: 4000,
         });
+
         writeDismissed(browserDismissKey);
         setPushPromptOpen(false);
         return;
