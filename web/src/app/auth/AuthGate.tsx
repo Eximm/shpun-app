@@ -303,17 +303,32 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }, [me, loading, uid, telegramMiniApp]);
 
   useEffect(() => {
+    toast.info(
+      `onb enter: me=${me ? 1 : 0} load=${loading ? 1 : 0} tg=${telegramMiniApp ? 1 : 0} uid=${uid}`,
+      { durationMs: 6000 },
+    );
+
     if (!me || loading) return;
 
     if (telegramMiniApp) {
+      toast.info("onb stop: telegram mini app", { durationMs: 6000 });
       setPushPromptOpen(false);
       return;
     }
 
-    if (!uid) return;
+    if (!uid) {
+      toast.info("onb stop: no uid", { durationMs: 6000 });
+      return;
+    }
 
-    if (onboardingCheckedForUidRef.current === uid) return;
+    if (onboardingCheckedForUidRef.current === uid) {
+      toast.info(`onb stop: already checked uid=${uid}`, { durationMs: 6000 });
+      return;
+    }
+
     onboardingCheckedForUidRef.current = uid;
+
+    toast.info(`onb pass: uid=${uid}`, { durationMs: 6000 });
 
     const browserDismissKey = sessionDismissKey(uid, "browser");
     const pwaDismissKey = sessionDismissKey(uid, "pwa");
@@ -323,7 +338,10 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     const run = async () => {
       try {
         const s = await getPushState();
-        // debug info
+        if (cancelled) return;
+
+        setPushState(s);
+
         const browserDismissed = readDismissed(browserDismissKey);
         const pwaDismissed = readDismissed(pwaDismissKey);
 
@@ -344,29 +362,34 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
           `push dbg: st=${s.standalone ? 1 : 0} perm=${s.permission} sub=${s.hasSubscription ? 1 : 0} dis=${s.disabledByUser ? 1 : 0} bd=${browserDismissed ? 1 : 0} pd=${pwaDismissed ? 1 : 0}`,
           { durationMs: 6000 },
         );
-        // end debug info
-        if (cancelled) return;
-
-        setPushState(s);
 
         if (!s.standalone) {
-          if (!readDismissed(browserDismissKey)) {
+          if (!browserDismissed) {
             setPushPromptOpen(true);
           }
           return;
         }
 
-        if (!isPushSupported()) return;
+        if (!isPushSupported()) {
+          toast.info("push dbg: stop unsupported", { durationMs: 6000 });
+          return;
+        }
 
         const pushEnabled = !s.disabledByUser && s.permission === "granted" && s.hasSubscription;
 
-        if (pushEnabled) return;
+        if (pushEnabled) {
+          toast.info("push dbg: stop pushEnabled=1", { durationMs: 6000 });
+          return;
+        }
 
-        if (!readDismissed(pwaDismissKey)) {
+        if (!pwaDismissed) {
+          toast.info("push dbg: open modal", { durationMs: 6000 });
           setPushPromptOpen(true);
+        } else {
+          toast.info("push dbg: stop pwaDismissed=1", { durationMs: 6000 });
         }
       } catch {
-        // ignore
+        toast.error("push dbg: run failed", { durationMs: 6000 });
       }
     };
 
