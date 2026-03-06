@@ -323,6 +323,28 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     const run = async () => {
       try {
         const s = await getPushState();
+        // debug info
+        const browserDismissed = readDismissed(browserDismissKey);
+        const pwaDismissed = readDismissed(pwaDismissKey);
+
+        console.log("[push-onboarding-debug]", {
+          uid,
+          telegramMiniApp,
+          standalone: s.standalone,
+          supported: s.supported,
+          permission: s.permission,
+          hasSubscription: s.hasSubscription,
+          disabledByUser: s.disabledByUser,
+          browserDismissed,
+          pwaDismissed,
+          lsDisabledRaw: localStorage.getItem("push_disabled_by_user"),
+        });
+
+        toast.info(
+          `push dbg: st=${s.standalone ? 1 : 0} perm=${s.permission} sub=${s.hasSubscription ? 1 : 0} dis=${s.disabledByUser ? 1 : 0} bd=${browserDismissed ? 1 : 0} pd=${pwaDismissed ? 1 : 0}`,
+          { durationMs: 6000 },
+        );
+        // end debug info
         if (cancelled) return;
 
         setPushState(s);
