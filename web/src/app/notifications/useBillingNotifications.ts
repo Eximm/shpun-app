@@ -1,4 +1,3 @@
-// FILE: web/src/app/notifications/useBillingNotifications.ts
 import { useEffect, useMemo, useRef } from "react";
 import { apiFetch } from "../../shared/api/client";
 import { toast } from "../../shared/ui/toast";
@@ -18,10 +17,10 @@ type Resp = { ok: true; items: BillingPushEvent[]; nextCursor: Cursor };
 
 const POLL_MS = 8000;
 const HIDDEN_POLL_MS = 30000;
+const ACTIVITY_PING_MS = 15000;
 
 const SHOWN_TTL_DAYS = 7;
 const SHOWN_TTL_MS = SHOWN_TTL_DAYS * 24 * 60 * 60 * 1000;
-
 const SHOWN_CLEANUP_LIMIT = 300;
 
 function nowUnix(): number {
@@ -172,11 +171,11 @@ export function useBillingNotifications(enabled: boolean) {
 
   const cursorRef = useRef<Cursor>({ ts: 0, id: "" });
   const timerRef = useRef<number | null>(null);
-
   const warmupRef = useRef<boolean>(true);
   const enabledAtTsRef = useRef<number>(0);
   const inFlightRef = useRef<boolean>(false);
   const lastUidRef = useRef<number>(0);
+  const lastActivityPingAtRef = useRef<number>(0);
 
   function clearTimer() {
     if (timerRef.current != null) window.clearTimeout(timerRef.current);
@@ -186,6 +185,24 @@ export function useBillingNotifications(enabled: boolean) {
   function scheduleNext(ms: number, fn: () => void) {
     clearTimer();
     timerRef.current = window.setTimeout(fn, ms);
+  }
+
+  async function pingActivity(force = false) {
+    if (!uid) return;
+
+    const now = Date.now();
+    if (!force && now - lastActivityPingAtRef.current < ACTIVITY_PING_MS) return;
+
+    lastActivityPingAtRef.current = now;
+
+    try {
+      await apiFetch("/notifications/activity", {
+        method: "POST",
+        body: {},
+      });
+    } catch {
+      // ignore
+    }
   }
 
   useEffect(() => {
@@ -223,6 +240,9 @@ export function useBillingNotifications(enabled: boolean) {
       inFlightRef.current = true;
 
       try {
+        // Пока приложение открыто, отмечаем пользователя активным.
+        await pingActivity();
+
         const c = cursorRef.current || { ts: 0, id: "" };
         const qs =
           `afterTs=${encodeURIComponent(String(c.ts || 0))}` +
@@ -275,11 +295,15 @@ export function useBillingNotifications(enabled: boolean) {
 
     const onVis = () => {
       if (stopped) return;
-      if (document.visibilityState === "visible") scheduleNext(200, () => void tick());
+      if (document.visibilityState === "visible") {
+        void pingActivity(true);
+        scheduleNext(200, () => void tick());
+      }
     };
 
     const onOnline = () => {
       if (stopped) return;
+      void pingActivity(true);
       scheduleNext(200, () => void tick());
     };
 

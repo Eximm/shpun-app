@@ -1,10 +1,16 @@
-﻿// FILE: api/src/modules/notifications/push.ts
-import type { FastifyInstance } from "fastify";
+﻿import type { FastifyInstance } from "fastify";
 import { getSessionFromRequest } from "../../shared/session/sessionStore.js";
-import { listEvents, listFeed, listNewsFeed, putEvent, type BillingPushEvent } from "./inbox.js";
+import {
+  listEvents,
+  listFeed,
+  listNewsFeed,
+  putEvent,
+  type BillingPushEvent,
+} from "./inbox.js";
 import { formatIncoming } from "./format.js";
 import { putSubscription, removeSubscription } from "./subscriptions.js";
 import { sendWebPushToUser } from "./webpush.js";
+import { markUserActive, isUserActive } from "./activity.js";
 import { linkDb } from "../../shared/linkdb/db.js";
 
 function envStr(name: string, def = "") {
@@ -31,23 +37,20 @@ function pickKeys(body: any): { endpoint: string; p256dh: string; auth: string }
   return { endpoint, p256dh, auth };
 }
 
-// === broadcast fanout list (same source as inbox.ts fanout eligibility) ===
-const stmtListAllUserIds = linkDb.prepare(`
-  SELECT DISTINCT shm_user_id AS uid
-  FROM account_links
-  WHERE shm_user_id IS NOT NULL AND shm_user_id > 0
-`);
-
-function isBroadcast(ev: BillingPushEvent): boolean {
-  const t = String(ev?.type ?? "").trim();
-  if (ev?.target === "all") return true;
-  if (t === "broadcast.news") return true;
-  if (t.startsWith("broadcast.")) return true;
+function isBroadcastEvent(e: BillingPushEvent): boolean {
+  const type = String(e?.type ?? "").trim();
+  if (e?.target === "all") return true;
+  if (type === "broadcast.news") return true;
+  if (type.startsWith("broadcast.")) return true;
   return false;
 }
 
-// Safety cap: do not try to push to infinite audience in one HTTP request
-const BROADCAST_PUSH_CAP = 300;
+// Только пользователи, у которых есть push subscriptions
+const stmtListUsersWithPushSubs = linkDb.prepare(`
+  SELECT DISTINCT user_id
+  FROM push_subscriptions
+  WHERE user_id IS NOT NULL AND user_id > 0
+`);
 
 export async function pushRoutes(app: FastifyInstance) {
   // ===== POST /api/billing/push =====
@@ -67,30 +70,30 @@ export async function pushRoutes(app: FastifyInstance) {
     const r = putEvent(formatted);
     if (!r.ok) return reply.code(400).send({ ok: false, error: r.error });
 
-    // === WebPush delivery (best-effort) ===
-    // 1) personal (has user_id in stored event)
-    // 2) broadcast without user_id: push fanout to users (capped)
+    // ВАЖНО:
+    // - если пользователь активен в приложении -> webpush не шлём
+    // - если приложение закрыто / inactive -> webpush шлём
     try {
-      const incomingIsBroadcast = isBroadcast(formatted);
+      const uid = Number((r.event as any)?.user_id ?? 0);
 
-      const storedUid = Number((r.event as any)?.user_id ?? 0);
+      if (uid > 0) {
+        if (!isUserActive(uid)) {
+          await sendWebPushToUser(uid, r.event ?? formatted);
+        }
+      } else if (isBroadcastEvent(formatted)) {
+        const rows = stmtListUsersWithPushSubs.all() as Array<{ user_id: number }>;
+        for (const row of rows) {
+          const targetUid = Number(row.user_id);
+          if (!Number.isFinite(targetUid) || targetUid <= 0) continue;
+          if (isUserActive(targetUid)) continue;
 
-      if (storedUid > 0) {
-        // personal or broadcast-as-user (when billing sent user_id)
-        await sendWebPushToUser(storedUid, (r.event as any) ?? formatted);
-      } else if (incomingIsBroadcast) {
-        const rows = stmtListAllUserIds.all() as Array<{ uid: number }>;
-        const uids = rows.map((x) => Number(x.uid)).filter((n) => Number.isFinite(n) && n > 0);
-
-        let attempted = 0;
-        for (const uid of uids) {
-          attempted++;
-          if (attempted > BROADCAST_PUSH_CAP) break;
           try {
-            // NOTE: stored per-user event_id differs, but payload is built from type/title/message anyway.
-            await sendWebPushToUser(uid, formatted as any);
+            await sendWebPushToUser(targetUid, {
+              ...formatted,
+              user_id: targetUid,
+            });
           } catch {
-            // ignore per-user push failures
+            // ignore per-user push errors
           }
         }
       }
@@ -105,6 +108,16 @@ export async function pushRoutes(app: FastifyInstance) {
       ts: r.event?.ts ?? null,
       delivered: r.delivered ?? null,
     });
+  });
+
+  // ===== POST /api/notifications/activity =====
+  app.post("/notifications/activity", async (req, reply) => {
+    const s = getSessionFromRequest(req);
+    const uid = s?.userId ? Number(s.userId) : 0;
+    if (!uid) return reply.code(401).send({ ok: false, error: "unauthorized" });
+
+    markUserActive(uid);
+    return reply.send({ ok: true });
   });
 
   // ===== POST /api/notifications/push/subscribe =====

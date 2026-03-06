@@ -1,33 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "../../shared/ui/toast";
+import { useMe } from "../auth/useMe";
 import {
   enablePushByUserGesture,
   ensurePushSubscribed,
   getPushState,
-  isPushDisabledByUser,
   isPushSupported,
   isStandalonePwa,
 } from "./push";
-
-const SS_BROWSER_DISMISSED = "push.onboarding.browser.dismissed.session.v1";
-const SS_PWA_DISMISSED = "push.onboarding.pwa.dismissed.session.v1";
-
-function readSessionFlag(key: string): boolean {
-  try {
-    return sessionStorage.getItem(key) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function writeSessionFlag(key: string, value: boolean) {
-  try {
-    if (value) sessionStorage.setItem(key, "1");
-    else sessionStorage.removeItem(key);
-  } catch {
-    // ignore
-  }
-}
 
 function isTelegramMiniApp(): boolean {
   try {
@@ -38,7 +18,29 @@ function isTelegramMiniApp(): boolean {
   }
 }
 
+function sessionDismissKey(uid: number, loginMarker: string, mode: "browser" | "pwa") {
+  return `push.onboarding.dismissed:${mode}:u:${uid}:login:${loginMarker}`;
+}
+
+function readDismissed(key: string): boolean {
+  try {
+    return sessionStorage.getItem(key) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeDismissed(key: string) {
+  try {
+    sessionStorage.setItem(key, "1");
+  } catch {
+    // ignore
+  }
+}
+
 export function usePushOnboarding(enabled: boolean) {
+  const { me } = useMe() as any;
+
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -55,8 +57,16 @@ export function usePushOnboarding(enabled: boolean) {
   });
 
   const telegramMiniApp = useMemo(() => isTelegramMiniApp(), []);
+  const uid = useMemo(() => {
+    const n = Number(me?.profile?.id ?? me?.profile?.user_id ?? me?.id ?? 0);
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+  }, [me?.profile?.id, me?.profile?.user_id, me?.id]);
+
+  // Отличный маркер новой авторизованной сессии — lastLogin пользователя
+  const loginMarker = String(me?.profile?.lastLogin ?? me?.profile?.last_login ?? me?.lastLogin ?? "na");
+
   const standalone = state.standalone;
-  const enabledNow = state.permission === "granted" && state.hasSubscription;
+  const pushEnabled = state.permission === "granted" && state.hasSubscription;
 
   async function refresh() {
     try {
@@ -78,12 +88,12 @@ export function usePushOnboarding(enabled: boolean) {
   }
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !uid) return;
     void refresh();
-  }, [enabled]);
+  }, [enabled, uid]);
 
   useEffect(() => {
-    if (!enabled || telegramMiniApp) return;
+    if (!enabled || telegramMiniApp || !uid) return;
 
     const onVis = () => {
       if (document.visibilityState === "visible") void refresh();
@@ -94,9 +104,6 @@ export function usePushOnboarding(enabled: boolean) {
     };
 
     const onAppInstalled = () => {
-      // После установки браузерного варианта сразу даём шанс показать PWA prompt
-      writeSessionFlag(SS_BROWSER_DISMISSED, false);
-      writeSessionFlag(SS_PWA_DISMISSED, false);
       void refresh();
     };
 
@@ -109,65 +116,56 @@ export function usePushOnboarding(enabled: boolean) {
       window.removeEventListener("focus", onFocus);
       window.removeEventListener("appinstalled", onAppInstalled as EventListener);
     };
-  }, [enabled, telegramMiniApp]);
+  }, [enabled, telegramMiniApp, uid]);
+
+  const browserDismissKey = sessionDismissKey(uid, loginMarker, "browser");
+  const pwaDismissKey = sessionDismissKey(uid, loginMarker, "pwa");
 
   const shouldShow = useMemo(() => {
     if (!enabled) return false;
+    if (!uid) return false;
     if (telegramMiniApp) return false;
 
-    // в браузере / PWA feature должен поддерживаться
-    if (!isPushSupported()) return false;
-
-    // если пользователь руками выключил push в профиле — onboarding не навязываем
-    if (isPushDisabledByUser()) return false;
-
-    // если уже включено — ничего не показываем
-    if (enabledNow) return false;
-
-    // если браузер уже запретил permission — не показываем onboarding,
-    // дальше только через профиль / настройки сайта
-    if (state.permission === "denied") return false;
-
-    // Обычный браузер: мягко предлагаем установить приложение,
-    // но не долбим в одной и той же вкладке бесконечно
+    // Обычный браузер: мягко предлагаем установить приложение
     if (!standalone) {
-      return !readSessionFlag(SS_BROWSER_DISMISSED);
+      return !readDismissed(browserDismissKey);
     }
 
-    // Установленная PWA: если push не включен, предлагаем при каждом запуске приложения.
-    // Внутри одной сессии можно закрыть один раз.
-    return !readSessionFlag(SS_PWA_DISMISSED);
-  }, [enabled, telegramMiniApp, standalone, state.permission, enabledNow]);
+    // В установленной PWA — только если push поддерживается и ещё не включён
+    if (!isPushSupported()) return false;
+    if (pushEnabled) return false;
+
+    return !readDismissed(pwaDismissKey);
+  }, [enabled, uid, telegramMiniApp, standalone, pushEnabled, browserDismissKey, pwaDismissKey]);
 
   useEffect(() => {
-    if (!enabled || telegramMiniApp) return;
+    if (!enabled || telegramMiniApp || !uid) return;
 
     const t = window.setTimeout(() => {
       setOpen(shouldShow);
-    }, 800);
+    }, 600);
 
     return () => window.clearTimeout(t);
-  }, [enabled, telegramMiniApp, shouldShow]);
+  }, [enabled, telegramMiniApp, uid, shouldShow]);
 
   async function accept() {
     if (busy) return;
     setBusy(true);
 
     try {
-      // Обычный браузер: мягкое приглашение установить PWA
+      // В обычном браузере просто мягко подсказываем установку
       if (!isStandalonePwa()) {
         toast.info("Установите приложение", {
           description:
-            "Откройте меню браузера и выберите «Установить приложение». После установки мы предложим включить уведомления.",
+            "Откройте меню браузера и выберите «Установить приложение». В установленном приложении мы предложим включить уведомления.",
           durationMs: 4000,
         });
-
-        writeSessionFlag(SS_BROWSER_DISMISSED, true);
+        writeDismissed(browserDismissKey);
         setOpen(false);
         return;
       }
 
-      // Установленная PWA: просим permission по клику
+      // В установленной PWA включаем push по клику пользователя
       const ok = await enablePushByUserGesture();
 
       if (ok) {
@@ -175,7 +173,7 @@ export function usePushOnboarding(enabled: boolean) {
         toast.success("Уведомления включены ✅", {
           description: "Теперь вы будете получать важные события.",
         });
-        writeSessionFlag(SS_PWA_DISMISSED, true);
+        writeDismissed(pwaDismissKey);
         setOpen(false);
         await refresh();
       } else {
@@ -183,7 +181,7 @@ export function usePushOnboarding(enabled: boolean) {
           description: "Их можно включить позже в профиле.",
           durationMs: 2500,
         });
-        writeSessionFlag(SS_PWA_DISMISSED, true);
+        writeDismissed(pwaDismissKey);
         setOpen(false);
         await refresh();
       }
@@ -193,11 +191,14 @@ export function usePushOnboarding(enabled: boolean) {
   }
 
   function dismiss() {
-    if (!standalone) {
-      writeSessionFlag(SS_BROWSER_DISMISSED, true);
-    } else {
-      writeSessionFlag(SS_PWA_DISMISSED, true);
+    if (!uid) {
+      setOpen(false);
+      return;
     }
+
+    if (!standalone) writeDismissed(browserDismissKey);
+    else writeDismissed(pwaDismissKey);
+
     setOpen(false);
   }
 
