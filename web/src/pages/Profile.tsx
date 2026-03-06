@@ -461,7 +461,19 @@ export function Profile() {
 
   async function logout() {
     setLoggingOut(true);
+
     try {
+      const uid =
+        Number(profile?.id ?? me?.profile?.id ?? me?.id ?? 0) || 0;
+
+      // очищаем session-dismiss для onboarding
+      if (uid) {
+        try {
+          sessionStorage.removeItem(`push.onboarding.dismissed:browser:u:${uid}`);
+          sessionStorage.removeItem(`push.onboarding.dismissed:pwa:u:${uid}`);
+        } catch {}
+      }
+
       await apiFetch("/logout", { method: "POST" });
     } finally {
       setLoggingOut(false);

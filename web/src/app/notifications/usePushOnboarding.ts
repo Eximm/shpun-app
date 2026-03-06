@@ -18,8 +18,8 @@ function isTelegramMiniApp(): boolean {
   }
 }
 
-function sessionDismissKey(uid: number, loginMarker: string, mode: "browser" | "pwa") {
-  return `push.onboarding.dismissed:${mode}:u:${uid}:login:${loginMarker}`;
+function sessionDismissKey(uid: number, mode: "browser" | "pwa") {
+  return `push.onboarding.dismissed:${mode}:u:${uid}`;
 }
 
 function readDismissed(key: string): boolean {
@@ -61,9 +61,6 @@ export function usePushOnboarding(enabled: boolean) {
     const n = Number(me?.profile?.id ?? me?.profile?.user_id ?? me?.id ?? 0);
     return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
   }, [me?.profile?.id, me?.profile?.user_id, me?.id]);
-
-  // Отличный маркер новой авторизованной сессии — lastLogin пользователя
-  const loginMarker = String(me?.profile?.lastLogin ?? me?.profile?.last_login ?? me?.lastLogin ?? "na");
 
   const standalone = state.standalone;
   const pushEnabled = state.permission === "granted" && state.hasSubscription;
@@ -118,8 +115,8 @@ export function usePushOnboarding(enabled: boolean) {
     };
   }, [enabled, telegramMiniApp, uid]);
 
-  const browserDismissKey = sessionDismissKey(uid, loginMarker, "browser");
-  const pwaDismissKey = sessionDismissKey(uid, loginMarker, "pwa");
+  const browserDismissKey = sessionDismissKey(uid, "browser");
+  const pwaDismissKey = sessionDismissKey(uid, "pwa");
 
   const shouldShow = useMemo(() => {
     if (!enabled) return false;
