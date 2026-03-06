@@ -459,27 +459,32 @@ export function Profile() {
 
   const [loggingOut, setLoggingOut] = useState(false);
 
-  async function logout() {
-    setLoggingOut(true);
+async function logout() {
+  setLoggingOut(true);
 
-    try {
-      const uid =
-        Number(profile?.id ?? me?.profile?.id ?? me?.id ?? 0) || 0;
+  try {
+    const uid =
+      Number(profile?.id ?? me?.profile?.id ?? me?.id ?? 0) || 0;
 
-      // очищаем session-dismiss для onboarding
-      if (uid) {
-        try {
-          sessionStorage.removeItem(`push.onboarding.dismissed:browser:u:${uid}`);
-          sessionStorage.removeItem(`push.onboarding.dismissed:pwa:u:${uid}`);
-        } catch {}
+    if (uid) {
+      try {
+        sessionStorage.removeItem(`push.onboarding.dismissed:browser:u:${uid}`);
+        sessionStorage.removeItem(`push.onboarding.dismissed:pwa:u:${uid}`);
+
+        // на всякий случай чистим старые варианты ключей, если они остались
+        sessionStorage.removeItem(`push.onboarding.browser.dismissed.session.v1`);
+        sessionStorage.removeItem(`push.onboarding.pwa.dismissed.session.v1`);
+      } catch {
+        // ignore
       }
-
-      await apiFetch("/logout", { method: "POST" });
-    } finally {
-      setLoggingOut(false);
-      nav("/login", { replace: true });
     }
+
+    await apiFetch("/logout", { method: "POST" });
+  } finally {
+    setLoggingOut(false);
+    nav("/login", { replace: true });
   }
+}
 
   function goChangePassword() {
     nav("/set-password?intent=change&redirect=/profile");
