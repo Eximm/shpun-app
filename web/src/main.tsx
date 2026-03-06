@@ -1,6 +1,13 @@
 ﻿import React from "react";
 import ReactDOM from "react-dom/client";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  useLocation,
+  Outlet,
+} from "react-router-dom";
 import "./index.css";
 
 import { Login } from "./pages/Login";
@@ -49,7 +56,9 @@ if (import.meta.env.PROD) {
 
       try {
         updateSW(false);
-      } catch {}
+      } catch {
+        // ignore
+      }
     })
     .catch(() => {});
 }
@@ -88,7 +97,11 @@ function AppShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Authed({ children }: { children: React.ReactNode }) {
+/* ============================================================
+   Protected layout
+   ============================================================ */
+
+function AuthedLayout() {
   const loc = useLocation();
 
   usePushAutoregister(true);
@@ -96,7 +109,11 @@ function Authed({ children }: { children: React.ReactNode }) {
   const hide = loc.pathname === "/login" || loc.pathname.startsWith("/transfer");
   useBillingNotifications(!hide);
 
-  return <AuthGate>{children}</AuthGate>;
+  return (
+    <AuthGate>
+      <Outlet />
+    </AuthGate>
+  );
 }
 
 /* ============================================================
@@ -162,113 +179,20 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
 
                 <Route path="/app" element={<AppPathRedirect />} />
 
-                <Route
-                  path="/"
-                  element={
-                    <Authed>
-                      <Home />
-                    </Authed>
-                  }
-                />
-
-                <Route
-                  path="/referrals"
-                  element={
-                    <Authed>
-                      <Referrals />
-                    </Authed>
-                  }
-                />
-
-                <Route
-                  path="/feed"
-                  element={
-                    <Authed>
-                      <Feed />
-                    </Authed>
-                  }
-                />
-
-                <Route
-                  path="/dashboard"
-                  element={
-                    <Authed>
-                      <Dashboard />
-                    </Authed>
-                  }
-                />
-
-                <Route
-                  path="/services"
-                  element={
-                    <Authed>
-                      <Services />
-                    </Authed>
-                  }
-                />
-
-                <Route
-                  path="/services/order"
-                  element={
-                    <Authed>
-                      <ServicesOrder />
-                    </Authed>
-                  }
-                />
-
-                <Route
-                  path="/help/router"
-                  element={
-                    <Authed>
-                      <ServicesRouter />
-                    </Authed>
-                  }
-                />
-
-                <Route
-                  path="/payments"
-                  element={
-                    <Authed>
-                      <Payments />
-                    </Authed>
-                  }
-                />
-
-                <Route
-                  path="/payments/history"
-                  element={
-                    <Authed>
-                      <PaymentsHistory />
-                    </Authed>
-                  }
-                />
-
-                <Route
-                  path="/payments/receipts"
-                  element={
-                    <Authed>
-                      <PaymentsReceipts />
-                    </Authed>
-                  }
-                />
-
-                <Route
-                  path="/profile"
-                  element={
-                    <Authed>
-                      <Profile />
-                    </Authed>
-                  }
-                />
-
-                <Route
-                  path="/set-password"
-                  element={
-                    <Authed>
-                      <SetPassword />
-                    </Authed>
-                  }
-                />
+                <Route element={<AuthedLayout />}>
+                  <Route path="/" element={<Home />} />
+                  <Route path="/referrals" element={<Referrals />} />
+                  <Route path="/feed" element={<Feed />} />
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/services" element={<Services />} />
+                  <Route path="/services/order" element={<ServicesOrder />} />
+                  <Route path="/help/router" element={<ServicesRouter />} />
+                  <Route path="/payments" element={<Payments />} />
+                  <Route path="/payments/history" element={<PaymentsHistory />} />
+                  <Route path="/payments/receipts" element={<PaymentsReceipts />} />
+                  <Route path="/profile" element={<Profile />} />
+                  <Route path="/set-password" element={<SetPassword />} />
+                </Route>
 
                 <Route path="/home" element={<Navigate to="/" replace />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
