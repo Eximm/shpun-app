@@ -214,8 +214,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
   }, [me]);
 
+  // один раз на текущую auth-session пользователя
   const onboardingCheckedForUidRef = useRef<number>(0);
-  const onboardingSessionPreparedForUidRef = useRef<number>(0);
 
   useEffect(() => {
     rememberPartnerIdFromUrl();
@@ -286,21 +286,10 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!me || !uid) {
       onboardingCheckedForUidRef.current = 0;
-      onboardingSessionPreparedForUidRef.current = 0;
       setPushPromptOpen(false);
       setPushPromptBusy(false);
     }
   }, [me, uid]);
-
-  useEffect(() => {
-    if (!me || loading || !uid) return;
-    if (telegramMiniApp) return;
-
-    if (onboardingSessionPreparedForUidRef.current === uid) return;
-    onboardingSessionPreparedForUidRef.current = uid;
-
-    clearAllOnboardingDismissedForUid(uid);
-  }, [me, loading, uid, telegramMiniApp]);
 
   useEffect(() => {
     if (!me || loading) return;
@@ -312,11 +301,25 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
     if (!uid) return;
 
+    // не повторять на переходах по разделам и обычных ререндерах
     if (onboardingCheckedForUidRef.current === uid) return;
     onboardingCheckedForUidRef.current = uid;
 
     const browserDismissKey = sessionDismissKey(uid, "browser");
     const pwaDismissKey = sessionDismissKey(uid, "pwa");
+
+    // очищаем dismiss только если это действительно новый успешный логин,
+    // а не просто reload или переход внутри уже живой auth-session
+    try {
+      const provider = sessionStorage.getItem(AUTH_PENDING_KEY);
+      const ts = Number(sessionStorage.getItem(AUTH_PENDING_AT_KEY) || "0");
+
+      if (provider && (!ts || Date.now() - ts <= 10000)) {
+        clearAllOnboardingDismissedForUid(uid);
+      }
+    } catch {
+      // ignore
+    }
 
     let cancelled = false;
 
@@ -330,6 +333,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         const browserDismissed = readDismissed(browserDismissKey);
         const pwaDismissed = readDismissed(pwaDismissKey);
 
+        // Обычный браузер: предлагаем установить приложение.
         if (!s.standalone) {
           if (!browserDismissed) {
             setPushPromptOpen(true);
@@ -337,6 +341,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
           return;
         }
 
+        // Установленная PWA: предлагаем включить push, если они выключены.
         if (!isPushSupported()) return;
 
         const pushEnabled = !s.disabledByUser && s.permission === "granted" && s.hasSubscription;
