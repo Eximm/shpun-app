@@ -33,7 +33,7 @@ export const RU: Dict = {
 
   'login.what.title': 'Что внутри Shpun App',
   'login.what.1': '⚡ Баланс и активные услуги — всегда под рукой',
-  'login.what.2': '🔔 Уведомления (скоро): платежи, продления, напоминания',
+  'login.what.2': '🔔 Уведомления: платежи, продления, напоминания',
   'login.what.3': '🧾 История оплат и квитанции',
   'login.what.4': '🧩 Управление роутерами и VPN',
 
@@ -266,7 +266,7 @@ export const EN: Dict = {
 
   'login.what.title': 'What you get in Shpun App',
   'login.what.1': '⚡ Balance & active services — always at hand',
-  'login.what.2': '🔔 Notifications (soon): payments, expirations, reminders',
+  'login.what.2': '🔔 Notifications: payments, expirations, reminders',
   'login.what.3': '🧾 Payments history & receipts',
   'login.what.4': '🧩 Routers & VPN — simplified flow',
 

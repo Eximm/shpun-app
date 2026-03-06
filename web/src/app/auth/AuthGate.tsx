@@ -16,6 +16,10 @@ const PARTNER_LS_KEY = "partner_id_pending";
 const AUTH_PENDING_KEY = "auth:pending";
 const AUTH_PENDING_AT_KEY = "auth:pending_at";
 
+// persistent auth-session keys
+const AUTH_SESSION_ID_PREFIX = "auth.session.id:u:";
+const PUSH_ONBOARDING_SEEN_PREFIX = "push.onboarding.seen:";
+
 function isTelegramMiniApp(): boolean {
   try {
     const tg = (window as any)?.Telegram?.WebApp;
@@ -25,41 +29,59 @@ function isTelegramMiniApp(): boolean {
   }
 }
 
-function sessionDismissKey(uid: number, mode: "browser" | "pwa") {
-  return `push.onboarding.dismissed:${mode}:u:${uid}`;
+function authSessionIdKey(uid: number) {
+  return `${AUTH_SESSION_ID_PREFIX}${uid}`;
 }
 
-function readDismissed(key: string): boolean {
+function readAuthSessionId(uid: number): string {
+  if (!uid) return "";
   try {
-    return sessionStorage.getItem(key) === "1";
+    return String(localStorage.getItem(authSessionIdKey(uid)) || "");
+  } catch {
+    return "";
+  }
+}
+
+function writeAuthSessionId(uid: number, value: string) {
+  if (!uid || !value) return;
+  try {
+    localStorage.setItem(authSessionIdKey(uid), value);
+  } catch {
+    // ignore
+  }
+}
+
+function ensureAuthSessionId(uid: number): string {
+  if (!uid) return "";
+
+  const existing = readAuthSessionId(uid);
+  if (existing) return existing;
+
+  // fallback для уже авторизованных пользователей после деплоя,
+  // без нового логина. Должен быть стабильным между reload / reopen.
+  const fallback = `${uid}:persisted`;
+  writeAuthSessionId(uid, fallback);
+  return fallback;
+}
+
+function onboardingSeenKey(uid: number, mode: "browser" | "pwa", authSessionId: string) {
+  return `${PUSH_ONBOARDING_SEEN_PREFIX}${mode}:u:${uid}:a:${authSessionId}`;
+}
+
+function readSeen(key: string): boolean {
+  try {
+    return localStorage.getItem(key) === "1";
   } catch {
     return false;
   }
 }
 
-function writeDismissed(key: string) {
+function writeSeen(key: string) {
   try {
-    sessionStorage.setItem(key, "1");
+    localStorage.setItem(key, "1");
   } catch {
     // ignore
   }
-}
-
-function clearDismissed(key: string) {
-  try {
-    sessionStorage.removeItem(key);
-  } catch {
-    // ignore
-  }
-}
-
-function clearAllOnboardingDismissedForUid(uid: number) {
-  clearDismissed(sessionDismissKey(uid, "browser"));
-  clearDismissed(sessionDismissKey(uid, "pwa"));
-
-  // legacy keys
-  clearDismissed(`push.onboarding.dismissed.browser.${uid}`);
-  clearDismissed(`push.onboarding.dismissed.pwa.${uid}`);
 }
 
 function PushOnboardingModal({
@@ -86,12 +108,12 @@ function PushOnboardingModal({
   if (!standalone) {
     title = "📲 Установите приложение";
     hint =
-      "Установите Shpun App на устройство. В установленном приложении возможно получать уведомления о балансе, оплате и услугах.";
+      "Установите Shpun App на устройство. С установленным приложением можно включить уведомления о балансе, оплате и услугах.";
     primaryText = "Понятно";
   } else if (permission === "denied") {
     title = "🔔 Уведомления";
     hint =
-      "Уведомления отключены в настройках браузера. Их можно разрешить позже в настройках сайта или в профиле.";
+      "Уведомления отключены в настройках браузера. Их можно разрешить позже в настройках профиля.";
     primaryText = "Понятно";
   } else {
     title = "🔔 Включите уведомления";
@@ -214,12 +236,31 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
   }, [me]);
 
-  // один раз на текущую auth-session пользователя
   const onboardingCheckedForUidRef = useRef<number>(0);
 
   useEffect(() => {
     rememberPartnerIdFromUrl();
   }, []);
+
+  // Новая успешная авторизация -> новый authSessionId.
+  // Только это событие должно "разрешать спросить заново".
+  useEffect(() => {
+    if (!me || loading || !uid) return;
+    if (telegramMiniApp) return;
+
+    try {
+      const provider = sessionStorage.getItem(AUTH_PENDING_KEY);
+      const ts = Number(sessionStorage.getItem(AUTH_PENDING_AT_KEY) || "0");
+
+      if (!provider) return;
+      if (ts && Date.now() - ts > 10000) return;
+
+      const newSessionId = `${uid}:${ts || Date.now()}`;
+      writeAuthSessionId(uid, newSessionId);
+    } catch {
+      // ignore
+    }
+  }, [me, loading, uid, telegramMiniApp]);
 
   useEffect(() => {
     if (!me) return;
@@ -301,25 +342,9 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
     if (!uid) return;
 
-    // не повторять на переходах по разделам и обычных ререндерах
+    // На переходах внутри приложения второй раз не заходим.
     if (onboardingCheckedForUidRef.current === uid) return;
     onboardingCheckedForUidRef.current = uid;
-
-    const browserDismissKey = sessionDismissKey(uid, "browser");
-    const pwaDismissKey = sessionDismissKey(uid, "pwa");
-
-    // очищаем dismiss только если это действительно новый успешный логин,
-    // а не просто reload или переход внутри уже живой auth-session
-    try {
-      const provider = sessionStorage.getItem(AUTH_PENDING_KEY);
-      const ts = Number(sessionStorage.getItem(AUTH_PENDING_AT_KEY) || "0");
-
-      if (provider && (!ts || Date.now() - ts <= 10000)) {
-        clearAllOnboardingDismissedForUid(uid);
-      }
-    } catch {
-      // ignore
-    }
 
     let cancelled = false;
 
@@ -330,27 +355,30 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
         setPushState(s);
 
-        const browserDismissed = readDismissed(browserDismissKey);
-        const pwaDismissed = readDismissed(pwaDismissKey);
+        const mode: "browser" | "pwa" = s.standalone ? "pwa" : "browser";
+        const sessionId = ensureAuthSessionId(uid);
+        const seenKey = onboardingSeenKey(uid, mode, sessionId);
 
-        // Обычный браузер: предлагаем установить приложение.
+        // Уже спрашивали / уже обработали в этой авторизации -> не показываем.
+        if (readSeen(seenKey)) return;
+
+        // Сразу помечаем как обработанное для текущей авторизации.
+        // Это и блокирует повтор при reload / reopen / навигации.
+        writeSeen(seenKey);
+
+        // Browser mode -> install prompt
         if (!s.standalone) {
-          if (!browserDismissed) {
-            setPushPromptOpen(true);
-          }
+          setPushPromptOpen(true);
           return;
         }
 
-        // Установленная PWA: предлагаем включить push, если они выключены.
+        // Installed PWA -> ask for push only if actually disabled
         if (!isPushSupported()) return;
 
         const pushEnabled = !s.disabledByUser && s.permission === "granted" && s.hasSubscription;
-
         if (pushEnabled) return;
 
-        if (!pwaDismissed) {
-          setPushPromptOpen(true);
-        }
+        setPushPromptOpen(true);
       } catch {
         // ignore
       }
@@ -369,20 +397,16 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   async function onPushPromptAccept() {
     if (!uid || pushPromptBusy) return;
 
-    const browserDismissKey = sessionDismissKey(uid, "browser");
-    const pwaDismissKey = sessionDismissKey(uid, "pwa");
-
     setPushPromptBusy(true);
 
     try {
       if (!isStandalonePwa()) {
         toast.info("Установите приложение", {
           description:
-            "Откройте меню браузера и выберите «Установить приложение». В установленном приложении мы предложим включить уведомления.",
+            "Откройте меню браузера и выберите «Установить приложение». В установленном приложении можно включить уведомления.",
           durationMs: 4000,
         });
 
-        writeDismissed(browserDismissKey);
         setPushPromptOpen(false);
         return;
       }
@@ -397,7 +421,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
           description: "Теперь вы будете получать важные события.",
         });
 
-        writeDismissed(pwaDismissKey);
         setPushPromptOpen(false);
       } else {
         const s = await getPushState().catch(() => null);
@@ -408,7 +431,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
           durationMs: 2500,
         });
 
-        writeDismissed(pwaDismissKey);
         setPushPromptOpen(false);
       }
     } finally {
@@ -417,16 +439,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }
 
   function onPushPromptDismiss() {
-    if (!uid) {
-      setPushPromptOpen(false);
-      return;
-    }
-
-    const key = pushState.standalone
-      ? sessionDismissKey(uid, "pwa")
-      : sessionDismissKey(uid, "browser");
-
-    writeDismissed(key);
     setPushPromptOpen(false);
   }
 
