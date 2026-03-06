@@ -18,8 +18,8 @@ const AUTH_PENDING_AT_KEY = "auth:pending_at";
 
 function isTelegramMiniApp(): boolean {
   try {
-    const w = window as any;
-    return Boolean(w?.Telegram?.WebApp?.initData || w?.Telegram?.WebApp?.initDataUnsafe);
+    const tg = (window as any)?.Telegram?.WebApp;
+    return typeof tg?.initData === "string" && tg.initData.length > 0;
   } catch {
     return false;
   }
@@ -303,32 +303,17 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }, [me, loading, uid, telegramMiniApp]);
 
   useEffect(() => {
-    toast.info(
-      `onb enter: me=${me ? 1 : 0} load=${loading ? 1 : 0} tg=${telegramMiniApp ? 1 : 0} uid=${uid}`,
-      { durationMs: 6000 },
-    );
-
     if (!me || loading) return;
 
     if (telegramMiniApp) {
-      toast.info("onb stop: telegram mini app", { durationMs: 6000 });
       setPushPromptOpen(false);
       return;
     }
 
-    if (!uid) {
-      toast.info("onb stop: no uid", { durationMs: 6000 });
-      return;
-    }
+    if (!uid) return;
 
-    if (onboardingCheckedForUidRef.current === uid) {
-      toast.info(`onb stop: already checked uid=${uid}`, { durationMs: 6000 });
-      return;
-    }
-
+    if (onboardingCheckedForUidRef.current === uid) return;
     onboardingCheckedForUidRef.current = uid;
-
-    toast.info(`onb pass: uid=${uid}`, { durationMs: 6000 });
 
     const browserDismissKey = sessionDismissKey(uid, "browser");
     const pwaDismissKey = sessionDismissKey(uid, "pwa");
@@ -345,24 +330,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         const browserDismissed = readDismissed(browserDismissKey);
         const pwaDismissed = readDismissed(pwaDismissKey);
 
-        console.log("[push-onboarding-debug]", {
-          uid,
-          telegramMiniApp,
-          standalone: s.standalone,
-          supported: s.supported,
-          permission: s.permission,
-          hasSubscription: s.hasSubscription,
-          disabledByUser: s.disabledByUser,
-          browserDismissed,
-          pwaDismissed,
-          lsDisabledRaw: localStorage.getItem("push_disabled_by_user"),
-        });
-
-        toast.info(
-          `push dbg: st=${s.standalone ? 1 : 0} perm=${s.permission} sub=${s.hasSubscription ? 1 : 0} dis=${s.disabledByUser ? 1 : 0} bd=${browserDismissed ? 1 : 0} pd=${pwaDismissed ? 1 : 0}`,
-          { durationMs: 6000 },
-        );
-
         if (!s.standalone) {
           if (!browserDismissed) {
             setPushPromptOpen(true);
@@ -370,26 +337,17 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
           return;
         }
 
-        if (!isPushSupported()) {
-          toast.info("push dbg: stop unsupported", { durationMs: 6000 });
-          return;
-        }
+        if (!isPushSupported()) return;
 
         const pushEnabled = !s.disabledByUser && s.permission === "granted" && s.hasSubscription;
 
-        if (pushEnabled) {
-          toast.info("push dbg: stop pushEnabled=1", { durationMs: 6000 });
-          return;
-        }
+        if (pushEnabled) return;
 
         if (!pwaDismissed) {
-          toast.info("push dbg: open modal", { durationMs: 6000 });
           setPushPromptOpen(true);
-        } else {
-          toast.info("push dbg: stop pwaDismissed=1", { durationMs: 6000 });
         }
       } catch {
-        toast.error("push dbg: run failed", { durationMs: 6000 });
+        // ignore
       }
     };
 
