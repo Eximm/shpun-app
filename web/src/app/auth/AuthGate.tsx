@@ -7,6 +7,7 @@ import {
   getPushState,
   isPushSupported,
   isStandalonePwa,
+  type PushState,
 } from "../notifications/push";
 import { toast } from "../../shared/ui/toast";
 
@@ -57,7 +58,7 @@ function clearAllOnboardingDismissedForUid(uid: number) {
   clearDismissed(sessionDismissKey(uid, "browser"));
   clearDismissed(sessionDismissKey(uid, "pwa"));
 
-  // legacy keys, если где-то остались старые записи
+  // legacy keys
   clearDismissed(`push.onboarding.dismissed.browser.${uid}`);
   clearDismissed(`push.onboarding.dismissed.pwa.${uid}`);
 }
@@ -120,9 +121,7 @@ function PushOnboardingModal({
       <div
         className="card"
         onMouseDown={(e) => e.stopPropagation()}
-        style={{
-          width: "min(520px, 92vw)",
-        }}
+        style={{ width: "min(520px, 92vw)" }}
       >
         <div className="card__body">
           <div className="h1" style={{ fontSize: 18, margin: 0 }}>
@@ -200,19 +199,14 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const [showLoader, setShowLoader] = useState(true);
   const [fadeOut, setFadeOut] = useState(false);
 
-  // onboarding
   const [pushPromptOpen, setPushPromptOpen] = useState(false);
   const [pushPromptBusy, setPushPromptBusy] = useState(false);
-  const [pushState, setPushState] = useState<{
-    supported: boolean;
-    permission: NotificationPermission | "unsupported";
-    hasSubscription: boolean;
-    standalone: boolean;
-  }>({
+  const [pushState, setPushState] = useState<PushState>({
     supported: false,
     permission: "unsupported",
     hasSubscription: false,
     standalone: false,
+    disabledByUser: false,
   });
 
   const telegramMiniApp = useMemo(() => isTelegramMiniApp(), []);
@@ -221,10 +215,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
   }, [me]);
 
-  // onboarding check не должен залипать между logout/login
   const onboardingCheckedForUidRef = useRef<number>(0);
-
-  // новый успешный логин должен начинать новую onboarding-сессию
   const onboardingSessionPreparedForUidRef = useRef<number>(0);
 
   useEffect(() => {
@@ -297,7 +288,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     return () => clearTimeout(t);
   }, [loading]);
 
-  // когда пользователь разлогинен — сбрасываем внутренние guard'ы
   useEffect(() => {
     if (!me || !uid) {
       onboardingCheckedForUidRef.current = 0;
@@ -307,8 +297,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     }
   }, [me, uid]);
 
-  // новый успешный логин = новая onboarding-сессия для uid
-  // убираем dismiss-ключи, чтобы после перелогина можно было снова спросить пользователя
   useEffect(() => {
     if (!me || loading || !uid) return;
     if (telegramMiniApp) return;
@@ -319,7 +307,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     clearAllOnboardingDismissedForUid(uid);
   }, [me, loading, uid, telegramMiniApp]);
 
-  // ===== onboarding after successful auth =====
   useEffect(() => {
     if (!me || loading) return;
 
@@ -330,7 +317,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
     if (!uid) return;
 
-    // один раз на текущую auth-сессию пользователя
     if (onboardingCheckedForUidRef.current === uid) return;
     onboardingCheckedForUidRef.current = uid;
 
@@ -346,8 +332,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
         setPushState(s);
 
-        // Обычный браузер: предлагаем установить приложение.
-        // Если в этой auth-сессии уже отказались — больше не показываем.
         if (!s.standalone) {
           if (!readDismissed(browserDismissKey)) {
             setPushPromptOpen(true);
@@ -355,10 +339,13 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
           return;
         }
 
-        // Установленная PWA: предлагаем включить push, если еще не включены.
         if (!isPushSupported()) return;
 
-        const pushEnabled = s.permission === "granted" && s.hasSubscription;
+        const pushEnabled =
+          !s.disabledByUser &&
+          s.permission === "granted" &&
+          s.hasSubscription;
+
         if (pushEnabled) return;
 
         if (!readDismissed(pwaDismissKey)) {

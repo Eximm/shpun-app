@@ -1,4 +1,3 @@
-// FILE: web/src/app/notifications/push.ts
 import { apiFetch } from "../../shared/api/client";
 
 function urlBase64ToUint8Array(base64String: string) {
@@ -13,6 +12,7 @@ export type PushState = {
   permission: NotificationPermission | "unsupported";
   hasSubscription: boolean;
   standalone: boolean;
+  disabledByUser: boolean;
 };
 
 const LS_DISABLED = "push_disabled_by_user";
@@ -65,6 +65,7 @@ export function setPushDisabledByUser(disabled: boolean) {
 export async function getPushState(): Promise<PushState> {
   const supported = isPushSupported();
   const standalone = isStandalonePwa();
+  const disabledByUser = isPushDisabledByUser();
 
   if (!supported) {
     return {
@@ -72,6 +73,7 @@ export async function getPushState(): Promise<PushState> {
       permission: "unsupported",
       hasSubscription: false,
       standalone,
+      disabledByUser,
     };
   }
 
@@ -91,7 +93,13 @@ export async function getPushState(): Promise<PushState> {
     hasSubscription = false;
   }
 
-  return { supported, permission, hasSubscription, standalone };
+  return {
+    supported,
+    permission,
+    hasSubscription,
+    standalone,
+    disabledByUser,
+  };
 }
 
 function subToJson(sub: PushSubscription): any {
