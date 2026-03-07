@@ -1525,6 +1525,166 @@ button, a { -webkit-tap-highlight-color: transparent; }
   }
 }
 
+/* ============================================================
+   ServicesOrder — visual cleanup / checkout layout
+   ============================================================ */
+
+.so__heroMeta {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.so__heroMeta .badge {
+  pointer-events: none;
+}
+
+.so__kindGrid {
+  margin-top: 12px;
+}
+
+.so__kindCard {
+  text-align: left;
+  display: block;
+  width: 100%;
+  cursor: pointer;
+  transition: transform 140ms ease, border-color 140ms ease, background 140ms ease, filter 140ms ease;
+}
+
+.so__kindCard:hover {
+  filter: brightness(1.04);
+  border-color: rgba(255,255,255,0.16);
+}
+
+.so__kindCard:active {
+  transform: translateY(1px);
+}
+
+.so__kindCardTitle {
+  font-weight: 900;
+  font-size: 16px;
+  letter-spacing: 0.1px;
+}
+
+.so__kindCardDescr {
+  margin-top: 6px;
+  opacity: 0.8;
+}
+
+.so__tariffList {
+  margin-top: 12px;
+}
+
+.so__tariffBtn {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 140ms ease, border-color 140ms ease, background 140ms ease, filter 140ms ease;
+}
+
+.so__tariffBtn:hover {
+  filter: brightness(1.04);
+  border-color: rgba(255,255,255,0.16);
+}
+
+.so__tariffBtn:active {
+  transform: translateY(1px);
+}
+
+.so__descrBox {
+  margin-top: 12px;
+  border: 1px solid rgba(148,163,184,.35);
+  opacity: 0.86;
+}
+
+.so__checkoutHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.so__checkoutTitle {
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+}
+
+.so__checkoutDescr {
+  margin-top: 6px;
+  opacity: 0.82;
+}
+
+.so__calcGrid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.so__calcCard {
+  position: relative;
+}
+
+.so__calcCard--accent {
+  border-color: rgba(124,92,255,0.34);
+  background:
+    radial-gradient(700px 140px at 0% 0%, rgba(124,92,255,0.10), transparent 55%),
+    rgba(255,255,255,0.04);
+}
+
+.so__calcValueStrong {
+  font-weight: 950;
+  font-size: 18px;
+  letter-spacing: -0.01em;
+}
+
+.so__createdBox {
+  margin-top: 12px;
+}
+
+.so__payMethods {
+  margin-top: 12px;
+}
+
+.so__payMethodTitle {
+  font-weight: 800;
+}
+
+.so__payMethodActions {
+  margin-top: 10px;
+}
+
+.so__lastPayUrl {
+  margin-top: 12px;
+  opacity: 0.85;
+  word-break: break-word;
+}
+
+.so__statusBox {
+  margin-top: 12px;
+}
+
+.so__muted {
+  opacity: 0.78;
+}
+
+@media (max-width: 520px) {
+  .so__checkoutHead {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .so__heroMeta {
+    gap: 6px;
+  }
+
+  .so__calcGrid {
+    grid-template-columns: 1fr;
+  }
+}
 
 /* ===== Overlay (used in ServicesOrder) ===== */
 

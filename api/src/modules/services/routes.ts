@@ -40,10 +40,8 @@ function calcDaysLeft(iso: string | null) {
 }
 
 function pickPrice(x: any) {
-  const real = Number(x?.real_cost ?? NaN);
-  if (Number.isFinite(real) && real >= 0) return real;
   const cost = Number(x?.cost ?? 0);
-  return Number.isFinite(cost) ? cost : 0;
+  return Number.isFinite(cost) && cost >= 0 ? cost : 0;
 }
 
 function pickPeriodRaw(p: any) {
