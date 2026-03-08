@@ -121,6 +121,8 @@ function PushOnboardingModal({
     primaryText = "Включить";
   }
 
+  const singlePrimaryButton = !standalone;
+
   return (
     <div
       role="dialog"
@@ -154,13 +156,31 @@ function PushOnboardingModal({
           </p>
 
           <div className="row" style={{ marginTop: 16, justifyContent: "flex-end", gap: 10 }}>
-            <button className="btn" type="button" onClick={onDismiss} disabled={busy}>
-              Не сейчас
-            </button>
+            {singlePrimaryButton ? (
+              <button
+                className="btn btn--primary"
+                type="button"
+                onClick={onDismiss}
+                disabled={busy}
+              >
+                {busy ? "..." : primaryText}
+              </button>
+            ) : (
+              <>
+                <button className="btn" type="button" onClick={onDismiss} disabled={busy}>
+                  Не сейчас
+                </button>
 
-            <button className="btn btn--primary" type="button" onClick={onAccept} disabled={busy}>
-              {busy ? "..." : primaryText}
-            </button>
+                <button
+                  className="btn btn--primary"
+                  type="button"
+                  onClick={onAccept}
+                  disabled={busy}
+                >
+                  {busy ? "..." : primaryText}
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>
