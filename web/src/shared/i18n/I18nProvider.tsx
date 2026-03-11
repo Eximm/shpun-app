@@ -10,10 +10,40 @@ type I18nCtx = {
 
 const Ctx = createContext<I18nCtx | null>(null);
 
+const LANG_STORAGE_KEY = "lang";
+
+function normalizeLang(v: unknown): Lang | null {
+  const s = String(v ?? "").trim().toLowerCase();
+  if (s === "ru") return "ru";
+  if (s === "en") return "en";
+  return null;
+}
+
+function detectBrowserLang(): Lang {
+  try {
+    const raw =
+      navigator.language ||
+      (Array.isArray(navigator.languages) ? navigator.languages[0] : "") ||
+      "";
+
+    const lang = String(raw).trim().toLowerCase();
+
+    if (lang.startsWith("ru")) return "ru";
+    return "en";
+  } catch {
+    return "en";
+  }
+}
+
 function getInitialLang(): Lang {
-  const saved = (localStorage.getItem("lang") || "").toLowerCase();
-  if (saved === "en" || saved === "ru") return saved;
-  return "ru";
+  try {
+    const saved = normalizeLang(localStorage.getItem(LANG_STORAGE_KEY));
+    if (saved) return saved;
+  } catch {
+    // ignore
+  }
+
+  return detectBrowserLang();
 }
 
 function dictFor(lang: Lang): Dict {
@@ -25,11 +55,16 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
 
   const api = useMemo<I18nCtx>(() => {
     const dict = dictFor(lang);
+
     return {
       lang,
       setLang: (l: Lang) => {
         setLangState(l);
-        localStorage.setItem("lang", l);
+        try {
+          localStorage.setItem(LANG_STORAGE_KEY, l);
+        } catch {
+          // ignore
+        }
       },
       t: (key: string, fallback?: string) => dict[key] ?? fallback ?? key,
     };

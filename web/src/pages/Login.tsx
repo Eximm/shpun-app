@@ -39,8 +39,6 @@ type Mode = "telegram" | "web";
 type PassMode = "login" | "register";
 
 const PARTNER_LS_KEY = "partner_id_pending";
-
-// auth markers
 const AUTH_PENDING_KEY = "auth:pending";
 const AUTH_PENDING_AT_KEY = "auth:pending_at";
 
@@ -125,29 +123,20 @@ function mapAuthError(raw: string, t: (k: string, fb?: string) => string): strin
     case "login_taken":
     case "user_exists":
       return t("login.err.login_taken", "Этот логин уже занят.");
-
     case "not_authenticated":
       return t("login.err.not_authenticated", "Нужно войти заново.");
     case "no_shm_session":
       return t("login.err.no_shm_session", "Не удалось открыть сессию. Попробуйте ещё раз.");
-
     case "init_data_required":
       return t("login.err.init_data_required", "Откройте приложение в Telegram для быстрого входа.");
     case "shm_telegram_auth_failed":
     case "shm_telegram_widget_auth_failed":
       return t("login.err.tg_failed", "Не удалось войти через Telegram. Попробуйте ещё раз.");
-
     default:
       return t("login.err.generic", "Не удалось выполнить вход. Попробуйте ещё раз.");
   }
 }
 
-/**
- * Turn unknown error into a "raw" token for mapAuthError:
- * - If backend returned { error: "some_code" } — use it
- * - Else if normalizeError knows it's SHM/network/auth — return stable tokens
- * - Else return a human fallback string
- */
 function errorToAuthRaw(e: unknown, fallback: string): string {
   if (typeof e === "string") return e;
 
@@ -172,8 +161,45 @@ function errorToAuthRaw(e: unknown, fallback: string): string {
   return fallback;
 }
 
+function LangSwitch({
+  lang,
+  setLang,
+  ariaLabel,
+}: {
+  lang: "ru" | "en";
+  setLang: (v: "ru" | "en") => void;
+  ariaLabel: string;
+}) {
+  return (
+    <div
+      style={{
+        display: "inline-flex",
+        gap: 6,
+        alignItems: "center",
+        flexWrap: "nowrap",
+      }}
+      aria-label={ariaLabel}
+    >
+      <button
+        type="button"
+        className={`btn ${lang === "ru" ? "btn--primary" : ""}`}
+        onClick={() => setLang("ru")}
+      >
+        RU
+      </button>
+      <button
+        type="button"
+        className={`btn ${lang === "en" ? "btn--primary" : ""}`}
+        onClick={() => setLang("en")}
+      >
+        EN
+      </button>
+    </div>
+  );
+}
+
 export function Login() {
-  const { t } = useI18n();
+  const { t, lang, setLang } = useI18n();
   const nav = useNavigate();
   const loc: any = useLocation();
 
@@ -220,9 +246,7 @@ export function Login() {
     }
 
     setAuthPending(provider || "auth");
-
     refetchMe().catch(() => {});
-
     clearPendingPartnerId();
 
     const nextRaw = String((r as any).next ?? "home").trim();
@@ -335,7 +359,6 @@ export function Login() {
       const provider = p || "auth";
 
       setAuthPending(provider);
-
       refetchMe().catch(() => {});
 
       sp.delete("a");
@@ -348,7 +371,6 @@ export function Login() {
 
       nav("/", { replace: true });
     }
-
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loc?.search]);
 
@@ -419,12 +441,13 @@ export function Login() {
 
   const headerCard = (
     <div className="pre login__headerCard">
-      <div className="login__whatTitle">{t("login.what.title", "Shpun App")}</div>
+      <div className="login__whatTitle">{t("login.what.title", "Что такое Shpun App")}</div>
 
       <div className="login__whatList">
-        <div>✅ {t("login.what.1", "Баланс, услуги и управление аккаунтом — в одном месте.")}</div>
-        <div>⚡ {t("login.what.2", "Через Telegram вход быстрее всего.")}</div>
-        <div>🔒 {t("login.what.3", "Логин и пароль можно использовать как запасной вариант.")}</div>
+        <div>✅ {t("login.what.1", "Shpun App — это ваш личный кабинет для управления сервисами Shpun.")}</div>
+        <div>💳 {t("login.what.2", "Здесь собраны баланс, услуги, оплаты, бонусы и важные уведомления.")}</div>
+        <div>⚙️ {t("login.what.3", "Вы можете быстро открыть нужный раздел и управлять аккаунтом в одном месте.")}</div>
+        <div>✈️ {t("login.what.4", "Через Telegram вход занимает всего пару секунд.")}</div>
       </div>
     </div>
   );
@@ -553,9 +576,17 @@ export function Login() {
               )}
             </div>
 
-            <span className="badge">
-              {mode === "telegram" ? t("login.badge.tg", "Telegram") : t("login.badge.web", "Браузер")}
-            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+              <LangSwitch
+                lang={(lang as "ru" | "en") === "en" ? "en" : "ru"}
+                setLang={setLang as (v: "ru" | "en") => void}
+                ariaLabel={t("login.lang.aria", "Язык")}
+              />
+
+              <span className="badge">
+                {mode === "telegram" ? t("login.badge.tg", "Telegram") : t("login.badge.web", "Браузер")}
+              </span>
+            </div>
           </div>
 
           {headerCard}
