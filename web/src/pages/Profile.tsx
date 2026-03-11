@@ -1,4 +1,3 @@
-// FILE: web/src/pages/Profile.tsx
 import { Children, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMe } from "../app/auth/useMe";
@@ -47,11 +46,11 @@ function isIOS(): boolean {
   return /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
 }
 
-function permissionLabel(p: string) {
-  if (p === "granted") return "Разрешены";
-  if (p === "denied") return "Запрещены";
-  if (p === "default") return "Не выбрано";
-  return "Недоступно";
+function permissionLabel(p: string, t: (k: string, fb?: string) => string) {
+  if (p === "granted") return t("profile.push.permission.granted", "Разрешены");
+  if (p === "denied") return t("profile.push.permission.denied", "Запрещены");
+  if (p === "default") return t("profile.push.permission.default", "Не выбрано");
+  return t("profile.push.permission.unsupported", "Недоступно");
 }
 
 function CardTitle({
@@ -218,11 +217,13 @@ function Modal({
   title,
   children,
   onClose,
+  closeLabel,
 }: {
   open: boolean;
   title: string;
   children: any;
   onClose: () => void;
+  closeLabel: string;
 }) {
   if (!open) return null;
   return (
@@ -258,7 +259,7 @@ function Modal({
             <div className="h1" style={{ fontSize: 18, margin: 0 }}>
               {title}
             </div>
-            <button className="btn" onClick={onClose} aria-label="Close">
+            <button className="btn" onClick={onClose} aria-label={closeLabel}>
               ✕
             </button>
           </div>
@@ -280,12 +281,14 @@ function Toast({ text }: { text: string }) {
 function Segmented({
   value,
   onChange,
+  ariaLabel,
 }: {
   value: "ru" | "en";
   onChange: (v: "ru" | "en") => void;
+  ariaLabel: string;
 }) {
   return (
-    <div className="seg" role="tablist" aria-label="Language">
+    <div className="seg" role="tablist" aria-label={ariaLabel}>
       <button
         type="button"
         className={`btn seg__btn ${value === "ru" ? "btn--primary" : ""}`}
@@ -367,9 +370,9 @@ export function Profile() {
       setSavedFullName(payload.full_name);
       setSavedPhone(payload.phone);
       setEditPersonal(false);
-      showToast("Данные сохранены ✅");
+      showToast(t("profile.toast.saved", "Данные сохранены"));
     } catch (e: any) {
-      setPersonalError(e?.message || "Не удалось сохранить изменения.");
+      setPersonalError(e?.message || t("profile.personal.error", "Не удалось сохранить изменения."));
     } finally {
       setSavingPersonal(false);
     }
@@ -413,11 +416,11 @@ export function Profile() {
     setTgError(null);
     const clean = String(tgLoginDraft || "").trim().replace(/^@/, "");
     if (!clean) {
-      setTgError("Введите Telegram логин.");
+      setTgError(t("profile.telegram.error.empty", "Введите Telegram логин."));
       return;
     }
     if (!/^[a-zA-Z0-9_]{5,32}$/.test(clean)) {
-      setTgError("Некорректный Telegram логин.");
+      setTgError(t("profile.telegram.error.invalid", "Некорректный Telegram логин."));
       return;
     }
 
@@ -441,9 +444,9 @@ export function Profile() {
       }
 
       setTgModal(false);
-      showToast("Telegram обновлён ✅");
+      showToast(t("profile.telegram.toast.saved", "Telegram обновлён"));
     } catch (e: any) {
-      setTgError(e?.message || "Не удалось сохранить Telegram логин.");
+      setTgError(e?.message || t("profile.telegram.error.save", "Не удалось сохранить Telegram логин."));
     } finally {
       setSavingTg(false);
     }
@@ -454,43 +457,42 @@ export function Profile() {
     if (!loginText) return;
     await copyToClipboard(loginText);
     setCopied(true);
+    showToast(t("profile.toast.copied", "Скопировано"));
     window.setTimeout(() => setCopied(false), 1200);
   }
 
   const [loggingOut, setLoggingOut] = useState(false);
 
-async function logout() {
-  setLoggingOut(true);
+  async function logout() {
+    setLoggingOut(true);
 
-  try {
-    const uid =
-      Number(profile?.id ?? me?.profile?.id ?? me?.id ?? 0) || 0;
+    try {
+      const uid =
+        Number(profile?.id ?? me?.profile?.id ?? me?.id ?? 0) || 0;
 
-    if (uid) {
-      try {
-        sessionStorage.removeItem(`push.onboarding.dismissed:browser:u:${uid}`);
-        sessionStorage.removeItem(`push.onboarding.dismissed:pwa:u:${uid}`);
+      if (uid) {
+        try {
+          sessionStorage.removeItem(`push.onboarding.dismissed:browser:u:${uid}`);
+          sessionStorage.removeItem(`push.onboarding.dismissed:pwa:u:${uid}`);
 
-        // на всякий случай чистим старые варианты ключей, если они остались
-        sessionStorage.removeItem(`push.onboarding.browser.dismissed.session.v1`);
-        sessionStorage.removeItem(`push.onboarding.pwa.dismissed.session.v1`);
-      } catch {
-        // ignore
+          sessionStorage.removeItem(`push.onboarding.browser.dismissed.session.v1`);
+          sessionStorage.removeItem(`push.onboarding.pwa.dismissed.session.v1`);
+        } catch {
+          // ignore
+        }
       }
-    }
 
-    await apiFetch("/logout", { method: "POST" });
-  } finally {
-    setLoggingOut(false);
-    nav("/login", { replace: true });
+      await apiFetch("/logout", { method: "POST" });
+    } finally {
+      setLoggingOut(false);
+      nav("/login", { replace: true });
+    }
   }
-}
 
   function goChangePassword() {
     nav("/set-password?intent=change&redirect=/profile");
   }
 
-  // ===== PWA install =====
   const [standalone, setStandalone] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [iosInstallModal, setIosInstallModal] = useState(false);
@@ -506,7 +508,7 @@ async function logout() {
     const onInstalled = () => {
       setStandalone(true);
       setDeferredPrompt(null);
-      showToast("Приложение установлено ✅");
+      showToast(t("profile.pwa.toast.installed", "Приложение установлено"));
     };
 
     window.addEventListener("beforeinstallprompt", onBip as any);
@@ -516,11 +518,11 @@ async function logout() {
       window.removeEventListener("beforeinstallprompt", onBip as any);
       window.removeEventListener("appinstalled", onInstalled as any);
     };
-  }, []);
+  }, [t]);
 
   async function doInstallPwa() {
     if (standalone) {
-      showToast("Уже установлено ✅");
+      showToast(t("profile.pwa.toast.already_installed", "Уже установлено"));
       return;
     }
 
@@ -530,23 +532,22 @@ async function logout() {
     }
 
     if (!deferredPrompt) {
-      showToast("Установка через меню браузера (⋮) → «Установить приложение»");
+      showToast(t("profile.pwa.toast.menu", "Установите приложение через меню браузера."));
       return;
     }
 
     try {
       await deferredPrompt.prompt();
       const choice = await deferredPrompt.userChoice;
-      if (choice?.outcome === "accepted") showToast("Установка запущена ✅");
-      else showToast("Установка отменена");
+      if (choice?.outcome === "accepted") showToast(t("profile.pwa.toast.started", "Установка запущена"));
+      else showToast(t("profile.pwa.toast.cancelled", "Установка отменена"));
     } catch {
-      showToast("Не удалось запустить установку");
+      showToast(t("profile.pwa.toast.failed", "Не удалось запустить установку"));
     } finally {
       setDeferredPrompt(null);
     }
   }
 
-  // ===== Push state + toggle =====
   const [pushLoading, setPushLoading] = useState(false);
   const [pushState, setPushState] = useState<{
     supported: boolean;
@@ -589,20 +590,19 @@ async function logout() {
 
       if (enabled) {
         await disablePush();
-        showToast("Уведомления выключены");
+        showToast(t("profile.push.toast.disabled", "Уведомления выключены"));
       } else {
-        // iOS требует установленной PWA, остальные браузеры — нет
         if (isIOS() && !standalone) {
-          showToast("Для push на iPhone нужно установить приложение (PWA) 📲");
+          showToast(t("profile.push.toast.install_ios", "Для push на iPhone сначала установите приложение."));
           setIosInstallModal(true);
           return;
         }
 
         const ok = await enablePushByUserGesture();
-        if (ok) showToast("Уведомления включены ✅");
+        if (ok) showToast(t("profile.push.toast.enabled", "Уведомления включены"));
         else {
-          if (pushState.permission === "denied") showToast("Уведомления запрещены в браузере");
-          else showToast("Не удалось включить уведомления");
+          if (pushState.permission === "denied") showToast(t("profile.push.toast.denied", "Уведомления запрещены в браузере."));
+          else showToast(t("profile.push.toast.failed", "Не удалось включить уведомления."));
         }
       }
     } finally {
@@ -615,7 +615,10 @@ async function logout() {
     return (
       <div className="section">
         <div className="page-status">
-          <PageStatusCard title="Услуги" text="Загрузка..." />
+          <PageStatusCard
+            title={t("profile.loading.title", "Профиль")}
+            text={t("profile.loading.text", "Загрузка...")}
+          />
         </div>
       </div>
     );
@@ -626,14 +629,14 @@ async function logout() {
       <div className="section">
         <div className="card">
           <div className="card__body">
-            <h1 className="h1">{t("profile.title")}</h1>
-            <p className="p">Ошибка загрузки данных.</p>
+            <h1 className="h1">{t("profile.title", "Профиль")}</h1>
+            <p className="p">{t("profile.error.text", "Не удалось загрузить данные.")}</p>
             <div className="row" style={{ marginTop: 14 }}>
               <button className="btn btn--primary" onClick={() => refetch?.()}>
-                Повторить
+                {t("profile.error.retry", "Повторить")}
               </button>
               <button className="btn btn--danger" onClick={logout} disabled={loggingOut}>
-                {loggingOut ? "…" : t("profile.logout")}
+                {loggingOut ? "…" : t("profile.logout", "Выйти")}
               </button>
             </div>
           </div>
@@ -644,25 +647,36 @@ async function logout() {
 
   const personalNameView = savedFullName || profile?.displayName || "—";
   const personalPhoneView = savedPhone || "—";
-  const telegramStatusBadge = telegramLogin ? <Badge text="Привязан" tone="ok" /> : <Badge text="Не привязан" />;
-  const soonBadge = <Badge text="Скоро" tone="soon" />;
+  const telegramStatusBadge = telegramLogin
+    ? <Badge text={t("profile.telegram.badge.linked", "Подключен")} tone="ok" />
+    : <Badge text={t("profile.telegram.badge.unlinked", "Не подключен")} />;
+  const soonBadge = <Badge text={t("profile.soon", "Скоро")} tone="soon" />;
 
-  const langHint = "Сохраняется автоматически.";
+  const langHint = t("profile.language.hint", "Сохраняется автоматически.");
 
-  const pwaText = standalone ? "Установлено" : "Не установлено";
-  const pwaBadge = standalone ? <Badge text="Установлено" tone="ok" /> : <Badge text="Не установлено" />;
+  const pwaText = standalone
+    ? t("profile.pwa.installed", "Установлено")
+    : t("profile.pwa.not_installed", "Не установлено");
 
-  const pwaBtnText = isIOS() ? "Как установить" : deferredPrompt ? "Установить" : "Через меню";
+  const pwaBadge = standalone
+    ? <Badge text={t("profile.pwa.installed", "Установлено")} tone="ok" />
+    : <Badge text={t("profile.pwa.not_installed", "Не установлено")} />;
+
+  const pwaBtnText = isIOS()
+    ? t("profile.pwa.button.how", "Как установить")
+    : deferredPrompt
+      ? t("profile.pwa.button.install", "Установить")
+      : t("profile.pwa.button.menu", "Через меню");
 
   const pwaHint = standalone
-    ? "Есть на экране."
+    ? t("profile.pwa.hint.installed", "Приложение уже на главном экране.")
     : isIOS()
-      ? "iPhone: «Поделиться» → «На экран Домой»."
+      ? t("profile.pwa.hint.ios", "iPhone: «Поделиться» → «На экран Домой».")
       : deferredPrompt
-        ? "Рекомендуем установить на экран."
-        : "Открой меню (⋮) → «Установить приложение».";
+        ? t("profile.pwa.hint.available", "Можно установить в один тап.")
+        : t("profile.pwa.hint.menu", "Откройте меню браузера и выберите установку.");
 
-  const pushPermText = permissionLabel(String(pushState.permission));
+  const pushPermText = permissionLabel(String(pushState.permission), t);
   const pushEnabled =
     pushState.permission === "granted" &&
     pushState.hasSubscription &&
@@ -670,52 +684,51 @@ async function logout() {
 
   const pushBadge =
     pushEnabled ? (
-      <Badge text="Включены" tone="ok" />
+      <Badge text={t("profile.push.enabled", "Включены")} tone="ok" />
     ) : pushState.permission === "denied" ? (
-      <Badge text="Запрещены" />
+      <Badge text={t("profile.push.permission.denied", "Запрещены")} />
     ) : pushState.permission === "granted" ? (
-      <Badge text="Разрешены" tone="ok" />
+      <Badge text={t("profile.push.permission.granted", "Разрешены")} tone="ok" />
     ) : (
       <Badge text={pushPermText} />
     );
 
   const pushHint = !pushState.supported
-    ? "Недоступно в этом браузере."
+    ? t("profile.push.hint.unsupported", "В этом браузере уведомления недоступны.")
     : pushState.permission === "denied"
-      ? "Разреши уведомления в настройках сайта."
+      ? t("profile.push.hint.denied", "Разрешите уведомления в настройках браузера.")
       : isIOS() && !standalone
-        ? "Для push на iPhone нужно установить приложение (PWA)."
+        ? t("profile.push.hint.ios_install", "Для push на iPhone сначала установите приложение.")
         : pushEnabled
-          ? "Можно присылать важные уведомления."
+          ? t("profile.push.hint.enabled", "Будем отправлять важные уведомления.")
           : pushState.permission === "default"
-            ? "Нажми «Включить», чтобы запросить доступ."
+            ? t("profile.push.hint.ask", "Нажмите «Включить», чтобы разрешить уведомления.")
             : pushState.permission === "granted" && pushState.disabledByUser
-              ? "Выключено вручную — нажми «Включить»."
-              : "Разрешение есть — включи подписку.";
+              ? t("profile.push.hint.disabled_by_user", "Выключено вручную. Можно включить снова.")
+              : t("profile.push.hint.subscription", "Разрешение уже есть, осталось включить подписку.");
 
   return (
     <div className="section">
-      {/* Header */}
       <div className="card">
         <div className="card__body">
           <CardTitle
             icon="👤"
             right={
-              <button className="btn" onClick={() => refetch?.()} title={t("profile.refresh")}>
-                {t("profile.refresh")}
+              <button className="btn" onClick={() => refetch?.()} title={t("profile.refresh", "Обновить")}>
+                {t("profile.refresh", "Обновить")}
               </button>
             }
           >
-            {t("profile.title")}
+            {t("profile.title", "Профиль")}
           </CardTitle>
 
-          <p className="p">Аккаунт • привязки • настройки</p>
+          <p className="p">{t("profile.head.sub", "Аккаунт, вход и настройки.")}</p>
 
           {toast ? <Toast text={toast} /> : null}
 
           <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
             <button className="btn" onClick={goChangePassword} style={{ width: "100%" }}>
-              🔐 {t("profile.change_password")}
+              🔐 {t("profile.change_password", "Сменить пароль")}
             </button>
 
             <button
@@ -724,13 +737,12 @@ async function logout() {
               disabled={loggingOut}
               style={{ width: "100%" }}
             >
-              🚪 {loggingOut ? "…" : t("profile.logout")}
+              🚪 {loggingOut ? "…" : t("profile.logout", "Выйти")}
             </button>
           </div>
         </div>
       </div>
 
-      {/* Personal */}
       <div className="section" style={{ marginTop: 14 }}>
         <div className="card">
           <div className="card__body">
@@ -739,21 +751,21 @@ async function logout() {
               right={
                 !editPersonal ? (
                   <button className="btn" onClick={() => setEditPersonal(true)}>
-                    Редактировать
+                    {t("profile.personal.edit", "Изменить")}
                   </button>
                 ) : (
                   <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                     <button className="btn btn--primary" onClick={savePersonal} disabled={savingPersonal}>
-                      {savingPersonal ? "…" : "Сохранить"}
+                      {savingPersonal ? "…" : t("profile.personal.save", "Сохранить")}
                     </button>
                     <button className="btn" onClick={cancelPersonal} disabled={savingPersonal}>
-                      Отмена
+                      {t("profile.personal.cancel", "Отмена")}
                     </button>
                   </div>
                 )
               }
             >
-              Личные данные
+              {t("profile.personal.title", "Личные данные")}
             </CardTitle>
 
             {personalError ? (
@@ -765,14 +777,14 @@ async function logout() {
             <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
               <RowLine
                 icon="🙍"
-                label="Имя"
+                label={t("profile.personal.name", "Имя")}
                 value={
                   editPersonal ? (
                     <input
                       className="input"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
-                      placeholder="Полное имя"
+                      placeholder={t("profile.personal.name_ph", "Полное имя")}
                       style={{ width: "100%" }}
                     />
                   ) : (
@@ -783,7 +795,7 @@ async function logout() {
 
               <RowLine
                 icon="📞"
-                label="Телефон"
+                label={t("profile.personal.phone", "Телефон")}
                 value={
                   editPersonal ? (
                     <input
@@ -801,7 +813,7 @@ async function logout() {
 
               <RowLine
                 icon="🔢"
-                label="Логин"
+                label={t("profile.personal.login", "Логин")}
                 value={loginText || "—"}
                 right={
                   loginText ? (
@@ -810,7 +822,7 @@ async function logout() {
                       className="btn"
                       onClick={doCopyLogin}
                       style={{ padding: "6px 10px", opacity: 0.9 }}
-                      title="Copy"
+                      title={t("profile.personal.copy", "Скопировать")}
                     >
                       {copied ? "✓" : "📋"}
                     </button>
@@ -825,36 +837,41 @@ async function logout() {
                   gap: 10,
                 }}
               >
-                <RowLine icon="🆔" label="ID" value={profile?.id ?? "—"} />
-                <RowLine icon="📅" label="Создан" value={formatDate(created)} />
+                <RowLine icon="🆔" label={t("profile.personal.id", "ID")} value={profile?.id ?? "—"} />
+                <RowLine icon="📅" label={t("profile.personal.created", "Создан")} value={formatDate(created)} />
               </div>
 
-              <RowLine icon="🕒" label="Последний вход" value={formatDate(lastLogin)} />
+              <RowLine
+                icon="🕒"
+                label={t("profile.personal.last_login", "Последний вход")}
+                value={formatDate(lastLogin)}
+              />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Auth */}
       <div className="section" style={{ marginTop: 14 }}>
         <div className="card">
           <div className="card__body">
-            <CardTitle icon="🔑">Авторизация и привязки</CardTitle>
+            <CardTitle icon="🔑">{t("profile.auth.title", "Вход и привязки")}</CardTitle>
 
             <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
               <RowLine
                 icon="✈️"
                 label="Telegram"
-                value={telegramLogin ? `${telegramLogin}` : "Не привязан"}
+                value={telegramLogin ? `${telegramLogin}` : t("profile.telegram.unlinked", "Не подключен")}
                 right={
                   <>
                     {telegramStatusBadge}
                     <button className="btn" onClick={() => setTgModal(true)}>
-                      {telegramLogin ? "Изменить" : "Привязать"}
+                      {telegramLogin
+                        ? t("profile.telegram.change", "Изменить")
+                        : t("profile.telegram.link", "Подключить")}
                     </button>
                   </>
                 }
-                hint="Используется для входа и уведомлений."
+                hint={t("profile.telegram.hint", "Используется для входа и уведомлений.")}
               />
 
               <RowLine icon="🟦" label="Google" value="OAuth" right={soonBadge} />
@@ -864,35 +881,38 @@ async function logout() {
         </div>
       </div>
 
-      {/* Settings */}
       <div className="section" style={{ marginTop: 14 }}>
         <div className="card">
           <div className="card__body">
-            <CardTitle icon="⚙️">Настройки</CardTitle>
+            <CardTitle icon="⚙️">{t("profile.settings.title", "Настройки")}</CardTitle>
 
             <div className="profile-list">
-              {/* Language */}
               <div className="profile-row">
                 <div className="profile-row__main">
                   <div className="profile-row__label">
                     <span aria-hidden="true">🌍</span>
-                    <span>Язык интерфейса</span>
+                    <span>{t("profile.language.title", "Язык интерфейса")}</span>
                   </div>
-                  <div className="profile-row__value">{lang === "ru" ? "Русский" : "English"}</div>
+                  <div className="profile-row__value">
+                    {lang === "ru" ? t("profile.language.ru", "Русский") : t("profile.language.en", "English")}
+                  </div>
                   <div className="profile-row__hint">{langHint}</div>
                 </div>
 
                 <div className="profile-row__right">
-                  <Segmented value={(lang as any) === "en" ? "en" : "ru"} onChange={setLang as any} />
+                  <Segmented
+                    value={(lang as any) === "en" ? "en" : "ru"}
+                    onChange={setLang as any}
+                    ariaLabel={t("profile.language.aria", "Язык")}
+                  />
                 </div>
               </div>
 
-              {/* PWA */}
               <div className="profile-row">
                 <div className="profile-row__main">
                   <div className="profile-row__label">
                     <span aria-hidden="true">📲</span>
-                    <span>Приложение (PWA)</span>
+                    <span>{t("profile.pwa.title", "Приложение")}</span>
                   </div>
                   <div className="profile-row__value">{pwaText}</div>
                   <div className="profile-row__hint">{pwaHint}</div>
@@ -908,16 +928,15 @@ async function logout() {
                 </div>
               </div>
 
-              {/* Push */}
               <div className="profile-row">
                 <div className="profile-row__main">
                   <div className="profile-row__label">
                     <span aria-hidden="true">🔔</span>
-                    <span>Push-уведомления</span>
+                    <span>{t("profile.push.title", "Уведомления")}</span>
                   </div>
 
                   <div className="profile-row__value">
-                    {pushEnabled ? "Включены" : "Выключены"} • {pushPermText}
+                    {pushEnabled ? t("profile.push.enabled", "Включены") : t("profile.push.disabled", "Выключены")} • {pushPermText}
                   </div>
 
                   <div className="profile-row__hint">{pushHint}</div>
@@ -928,15 +947,15 @@ async function logout() {
 
                   {!pushState.supported ? (
                     <button className="btn" type="button" disabled>
-                      Недоступно
+                      {t("profile.push.button.unavailable", "Недоступно")}
                     </button>
                   ) : pushState.permission === "denied" ? (
                     <button className="btn" type="button" disabled>
-                      В настройках
+                      {t("profile.push.button.settings", "В настройках")}
                     </button>
                   ) : isIOS() && !standalone ? (
                     <button className="btn btn--primary" type="button" onClick={doInstallPwa} disabled={pushLoading}>
-                      Установить
+                      {t("profile.pwa.button.install", "Установить")}
                     </button>
                   ) : (
                     <button
@@ -945,7 +964,11 @@ async function logout() {
                       onClick={togglePush}
                       disabled={pushLoading}
                     >
-                      {pushLoading ? "…" : pushEnabled ? "Выключить" : "Включить"}
+                      {pushLoading
+                        ? "…"
+                        : pushEnabled
+                          ? t("profile.push.button.disable", "Выключить")
+                          : t("profile.push.button.enable", "Включить")}
                     </button>
                   )}
                 </div>
@@ -955,36 +978,47 @@ async function logout() {
         </div>
       </div>
 
-      <Modal open={iosInstallModal} title="Установка на iPhone" onClose={() => setIosInstallModal(false)}>
+      <Modal
+        open={iosInstallModal}
+        title={t("profile.pwa.ios_modal.title", "Установка на iPhone")}
+        onClose={() => setIosInstallModal(false)}
+        closeLabel={t("profile.modal.close", "Закрыть")}
+      >
         <div className="p" style={{ marginTop: 0 }}>
-          iOS устанавливает PWA через меню <b>Поделиться</b>.
+          {t("profile.pwa.ios_modal.text", "На iPhone приложение устанавливается через меню «Поделиться».")}
         </div>
         <div className="pre" style={{ marginTop: 10 }}>
-          1) Открой меню “Поделиться” (иконка квадрат со стрелкой вверх)
-          {"\n"}2) Выбери “На экран Домой”
-          {"\n"}3) Подтверди “Добавить”
+          {t(
+            "profile.pwa.ios_modal.steps",
+            "1) Откройте меню «Поделиться»\n2) Выберите «На экран Домой»\n3) Подтвердите добавление"
+          )}
         </div>
         <div className="row" style={{ marginTop: 12, justifyContent: "flex-end" }}>
           <button className="btn btn--primary" onClick={() => setIosInstallModal(false)}>
-            Понятно
+            {t("profile.ok", "Понятно")}
           </button>
         </div>
       </Modal>
 
       <Modal
         open={tgModal}
-        title={telegramLogin ? "Изменить Telegram" : "Привязать Telegram"}
+        title={
+          telegramLogin
+            ? t("profile.telegram.modal.change_title", "Изменить Telegram")
+            : t("profile.telegram.modal.link_title", "Подключить Telegram")
+        }
         onClose={() => setTgModal(false)}
+        closeLabel={t("profile.modal.close", "Закрыть")}
       >
         <div className="p" style={{ marginTop: 0 }}>
-          Telegram логин (без <b>@</b>)
+          {t("profile.telegram.modal.label", "Telegram логин без @")}
         </div>
 
         <input
           className="input"
           value={tgLoginDraft}
           onChange={(e) => setTgLoginDraft(e.target.value)}
-          placeholder="например: shpunbest"
+          placeholder={t("profile.telegram.modal.placeholder", "например: shpunbest")}
           style={{ width: "100%", marginTop: 8 }}
         />
 
@@ -996,10 +1030,10 @@ async function logout() {
 
         <div className="row" style={{ marginTop: 12, justifyContent: "flex-end" }}>
           <button className="btn" onClick={() => setTgModal(false)} disabled={savingTg}>
-            Отмена
+            {t("profile.personal.cancel", "Отмена")}
           </button>
           <button className="btn btn--primary" onClick={saveTelegramLogin} disabled={savingTg}>
-            {savingTg ? "…" : "Сохранить"}
+            {savingTg ? "…" : t("profile.personal.save", "Сохранить")}
           </button>
         </div>
       </Modal>

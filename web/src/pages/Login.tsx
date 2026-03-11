@@ -94,11 +94,11 @@ function mapRedirectError(e: string, t: (k: string, fb?: string) => string): str
     case "missing_telegram_payload":
       return t("login.err.missing_payload", "Telegram не передал данные для входа. Попробуйте ещё раз.");
     case "tg_widget_failed":
-      return t("login.err.tg_widget_failed", "Не удалось войти через Telegram-виджет. Попробуйте ещё раз.");
+      return t("login.err.tg_widget_failed", "Не удалось войти через Telegram. Попробуйте ещё раз.");
     case "no_shm_session":
-      return t("login.err.no_shm_session", "Сессия не была создана. Попробуйте ещё раз.");
+      return t("login.err.no_shm_session", "Не удалось открыть сессию. Попробуйте ещё раз.");
     case "user_lookup_failed":
-      return t("login.err.user_lookup_failed", "Не удалось получить данные пользователя. Попробуйте ещё раз.");
+      return t("login.err.user_lookup_failed", "Не удалось загрузить данные аккаунта. Попробуйте ещё раз.");
     default:
       return t("login.err.unknown", "Не удалось выполнить вход. Попробуйте ещё раз.");
   }
@@ -108,11 +108,9 @@ function mapAuthError(raw: string, t: (k: string, fb?: string) => string): strin
   const code = String(raw || "").trim();
   if (!code) return t("login.err.unknown", "Не удалось выполнить вход. Попробуйте ещё раз.");
 
-  // If it's a human sentence, keep it
   if (!looksLikeCode(code)) return code;
 
   switch (code) {
-    // password flow
     case "login_and_password_required":
       return t("login.err.login_and_password_required", "Введите логин и пароль.");
     case "login_required":
@@ -123,23 +121,21 @@ function mapAuthError(raw: string, t: (k: string, fb?: string) => string): strin
       return t("login.err.invalid_credentials", "Неверный логин или пароль.");
     case "password_too_short":
     case "password_too_short_or_weak":
-      return t("login.err.password_too_short", "Пароль слишком короткий (минимум 8 символов).");
+      return t("login.err.password_too_short", "Пароль слишком короткий. Минимум 8 символов.");
     case "login_taken":
     case "user_exists":
-      return t("login.err.login_taken", "Такой логин уже занят.");
+      return t("login.err.login_taken", "Этот логин уже занят.");
 
-    // auth/session
     case "not_authenticated":
-      return t("login.err.not_authenticated", "Нужна авторизация. Войдите заново.");
+      return t("login.err.not_authenticated", "Нужно войти заново.");
     case "no_shm_session":
-      return t("login.err.no_shm_session", "Сессия не была создана. Попробуйте ещё раз.");
+      return t("login.err.no_shm_session", "Не удалось открыть сессию. Попробуйте ещё раз.");
 
-    // telegram
     case "init_data_required":
-      return t("login.err.init_data_required", "Откройте приложение внутри Telegram, чтобы войти.");
+      return t("login.err.init_data_required", "Откройте приложение в Telegram для быстрого входа.");
     case "shm_telegram_auth_failed":
     case "shm_telegram_widget_auth_failed":
-      return t("login.err.tg_failed", "Telegram-вход не сработал. Попробуйте ещё раз.");
+      return t("login.err.tg_failed", "Не удалось войти через Telegram. Попробуйте ещё раз.");
 
     default:
       return t("login.err.generic", "Не удалось выполнить вход. Попробуйте ещё раз.");
@@ -153,30 +149,24 @@ function mapAuthError(raw: string, t: (k: string, fb?: string) => string): strin
  * - Else return a human fallback string
  */
 function errorToAuthRaw(e: unknown, fallback: string): string {
-  // if it's already a string (e.g. "invalid_credentials") — keep
   if (typeof e === "string") return e;
 
-  // If it's a plain object with {error:"..."} — prefer that
   if (e && typeof e === "object") {
     const any = e as any;
     const code = typeof any.error === "string" ? any.error : typeof any.code === "string" ? any.code : "";
     if (code) return code;
-    // sometimes apiFetch throws { status, json: {error} }
     const nested = any?.json?.error || any?.data?.error || any?.body?.error;
     if (typeof nested === "string" && nested) return nested;
   }
 
   const n = normalizeError(e);
 
-  // If normalizeError detects auth — return stable token so mapAuthError shows correct text
   if (n.status === 401 || n.status === 403 || n.code === "not_authenticated") return "not_authenticated";
 
-  // If SHM/upstream — never leak shm_error; show generic login failure
   if ((n.code || "").toLowerCase().startsWith("shm_") || (n.code || "").toLowerCase() === "shm_error") {
     return "login_failed";
   }
 
-  // if we have a decent human description — use it (mapAuthError will keep it)
   if (n.description && !looksLikeCode(n.description)) return n.description;
 
   return fallback;
@@ -193,19 +183,16 @@ export function Login() {
   const [tgInitData, setTgInitData] = useState<string | null>(initDataNow);
   const [loading, setLoading] = useState(false);
 
-  // Password fallback + registration
   const [passMode, setPassMode] = useState<PassMode>("login");
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [password2, setPassword2] = useState("");
 
-  // partner_id captured earlier in AuthGate (or may be missing)
   const partnerId = useMemo(() => readPendingPartnerId(), []);
 
   const autoLoginStarted = useRef(false);
   const widgetWrapRef = useRef<HTMLDivElement | null>(null);
 
-  // антиспам тостов одинаковыми сообщениями
   const lastToastRef = useRef<{ msg: string; at: number }>({ msg: "", at: 0 });
   function toastError(raw: string) {
     const msg = mapAuthError(raw, t);
@@ -232,13 +219,10 @@ export function Login() {
       return;
     }
 
-    // mark pending success toast (centralized in AuthGate)
     setAuthPending(provider || "auth");
 
-    // ✅ ВАЖНО: обновляем глобальный /me-store после логина
     refetchMe().catch(() => {});
 
-    // ✅ при успешном входе — считаем, что реф. линк “использован”
     clearPendingPartnerId();
 
     const nextRaw = String((r as any).next ?? "home").trim();
@@ -278,7 +262,7 @@ export function Login() {
       });
       goAfterAuth(r, "password");
     } catch (e: unknown) {
-      toastError(errorToAuthRaw(e, t("error.password_login_failed", "Не удалось войти по паролю")));
+      toastError(errorToAuthRaw(e, t("error.password_login_failed", "Не удалось войти по паролю.")));
     } finally {
       setLoading(false);
     }
@@ -306,7 +290,7 @@ export function Login() {
       });
       goAfterAuth(r, "password");
     } catch (e: unknown) {
-      toastError(errorToAuthRaw(e, t("error.password_login_failed", "Не удалось выполнить регистрацию")));
+      toastError(errorToAuthRaw(e, t("error.password_register_failed", "Не удалось создать аккаунт.")));
     } finally {
       setLoading(false);
     }
@@ -315,7 +299,7 @@ export function Login() {
   async function telegramLoginMiniApp() {
     const initData = tgInitData || getTelegramInitData();
     if (!initData) {
-      toastError(t("error.open_in_tg", "Откройте это приложение внутри Telegram, чтобы войти."));
+      toastError(t("error.open_in_tg", "Откройте приложение в Telegram для быстрого входа."));
       return;
     }
 
@@ -332,7 +316,7 @@ export function Login() {
       });
       goAfterAuth(r, "telegram");
     } catch (e: unknown) {
-      toastError(errorToAuthRaw(e, t("error.telegram_login_failed", "Не удалось войти через Telegram")));
+      toastError(errorToAuthRaw(e, t("error.telegram_login_failed", "Не удалось войти через Telegram.")));
     } finally {
       setLoading(false);
     }
@@ -342,7 +326,6 @@ export function Login() {
     widgetWrapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  // Если вдруг попали на /login с success-marker (на будущее / для совместимости)
   useEffect(() => {
     const sp = new URLSearchParams(String(loc?.search ?? ""));
     const a = String(sp.get("a") ?? "").trim().toLowerCase();
@@ -351,13 +334,10 @@ export function Login() {
     if (a === "auth_ok") {
       const provider = p || "auth";
 
-      // ставим маркер успешной авторизации
       setAuthPending(provider);
 
-      // обновляем /me чтобы AuthGate увидел пользователя
       refetchMe().catch(() => {});
 
-      // чистим URL
       sp.delete("a");
       sp.delete("p");
 
@@ -366,14 +346,12 @@ export function Login() {
 
       window.history.replaceState(null, "", nextUrl);
 
-      // отправляем пользователя в приложение
       nav("/", { replace: true });
     }
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loc?.search]);
 
-  // Пришли после redirect-flow: /login?e=...
   useEffect(() => {
     const sp = new URLSearchParams(String(loc?.search ?? ""));
     const e = sp.get("e") ?? "";
@@ -384,7 +362,6 @@ export function Login() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loc?.search]);
 
-  // Telegram Mini App: готовим окружение + auto-login
   useEffect(() => {
     const tg = getTelegramWebApp();
     tg?.ready?.();
@@ -414,7 +391,6 @@ export function Login() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
-  // Web mode: inject Telegram Login Widget (redirect-flow via data-auth-url)
   useEffect(() => {
     if (mode !== "web") return;
 
@@ -443,13 +419,12 @@ export function Login() {
 
   const headerCard = (
     <div className="pre login__headerCard">
-      <div className="login__whatTitle">{t("login.what.title", "Что это такое")}</div>
+      <div className="login__whatTitle">{t("login.what.title", "Shpun App")}</div>
 
       <div className="login__whatList">
-        <div>✅ {t("login.what.1", "Shpun App — кабинет Shpun SDN System: баланс, услуги и управление подпиской.")}</div>
-        <div>⚡ {t("login.what.2", "Самый быстрый вход — через Telegram: без паролей и лишних действий.")}</div>
-        <div>🔒 {t("login.what.3", "Пароль — резервный способ входа (если нужно зайти из браузера).")}</div>
-        <div>🧩 {t("login.what.4", "Google/Yandex появятся позже — сейчас всё уже работает через Telegram + пароль.")}</div>
+        <div>✅ {t("login.what.1", "Баланс, услуги и управление аккаунтом — в одном месте.")}</div>
+        <div>⚡ {t("login.what.2", "Через Telegram вход быстрее всего.")}</div>
+        <div>🔒 {t("login.what.3", "Логин и пароль можно использовать как запасной вариант.")}</div>
       </div>
     </div>
   );
@@ -468,8 +443,8 @@ export function Login() {
       >
         <div className="login__formTitle">
           {passMode === "login"
-            ? t("login.password.summary", "Войти по логину и паролю")
-            : t("login.password.register_title", "Регистрация по логину и паролю")}
+            ? t("login.password.form_title_login", "Вход по логину и паролю")
+            : t("login.password.form_title_register", "Регистрация")}
         </div>
 
         <div className="auth__grid">
@@ -477,7 +452,7 @@ export function Login() {
             <span className="field__label">{t("login.password.login", "Логин")}</span>
             <input
               className="input"
-              placeholder={t("login.password.login_ph", "например @123456789")}
+              placeholder={t("login.password.login_ph", "Введите логин")}
               value={login}
               onChange={(e) => setLogin(e.target.value)}
               autoComplete="username"
@@ -490,7 +465,7 @@ export function Login() {
             <span className="field__label">{t("login.password.password", "Пароль")}</span>
             <input
               className="input"
-              placeholder={t("login.password.password_ph", "••••••••")}
+              placeholder={t("login.password.password_ph", "Введите пароль")}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               type="password"
@@ -501,10 +476,10 @@ export function Login() {
 
           {passMode === "register" && (
             <label className="field">
-              <span className="field__label">{t("login.password.repeat", "Повтор пароля")}</span>
+              <span className="field__label">{t("login.password.repeat", "Повторите пароль")}</span>
               <input
                 className="input"
-                placeholder={t("login.password.repeat_ph", "Введите пароль ещё раз")}
+                placeholder={t("login.password.repeat_ph", "Повторите пароль")}
                 value={password2}
                 onChange={(e) => setPassword2(e.target.value)}
                 type="password"
@@ -531,7 +506,7 @@ export function Login() {
                 : t("login.password.register_loading", "Создаём аккаунт…")
               : passMode === "login"
                 ? t("login.password.submit", "Войти")
-                : t("login.password.register_submit", "Зарегистрироваться")}
+                : t("login.password.register_submit", "Создать аккаунт")}
           </button>
         </div>
 
@@ -550,15 +525,15 @@ export function Login() {
             }}
           >
             {passMode === "login"
-              ? t("login.password.switch_register", "Регистрация")
-              : t("login.password.switch_login", "Уже есть аккаунт? Вход")}
+              ? t("login.password.switch_register", "Создать аккаунт")
+              : t("login.password.switch_login", "Уже есть аккаунт? Войти")}
           </button>
         </div>
 
         <div className="pre login__preMt12">
           {passMode === "login"
-            ? t("login.password.tip", "Пароль — резервный способ. Основной вход — через Telegram.")
-            : t("login.password.register_tip", "Регистрация — резервный способ. Основной вход — через Telegram.")}
+            ? t("login.password.tip", "Используйте этот способ, если входите не через Telegram.")
+            : t("login.password.register_tip", "Этот способ подойдёт для входа из браузера.")}
         </div>
       </form>
     </details>
@@ -572,52 +547,51 @@ export function Login() {
             <div>
               <h1 className="h1">{t("login.title", "Вход в Shpun App")}</h1>
               {mode === "telegram" ? (
-                <p className="p">{t("login.desc.tg", "Мы распознали Telegram Mini App — можно войти в один тап.")}</p>
+                <p className="p">{t("login.desc.tg", "Продолжите вход через Telegram.")}</p>
               ) : (
-                <p className="p">{t("login.desc.web", "Войдите через Telegram-виджет или используйте логин и пароль.")}</p>
+                <p className="p">{t("login.desc.web", "Войдите через Telegram или по логину и паролю.")}</p>
               )}
             </div>
 
             <span className="badge">
-              {mode === "telegram" ? t("login.badge.tg", "Telegram") : t("login.badge.web", "Веб-режим")}
+              {mode === "telegram" ? t("login.badge.tg", "Telegram") : t("login.badge.web", "Браузер")}
             </span>
           </div>
 
           {headerCard}
 
-          {/* Основной вход: Telegram */}
           <div className="auth__divider login__dividerMt14">
-            <span>{t("login.divider.telegram", "Основной вход")}</span>
+            <span>{t("login.divider.telegram", "Вход через Telegram")}</span>
           </div>
 
           {mode === "telegram" ? (
             <div className="auth__actions login__dividerMt14">
               <button type="button" className="btn btn--primary login__btnFull" onClick={telegramLoginMiniApp} disabled={loading}>
-                {loading ? t("login.tg.cta_loading", "Входим…") : t("login.tg.cta", "Войти через Telegram")}
+                {loading ? t("login.tg.cta_loading", "Входим…") : t("login.tg.cta", "Продолжить")}
               </button>
             </div>
           ) : (
             <div ref={widgetWrapRef} className="login__dividerMt14">
-              <div className="pre login__preMb10">{t("login.widget.tip", "Нажмите кнопку ниже — это официальный вход через Telegram.")}</div>
+              <div className="pre login__preMb10">
+                {t("login.widget.tip", "Быстрый вход в аккаунт через Telegram.")}
+              </div>
 
               {!botUsername ? (
-                <div className="pre">{t("login.widget.env_missing", "Не настроен VITE_TG_BOT_USERNAME — виджет Telegram недоступен.")}</div>
+                <div className="pre">{t("login.widget.unavailable", "Вход через Telegram сейчас недоступен.")}</div>
               ) : (
                 <div id="tg-widget-container" className="login__widgetBox" />
               )}
             </div>
           )}
 
-          {/* Резервный вход: password */}
           <div className="auth__divider login__dividerMt14">
-            <span>{t("login.divider.password", "Вход по логину и паролю")}</span>
+            <span>{t("login.divider.password", "Логин и пароль")}</span>
           </div>
 
           {passwordDetails}
 
-          {/* Другие способы */}
           <div className="auth__divider login__dividerMt14">
-            <span>{t("login.divider.providers", "Или другой способ")}</span>
+            <span>{t("login.divider.providers", "Другие способы")}</span>
           </div>
 
           <div className="auth__providers">
@@ -632,8 +606,8 @@ export function Login() {
                 Telegram
                 <span className="auth__providerHint">
                   {mode === "telegram"
-                    ? t("login.providers.telegram.hint.tg", "вход в один тап")
-                    : t("login.providers.telegram.hint.web", "вход через виджет")}
+                    ? t("login.providers.telegram.hint.tg", "быстрый вход")
+                    : t("login.providers.telegram.hint.web", "открыть вход")}
                 </span>
               </span>
               <span className="auth__providerRight">→</span>

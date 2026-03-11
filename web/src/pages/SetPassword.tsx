@@ -1,4 +1,3 @@
-// web/src/pages/SetPassword.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { apiFetch } from "../shared/api/client";
@@ -40,7 +39,7 @@ export function SetPassword() {
   const loc = useLocation();
 
   const sp = useMemo(() => new URLSearchParams(loc.search), [loc.search]);
-  const intent = (sp.get("intent") || "").trim().toLowerCase(); // "change" | ""
+  const intent = (sp.get("intent") || "").trim().toLowerCase();
   const isChange = intent === "change";
 
   const redirectTo = useMemo(() => {
@@ -82,7 +81,7 @@ export function SetPassword() {
           if (!alive) return;
           setGate({
             status: "error",
-            message: (me as any).error || t("setpwd.need_login.text", "Нужен вход"),
+            message: (me as any).error || t("setpwd.need_login.text", "Нужно войти в аккаунт."),
           });
           return;
         }
@@ -93,21 +92,18 @@ export function SetPassword() {
         const psRaw = (me as any)?.profile?.passwordSet;
         const passwordSet: boolean | undefined = typeof psRaw === "boolean" ? psRaw : undefined;
 
-        // 1) intent=change: разрешаем всегда (если залогинен)
         if (isChange) {
           if (!alive) return;
           setGate({ status: "allowed" });
           return;
         }
 
-        // 2) onboarding: только если точно знаем, что пароль НЕ установлен
         if (passwordSet === false) {
           if (!alive) return;
           setGate({ status: "allowed" });
           return;
         }
 
-        // 3) иначе блок и редирект в app
         if (!alive) return;
         setGate({ status: "blocked" });
         nav("/app", { replace: true });
@@ -116,7 +112,7 @@ export function SetPassword() {
         const n = normalizeError(e);
         setGate({
           status: "error",
-          message: n.description || t("setpwd.need_login.text", "Нужен вход"),
+          message: n.description || t("setpwd.need_login.text", "Нужно войти в аккаунт."),
         });
       }
     }
@@ -141,17 +137,19 @@ export function SetPassword() {
       });
 
       if (!res.ok) {
-        // чтобы toastApiError корректно показал “человеческое”,
-        // генерим ошибку с кодом, но НЕ показываем её напрямую пользователю
         throw new Error(String((res as any).error || "password_set_failed"));
       }
 
-      toast.success(isChange ? "Пароль изменён ✅" : "Пароль установлен ✅", {
-        description: "Пароль успешно изменен.",
-        durationMs: 2500,
-      });
+      toast.success(
+        isChange
+          ? t("setpwd.toast.changed.title", "Пароль изменён")
+          : t("setpwd.toast.saved.title", "Пароль сохранён"),
+        {
+          description: t("setpwd.toast.saved.desc", "Теперь войдите снова с новым паролем."),
+          durationMs: 2500,
+        }
+      );
 
-      // ВАЖНО: после смены пароля просим войти заново (чтобы не было тихого “вылета”)
       try {
         await apiFetch("/logout", { method: "POST" });
       } catch {
@@ -164,10 +162,10 @@ export function SetPassword() {
       });
     } catch (e: unknown) {
       const n = normalizeError(e);
-      const msg = n.description || t("setpwd.err.generic", "Не удалось сохранить пароль");
+      const msg = n.description || t("setpwd.err.generic", "Не удалось сохранить пароль.");
 
       setErr(msg);
-      toastApiError(e, { title: t("setpwd.err.generic", "Не удалось сохранить пароль") });
+      toastApiError(e, { title: t("setpwd.err.generic", "Не удалось сохранить пароль.") });
     } finally {
       setLoading(false);
     }
@@ -178,8 +176,8 @@ export function SetPassword() {
       <div className="section">
         <div className="card">
           <div className="card__body">
-            <h1 className="h1">{t("setpwd.checking.title", "Проверяем…")}</h1>
-            <p className="p">{t("setpwd.checking.text", "Подготавливаем вход.")}</p>
+            <h1 className="h1">{t("setpwd.checking.title", "Проверяем доступ…")}</h1>
+            <p className="p">{t("setpwd.checking.text", "Подготавливаем страницу.")}</p>
             <div className="skeleton p" style={{ width: "64%", marginTop: 12 }} />
             <div className="skeleton p" style={{ width: "46%", marginTop: 8 }} />
           </div>
@@ -196,7 +194,7 @@ export function SetPassword() {
             <h1 className="h1">{t("setpwd.need_login.title", "Нужен вход")}</h1>
             <p className="p">{gate.message}</p>
             <button className="btn btn--primary" onClick={() => nav("/login", { replace: true })}>
-              {t("setpwd.need_login.cta", "Перейти к входу")}
+              {t("setpwd.need_login.cta", "Перейти ко входу")}
             </button>
           </div>
         </div>
@@ -209,20 +207,24 @@ export function SetPassword() {
       <div className="section">
         <div className="card">
           <div className="card__body">
-            <p className="p">{t("setpwd.redirecting", "Открываем приложение…")}</p>
+            <p className="p">{t("setpwd.redirecting", "Возвращаем в приложение…")}</p>
           </div>
         </div>
       </div>
     );
   }
 
-  const title = isChange ? t("setpwd.change.title", "Сменить пароль") : t("setpwd.title", "Установить пароль");
+  const title = isChange
+    ? t("setpwd.change.title", "Сменить пароль")
+    : t("setpwd.title", "Создать пароль");
 
   const desc = isChange
-    ? t("setpwd.change.desc", "Вы можете изменить пароль в любой момент. Это не влияет на вход через Telegram.")
-    : t("setpwd.desc", "Вы вошли через Telegram. Создайте пароль — так вы сможете входить и вне Telegram.");
+    ? t("setpwd.change.desc", "Вы можете обновить пароль в любой момент.")
+    : t("setpwd.desc", "Пароль пригодится для входа в браузере и в приложении.");
 
-  const nextText = isChange ? t("setpwd.kv.next_value_profile", "Профиль") : t("setpwd.kv.next_value", "Главная");
+  const nextText = isChange
+    ? t("setpwd.kv.next_value_profile", "Профиль")
+    : t("setpwd.kv.next_value", "Главная");
 
   return (
     <div className="section">
@@ -234,17 +236,17 @@ export function SetPassword() {
               <p className="p">{desc}</p>
             </div>
 
-            {!isChange && <span className="badge">{t("setpwd.badge", "Шаг 1 / 1")}</span>}
+            {!isChange && <span className="badge">{t("setpwd.badge", "Готово за минуту")}</span>}
           </div>
 
           <div className="kv">
             <div className="kv__item">
-              <div className="kv__k">{t("setpwd.kv.login", "Ваш логин")}</div>
+              <div className="kv__k">{t("setpwd.kv.login", "Логин")}</div>
               <div className="kv__v">{login || "…"}</div>
             </div>
             <div className="kv__item">
-              <div className="kv__k">{t("setpwd.kv.why", "Зачем")}</div>
-              <div className="kv__v">{t("setpwd.kv.why_value", "Резервный вход")}</div>
+              <div className="kv__k">{t("setpwd.kv.why", "Для чего")}</div>
+              <div className="kv__v">{t("setpwd.kv.why_value", "Вход по паролю")}</div>
             </div>
             <div className="kv__item">
               <div className="kv__k">{t("setpwd.kv.next", "Дальше")}</div>
@@ -278,8 +280,16 @@ export function SetPassword() {
                     className="btn btn--soft pwdfield__btn"
                     onClick={() => setShowPwd1((v) => !v)}
                     disabled={loading}
-                    aria-label={showPwd1 ? "Скрыть пароль" : "Показать пароль"}
-                    title={showPwd1 ? "Скрыть" : "Показать"}
+                    aria-label={
+                      showPwd1
+                        ? t("setpwd.field.hide_password", "Скрыть пароль")
+                        : t("setpwd.field.show_password", "Показать пароль")
+                    }
+                    title={
+                      showPwd1
+                        ? t("setpwd.field.hide", "Скрыть")
+                        : t("setpwd.field.show", "Показать")
+                    }
                   >
                     {showPwd1 ? "🙈" : "👁"}
                   </button>
@@ -304,8 +314,16 @@ export function SetPassword() {
                     className="btn btn--soft pwdfield__btn"
                     onClick={() => setShowPwd2((v) => !v)}
                     disabled={loading}
-                    aria-label={showPwd2 ? "Скрыть пароль" : "Показать пароль"}
-                    title={showPwd2 ? "Скрыть" : "Показать"}
+                    aria-label={
+                      showPwd2
+                        ? t("setpwd.field.hide_password", "Скрыть пароль")
+                        : t("setpwd.field.show_password", "Показать пароль")
+                    }
+                    title={
+                      showPwd2
+                        ? t("setpwd.field.hide", "Скрыть")
+                        : t("setpwd.field.show", "Показать")
+                    }
                   >
                     {showPwd2 ? "🙈" : "👁"}
                   </button>
@@ -318,16 +336,18 @@ export function SetPassword() {
                 <span className="pwdmeter__title">{t("setpwd.strength", "Надёжность")}</span>
                 <span className="pwdmeter__score">{score}/5</span>
               </div>
-              <div className="pwdmeter__tip">{t("setpwd.tip", "Совет: 8+ символов, цифры и спецсимволы.")}</div>
+              <div className="pwdmeter__tip">
+                {t("setpwd.tip", "Используйте 8+ символов, цифры и спецсимволы.")}
+              </div>
             </div>
 
             <div className="actions actions--2">
               <button type="submit" className="btn btn--primary" disabled={!canSubmit}>
                 {loading
-                  ? t("setpwd.saving", "Сохраняю…")
+                  ? t("setpwd.saving", "Сохраняем…")
                   : isChange
-                  ? t("setpwd.change.save", "Сменить пароль")
-                  : t("setpwd.save", "Сохранить пароль")}
+                    ? t("setpwd.change.save", "Сменить пароль")
+                    : t("setpwd.save", "Сохранить пароль")}
               </button>
 
               <button

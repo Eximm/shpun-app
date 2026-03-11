@@ -1,11 +1,8 @@
-// web/src/pages/Home.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMe } from "../app/auth/useMe";
 import { useI18n } from "../shared/i18n";
 import { apiFetch } from "../shared/api/client";
-
-// ✅ NEW: toast
 import { toast } from "../shared/ui/toast";
 
 /* ========================================================================
@@ -35,10 +32,7 @@ function hasTelegramInitData(): boolean {
 }
 
 /**
- * ✅ No transfer, no cookie migration.
- * Just open external browser to the page with Telegram Widget auth.
- *
- * If your widget is NOT on /login — change targetPath.
+ * Open browser auth page from Telegram Mini App.
  */
 function openExternalAuthPage() {
   const targetPath = "/login";
@@ -73,7 +67,6 @@ type PromoState =
   | { status: "done"; message: string }
   | { status: "error"; message: string };
 
-/** ===== Services summary (from /api/services) ===== */
 type ApiSummary = {
   total: number;
   active: number;
@@ -98,10 +91,8 @@ type ApiServicesResponse = {
   forecast?: ApiForecast;
 };
 
-/** ===== Payments forecast ===== */
 type ForecastResp = { ok: true; raw: any };
 
-/** ===== Notifications feed (for Home News) ===== */
 type NotifLevel = "info" | "success" | "error";
 type NotifEvent = {
   event_id: string;
@@ -159,7 +150,7 @@ function fmtShortDate(iso: string | null | undefined) {
   });
 }
 
-function fmtFeedDate(tsSec: number) {
+function fmtFeedDate(tsSec: number, todayLabel: string) {
   const d = new Date(tsSec * 1000);
   const now = new Date();
 
@@ -168,14 +159,10 @@ function fmtFeedDate(tsSec: number) {
     d.getMonth() === now.getMonth() &&
     d.getDate() === now.getDate();
 
-  if (sameDay) return "today";
+  if (sameDay) return todayLabel;
   return d.toLocaleDateString(undefined, { month: "short", day: "2-digit" });
 }
 
-/**
- * ✅ Same categorization idea as Feed:
- * Home shows ONLY items with category "news"
- */
 function categoryOf(e: NotifEvent): Category {
   const t = String(e.type || "").trim().toLowerCase();
 
@@ -198,10 +185,6 @@ function categoryOf(e: NotifEvent): Category {
   return "all";
 }
 
-/**
- * ✅ Strictly matches your real payload:
- * raw: { data: [ { total: 117.35, ... } ], date: "Thu Feb ..." }
- */
 function parsePaymentsForecast(raw: any): { whenText?: string; amount?: number } | null {
   if (!raw || typeof raw !== "object") return null;
 
@@ -215,6 +198,13 @@ function parsePaymentsForecast(raw: any): { whenText?: string; amount?: number }
 
   if (!whenText && amount == null) return null;
   return { whenText, amount: amount ?? undefined };
+}
+
+function tr(template: string, params: Record<string, string | number>) {
+  return Object.entries(params).reduce(
+    (acc, [key, value]) => acc.replace(new RegExp(`\\{${key}\\}`, "g"), String(value)),
+    template
+  );
 }
 
 /* ========================================================================
@@ -278,17 +268,14 @@ export function Home() {
     state: { status: "idle" },
   });
 
-  // services
   const [svcLoading, setSvcLoading] = useState(false);
   const [svcError, setSvcError] = useState<string | null>(null);
   const [svcSummary, setSvcSummary] = useState<ApiSummary | null>(null);
   const [svcForecast, setSvcForecast] = useState<ApiForecast | null>(null);
 
-  // payments forecast
   const [payLoading, setPayLoading] = useState(false);
   const [payForecast, setPayForecast] = useState<{ whenText?: string; amount?: number } | null>(null);
 
-  // news from notif feed
   const [newsLoading, setNewsLoading] = useState(false);
   const [newsItems, setNewsItems] = useState<NotifEvent[]>([]);
 
@@ -305,10 +292,6 @@ export function Home() {
     if (!s) return 0;
     return Number(s.blocked || 0) + Number(s.notPaid || 0);
   }, [svcSummary]);
-
-  /* ======================================================================
-     ✅ TOASTS: react to bonus / balance changes (no spam, no first render)
-     ====================================================================== */
 
   const prevBonusRef = useRef<number | null>(null);
   const prevBalRef = useRef<number | null>(null);
@@ -330,8 +313,15 @@ export function Home() {
     if (curBonus != null && prevBonusRef.current != null && curBonus !== prevBonusRef.current) {
       const delta = curBonus - prevBonusRef.current;
 
-      if (delta > 0) toast.success("🎁 Бонусы начислены", { description: `+${delta}` });
-      else toast.info("🎁 Бонусы изменились", { description: `${delta}` });
+      if (delta > 0) {
+        toast.success(t("home.toast.bonus_added.title", "Бонусы начислены"), {
+          description: `+${delta}`,
+        });
+      } else {
+        toast.info(t("home.toast.bonus_changed.title", "Бонусы обновлены"), {
+          description: `${delta}`,
+        });
+      }
 
       prevBonusRef.current = curBonus;
     } else if (curBonus != null && prevBonusRef.current == null) {
@@ -343,7 +333,9 @@ export function Home() {
 
       if (delta > 0) {
         const cur = String(balance?.currency || "RUB");
-        toast.success("💰 Баланс пополнен", { description: `+${fmtMoney(delta, cur)}` });
+        toast.success(t("home.toast.balance_added.title", "Баланс пополнен"), {
+          description: `+${fmtMoney(delta, cur)}`,
+        });
       }
 
       prevBalRef.current = curBal;
@@ -352,10 +344,6 @@ export function Home() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bonusValue, balance?.amount, balance?.currency, me?.ok]);
-
-  /* ======================================================================
-     DATA: load services + payments forecast + news feed
-     ====================================================================== */
 
   async function loadServicesSummary() {
     setSvcLoading(true);
@@ -388,11 +376,8 @@ export function Home() {
   async function loadHomeNews() {
     setNewsLoading(true);
     try {
-      // ✅ Now server-side filtered: only broadcast/news items (independent of other event noise)
       const r = await apiFetch<FeedResp>(`/notifications/feed?onlyNews=1&limit=5`);
       const arr = Array.isArray(r.items) ? r.items : [];
-
-      // defensive: keep the same categorizer, but feed should already be news
       const news = arr.filter((x) => categoryOf(x) === "news").slice(0, 5);
       setNewsItems(news);
     } catch {
@@ -411,16 +396,12 @@ export function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me?.ok]);
 
-  /* ======================================================================
-     ACTION: promo stub
-     ====================================================================== */
-
   async function applyPromoStub() {
     const code = promo.code.trim();
     if (!code) {
       setPromo((p) => ({
         ...p,
-        state: { status: "error", message: t("promo.err.empty", "Введите промокод.") },
+        state: { status: "error", message: t("promo.err.empty", "Введите код.") },
       }));
       return;
     }
@@ -432,21 +413,17 @@ export function Home() {
       ...p,
       state: {
         status: "done",
-        message: t("promo.done.stub", "Бонус-коды скоро будут доступны прямо в приложении ✨"),
+        message: t("promo.done.stub", "Бонус-коды скоро появятся в приложении."),
       },
     }));
   }
-
-  /* ======================================================================
-     STATES: loading / error
-     ====================================================================== */
 
   if (loading) {
     return (
       <div className="section">
         <div className="card">
           <div className="card__body">
-            <h1 className="h1">{t("home.loading.title", "ShpunApp")}</h1>
+            <h1 className="h1">{t("home.loading.title", "Shpun")}</h1>
             <p className="p">{t("home.loading.text", "Загрузка…")}</p>
           </div>
         </div>
@@ -459,8 +436,8 @@ export function Home() {
       <div className="section">
         <div className="card">
           <div className="card__body">
-            <h1 className="h1">{t("home.error.title", "ShpunApp")}</h1>
-            <p className="p">{t("home.error.text", "Ошибка загрузки профиля.")}</p>
+            <h1 className="h1">{t("home.error.title", "Shpun")}</h1>
+            <p className="p">{t("home.error.text", "Не удалось загрузить профиль.")}</p>
 
             <ActionGrid>
               <button className="btn btn--primary" onClick={() => refetch?.()}>
@@ -481,10 +458,6 @@ export function Home() {
     );
   }
 
-  /* ======================================================================
-     DERIVED: values for tiles
-     ====================================================================== */
-
   const s = svcSummary;
   const currencyFallback = s?.currency || balance?.currency || "RUB";
 
@@ -499,10 +472,10 @@ export function Home() {
     svcForecast && (svcForecast.nextInDays != null || svcForecast.nextDate || svcForecast.nextAmount != null)
       ? `${
           svcForecast.nextInDays != null
-            ? `через ${svcForecast.nextInDays} дн.`
+            ? tr(t("home.tiles.services_in_days", "через {days} дн."), { days: svcForecast.nextInDays })
             : svcForecast.nextDate
-            ? fmtShortDate(svcForecast.nextDate)
-            : "—"
+              ? fmtShortDate(svcForecast.nextDate)
+              : "—"
         }${
           svcForecast.nextAmount != null
             ? ` · ~${fmtMoneyForecast(svcForecast.nextAmount, svcForecast.currency || currencyFallback)}`
@@ -510,20 +483,16 @@ export function Home() {
         }`
       : null;
 
-  const forecastSub = forecastWhenText || servicesForecastText || (payLoading ? "Считаем…" : "—");
+  const forecastSub = forecastWhenText || servicesForecastText || (payLoading ? t("home.tiles.forecast.loading", "Считаем…") : "—");
 
   const attentionSub = (() => {
-    if (!s) return svcLoading ? "Проверяем…" : "—";
+    if (!s) return svcLoading ? t("home.tiles.forecast.loading", "Считаем…") : "—";
     const parts: string[] = [];
-    if (s.notPaid > 0) parts.push(`Оплата: ${s.notPaid}`);
-    if (s.blocked > 0) parts.push(`Блок: ${s.blocked}`);
-    if (parts.length === 0) return "Всё в порядке";
+    if (s.notPaid > 0) parts.push(tr(t("home.tiles.state.pay", "К оплате: {count}"), { count: s.notPaid }));
+    if (s.blocked > 0) parts.push(tr(t("home.tiles.state.block", "Заблокировано: {count}"), { count: s.blocked }));
+    if (parts.length === 0) return t("home.tiles.state.ok", "Всё в порядке");
     return parts.join(" · ");
   })();
-
-  /* ======================================================================
-     RENDER
-     ====================================================================== */
 
   return (
     <div className="section">
@@ -535,7 +504,7 @@ export function Home() {
                 {t("home.hello", "Привет")}
                 {displayName ? `, ${displayName}` : ""} 👋
               </div>
-              <div className="home-head__sub">Аккаунт и услуги — самое важное. Плитки ведут в нужные разделы.</div>
+              <div className="home-head__sub">{t("home.head.sub", "Самое важное по аккаунту — на одной странице.")}</div>
             </div>
           </div>
 
@@ -543,53 +512,66 @@ export function Home() {
             <Tile
               to="/payments"
               icon="💰"
-              title="Баланс"
+              title={t("home.tiles.balance", "Баланс")}
               value={balance ? <Money amount={balance.amount} currency={balance.currency} /> : "—"}
-              sub="Пополнение и история"
+              sub={t("home.tiles.balance.sub", "Пополнение и история")}
               tone="accent"
             />
 
             <Tile
               to="/services"
               icon="🛰️"
-              title="Услуги"
+              title={t("home.tiles.services", "Услуги")}
               value={svcLoading ? "…" : s ? `${s.active}/${s.total}` : "—"}
-              sub="Список и статусы"
+              sub={t("home.tiles.services.sub", "Список и статусы")}
               tone="ok"
             />
 
             <Tile
               to="/services"
               icon={attentionCount > 0 ? "⚠️" : "✅"}
-              title={attentionCount > 0 ? "Требуют действий" : "Состояние"}
+              title={attentionCount > 0 ? t("home.tiles.attention", "Требуют внимания") : t("home.tiles.state", "Состояние")}
               value={svcLoading ? "…" : s ? attentionCount : "—"}
               sub={attentionSub}
               tone={attentionCount > 0 ? "warn" : "ok"}
-              badge={showBlocked ? <span className="home-badge home-badge--danger">есть блок</span> : null}
+              badge={
+                showBlocked ? (
+                  <span className="home-badge home-badge--danger">
+                    {t("home.tiles.state.block_badge", "есть блок")}
+                  </span>
+                ) : null
+              }
             />
 
             <Tile
               to="/services"
               icon="📦"
-              title="В месяц"
+              title={t("home.tiles.monthly", "В месяц")}
               value={svcLoading ? "…" : s ? fmtMoney(s.monthlyCost || 0, currencyFallback) : "—"}
-              sub="Плановый расход"
+              sub={t("home.tiles.monthly.sub", "Плановый расход")}
               tone="default"
             />
 
-            <Tile to="/payments" icon="🎁" title="Бонусы" value={bonusValue} sub="Начисления и списания" tone="default" />
+            <Tile
+              to="/payments"
+              icon="🎁"
+              title={t("home.tiles.bonus", "Бонусы")}
+              value={bonusValue}
+              sub={t("home.tiles.bonus.sub", "Начисления и списания")}
+              tone="default"
+            />
 
             <Tile
               to="/payments"
               icon="🗓️"
-              title="Прогноз оплаты"
+              title={t("home.tiles.forecast", "Следующая оплата")}
               value={forecastAmountText || (payLoading ? "…" : "—")}
               sub={forecastAmountText ? `${forecastSub}` : forecastSub}
               tone="default"
             />
           </div>
 
-          {svcError ? <div className="muted" style={{ marginTop: 10 }}>Не удалось обновить статусы услуг.</div> : null}
+          {svcError ? <div className="muted" style={{ marginTop: 10 }}>{t("home.services.error", "Не удалось обновить статусы услуг.")}</div> : null}
         </div>
       </div>
 
@@ -599,13 +581,13 @@ export function Home() {
             <div className="home-install__glow" />
             <div className="card__body">
               <div className="home-install__copy">
-                <div className="home-install__title">🚀 Установить ShpunApp</div>
-                <div className="home-install__sub">Откроем приложение во внешнем браузере для входа через Telegram Widget.</div>
+                <div className="home-install__title">{t("home.install.card.title", "Открыть Shpun в браузере")}</div>
+                <div className="home-install__sub">{t("home.install.card.sub", "В браузере доступны все функции приложения.")}</div>
               </div>
 
               <div className="home-install__btnwrap">
                 <button className="btn btn--primary home-install__btn" onClick={openExternalAuthPage}>
-                  Открыть в браузере
+                  {t("home.install.card.open", "Открыть в браузере")}
                 </button>
               </div>
             </div>
@@ -613,16 +595,13 @@ export function Home() {
         </div>
       ) : null}
 
-      {/* ==================================================================
-         MODULE: News (REAL from notif feed)
-         ================================================================== */}
       <div className="section">
         <div className="card">
           <div className="card__body">
             <div className="home-block-head">
               <div>
                 <div className="h1">{t("home.news.title", "Новости")}</div>
-                <div className="p">{t("home.news.subtitle", "Коротко и по делу. Полная лента — в Инфоцентре.")}</div>
+                <div className="p">{t("home.news.subtitle", "Короткие обновления и важные сообщения.")}</div>
               </div>
             </div>
 
@@ -637,11 +616,11 @@ export function Home() {
                   <Link key={n.event_id} to="/feed" className="home-link">
                     <div className="list__item">
                       <div className="list__main">
-                        <div className="list__title">{n.title || "📢 Сообщение"}</div>
+                        <div className="list__title">{n.title || t("home.news.item.fallback", "Сообщение")}</div>
                         {n.message ? <div className="list__sub">{n.message}</div> : null}
                       </div>
                       <div className="list__side">
-                        <span className="chip chip--soft">{fmtFeedDate(n.ts)}</span>
+                        <span className="chip chip--soft">{fmtFeedDate(n.ts, t("home.news.today", "Сегодня"))}</span>
                       </div>
                     </div>
                   </Link>
@@ -650,8 +629,8 @@ export function Home() {
                 <Link to="/feed" className="home-link">
                   <div className="list__item">
                     <div className="list__main">
-                      <div className="list__title">📢 Пока новостей нет</div>
-                      <div className="list__sub">Как только появятся обновления — они будут здесь и в Инфоцентре.</div>
+                      <div className="list__title">{t("home.news.empty.title", "Пока новостей нет")}</div>
+                      <div className="list__sub">{t("home.news.empty.sub", "Когда появятся обновления, они будут здесь.")}</div>
                     </div>
                     <div className="list__side">
                       <span className="chip chip--soft">—</span>
@@ -670,61 +649,53 @@ export function Home() {
         </div>
       </div>
 
-      {/* ==================================================================
-         MODULE: Referrals
-         ================================================================== */}
       <div className="section">
         <div className="card home-refcard">
           <div className="card__body">
             <div className="home-block-head">
               <div>
-                <div className="h1">🤝 Реферальная программа</div>
-                <div className="p">
-                  Пригласи друзей — и получай бонусы с их пополнений.<span className="dot" /> Это реально “пассивка”.
-                </div>
+                <div className="h1">{t("home.ref.title", "Реферальная программа")}</div>
+                <div className="p">{t("home.ref.sub", "Приглашайте друзей и получайте бонусы за их пополнения.")}</div>
               </div>
             </div>
 
             <div className="kv kv--3 home-refkv">
               <div className="kv__item">
-                <div className="kv__k">🔗 Ссылка</div>
-                <div className="kv__v">Поделись в чат</div>
+                <div className="kv__k">{t("home.ref.link.k", "Ссылка")}</div>
+                <div className="kv__v">{t("home.ref.link.v", "Поделиться с друзьями")}</div>
               </div>
               <div className="kv__item">
-                <div className="kv__k">👥 Приглашённые</div>
-                <div className="kv__v">Список и статусы</div>
+                <div className="kv__k">{t("home.ref.list.k", "Приглашённые")}</div>
+                <div className="kv__v">{t("home.ref.list.v", "Список и статусы")}</div>
               </div>
               <div className="kv__item">
-                <div className="kv__k">💸 Процент</div>
-                <div className="kv__v">Правила и начисления</div>
+                <div className="kv__k">{t("home.ref.percent.k", "Начисления")}</div>
+                <div className="kv__v">{t("home.ref.percent.v", "Правила и проценты")}</div>
               </div>
             </div>
 
             <div className="home-refactions">
               <div className="actions actions--3 home-refactions__grid">
-                <Link className="btn" to="/referrals#link">Скопировать ссылку</Link>
-                <Link className="btn" to="/referrals#list">Список</Link>
-                <Link className="btn" to="/referrals#rules">Правила</Link>
+                <Link className="btn" to="/referrals#link">{t("home.ref.copy_link", "Ссылка")}</Link>
+                <Link className="btn" to="/referrals#list">{t("home.ref.list_btn", "Список")}</Link>
+                <Link className="btn" to="/referrals#rules">{t("home.ref.rules", "Правила")}</Link>
               </div>
 
               <div className="home-cta">
-                <Link className="btn btn--accent home-cta__btn" to="/referrals">Открыть</Link>
+                <Link className="btn btn--accent home-cta__btn" to="/referrals">{t("home.ref.open", "Открыть")}</Link>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* ==================================================================
-         MODULE: Promo codes
-         ================================================================== */}
       <div className="section">
         <div className="card home-promocard">
           <div className="card__body">
             <div className="home-block-head">
               <div>
-                <div className="h1">Бонус-коды</div>
-                <div className="p">Введи код — бонусы или скидка применятся к аккаунту.</div>
+                <div className="h1">{t("home.promo.title", "Бонус-код")}</div>
+                <div className="p">{t("home.promo.sub", "Введите код, чтобы получить бонус или скидку.")}</div>
               </div>
             </div>
 
@@ -735,7 +706,7 @@ export function Home() {
                 onChange={(e) =>
                   setPromo((p) => ({ ...p, code: e.target.value, state: { status: "idle" } }))
                 }
-                placeholder="Например: SHPUN-2026"
+                placeholder={t("promo.input_ph", "Например: SHPUN-2026")}
                 autoCapitalize="characters"
                 spellCheck={false}
               />
@@ -745,7 +716,9 @@ export function Home() {
                 onClick={applyPromoStub}
                 disabled={promo.state.status === "applying"}
               >
-                {promo.state.status === "applying" ? "Применяем…" : "Применить"}
+                {promo.state.status === "applying"
+                  ? t("promo.applying", "Применяем…")
+                  : t("promo.apply", "Применить")}
               </button>
             </div>
 
