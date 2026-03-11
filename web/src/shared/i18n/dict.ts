@@ -310,6 +310,112 @@ export const RU: Dict = {
 
   "setpwd.err.title": "Ошибка",
   "setpwd.err.generic": "Не удалось сохранить пароль.",
+
+
+  //Services
+"services.title": "Услуги",
+"services.sub": "Ваши услуги и их текущий статус.",
+"services.loading": "Загрузка...",
+"services.loading_short": "Загрузка…",
+"services.error.text": "Не удалось загрузить список услуг. Попробуйте ещё раз.",
+"services.retry": "Повторить",
+
+"services.kind.amneziawg": "AmneziaWG",
+"services.kind.marzban": "Marzban",
+"services.kind.marzban_router": "Router VPN",
+"services.kind.unknown": "Другое",
+
+"services.kind_descr.amneziawg": "Простой ключ для одного сервера.",
+"services.kind_descr.marzban": "Подписка для телефонов, ПК и планшетов.",
+"services.kind_descr.marzban_router": "Отдельные подписки для роутеров (Shpun Router / OpenWrt).",
+"services.kind_descr.unknown": "Прочие услуги.",
+
+"services.status.active": "Активна",
+"services.status.pending": "Подключается",
+"services.status.not_paid": "Не оплачена",
+"services.status.blocked": "Заблокирована",
+"services.status.removed": "Завершена",
+"services.status.error": "Ошибка",
+"services.status.init": "Инициализация",
+"services.status.default": "Статус",
+
+"services.hint.days_left": "Осталось около {days} дн.",
+"services.hint.expired": "Срок истёк",
+"services.hint.not_paid": "Требуется оплата",
+"services.hint.blocked": "Нужны действия",
+"services.hint.pending": "Подождите немного",
+"services.hint.init": "Инициализация услуги",
+"services.hint.error": "Проверьте статус или обратитесь в поддержку",
+
+"services.meta.until": "До",
+"services.meta.active": "Активные",
+"services.meta.attention": "Внимание",
+"services.meta.monthly": "В месяц",
+"services.meta.discount": "Скидка",
+
+"services.month_short": "м",
+"services.item": "Услуга",
+
+"services.actions.title": "Действия",
+"services.order": "Заказать",
+"services.refresh": "Обновить",
+"services.refresh_status": "Обновить статус",
+"services.pay": "Оплатить / пополнить",
+"services.topup": "Пополнить / оплатить",
+"services.support": "В поддержку",
+
+"services.connect.title": "Подключение",
+"services.connect.button": "Подключение",
+"services.connect.hide": "Скрыть подключение",
+"services.connect.open": "Открыть подключение",
+"services.connect.only_active": "Подключение доступно только для активной услуги.",
+"services.connect.unavailable": "Для этого типа услуги пока нет помощника подключения.",
+
+"services.stop.title": "Заблокировать услугу",
+"services.stop.button": "Заблокировать",
+
+"services.delete.title": "Удалить услугу",
+"services.delete.button": "Удалить услугу",
+"services.delete.confirm": "Удалить",
+
+"services.delete_confirm.not_paid": "Удалить неоплаченный заказ? Он исчезнет из списка.",
+"services.delete_confirm.blocked": "Удалить услугу? Она исчезнет из списка.",
+"services.delete_confirm.error": "Удалить услугу? Она исчезнет из списка.",
+"services.delete_confirm.default": "Удалить услугу?",
+
+"services.toast.updated": "Обновлено",
+"services.toast.updated_desc": "Статусы услуг обновлены.",
+"services.toast.refresh_failed": "Не удалось обновить",
+"services.toast.blocked": "Заблокировано",
+"services.toast.blocked_desc": "Услуга заблокирована.",
+"services.toast.block_failed": "Не удалось заблокировать",
+"services.toast.deleted": "Услуга удалена",
+"services.toast.deleted_desc": "Готово. Услуга удалена из списка.",
+"services.toast.delete_failed": "Не удалось удалить",
+"services.toast.service_blocked": "Услуга заблокирована. Нужны действия.",
+"services.toast.service_not_paid": "Требуется оплата.",
+"services.toast.service_active": "Услуга активирована.",
+"services.toast.service_removed": "Услуга завершена.",
+
+"services.modal.footer_hint": "Если вы сомневаетесь — сначала проверьте статус услуги или обратитесь в поддержку.",
+"services.modal.status": "Статус",
+"services.modal.type": "Тип",
+"services.modal.plan": "Тариф",
+"services.modal.until": "Действует до",
+
+"services.modal.stop.title": "Заблокировать услугу?",
+"services.modal.stop.title_named": "Заблокировать услугу «{title}»?",
+"services.modal.stop.what_happens": "Что произойдёт:",
+"services.modal.stop.text": "Мы заблокируем услугу «{title}». После этого она перестанет работать.",
+"services.modal.stop.warn1": "Разблокировка самостоятельно недоступна.",
+"services.modal.stop.warn2": "Если потребуется вернуть доступ — только через техподдержку.",
+
+"services.modal.delete.title": "Удалить услугу?",
+"services.modal.delete.title_named": "Удалить услугу «{title}»?",
+"services.modal.delete.confirm_title": "Подтверждение удаления",
+
+"services.cancel": "Отмена",
+"services.close": "Закрыть",
 };
 
 export const EN: Dict = {
@@ -621,4 +727,109 @@ export const EN: Dict = {
 
   "setpwd.err.title": "Error",
   "setpwd.err.generic": "Could not save password.",
+ //Services
+  
+  "services.title": "Services",
+  "services.sub": "Your services and their current status.",
+  "services.loading": "Loading...",
+  "services.loading_short": "Loading…",
+  "services.error.text": "Could not load services list. Please try again.",
+  "services.retry": "Retry",
+
+  "services.kind.amneziawg": "AmneziaWG",
+  "services.kind.marzban": "Marzban",
+  "services.kind.marzban_router": "Router VPN",
+  "services.kind.unknown": "Other",
+
+  "services.kind_descr.amneziawg": "Simple key for one server.",
+  "services.kind_descr.marzban": "Subscription for phones, PCs, and tablets.",
+  "services.kind_descr.marzban_router": "Separate subscriptions for routers (Shpun Router / OpenWrt).",
+  "services.kind_descr.unknown": "Other services.",
+
+  "services.status.active": "Active",
+  "services.status.pending": "Connecting",
+  "services.status.not_paid": "Unpaid",
+  "services.status.blocked": "Blocked",
+  "services.status.removed": "Completed",
+  "services.status.error": "Error",
+  "services.status.init": "Initializing",
+  "services.status.default": "Status",
+
+  "services.hint.days_left": "About {days} days left.",
+  "services.hint.expired": "Expired",
+  "services.hint.not_paid": "Payment required",
+  "services.hint.blocked": "Action required",
+  "services.hint.pending": "Please wait a little",
+  "services.hint.init": "Service is being initialized",
+  "services.hint.error": "Check the status or contact support",
+
+  "services.meta.until": "Until",
+  "services.meta.active": "Active",
+  "services.meta.attention": "Attention",
+  "services.meta.monthly": "Per month",
+  "services.meta.discount": "Discount",
+
+  "services.month_short": "mo",
+  "services.item": "Service",
+
+  "services.actions.title": "Actions",
+  "services.order": "Order",
+  "services.refresh": "Refresh",
+  "services.refresh_status": "Refresh status",
+  "services.pay": "Pay / top up",
+  "services.topup": "Top up / pay",
+  "services.support": "Support",
+
+  "services.connect.title": "Connection",
+  "services.connect.button": "Connection",
+  "services.connect.hide": "Hide connection",
+  "services.connect.open": "Open connection",
+  "services.connect.only_active": "Connection is available only for active services.",
+  "services.connect.unavailable": "No connection helper for this service type yet.",
+
+  "services.stop.title": "Block service",
+  "services.stop.button": "Block",
+
+  "services.delete.title": "Delete service",
+  "services.delete.button": "Delete service",
+  "services.delete.confirm": "Delete",
+
+  "services.delete_confirm.not_paid": "Delete unpaid order? It will disappear from the list.",
+  "services.delete_confirm.blocked": "Delete service? It will disappear from the list.",
+  "services.delete_confirm.error": "Delete service? It will disappear from the list.",
+  "services.delete_confirm.default": "Delete service?",
+
+  "services.toast.updated": "Updated",
+  "services.toast.updated_desc": "Service statuses updated.",
+  "services.toast.refresh_failed": "Could not refresh",
+  "services.toast.blocked": "Blocked",
+  "services.toast.blocked_desc": "Service has been blocked.",
+  "services.toast.block_failed": "Could not block",
+  "services.toast.deleted": "Service deleted",
+  "services.toast.deleted_desc": "Done. Service was removed from the list.",
+  "services.toast.delete_failed": "Could not delete",
+  "services.toast.service_blocked": "Service is blocked. Action required.",
+  "services.toast.service_not_paid": "Payment required.",
+  "services.toast.service_active": "Service activated.",
+  "services.toast.service_removed": "Service completed.",
+
+  "services.modal.footer_hint": "If you are unsure, first check the service status or contact support.",
+  "services.modal.status": "Status",
+  "services.modal.type": "Type",
+  "services.modal.plan": "Plan",
+  "services.modal.until": "Active until",
+
+  "services.modal.stop.title": "Block service?",
+  "services.modal.stop.title_named": "Block service “{title}”?",
+  "services.modal.stop.what_happens": "What will happen:",
+  "services.modal.stop.text": "We will block service “{title}”. After that it will stop working.",
+  "services.modal.stop.warn1": "You cannot unblock it yourself.",
+  "services.modal.stop.warn2": "If you need access again, contact support.",
+
+  "services.modal.delete.title": "Delete service?",
+  "services.modal.delete.title_named": "Delete service “{title}”?",
+  "services.modal.delete.confirm_title": "Delete confirmation",
+
+  "services.cancel": "Cancel",
+  "services.close": "Close",
 };
