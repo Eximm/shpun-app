@@ -342,39 +342,36 @@ export function Login() {
     widgetWrapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-// Если вдруг попали на /login с success-marker (на будущее / для совместимости)
-useEffect(() => {
-  const sp = new URLSearchParams(String(loc?.search ?? ""));
-  const a = String(sp.get("a") ?? "").trim().toLowerCase();
-  const p = String(sp.get("p") ?? "").trim().toLowerCase();
+  // Если вдруг попали на /login с success-marker (на будущее / для совместимости)
+  useEffect(() => {
+    const sp = new URLSearchParams(String(loc?.search ?? ""));
+    const a = String(sp.get("a") ?? "").trim().toLowerCase();
+    const p = String(sp.get("p") ?? "").trim().toLowerCase();
 
-  if (a === "auth_ok") {
-    const provider = p || "auth";
+    if (a === "auth_ok") {
+      const provider = p || "auth";
 
-    // ставим маркер успешной авторизации
-    setAuthPending(provider);
+      // ставим маркер успешной авторизации
+      setAuthPending(provider);
 
-    // обновляем /me чтобы AuthGate увидел пользователя
-    refetchMe().catch(() => {});
+      // обновляем /me чтобы AuthGate увидел пользователя
+      refetchMe().catch(() => {});
 
-    // чистим URL
-    sp.delete("a");
-    sp.delete("p");
+      // чистим URL
+      sp.delete("a");
+      sp.delete("p");
 
-    const nextSearch = sp.toString();
-    const nextUrl =
-      window.location.pathname +
-      (nextSearch ? `?${nextSearch}` : "") +
-      window.location.hash;
+      const nextSearch = sp.toString();
+      const nextUrl = window.location.pathname + (nextSearch ? `?${nextSearch}` : "") + window.location.hash;
 
-    window.history.replaceState(null, "", nextUrl);
+      window.history.replaceState(null, "", nextUrl);
 
-    // отправляем пользователя в приложение
-    nav("/", { replace: true });
-  }
+      // отправляем пользователя в приложение
+      nav("/", { replace: true });
+    }
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [loc?.search]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loc?.search]);
 
   // Пришли после redirect-flow: /login?e=...
   useEffect(() => {
@@ -433,7 +430,7 @@ useEffect(() => {
     script.src = "https://telegram.org/js/telegram-widget.js?22";
     script.setAttribute("data-telegram-login", botUsername);
     script.setAttribute("data-size", "large");
-    script.setAttribute("data-userpic", "false");
+    script.setAttribute("data-userpic", "true");
     script.setAttribute("data-request-access", "write");
     script.setAttribute("data-auth-url", getAuthRedirectUrl(partnerId));
 
@@ -533,8 +530,8 @@ useEffect(() => {
                 ? t("login.password.submit_loading", "Входим…")
                 : t("login.password.register_loading", "Создаём аккаунт…")
               : passMode === "login"
-              ? t("login.password.submit", "Войти")
-              : t("login.password.register_submit", "Зарегистрироваться")}
+                ? t("login.password.submit", "Войти")
+                : t("login.password.register_submit", "Зарегистрироваться")}
           </button>
         </div>
 
