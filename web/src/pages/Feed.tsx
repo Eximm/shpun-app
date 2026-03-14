@@ -388,41 +388,40 @@ export function Feed() {
         </div>
       </div>
 
-      {openedEvent ? (
-        <div
-          className="modal"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="feed-modal-title"
-          onClick={() => setOpenedEvent(null)}
-        >
-          <div className="modal__card card" onClick={(ev) => ev.stopPropagation()}>
-            <div className="card__body">
-              <div className="modal__head">
-                <div>
-                  <div className="kicker">{formatDateTime(openedEvent.ts)}</div>
-                  <div id="feed-modal-title" className="modal__title">
-                    {openedEvent.title || "Сообщение"}
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  className="btn btn--soft modal__close"
-                  onClick={() => setOpenedEvent(null)}
-                  aria-label="Закрыть"
-                >
-                  ✕
-                </button>
+    {openedEvent ? (
+      <div
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="feed-modal-title"
+        onClick={() => setOpenedEvent(null)}
+      >
+        <div className="modal__card card feed-modalCard" onClick={(ev) => ev.stopPropagation()}>
+          <div className="card__body">
+            <div className="feed-modalCard__head">
+              <div className="kicker">{formatDateTime(openedEvent.ts)}</div>
+              <div id="feed-modal-title" className="modal__title feed-modalCard__title">
+                {openedEvent.title || "Сообщение"}
               </div>
+            </div>
 
-              <div className="modal__content">
-                <div className="list__sub feed__fulltext">{openedEvent.message || ""}</div>
-              </div>
+            <div className="modal__content feed-modalCard__content">
+              <div className="list__sub feed__fulltext">{openedEvent.message || ""}</div>
+            </div>
+
+            <div className="feed-modalCard__actions">
+              <button
+                type="button"
+                className="btn btn--soft"
+                onClick={() => setOpenedEvent(null)}
+              >
+                Закрыть
+              </button>
             </div>
           </div>
         </div>
-      ) : null}
+      </div>
+    ) : null}
     </>
   );
 }
