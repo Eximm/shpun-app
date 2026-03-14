@@ -11,7 +11,7 @@ type NotifEvent = {
   level?: NotifLevel;
   title?: string;
   message?: string;
-  meta?: any; // для маршрутизации (service.id, usi и т.д.)
+  meta?: any;
 };
 
 type Cursor = { ts: number; id: string };
@@ -36,15 +36,11 @@ function normalizeType(t: any) {
   return String(t ?? "").trim().toLowerCase();
 }
 
-/**
- * STRICT категоризация — только по type, без эвристик по тексту.
- */
 function categoryOf(e: NotifEvent): Category {
   const t = normalizeType(e.type);
 
   if (t.startsWith("balance.") || t.startsWith("payment.") || t.startsWith("invoice.")) return "money";
   if (t.startsWith("service.") || t.startsWith("services.")) return "services";
-
   if (t === "broadcast.news" || t.startsWith("broadcast.news.") || t.startsWith("broadcast.")) return "news";
 
   return "all";
@@ -59,13 +55,8 @@ function chipKindByLevel(level?: NotifLevel): "ok" | "warn" | "soft" {
 function chipTextByEvent(e: NotifEvent) {
   const t = normalizeType(e.type);
 
-  if (t === "broadcast.news" || t.startsWith("broadcast.news.")) {
-    return "NEWS";
-  }
-
-  if (t === "service.blocked") {
-    return "ALERT";
-  }
+  if (t === "broadcast.news" || t.startsWith("broadcast.news.")) return "NEWS";
+  if (t === "service.blocked") return "ALERT";
 
   return "INFO";
 }
@@ -115,15 +106,6 @@ function pick(obj: any, path: string) {
   }
 }
 
-/**
- * STRICT навигация:
- * - деньги -> /payments
- * - услуги -> /services (+ usi если нашли)
- * - broadcast/news -> null
- * - всё остальное -> null
- *
- * Дополнительно поддерживаем meta.action.to (явная команда бэка).
- */
 function eventLink(e: NotifEvent): string | null {
   const actionTo = pick(e.meta, "action.to");
   if (typeof actionTo === "string" && actionTo.trim()) {
@@ -138,7 +120,6 @@ function eventLink(e: NotifEvent): string | null {
   const t = normalizeType(e.type);
 
   if (t === "broadcast.news" || t.startsWith("broadcast.news.") || t.startsWith("broadcast.")) return null;
-
   if (t.startsWith("balance.") || t.startsWith("payment.") || t.startsWith("invoice.")) return "/payments";
 
   if (t.startsWith("service.") || t.startsWith("services.")) {
@@ -163,10 +144,6 @@ function uniqAppend(prev: NotifEvent[], next: NotifEvent[]) {
   return out;
 }
 
-/**
- * Сервер умеет фильтровать новости через onlyNews=1.
- * Для остальных категорий фильтруем клиентом (строго по type).
- */
 function buildFeedUrl(cat: Category, cursor?: Cursor | null) {
   const limit = PAGE_LIMIT;
   const onlyNews = cat === "news" ? 1 : 0;
@@ -322,7 +299,7 @@ export function Feed() {
                 filtered.map((e) => {
                   const title = e.title || "Сообщение";
                   const preview = buildFeedPreview(e);
-                  const isNews = isNewsEvent(e);
+                  const news = isNewsEvent(e);
                   const hasFullView = shouldShowFeedMore(e, preview);
                   const dt = formatDateTime(e.ts);
 
@@ -334,10 +311,41 @@ export function Feed() {
                     nav(link);
                   };
 
+                  if (news) {
+                    return (
+                      <div key={e.event_id} className="list__item feed-newsCard">
+                        <div className="feed-newsCard__top">
+                          <div className="kicker">{dt}</div>
+                          <span className={`chip chip--${chipKindByLevel(e.level)}`}>{chipTextByEvent(e)}</span>
+                        </div>
+
+                        <div className="feed-newsCard__title">{title}</div>
+
+                        {preview ? <div className="list__sub feed-news__preview">{preview}</div> : null}
+
+                        {hasFullView ? (
+                          <div className="feed__more">
+                            <button
+                              type="button"
+                              className="btn btn--soft"
+                              onClick={(ev) => {
+                                ev.preventDefault();
+                                ev.stopPropagation();
+                                setOpenedEvent(e);
+                              }}
+                            >
+                              Подробнее
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  }
+
                   return (
                     <div
                       key={e.event_id}
-                      className={`list__item${clickable ? " is-clickable" : ""}${isNews ? " feed-item--news" : ""}`}
+                      className={`list__item${clickable ? " is-clickable" : ""}`}
                       role={clickable ? "button" : undefined}
                       tabIndex={clickable ? 0 : undefined}
                       onClick={clickable ? onOpen : undefined}
@@ -357,28 +365,12 @@ export function Feed() {
                         <div className="list__title" style={{ marginTop: 6 }}>
                           {title}
                         </div>
-                        {preview ? <div className={`list__sub ${isNews ? "feed-news__preview" : ""}`}>{preview}</div> : null}
-
-                        {hasFullView ? (
-                          <div className="feed__more">
-                            <button
-                              type="button"
-                              className="btn btn--soft"
-                              onClick={(ev) => {
-                                ev.preventDefault();
-                                ev.stopPropagation();
-                                setOpenedEvent(e);
-                              }}
-                            >
-                              Подробнее
-                            </button>
-                          </div>
-                        ) : null}
+                        {preview ? <div className="list__sub">{preview}</div> : null}
                       </div>
 
-                    <div className={`list__side${isNews ? " feed-item__side--news" : ""}`}>
-                      <span className={`chip chip--${chipKindByLevel(e.level)}`}>{chipTextByEvent(e)}</span>
-                    </div>
+                      <div className="list__side">
+                        <span className={`chip chip--${chipKindByLevel(e.level)}`}>{chipTextByEvent(e)}</span>
+                      </div>
                     </div>
                   );
                 })
