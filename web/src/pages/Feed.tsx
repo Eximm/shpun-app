@@ -20,6 +20,7 @@ type FeedResp = { ok: true; items: NotifEvent[]; nextBefore: Cursor };
 type Category = "all" | "money" | "services" | "news";
 
 const PAGE_LIMIT = 50;
+const FEED_PREVIEW_LIMIT = 240;
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
@@ -34,6 +35,17 @@ function formatDateTime(tsSec: number) {
 
 function normalizeType(t: any) {
   return String(t ?? "").trim().toLowerCase();
+}
+
+function truncateText(text: string | null | undefined, limit: number) {
+  const source = String(text || "").trim();
+  if (!source) return "";
+  if (source.length <= limit) return source;
+  return source.slice(0, limit).trimEnd() + "…";
+}
+
+function isLongText(text: string | null | undefined, limit: number) {
+  return String(text || "").trim().length > limit;
 }
 
 /**
@@ -190,6 +202,7 @@ export function Feed() {
   const [hasMore, setHasMore] = useState(true);
 
   const [cat, setCat] = useState<Category>("all");
+  const [openedEvent, setOpenedEvent] = useState<NotifEvent | null>(null);
 
   async function loadFirst(activeCat: Category) {
     setLoading(true);
@@ -242,11 +255,29 @@ export function Feed() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // reload when category changes (news uses server filter; others cheap reload for consistent UX)
+  // reload when category changes
   useEffect(() => {
     void loadFirst(cat);
+    setOpenedEvent(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cat]);
+
+  useEffect(() => {
+    if (!openedEvent) return;
+
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const onKeyDown = (ev: KeyboardEvent) => {
+      if (ev.key === "Escape") setOpenedEvent(null);
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [openedEvent]);
 
   const filtered = useMemo(() => {
     if (cat === "news") return items; // already server-filtered
@@ -257,104 +288,160 @@ export function Feed() {
   const countText = `${filtered.length} ${pluralRu(filtered.length, "сообщение", "сообщения", "сообщений")}`;
 
   return (
-    <div className="section">
-      <div className="card">
-        <div className="card__body">
-          <h1 className="h1">Инфоцентр</h1>
-          <p className="p">Здесь всё, что важно.</p>
+    <>
+      <div className="section">
+        <div className="card">
+          <div className="card__body">
+            <h1 className="h1">Инфоцентр</h1>
+            <p className="p">Здесь всё, что важно.</p>
 
-          <div className="actions actions--4" style={{ marginTop: 12 }}>
-            <FilterBtn active={cat === "all"} onClick={() => setCat("all")}>
-              Все
-            </FilterBtn>
-            <FilterBtn active={cat === "money"} onClick={() => setCat("money")}>
-              Деньги
-            </FilterBtn>
-            <FilterBtn active={cat === "services"} onClick={() => setCat("services")}>
-              Услуги
-            </FilterBtn>
-            <FilterBtn active={cat === "news"} onClick={() => setCat("news")}>
-              Новости
-            </FilterBtn>
-          </div>
-
-          <p className="p" style={{ marginTop: 10, opacity: 0.85 }}>
-            {catLabel(cat)} · {countText}
-          </p>
-
-          <div className="list" style={{ marginTop: 12 }}>
-            {loading && items.length === 0 ? (
-              <>
-                <div className="skeleton h1" />
-                <div className="skeleton p" />
-                <div className="skeleton p" />
-              </>
-            ) : filtered.length === 0 ? (
-              <div className="pre">
-                <div style={{ fontWeight: 900, marginBottom: 6 }}>Пока здесь тихо</div>
-                <div style={{ opacity: 0.85 }}>
-                  Как только появятся пополнения, продления или новости — они будут в Инфоцентре.
-                </div>
-              </div>
-            ) : (
-              filtered.map((e) => {
-                const title = e.title || "Сообщение";
-                const msg = e.message || "";
-                const dt = formatDateTime(e.ts);
-
-                const link = eventLink(e);
-                const clickable = !!link;
-
-                const onOpen = () => {
-                  if (!link) return;
-                  nav(link);
-                };
-
-                return (
-                  <div
-                    key={e.event_id}
-                    className={`list__item${clickable ? " is-clickable" : ""}`}
-                    role={clickable ? "button" : undefined}
-                    tabIndex={clickable ? 0 : undefined}
-                    onClick={clickable ? onOpen : undefined}
-                    onKeyDown={
-                      clickable
-                        ? (ev) => {
-                            if (ev.key === "Enter" || ev.key === " ") {
-                              ev.preventDefault();
-                              onOpen();
-                            }
-                          }
-                        : undefined
-                    }
-                  >
-                    <div className="list__main">
-                      <div className="kicker">{dt}</div>
-                      <div className="list__title" style={{ marginTop: 6 }}>
-                        {title}
-                      </div>
-                      {msg ? <div className="list__sub">{msg}</div> : null}
-                    </div>
-
-                    <div className="list__side">
-                      <span className={`chip chip--${chipKindByLevel(e.level)}`}>{chipTextByLevel(e.level)}</span>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-
-          {filtered.length > 0 ? (
-            <div className="actions actions--1" style={{ marginTop: 12 }}>
-              <button className="btn btn--accent" onClick={loadMore} disabled={!hasMore || loading} type="button">
-                {loading ? "Загружаю…" : hasMore ? "Загрузить ещё" : "Больше нет"}
-              </button>
+            <div className="actions actions--4" style={{ marginTop: 12 }}>
+              <FilterBtn active={cat === "all"} onClick={() => setCat("all")}>
+                Все
+              </FilterBtn>
+              <FilterBtn active={cat === "money"} onClick={() => setCat("money")}>
+                Деньги
+              </FilterBtn>
+              <FilterBtn active={cat === "services"} onClick={() => setCat("services")}>
+                Услуги
+              </FilterBtn>
+              <FilterBtn active={cat === "news"} onClick={() => setCat("news")}>
+                Новости
+              </FilterBtn>
             </div>
-          ) : null}
+
+            <p className="p" style={{ marginTop: 10, opacity: 0.85 }}>
+              {catLabel(cat)} · {countText}
+            </p>
+
+            <div className="list" style={{ marginTop: 12 }}>
+              {loading && items.length === 0 ? (
+                <>
+                  <div className="skeleton h1" />
+                  <div className="skeleton p" />
+                  <div className="skeleton p" />
+                </>
+              ) : filtered.length === 0 ? (
+                <div className="pre">
+                  <div style={{ fontWeight: 900, marginBottom: 6 }}>Пока здесь тихо</div>
+                  <div style={{ opacity: 0.85 }}>
+                    Как только появятся пополнения, продления или новости — они будут в Инфоцентре.
+                  </div>
+                </div>
+              ) : (
+                filtered.map((e) => {
+                  const title = e.title || "Сообщение";
+                  const fullMessage = String(e.message || "");
+                  const preview = truncateText(fullMessage, FEED_PREVIEW_LIMIT);
+                  const hasFullView = isLongText(fullMessage, FEED_PREVIEW_LIMIT);
+                  const dt = formatDateTime(e.ts);
+
+                  const link = eventLink(e);
+                  const clickable = !!link;
+
+                  const onOpen = () => {
+                    if (!link) return;
+                    nav(link);
+                  };
+
+                  return (
+                    <div
+                      key={e.event_id}
+                      className={`list__item${clickable ? " is-clickable" : ""}`}
+                      role={clickable ? "button" : undefined}
+                      tabIndex={clickable ? 0 : undefined}
+                      onClick={clickable ? onOpen : undefined}
+                      onKeyDown={
+                        clickable
+                          ? (ev) => {
+                              if (ev.key === "Enter" || ev.key === " ") {
+                                ev.preventDefault();
+                                onOpen();
+                              }
+                            }
+                          : undefined
+                      }
+                    >
+                      <div className="list__main">
+                        <div className="kicker">{dt}</div>
+                        <div className="list__title" style={{ marginTop: 6 }}>
+                          {title}
+                        </div>
+                        {preview ? <div className="list__sub">{preview}</div> : null}
+
+                        {hasFullView ? (
+                          <div className="feed__more">
+                            <button
+                              type="button"
+                              className="btn btn--soft"
+                              onClick={(ev) => {
+                                ev.preventDefault();
+                                ev.stopPropagation();
+                                setOpenedEvent(e);
+                              }}
+                            >
+                              Подробнее
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div className="list__side">
+                        <span className={`chip chip--${chipKindByLevel(e.level)}`}>{chipTextByLevel(e.level)}</span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {filtered.length > 0 ? (
+              <div className="actions actions--1" style={{ marginTop: 12 }}>
+                <button className="btn btn--accent" onClick={loadMore} disabled={!hasMore || loading} type="button">
+                  {loading ? "Загружаю…" : hasMore ? "Загрузить ещё" : "Больше нет"}
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
-    </div>
+
+      {openedEvent ? (
+        <div
+          className="modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="feed-modal-title"
+          onClick={() => setOpenedEvent(null)}
+        >
+          <div className="modal__card card" onClick={(ev) => ev.stopPropagation()}>
+            <div className="card__body">
+              <div className="modal__head">
+                <div>
+                  <div className="kicker">{formatDateTime(openedEvent.ts)}</div>
+                  <div id="feed-modal-title" className="modal__title">
+                    {openedEvent.title || "Сообщение"}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className="btn btn--soft modal__close"
+                  onClick={() => setOpenedEvent(null)}
+                  aria-label="Закрыть"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="modal__content">
+                <div className="list__sub feed__fulltext">{openedEvent.message || ""}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }
 

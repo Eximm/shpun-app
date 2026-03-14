@@ -1,3 +1,4 @@
+// FILE: api/src/modules/notifications/format.ts
 import type { BillingPushEvent } from "./inbox.js";
 
 type Level = "info" | "success" | "error";
@@ -27,7 +28,6 @@ function pick(obj: any, path: string): any {
 function firstForecastItem(meta: any) {
   const items = pick(meta, "items");
   if (!Array.isArray(items) || !items.length) return null;
-  // берём первый как “ближайший” (биллинг может сортировать)
   const it = items[0] ?? {};
   const id = pick(it, "id") ?? pick(it, "usi") ?? pick(it, "service.id");
   const name = pick(it, "name") ?? pick(it, "service.name");
@@ -41,7 +41,7 @@ function firstForecastItem(meta: any) {
  * billing may send toast as "", "1", 1, "true", true, etc.
  */
 function parseToast(v: any): boolean | undefined {
-  if (v == null) return undefined; // not provided
+  if (v == null) return undefined;
 
   if (typeof v === "boolean") return v;
   if (typeof v === "number") return Number.isFinite(v) ? v !== 0 : undefined;
@@ -52,7 +52,6 @@ function parseToast(v: any): boolean | undefined {
   if (s === "1" || s === "true" || s === "yes" || s === "y" || s === "on") return true;
   if (s === "0" || s === "false" || s === "no" || s === "n" || s === "off") return false;
 
-  // fallback: any non-empty garbage -> true (safer for "show notifications")
   return true;
 }
 
@@ -66,7 +65,6 @@ function parseToast(v: any): boolean | undefined {
 function addActionToMeta(type: string, metaIn: any) {
   const meta = metaIn && typeof metaIn === "object" ? { ...metaIn } : {};
 
-  // Respect explicit action from billing (if provided)
   if (meta.action) return meta;
 
   const usi = pick(meta, "service.id") ?? pick(meta, "usi") ?? pick(meta, "service.usi");
@@ -83,9 +81,6 @@ function addActionToMeta(type: string, metaIn: any) {
 }
 
 export function formatIncoming(e: BillingPushEvent): BillingPushEvent {
-  // =========================
-  // 1) Normalize base fields
-  // =========================
   const type = String(e.type || "").trim();
 
   const level: Level =
@@ -93,33 +88,26 @@ export function formatIncoming(e: BillingPushEvent): BillingPushEvent {
     (type === "balance.credited" || type === "service.renewed" || type === "service.activated"
       ? "success"
       : type === "service.blocked"
-      ? "error"
-      : "info");
+        ? "error"
+        : "info");
 
-  // toast:
-  // - if billing provided toast (in any form) -> normalize and respect
-  // - else -> defaults
   let toast = parseToast((e as any).toast);
   if (toast === undefined) {
     if (type === "balance.credited") toast = true;
     else if (type === "service.blocked") toast = true;
     else if (type === "service.renewed") toast = true;
     else if (type === "service.activated") toast = true;
-    else if (type === "service.forecast") toast = false; // forecast лучше контролировать из биллинга
-    else if (type === "broadcast.news") toast = false; // новости: тост только если биллинг выставит toast=true
+    else if (type === "service.forecast") toast = false;
+    else if (type === "broadcast.news") toast = false;
     else toast = false;
   }
 
-  // meta is important both for message formatting and for UI routing hints
   const metaRaw = (e as any).meta || {};
   const meta = addActionToMeta(type, metaRaw);
 
   const serviceId = pick(meta, "service.id") ?? pick(meta, "usi");
   const serviceName = pick(meta, "service.name") ?? pick(meta, "name");
 
-  // =========================
-  // 2) Build title/message by type
-  // =========================
   let title = (e as any).title || "";
   let message = (e as any).message || "";
 
@@ -184,19 +172,16 @@ export function formatIncoming(e: BillingPushEvent): BillingPushEvent {
     title = title || "Сообщение";
   }
 
-  // =========================
-  // 3) Final cleanup + return
-  // =========================
   title = compact(title, 80);
-  message = compact(message, 220);
+  message = String(message || "").trim();
 
   return {
     ...e,
     type: type || e.type,
     level,
-    toast, // ALWAYS boolean after parseToast/defaults
+    toast,
     title,
     message,
-    meta, // keep enriched meta (action hints)
+    meta,
   };
 }

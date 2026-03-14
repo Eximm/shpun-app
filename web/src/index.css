@@ -578,6 +578,16 @@ button, a { -webkit-tap-highlight-color: transparent; }
 
 .list__side { display: flex; align-items: flex-start; flex: 0 0 auto; }
 
+/* feed helpers */
+
+.feed__more {
+  margin-top: 10px;
+}
+
+.feed__fulltext {
+  white-space: pre-wrap;
+}
+
 /* Two-column block */
 .grid2 {
   display: grid;

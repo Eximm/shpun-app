@@ -675,6 +675,37 @@ app.get("/auth/telegram_widget_redirect", async (req, reply) => {
     return reply.send({ ok: true, password_set: 1 });
   });
 
+
+  app.post("/auth/debug-template-register", async (req, reply) => {
+    const body = readJsonBody(req);
+    const session = getSessionFromRequest(req) as any;
+    const shmSessionId = String(session?.shmSessionId ?? "").trim();
+
+    if (!shmSessionId) {
+      return reply.code(401).send({ ok: false, error: "no_shm_session" });
+    }
+
+    const r = await shmFetch<any>(null, "v1/template/shpun_app", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: toFormUrlEncoded({
+        session_id: shmSessionId,
+        action: "auth.register",
+        login: String(body?.login ?? "test_ref_user_777"),
+        password: String(body?.password ?? "TestPass123"),
+        partner_id: Number(body?.partner_id ?? 1),
+      }),
+    });
+
+    return reply.code(r.ok ? 200 : (r.status || 500)).send({
+      ok: r.ok,
+      status: r.status,
+      json: r.json,
+      text: r.text,
+    });
+  });
+
+
   /* ===============================
      5) Status
   =============================== */

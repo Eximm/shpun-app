@@ -1,3 +1,4 @@
+// FILE: web/src/pages/Home.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMe } from "../app/auth/useMe";
@@ -112,6 +113,8 @@ type Category = "all" | "money" | "services" | "news";
    UTIL: Formatting helpers
    ======================================================================== */
 
+const HOME_NEWS_PREVIEW_LIMIT = 140;
+
 function fmtMoney(n: number, cur: string) {
   const v = Number(n || 0);
   try {
@@ -205,6 +208,13 @@ function tr(template: string, params: Record<string, string | number>) {
     (acc, [key, value]) => acc.replace(new RegExp(`\\{${key}\\}`, "g"), String(value)),
     template
   );
+}
+
+function truncateText(text: string | null | undefined, limit: number) {
+  const source = String(text || "").trim();
+  if (!source) return "";
+  if (source.length <= limit) return source;
+  return source.slice(0, limit).trimEnd() + "…";
 }
 
 /* ========================================================================
@@ -612,19 +622,23 @@ export function Home() {
                   <div className="skeleton p" />
                 </>
               ) : newsItems.length ? (
-                newsItems.map((n) => (
-                  <Link key={n.event_id} to="/feed" className="home-link">
-                    <div className="list__item">
-                      <div className="list__main">
-                        <div className="list__title">{n.title || t("home.news.item.fallback", "Сообщение")}</div>
-                        {n.message ? <div className="list__sub">{n.message}</div> : null}
+                newsItems.map((n) => {
+                  const preview = truncateText(n.message, HOME_NEWS_PREVIEW_LIMIT);
+
+                  return (
+                    <Link key={n.event_id} to="/feed" className="home-link">
+                      <div className="list__item">
+                        <div className="list__main">
+                          <div className="list__title">{n.title || t("home.news.item.fallback", "Сообщение")}</div>
+                          {preview ? <div className="list__sub">{preview}</div> : null}
+                        </div>
+                        <div className="list__side">
+                          <span className="chip chip--soft">{fmtFeedDate(n.ts, t("home.news.today", "Сегодня"))}</span>
+                        </div>
                       </div>
-                      <div className="list__side">
-                        <span className="chip chip--soft">{fmtFeedDate(n.ts, t("home.news.today", "Сегодня"))}</span>
-                      </div>
-                    </div>
-                  </Link>
-                ))
+                    </Link>
+                  );
+                })
               ) : (
                 <Link to="/feed" className="home-link">
                   <div className="list__item">
