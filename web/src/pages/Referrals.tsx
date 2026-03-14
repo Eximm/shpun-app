@@ -11,7 +11,7 @@ function getTelegramWebApp(): any | null {
 function isTelegramMiniApp(): boolean {
   try {
     const tg = getTelegramWebApp();
-    return typeof tg?.initData === "string" && tg.initData.length > 0;
+    return typeof tg?.initData === "string" && tg.initData.trim().length > 0;
   } catch {
     return false;
   }
@@ -32,8 +32,11 @@ type RefStatusResp = {
   ok: number | boolean;
   data?: {
     referrals?: {
+      enabled?: number;
+      kind?: string;
       income_percent?: number;
       referrals_count?: number;
+      bonus?: number;
     };
   };
 };
@@ -42,7 +45,11 @@ type RefListResp = {
   ok: number | boolean;
   data?: {
     referrals?: {
+      enabled?: number;
+      kind?: string;
       total?: number;
+      limit?: number;
+      offset?: number;
       items?: Array<{
         id?: number;
         full_name?: string;
@@ -57,7 +64,10 @@ type RefLinkResp = {
   ok: number | boolean;
   data?: {
     referrals?: {
+      enabled?: number;
+      kind?: string;
       partner_id?: number;
+      income_percent?: number;
       telegram_link?: string;
       web_link?: string;
     };
@@ -80,24 +90,28 @@ export function Referrals() {
   const [telegramLink, setTelegramLink] = useState("");
   const [webLink, setWebLink] = useState("");
 
+  const [statusLoading, setStatusLoading] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
   const [incomePercent, setIncomePercent] = useState(0);
   const [refCount, setRefCount] = useState(0);
 
-  const [items, setItems] = useState<any[]>([]);
+  const [listLoading, setListLoading] = useState(false);
+  const [listError, setListError] = useState<string | null>(null);
+  const [items, setItems] = useState<Array<any>>([]);
   const [total, setTotal] = useState(0);
 
-  const [refLoading, setRefLoading] = useState(false);
-  const [refError, setRefError] = useState<string | null>(null);
+  const [linkLoading, setLinkLoading] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
 
-  const debugIsMiniApp = isTelegramMiniApp();
+  const debugMiniApp = isTelegramMiniApp();
 
   const referralUrl = useMemo(() => {
     const tg = telegramLink.trim();
     const web = webLink.trim();
 
-    if (debugIsMiniApp) return tg || web;
+    if (debugMiniApp) return tg || web;
     return web || tg;
-  }, [telegramLink, webLink, debugIsMiniApp]);
+  }, [telegramLink, webLink, debugMiniApp]);
 
   const shareUrl = useMemo(() => {
     if (!referralUrl) return "";
@@ -105,46 +119,53 @@ export function Referrals() {
   }, [referralUrl]);
 
   async function loadStatus() {
+    setStatusLoading(true);
+    setStatusError(null);
     try {
-      const r = (await (await fetch(`/api/referrals/status`)).json()) as RefStatusResp;
+      const r = (await (await fetch(`/api/referrals/status`, { method: "GET" })).json()) as RefStatusResp;
       const refs = (r as any)?.data?.referrals ?? {};
-      setIncomePercent(toNum(refs.income_percent));
-      setRefCount(toNum(refs.referrals_count));
-    } catch {
+      setIncomePercent(toNum(refs.income_percent, 0));
+      setRefCount(toNum(refs.referrals_count, 0));
+    } catch (e: any) {
+      setStatusError(e?.message || "Failed to load status");
       setIncomePercent(0);
       setRefCount(0);
+    } finally {
+      setStatusLoading(false);
     }
   }
 
   async function loadList() {
+    setListLoading(true);
+    setListError(null);
     try {
-      const r = (await (await fetch(`/api/referrals/list?limit=10&offset=0`)).json()) as RefListResp;
+      const r = (await (await fetch(`/api/referrals/list?limit=10&offset=0`, { method: "GET" })).json()) as RefListResp;
       const refs = (r as any)?.data?.referrals ?? {};
       setItems(Array.isArray(refs.items) ? refs.items : []);
-      setTotal(toNum(refs.total));
-    } catch {
+      setTotal(toNum(refs.total, 0));
+    } catch (e: any) {
+      setListError(e?.message || "Failed to load list");
       setItems([]);
       setTotal(0);
+    } finally {
+      setListLoading(false);
     }
   }
 
   async function loadLink() {
-    setRefLoading(true);
-    setRefError(null);
-
+    setLinkLoading(true);
+    setLinkError(null);
     try {
-      const r = (await (await fetch(`/api/referrals/link`)).json()) as RefLinkResp;
-
+      const r = (await (await fetch(`/api/referrals/link`, { method: "GET" })).json()) as RefLinkResp;
       const refs = (r as any)?.data?.referrals ?? {};
-
-      setTelegramLink(toStr(refs.telegram_link));
-      setWebLink(toStr(refs.web_link));
+      setTelegramLink(toStr(refs.telegram_link, ""));
+      setWebLink(toStr(refs.web_link, ""));
     } catch (e: any) {
-      setRefError(e?.message || "Failed to load link");
+      setLinkError(e?.message || "Failed to load link");
       setTelegramLink("");
       setWebLink("");
     } finally {
-      setRefLoading(false);
+      setLinkLoading(false);
     }
   }
 
@@ -154,38 +175,47 @@ export function Referrals() {
       loadList();
       loadLink();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [(me as any)?.ok]);
 
   function copyLink() {
     if (!referralUrl) return;
 
-    navigator.clipboard.writeText(referralUrl);
+    navigator.clipboard
+      ?.writeText(referralUrl)
+      .then(() => {
+        toast.success("Ссылка скопирована", {
+          description: "Отправьте её другу.",
+        });
 
-    toast.success("Ссылка скопирована", {
-      description: "Отправьте её другу.",
-    });
-
-    const tg = getTelegramWebApp();
-    try {
-      tg?.showPopup?.({
-        title: "Готово",
-        message: "Ссылка скопирована. Отправьте её другу.",
-        buttons: [{ type: "ok" }],
+        const tg = getTelegramWebApp();
+        try {
+          tg?.showPopup?.({
+            title: "Готово",
+            message: "Ссылка скопирована. Отправьте её другу.",
+            buttons: [{ type: "ok" }],
+          });
+        } catch {
+          // ignore
+        }
+      })
+      .catch(() => {
+        toast.error("Не удалось скопировать ссылку", {
+          description: "Попробуйте ещё раз.",
+        });
       });
-    } catch {}
   }
 
   function shareLink() {
     if (!shareUrl) return;
-
     const tg = getTelegramWebApp();
-
     try {
       if (tg?.openTelegramLink) return tg.openTelegramLink(shareUrl);
-      if (tg?.openLink) return tg.openLink(shareUrl);
-    } catch {}
-
-    window.open(shareUrl, "_blank");
+      if (tg?.openLink) return tg.openLink(shareUrl, { try_instant_view: false });
+    } catch {
+      // ignore
+    }
+    window.open(shareUrl, "_blank", "noopener,noreferrer");
   }
 
   if (loading) {
@@ -194,7 +224,9 @@ export function Referrals() {
         <div className="card">
           <div className="card__body">
             <div className="h1">Рефералы</div>
-            <div className="p">Загрузка…</div>
+            <div className="p" style={{ marginTop: 6 }}>
+              Загрузка…
+            </div>
           </div>
         </div>
       </div>
@@ -207,13 +239,13 @@ export function Referrals() {
         <div className="card">
           <div className="card__body">
             <div className="h1">Рефералы</div>
-            <div className="p">Нужно войти в аккаунт.</div>
-
-            <div className="actions actions--2">
+            <div className="p" style={{ marginTop: 6 }}>
+              Нужно войти в аккаунт.
+            </div>
+            <div className="actions actions--2" style={{ marginTop: 12 }}>
               <Link className="btn btn--primary" to="/login">
                 Войти
               </Link>
-
               <Link className="btn" to="/app">
                 На главную
               </Link>
@@ -226,14 +258,12 @@ export function Referrals() {
 
   return (
     <div className="section">
-
       <div className="card">
         <div className="card__body">
-
           <div className="home-block-head">
             <div>
               <div className="h1">🤝 Партнёрская программа</div>
-              <div className="p">
+              <div className="p" style={{ marginTop: 6 }}>
                 Приглашай друзей и получай процент с их пополнений
               </div>
             </div>
@@ -244,82 +274,123 @@ export function Referrals() {
           </div>
 
           <div style={{ marginTop: 12 }}>
-
-            <div style={{ fontSize: 12, opacity: 0.7 }}>
+            <div style={{ fontSize: 12, opacity: 0.72, marginBottom: 6 }}>
               Твоя реферальная ссылка
             </div>
 
-            <div className="pre">
-              {referralUrl || "Ссылка недоступна"}
+            <div className="pre" style={{ marginTop: 0, userSelect: "text" }}>
+              {referralUrl || "Ссылка недоступна (не удалось получить из биллинга)"}
             </div>
 
             <div className="actions actions--2" style={{ marginTop: 10 }}>
-              <button className="btn btn--primary" onClick={shareLink}>
+              <button className="btn btn--primary" onClick={shareLink} disabled={!shareUrl}>
                 Поделиться
               </button>
-
-              <button className="btn" onClick={copyLink}>
+              <button className="btn" onClick={copyLink} disabled={!referralUrl}>
                 Скопировать
               </button>
             </div>
 
-            {/* DEBUG BLOCK */}
             <div
               className="pre"
               style={{
                 marginTop: 10,
-                fontSize: 12,
-                opacity: 0.8,
                 userSelect: "text",
+                fontSize: 12,
+                opacity: 0.85,
+                whiteSpace: "pre-wrap",
               }}
             >
-miniapp: {debugIsMiniApp ? "yes" : "no"}
-telegram_link: {telegramLink || "(empty)"}
-web_link: {webLink || "(empty)"}
-selected: {referralUrl || "(empty)"}
+              {`miniapp: ${debugMiniApp ? "yes" : "no"}
+telegram_link: ${telegramLink || "(empty)"}
+web_link: ${webLink || "(empty)"}
+selected: ${referralUrl || "(empty)"}`}
             </div>
 
+            {linkLoading ? (
+              <div style={{ marginTop: 10, fontSize: 12, opacity: 0.72 }}>Генерируем ссылку…</div>
+            ) : linkError ? (
+              <div style={{ marginTop: 10, fontSize: 12, opacity: 0.72 }}>
+                Не удалось получить ссылку: {linkError}
+              </div>
+            ) : null}
+
+            {statusError ? (
+              <div style={{ marginTop: 10, fontSize: 12, opacity: 0.72 }}>
+                Не удалось загрузить статус: {statusError}
+              </div>
+            ) : null}
           </div>
 
-          <div style={{ marginTop: 12 }}>
-            👥 Приглашено: <b>{refCount}</b> &nbsp;&nbsp;
-            💸 Процент: <b>{incomePercent}%</b>
+          <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
+            <div className="chip chip--soft">
+              👥 Приглашено: <b style={{ marginLeft: 6 }}>{statusLoading ? "…" : refCount}</b>
+            </div>
+            <div className="chip chip--soft">
+              💸 Процент: <b style={{ marginLeft: 6 }}>{statusLoading ? "…" : `${incomePercent || 0}%`}</b>
+            </div>
           </div>
-
         </div>
       </div>
 
-      <div className="card">
-        <div className="card__body">
+      <div className="section">
+        <div className="card">
+          <div className="card__body">
+            <div className="home-block-head">
+              <div>
+                <div className="h1">📃 Список приглашённых</div>
+                <div className="p" style={{ marginTop: 6 }}>
+                  {listLoading ? "Загрузка…" : total ? `Всего: ${total}` : "Пока никого нет — поделись ссылкой 🙂"}
+                </div>
+              </div>
+            </div>
 
-          <div className="h1">📃 Список приглашённых</div>
+            {listError ? (
+              <div className="pre" style={{ marginTop: 12 }}>
+                Ошибка загрузки списка: {String(listError)}
+              </div>
+            ) : null}
 
-          {items.length ? (
-            items.map((r, i) => {
-              const name = toStr(r?.full_name, "Без имени");
-              const uname = toStr(r?.username);
-              const created = toStr(r?.created_at);
-
-              return (
-                <div className="list__item" key={i}>
+            <div className="list" style={{ marginTop: 10 }}>
+              {listLoading ? (
+                <div className="list__item">
                   <div className="list__main">
-                    <div className="list__title">
-                      {name} {uname ? `@${uname}` : ""}
-                    </div>
-
-                    <div className="list__sub">
-                      {created ? `Присоединился: ${fmtDate(created)}` : ""}
-                    </div>
+                    <div className="list__title">Загружаем…</div>
+                    <div className="list__sub">Подождите</div>
                   </div>
                 </div>
-              );
-            })
-          ) : (
-            <div className="list__item">
-              Пока приглашённых нет
+              ) : items.length ? (
+                items.map((r, idx) => {
+                  const name = toStr(r?.full_name, "Без имени");
+                  const uname = toStr(r?.username, "");
+                  const created = toStr(r?.created_at, "");
+                  return (
+                    <div className="list__item" key={`${r?.id ?? "x"}-${idx}`}>
+                      <div className="list__main">
+                        <div className="list__title">
+                          {name}
+                          {uname ? (
+                            <span style={{ opacity: 0.75, fontWeight: 600 }}>
+                              {" "}
+                              @{uname}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="list__sub">{created ? `Присоединился: ${fmtDate(created)}` : "—"}</div>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="list__item">
+                  <div className="list__main">
+                    <div className="list__title">Пока приглашённых нет</div>
+                    <div className="list__sub">Нажми “Поделиться” — и отправь ссылку друзьям</div>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-
+          </div>
         </div>
       </div>
     </div>
