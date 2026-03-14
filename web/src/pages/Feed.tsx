@@ -57,7 +57,6 @@ function categoryOf(e: NotifEvent): Category {
   if (t.startsWith("balance.") || t.startsWith("payment.") || t.startsWith("invoice.")) return "money";
   if (t.startsWith("service.") || t.startsWith("services.")) return "services";
 
-  // broadcast.* => news
   if (t === "broadcast.news" || t.startsWith("broadcast.news.") || t.startsWith("broadcast.")) return "news";
 
   return "all";
@@ -69,9 +68,17 @@ function chipKindByLevel(level?: NotifLevel): "ok" | "warn" | "soft" {
   return "soft";
 }
 
-function chipTextByLevel(level?: NotifLevel) {
-  if (level === "success") return "OK";
-  if (level === "error") return "ALERT";
+function chipTextByEvent(e: NotifEvent) {
+  const t = normalizeType(e.type);
+
+  if (t === "broadcast.news" || t.startsWith("broadcast.news.")) {
+    return "NEWS";
+  }
+
+  if (t === "service.blocked") {
+    return "ALERT";
+  }
+
   return "INFO";
 }
 
@@ -142,13 +149,10 @@ function eventLink(e: NotifEvent): string | null {
 
   const t = normalizeType(e.type);
 
-  // broadcast/news: никуда
   if (t === "broadcast.news" || t.startsWith("broadcast.news.") || t.startsWith("broadcast.")) return null;
 
-  // деньги
   if (t.startsWith("balance.") || t.startsWith("payment.") || t.startsWith("invoice.")) return "/payments";
 
-  // услуги
   if (t.startsWith("service.") || t.startsWith("services.")) {
     const usi = pick(e.meta, "service.id") ?? pick(e.meta, "usi") ?? pick(e.meta, "service.usi");
     if (usi != null) return `/services?usi=${encodeURIComponent(String(usi))}`;
@@ -249,13 +253,11 @@ export function Feed() {
     }
   }
 
-  // initial
   useEffect(() => {
     void loadFirst(cat);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // reload when category changes
   useEffect(() => {
     void loadFirst(cat);
     setOpenedEvent(null);
@@ -280,7 +282,7 @@ export function Feed() {
   }, [openedEvent]);
 
   const filtered = useMemo(() => {
-    if (cat === "news") return items; // already server-filtered
+    if (cat === "news") return items;
     if (cat === "all") return items;
     return items.filter((e) => categoryOf(e) === cat);
   }, [items, cat]);
@@ -387,7 +389,7 @@ export function Feed() {
                       </div>
 
                       <div className="list__side">
-                        <span className={`chip chip--${chipKindByLevel(e.level)}`}>{chipTextByLevel(e.level)}</span>
+                        <span className={`chip chip--${chipKindByLevel(e.level)}`}>{chipTextByEvent(e)}</span>
                       </div>
                     </div>
                   );
