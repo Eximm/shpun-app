@@ -113,7 +113,7 @@ type Category = "all" | "money" | "services" | "news";
    UTIL: Formatting helpers
    ======================================================================== */
 
-const HOME_NEWS_PREVIEW_LIMIT = 140;
+const HOME_NEWS_PREVIEW_LIMIT = 120;
 
 function fmtMoney(n: number, cur: string) {
   const v = Number(n || 0);

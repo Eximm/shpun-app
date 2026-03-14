@@ -20,7 +20,7 @@ type FeedResp = { ok: true; items: NotifEvent[]; nextBefore: Cursor };
 type Category = "all" | "money" | "services" | "news";
 
 const PAGE_LIMIT = 50;
-const FEED_PREVIEW_LIMIT = 240;
+const FEED_PREVIEW_LIMIT = 170;
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
