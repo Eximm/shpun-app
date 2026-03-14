@@ -1,7 +1,7 @@
 // api/src/modules/auth/providers/password.ts
 
 import type { AuthResult } from "../authService.js";
-import { shmFetch, toFormUrlEncoded } from "../../../shared/shm/shmClient.js";
+import { shmFetch } from "../../../shared/shm/shmClient.js";
 
 type Mode = "login" | "register";
 
@@ -47,40 +47,38 @@ async function withTimeout<T>(
   }
 }
 
-async function shmRegisterViaTemplate(
+async function shmRegister(
   login: string,
   password: string,
   partnerId: number,
   signal: AbortSignal
 ) {
-  const form: Record<string, string | number> = {
-    action: "auth.register",
+  const body: Record<string, any> = {
     login,
     password,
   };
 
   if (partnerId > 0) {
-    form.partner_id = partnerId;
+    body.partner_id = partnerId;
   }
 
-  const r = await shmFetch<any>(null, "v1/template/shpun_app", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: toFormUrlEncoded(form),
+  const r = await shmFetch<any>(null, "v1/user", {
+    method: "PUT",
+    body,
     signal,
   });
 
-  const j = (r.json ?? {}) as any;
-  const logicalOk = !!(r.ok && (j?.ok === 1 || j?.ok === true));
-
-  if (logicalOk) {
-    return { ok: true as const, detail: j };
+  if (r.ok) {
+    return {
+      ok: true as const,
+      detail: r.json ?? r.text,
+    };
   }
 
   return {
     ok: false as const,
     status: r.status || 400,
-    detail: j?.error ? j : (r.json ?? r.text),
+    detail: r.json ?? r.text,
   };
 }
 
@@ -138,17 +136,12 @@ export async function passwordAuth(body: any): Promise<AuthResult> {
   try {
     return await withTimeout(12_000, async (signal) => {
       if (mode === "register") {
-        const reg = await shmRegisterViaTemplate(login, password, partnerId, signal);
-
+        const reg = await shmRegister(login, password, partnerId, signal);
         if (!reg.ok) {
-          const detailAny = reg.detail as any;
-          const detailError =
-            typeof detailAny?.error === "string" ? detailAny.error.trim() : "";
-
           return {
             ok: false,
             status: reg.status,
-            error: detailError || "shm_register_failed",
+            error: "shm_register_failed",
             detail: reg.detail,
           };
         }
