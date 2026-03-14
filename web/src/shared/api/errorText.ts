@@ -35,7 +35,6 @@ function extract(err: unknown): { code?: string; message?: string; status?: numb
   if (typeof err === "string") return { message: err };
 
   if (err instanceof Error) {
-    // some libs put custom fields into Error object
     const anyErr = err as any;
     const status =
       typeof anyErr.status === "number"
@@ -47,8 +46,6 @@ function extract(err: unknown): { code?: string; message?: string; status?: numb
             : undefined;
 
     const code = pickString(anyErr.code, anyErr.name, anyErr.error);
-
-    // Error.message sometimes equals technical code: "shm_fail"
     const message = pickString(err.message);
 
     return { code, message, status };
@@ -67,11 +64,6 @@ function extract(err: unknown): { code?: string; message?: string; status?: numb
             ? err.response.status
             : undefined;
 
-  // Common API payloads in your project:
-  // - { ok:false, error:"shm_error", message?: "..." }
-  // - { ok:false, error:"not_authenticated" }
-  // - fastify-like: { statusCode, error, message }
-  // - client wrapper: { status, data:{...} } / { response:{...} }
   const code = pickString(
     err.error,
     err.code,
@@ -115,7 +107,6 @@ function lc(s?: string) {
 function hasShmToken(s?: string) {
   const v = lc(s);
   if (!v) return false;
-  // catches: shm_fail, shm_error, shm-foo, "… shm_fail …"
   return /\bshm[_-][a-z0-9_]+\b/.test(v) || v === "shm_error" || v === "shm_fail" || v.startsWith("shm_");
 }
 
@@ -132,8 +123,10 @@ function isAuth(code?: string, status?: number, message?: string) {
     c === "not_authenticated" ||
     c.includes("bad_session") ||
     c.includes("unauthorized") ||
+    c.includes("forbidden") ||
     m.includes("bad_session") ||
     m.includes("unauthorized") ||
+    m.includes("forbidden") ||
     m.includes("not_authenticated")
   );
 }
@@ -156,28 +149,40 @@ function isNetwork(message?: string, code?: string) {
   );
 }
 
+function looksLikeHtml(s?: string) {
+  const t = String(s || "").trim();
+  if (!t) return false;
+  return /^<!doctype html/i.test(t) || /^<html/i.test(t) || /<\/[a-z]+>/i.test(t);
+}
+
+function looksLikeJsonBlob(s?: string) {
+  const t = String(s || "").trim();
+  if (!t) return false;
+  return (
+    (t.startsWith("{") && t.endsWith("}")) ||
+    (t.startsWith("[") && t.endsWith("]"))
+  );
+}
+
 function looksLikeTechGarbage(s?: string) {
   const t = (s || "").trim();
   if (!t) return false;
 
-  // pure tokens/codes → not for user
   if (
     /^shm[_-][a-z0-9_]+$/i.test(t) ||
     /^not_authenticated$/i.test(t) ||
     /^bad_session$/i.test(t) ||
-    /^unauthorized$/i.test(t)
+    /^unauthorized$/i.test(t) ||
+    /^forbidden$/i.test(t)
   ) {
     return true;
   }
 
-  // screaming snake / opaque codes
   if (/^[A-Z0-9_]{6,}$/.test(t)) return true;
-
-  // typical fetch noisy strings
   if (/^fetch failed/i.test(t)) return true;
-
-  // "Request failed with status code 502" style
   if (/status code\s+\d{3}/i.test(t)) return true;
+  if (looksLikeHtml(t)) return true;
+  if (looksLikeJsonBlob(t)) return true;
 
   return false;
 }
@@ -190,17 +195,15 @@ function looksLikeTechGarbage(s?: string) {
 export function normalizeError(err: unknown, ctx?: { title?: string }): NormalizedError {
   const { code, message, status } = extract(err);
 
-  // Auth/session
   if (isAuth(code, status, message)) {
     return {
       title: ctx?.title || "Нужно войти заново",
-      description: "Сессия устарела. Пожалуйста, перезайдите в приложение.",
+      description: "Сессия устарела. Пожалуйста, войдите в приложение ещё раз.",
       code,
       status,
     };
   }
 
-  // Network
   if (isNetwork(message, code)) {
     return {
       title: ctx?.title || "Проблема с соединением",
@@ -210,7 +213,6 @@ export function normalizeError(err: unknown, ctx?: { title?: string }): Normaliz
     };
   }
 
-  // SHM upstream
   if (isShmCode(code, message)) {
     return {
       title: ctx?.title || "Сервис временно недоступен",
@@ -220,7 +222,15 @@ export function normalizeError(err: unknown, ctx?: { title?: string }): Normaliz
     };
   }
 
-  // Generic HTTP
+  if (status === 429) {
+    return {
+      title: ctx?.title || "Слишком много запросов",
+      description: "Подождите немного и попробуйте ещё раз.",
+      code,
+      status,
+    };
+  }
+
   if (status && status >= 500) {
     return {
       title: ctx?.title || "Ошибка сервера",
@@ -233,13 +243,30 @@ export function normalizeError(err: unknown, ctx?: { title?: string }): Normaliz
   if (status === 404) {
     return {
       title: ctx?.title || "Не найдено",
-      description: "Запрошенный ресурс не найден.",
+      description: "Нужные данные не найдены.",
       code,
       status,
     };
   }
 
-  // Use backend message if it's not a technical token
+  if (status === 400 || status === 422) {
+    if (message && !looksLikeTechGarbage(message)) {
+      return {
+        title: ctx?.title || "Не удалось выполнить действие",
+        description: message,
+        code,
+        status,
+      };
+    }
+
+    return {
+      title: ctx?.title || "Проверьте введённые данные",
+      description: "Что-то заполнено неверно или не хватает данных.",
+      code,
+      status,
+    };
+  }
+
   if (message && !looksLikeTechGarbage(message)) {
     return {
       title: ctx?.title || "Не удалось выполнить действие",
@@ -249,8 +276,6 @@ export function normalizeError(err: unknown, ctx?: { title?: string }): Normaliz
     };
   }
 
-  // If code looks like a real domain error (not shm/auth) but no good message:
-  // don't show the code — show generic.
   return {
     title: ctx?.title || "Что-то пошло не так",
     description: "Попробуйте ещё раз.",
