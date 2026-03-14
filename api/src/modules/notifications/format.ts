@@ -37,10 +37,10 @@ function firstForecastItem(meta: any) {
 }
 
 /**
- * toast normalization:
- * billing may send toast as "", "1", 1, "true", true, etc.
+ * bool normalization:
+ * billing may send "", "1", 1, "true", true, etc.
  */
-function parseToast(v: any): boolean | undefined {
+function parseBoolLike(v: any): boolean | undefined {
   if (v == null) return undefined;
 
   if (typeof v === "boolean") return v;
@@ -91,7 +91,7 @@ export function formatIncoming(e: BillingPushEvent): BillingPushEvent {
         ? "error"
         : "info");
 
-  let toast = parseToast((e as any).toast);
+  let toast = parseBoolLike((e as any).toast);
   if (toast === undefined) {
     if (type === "balance.credited") toast = true;
     else if (type === "service.blocked") toast = true;
@@ -100,6 +100,11 @@ export function formatIncoming(e: BillingPushEvent): BillingPushEvent {
     else if (type === "service.forecast") toast = false;
     else if (type === "broadcast.news") toast = false;
     else toast = false;
+  }
+
+  let push = parseBoolLike((e as any).push);
+  if (push === undefined) {
+    push = false;
   }
 
   const metaRaw = (e as any).meta || {};
@@ -180,6 +185,7 @@ export function formatIncoming(e: BillingPushEvent): BillingPushEvent {
     type: type || e.type,
     level,
     toast,
+    push,
     title,
     message,
     meta,

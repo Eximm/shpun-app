@@ -100,26 +100,32 @@ export async function pushRoutes(app: FastifyInstance) {
     if (!r.ok) return reply.code(400).send({ ok: false, error: r.error });
 
     try {
-      const uid = Number((r.event as any)?.user_id ?? 0);
+      const wantsPush = parseBool((body as any)?.push ?? (formatted as any)?.push);
+      if (wantsPush) {
+        const payloadEvent = {
+          ...formatted,
+          event_id: r.event?.event_id ?? formatted.event_id,
+          ts: r.event?.ts ?? formatted.ts,
+        };
 
-      if (uid > 0) {
-        if (!isUserActive(uid)) {
-          await sendWebPushToUser(uid, r.event ?? formatted);
-        }
-      } else if (isBroadcastEvent(formatted)) {
-        const rows = stmtListUsersWithPushSubs.all() as Array<{ user_id: number }>;
-        for (const row of rows) {
-          const targetUid = Number(row.user_id);
-          if (!Number.isFinite(targetUid) || targetUid <= 0) continue;
-          if (isUserActive(targetUid)) continue;
+        const uid = Number((r.event as any)?.user_id ?? 0);
 
-          try {
-            await sendWebPushToUser(targetUid, {
-              ...formatted,
-              user_id: targetUid,
-            });
-          } catch {
-            // ignore
+        if (uid > 0) {
+          if (!isUserActive(uid)) {
+            await sendWebPushToUser(uid, payloadEvent);
+          }
+        } else if (isBroadcastEvent(formatted)) {
+          const rows = stmtListUsersWithPushSubs.all() as Array<{ user_id: number }>;
+          for (const row of rows) {
+            const targetUid = Number(row.user_id);
+            if (!Number.isFinite(targetUid) || targetUid <= 0) continue;
+            if (isUserActive(targetUid)) continue;
+
+            try {
+              await sendWebPushToUser(targetUid, payloadEvent);
+            } catch {
+              // ignore
+            }
           }
         }
       }

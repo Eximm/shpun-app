@@ -70,8 +70,14 @@ function rowToEvent(r: any): NotifEvent {
 
 function extractBroadcastOriginId(eventId: string): string {
   const s = String(eventId ?? "").trim();
-  const m = s.match(/^u:\d+:b:(.+)$/);
-  return m?.[1] ? String(m[1]).trim() : "";
+
+  const sys = s.match(/^sys:broadcast:(.+)$/);
+  if (sys?.[1]) return String(sys[1]).trim();
+
+  const legacy = s.match(/^u:\d+:b:(.+)$/);
+  if (legacy?.[1]) return String(legacy[1]).trim();
+
+  return "";
 }
 
 // ===== schema =====
@@ -119,9 +125,14 @@ const stmtListAfter = linkDb.prepare(`
       ts > @afterTs
       OR (ts = @afterTs AND event_id > @afterId)
     )
-    AND target = 'user'
-    AND user_id = @uid
-    AND @uid > 0
+    AND (
+      target = 'all'
+      OR (
+        target = 'user'
+        AND user_id = @uid
+        AND @uid > 0
+      )
+    )
   ORDER BY ts ASC, event_id ASC
   LIMIT @limit
 `);
@@ -134,9 +145,14 @@ const stmtFeed = linkDb.prepare(`
       OR ts < @beforeTs
       OR (ts = @beforeTs AND event_id < @beforeId)
     )
-    AND target = 'user'
-    AND user_id = @uid
-    AND @uid > 0
+    AND (
+      target = 'all'
+      OR (
+        target = 'user'
+        AND user_id = @uid
+        AND @uid > 0
+      )
+    )
   ORDER BY ts DESC, event_id DESC
   LIMIT @limit
 `);
@@ -149,9 +165,14 @@ const stmtFeedNews = linkDb.prepare(`
       OR ts < @beforeTs
       OR (ts = @beforeTs AND event_id < @beforeId)
     )
-    AND target = 'user'
-    AND user_id = @uid
-    AND @uid > 0
+    AND (
+      target = 'all'
+      OR (
+        target = 'user'
+        AND user_id = @uid
+        AND @uid > 0
+      )
+    )
     AND (
       type = 'broadcast.news'
       OR type LIKE 'broadcast.news.%'
@@ -165,7 +186,10 @@ const stmtDeleteBroadcastByOriginId = linkDb.prepare(`
   DELETE FROM notif_events
   WHERE
     type LIKE 'broadcast.%'
-    AND event_id LIKE @pattern
+    AND (
+      event_id = @sysEventId
+      OR event_id LIKE @userPattern
+    )
 `);
 
 const stmtListBroadcastRows = linkDb.prepare(`
@@ -183,10 +207,11 @@ export function putNotifEvent(
   if (!event_id) return { ok: false, error: "missing_event_id" };
 
   const ts = normalizeTs(ev.ts);
-  const target: NotifTarget = "user";
-  const uid = Number(ev.user_id);
+  const target: NotifTarget = ev.target === "user" ? "user" : "all";
+  const uidRaw = Number(ev.user_id);
+  const uid = Number.isFinite(uidRaw) && uidRaw > 0 ? Math.floor(uidRaw) : null;
 
-  if (!Number.isFinite(uid) || uid <= 0) {
+  if (target === "user" && !uid) {
     return { ok: false, error: "missing_user_id" };
   }
 
@@ -195,7 +220,7 @@ export function putNotifEvent(
       event_id,
       ts,
       target,
-      user_id: uid,
+      user_id: target === "user" ? uid : null,
       type: ev.type ?? null,
       level: ev.level ?? null,
       title: ev.title ?? null,
@@ -336,10 +361,11 @@ export function deleteBroadcastByOriginId(
   const cleanOriginId = String(originId ?? "").trim();
   if (!cleanOriginId) return { ok: false, error: "missing_origin_id" };
 
-  const pattern = `%:b:${cleanOriginId}`;
+  const userPattern = `%:b:${cleanOriginId}`;
+  const sysEventId = `sys:broadcast:${cleanOriginId}`;
 
   try {
-    const res = stmtDeleteBroadcastByOriginId.run({ pattern });
+    const res = stmtDeleteBroadcastByOriginId.run({ userPattern, sysEventId });
     const deleted = Number((res as any)?.changes ?? 0);
     return { ok: true, deleted };
   } catch {

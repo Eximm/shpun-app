@@ -1,5 +1,4 @@
 // FILE: api/src/modules/notifications/inbox.ts
-import { linkDb } from "../../shared/linkdb/db.js";
 import {
   putNotifEvent,
   listNotifAfter,
@@ -19,6 +18,7 @@ export type BillingPushEvent = {
   target?: "all" | "user"; // can be ignored, billing decides recipients
   user_id?: number | string; // may be absent for broadcast
   toast?: boolean;
+  push?: boolean;
   meta?: unknown;
 };
 
@@ -56,17 +56,8 @@ function isBroadcast(e: BillingPushEvent): boolean {
   return false;
 }
 
-// Users we can deliver broadcast to:
-// those who have account_link (logged in / linked at least once).
-const stmtListAllUserIds = linkDb.prepare(`
-  SELECT DISTINCT shm_user_id AS uid
-  FROM account_links
-  WHERE shm_user_id IS NOT NULL AND shm_user_id > 0
-`);
-
-function buildBroadcastEventId(uid: number, baseEventId: string): string {
-  // stable per-user => 1 copy per user, repeats are deduped
-  return `u:${uid}:b:${baseEventId}`;
+function buildSystemBroadcastEventId(baseEventId: string): string {
+  return `sys:broadcast:${baseEventId}`;
 }
 
 function buildUserEventId(uid: number, baseEventId: string, ts: number): string {
@@ -90,46 +81,31 @@ export function putEvent(
   const type = String(e.type ?? "").trim();
   const broadcast = isBroadcast(e);
 
-  // ===== A) broadcast without user_id => server fanout =====
-  if (broadcast && uid === 0) {
-    const rows = stmtListAllUserIds.all() as Array<{ uid: number }>;
-    const uids = rows.map((r) => Number(r.uid)).filter((x) => Number.isFinite(x) && x > 0);
+  // ===== A) broadcast => single global event =====
+  // Important:
+  // even if billing executes template from some concrete user (e.g. admin user_id=1),
+  // broadcast.news must be stored ONCE globally, not copied per user.
+  if (broadcast) {
+    const ev: NotifEvent = {
+      event_id: buildSystemBroadcastEventId(baseEventId),
+      ts,
+      type: e.type,
+      level: e.level,
+      title: e.title,
+      message: e.message,
+      target: "all",
+      toast: e.toast,
+      meta: e.meta,
+    };
 
-    let inserted = 0;
-    let anyDedup = false;
-
-    // важно: возвращаем список uid, чтобы роут мог сделать webpush fanout
-    const deliveredUserIds: number[] = [];
-
-    for (const u of uids) {
-      const ev: NotifEvent = {
-        event_id: buildBroadcastEventId(u, baseEventId),
-        ts,
-        type: e.type,
-        level: e.level,
-        title: e.title,
-        message: e.message,
-        target: "user",
-        user_id: u,
-        toast: e.toast,
-        meta: e.meta,
-      };
-
-      const r = putNotifEvent(ev);
-      if (!r.ok) return r;
-
-      if (r.dedup) {
-        anyDedup = true;
-      } else {
-        inserted++;
-        deliveredUserIds.push(u);
-      }
-    }
+    const r = putNotifEvent(ev);
+    if (!r.ok) return r;
 
     return {
       ok: true,
-      dedup: anyDedup && inserted === 0,
-      delivered: { total: uids.length, inserted, userIds: deliveredUserIds },
+      dedup: r.dedup,
+      event: ev,
+      delivered: { total: 1, inserted: r.dedup ? 0 : 1 },
     };
   }
 
@@ -138,8 +114,7 @@ export function putEvent(
     return { ok: false, error: "missing_user_id" };
   }
 
-  const event_id =
-    type === "broadcast.news" ? buildBroadcastEventId(uid, baseEventId) : buildUserEventId(uid, baseEventId, ts);
+  const event_id = buildUserEventId(uid, baseEventId, ts);
 
   const ev: NotifEvent = {
     event_id,
