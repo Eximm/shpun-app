@@ -1,7 +1,7 @@
 // api/src/modules/auth/providers/password.ts
 
 import type { AuthResult } from "../authService.js";
-import { shmFetch } from "../../../shared/shm/shmClient.js";
+import { shmFetch, toFormUrlEncoded } from "../../../shared/shm/shmClient.js";
 
 type Mode = "login" | "register";
 
@@ -16,6 +16,11 @@ function normalizePassword(v: unknown) {
 function normalizeMode(v: unknown): Mode {
   const s = String(v ?? "login").trim().toLowerCase();
   return s === "register" ? "register" : "login";
+}
+
+function normalizePartnerId(v: unknown): number {
+  const n = Number(v ?? 0);
+  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : 0;
 }
 
 function extractSessionId(payload: unknown): string {
@@ -42,19 +47,40 @@ async function withTimeout<T>(
   }
 }
 
-async function shmRegister(login: string, password: string, signal: AbortSignal) {
-  const r = await shmFetch<any>(null, "v1/user", {
-    method: "PUT",
-    body: { login, password },
+async function shmRegisterViaTemplate(
+  login: string,
+  password: string,
+  partnerId: number,
+  signal: AbortSignal
+) {
+  const form: Record<string, string | number> = {
+    action: "auth.register",
+    login,
+    password,
+  };
+
+  if (partnerId > 0) {
+    form.partner_id = partnerId;
+  }
+
+  const r = await shmFetch<any>(null, "v1/template/shpun_app", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: toFormUrlEncoded(form),
     signal,
   });
 
-  if (r.ok) return { ok: true as const };
+  const j = (r.json ?? {}) as any;
+  const logicalOk = !!(r.ok && (j?.ok === 1 || j?.ok === true));
+
+  if (logicalOk) {
+    return { ok: true as const, detail: j };
+  }
 
   return {
     ok: false as const,
     status: r.status || 400,
-    detail: r.json ?? r.text,
+    detail: j?.error ? j : (r.json ?? r.text),
   };
 }
 
@@ -95,6 +121,7 @@ export async function passwordAuth(body: any): Promise<AuthResult> {
   const login = normalizeLogin(body?.login);
   const password = normalizePassword(body?.password);
   const mode = normalizeMode(body?.mode);
+  const partnerId = normalizePartnerId(body?.partner_id);
 
   if (!login || !password) {
     return { ok: false, status: 400, error: "login_and_password_required" };
@@ -111,12 +138,17 @@ export async function passwordAuth(body: any): Promise<AuthResult> {
   try {
     return await withTimeout(12_000, async (signal) => {
       if (mode === "register") {
-        const reg = await shmRegister(login, password, signal);
+        const reg = await shmRegisterViaTemplate(login, password, partnerId, signal);
+
         if (!reg.ok) {
+          const detailAny = reg.detail as any;
+          const detailError =
+            typeof detailAny?.error === "string" ? detailAny.error.trim() : "";
+
           return {
             ok: false,
             status: reg.status,
-            error: "shm_register_failed",
+            error: detailError || "shm_register_failed",
             detail: reg.detail,
           };
         }

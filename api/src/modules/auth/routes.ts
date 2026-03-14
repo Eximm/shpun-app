@@ -572,16 +572,6 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(502).send({ ok: false, error: "shm_user_lookup_failed" });
     }
 
-    if (mode === "register") {
-      try {
-        await tryAttachPartner(shmSessionId, (body as any)?.partner_id);
-      } catch {}
-
-      try {
-        await callShmTemplate(shmSessionId, "password.mark_set");
-      } catch {}
-    }
-
     const localSid = reuseOrCreateSid(req);
 
     putSession(localSid, { shmSessionId, shmUserId, createdAt: Date.now() });
