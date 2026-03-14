@@ -6,6 +6,7 @@ import { useMe } from "../auth/useMe";
 type BillingPushEvent = {
   event_id: string;
   ts: number;
+  type?: string;
   level?: "info" | "success" | "error";
   title?: string;
   message?: string;
@@ -35,7 +36,7 @@ function cursorKeyFor(uid: number): string {
   return `notif.cursor.v2:u:${uid}`;
 }
 
-function shownPrefixFor(uid: number): string {
+function shownPrefixFor(uid: number) {
   return `notif.toast.shown.v2:u:${uid}:`;
 }
 
@@ -158,6 +159,33 @@ function cleanupShownKeys(uid: number) {
 }
 
 /* =========================================================
+   Toast presentation
+   ========================================================= */
+
+function getToastView(ev: BillingPushEvent): {
+  title: string;
+  description: string;
+  level: "info" | "success" | "error";
+} {
+  const type = String(ev.type ?? "").trim();
+  const level = ev.level || "info";
+
+  if (type === "broadcast.news") {
+    return {
+      title: "📰 Новость",
+      description: "Появилась новая новость — загляните в Инфоцентр",
+      level,
+    };
+  }
+
+  return {
+    title: ev.title || "Уведомление",
+    description: ev.message || "",
+    level,
+  };
+}
+
+/* =========================================================
    Hook
    ========================================================= */
 
@@ -240,7 +268,6 @@ export function useBillingNotifications(enabled: boolean) {
       inFlightRef.current = true;
 
       try {
-        // Пока приложение открыто, отмечаем пользователя активным.
         await pingActivity();
 
         const c = cursorRef.current || { ts: 0, id: "" };
@@ -264,15 +291,17 @@ export function useBillingNotifications(enabled: boolean) {
           if (!shownKey) continue;
           if (hasShownToast(uid, shownKey)) continue;
 
-          const title = ev.title || "Уведомление";
-          const desc = ev.message || "";
-          const lvl = ev.level || "info";
+          const view = getToastView(ev);
 
           markToastShown(uid, shownKey);
 
-          if (lvl === "success") toast.success(title, { description: desc });
-          else if (lvl === "error") toast.error(title, { description: desc });
-          else toast.info(title, { description: desc });
+          if (view.level === "success") {
+            toast.success(view.title, { description: view.description });
+          } else if (view.level === "error") {
+            toast.error(view.title, { description: view.description });
+          } else {
+            toast.info(view.title, { description: view.description });
+          }
         }
 
         const next = (r as any)?.nextCursor;
