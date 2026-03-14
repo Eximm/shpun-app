@@ -581,7 +581,14 @@ button, a { -webkit-tap-highlight-color: transparent; }
 /* feed helpers */
 
 .feed__more {
-  margin-top: 10px;
+  margin-top: 14px;
+  width: 100%;
+}
+
+.feed__more .btn {
+  width: 100%;
+  justify-content: center;
+  padding: 12px 16px;
 }
 
 .feed__fulltext {
