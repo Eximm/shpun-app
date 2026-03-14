@@ -63,9 +63,9 @@ function setState(patch: Partial<State>) {
   emit();
 }
 
-let inFlight: Promise<void> | null = null;
+let inFlight: Promise<MeResponse | null> | null = null;
 
-async function doFetchMe() {
+async function doFetchMe(): Promise<MeResponse | null> {
   if (inFlight) return inFlight;
 
   inFlight = (async () => {
@@ -80,6 +80,7 @@ async function doFetchMe() {
         authRequired: false,
         lastFetchedAt: Date.now(),
       });
+      return data;
     } catch (e: any) {
       const authRequired = isNotAuthenticated(e);
       const err: Error =
@@ -92,6 +93,8 @@ async function doFetchMe() {
         authRequired,
         lastFetchedAt: Date.now(),
       });
+
+      return null;
     } finally {
       inFlight = null;
     }
@@ -100,7 +103,7 @@ async function doFetchMe() {
   return inFlight;
 }
 
-export function refetchMe() {
+export function refetchMe(): Promise<MeResponse | null> {
   return doFetchMe();
 }
 

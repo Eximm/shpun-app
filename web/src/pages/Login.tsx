@@ -51,6 +51,32 @@ function setAuthPending(provider: string) {
   }
 }
 
+function clearAuthPending() {
+  try {
+    sessionStorage.removeItem(AUTH_PENDING_KEY);
+    sessionStorage.removeItem(AUTH_PENDING_AT_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+async function ensureAuthorizedAfterAuth(attempts = 4, delayMs = 180) {
+  for (let i = 0; i < attempts; i++) {
+    const me = await refetchMe().catch(() => null);
+    if (me) return me;
+    if (i < attempts - 1) {
+      await sleep(delayMs);
+    }
+  }
+  return null;
+}
+
 function normalizePartnerId(v: unknown): number {
   const n = Number(v ?? 0);
   return Number.isFinite(n) && n > 0 ? Math.trunc(n) : 0;
@@ -289,29 +315,42 @@ export function Login() {
     setShowPassword2(false);
   }
 
-  function goAfterAuth(r?: AuthResponse, provider?: string) {
+  async function goAfterAuth(r?: AuthResponse, provider?: string) {
     const ok = !!r && (r as any).ok === true;
 
     if (!ok) {
       const msg = String((r as any)?.error ?? "").trim();
+      clearAuthPending();
       toastError(msg || "login_failed");
       return;
     }
-
-    setAuthPending(provider || "auth");
-    refetchMe().catch(() => {});
-    clearPendingPartnerId();
-    setPartnerId(0);
-    setPartnerIdInput("");
 
     const nextRaw = String((r as any).next ?? "home").trim();
     const next = nextRaw || "home";
     const loginFromApi = String((r as any).login ?? "").trim();
 
+    setAuthPending(provider || "auth");
+    clearPendingPartnerId();
+    setPartnerId(0);
+    setPartnerIdInput("");
+
     if (next === "set_password") {
       nav("/set-password", {
         replace: true,
         state: { login: loginFromApi },
+      });
+      return;
+    }
+
+    const me = await ensureAuthorizedAfterAuth();
+
+    if (!me) {
+      clearAuthPending();
+      toast.error(t("login.toast.error_title", "Ошибка"), {
+        description: t(
+          "login.auth.finish_failed",
+          "Не удалось завершить вход. Попробуйте ещё раз."
+        ),
       });
       return;
     }
@@ -326,7 +365,6 @@ export function Login() {
       return;
     }
 
-    setAuthPending("password");
     setLoading(true);
     try {
       const r = await apiFetch<AuthResponse>("/auth/password", {
@@ -337,8 +375,9 @@ export function Login() {
           mode: "login",
         },
       });
-      goAfterAuth(r, "password");
+      await goAfterAuth(r, "password");
     } catch (e: unknown) {
+      clearAuthPending();
       toastError(errorToAuthRaw(e, t("error.password_login_failed", "Не удалось войти по паролю.")));
     } finally {
       setLoading(false);
@@ -362,7 +401,6 @@ export function Login() {
       return;
     }
 
-    setAuthPending("password");
     setLoading(true);
     try {
       const r = await apiFetch<AuthResponse>("/auth/password", {
@@ -375,14 +413,9 @@ export function Login() {
         },
       });
 
-      if ((r as any)?.ok) {
-        toast.success(t("login.register.success_title", "Регистрация успешна"), {
-          description: t("login.register.success_desc", "Аккаунт создан. Открываем приложение…"),
-        });
-      }
-
-      goAfterAuth(r, "password");
+      await goAfterAuth(r, "password");
     } catch (e: unknown) {
+      clearAuthPending();
       toastError(errorToAuthRaw(e, t("error.password_register_failed", "Не удалось создать аккаунт.")));
     } finally {
       setLoading(false);
@@ -396,7 +429,6 @@ export function Login() {
       return;
     }
 
-    setAuthPending("telegram");
     setLoading(true);
     try {
       const r = await apiFetch<AuthResponse>("/auth/telegram", {
@@ -406,8 +438,9 @@ export function Login() {
           ...(partnerId > 0 ? { partner_id: partnerId } : {}),
         },
       });
-      goAfterAuth(r, "telegram");
+      await goAfterAuth(r, "telegram");
     } catch (e: unknown) {
+      clearAuthPending();
       toastError(errorToAuthRaw(e, t("error.telegram_login_failed", "Не удалось войти через Telegram.")));
     } finally {
       setLoading(false);
@@ -415,7 +448,6 @@ export function Login() {
   }
 
   async function telegramLoginWidget(widgetUser: Record<string, any>) {
-    setAuthPending("telegram");
     setLoading(true);
     try {
       const r = await apiFetch<AuthResponse>("/auth/telegram_widget", {
@@ -425,8 +457,9 @@ export function Login() {
           ...(partnerId > 0 ? { partner_id: partnerId } : {}),
         },
       });
-      goAfterAuth(r, "telegram");
+      await goAfterAuth(r, "telegram");
     } catch (e: unknown) {
+      clearAuthPending();
       toastError(errorToAuthRaw(e, t("error.telegram_login_failed", "Не удалось войти через Telegram.")));
     } finally {
       setLoading(false);
@@ -446,7 +479,6 @@ export function Login() {
       const provider = p || "auth";
 
       setAuthPending(provider);
-      refetchMe().catch(() => {});
 
       sp.delete("a");
       sp.delete("p");
@@ -456,9 +488,23 @@ export function Login() {
 
       window.history.replaceState(null, "", nextUrl);
 
-      nav("/", { replace: true });
+      void (async () => {
+        const me = await ensureAuthorizedAfterAuth();
+        if (me) {
+          nav("/", { replace: true });
+          return;
+        }
+
+        clearAuthPending();
+        toast.error(t("login.toast.error_title", "Ошибка"), {
+          description: t(
+            "login.auth.finish_failed",
+            "Не удалось завершить вход. Попробуйте ещё раз."
+          ),
+        });
+      })();
     }
-  }, [loc?.search, nav]);
+  }, [loc?.search, nav, t]);
 
   useEffect(() => {
     const sp = new URLSearchParams(String(loc?.search ?? ""));
@@ -504,7 +550,7 @@ export function Login() {
       if (!autoLoginStarted.current) {
         autoLoginStarted.current = true;
         window.setTimeout(() => {
-          telegramLoginMiniApp();
+          void telegramLoginMiniApp();
         }, 180);
       }
 
@@ -528,7 +574,7 @@ export function Login() {
 
     const w = window as any;
     w.__shpunTelegramWidgetAuth = (user: Record<string, any>) => {
-      telegramLoginWidget(user);
+      void telegramLoginWidget(user);
     };
 
     const script = document.createElement("script");
@@ -586,7 +632,7 @@ export function Login() {
               <div className="pre">
                 {t(
                   "login.partner.notice",
-                  "Вы пришли по приглашению. Партнёрская привязка будет учтена при регистрации."
+                  "Вы пришли по приглашению. Партнёрская ссылка будет учтена при регистрации."
                 )}
               </div>
             )}
@@ -595,8 +641,11 @@ export function Login() {
               className="auth__form"
               onSubmit={(e) => {
                 e.preventDefault();
-                if (authModal === "login") passwordLogin();
-                else passwordRegister();
+                if (authModal === "login") {
+                  void passwordLogin();
+                } else {
+                  void passwordRegister();
+                }
               }}
             >
               <div className="field">
@@ -641,7 +690,7 @@ export function Login() {
                     }
                   >
                     👁
-                  </button> 
+                  </button>
                 </div>
               </div>
 
@@ -788,7 +837,14 @@ export function Login() {
 
           {mode === "telegram" ? (
             <div className="auth__actions login__dividerMt14">
-              <button type="button" className="btn btn--primary login__btnFull" onClick={telegramLoginMiniApp} disabled={loading}>
+              <button
+                type="button"
+                className="btn btn--primary login__btnFull"
+                onClick={() => {
+                  void telegramLoginMiniApp();
+                }}
+                disabled={loading}
+              >
                 {loading ? t("login.tg.cta_loading", "Входим…") : t("login.tg.cta", "Продолжить")}
               </button>
             </div>
@@ -839,7 +895,7 @@ export function Login() {
           <div className="auth__providers">
             <button
               className="btn auth__provider login__providerBtn"
-              onClick={mode === "telegram" ? telegramLoginMiniApp : focusWidget}
+              onClick={mode === "telegram" ? () => void telegramLoginMiniApp() : focusWidget}
               disabled={loading}
               type="button"
             >

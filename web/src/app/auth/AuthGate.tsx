@@ -84,6 +84,47 @@ function writeSeen(key: string) {
   }
 }
 
+function hasFreshAuthPending(): boolean {
+  try {
+    const provider = String(sessionStorage.getItem(AUTH_PENDING_KEY) || "").trim();
+    const ts = Number(sessionStorage.getItem(AUTH_PENDING_AT_KEY) || "0");
+    if (!provider) return false;
+    if (!ts) return true;
+    return Date.now() - ts <= 15_000;
+  } catch {
+    return false;
+  }
+}
+
+function hasReferralContext(search: string): boolean {
+  try {
+    const sp = new URLSearchParams(String(search || ""));
+    const pid = Number(sp.get("partner_id") || "0");
+    if (Number.isFinite(pid) && pid > 0) return true;
+  } catch {
+    // ignore
+  }
+
+  try {
+    const pending = Number(localStorage.getItem(PARTNER_LS_KEY) || "0");
+    if (Number.isFinite(pending) && pending > 0) return true;
+  } catch {
+    // ignore
+  }
+
+  return false;
+}
+
+function shouldNotifyExpiredSession(pathname: string, search: string): boolean {
+  const p = String(pathname || "").trim().toLowerCase();
+
+  if (p === "/login" || p === "/register" || p === "/set-password") return false;
+  if (hasFreshAuthPending()) return false;
+  if (hasReferralContext(search)) return false;
+
+  return true;
+}
+
 function PushOnboardingModal({
   open,
   busy,
@@ -317,10 +358,14 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
     notifiedRef.current = true;
 
-    toast.error("Сессия истекла", {
-      description: "Пожалуйста, авторизуйтесь снова.",
-      durationMs: 3500,
-    });
+    const notify = shouldNotifyExpiredSession(loc.pathname, loc.search);
+
+    if (notify) {
+      toast.error("Сессия истекла", {
+        description: "Пожалуйста, авторизуйтесь снова.",
+        durationMs: 3500,
+      });
+    }
 
     nav("/login", {
       replace: true,
