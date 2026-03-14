@@ -2754,26 +2754,21 @@ button, a { -webkit-tap-highlight-color: transparent; }
   font-weight: 800;
   color: rgba(255,255,255,0.62);
 }
-/* ============================================================
-   Login modal: show/hide password button
-   ============================================================ */
-
-.pwdfield__toggle{
-  min-width: 96px;
-  padding: 0 12px;
-  white-space: nowrap;
-  font-size: 12px;
-  font-weight: 800;
+/* compact lang switch on login */
+.login__langSwitch{
+  width: auto;
+  flex: 0 0 auto;
+  align-self: flex-start;
 }
 
-@media (max-width: 520px){
-  .pwdfield{
-    grid-template-columns: 1fr;
-  }
+.login__langSwitch .seg__btn{
+  min-width: 72px;
+  padding: 0 16px;
+}
 
-  .pwdfield__toggle{
-    width: 100%;
-    min-width: 0;
-    min-height: 40px;
+@media (max-width: 640px){
+  .login__langSwitch .seg__btn{
+    min-width: 64px;
+    padding: 0 14px;
   }
 }

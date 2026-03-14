@@ -201,7 +201,7 @@ function LangSwitch({
   ariaLabel: string;
 }) {
   return (
-    <div className="seg" aria-label={ariaLabel}>
+    <div className="seg login__langSwitch" aria-label={ariaLabel}>
       <button
         type="button"
         className={`btn seg__btn ${lang === "ru" ? "btn--primary" : ""}`}
@@ -626,7 +626,7 @@ export function Login() {
                   />
                   <button
                     type="button"
-                    className="btn pwdfield__toggle"
+                    className="btn pwdfield__btn"
                     onClick={() => setShowPassword((v) => !v)}
                     disabled={loading}
                     aria-label={
@@ -634,11 +634,14 @@ export function Login() {
                         ? t("login.password.hide", "Скрыть пароль")
                         : t("login.password.show", "Показать пароль")
                     }
+                    title={
+                      showPassword
+                        ? t("login.password.hide", "Скрыть пароль")
+                        : t("login.password.show", "Показать пароль")
+                    }
                   >
-                    {showPassword
-                      ? t("login.password.hide_short", "Скрыть")
-                      : t("login.password.show_short", "Показать")}
-                  </button>
+                    👁
+                  </button> 
                 </div>
               </div>
 
@@ -658,7 +661,7 @@ export function Login() {
                       />
                       <button
                         type="button"
-                        className="btn pwdfield__toggle"
+                        className="btn pwdfield__btn"
                         onClick={() => setShowPassword2((v) => !v)}
                         disabled={loading}
                         aria-label={
@@ -666,10 +669,13 @@ export function Login() {
                             ? t("login.password.hide_repeat", "Скрыть повтор пароля")
                             : t("login.password.show_repeat", "Показать повтор пароля")
                         }
+                        title={
+                          showPassword2
+                            ? t("login.password.hide_repeat", "Скрыть повтор пароля")
+                            : t("login.password.show_repeat", "Показать повтор пароля")
+                        }
                       >
-                        {showPassword2
-                          ? t("login.password.hide_short", "Скрыть")
-                          : t("login.password.show_short", "Показать")}
+                        👁
                       </button>
                     </div>
                   </div>
