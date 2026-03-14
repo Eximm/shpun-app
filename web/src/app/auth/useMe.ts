@@ -1,4 +1,4 @@
-﻿// web/src/app/auth/useMe.ts
+﻿// FILE: web/src/app/auth/useMe.ts
 import { useEffect, useState } from "react";
 import { apiFetch, isNotAuthenticated } from "../../shared/api/client";
 
@@ -13,6 +13,12 @@ export type MeResponse = {
     passwordSet: boolean;
     created?: string | null;
     lastLogin?: string | null;
+    role?: string | null;
+    isAdmin?: boolean;
+  };
+  admin?: {
+    role?: string | null;
+    isAdmin?: boolean;
   };
   telegram?: {
     login?: string | null;
@@ -60,7 +66,6 @@ function setState(patch: Partial<State>) {
 let inFlight: Promise<void> | null = null;
 
 async function doFetchMe() {
-  // дедуп запросов
   if (inFlight) return inFlight;
 
   inFlight = (async () => {
@@ -106,7 +111,6 @@ export function useMe() {
     const onChange = (s: State) => setSnap(s);
     listeners.add(onChange);
 
-    // первый раз — грузим, если ещё не грузили
     if (state.loading && state.lastFetchedAt === 0) {
       doFetchMe().catch(() => {});
     }

@@ -1,3 +1,4 @@
+// FILE: web/src/pages/Profile.tsx
 import { Children, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMe } from "../app/auth/useMe";
@@ -317,6 +318,7 @@ export function Profile() {
   const { lang, setLang, t } = useI18n();
 
   const profile = me?.profile;
+  const isAdmin = Boolean(profile?.isAdmin || me?.admin?.isAdmin);
 
   const loginText = useMemo(() => {
     const l =
@@ -474,7 +476,6 @@ export function Profile() {
         try {
           sessionStorage.removeItem(`push.onboarding.dismissed:browser:u:${uid}`);
           sessionStorage.removeItem(`push.onboarding.dismissed:pwa:u:${uid}`);
-
           sessionStorage.removeItem(`push.onboarding.browser.dismissed.session.v1`);
           sessionStorage.removeItem(`push.onboarding.pwa.dismissed.session.v1`);
         } catch {
@@ -727,6 +728,12 @@ export function Profile() {
           {toast ? <Toast text={toast} /> : null}
 
           <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
+            {isAdmin ? (
+              <button className="btn btn--accent" onClick={() => nav("/admin/broadcasts")} style={{ width: "100%" }}>
+                🛠 Broadcasts
+              </button>
+            ) : null}
+
             <button className="btn" onClick={goChangePassword} style={{ width: "100%" }}>
               🔐 {t("profile.change_password", "Сменить пароль")}
             </button>

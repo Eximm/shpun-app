@@ -1,4 +1,5 @@
-﻿/**
+﻿// FILE: api/src/shared/shm/shmClient.ts
+/**
  * Важно:
  * SHM_BASE должен указывать на /shm/ (с любым количеством слешей на конце — мы нормализуем)
  * Пример:
@@ -389,6 +390,10 @@ export async function shmShpunAppTemplate<T = any>(
 
 export async function shmShpunAppStatus(shmSessionId: string) {
   return await shmShpunAppTemplate<any>(shmSessionId, 'status')
+}
+
+export async function shmShpunAppAdminStatus(shmSessionId: string) {
+  return await shmShpunAppTemplate<any>(shmSessionId, 'admin.status')
 }
 
 export async function shmShpunAppReferralsStatus(shmSessionId: string) {

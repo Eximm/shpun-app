@@ -1,4 +1,4 @@
-// api/src/shared/linkdb/notificationsRepo.ts
+// FILE: api/src/shared/linkdb/notificationsRepo.ts
 import { linkDb } from "./db.js";
 
 export type NotifTarget = "all" | "user";
@@ -19,6 +19,16 @@ export type NotifEvent = {
 
 export type NotifCursor = { ts: number; id: string };
 
+export type BroadcastItem = {
+  origin_id: string;
+  ts: number;
+  type?: string;
+  level?: NotifLevel;
+  title?: string;
+  message?: string;
+  copies: number;
+};
+
 function asInt(v: any) {
   return v ? 1 : 0;
 }
@@ -36,7 +46,6 @@ function normalizeTs(input: any): number {
   const raw = Number(input);
   let ts = Number.isFinite(raw) ? raw : Math.floor(Date.now() / 1000);
 
-  // allow ms
   if (ts > 10_000_000_000) ts = Math.floor(ts / 1000);
 
   ts = Math.floor(ts);
@@ -57,6 +66,12 @@ function rowToEvent(r: any): NotifEvent {
     toast: Number(r.toast) === 1,
     meta: parseJson(r.meta_json),
   };
+}
+
+function extractBroadcastOriginId(eventId: string): string {
+  const s = String(eventId ?? "").trim();
+  const m = s.match(/^u:\d+:b:(.+)$/);
+  return m?.[1] ? String(m[1]).trim() : "";
 }
 
 // ===== schema =====
@@ -84,14 +99,12 @@ CREATE INDEX IF NOT EXISTS idx_notif_events_user_ts
 CREATE INDEX IF NOT EXISTS idx_notif_events_target_ts
   ON notif_events(target, ts);
 
--- Helpful for feed filtering by broadcast/type:
 CREATE INDEX IF NOT EXISTS idx_notif_events_user_type_ts
   ON notif_events(user_id, type, ts);
 `);
 
 // ===== statements =====
 
-// We dedupe by event_id via PK. If the same (event_id) is inserted again -> ignore.
 const stmtInsertOrIgnore = linkDb.prepare(`
   INSERT OR IGNORE INTO notif_events
     (event_id, ts, target, user_id, type, level, title, message, toast, meta_json)
@@ -99,8 +112,6 @@ const stmtInsertOrIgnore = linkDb.prepare(`
     (@event_id, @ts, @target, @user_id, @type, @level, @title, @message, @toast, @meta_json)
 `);
 
-// Cursor = (ts, event_id) to avoid “missing” events in same second
-// IMPORTANT: We intentionally return ONLY user-targeted events for current user.
 const stmtListAfter = linkDb.prepare(`
   SELECT * FROM notif_events
   WHERE
@@ -150,6 +161,21 @@ const stmtFeedNews = linkDb.prepare(`
   LIMIT @limit
 `);
 
+const stmtDeleteBroadcastByOriginId = linkDb.prepare(`
+  DELETE FROM notif_events
+  WHERE
+    type LIKE 'broadcast.%'
+    AND event_id LIKE @pattern
+`);
+
+const stmtListBroadcastRows = linkDb.prepare(`
+  SELECT event_id, ts, type, level, title, message
+  FROM notif_events
+  WHERE type LIKE 'broadcast.%'
+  ORDER BY ts DESC, event_id DESC
+  LIMIT @limit
+`);
+
 export function putNotifEvent(
   ev: NotifEvent,
 ): { ok: true; dedup: boolean } | { ok: false; error: string } {
@@ -157,8 +183,6 @@ export function putNotifEvent(
   if (!event_id) return { ok: false, error: "missing_event_id" };
 
   const ts = normalizeTs(ev.ts);
-
-  // We store only per-user events to avoid leaks.
   const target: NotifTarget = "user";
   const uid = Number(ev.user_id);
 
@@ -193,7 +217,6 @@ export function listNotifAfter(params: {
   userId?: number;
   limit?: number;
 }) {
-  // afterTs=0 means "from the beginning": keep it 0
   const afterTsRaw = Number(params.afterTs ?? 0);
   const afterTs = Number.isFinite(afterTsRaw) ? Math.floor(afterTsRaw) : 0;
 
@@ -218,8 +241,6 @@ export function listNotifFeed(params: {
   limit?: number;
 }) {
   const uid = params.userId ?? 0;
-
-  // beforeTs=0 means "latest", keep it 0 (do NOT normalize to now)
   const beforeTsRaw = Number(params.beforeTs ?? 0);
   const beforeTs = Number.isFinite(beforeTsRaw) ? Math.floor(beforeTsRaw) : 0;
 
@@ -243,8 +264,6 @@ export function listNotifNewsFeed(params: {
   limit?: number;
 }) {
   const uid = params.userId ?? 0;
-
-  // beforeTs=0 means "latest", keep it 0 (do NOT normalize to now)
   const beforeTsRaw = Number(params.beforeTs ?? 0);
   const beforeTs = Number.isFinite(beforeTsRaw) ? Math.floor(beforeTsRaw) : 0;
 
@@ -261,11 +280,77 @@ export function listNotifNewsFeed(params: {
   return { items, nextBefore };
 }
 
+export function listBroadcasts(params?: { limit?: number }) {
+  const limit = Math.min(Math.max(Number(params?.limit ?? 500), 1), 2000);
+  const rows = stmtListBroadcastRows.all({ limit }) as Array<{
+    event_id: string;
+    ts: number;
+    type?: string;
+    level?: NotifLevel;
+    title?: string;
+    message?: string;
+  }>;
+
+  const map = new Map<string, BroadcastItem>();
+
+  for (const row of rows) {
+    const originId = extractBroadcastOriginId(row.event_id);
+    if (!originId) continue;
+
+    const existing = map.get(originId);
+    if (!existing) {
+      map.set(originId, {
+        origin_id: originId,
+        ts: Number(row.ts) || 0,
+        type: row.type ?? undefined,
+        level: row.level ?? undefined,
+        title: row.title ?? undefined,
+        message: row.message ?? undefined,
+        copies: 1,
+      });
+      continue;
+    }
+
+    existing.copies += 1;
+
+    if ((Number(row.ts) || 0) > existing.ts) {
+      existing.ts = Number(row.ts) || 0;
+      existing.type = row.type ?? undefined;
+      existing.level = row.level ?? undefined;
+      existing.title = row.title ?? undefined;
+      existing.message = row.message ?? undefined;
+    }
+  }
+
+  const items = Array.from(map.values()).sort((a, b) => {
+    if (b.ts !== a.ts) return b.ts - a.ts;
+    return a.origin_id < b.origin_id ? 1 : -1;
+  });
+
+  return { items };
+}
+
+export function deleteBroadcastByOriginId(
+  originId: string,
+): { ok: true; deleted: number } | { ok: false; error: string } {
+  const cleanOriginId = String(originId ?? "").trim();
+  if (!cleanOriginId) return { ok: false, error: "missing_origin_id" };
+
+  const pattern = `%:b:${cleanOriginId}`;
+
+  try {
+    const res = stmtDeleteBroadcastByOriginId.run({ pattern });
+    const deleted = Number((res as any)?.changes ?? 0);
+    return { ok: true, deleted };
+  } catch {
+    return { ok: false, error: "db_delete_failed" };
+  }
+}
+
 /* =========================================================
    PUSH SUBSCRIPTIONS (SQLite, persistent)
    ========================================================= */
 
-// ===== push subscriptions schema =====
 linkDb.exec(`
 CREATE TABLE IF NOT EXISTS push_subscriptions (
   user_id     INTEGER NOT NULL,
@@ -281,9 +366,6 @@ CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user
   ON push_subscriptions(user_id);
 `);
 
-// ===== push subscriptions statements =====
-
-// upsert by (user_id, endpoint)
 const stmtPushSubUpsert = linkDb.prepare(`
   INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, created_at, updated_at)
   VALUES (@user_id, @endpoint, @p256dh, @auth, @now, @now)
@@ -313,7 +395,7 @@ const stmtPushSubRemoveAll = linkDb.prepare(`
 export type PushSubscriptionRow = {
   endpoint: string;
   keys: { p256dh: string; auth: string };
-  ts?: number; // unix seconds
+  ts?: number;
 };
 
 export function upsertPushSubscription(params: {

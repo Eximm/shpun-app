@@ -1,8 +1,8 @@
-﻿// api/src/modules/user/routes.ts
+﻿// FILE: api/src/modules/user/routes.ts
 import type { FastifyInstance } from "fastify";
 import { getSessionFromRequest } from "../../shared/session/sessionStore.js";
 import { fetchMe } from "./me.js";
-import { shmFetch } from "../../shared/shm/shmClient.js";
+import { shmFetch, shmShpunAppAdminStatus } from "../../shared/shm/shmClient.js";
 
 function toDisplayName(me: any): string {
   const fullName = String(me?.full_name ?? "").trim();
@@ -16,15 +16,29 @@ function toNum(v: any, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function parseAdminStatus(v: any) {
+  const json = v?.json ?? {};
+  const role = String(json?.role ?? "").trim();
+  const isAdminRaw = json?.is_admin;
+  const isAdmin =
+    isAdminRaw === 1 ||
+    isAdminRaw === "1" ||
+    isAdminRaw === true ||
+    role.toLowerCase() === "admin";
+
+  return {
+    role: role || null,
+    isAdmin,
+  };
+}
+
 async function fetchTelegramUser(sessionId: string) {
-  // SHM: GET /shm/v1/telegram/user
   const r = await shmFetch<any>(sessionId, "v1/telegram/user", { method: "GET" });
   if (!r.ok) return null;
   return r.json ?? null;
 }
 
 export async function userRoutes(app: FastifyInstance) {
-  // ====== GET /api/me ======
   app.get("/me", async (req, reply) => {
     const s = getSessionFromRequest(req);
 
@@ -44,7 +58,6 @@ export async function userRoutes(app: FastifyInstance) {
 
     const meRaw = meRes.meRaw;
 
-    // Telegram (best-effort): не ломаем /me если телега недоступна
     const tg = await fetchTelegramUser(s.shmSessionId);
     const telegram = tg
       ? {
@@ -55,7 +68,11 @@ export async function userRoutes(app: FastifyInstance) {
         }
       : null;
 
-    // Стабильный контракт для фронта
+    const adminRes = await shmShpunAppAdminStatus(s.shmSessionId);
+    const admin = adminRes.ok
+      ? parseAdminStatus(adminRes)
+      : { role: null as string | null, isAdmin: false };
+
     const userId = toNum(meRaw.user_id, 0);
     const balance = toNum(meRaw.balance, 0);
     const bonus = toNum(meRaw.bonus, 0);
@@ -70,28 +87,24 @@ export async function userRoutes(app: FastifyInstance) {
         login: meRaw.login ?? null,
         fullName: meRaw.full_name ?? null,
         phone: meRaw.phone ?? null,
-
         passwordSet: !!meRes.me.passwordSet,
-
         created: meRes.me.created ?? null,
         lastLogin: meRes.me.lastLogin ?? null,
+        role: admin.role,
+        isAdmin: admin.isAdmin,
       },
+
+      admin,
 
       telegram,
 
-      // Финансы остаются в /me (пригодится для Home/Payments),
-      // но в Profile UI мы их больше не показываем.
       balance: { amount: balance, currency: "RUB" },
       bonus,
       discount,
-
-      // ✅ рефералы из биллинга
       referralsCount,
-
       shm: { status: 200 },
     };
 
-    // ✅ meRaw оставим только в dev (чтобы в проде не светить лишнее)
     if (process.env.NODE_ENV !== "production") {
       payload.meRaw = meRaw;
     }
@@ -99,8 +112,6 @@ export async function userRoutes(app: FastifyInstance) {
     return reply.send(payload);
   });
 
-  // ====== POST /api/user/profile ======
-  // update full_name / phone via SHM POST v1/user
   app.post("/user/profile", async (req, reply) => {
     const s = getSessionFromRequest(req);
     if (!s?.shmSessionId) {
@@ -134,8 +145,6 @@ export async function userRoutes(app: FastifyInstance) {
     return reply.send({ ok: true });
   });
 
-  // ====== POST /api/user/telegram ======
-  // set telegram login via SHM POST v1/telegram/user
   app.post("/user/telegram", async (req, reply) => {
     const s = getSessionFromRequest(req);
     if (!s?.shmSessionId) {
@@ -164,7 +173,6 @@ export async function userRoutes(app: FastifyInstance) {
       });
     }
 
-    // Возвращаем актуальные данные телеги
     return reply.send({ ok: true, telegram: r.json ?? null });
   });
 }

@@ -1,4 +1,5 @@
-﻿import React from "react";
+﻿// FILE: web/src/main.tsx
+import React from "react";
 import ReactDOM from "react-dom/client";
 import {
   BrowserRouter,
@@ -24,17 +25,13 @@ import { Referrals } from "./pages/Referrals";
 import { PaymentsHistory } from "./pages/PaymentsHistory";
 import { PaymentsReceipts } from "./pages/PaymentsReceipts";
 import { ServicesRouter } from "./pages/help/ServicesRouter";
+import { AdminBroadcasts } from "./pages/AdminBroadcasts";
 
 import { AuthGate } from "./app/auth/AuthGate";
 import { BottomNav } from "./app/layout/BottomNav";
 import { I18nProvider, useI18n } from "./shared/i18n";
 import { ToastProvider } from "./shared/ui/toast/ToastProvider";
 import { useBillingNotifications } from "./app/notifications/useBillingNotifications";
-
-
-/* ============================================================
-   Service Worker (production only)
-   ============================================================ */
 
 if (import.meta.env.PROD) {
   import("virtual:pwa-register")
@@ -62,10 +59,6 @@ if (import.meta.env.PROD) {
     })
     .catch(() => {});
 }
-
-/* ============================================================
-   AppShell
-   ============================================================ */
 
 function AppShell({ children }: { children: React.ReactNode }) {
   const { t } = useI18n();
@@ -97,10 +90,6 @@ function AppShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-/* ============================================================
-   Protected layout
-   ============================================================ */
-
 function AuthedLayout() {
   const loc = useLocation();
 
@@ -114,18 +103,10 @@ function AuthedLayout() {
   );
 }
 
-/* ============================================================
-   Redirect helper: /app -> /
-   ============================================================ */
-
 function AppPathRedirect() {
   const loc = useLocation();
   return <Navigate to={{ pathname: "/", search: loc.search }} replace />;
 }
-
-/* ============================================================
-   Page transition wrapper
-   ============================================================ */
 
 function PageContainer({ children }: { children: React.ReactNode }) {
   const loc = useLocation();
@@ -160,10 +141,6 @@ function PageContainer({ children }: { children: React.ReactNode }) {
   );
 }
 
-/* ============================================================
-   Render
-   ============================================================ */
-
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <I18nProvider>
@@ -190,6 +167,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                   <Route path="/payments/receipts" element={<PaymentsReceipts />} />
                   <Route path="/profile" element={<Profile />} />
                   <Route path="/set-password" element={<SetPassword />} />
+                  <Route path="/admin/broadcasts" element={<AdminBroadcasts />} />
                 </Route>
 
                 <Route path="/home" element={<Navigate to="/" replace />} />

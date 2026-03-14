@@ -1,4 +1,5 @@
-﻿import type { FastifyInstance } from "fastify";
+﻿// FILE: api/src/modules/notifications/push.ts
+import type { FastifyInstance } from "fastify";
 import { getSessionFromRequest } from "../../shared/session/sessionStore.js";
 import {
   listEvents,
@@ -12,6 +13,11 @@ import { putSubscription, removeSubscription } from "./subscriptions.js";
 import { sendWebPushToUser } from "./webpush.js";
 import { markUserActive, isUserActive } from "./activity.js";
 import { linkDb } from "../../shared/linkdb/db.js";
+import {
+  deleteBroadcastByOriginId,
+  listBroadcasts,
+} from "../../shared/linkdb/notificationsRepo.js";
+import { shmShpunAppAdminStatus } from "../../shared/shm/shmClient.js";
 
 function envStr(name: string, def = "") {
   const v = String(process.env[name] ?? "").trim();
@@ -45,7 +51,31 @@ function isBroadcastEvent(e: BillingPushEvent): boolean {
   return false;
 }
 
-// Только пользователи, у которых есть push subscriptions
+function isAdminStatusOk(v: any): boolean {
+  const json = v?.json ?? {};
+  const isAdmin = json?.is_admin;
+  if (isAdmin === 1 || isAdmin === "1" || isAdmin === true) return true;
+
+  const role = String(json?.role ?? "").trim().toLowerCase();
+  return role === "admin";
+}
+
+async function ensureAdmin(req: any, reply: any) {
+  const s = getSessionFromRequest(req);
+  if (!s?.shmSessionId) {
+    reply.code(401).send({ ok: false, error: "unauthorized" });
+    return null;
+  }
+
+  const adminRes = await shmShpunAppAdminStatus(s.shmSessionId);
+  if (!adminRes.ok || !isAdminStatusOk(adminRes)) {
+    reply.code(403).send({ ok: false, error: "forbidden" });
+    return null;
+  }
+
+  return s;
+}
+
 const stmtListUsersWithPushSubs = linkDb.prepare(`
   SELECT DISTINCT user_id
   FROM push_subscriptions
@@ -53,7 +83,6 @@ const stmtListUsersWithPushSubs = linkDb.prepare(`
 `);
 
 export async function pushRoutes(app: FastifyInstance) {
-  // ===== POST /api/billing/push =====
   app.post("/billing/push", async (req, reply) => {
     const secret = envStr("BILLING_PUSH_SECRET", "");
 
@@ -70,9 +99,6 @@ export async function pushRoutes(app: FastifyInstance) {
     const r = putEvent(formatted);
     if (!r.ok) return reply.code(400).send({ ok: false, error: r.error });
 
-    // ВАЖНО:
-    // - если пользователь активен в приложении -> webpush не шлём
-    // - если приложение закрыто / inactive -> webpush шлём
     try {
       const uid = Number((r.event as any)?.user_id ?? 0);
 
@@ -93,12 +119,12 @@ export async function pushRoutes(app: FastifyInstance) {
               user_id: targetUid,
             });
           } catch {
-            // ignore per-user push errors
+            // ignore
           }
         }
       }
     } catch {
-      // ignore push errors
+      // ignore
     }
 
     return reply.send({
@@ -110,7 +136,39 @@ export async function pushRoutes(app: FastifyInstance) {
     });
   });
 
-  // ===== POST /api/notifications/activity =====
+  app.get("/admin/broadcasts", async (req, reply) => {
+    const s = await ensureAdmin(req, reply);
+    if (!s) return;
+
+    const q = (req.query ?? {}) as any;
+    const limit = Number(q.limit ?? 200);
+    const { items } = listBroadcasts({ limit });
+
+    return reply.send({ ok: true, items });
+  });
+
+  app.delete("/admin/broadcast/:originId", async (req, reply) => {
+    const s = await ensureAdmin(req, reply);
+    if (!s) return;
+
+    const params = (req.params ?? {}) as any;
+    const originId = String(params.originId ?? "").trim();
+    if (!originId) {
+      return reply.code(400).send({ ok: false, error: "missing_origin_id" });
+    }
+
+    const del = deleteBroadcastByOriginId(originId);
+    if (!del.ok) {
+      return reply.code(500).send({ ok: false, error: del.error });
+    }
+
+    return reply.send({
+      ok: true,
+      originId,
+      deleted: del.deleted,
+    });
+  });
+
   app.post("/notifications/activity", async (req, reply) => {
     const s = getSessionFromRequest(req);
     const uid = s?.userId ? Number(s.userId) : 0;
@@ -120,7 +178,6 @@ export async function pushRoutes(app: FastifyInstance) {
     return reply.send({ ok: true });
   });
 
-  // ===== POST /api/notifications/push/subscribe =====
   app.post("/notifications/push/subscribe", async (req, reply) => {
     const s = getSessionFromRequest(req);
     const uid = s?.userId ? Number(s.userId) : 0;
@@ -142,7 +199,6 @@ export async function pushRoutes(app: FastifyInstance) {
     return reply.send({ ok: true });
   });
 
-  // ===== POST /api/notifications/push/unsubscribe =====
   app.post("/notifications/push/unsubscribe", async (req, reply) => {
     const s = getSessionFromRequest(req);
     const uid = s?.userId ? Number(s.userId) : 0;
@@ -156,7 +212,6 @@ export async function pushRoutes(app: FastifyInstance) {
     return reply.send({ ok: true });
   });
 
-  // ===== GET /api/notifications =====
   app.get("/notifications", async (req, reply) => {
     const s = getSessionFromRequest(req);
     const uid = s?.userId ? Number(s.userId) : 0;
@@ -172,7 +227,6 @@ export async function pushRoutes(app: FastifyInstance) {
     return reply.send({ ok: true, items, nextCursor });
   });
 
-  // ===== GET /api/notifications/feed =====
   app.get("/notifications/feed", async (req, reply) => {
     const s = getSessionFromRequest(req);
     const uid = s?.userId ? Number(s.userId) : 0;
