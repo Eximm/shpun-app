@@ -290,23 +290,6 @@ export function Referrals() {
                 Скопировать
               </button>
             </div>
-
-            <div
-              className="pre"
-              style={{
-                marginTop: 10,
-                userSelect: "text",
-                fontSize: 12,
-                opacity: 0.85,
-                whiteSpace: "pre-wrap",
-              }}
-            >
-              {`miniapp: ${debugMiniApp ? "yes" : "no"}
-telegram_link: ${telegramLink || "(empty)"}
-web_link: ${webLink || "(empty)"}
-selected: ${referralUrl || "(empty)"}`}
-            </div>
-
             {linkLoading ? (
               <div style={{ marginTop: 10, fontSize: 12, opacity: 0.72 }}>Генерируем ссылку…</div>
             ) : linkError ? (
