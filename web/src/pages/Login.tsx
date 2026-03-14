@@ -70,14 +70,6 @@ function clearPendingPartnerId() {
   }
 }
 
-function getAuthRedirectUrl(partnerId?: number): string {
-  const origin = window.location.origin;
-  const base = `${origin}/api/auth/telegram_widget_redirect`;
-  const pid = Number(partnerId ?? 0);
-  if (!Number.isFinite(pid) || pid <= 0) return base;
-  return `${base}?partner_id=${encodeURIComponent(String(Math.trunc(pid)))}`;
-}
-
 function looksLikeCode(s: string) {
   const v = String(s || "").trim();
   if (!v) return false;
@@ -346,6 +338,26 @@ export function Login() {
     }
   }
 
+  async function telegramLoginWidget(widgetUser: Record<string, any>) {
+    setAuthPending("telegram");
+
+    setLoading(true);
+    try {
+      const r = await apiFetch<AuthResponse>("/auth/telegram_widget", {
+        method: "POST",
+        body: {
+          ...widgetUser,
+          ...(partnerId ? { partner_id: partnerId } : {}),
+        },
+      });
+      goAfterAuth(r, "telegram");
+    } catch (e: unknown) {
+      toastError(errorToAuthRaw(e, t("error.telegram_login_failed", "Не удалось войти через Telegram.")));
+    } finally {
+      setLoading(false);
+    }
+  }
+
   function focusWidget() {
     widgetWrapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -423,6 +435,11 @@ export function Login() {
     container.innerHTML = "";
     if (!botUsername) return;
 
+    const w = window as any;
+    w.__shpunTelegramWidgetAuth = (user: Record<string, any>) => {
+      telegramLoginWidget(user);
+    };
+
     const script = document.createElement("script");
     script.async = true;
     script.src = "https://telegram.org/js/telegram-widget.js?22";
@@ -430,12 +447,17 @@ export function Login() {
     script.setAttribute("data-size", "large");
     script.setAttribute("data-userpic", "true");
     script.setAttribute("data-request-access", "write");
-    script.setAttribute("data-auth-url", getAuthRedirectUrl(partnerId));
+    script.setAttribute("data-onauth", "__shpunTelegramWidgetAuth(user)");
 
     container.appendChild(script);
 
     return () => {
       container.innerHTML = "";
+      try {
+        delete (window as any).__shpunTelegramWidgetAuth;
+      } catch {
+        // ignore
+      }
     };
   }, [mode, botUsername, partnerId]);
 
