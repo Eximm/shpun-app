@@ -1,7 +1,7 @@
-﻿// FILE: web/src/pages/Feed.tsx
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiFetch } from "../shared/api/client";
+import { buildFeedPreview, shouldShowFeedMore, isNewsEvent } from "../shared/ui/newsPreview";
 
 type NotifLevel = "info" | "success" | "error";
 type NotifEvent = {
@@ -20,7 +20,6 @@ type FeedResp = { ok: true; items: NotifEvent[]; nextBefore: Cursor };
 type Category = "all" | "money" | "services" | "news";
 
 const PAGE_LIMIT = 50;
-const FEED_PREVIEW_LIMIT = 170;
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
@@ -35,17 +34,6 @@ function formatDateTime(tsSec: number) {
 
 function normalizeType(t: any) {
   return String(t ?? "").trim().toLowerCase();
-}
-
-function truncateText(text: string | null | undefined, limit: number) {
-  const source = String(text || "").trim();
-  if (!source) return "";
-  if (source.length <= limit) return source;
-  return source.slice(0, limit).trimEnd() + "…";
-}
-
-function isLongText(text: string | null | undefined, limit: number) {
-  return String(text || "").trim().length > limit;
 }
 
 /**
@@ -333,9 +321,9 @@ export function Feed() {
               ) : (
                 filtered.map((e) => {
                   const title = e.title || "Сообщение";
-                  const fullMessage = String(e.message || "");
-                  const preview = truncateText(fullMessage, FEED_PREVIEW_LIMIT);
-                  const hasFullView = isLongText(fullMessage, FEED_PREVIEW_LIMIT);
+                  const preview = buildFeedPreview(e);
+                  const isNews = isNewsEvent(e);
+                  const hasFullView = shouldShowFeedMore(e, preview);
                   const dt = formatDateTime(e.ts);
 
                   const link = eventLink(e);
@@ -369,7 +357,7 @@ export function Feed() {
                         <div className="list__title" style={{ marginTop: 6 }}>
                           {title}
                         </div>
-                        {preview ? <div className="list__sub">{preview}</div> : null}
+                        {preview ? <div className={`list__sub ${isNews ? "feed-news__preview" : ""}`}>{preview}</div> : null}
 
                         {hasFullView ? (
                           <div className="feed__more">
