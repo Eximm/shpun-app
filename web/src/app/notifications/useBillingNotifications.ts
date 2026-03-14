@@ -172,8 +172,8 @@ function getToastView(ev: BillingPushEvent): {
 
   if (type === "broadcast.news") {
     return {
-      title: "📰 Новость",
-      description: "Появилась новая новость — загляните в Инфоцентр",
+      title: "📰 Свежая новость",
+      description: "Загляните в Инфоцентр",
       level,
     };
   }
