@@ -337,7 +337,7 @@ export function Feed() {
                   return (
                     <div
                       key={e.event_id}
-                      className={`list__item${clickable ? " is-clickable" : ""}`}
+                      className={`list__item${clickable ? " is-clickable" : ""}${isNews ? " feed-item--news" : ""}`}
                       role={clickable ? "button" : undefined}
                       tabIndex={clickable ? 0 : undefined}
                       onClick={clickable ? onOpen : undefined}
@@ -376,9 +376,9 @@ export function Feed() {
                         ) : null}
                       </div>
 
-                      <div className="list__side">
-                        <span className={`chip chip--${chipKindByLevel(e.level)}`}>{chipTextByEvent(e)}</span>
-                      </div>
+                    <div className={`list__side${isNews ? " feed-item__side--news" : ""}`}>
+                      <span className={`chip chip--${chipKindByLevel(e.level)}`}>{chipTextByEvent(e)}</span>
+                    </div>
                     </div>
                   );
                 })

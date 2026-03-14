@@ -595,6 +595,51 @@ button, a { -webkit-tap-highlight-color: transparent; }
   white-space: pre-wrap;
 }
 
+.feed-item--news {
+  position: relative;
+  align-items: flex-start;
+}
+
+.feed-item--news .list__main {
+  width: 100%;
+  min-width: 0;
+  padding-right: 96px;
+}
+
+.feed-item__side--news {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  margin: 0;
+  pointer-events: none;
+}
+
+.feed-item__side--news .chip {
+  min-width: 72px;
+  justify-content: center;
+}
+
+.feed-news__preview {
+  display: -webkit-box;
+  display: box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.feed__more {
+  margin-top: 14px;
+  width: 100%;
+}
+
+.feed__more .btn {
+  width: 100%;
+  justify-content: center;
+  padding: 12px 16px;
+}
+
 .home-news__preview {
   display: -webkit-box;
   -webkit-line-clamp: 2;
