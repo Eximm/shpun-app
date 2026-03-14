@@ -8,9 +8,11 @@ type Mode = "login" | "register";
 function normalizeLogin(v: unknown) {
   return String(v ?? "").trim();
 }
+
 function normalizePassword(v: unknown) {
   return String(v ?? "").trim();
 }
+
 function normalizeMode(v: unknown): Mode {
   const s = String(v ?? "login").trim().toLowerCase();
   return s === "register" ? "register" : "login";
@@ -41,7 +43,6 @@ async function withTimeout<T>(
 }
 
 async function shmRegister(login: string, password: string, signal: AbortSignal) {
-  // PUT /shm/v1/user  { login, password }
   const r = await shmFetch<any>(null, "v1/user", {
     method: "PUT",
     body: { login, password },
@@ -49,6 +50,7 @@ async function shmRegister(login: string, password: string, signal: AbortSignal)
   });
 
   if (r.ok) return { ok: true as const };
+
   return {
     ok: false as const,
     status: r.status || 400,
@@ -56,8 +58,11 @@ async function shmRegister(login: string, password: string, signal: AbortSignal)
   };
 }
 
-async function shmLogin(login: string, password: string, signal: AbortSignal): Promise<AuthResult> {
-  // POST /shm/v1/user/auth  { login, password }
+async function shmLogin(
+  login: string,
+  password: string,
+  signal: AbortSignal
+): Promise<AuthResult> {
   const r = await shmFetch<any>(null, "v1/user/auth", {
     method: "POST",
     body: { login, password },
@@ -94,9 +99,11 @@ export async function passwordAuth(body: any): Promise<AuthResult> {
   if (!login || !password) {
     return { ok: false, status: 400, error: "login_and_password_required" };
   }
+
   if (login.length < 3) {
     return { ok: false, status: 400, error: "login_too_short" };
   }
+
   if (password.length < 8) {
     return { ok: false, status: 400, error: "password_too_short" };
   }
@@ -113,7 +120,7 @@ export async function passwordAuth(body: any): Promise<AuthResult> {
             detail: reg.detail,
           };
         }
-        // после регистрации — сразу логиним
+
         return await shmLogin(login, password, signal);
       }
 

@@ -36,7 +36,7 @@ function getTelegramBotUsername(): string {
 }
 
 type Mode = "telegram" | "web";
-type PassMode = "login" | "register";
+type AuthModal = "none" | "login" | "register";
 
 const PARTNER_LS_KEY = "partner_id_pending";
 const AUTH_PENDING_KEY = "auth:pending";
@@ -51,14 +51,25 @@ function setAuthPending(provider: string) {
   }
 }
 
+function normalizePartnerId(v: unknown): number {
+  const n = Number(v ?? 0);
+  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : 0;
+}
+
 function readPendingPartnerId(): number {
   try {
     const v = String(localStorage.getItem(PARTNER_LS_KEY) ?? "").trim();
-    if (!v) return 0;
-    const n = Number(v);
-    return Number.isFinite(n) && n > 0 ? Math.trunc(n) : 0;
+    return normalizePartnerId(v);
   } catch {
     return 0;
+  }
+}
+
+function savePendingPartnerId(id: number) {
+  try {
+    if (id > 0) localStorage.setItem(PARTNER_LS_KEY, String(id));
+  } catch {
+    // ignore
   }
 }
 
@@ -68,6 +79,31 @@ function clearPendingPartnerId() {
   } catch {
     // ignore
   }
+}
+
+function getPartnerIdFromLocation(): number {
+  try {
+    const searchId = new URLSearchParams(window.location.search).get("partner_id");
+    const fromSearch = normalizePartnerId(searchId);
+    if (fromSearch > 0) return fromSearch;
+  } catch {
+    // ignore
+  }
+
+  try {
+    const hash = String(window.location.hash ?? "");
+    const idx = hash.indexOf("?");
+    if (idx >= 0) {
+      const qs = hash.slice(idx + 1);
+      const hashId = new URLSearchParams(qs).get("partner_id");
+      const fromHash = normalizePartnerId(hashId);
+      if (fromHash > 0) return fromHash;
+    }
+  } catch {
+    // ignore
+  }
+
+  return 0;
 }
 
 function looksLikeCode(s: string) {
@@ -124,6 +160,8 @@ function mapAuthError(raw: string, t: (k: string, fb?: string) => string): strin
     case "shm_telegram_auth_failed":
     case "shm_telegram_widget_auth_failed":
       return t("login.err.tg_failed", "Не удалось войти через Telegram. Попробуйте ещё раз.");
+    case "shm_register_failed":
+      return t("login.err.register_failed", "Не удалось создать аккаунт. Попробуйте ещё раз.");
     default:
       return t("login.err.generic", "Не удалось выполнить вход. Попробуйте ещё раз.");
   }
@@ -163,25 +201,17 @@ function LangSwitch({
   ariaLabel: string;
 }) {
   return (
-    <div
-      style={{
-        display: "inline-flex",
-        gap: 6,
-        alignItems: "center",
-        flexWrap: "nowrap",
-      }}
-      aria-label={ariaLabel}
-    >
+    <div className="seg" aria-label={ariaLabel}>
       <button
         type="button"
-        className={`btn ${lang === "ru" ? "btn--primary" : ""}`}
+        className={`btn seg__btn ${lang === "ru" ? "btn--primary" : ""}`}
         onClick={() => setLang("ru")}
       >
         RU
       </button>
       <button
         type="button"
-        className={`btn ${lang === "en" ? "btn--primary" : ""}`}
+        className={`btn seg__btn ${lang === "en" ? "btn--primary" : ""}`}
         onClick={() => setLang("en")}
       >
         EN
@@ -201,23 +231,24 @@ export function Login() {
   const [tgInitData, setTgInitData] = useState<string | null>(initDataNow);
   const [loading, setLoading] = useState(false);
 
-  const [passMode, setPassMode] = useState<PassMode>("login");
+  const [authModal, setAuthModal] = useState<AuthModal>("none");
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [password2, setPassword2] = useState("");
 
-  const partnerId = useMemo(() => readPendingPartnerId(), []);
+  const [partnerId, setPartnerId] = useState<number>(() => readPendingPartnerId());
 
   const autoLoginStarted = useRef(false);
   const widgetWrapRef = useRef<HTMLDivElement | null>(null);
+  const referralHandledRef = useRef(false);
 
   const lastToastRef = useRef<{ msg: string; at: number }>({ msg: "", at: 0 });
+
   function toastError(raw: string) {
     const msg = mapAuthError(raw, t);
     const now = Date.now();
     if (lastToastRef.current.msg === msg && now - lastToastRef.current.at < 1200) return;
     lastToastRef.current = { msg, at: now };
-
     toast.error(t("login.toast.error_title", "Ошибка"), { description: msg });
   }
 
@@ -227,6 +258,18 @@ export function Login() {
     login.trim().length > 0 && password.length > 0 && password2.length > 0 && password === password2;
 
   const botUsername = useMemo(() => getTelegramBotUsername(), []);
+
+  function openModal(next: AuthModal) {
+    setAuthModal(next);
+    setPassword("");
+    setPassword2("");
+  }
+
+  function closeModal() {
+    setAuthModal("none");
+    setPassword("");
+    setPassword2("");
+  }
 
   function goAfterAuth(r?: AuthResponse, provider?: string) {
     const ok = !!r && (r as any).ok === true;
@@ -240,6 +283,7 @@ export function Login() {
     setAuthPending(provider || "auth");
     refetchMe().catch(() => {});
     clearPendingPartnerId();
+    setPartnerId(0);
 
     const nextRaw = String((r as any).next ?? "home").trim();
     const next = nextRaw || "home";
@@ -264,7 +308,6 @@ export function Login() {
     }
 
     setAuthPending("password");
-
     setLoading(true);
     try {
       const r = await apiFetch<AuthResponse>("/auth/password", {
@@ -273,7 +316,6 @@ export function Login() {
           login: login.trim(),
           password,
           mode: "login",
-          ...(partnerId ? { partner_id: partnerId } : {}),
         },
       });
       goAfterAuth(r, "password");
@@ -286,13 +328,15 @@ export function Login() {
 
   async function passwordRegister() {
     if (!canPasswordRegister) {
-      if (!login.trim() || !password) toastError("login_and_password_required");
-      else if (!passwordsMatch) toastError(t("login.password.mismatch", "Пароли не совпадают."));
+      if (!login.trim() || !password) {
+        toastError("login_and_password_required");
+      } else if (!passwordsMatch) {
+        toastError(t("login.password.mismatch", "Пароли не совпадают."));
+      }
       return;
     }
 
     setAuthPending("password");
-
     setLoading(true);
     try {
       const r = await apiFetch<AuthResponse>("/auth/password", {
@@ -301,9 +345,16 @@ export function Login() {
           login: login.trim(),
           password,
           mode: "register",
-          ...(partnerId ? { partner_id: partnerId } : {}),
+          ...(partnerId > 0 ? { partner_id: partnerId } : {}),
         },
       });
+
+      if ((r as any)?.ok) {
+        toast.success(t("login.register.success_title", "Регистрация успешна"), {
+          description: t("login.register.success_desc", "Аккаунт создан. Открываем приложение…"),
+        });
+      }
+
       goAfterAuth(r, "password");
     } catch (e: unknown) {
       toastError(errorToAuthRaw(e, t("error.password_register_failed", "Не удалось создать аккаунт.")));
@@ -320,14 +371,13 @@ export function Login() {
     }
 
     setAuthPending("telegram");
-
     setLoading(true);
     try {
       const r = await apiFetch<AuthResponse>("/auth/telegram", {
         method: "POST",
         body: {
           initData,
-          ...(partnerId ? { partner_id: partnerId } : {}),
+          ...(partnerId > 0 ? { partner_id: partnerId } : {}),
         },
       });
       goAfterAuth(r, "telegram");
@@ -340,14 +390,13 @@ export function Login() {
 
   async function telegramLoginWidget(widgetUser: Record<string, any>) {
     setAuthPending("telegram");
-
     setLoading(true);
     try {
       const r = await apiFetch<AuthResponse>("/auth/telegram_widget", {
         method: "POST",
         body: {
           ...widgetUser,
-          ...(partnerId ? { partner_id: partnerId } : {}),
+          ...(partnerId > 0 ? { partner_id: partnerId } : {}),
         },
       });
       goAfterAuth(r, "telegram");
@@ -383,8 +432,7 @@ export function Login() {
 
       nav("/", { replace: true });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loc?.search]);
+  }, [loc?.search, nav]);
 
   useEffect(() => {
     const sp = new URLSearchParams(String(loc?.search ?? ""));
@@ -393,8 +441,25 @@ export function Login() {
 
     const msg = mapRedirectError(e, t);
     if (msg) toastError(msg);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loc?.search]);
+  }, [loc?.search, t]);
+
+  useEffect(() => {
+    if (referralHandledRef.current) return;
+    referralHandledRef.current = true;
+
+    const fromUrl = getPartnerIdFromLocation();
+    const pending = readPendingPartnerId();
+    const finalPartnerId = fromUrl > 0 ? fromUrl : pending;
+
+    if (finalPartnerId > 0) {
+      savePendingPartnerId(finalPartnerId);
+      setPartnerId(finalPartnerId);
+
+      if (mode === "web") {
+        setAuthModal("register");
+      }
+    }
+  }, [mode]);
 
   useEffect(() => {
     const tg = getTelegramWebApp();
@@ -422,7 +487,6 @@ export function Login() {
         window.clearTimeout(t3);
       };
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
   useEffect(() => {
@@ -461,128 +525,134 @@ export function Login() {
     };
   }, [mode, botUsername, partnerId]);
 
-  const headerCard = (
-    <div className="pre login__headerCard">
-      <div className="login__whatTitle">{t("login.what.title", "Что такое Shpun App")}</div>
+  const passwordModal = authModal !== "none" ? (
+    <div className="modal" role="dialog" aria-modal="true">
+      <div className="card modal__card">
+        <div className="card__body">
+          <div className="modal__head">
+            <div>
+              <div className="modal__title">
+                {authModal === "login"
+                  ? t("login.password.form_title_login", "Вход по логину и паролю")
+                  : t("login.password.form_title_register", "Регистрация")}
+              </div>
+              <p className="p">
+                {authModal === "login"
+                  ? t("login.password.tip", "Используйте этот способ, если входите не через Telegram.")
+                  : t("login.password.register_tip", "Этот способ подойдёт для входа из браузера.")}
+              </p>
+            </div>
 
-      <div className="login__whatList">
-        <div>✅ {t("login.what.1", "Shpun App — это ваш личный кабинет для управления сервисами Shpun.")}</div>
-        <div>💳 {t("login.what.2", "Здесь собраны баланс, услуги, оплаты, бонусы и важные уведомления.")}</div>
-        <div>⚙️ {t("login.what.3", "Вы можете быстро открыть нужный раздел и управлять аккаунтом в одном месте.")}</div>
-        <div>✈️ {t("login.what.4", "Через Telegram вход занимает всего пару секунд.")}</div>
+            <button
+              type="button"
+              className="btn modal__close"
+              onClick={closeModal}
+              disabled={loading}
+              aria-label={t("common.close", "Закрыть")}
+            >
+              ×
+            </button>
+          </div>
+
+          <div className="modal__content">
+            {authModal === "register" && partnerId > 0 && (
+              <div className="pre">
+                {t(
+                  "login.partner.notice",
+                  "Вы пришли по приглашению. Партнёрская привязка будет учтена при регистрации."
+                )}
+              </div>
+            )}
+
+            <form
+              className="auth__form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (authModal === "login") passwordLogin();
+                else passwordRegister();
+              }}
+            >
+              <div className="auth__grid">
+                <label className="field">
+                  <span className="field__label">{t("login.password.login", "Логин")}</span>
+                  <input
+                    className="input"
+                    placeholder={t("login.password.login_ph", "Введите логин")}
+                    value={login}
+                    onChange={(e) => setLogin(e.target.value)}
+                    autoComplete="username"
+                    disabled={loading}
+                    inputMode="text"
+                  />
+                </label>
+
+                <label className="field">
+                  <span className="field__label">{t("login.password.password", "Пароль")}</span>
+                  <input
+                    className="input"
+                    placeholder={t("login.password.password_ph", "Введите пароль")}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    type="password"
+                    autoComplete={authModal === "login" ? "current-password" : "new-password"}
+                    disabled={loading}
+                  />
+                </label>
+
+                {authModal === "register" && (
+                  <label className="field">
+                    <span className="field__label">{t("login.password.repeat", "Повторите пароль")}</span>
+                    <input
+                      className="input"
+                      placeholder={t("login.password.repeat_ph", "Повторите пароль")}
+                      value={password2}
+                      onChange={(e) => setPassword2(e.target.value)}
+                      type="password"
+                      autoComplete="new-password"
+                      disabled={loading}
+                    />
+                  </label>
+                )}
+              </div>
+
+              {authModal === "register" && password2.length > 0 && !passwordsMatch && (
+                <div className="pre login__preMt12">{t("login.password.mismatch", "Пароли не совпадают.")}</div>
+              )}
+
+              <div className="auth__actions">
+                <button
+                  type="submit"
+                  className="btn btn--primary login__btnFull"
+                  disabled={loading || (authModal === "login" ? !canPasswordLogin : !canPasswordRegister)}
+                >
+                  {loading
+                    ? authModal === "login"
+                      ? t("login.password.submit_loading", "Входим…")
+                      : t("login.password.register_loading", "Создаём аккаунт…")
+                    : authModal === "login"
+                      ? t("login.password.submit", "Войти")
+                      : t("login.password.register_submit", "Создать аккаунт")}
+                </button>
+              </div>
+
+              <div className="login__switchWrap">
+                <button
+                  type="button"
+                  className="btn login__switchBtn"
+                  disabled={loading}
+                  onClick={() => openModal(authModal === "login" ? "register" : "login")}
+                >
+                  {authModal === "login"
+                    ? t("login.password.switch_register", "Создать аккаунт")
+                    : t("login.password.switch_login", "Уже есть аккаунт? Войти")}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       </div>
     </div>
-  );
-
-  const passwordDetails = (
-    <details className="auth__details">
-      <summary className="auth__detailsSummary">{t("login.password.summary", "Войти по логину и паролю")}</summary>
-
-      <form
-        className="auth__form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (passMode === "login") passwordLogin();
-          else passwordRegister();
-        }}
-      >
-        <div className="login__formTitle">
-          {passMode === "login"
-            ? t("login.password.form_title_login", "Вход по логину и паролю")
-            : t("login.password.form_title_register", "Регистрация")}
-        </div>
-
-        <div className="auth__grid">
-          <label className="field">
-            <span className="field__label">{t("login.password.login", "Логин")}</span>
-            <input
-              className="input"
-              placeholder={t("login.password.login_ph", "Введите логин")}
-              value={login}
-              onChange={(e) => setLogin(e.target.value)}
-              autoComplete="username"
-              disabled={loading}
-              inputMode="text"
-            />
-          </label>
-
-          <label className="field">
-            <span className="field__label">{t("login.password.password", "Пароль")}</span>
-            <input
-              className="input"
-              placeholder={t("login.password.password_ph", "Введите пароль")}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              type="password"
-              autoComplete={passMode === "login" ? "current-password" : "new-password"}
-              disabled={loading}
-            />
-          </label>
-
-          {passMode === "register" && (
-            <label className="field">
-              <span className="field__label">{t("login.password.repeat", "Повторите пароль")}</span>
-              <input
-                className="input"
-                placeholder={t("login.password.repeat_ph", "Повторите пароль")}
-                value={password2}
-                onChange={(e) => setPassword2(e.target.value)}
-                type="password"
-                autoComplete="new-password"
-                disabled={loading}
-              />
-            </label>
-          )}
-        </div>
-
-        {passMode === "register" && password2.length > 0 && !passwordsMatch && (
-          <div className="pre login__preMt12">{t("login.password.mismatch", "Пароли не совпадают.")}</div>
-        )}
-
-        <div className="auth__actions">
-          <button
-            type="submit"
-            className="btn btn--primary login__btnFull"
-            disabled={loading || (passMode === "login" ? !canPasswordLogin : !canPasswordRegister)}
-          >
-            {loading
-              ? passMode === "login"
-                ? t("login.password.submit_loading", "Входим…")
-                : t("login.password.register_loading", "Создаём аккаунт…")
-              : passMode === "login"
-                ? t("login.password.submit", "Войти")
-                : t("login.password.register_submit", "Создать аккаунт")}
-          </button>
-        </div>
-
-        <div className="login__switchWrap">
-          <button
-            type="button"
-            className="btn login__switchBtn"
-            disabled={loading}
-            onClick={() => {
-              if (passMode === "login") {
-                setPassMode("register");
-              } else {
-                setPassMode("login");
-                setPassword2("");
-              }
-            }}
-          >
-            {passMode === "login"
-              ? t("login.password.switch_register", "Создать аккаунт")
-              : t("login.password.switch_login", "Уже есть аккаунт? Войти")}
-          </button>
-        </div>
-
-        <div className="pre login__preMt12">
-          {passMode === "login"
-            ? t("login.password.tip", "Используйте этот способ, если входите не через Telegram.")
-            : t("login.password.register_tip", "Этот способ подойдёт для входа из браузера.")}
-        </div>
-      </form>
-    </details>
-  );
+  ) : null;
 
   return (
     <div className="section">
@@ -594,11 +664,18 @@ export function Login() {
               {mode === "telegram" ? (
                 <p className="p">{t("login.desc.tg", "Продолжите вход через Telegram.")}</p>
               ) : (
-                <p className="p">{t("login.desc.web", "Войдите через Telegram или по логину и паролю.")}</p>
+                <p className="p">
+                  {partnerId > 0
+                    ? t(
+                        "login.desc.web.partner",
+                        "Вы открыли приглашение. Зарегистрируйтесь или войдите через Telegram."
+                      )
+                    : t("login.desc.web", "Войдите через Telegram или по логину и паролю.")}
+                </p>
               )}
             </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <div className="row">
               <LangSwitch
                 lang={(lang as "ru" | "en") === "en" ? "en" : "ru"}
                 setLang={setLang as (v: "ru" | "en") => void}
@@ -611,7 +688,25 @@ export function Login() {
             </div>
           </div>
 
-          {headerCard}
+          <div className="pre login__headerCard">
+            <div className="login__whatTitle">{t("login.what.title", "Что такое Shpun App")}</div>
+
+            <div className="login__whatList">
+              <div>✅ {t("login.what.1", "Shpun App — это ваш личный кабинет для управления сервисами Shpun.")}</div>
+              <div>💳 {t("login.what.2", "Здесь собраны баланс, услуги, оплаты, бонусы и важные уведомления.")}</div>
+              <div>⚙️ {t("login.what.3", "Вы можете быстро открыть нужный раздел и управлять аккаунтом в одном месте.")}</div>
+              <div>✈️ {t("login.what.4", "Через Telegram вход занимает всего пару секунд.")}</div>
+            </div>
+          </div>
+
+          {partnerId > 0 && mode === "web" && (
+            <div className="pre login__preMt12">
+              {t(
+                "login.partner.banner",
+                "Приглашение сохранено. Для нового пользователя сразу открыта регистрация, и партнёрка будет учтена."
+              )}
+            </div>
+          )}
 
           <div className="auth__divider login__dividerMt14">
             <span>{t("login.divider.telegram", "Вход через Telegram")}</span>
@@ -641,7 +736,27 @@ export function Login() {
             <span>{t("login.divider.password", "Логин и пароль")}</span>
           </div>
 
-          {passwordDetails}
+          <div className="auth__actions">
+            <button
+              type="button"
+              className="btn login__btnFull"
+              onClick={() => openModal("login")}
+              disabled={loading}
+            >
+              {t("login.password.open_login", "Войти по логину")}
+            </button>
+
+            <button
+              type="button"
+              className="btn btn--primary login__btnFull"
+              onClick={() => openModal("register")}
+              disabled={loading}
+            >
+              {partnerId > 0
+                ? t("login.password.open_register_partner", "Зарегистрироваться по приглашению")
+                : t("login.password.open_register", "Создать аккаунт")}
+            </button>
+          </div>
 
           <div className="auth__divider login__dividerMt14">
             <span>{t("login.divider.providers", "Другие способы")}</span>
@@ -686,6 +801,8 @@ export function Login() {
           </div>
         </div>
       </div>
+
+      {passwordModal}
     </div>
   );
 }
