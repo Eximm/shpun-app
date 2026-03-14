@@ -576,6 +576,10 @@ export async function authRoutes(app: FastifyInstance) {
       try {
         await tryAttachPartner(shmSessionId, (body as any)?.partner_id);
       } catch {}
+
+      try {
+        await callShmTemplate(shmSessionId, "password.mark_set");
+      } catch {}
     }
 
     const localSid = reuseOrCreateSid(req);
