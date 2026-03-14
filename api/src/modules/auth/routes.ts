@@ -576,6 +576,22 @@ export async function authRoutes(app: FastifyInstance) {
 
     putSession(localSid, { shmSessionId, shmUserId, createdAt: Date.now() });
 
+    if (mode === "register") {
+      try {
+        await callShmTemplate(shmSessionId, "password.mark_set");
+        dbg(req, "password_auth:mark_password_set_ok", {
+          userId: shmUserId,
+          mode,
+        });
+      } catch (e: any) {
+        dbg(req, "password_auth:mark_password_set_failed", {
+          userId: shmUserId,
+          mode,
+          error: String(e?.message ?? e ?? ""),
+        });
+      }
+    }
+
     dbg(req, "password_auth:set_cookie_and_reply", {
       userId: shmUserId,
       sid: maskValue(localSid),

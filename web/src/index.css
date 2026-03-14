@@ -2200,10 +2200,12 @@ button, a { -webkit-tap-highlight-color: transparent; }
   align-items: stretch;
 }
 
-.pwdfield__btn {
-  width: var(--tap);
-  min-width: var(--tap);
-  padding: 0;
+.pwdfield__toggle{
+  min-width: 96px;
+  padding: 0 12px;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 800;
 }
 .list__item.is-clickable { cursor: pointer; }
 .list__item.is-clickable:hover { filter: brightness(1.04); }
@@ -2751,4 +2753,27 @@ button, a { -webkit-tap-highlight-color: transparent; }
   font-size: 12.5px;
   font-weight: 800;
   color: rgba(255,255,255,0.62);
+}
+/* ============================================================
+   Login modal: show/hide password button
+   ============================================================ */
+
+.pwdfield__toggle{
+  min-width: 96px;
+  padding: 0 12px;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+@media (max-width: 520px){
+  .pwdfield{
+    grid-template-columns: 1fr;
+  }
+
+  .pwdfield__toggle{
+    width: 100%;
+    min-width: 0;
+    min-height: 40px;
+  }
 }

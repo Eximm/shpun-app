@@ -2,9 +2,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMe } from "../app/auth/useMe";
+import { toast } from "../shared/ui/toast";
 
 function getTelegramWebApp(): any | null {
   return (window as any)?.Telegram?.WebApp ?? null;
+}
+
+function isTelegramMiniApp(): boolean {
+  try {
+    const tg = getTelegramWebApp();
+    return typeof tg?.initData === "string" && tg.initData.trim().length > 0;
+  } catch {
+    return false;
+  }
 }
 
 function fmtDate(iso: string) {
@@ -84,14 +94,14 @@ export function Referrals() {
   const [webLink, setWebLink] = useState<string>("");
   const [, setPartnerId] = useState<number>(0); // partner id is fetched but not shown
 
-  function isTelegramMiniApp() {
-    return !!getTelegramWebApp();
-  }
-
   const referralUrl = useMemo(() => {
     const tg = telegramLink.trim();
     const web = webLink.trim();
-    if (isTelegramMiniApp()) return tg || web;
+
+    if (isTelegramMiniApp()) {
+      return tg || web;
+    }
+
     return web || tg;
   }, [telegramLink, webLink]);
 
@@ -184,17 +194,30 @@ export function Referrals() {
 
   function copyLink() {
     if (!referralUrl) return;
-    navigator.clipboard?.writeText(referralUrl).catch(() => {});
-    const tg = getTelegramWebApp();
-    try {
-      tg?.showPopup?.({
-        title: "Готово",
-        message: "Ссылка скопирована",
-        buttons: [{ type: "ok" }],
+
+    navigator.clipboard
+      ?.writeText(referralUrl)
+      .then(() => {
+        toast.success("Ссылка скопирована", {
+          description: "Отправьте её другу.",
+        });
+
+        const tg = getTelegramWebApp();
+        try {
+          tg?.showPopup?.({
+            title: "Готово",
+            message: "Ссылка скопирована. Отправьте её другу.",
+            buttons: [{ type: "ok" }],
+          });
+        } catch {
+          // ignore
+        }
+      })
+      .catch(() => {
+        toast.error("Не удалось скопировать ссылку", {
+          description: "Попробуйте ещё раз.",
+        });
       });
-    } catch {
-      // ignore
-    }
   }
 
   function shareLink() {
@@ -252,7 +275,6 @@ export function Referrals() {
 
   return (
     <div className="section">
-      {/* Header */}
       <div className="card">
         <div className="card__body">
           <div className="home-block-head">
@@ -268,7 +290,6 @@ export function Referrals() {
             </Link>
           </div>
 
-          {/* Link box */}
           <div style={{ marginTop: 12 }}>
             <div style={{ fontSize: 12, opacity: 0.72, marginBottom: 6 }}>
               Твоя реферальная ссылка
@@ -302,7 +323,6 @@ export function Referrals() {
             ) : null}
           </div>
 
-          {/* Stats row */}
           <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
             <div className="chip chip--soft">
               👥 Приглашено: <b style={{ marginLeft: 6 }}>{stLoading ? "…" : refCount}</b>
@@ -314,7 +334,6 @@ export function Referrals() {
         </div>
       </div>
 
-      {/* List */}
       <div className="section">
         <div className="card">
           <div className="card__body">
@@ -360,8 +379,6 @@ export function Referrals() {
                         </div>
                         <div className="list__sub">{created ? `Присоединился: ${fmtDate(created)}` : "—"}</div>
                       </div>
-
-                      {/* ✅ ID intentionally not shown */}
                     </div>
                   );
                 })
@@ -375,7 +392,6 @@ export function Referrals() {
               )}
             </div>
 
-            {/* Pagination */}
             <div className="actions actions--2" style={{ marginTop: 12 }}>
               <button
                 className="btn"

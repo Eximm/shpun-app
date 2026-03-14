@@ -236,7 +236,14 @@ export function Login() {
   const [password, setPassword] = useState("");
   const [password2, setPassword2] = useState("");
 
+  const [showPassword, setShowPassword] = useState(false);
+  const [showPassword2, setShowPassword2] = useState(false);
+
   const [partnerId, setPartnerId] = useState<number>(() => readPendingPartnerId());
+  const [partnerIdInput, setPartnerIdInput] = useState<string>(() => {
+    const pending = readPendingPartnerId();
+    return pending > 0 ? String(pending) : "";
+  });
 
   const autoLoginStarted = useRef(false);
   const widgetWrapRef = useRef<HTMLDivElement | null>(null);
@@ -254,6 +261,7 @@ export function Login() {
 
   const canPasswordLogin = login.trim().length > 0 && password.length > 0;
   const passwordsMatch = password2.length === 0 ? true : password === password2;
+  const currentPartnerId = normalizePartnerId(partnerIdInput);
   const canPasswordRegister =
     login.trim().length > 0 && password.length > 0 && password2.length > 0 && password === password2;
 
@@ -263,12 +271,22 @@ export function Login() {
     setAuthModal(next);
     setPassword("");
     setPassword2("");
+    setShowPassword(false);
+    setShowPassword2(false);
+
+    if (next === "register") {
+      const pending = readPendingPartnerId();
+      const effective = pending > 0 ? pending : partnerId;
+      setPartnerIdInput(effective > 0 ? String(effective) : "");
+    }
   }
 
   function closeModal() {
     setAuthModal("none");
     setPassword("");
     setPassword2("");
+    setShowPassword(false);
+    setShowPassword2(false);
   }
 
   function goAfterAuth(r?: AuthResponse, provider?: string) {
@@ -284,6 +302,7 @@ export function Login() {
     refetchMe().catch(() => {});
     clearPendingPartnerId();
     setPartnerId(0);
+    setPartnerIdInput("");
 
     const nextRaw = String((r as any).next ?? "home").trim();
     const next = nextRaw || "home";
@@ -336,6 +355,13 @@ export function Login() {
       return;
     }
 
+    const finalPartnerId = normalizePartnerId(partnerIdInput);
+
+    if (partnerIdInput.trim() && finalPartnerId <= 0) {
+      toastError(t("login.partner.invalid", "Партнёрский код должен быть положительным числом."));
+      return;
+    }
+
     setAuthPending("password");
     setLoading(true);
     try {
@@ -345,7 +371,7 @@ export function Login() {
           login: login.trim(),
           password,
           mode: "register",
-          ...(partnerId > 0 ? { partner_id: partnerId } : {}),
+          ...(finalPartnerId > 0 ? { partner_id: finalPartnerId } : {}),
         },
       });
 
@@ -454,6 +480,7 @@ export function Login() {
     if (finalPartnerId > 0) {
       savePendingPartnerId(finalPartnerId);
       setPartnerId(finalPartnerId);
+      setPartnerIdInput(String(finalPartnerId));
 
       if (mode === "web") {
         setAuthModal("register");
@@ -555,7 +582,7 @@ export function Login() {
           </div>
 
           <div className="modal__content">
-            {authModal === "register" && partnerId > 0 && (
+            {authModal === "register" && currentPartnerId > 0 && (
               <div className="pre">
                 {t(
                   "login.partner.notice",
@@ -572,48 +599,95 @@ export function Login() {
                 else passwordRegister();
               }}
             >
-              <div className="auth__grid">
-                <label className="field">
-                  <span className="field__label">{t("login.password.login", "Логин")}</span>
-                  <input
-                    className="input"
-                    placeholder={t("login.password.login_ph", "Введите логин")}
-                    value={login}
-                    onChange={(e) => setLogin(e.target.value)}
-                    autoComplete="username"
-                    disabled={loading}
-                    inputMode="text"
-                  />
-                </label>
+              <div className="field">
+                <label className="field__label">{t("login.password.login", "Логин")}</label>
+                <input
+                  className="input"
+                  placeholder={t("login.password.login_ph", "Введите логин")}
+                  value={login}
+                  onChange={(e) => setLogin(e.target.value)}
+                  autoComplete="username"
+                  disabled={loading}
+                  inputMode="text"
+                />
+              </div>
 
-                <label className="field">
-                  <span className="field__label">{t("login.password.password", "Пароль")}</span>
+              <div className="field">
+                <label className="field__label">{t("login.password.password", "Пароль")}</label>
+                <div className="pwdfield">
                   <input
                     className="input"
                     placeholder={t("login.password.password_ph", "Введите пароль")}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     autoComplete={authModal === "login" ? "current-password" : "new-password"}
                     disabled={loading}
                   />
-                </label>
+                  <button
+                    type="button"
+                    className="btn pwdfield__toggle"
+                    onClick={() => setShowPassword((v) => !v)}
+                    disabled={loading}
+                    aria-label={
+                      showPassword
+                        ? t("login.password.hide", "Скрыть пароль")
+                        : t("login.password.show", "Показать пароль")
+                    }
+                  >
+                    {showPassword
+                      ? t("login.password.hide_short", "Скрыть")
+                      : t("login.password.show_short", "Показать")}
+                  </button>
+                </div>
+              </div>
 
-                {authModal === "register" && (
-                  <label className="field">
-                    <span className="field__label">{t("login.password.repeat", "Повторите пароль")}</span>
+              {authModal === "register" && (
+                <>
+                  <div className="field">
+                    <label className="field__label">{t("login.password.repeat", "Повторите пароль")}</label>
+                    <div className="pwdfield">
+                      <input
+                        className="input"
+                        placeholder={t("login.password.repeat_ph", "Повторите пароль")}
+                        value={password2}
+                        onChange={(e) => setPassword2(e.target.value)}
+                        type={showPassword2 ? "text" : "password"}
+                        autoComplete="new-password"
+                        disabled={loading}
+                      />
+                      <button
+                        type="button"
+                        className="btn pwdfield__toggle"
+                        onClick={() => setShowPassword2((v) => !v)}
+                        disabled={loading}
+                        aria-label={
+                          showPassword2
+                            ? t("login.password.hide_repeat", "Скрыть повтор пароля")
+                            : t("login.password.show_repeat", "Показать повтор пароля")
+                        }
+                      >
+                        {showPassword2
+                          ? t("login.password.hide_short", "Скрыть")
+                          : t("login.password.show_short", "Показать")}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="field">
+                    <label className="field__label">{t("login.partner.field", "Партнёрский код (необязательно)")}</label>
                     <input
                       className="input"
-                      placeholder={t("login.password.repeat_ph", "Повторите пароль")}
-                      value={password2}
-                      onChange={(e) => setPassword2(e.target.value)}
-                      type="password"
-                      autoComplete="new-password"
+                      placeholder={t("login.partner.field_ph", "Введите ID партнёра")}
+                      value={partnerIdInput}
+                      onChange={(e) => setPartnerIdInput(String(e.target.value).replace(/[^\d]/g, ""))}
+                      inputMode="numeric"
+                      autoComplete="off"
                       disabled={loading}
                     />
-                  </label>
-                )}
-              </div>
+                  </div>
+                </>
+              )}
 
               {authModal === "register" && password2.length > 0 && !passwordsMatch && (
                 <div className="pre login__preMt12">{t("login.password.mismatch", "Пароли не совпадают.")}</div>
@@ -675,17 +749,11 @@ export function Login() {
               )}
             </div>
 
-            <div className="row">
-              <LangSwitch
-                lang={(lang as "ru" | "en") === "en" ? "en" : "ru"}
-                setLang={setLang as (v: "ru" | "en") => void}
-                ariaLabel={t("login.lang.aria", "Язык")}
-              />
-
-              <span className="badge">
-                {mode === "telegram" ? t("login.badge.tg", "Telegram") : t("login.badge.web", "Браузер")}
-              </span>
-            </div>
+            <LangSwitch
+              lang={(lang as "ru" | "en") === "en" ? "en" : "ru"}
+              setLang={setLang as (v: "ru" | "en") => void}
+              ariaLabel={t("login.lang.aria", "Язык")}
+            />
           </div>
 
           <div className="pre login__headerCard">
