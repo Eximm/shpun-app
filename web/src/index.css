@@ -1845,6 +1845,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
   line-height: 1.2;
   font-weight: 950;
   letter-spacing: 0.1px;
+  margin-top: 10px;
 }
 
 .modal__close{
