@@ -6,8 +6,6 @@ import { toast } from '../../shared/ui/toast'
 
 type Props = {
   usi: number
-  service: { title: string; status: string; statusRaw: string }
-  onDone?: () => void
 }
 
 type Platform = 'android' | 'ios' | 'windows' | 'mac' | 'linux'
@@ -100,7 +98,7 @@ async function copyToClipboard(text: string) {
 
 function pickConfig(resp: any): { text: string; name: string } {
   const name =
-    String(resp?.configName ?? resp?.filename ?? resp?.fileName ?? resp?.name ?? '').trim() || 'vpn.conf'
+    String(resp?.configName ?? resp?.filename ?? resp?.fileName ?? resp?.name ?? '').trim() || `vpn.conf`
 
   const raw =
     resp?.configText ??
@@ -155,21 +153,32 @@ export default function ConnectAmneziaWG({ usi }: Props) {
 
       if (!didToastReadyRef.current) {
         didToastReadyRef.current = true
-        toast.success(t('connectAmneziaWG.toast.ready.title', 'Профиль готов'), {
-          description: t('connectAmneziaWG.toast.ready.desc', 'Теперь его можно импортировать в AmneziaWG.'),
-        })
+        toast.success(
+          t('connectAmneziaWG.toast.ready.title', 'Профиль готов') || 'Профиль готов',
+          {
+            description:
+              t('connectAmneziaWG.toast.ready.desc', 'Теперь его можно импортировать в AmneziaWG.') ||
+              'Теперь его можно импортировать в AmneziaWG.',
+          },
+        )
       }
     } catch (e: any) {
       setConfigText('')
-      const msg = e?.message || t('connectAmneziaWG.error.load_failed', 'Не удалось загрузить профиль')
+      const msg = e?.message || t('connectAmneziaWG.error.load_failed', 'Не удалось загрузить профиль') || 'Не удалось загрузить профиль'
       setError(msg)
 
-      toast.error(t('connectAmneziaWG.toast.prepare_failed.title', 'Не удалось подготовить профиль'), {
-        description:
-          msg === 'profile_missing'
-            ? t('connectAmneziaWG.toast.prepare_failed.profile_missing', 'Профиль пока недоступен. Попробуйте чуть позже.')
-            : String(msg),
-      })
+      toast.error(
+        t('connectAmneziaWG.toast.prepare_failed.title', 'Не удалось подготовить профиль') || 'Не удалось подготовить профиль',
+        {
+          description:
+            msg === 'profile_missing'
+              ? t(
+                  'connectAmneziaWG.toast.prepare_failed.profile_missing',
+                  'Профиль пока недоступен. Попробуйте чуть позже.',
+                ) || 'Профиль пока недоступен. Попробуйте чуть позже.'
+              : String(msg),
+        },
+      )
     } finally {
       setLoading(false)
     }
@@ -186,14 +195,22 @@ export default function ConnectAmneziaWG({ usi }: Props) {
   const topHint = useMemo(() => {
     const pName = platformLabel(platform)
     if (loading) {
-      return t('connectAmneziaWG.top_hint.loading', 'Готовим подключение для {platform}…').replace('{platform}', pName)
+      return (
+        t('connectAmneziaWG.top_hint.loading', 'Готовим подключение для {platform}…') ||
+        'Готовим подключение для {platform}…'
+      ).replace('{platform}', pName)
     }
     if (error) {
-      return t('connectAmneziaWG.top_hint.error', 'Не удалось подготовить подключение для {platform}.').replace('{platform}', pName)
+      return (
+        t('connectAmneziaWG.top_hint.error', 'Не удалось подготовить подключение для {platform}.') ||
+        'Не удалось подготовить подключение для {platform}.'
+      ).replace('{platform}', pName)
     }
-    return t(
-      'connectAmneziaWG.top_hint.ready',
-      'Устройство: {platform}. Ниже — установка приложения и импорт готового профиля.',
+    return (
+      t(
+        'connectAmneziaWG.top_hint.ready',
+        'Устройство: {platform}. Ниже — установка приложения и импорт готового профиля.',
+      ) || 'Устройство: {platform}. Ниже — установка приложения и импорт готового профиля.'
     ).replace('{platform}', pName)
   }, [platform, loading, error, t])
 
@@ -204,13 +221,28 @@ export default function ConnectAmneziaWG({ usi }: Props) {
       setQrDataUrl(dataUrl)
       setQrOpen(true)
 
-      toast.info(t('connectAmneziaWG.toast.qr_ready.title', 'QR-код готов'), {
-        description: t('connectAmneziaWG.toast.qr_ready.desc', 'Откройте AmneziaWG и импортируйте профиль по QR-коду.'),
-      })
+      toast.info(
+        t('connectAmneziaWG.toast.qr_ready.title', 'QR-код готов') || 'QR-код готов',
+        {
+          description:
+            t(
+              'connectAmneziaWG.toast.qr_ready.desc',
+              'Откройте AmneziaWG и импортируйте профиль по QR-коду.',
+            ) || 'Откройте AmneziaWG и импортируйте профиль по QR-коду.',
+        },
+      )
     } catch (e: any) {
-      toast.error(t('connectAmneziaWG.toast.qr_failed.title', 'Не удалось показать QR-код'), {
-        description: String(e?.message || t('connectAmneziaWG.toast.qr_failed.desc', 'Попробуйте ещё раз.')),
-      })
+      toast.error(
+        t('connectAmneziaWG.toast.qr_failed.title', 'Не удалось показать QR-код') || 'Не удалось показать QR-код',
+        {
+          description:
+            String(
+              e?.message ||
+                t('connectAmneziaWG.toast.qr_failed.desc', 'Попробуйте ещё раз.') ||
+                'Попробуйте ещё раз.',
+            ),
+        },
+      )
     }
   }
 
@@ -218,43 +250,63 @@ export default function ConnectAmneziaWG({ usi }: Props) {
     if (!configText) return
     downloadTextFile(configName || `vpn${usi}.conf`, configText)
 
-    toast.success(t('connectAmneziaWG.toast.download.title', 'Файл скачивается'), {
-      description: t('connectAmneziaWG.toast.download.desc', 'Конфиг .conf появится в загрузках.'),
-    })
+    toast.success(
+      t('connectAmneziaWG.toast.download.title', 'Файл скачивается') || 'Файл скачивается',
+      {
+        description:
+          t('connectAmneziaWG.toast.download.desc', 'Конфиг .conf появится в загрузках.') ||
+          'Конфиг .conf появится в загрузках.',
+      },
+    )
   }
 
   async function copyConf() {
     if (!configText) return
     const ok = await copyToClipboard(configText)
     if (ok) {
-      toast.success(t('connectAmneziaWG.toast.copy_ok.title', 'Конфиг скопирован'), {
-        description: t('connectAmneziaWG.toast.copy_ok.desc', 'Теперь его можно вставить в приложение или форму импорта.'),
-      })
+      toast.success(
+        t('connectAmneziaWG.toast.copy_ok.title', 'Конфиг скопирован') || 'Конфиг скопирован',
+        {
+          description:
+            t(
+              'connectAmneziaWG.toast.copy_ok.desc',
+              'Теперь его можно вставить в приложение или форму импорта.',
+            ) || 'Теперь его можно вставить в приложение или форму импорта.',
+        },
+      )
     } else {
-      toast.error(t('connectAmneziaWG.toast.copy_failed.title', 'Не удалось скопировать конфиг'), {
-        description: t('connectAmneziaWG.toast.copy_failed.desc', 'Браузер запретил копирование. Попробуйте другой способ.'),
-      })
+      toast.error(
+        t('connectAmneziaWG.toast.copy_failed.title', 'Не удалось скопировать конфиг') || 'Не удалось скопировать конфиг',
+        {
+          description:
+            t(
+              'connectAmneziaWG.toast.copy_failed.desc',
+              'Браузер запретил копирование. Попробуйте другой способ.',
+            ) || 'Браузер запретил копирование. Попробуйте другой способ.',
+        },
+      )
     }
   }
 
-  const main2Label = t('connectAmneziaWG.step2.download_conf', 'Скачать конфиг (.conf)')
+  const main2Label =
+    t('connectAmneziaWG.step2.download_conf', 'Скачать конфиг (.conf)') || 'Скачать конфиг (.conf)'
   const main2Action = downloadConf
 
   const storeLabel =
     platform === 'android'
-      ? t('connectAmneziaWG.store.google_play', 'Google Play')
+      ? t('connectAmneziaWG.store.google_play', 'Google Play') || 'Google Play'
       : platform === 'ios' || platform === 'mac'
-        ? t('connectAmneziaWG.store.app_store', 'App Store')
-        : t('connectAmneziaWG.store.download_page', 'страницу скачивания')
+        ? t('connectAmneziaWG.store.app_store', 'App Store') || 'App Store'
+        : t('connectAmneziaWG.store.download_page', 'страницу скачивания') || 'страницу скачивания'
 
   return (
     <div className="cawg">
       <div className="pre cawg__topHint">
         {ready
-          ? t('connectAmneziaWG.status.ready', '✅ Профиль готов. ')
+          ? t('connectAmneziaWG.status.ready', '✅ Профиль готов. ') || '✅ Профиль готов. '
           : error
-            ? t('connectAmneziaWG.status.not_ready', '⚠️ Профиль пока недоступен. ')
-            : t('connectAmneziaWG.status.loading', '… ')}
+            ? t('connectAmneziaWG.status.not_ready', '⚠️ Профиль пока недоступен. ') || '⚠️ Профиль пока недоступен. '
+            : t('connectAmneziaWG.status.loading', '… ') || '… '}
         {topHint}
       </div>
 
@@ -263,24 +315,27 @@ export default function ConnectAmneziaWG({ usi }: Props) {
           {String(error)}
           <div className="cawg__errorActions">
             <button className="btn" onClick={load} type="button">
-              {t('connectAmneziaWG.retry', 'Повторить')}
+              {t('connectAmneziaWG.retry', 'Повторить') || 'Повторить'}
             </button>
           </div>
         </div>
       ) : null}
 
       <div className="row cawg__rowTop">
-        <div className="p cawg__label">{t('connectAmneziaWG.device.label', 'Устройство:')}</div>
+        <div className="p cawg__label">{t('connectAmneziaWG.device.label', 'Устройство:') || 'Устройство:'}</div>
 
         <button
           className="btn cawg__deviceBtn"
           type="button"
           onClick={() => setPlatformPickerOpen(true)}
           disabled={loading}
-          aria-label={t('connectAmneziaWG.device.pick_aria', 'Выбор устройства')}
+          aria-label={t('connectAmneziaWG.device.pick_aria', 'Выбор устройства') || 'Выбор устройства'}
         >
           {chip === 'auto'
-            ? t('connectAmneziaWG.device.current', '✨ Текущее ({platform})').replace('{platform}', platformLabel(autoPlatform))
+            ? (
+                t('connectAmneziaWG.device.current', '✨ Текущее ({platform})') ||
+                '✨ Текущее ({platform})'
+              ).replace('{platform}', platformLabel(autoPlatform))
             : platformLabel(platform)}{' '}
           <span aria-hidden>▾</span>
         </button>
@@ -288,14 +343,17 @@ export default function ConnectAmneziaWG({ usi }: Props) {
 
       <div className="card cawg__card">
         <div className="card__body">
-          <div className="services-cat__title">{t('connectAmneziaWG.step1.title', '1) Установите приложение')}</div>
+          <div className="services-cat__title">
+            {t('connectAmneziaWG.step1.title', '1) Установите приложение') || '1) Установите приложение'}
+          </div>
 
           <p className="p cawg__subText">
-            {t('connectAmneziaWG.step1.sub', 'Установите ')}
-
+            {t('connectAmneziaWG.step1.sub', 'Установите ') || 'Установите '}
             <b>AmneziaWG</b>
-
-            {t('connectAmneziaWG.step1.sub_for', ' для {platform}.').replace('{platform}', platformLabel(platform))}
+            {(t('connectAmneziaWG.step1.sub_for', ' для {platform}.') || ' для {platform}.').replace(
+              '{platform}',
+              platformLabel(platform),
+            )}
           </p>
 
           <div className="actions actions--2 cawg__actions">
@@ -305,16 +363,19 @@ export default function ConnectAmneziaWG({ usi }: Props) {
               disabled={loading}
               type="button"
             >
-              {t('connectAmneziaWG.step1.open_store', 'Открыть {store}').replace('{store}', storeLabel)}
+              {(t('connectAmneziaWG.step1.open_store', 'Открыть {store}') || 'Открыть {store}').replace(
+                '{store}',
+                storeLabel,
+              )}
             </button>
 
             {platform === 'android' ? (
               <button className="btn" onClick={() => openLinkSafe(APK_LINK)} disabled={loading} type="button">
-                {t('connectAmneziaWG.step1.download_apk', 'Скачать APK')}
+                {t('connectAmneziaWG.step1.download_apk', 'Скачать APK') || 'Скачать APK'}
               </button>
             ) : (
               <button className="btn" onClick={() => openLinkSafe(APP_LINKS[platform])} disabled={loading} type="button">
-                {t('connectAmneziaWG.step1.download_direct', 'Скачать напрямую')}
+                {t('connectAmneziaWG.step1.download_direct', 'Скачать напрямую') || 'Скачать напрямую'}
               </button>
             )}
           </div>
@@ -323,15 +384,20 @@ export default function ConnectAmneziaWG({ usi }: Props) {
 
       <div className="card cawg__card">
         <div className="card__body">
-          <div className="services-cat__title">{t('connectAmneziaWG.step2.title', '2) Добавьте профиль')}</div>
+          <div className="services-cat__title">
+            {t('connectAmneziaWG.step2.title', '2) Добавьте профиль') || '2) Добавьте профиль'}
+          </div>
 
           <p className="p cawg__subText">
-            {t('connectAmneziaWG.step2.sub_1', 'Скачайте ')}
+            {t('connectAmneziaWG.step2.sub_1', 'Скачайте ') || 'Скачайте '}
             <b>.conf</b>
-            {t('connectAmneziaWG.step2.sub_2', ' и импортируйте файл в ')}
+            {t('connectAmneziaWG.step2.sub_2', ' и импортируйте файл в ') || ' и импортируйте файл в '}
             <b>AmneziaWG</b>.{' '}
             <span className="cawg__inlineHint">
-              {t('connectAmneziaWG.step2.more_hint', '(QR-код и копирование — в разделе «Другие способы».)')}
+              {t(
+                'connectAmneziaWG.step2.more_hint',
+                '(QR-код и копирование — в разделе «Другие способы».)',
+              ) || '(QR-код и копирование — в разделе «Другие способы».)'}
             </span>
           </p>
 
@@ -341,15 +407,15 @@ export default function ConnectAmneziaWG({ usi }: Props) {
               onClick={main2Action}
               disabled={!ready}
               type="button"
-              title={!ready ? t('connectAmneziaWG.step2.not_ready_title', 'Профиль ещё не готов') : undefined}
+              title={!ready ? t('connectAmneziaWG.step2.not_ready_title', 'Профиль ещё не готов') || 'Профиль ещё не готов' : undefined}
             >
-              {loading ? t('connectAmneziaWG.wait', 'Подождите…') : main2Label}
+              {loading ? t('connectAmneziaWG.wait', 'Подождите…') || 'Подождите…' : main2Label}
             </button>
 
             <button className="btn" onClick={() => setMoreOpen((v) => !v)} disabled={!ready} type="button">
               {moreOpen
-                ? t('connectAmneziaWG.step2.hide_more', 'Скрыть способы')
-                : t('connectAmneziaWG.step2.show_more', 'Другие способы')}
+                ? t('connectAmneziaWG.step2.hide_more', 'Скрыть способы') || 'Скрыть способы'
+                : t('connectAmneziaWG.step2.show_more', 'Другие способы') || 'Другие способы'}
             </button>
           </div>
 
@@ -358,13 +424,13 @@ export default function ConnectAmneziaWG({ usi }: Props) {
               <div className="pre cawg__moreBox">
                 <div className="actions actions--1 cawg__moreActionsTop">
                   <button className="btn btn--soft so__btnFull" type="button" onClick={openQr}>
-                    {t('connectAmneziaWG.step2.show_qr', 'Показать QR-код')}
+                    {t('connectAmneziaWG.step2.show_qr', 'Показать QR-код') || 'Показать QR-код'}
                   </button>
                 </div>
 
                 <div className="actions actions--1 cawg__moreActionsBottom">
                   <button className="btn btn--soft so__btnFull" type="button" onClick={copyConf}>
-                    {t('connectAmneziaWG.step2.copy_conf', 'Скопировать конфиг')}
+                    {t('connectAmneziaWG.step2.copy_conf', 'Скопировать конфиг') || 'Скопировать конфиг'}
                   </button>
                 </div>
               </div>
@@ -378,12 +444,14 @@ export default function ConnectAmneziaWG({ usi }: Props) {
           <div className="card overlay__card" onClick={(e) => e.stopPropagation()}>
             <div className="card__body">
               <div className="row so__spaceBetween cawg__modalHead">
-                <div className="overlay__title">{t('connectAmneziaWG.device.modal_title', 'Выберите устройство')}</div>
+                <div className="overlay__title">
+                  {t('connectAmneziaWG.device.modal_title', 'Выберите устройство') || 'Выберите устройство'}
+                </div>
                 <button
                   className="btn"
                   type="button"
                   onClick={() => setPlatformPickerOpen(false)}
-                  aria-label={t('connectAmneziaWG.close', 'Закрыть')}
+                  aria-label={t('connectAmneziaWG.close', 'Закрыть') || 'Закрыть'}
                 >
                   ✕
                 </button>
@@ -400,7 +468,7 @@ export default function ConnectAmneziaWG({ usi }: Props) {
                 >
                   <div className="row so__spaceBetween">
                     <div className="kv__k cawg__pickLabel">
-                      {t('connectAmneziaWG.device.current_short', '✨ Текущее')}
+                      {t('connectAmneziaWG.device.current_short', '✨ Текущее') || '✨ Текущее'}
                     </div>
                     <span className="badge">{platformLabel(autoPlatform)}</span>
                   </div>
@@ -425,7 +493,7 @@ export default function ConnectAmneziaWG({ usi }: Props) {
 
               <div className="actions actions--1 so__mt12">
                 <button className="btn so__btnFull" type="button" onClick={() => setPlatformPickerOpen(false)}>
-                  {t('connectAmneziaWG.close', 'Закрыть')}
+                  {t('connectAmneziaWG.close', 'Закрыть') || 'Закрыть'}
                 </button>
               </div>
             </div>
@@ -438,27 +506,32 @@ export default function ConnectAmneziaWG({ usi }: Props) {
           <div className="card overlay__card" onClick={(e) => e.stopPropagation()}>
             <div className="card__body">
               <div className="row so__spaceBetween cawg__modalHead">
-                <div className="overlay__title">{t('connectAmneziaWG.qr.title', 'QR-код профиля')}</div>
+                <div className="overlay__title">
+                  {t('connectAmneziaWG.qr.title', 'QR-код профиля') || 'QR-код профиля'}
+                </div>
 
                 <button
                   className="btn"
                   type="button"
                   onClick={() => setQrOpen(false)}
-                  aria-label={t('connectAmneziaWG.close', 'Закрыть')}
+                  aria-label={t('connectAmneziaWG.close', 'Закрыть') || 'Закрыть'}
                 >
                   ✕
                 </button>
               </div>
 
               <p className="p so__mt8 cawg__subText">
-                {t('connectAmneziaWG.qr.sub', 'В AmneziaWG выберите импорт по QR-коду и наведите камеру.')}
+                {t(
+                  'connectAmneziaWG.qr.sub',
+                  'В AmneziaWG выберите импорт по QR-коду и наведите камеру.',
+                ) || 'В AmneziaWG выберите импорт по QR-коду и наведите камеру.'}
               </p>
 
               <div className="pre so__mt12 cawg__qrBox">
                 {qrDataUrl ? (
                   <img
                     src={qrDataUrl}
-                    alt={t('connectAmneziaWG.qr.alt', 'QR-код конфигурации')}
+                    alt={t('connectAmneziaWG.qr.alt', 'QR-код конфигурации') || 'QR-код конфигурации'}
                     loading="lazy"
                     decoding="async"
                     className="cawg__qrImage"
@@ -468,7 +541,7 @@ export default function ConnectAmneziaWG({ usi }: Props) {
 
               <div className="actions actions--1 so__mt12">
                 <button className="btn btn--primary so__btnFull" onClick={() => setQrOpen(false)} type="button">
-                  {t('connectAmneziaWG.close', 'Закрыть')}
+                  {t('connectAmneziaWG.close', 'Закрыть') || 'Закрыть'}
                 </button>
               </div>
             </div>

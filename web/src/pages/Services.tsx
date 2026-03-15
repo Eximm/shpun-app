@@ -307,7 +307,7 @@ function ConnectInline({
 
       <div className="svc__connectBody">
         <Suspense fallback={<div className="p">{t("services.loading_short", "Loading…")}</div>}>
-          {kind === "amneziawg" ? <ConnectAmneziaWG usi={service.userServiceId} service={service} onDone={onDone} /> : null}
+          {kind === "amneziawg" ? <ConnectAmneziaWG usi={service.userServiceId} /> : null}
           {kind === "marzban" ? <ConnectMarzban usi={service.userServiceId} /> : null}
           {kind === "marzban_router" ? <ConnectRouter usi={service.userServiceId} onDone={onDone} /> : null}
           {kind === "unknown" ? <div className="pre">{t("services.connect.unavailable", "No connection helper for this service type yet.")}</div> : null}
