@@ -618,7 +618,7 @@ export function Login() {
               <div className="modal__title">
                 {authModal === "login"
                   ? t("login.password.form_title_login", "Вход по e-mail и паролю")
-                  : t("login.password.form_title_register", "Регистрация")}
+                  : t("login.password.form_title_register", "Создать аккаунт")}
               </div>
               <p className="p">
                 {authModal === "login"
@@ -939,7 +939,12 @@ export function Login() {
               <span className="auth__providerRight">→</span>
             </button>
 
-            <button className="btn auth__provider login__providerBtn" disabled={true} type="button" title={t("login.providers.soon", "Скоро")}>
+            <button
+              className="btn auth__provider login__providerBtn"
+              disabled={true}
+              type="button"
+              title={t("login.providers.soon", "Скоро")}
+            >
               <span className="auth__providerIcon">🟦</span>
               <span className="auth__providerText">
                 Google
@@ -948,7 +953,12 @@ export function Login() {
               <span className="auth__providerRight">🔒</span>
             </button>
 
-            <button className="btn auth__provider login__providerBtn" disabled={true} type="button" title={t("login.providers.soon", "Скоро")}>
+            <button
+              className="btn auth__provider login__providerBtn"
+              disabled={true}
+              type="button"
+              title={t("login.providers.soon", "Скоро")}
+            >
               <span className="auth__providerIcon">🟨</span>
               <span className="auth__providerText">
                 Yandex
