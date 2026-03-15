@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from "react"
-import { apiFetch } from "../../shared/api/client"
-import { toast } from "../../shared/ui/toast"
-import { useI18n } from "../../shared/i18n"
+import { useEffect, useMemo, useState } from 'react'
+import { apiFetch } from '../../shared/api/client'
+
+// ✅ toasts + mood (типизированные ключи — только из payments-mood)
+import { toast } from '../../shared/ui/toast'
+import { getMood } from '../../shared/payments-mood'
 
 type ApiRouterItem = {
   code?: string
@@ -10,6 +12,7 @@ type ApiRouterItem = {
   created_at?: number
   last_seen_at?: number
 
+  // допускаем другие варианты полей (на всякий)
   cleanCode?: string
   createdAt?: number
   lastSeenAt?: number
@@ -18,18 +21,19 @@ type ApiRouterItem = {
 
 type Props = {
   usi: number
+  service: { title: string; status: string; statusRaw: string }
   onDone?: () => void
 }
 
 function fmtTs(ts?: number) {
-  if (!ts) return ""
+  if (!ts) return ''
   const d = new Date(ts * 1000)
-  if (Number.isNaN(d.getTime())) return ""
+  if (Number.isNaN(d.getTime())) return ''
   return d.toLocaleString()
 }
 
 function normOne(x: any): ApiRouterItem | null {
-  if (!x || typeof x !== "object") return null
+  if (!x || typeof x !== 'object') return null
   return {
     code: x.code ?? x.router_code ?? x.routerCode ?? undefined,
     clean_code: x.clean_code ?? x.cleanCode ?? undefined,
@@ -42,110 +46,72 @@ function normOne(x: any): ApiRouterItem | null {
 function extractRouters(resp: any): ApiRouterItem[] {
   const r = resp ?? {}
   const arr = r.routers ?? r.items ?? r.data ?? r.list ?? r.result ?? null
-
-  if (Array.isArray(arr)) {
-    return arr.map(normOne).filter(Boolean) as ApiRouterItem[]
-  }
-
-  const one =
-    r.router ??
-    r.binding ??
-    r.bound ??
-    r.item ??
-    (r.data && !Array.isArray(r.data) ? r.data : null)
-
+  if (Array.isArray(arr)) return arr.map(normOne).filter(Boolean) as ApiRouterItem[]
+  const one = r.router ?? r.binding ?? r.bound ?? r.item ?? (r.data && !Array.isArray(r.data) ? r.data : null)
   const n = normOne(one)
   return n ? [n] : []
 }
 
 function toClean8(raw: string) {
-  return String(raw || "")
+  return String(raw || '')
     .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "")
+    .replace(/[^A-Z0-9]/g, '')
     .slice(0, 8)
 }
 
 function toPretty9(raw: string) {
   const c = toClean8(raw)
-  if (!c) return ""
+  if (!c) return ''
   if (c.length <= 4) return c
-  return c.slice(0, 4) + "-" + c.slice(4)
+  return c.slice(0, 4) + '-' + c.slice(4)
 }
 
 function statusView(status?: string) {
-  const s = String(status || "").trim().toLowerCase()
-
-  if (!s) return { label: "unknown", tone: "muted" as const }
-
-  if (s === "bound" || s === "active" || s === "ok") {
-    return { label: s, tone: "good" as const }
-  }
-
-  if (s === "unbound" || s === "removed" || s === "none" || s === "new") {
-    return { label: s, tone: "muted" as const }
-  }
-
-  if (s === "error" || s === "fail" || s === "failed") {
-    return { label: s, tone: "bad" as const }
-  }
-
-  return { label: s, tone: "muted" as const }
+  const s = String(status || '').trim().toLowerCase()
+  if (!s) return { label: 'unknown', tone: 'muted' as const }
+  if (s === 'bound' || s === 'active' || s === 'ok') return { label: s, tone: 'good' as const }
+  if (s === 'unbound' || s === 'removed' || s === 'none' || s === 'new') return { label: s, tone: 'muted' as const }
+  if (s === 'error' || s === 'fail' || s === 'failed') return { label: s, tone: 'bad' as const }
+  return { label: s, tone: 'muted' as const }
 }
 
 export default function ConnectRouter({ usi, onDone }: Props) {
-  const { t } = useI18n()
-
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const [routers, setRouters] = useState<ApiRouterItem[]>([])
-  const [code, setCode] = useState("")
+  const [code, setCode] = useState('')
 
   const first = routers?.[0]
-
-  const shownClean = String(first?.clean_code || first?.cleanCode || "").trim()
-  const shownCode = String(first?.code || first?.router_code || "").trim()
+  const shownClean = String(first?.clean_code || first?.cleanCode || '').trim()
+  const shownCode = String(first?.code || first?.router_code || '').trim()
 
   const shownPretty = useMemo(() => {
     const base = shownClean || shownCode
-    return base ? toPretty9(base) : ""
+    return base ? toPretty9(base) : ''
   }, [shownClean, shownCode])
 
   const st = useMemo(() => statusView(first?.status), [first?.status])
 
   const hasBound = useMemo(() => {
     if (!first) return false
-
-    const normalized = String(first.status || "").toLowerCase()
-
-    if (normalized === "bound" || normalized === "active" || normalized === "ok") {
-      return true
-    }
-
-    if (
-      normalized === "unbound" ||
-      normalized === "removed" ||
-      normalized === "none" ||
-      normalized === "new"
-    ) {
-      return false
-    }
-
+    const normalized = String(first.status || '').toLowerCase()
+    if (normalized === 'bound' || normalized === 'active' || normalized === 'ok') return true
+    if (normalized === 'unbound' || normalized === 'removed' || normalized === 'none' || normalized === 'new') return false
+    // если статус непонятный, но код есть — считаем, что привязан (чтобы не скрывать существующую связку)
     return !!(shownClean || shownCode)
   }, [first, shownClean, shownCode])
 
   async function load(opts?: { silent?: boolean }) {
     const silent = !!opts?.silent
-
     setLoading(true)
     setError(null)
 
     try {
-      const r = (await apiFetch(
-        `/services/${encodeURIComponent(String(usi))}/router`,
-        { method: "GET" }
-      )) as any
+      const r = (await apiFetch(`/services/${encodeURIComponent(String(usi))}/router`, {
+        method: 'GET',
+      })) as any
 
       if (r && (r.ok === false || r.ok === 0) && (r.error || r.message)) {
         throw new Error(String(r.error || r.message))
@@ -153,21 +119,19 @@ export default function ConnectRouter({ usi, onDone }: Props) {
 
       setRouters(extractRouters(r))
 
+      // ✅ не спамим тостом на mount
       if (!silent) {
-        toast.info(t("router.status_updated"), {
-          description: t("router.status_updated_desc"),
+        toast.info('Обновлено', {
+          description: getMood('payment_checking', { seed: String(usi) }) ?? 'Статус роутера обновлён.',
         })
       }
     } catch (e: any) {
-      const msg = e?.message || t("router.load_error")
-
+      const msg = e?.message || 'Не удалось загрузить состояние роутера'
       setError(msg)
       setRouters([])
 
       if (!silent) {
-        toast.error(t("router.status_error"), {
-          description: msg,
-        })
+        toast.error('Не удалось обновить', { description: msg })
       }
     } finally {
       setLoading(false)
@@ -178,31 +142,25 @@ export default function ConnectRouter({ usi, onDone }: Props) {
     const clean = toClean8(code)
 
     if (!clean) return
-
     if (clean.length !== 8) {
-      const msg = t("router.code_invalid_desc")
-
+      const msg = 'Код должен быть в формате XXXX-XXXX (латинские буквы и цифры).'
       setError(msg)
-
-      toast.error(t("router.code_invalid"), {
-        description: msg,
-      })
-
+      toast.error('Неверный код', { description: msg })
       return
     }
 
     setBusy(true)
     setError(null)
 
-    toast.info(t("router.binding"), {
-      description: t("router.binding_desc"),
+    toast.info('Привязываем роутер', {
+      description: getMood('payment_checking', { seed: String(usi) }) ?? 'Пара секунд…',
     })
 
     try {
       const r = (await apiFetch(
         `/services/${encodeURIComponent(String(usi))}/router/bind`,
         {
-          method: "POST",
+          method: 'POST',
           body: { code: clean },
         } as any
       )) as any
@@ -211,50 +169,39 @@ export default function ConnectRouter({ usi, onDone }: Props) {
         throw new Error(String(r.error || r.message))
       }
 
-      setCode("")
+      setCode('')
       await load({ silent: true })
       onDone?.()
 
-      toast.success(t("router.bind_ok"), {
-        description: t("router.bind_ok_desc"),
+      toast.success('Роутер привязан', {
+        description: getMood('payment_success', { seed: String(usi) }) ?? 'Готово.',
       })
     } catch (e: any) {
-      const msg = e?.message || t("router.bind_error")
-
+      const msg = e?.message || 'Не удалось привязать роутер'
       setError(msg)
-
-      toast.error(t("router.bind_error"), {
-        description: msg,
-      })
+      toast.error('Не удалось привязать', { description: msg })
     } finally {
       setBusy(false)
     }
   }
 
   async function unbind() {
-    const v = String(
-      first?.clean_code ||
-        first?.cleanCode ||
-        first?.code ||
-        first?.router_code ||
-        ""
-    ).trim()
-
+    const v = String(first?.clean_code || first?.cleanCode || first?.code || first?.router_code || '').trim()
     const clean = toClean8(v)
     if (!clean) return
 
     setBusy(true)
     setError(null)
 
-    toast.info(t("router.unbinding"), {
-      description: t("router.unbinding_desc"),
+    toast.info('Отвязываем роутер', {
+      description: getMood('payment_checking', { seed: String(usi) }) ?? 'Пара секунд…',
     })
 
     try {
       const r = (await apiFetch(
         `/services/${encodeURIComponent(String(usi))}/router/unbind`,
         {
-          method: "POST",
+          method: 'POST',
           body: { code: clean },
         } as any
       )) as any
@@ -266,24 +213,22 @@ export default function ConnectRouter({ usi, onDone }: Props) {
       await load({ silent: true })
       onDone?.()
 
-      toast.success(t("router.unbind_ok"), {
-        description: t("router.unbind_ok_desc"),
+      toast.success('Роутер отвязан', {
+        description: getMood('payment_success', { seed: String(usi) }) ?? 'Готово.',
       })
     } catch (e: any) {
-      const msg = e?.message || t("router.unbind_error")
-
+      const msg = e?.message || 'Не удалось отвязать роутер'
       setError(msg)
-
-      toast.error(t("router.unbind_error"), {
-        description: msg,
-      })
+      toast.error('Не удалось отвязать', { description: msg })
     } finally {
       setBusy(false)
     }
   }
 
   useEffect(() => {
+    // ✅ первичная загрузка без тостов
     load({ silent: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usi])
 
   const inputValue = toPretty9(code)
@@ -291,17 +236,15 @@ export default function ConnectRouter({ usi, onDone }: Props) {
   const canBind = !busy && !hasBound && cleanLen === 8
 
   const statusToneClass =
-    st.tone === "good"
-      ? "cr__badge--good"
-      : st.tone === "bad"
-      ? "cr__badge--bad"
-      : "cr__badge--muted"
+    st.tone === 'good' ? 'cr__badge--good' : st.tone === 'bad' ? 'cr__badge--bad' : 'cr__badge--muted'
+
+  const actionsCols = 'cr__actionsGrid--2'
 
   return (
     <div className="cr">
-      <div className="p cr__hintTop">{t("router.hint")}</div>
+      <div className="p cr__hintTop">Введите код с экрана роутера, чтобы привязать устройство к этой услуге.</div>
 
-      {loading ? <div className="p">{t("router.loading")}</div> : null}
+      {loading ? <div className="p">Загрузка состояния…</div> : null}
 
       {error ? <div className="pre cr__mt10">{error}</div> : null}
 
@@ -311,32 +254,29 @@ export default function ConnectRouter({ usi, onDone }: Props) {
             {hasBound ? (
               <>
                 <div>
-                  {t("router.bound")} <b>{shownPretty || "—"}</b>
+                  ✅ Роутер привязан: <b>{shownPretty || '—'}</b>
                 </div>
 
                 {first?.created_at ? (
                   <div className="cr__meta cr__mt6">
-                    {t("router.bound_at")} <b>{fmtTs(first.created_at)}</b>
+                    Привязан: <b>{fmtTs(first.created_at)}</b>
                   </div>
                 ) : null}
 
                 {first?.last_seen_at ? (
                   <div className="cr__meta">
-                    {t("router.last_seen")} <b>{fmtTs(first.last_seen_at)}</b>
+                    Последний контакт: <b>{fmtTs(first.last_seen_at)}</b>
                   </div>
                 ) : null}
               </>
             ) : (
-              <div>{t("router.not_bound")}</div>
+              <div>Роутер ещё не привязан.</div>
             )}
           </div>
 
           {first ? (
-            <span
-              className={`cr__badge ${statusToneClass}`}
-              title={t("router.status_title")}
-            >
-              <span className="cr__badgeK">{t("router.status_short", "status")}</span>
+            <span className={`cr__badge ${statusToneClass}`} title="Статус привязки">
+              <span className="cr__badgeK">status</span>
               <b className="cr__badgeV">{st.label}</b>
             </span>
           ) : null}
@@ -352,7 +292,7 @@ export default function ConnectRouter({ usi, onDone }: Props) {
               setCode(e.target.value)
             }}
             onBlur={() => setCode((cur) => toPretty9(cur))}
-            placeholder={t("router.input_placeholder")}
+            placeholder="Например: N8JD-6TQ4"
             className="input cr__input"
             disabled={busy}
             inputMode="text"
@@ -366,41 +306,28 @@ export default function ConnectRouter({ usi, onDone }: Props) {
         </div>
       ) : null}
 
-      <div className="cr__actionsGrid cr__actionsGrid--2 cr__mt12">
+      <div className={`cr__actionsGrid ${actionsCols} cr__mt12`}>
         {!hasBound ? (
-          <button
-            className="btn btn--primary cr__btnFull"
-            onClick={bind}
-            disabled={!canBind}
-            type="button"
-          >
-            {busy ? t("common.wait") : t("router.bind")}
+          <button className="btn btn--primary cr__btnFull" onClick={bind} disabled={!canBind}>
+            {busy ? 'Подождите…' : 'Привязать роутер'}
           </button>
         ) : (
-          <button
-            className="btn btn--danger cr__btnFull"
-            onClick={unbind}
-            disabled={busy}
-            type="button"
-          >
-            {busy ? t("common.wait") : t("router.unbind")}
+          <button className="btn btn--danger cr__btnFull" onClick={unbind} disabled={busy}>
+            {busy ? 'Подождите…' : 'Отвязать роутер'}
           </button>
         )}
 
-        <button
-          className="btn cr__btnFull"
-          onClick={() => load({ silent: false })}
-          disabled={busy}
-          type="button"
-        >
-          {t("common.refresh")}
+        <button className="btn cr__btnFull" onClick={() => load({ silent: false })} disabled={busy}>
+          Обновить
         </button>
       </div>
 
       {hasBound ? (
-        <div className="cr__note cr__mt10">{t("router.one_device")}</div>
+        <div className="cr__note cr__mt10">Один роутер может быть привязан к услуге одновременно.</div>
       ) : (
-        <div className="cr__note cr__mt10">{t("router.code_format")}</div>
+        <div className="cr__note cr__mt10">
+          Формат кода: <b>XXXX-XXXX</b> (только латинские буквы и цифры).
+        </div>
       )}
     </div>
   )
