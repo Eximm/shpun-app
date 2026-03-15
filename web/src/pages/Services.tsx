@@ -8,7 +8,6 @@ import { getMood } from "../shared/payments-mood";
 
 import { useMe } from "../app/auth/useMe";
 import { normalizeError } from "../shared/api/errorText";
-import { useI18n } from "../shared/i18n";
 
 type UiStatus = "active" | "blocked" | "pending" | "not_paid" | "removed" | "error" | "init";
 
@@ -59,53 +58,55 @@ function detectKind(category?: string): ServiceKind {
   return "unknown";
 }
 
-function kindTitle(k: ServiceKind, t: (k: string, fb?: string) => string) {
+function kindTitle(k: ServiceKind) {
   switch (k) {
     case "amneziawg":
-      return t("services.kind.amneziawg", "AmneziaWG");
+      return "AmneziaWG";
     case "marzban":
-      return t("services.kind.marzban", "Marzban");
+      return "Marzban";
     case "marzban_router":
-      return t("services.kind.marzban_router", "Router VPN");
+      return "Router VPN";
     default:
-      return t("services.kind.unknown", "Other");
+      return "Другое";
   }
 }
 
-function kindDescr(k: ServiceKind, t: (k: string, fb?: string) => string) {
+/** Описание — как в боте */
+function kindDescr(k: ServiceKind) {
   switch (k) {
     case "marzban":
-      return t("services.kind_descr.marzban", "Subscription for phones, PCs, and tablets.");
+      return "Подписка для телефонов, ПК и планшетов.";
     case "marzban_router":
-      return t("services.kind_descr.marzban_router", "Separate subscriptions for routers (Shpun Router / OpenWrt).");
+      return "Отдельные подписки для роутеров (Shpun Router / OpenWrt).";
     case "amneziawg":
-      return t("services.kind_descr.amneziawg", "Simple key for one server.");
+      return "Простой ключ для одного сервера.";
     default:
-      return t("services.kind_descr.unknown", "Other services.");
+      return "Прочие услуги.";
   }
 }
 
-function statusLabel(s: UiStatus, t: (k: string, fb?: string) => string) {
+function statusLabel(s: UiStatus) {
   switch (s) {
     case "active":
-      return t("services.status.active", "Active");
+      return "Активна";
     case "pending":
-      return t("services.status.pending", "Connecting");
+      return "Подключается";
     case "not_paid":
-      return t("services.status.not_paid", "Unpaid");
+      return "Не оплачена";
     case "blocked":
-      return t("services.status.blocked", "Blocked");
+      return "Заблокирована";
     case "removed":
-      return t("services.status.removed", "Completed");
+      return "Завершена";
     case "error":
-      return t("services.status.error", "Error");
+      return "Ошибка";
     case "init":
-      return t("services.status.init", "Initializing");
+      return "Инициализация";
     default:
-      return t("services.status.default", "Status");
+      return "Статус";
   }
 }
 
+/** мягкий оттенок по статусу */
 function statusTint(s: UiStatus) {
   switch (s) {
     case "active":
@@ -146,18 +147,14 @@ function fmtMoney(n: number, cur: string) {
   }
 }
 
-function hintText(s: ApiServiceItem, t: (k: string, fb?: string) => string) {
+function hintText(s: ApiServiceItem) {
   const left = s.daysLeft;
-  if (s.status === "active" && left != null) {
-    return left >= 0
-      ? t("services.hint.days_left", "About {days} days left.").replace("{days}", String(left))
-      : t("services.hint.expired", "Expired");
-  }
-  if (s.status === "not_paid") return t("services.hint.not_paid", "Payment required");
-  if (s.status === "blocked") return t("services.hint.blocked", "Action required");
-  if (s.status === "pending") return t("services.hint.pending", "Please wait a little");
-  if (s.status === "init") return t("services.hint.init", "Service is being initialized");
-  if (s.status === "error") return t("services.hint.error", "Check the status or contact support");
+  if (s.status === "active" && left != null) return left >= 0 ? `Осталось ~${left} дн.` : "Срок истёк";
+  if (s.status === "not_paid") return "Требуется оплата";
+  if (s.status === "blocked") return "Нужны действия";
+  if (s.status === "pending") return "Подождите немного";
+  if (s.status === "init") return "Инициализация услуги";
+  if (s.status === "error") return "Проверьте статус или обратитесь в поддержку";
   return "";
 }
 
@@ -193,16 +190,16 @@ function canStopStatus(s: UiStatus) {
   return s === "active";
 }
 
-function deleteConfirmText(s: ApiServiceItem, t: (k: string, fb?: string) => string) {
+function deleteConfirmText(s: ApiServiceItem) {
   switch (s.status) {
     case "not_paid":
-      return t("services.delete_confirm.not_paid", "Delete unpaid order? It will disappear from the list.");
+      return "Удалить неоплаченный заказ? Он исчезнет из списка.";
     case "blocked":
-      return t("services.delete_confirm.blocked", "Delete service? It will disappear from the list.");
+      return "Удалить услугу? Она исчезнет из списка.";
     case "error":
-      return t("services.delete_confirm.error", "Delete service? It will disappear from the list.");
+      return "Удалить услугу? Она исчезнет из списка.";
     default:
-      return t("services.delete_confirm.default", "Delete service?");
+      return "Удалить услугу?";
   }
 }
 
@@ -210,15 +207,13 @@ function Modal({
   title,
   open,
   children,
-  confirmText = "Confirm",
-  cancelText = "Cancel",
+  confirmText = "Подтвердить",
+  cancelText = "Отмена",
   loading,
   error,
   confirmClassName = "btn btn--primary",
   onClose,
   onConfirm,
-  footerHint,
-  closeLabel,
 }: {
   title: string;
   open: boolean;
@@ -230,8 +225,6 @@ function Modal({
   confirmClassName?: string;
   onClose: () => void;
   onConfirm: () => void;
-  footerHint: string;
-  closeLabel: string;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -258,7 +251,7 @@ function Modal({
         <div className="card__body">
           <div className="modal__head">
             <div className="modal__title">{title}</div>
-            <button className="btn modal__close" onClick={onClose} aria-label={closeLabel} disabled={!!loading}>
+            <button className="btn modal__close" onClick={onClose} aria-label="Закрыть" disabled={!!loading}>
               ✕
             </button>
           </div>
@@ -273,11 +266,11 @@ function Modal({
             </button>
 
             <button className={confirmClassName} onClick={onConfirm} disabled={!!loading}>
-              {loading ? "…" : confirmText}
+              {loading ? "Подождите…" : confirmText}
             </button>
           </div>
 
-          <div className="p">{footerHint}</div>
+          <div className="p">Если вы сомневаетесь — лучше сначала проверьте статус услуги или обратитесь в поддержку.</div>
         </div>
       </div>
     </div>
@@ -285,32 +278,33 @@ function Modal({
 }
 
 const ConnectAmneziaWG = React.lazy(() => import("./connect/ConnectAmneziaWG"));
-const ConnectMarzban = React.lazy(() => import("./connect/ConnectMarzban"));
+const ConnectMarzban = React.lazy(() => import("./connect/ConnectMarzban.tsx"));
 const ConnectRouter = React.lazy(() => import("./connect/ConnectRouter"));
 
 function ConnectInline({
   kind,
   service,
   onDone,
-  t,
 }: {
   kind: ServiceKind;
   service: ApiServiceItem;
   onDone?: () => void;
-  t: (k: string, fb?: string) => string;
 }) {
   return (
     <div className="svc__connect">
       <div className="row svc__connectHead">
-        <div className="services-cat__title svc__connectTitle">{t("services.connect.title", "Connection")}</div>
+        <div className="services-cat__title svc__connectTitle">Подключение</div>
       </div>
 
       <div className="svc__connectBody">
-        <Suspense fallback={<div className="p">{t("services.loading_short", "Loading…")}</div>}>
-          {kind === "amneziawg" ? <ConnectAmneziaWG usi={service.userServiceId} /> : null}
-          {kind === "marzban" ? <ConnectMarzban usi={service.userServiceId} /> : null}
-          {kind === "marzban_router" ? <ConnectRouter usi={service.userServiceId} onDone={onDone} /> : null}
-          {kind === "unknown" ? <div className="pre">{t("services.connect.unavailable", "No connection helper for this service type yet.")}</div> : null}
+        <Suspense fallback={<div className="p">Загрузка…</div>}>
+          {kind === "amneziawg" ? <ConnectAmneziaWG usi={service.userServiceId} service={service} onDone={onDone} /> : null}
+
+          {kind === "marzban" ? <ConnectMarzban usi={service.userServiceId} service={service} onDone={onDone} /> : null}
+
+          {kind === "marzban_router" ? <ConnectRouter usi={service.userServiceId} service={service} onDone={onDone} /> : null}
+
+          {kind === "unknown" ? <div className="pre">Для этого типа услуги пока нет помощника подключения.</div> : null}
         </Suspense>
       </div>
     </div>
@@ -326,7 +320,6 @@ function ServiceCard({
   onRefresh,
   onAskDelete,
   onAskStop,
-  t,
 }: {
   s: ApiServiceItem;
   expanded: boolean;
@@ -336,11 +329,10 @@ function ServiceCard({
   onRefresh: () => void;
   onAskDelete: (s: ApiServiceItem) => void;
   onAskStop: (s: ApiServiceItem) => void;
-  t: (k: string, fb?: string) => string;
 }) {
   const until = s.expireAt ? fmtDate(s.expireAt) : "";
   const kind = detectKind(s.category);
-  const hint = hintText(s, t);
+  const hint = hintText(s);
 
   const payUrl = `/payments?reason=service&usi=${encodeURIComponent(String(s.userServiceId))}`;
   const supportUrl = `/support?topic=service&usi=${encodeURIComponent(String(s.userServiceId))}`;
@@ -352,7 +344,7 @@ function ServiceCard({
 
   const compactMeta = (() => {
     const parts: React.ReactNode[] = [];
-    if (until) parts.push(<>{t("services.meta.until", "Until")}: <b>{until}</b></>);
+    if (until) parts.push(<>До: <b>{until}</b></>);
     if (hint) parts.push(<>{hint}</>);
     if (parts.length === 0) return "—";
     return (
@@ -381,7 +373,7 @@ function ServiceCard({
       <button type="button" className="svc__btn" onClick={onToggle} aria-expanded={expanded}>
         <div className="svc__row">
           <div className="svc__left">
-            <div className="svc__status">{statusLabel(s.status, t)}</div>
+            <div className="svc__status">{statusLabel(s.status)}</div>
             <div className="svc__title">
               #{s.userServiceId} — {s.title}
             </div>
@@ -390,14 +382,13 @@ function ServiceCard({
 
           <div className="svc__right">
             <span className="badge">
-              {fmtMoney(s.price, s.currency)} / {s.periodMonths || 1}
-              {t("services.month_short", "mo")}
+              {fmtMoney(s.price, s.currency)} / {s.periodMonths || 1}м
             </span>
           </div>
         </div>
 
         <div className="svc__toggle">
-          <b>{expanded ? "▲" : "▼"}</b> {t("services.actions.title", "Actions")}
+          <b>{expanded ? "▲" : "▼"}</b> Действия
         </div>
       </button>
 
@@ -409,13 +400,9 @@ function ServiceCard({
                 className="btn btn--primary"
                 onClick={onToggleConnect}
                 disabled={!canShowConnect}
-                title={
-                  !canShowConnect
-                    ? t("services.connect.only_active", "Connection is available only for active services.")
-                    : t("services.connect.open", "Open connection")
-                }
+                title={!canShowConnect ? "Подключение доступно только для активной услуги" : "Открыть подключение"}
               >
-                {connectOpen ? t("services.connect.hide", "Hide connection") : t("services.connect.button", "Connection")}
+                {connectOpen ? "Скрыть подключение" : "Подключение"}
               </button>
             </div>
           ) : null}
@@ -423,10 +410,10 @@ function ServiceCard({
           {s.status === "not_paid" ? (
             <div className="actions actions--2">
               <button className="btn btn--primary" onClick={() => go(payUrl)}>
-                {t("services.pay", "Pay / top up")}
+                Оплатить / пополнить
               </button>
               <button className="btn" onClick={onRefresh}>
-                {t("services.refresh", "Refresh")}
+                Обновить
               </button>
             </div>
           ) : null}
@@ -434,7 +421,7 @@ function ServiceCard({
           {s.status === "pending" || s.status === "init" ? (
             <div className="actions actions--1">
               <button className="btn btn--primary" onClick={onRefresh}>
-                {t("services.refresh_status", "Refresh status")}
+                Обновить статус
               </button>
             </div>
           ) : null}
@@ -442,10 +429,10 @@ function ServiceCard({
           {s.status === "blocked" ? (
             <div className="actions actions--2">
               <button className="btn btn--primary" onClick={() => go(payUrl)}>
-                {t("services.topup", "Top up / pay")}
+                Пополнить / оплатить
               </button>
               <button className="btn" onClick={() => go(supportUrl)}>
-                {t("services.support", "Support")}
+                В поддержку
               </button>
             </div>
           ) : null}
@@ -453,28 +440,28 @@ function ServiceCard({
           {s.status === "error" ? (
             <div className="actions actions--2">
               <button className="btn btn--primary" onClick={onRefresh}>
-                {t("services.refresh", "Refresh")}
+                Обновить
               </button>
               <button className="btn" onClick={() => go(supportUrl)}>
-                {t("services.support", "Support")}
+                В поддержку
               </button>
             </div>
           ) : null}
 
-          {connectOpen && canShowConnect ? <ConnectInline kind={kind} service={s} onDone={onRefresh} t={t} /> : null}
+          {connectOpen && canShowConnect ? <ConnectInline kind={kind} service={s} onDone={onRefresh} /> : null}
 
           {allowStop ? (
             <div className="actions actions--1">
-              <button className="btn" onClick={() => onAskStop(s)} title={t("services.stop.title", "Block service")}>
-                🛑 {t("services.stop.button", "Block")}
+              <button className="btn" onClick={() => onAskStop(s)} title="Заблокировать услугу">
+                🛑 Заблокировать
               </button>
             </div>
           ) : null}
 
           {allowDelete ? (
             <div className="actions actions--1">
-              <button className="btn" onClick={() => onAskDelete(s)} title={t("services.delete.title", "Delete service")}>
-                🗑️ {t("services.delete.button", "Delete service")}
+              <button className="btn" onClick={() => onAskDelete(s)} title="Удалить услугу">
+                🗑️ Удалить услугу
               </button>
             </div>
           ) : null}
@@ -528,8 +515,6 @@ function nnum(v: any, def = 0) {
 }
 
 export function Services() {
-  const { t } = useI18n();
-
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
   const [items, setItems] = useState<ApiServiceItem[]>([]);
@@ -582,13 +567,13 @@ export function Services() {
       setSummary(r.summary || null);
 
       if (toastOnSuccess) {
-        toast.info(t("services.toast.updated", "Updated"), {
-          description: getMood("payment_checking", { seed: String(newItems.length) }) ?? t("services.toast.updated_desc", "Service statuses updated."),
+        toast.info("Обновлено", {
+          description: getMood("payment_checking", { seed: String(newItems.length) }) ?? "Статусы услуг обновлены.",
         });
       }
     } catch (e: unknown) {
       setError(e);
-      if (!silent) toastApiError(e, { title: t("services.toast.refresh_failed", "Could not refresh") });
+      if (!silent) toastApiError(e, { title: "Не удалось обновить" });
     } finally {
       if (!silent) setLoading(false);
     }
@@ -614,14 +599,14 @@ export function Services() {
       setStopTarget(null);
       setExpandedId(usi);
 
-      toast.success(t("services.toast.blocked", "Blocked"), {
-        description: getMood("payment_success", { seed: String(usi) }) ?? t("services.toast.blocked_desc", "Service has been blocked."),
+      toast.success("Заблокировано", {
+        description: getMood("payment_success", { seed: String(usi) }) ?? "Услуга заблокирована.",
       });
 
       await load({ silent: true });
     } catch (e: unknown) {
       setStopError(e);
-      toastApiError(e, { title: t("services.toast.block_failed", "Could not block") });
+      toastApiError(e, { title: "Не удалось заблокировать" });
     } finally {
       setStopBusy(false);
     }
@@ -640,14 +625,14 @@ export function Services() {
       setExpandedId((cur) => (cur === usi ? null : cur));
       setConnectOpenId((cur) => (cur === usi ? null : cur));
 
-      toast.success(t("services.toast.deleted", "Service deleted"), {
-        description: getMood("payment_success", { seed: String(usi) }) ?? t("services.toast.deleted_desc", "Done. Service was removed from the list."),
+      toast.success("Услуга удалена", {
+        description: getMood("payment_success", { seed: String(usi) }) ?? "Готово. Услуга удалена из списка.",
       });
 
       await load({ silent: true });
     } catch (e: unknown) {
       setDeleteError(e);
-      toastApiError(e, { title: t("services.toast.delete_failed", "Could not delete") });
+      toastApiError(e, { title: "Не удалось удалить" });
     } finally {
       setDeleteBusy(false);
     }
@@ -677,22 +662,22 @@ export function Services() {
 
       if (!before || !after || before === after) continue;
 
-      const title = it.title ? it.title : `${t("services.item", "Service")} #${id}`;
+      const title = it.title ? it.title : `Услуга #${id}`;
       const seed = String(id);
 
       if (after === "blocked") {
-        toast.error(title, { description: t("services.toast.service_blocked", "Service is blocked. Action required.") });
+        toast.error(title, { description: "Услуга заблокирована. Нужны действия." });
       } else if (after === "not_paid") {
-        toast.info(title, { description: t("services.toast.service_not_paid", "Payment required.") });
+        toast.info(title, { description: "Требуется оплата." });
       } else if (after === "active" && (before === "pending" || before === "not_paid" || before === "blocked" || before === "init")) {
-        toast.success(title, { description: getMood("payment_success", { seed }) ?? t("services.toast.service_active", "Service activated.") });
+        toast.success(title, { description: getMood("payment_success", { seed }) ?? "Услуга активирована." });
       } else if (after === "removed") {
-        toast.success(title, { description: getMood("payment_success", { seed }) ?? t("services.toast.service_removed", "Service completed.") });
+        toast.success(title, { description: getMood("payment_success", { seed }) ?? "Услуга завершена." });
       }
     }
 
     prevStatusesRef.current = cur;
-  }, [items, t]);
+  }, [items]);
 
   const groups = useMemo(() => {
     const byKind: Record<ServiceKind, ApiServiceItem[]> = {
@@ -719,24 +704,24 @@ export function Services() {
     return (
       <div className="section">
         <div className="page-status">
-          <PageStatusCard title={t("services.title", "Services")} text={t("services.loading", "Loading...")} />
+          <PageStatusCard title="Услуги" text="Загрузка..." />
         </div>
       </div>
     );
   }
 
   if (error) {
-    const n = normalizeError(error, { title: t("services.title", "Services") });
+    const n = normalizeError(error, { title: "Услуги" });
 
     return (
       <div className="section">
         <div className="card">
           <div className="card__body">
-            <h1 className="h1">{t("services.title", "Services")}</h1>
-            <p className="p">{n.description ?? t("services.error.text", "Could not load services list. Please try again.")}</p>
+            <h1 className="h1">Услуги</h1>
+            <p className="p">{n.description ?? "Не удалось загрузить список услуг. Попробуйте ещё раз."}</p>
             <div className="actions actions--1">
               <button className="btn btn--primary" onClick={() => load({ silent: false, toastOnSuccess: false })}>
-                {t("services.retry", "Retry")}
+                Повторить
               </button>
             </div>
           </div>
@@ -771,12 +756,12 @@ export function Services() {
             >
               <div className="services-cat__headLeft">
                 <div className="services-cat__titleRow">
-                  <div className="services-cat__title">{kindTitle(kind, t)}</div>
+                  <div className="services-cat__title">{kindTitle(kind)}</div>
                   <span className="services-cat__chev" aria-hidden>
                     {open ? "▲" : "▼"}
                   </span>
                 </div>
-                <p className="p">{kindDescr(kind, t)}</p>
+                <p className="p">{kindDescr(kind)}</p>
               </div>
 
               <span className="badge">{arr.length}</span>
@@ -807,7 +792,6 @@ export function Services() {
                       setStopError(null);
                       setStopTarget(svc);
                     }}
-                    t={t}
                   />
                 ))}
               </div>
@@ -818,8 +802,8 @@ export function Services() {
     );
   };
 
-  const stopErrText = stopError ? normalizeError(stopError, { title: t("services.toast.block_failed", "Could not block") }).description : null;
-  const deleteErrText = deleteError ? normalizeError(deleteError, { title: t("services.toast.delete_failed", "Could not delete") }).description : null;
+  const stopErrText = stopError ? normalizeError(stopError, { title: "Не удалось заблокировать" }).description : null;
+  const deleteErrText = deleteError ? normalizeError(deleteError, { title: "Не удалось удалить" }).description : null;
 
   return (
     <div className="section">
@@ -827,40 +811,40 @@ export function Services() {
         <div className="card__body">
           <div className="services-top">
             <div className="services-top__left">
-              <div className="services-top__title">{t("services.title", "Services")}</div>
-              <div className="services-top__sub">{t("services.sub", "Your services and their current status.")}</div>
+              <div className="services-top__title">Услуги</div>
+              <div className="services-top__sub">Список ключей и статусы.</div>
             </div>
           </div>
 
           <div className="services-head__meta services-head__meta--wide">
             <span className="badge">
-              {t("services.meta.active", "Active")}: <b>{s?.active ?? fallbackActive}</b>
+              Активные: <b>{s?.active ?? fallbackActive}</b>
             </span>
             <span className="badge">
-              {t("services.meta.attention", "Attention")}: <b>{(s?.blocked ?? 0) + (s?.notPaid ?? 0) || fallbackAttention}</b>
+              Внимание: <b>{(s?.blocked ?? 0) + (s?.notPaid ?? 0) || fallbackAttention}</b>
             </span>
             <span className="badge">
-              {t("services.meta.monthly", "Per month")}: <b>{fmtMoney(s?.monthlyCost ?? 0, s?.currency ?? "RUB")}</b>
+              В месяц: <b>{fmtMoney(s?.monthlyCost ?? 0, s?.currency ?? "RUB")}</b>
             </span>
 
             {discountPercent > 0 ? (
               <span className="badge">
-                {t("services.meta.discount", "Discount")}: <b>-{Math.round(discountPercent)}%</b>
+                Скидка: <b>-{Math.round(discountPercent)}%</b>
               </span>
             ) : null}
           </div>
 
           <div className="services-head__actions">
             <button className="btn btn--primary services-head__cta" onClick={() => go("/services/order")}>
-              {t("services.order", "Order")}
+              Заказать
             </button>
 
             <button
               className="btn services-head__cta"
               onClick={() => load({ silent: false, toastOnSuccess: true })}
-              title={t("services.refresh_status", "Refresh status")}
+              title="Обновить статусы"
             >
-              {t("services.refresh", "Refresh")}
+              Обновить
             </button>
           </div>
         </div>
@@ -871,12 +855,9 @@ export function Services() {
       <Section kind="marzban_router" />
       <Section kind="unknown" />
 
+      {/* STOP modal */}
       <Modal
-        title={
-          stopTarget
-            ? t("services.modal.stop.title_named", "Block service “{title}”?").replace("{title}", stopTarget.title)
-            : t("services.modal.stop.title", "Block service?")
-        }
+        title={stopTarget ? `Заблокировать услугу «${stopTarget.title}»?` : "Заблокировать услугу?"}
         open={!!stopTarget}
         loading={stopBusy}
         error={stopErrText}
@@ -886,41 +867,38 @@ export function Services() {
           setStopError(null);
         }}
         onConfirm={onConfirmStop}
-        confirmText={t("services.stop.button", "Block")}
-        cancelText={t("services.cancel", "Cancel")}
+        confirmText="Заблокировать"
+        cancelText="Отмена"
         confirmClassName="btn btn--primary"
-        footerHint={t("services.modal.footer_hint", "If you are unsure, first check the service status or contact support.")}
-        closeLabel={t("services.close", "Close")}
       >
         {stopTarget ? (
           <>
             <div className="p">
-              <b>{t("services.modal.stop.what_happens", "What will happen:")}</b>
+              <b>Что произойдёт:</b>
             </div>
 
             <div className="p">
-              {t("services.modal.stop.text", "We will block service “{title}”. After that it will stop working.").replace("{title}", stopTarget.title)}
+              Мы заблокируем услугу <b>«{stopTarget.title}»</b>. После этого она перестанет работать.
             </div>
 
             <div className="pre">
-              <div>⚠️ {t("services.modal.stop.warn1", "You cannot unblock it yourself.")}</div>
-              <div>{t("services.modal.stop.warn2", "If you need access again, contact support.")}</div>
+              <div>⚠️ Разблокировка самостоятельно недоступна.</div>
+              <div>Если потребуется вернуть доступ — только через техподдержку.</div>
             </div>
 
             <div className="pre">
               <div>
-                {t("services.modal.status", "Status")}: <b>{statusLabel(stopTarget.status, t)}</b>
+                Статус: <b>{statusLabel(stopTarget.status)}</b>
               </div>
               <div>
-                {t("services.modal.type", "Type")}: <b>{kindTitle(detectKind(stopTarget.category), t)}</b>
+                Тип: <b>{kindTitle(detectKind(stopTarget.category))}</b>
               </div>
               <div>
-                {t("services.modal.plan", "Plan")}: <b>{fmtMoney(stopTarget.price, stopTarget.currency)}</b> / {stopTarget.periodMonths || 1}
-                {t("services.month_short", "mo")}
+                Тариф: <b>{fmtMoney(stopTarget.price, stopTarget.currency)}</b> / {stopTarget.periodMonths || 1}м
               </div>
               {stopTarget.expireAt ? (
                 <div>
-                  {t("services.modal.until", "Active until")}: <b>{fmtDate(stopTarget.expireAt)}</b>
+                  Действует до: <b>{fmtDate(stopTarget.expireAt)}</b>
                 </div>
               ) : null}
             </div>
@@ -928,12 +906,9 @@ export function Services() {
         ) : null}
       </Modal>
 
+      {/* DELETE modal */}
       <Modal
-        title={
-          deleteTarget
-            ? t("services.modal.delete.title_named", "Delete service “{title}”?").replace("{title}", deleteTarget.title)
-            : t("services.modal.delete.title", "Delete service?")
-        }
+        title={deleteTarget ? `Удалить услугу «${deleteTarget.title}»?` : "Удалить услугу?"}
         open={!!deleteTarget}
         loading={deleteBusy}
         error={deleteErrText}
@@ -943,34 +918,31 @@ export function Services() {
           setDeleteError(null);
         }}
         onConfirm={onConfirmDelete}
-        confirmText={t("services.delete.confirm", "Delete")}
-        cancelText={t("services.cancel", "Cancel")}
+        confirmText="Удалить"
+        cancelText="Отмена"
         confirmClassName="btn btn--primary"
-        footerHint={t("services.modal.footer_hint", "If you are unsure, first check the service status or contact support.")}
-        closeLabel={t("services.close", "Close")}
       >
         {deleteTarget ? (
           <>
             <div className="p">
-              <b>{t("services.modal.delete.confirm_title", "Delete confirmation")}</b>
+              <b>Подтверждение удаления</b>
             </div>
 
-            <div className="p">{deleteConfirmText(deleteTarget, t)}</div>
+            <div className="p">{deleteConfirmText(deleteTarget)}</div>
 
             <div className="pre">
               <div>
-                {t("services.modal.status", "Status")}: <b>{statusLabel(deleteTarget.status, t)}</b>
+                Статус: <b>{statusLabel(deleteTarget.status)}</b>
               </div>
               <div>
-                {t("services.modal.type", "Type")}: <b>{kindTitle(detectKind(deleteTarget.category), t)}</b>
+                Тип: <b>{kindTitle(detectKind(deleteTarget.category))}</b>
               </div>
               <div>
-                {t("services.modal.plan", "Plan")}: <b>{fmtMoney(deleteTarget.price, deleteTarget.currency)}</b> / {deleteTarget.periodMonths || 1}
-                {t("services.month_short", "mo")}
+                Тариф: <b>{fmtMoney(deleteTarget.price, deleteTarget.currency)}</b> / {deleteTarget.periodMonths || 1}м
               </div>
               {deleteTarget.expireAt ? (
                 <div>
-                  {t("services.modal.until", "Active until")}: <b>{fmtDate(deleteTarget.expireAt)}</b>
+                  Действует до: <b>{fmtDate(deleteTarget.expireAt)}</b>
                 </div>
               ) : null}
             </div>
