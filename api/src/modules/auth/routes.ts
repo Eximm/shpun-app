@@ -110,8 +110,32 @@ async function shmGetUserIdentity(sessionId: string): Promise<{ userId: number; 
   return { userId, login };
 }
 
+function normalizeIp(raw: unknown): string {
+  let ip = String(raw ?? "").trim();
+  if (!ip) return "";
+
+  if (ip.includes(",")) {
+    ip = ip.split(",")[0].trim();
+  }
+
+  if (ip.startsWith("::ffff:")) {
+    ip = ip.slice(7);
+  }
+
+  if (ip === "::1") {
+    return "127.0.0.1";
+  }
+
+  return ip;
+}
+
 function getRequestIp(req: any): string {
-  return String(req.headers?.["x-real-ip"] ?? req.ip ?? "").trim();
+  return normalizeIp(
+    req?.ip ??
+      req?.headers?.["x-forwarded-for"] ??
+      req?.headers?.["x-real-ip"] ??
+      ""
+  );
 }
 
 function isHttps(req: any): boolean {
