@@ -730,7 +730,44 @@ export const RU: Dict = {
   "connectAmneziaWG.qr.title": "QR-код профиля",
   "connectAmneziaWG.qr.sub": "В AmneziaWG выберите импорт по QR-коду и наведите камеру.",
   "connectAmneziaWG.qr.alt": "QR-код конфигурации",
-  
+
+  // CONNeCT MARZBAN
+  "connect.loading": "Готовим подключение…",
+  "connect.ready": "Подписка готова.",
+  "connect.error": "Не удалось подготовить подключение.",
+  "connect.load_failed": "Не удалось загрузить ссылку подписки.",
+
+  "connect.sub_ready": "Подписка готова",
+  "connect.sub_ready_desc": "Теперь её можно добавить в приложение.",
+
+  "connect.sub_prepare_error": "Не удалось подготовить подписку",
+  "connect.sub_prepare_error_desc": "Попробуйте ещё раз чуть позже.",
+
+  "connect.step_install": "1) Установите приложение",
+  "connect.install_text": "Установите {client} для {platform}.",
+
+  "connect.open_store": "Открыть",
+  "connect.download_direct": "Скачать напрямую",
+
+  "connect.step_import": "2) Добавьте подписку",
+  "connect.import_text": "Откройте приложение и добавьте подписку.",
+
+  "connect.add_sub": "Добавить подписку",
+  "connect.wait": "Подождите…",
+
+  "connect.more_methods": "Другие способы",
+  "connect.hide_methods": "Скрыть способы",
+
+  "connect.copy_link": "Скопировать ссылку",
+  "connect.copied": "Ссылка скопирована",
+
+  "connect.show_qr": "Показать QR",
+
+  "connect.qr_title": "QR-код подписки",
+  "connect.qr_text": "Откройте приложение на другом устройстве и импортируйте подписку через QR.",
+
+  "connect.open_client": "Открываем приложение"
+
 };
 
 export const EN: Dict = {
@@ -1463,5 +1500,43 @@ export const EN: Dict = {
   "connectAmneziaWG.qr.title": "Profile QR code",
   "connectAmneziaWG.qr.sub": "In AmneziaWG, choose import by QR code and point the camera at it.",
   "connectAmneziaWG.qr.alt": "Configuration QR code",
+
+  // connect Marzban
+  "connect.loading": "Preparing connection…",
+  "connect.ready": "Subscription is ready.",
+  "connect.error": "Failed to prepare connection.",
+  "connect.load_failed": "Failed to load subscription link.",
+
+  "connect.sub_ready": "Subscription ready",
+  "connect.sub_ready_desc": "You can now add it to the app.",
+
+  "connect.sub_prepare_error": "Failed to prepare subscription",
+  "connect.sub_prepare_error_desc": "Please try again later.",
+
+  "connect.step_install": "1) Install the app",
+  "connect.install_text": "Install {client} for {platform}.",
+
+  "connect.open_store": "Open",
+  "connect.download_direct": "Direct download",
+
+  "connect.step_import": "2) Add subscription",
+  "connect.import_text": "Open the app and add the subscription.",
+
+  "connect.add_sub": "Add subscription",
+  "connect.wait": "Please wait…",
+
+  "connect.more_methods": "More options",
+  "connect.hide_methods": "Hide options",
+
+  "connect.copy_link": "Copy link",
+  "connect.copied": "Link copied",
+
+  "connect.show_qr": "Show QR",
+
+  "connect.qr_title": "Subscription QR code",
+  "connect.qr_text": "Open the client on another device and import the subscription via QR.",
+
+  "connect.open_client": "Opening the app"
+  
 
 };
