@@ -60,7 +60,7 @@ async function shmRegister(
   const body: Record<string, any> = {
     login,
     password,
-    client,
+    full_name: client, // <-- исправлено
   };
 
   if (partnerId > 0) {
@@ -123,7 +123,7 @@ async function shmLogin(
 export async function passwordAuth(body: any): Promise<AuthResult> {
   const login = normalizeLogin(body?.login);
   const password = normalizePassword(body?.password);
-  const client = normalizeClient(body?.client, login);
+  const client = normalizeClient(body?.client, login); // fallback = email
   const mode = normalizeMode(body?.mode);
   const partnerId = normalizePartnerId(body?.partner_id);
 
