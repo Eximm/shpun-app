@@ -59,8 +59,7 @@ async function shmRegister(
 ) {
   const body: Record<string, any> = {
     login,
-    password,
-    full_name: client, // <-- исправлено
+    password
   };
 
   if (partnerId > 0) {
@@ -70,20 +69,20 @@ async function shmRegister(
   const r = await shmFetch<any>(null, "v1/user", {
     method: "PUT",
     body,
-    signal,
+    signal
   });
 
   if (r.ok) {
     return {
       ok: true as const,
-      detail: r.json ?? r.text,
+      detail: r.json ?? r.text
     };
   }
 
   return {
     ok: false as const,
     status: r.status || 400,
-    detail: r.json ?? r.text,
+    detail: r.json ?? r.text
   };
 }
 
@@ -92,10 +91,11 @@ async function shmLogin(
   password: string,
   signal: AbortSignal
 ): Promise<AuthResult> {
+
   const r = await shmFetch<any>(null, "v1/user/auth", {
     method: "POST",
     body: { login, password },
-    signal,
+    signal
   });
 
   if (!r.ok) {
@@ -103,27 +103,45 @@ async function shmLogin(
       ok: false,
       status: r.status || 401,
       error: "shm_auth_failed",
-      detail: r.json ?? r.text,
+      detail: r.json ?? r.text
     };
   }
 
   const sessionId = extractSessionId(r.json);
+
   if (!sessionId) {
     return {
       ok: false,
       status: 502,
       error: "shm_auth_invalid_response",
-      detail: r.json ?? r.text,
+      detail: r.json ?? r.text
     };
   }
 
   return { ok: true, shmSessionId: sessionId, login };
 }
 
+async function shmSetClientName(
+  sessionId: string,
+  client: string,
+  signal: AbortSignal
+) {
+  if (!client) return;
+
+  await shmFetch(sessionId, "v1/user", {
+    method: "POST",
+    body: {
+      full_name: client
+    },
+    signal
+  });
+}
+
 export async function passwordAuth(body: any): Promise<AuthResult> {
+
   const login = normalizeLogin(body?.login);
   const password = normalizePassword(body?.password);
-  const client = normalizeClient(body?.client, login); // fallback = email
+  const client = normalizeClient(body?.client, login);
   const mode = normalizeMode(body?.mode);
   const partnerId = normalizePartnerId(body?.partner_id);
 
@@ -140,30 +158,49 @@ export async function passwordAuth(body: any): Promise<AuthResult> {
   }
 
   try {
+
     return await withTimeout(12_000, async (signal) => {
+
       if (mode === "register") {
+
         const reg = await shmRegister(login, password, client, partnerId, signal);
+
         if (!reg.ok) {
           return {
             ok: false,
             status: reg.status,
             error: "shm_register_failed",
-            detail: reg.detail,
+            detail: reg.detail
           };
         }
 
-        return await shmLogin(login, password, signal);
+        const auth = await shmLogin(login, password, signal);
+
+          if (auth.ok && auth.shmSessionId) {
+            try {
+              await shmSetClientName(auth.shmSessionId, client, signal);
+            } catch {
+              // имя не критично
+            }
+          }
+
+        return auth;
       }
 
       return await shmLogin(login, password, signal);
     });
+
   } catch (e: unknown) {
+
     const msg = toErrorDetail(e);
+
     return {
       ok: false,
       status: 502,
-      error: mode === "register" ? "shm_register_exception" : "shm_auth_exception",
-      detail: msg,
+      error: mode === "register"
+        ? "shm_register_exception"
+        : "shm_auth_exception",
+      detail: msg
     };
   }
 }
