@@ -42,6 +42,7 @@ function normOne(x: any): ApiRouterItem | null {
 function extractRouters(resp: any): ApiRouterItem[] {
   const r = resp ?? {}
   const arr = r.routers ?? r.items ?? r.data ?? r.list ?? r.result ?? null
+
   if (Array.isArray(arr)) {
     return arr.map(normOne).filter(Boolean) as ApiRouterItem[]
   }
@@ -76,14 +77,17 @@ function statusView(status?: string) {
 
   if (!s) return { label: "unknown", tone: "muted" as const }
 
-  if (s === "bound" || s === "active" || s === "ok")
+  if (s === "bound" || s === "active" || s === "ok") {
     return { label: s, tone: "good" as const }
+  }
 
-  if (s === "unbound" || s === "removed" || s === "none" || s === "new")
+  if (s === "unbound" || s === "removed" || s === "none" || s === "new") {
     return { label: s, tone: "muted" as const }
+  }
 
-  if (s === "error" || s === "fail" || s === "failed")
+  if (s === "error" || s === "fail" || s === "failed") {
     return { label: s, tone: "bad" as const }
+  }
 
   return { label: s, tone: "muted" as const }
 }
@@ -115,16 +119,18 @@ export default function ConnectRouter({ usi, onDone }: Props) {
 
     const normalized = String(first.status || "").toLowerCase()
 
-    if (normalized === "bound" || normalized === "active" || normalized === "ok")
+    if (normalized === "bound" || normalized === "active" || normalized === "ok") {
       return true
+    }
 
     if (
       normalized === "unbound" ||
       normalized === "removed" ||
       normalized === "none" ||
       normalized === "new"
-    )
+    ) {
       return false
+    }
 
     return !!(shownClean || shownCode)
   }, [first, shownClean, shownCode])
@@ -178,7 +184,9 @@ export default function ConnectRouter({ usi, onDone }: Props) {
 
       setError(msg)
 
-      toast.error(t("router.code_invalid"), { description: msg })
+      toast.error(t("router.code_invalid"), {
+        description: msg,
+      })
 
       return
     }
@@ -205,7 +213,6 @@ export default function ConnectRouter({ usi, onDone }: Props) {
 
       setCode("")
       await load({ silent: true })
-
       onDone?.()
 
       toast.success(t("router.bind_ok"), {
@@ -216,7 +223,9 @@ export default function ConnectRouter({ usi, onDone }: Props) {
 
       setError(msg)
 
-      toast.error(t("router.bind_error"), { description: msg })
+      toast.error(t("router.bind_error"), {
+        description: msg,
+      })
     } finally {
       setBusy(false)
     }
@@ -232,7 +241,6 @@ export default function ConnectRouter({ usi, onDone }: Props) {
     ).trim()
 
     const clean = toClean8(v)
-
     if (!clean) return
 
     setBusy(true)
@@ -256,7 +264,6 @@ export default function ConnectRouter({ usi, onDone }: Props) {
       }
 
       await load({ silent: true })
-
       onDone?.()
 
       toast.success(t("router.unbind_ok"), {
@@ -267,7 +274,9 @@ export default function ConnectRouter({ usi, onDone }: Props) {
 
       setError(msg)
 
-      toast.error(t("router.unbind_error"), { description: msg })
+      toast.error(t("router.unbind_error"), {
+        description: msg,
+      })
     } finally {
       setBusy(false)
     }
@@ -290,15 +299,13 @@ export default function ConnectRouter({ usi, onDone }: Props) {
 
   return (
     <div className="cr">
-      <div className="p cr__hintTop">
-        {t("router.hint")}
-      </div>
+      <div className="p cr__hintTop">{t("router.hint")}</div>
 
-      {loading && <div className="p">{t("router.loading")}</div>}
+      {loading ? <div className="p">{t("router.loading")}</div> : null}
 
-      {error && <div className="pre cr__mt10">{error}</div>}
+      {error ? <div className="pre cr__mt10">{error}</div> : null}
 
-      {!loading && (
+      {!loading ? (
         <div className="pre cr__mt10 cr__state">
           <div className="cr__stateMain">
             {hasBound ? (
@@ -307,33 +314,36 @@ export default function ConnectRouter({ usi, onDone }: Props) {
                   {t("router.bound")} <b>{shownPretty || "—"}</b>
                 </div>
 
-                {first?.created_at && (
+                {first?.created_at ? (
                   <div className="cr__meta cr__mt6">
                     {t("router.bound_at")} <b>{fmtTs(first.created_at)}</b>
                   </div>
-                )}
+                ) : null}
 
-                {first?.last_seen_at && (
+                {first?.last_seen_at ? (
                   <div className="cr__meta">
                     {t("router.last_seen")} <b>{fmtTs(first.last_seen_at)}</b>
                   </div>
-                )}
+                ) : null}
               </>
             ) : (
               <div>{t("router.not_bound")}</div>
             )}
           </div>
 
-          {first && (
-            <span className={`cr__badge ${statusToneClass}`}>
-              <span className="cr__badgeK">status</span>
+          {first ? (
+            <span
+              className={`cr__badge ${statusToneClass}`}
+              title={t("router.status_title")}
+            >
+              <span className="cr__badgeK">{t("router.status_short", "status")}</span>
               <b className="cr__badgeV">{st.label}</b>
             </span>
-          )}
+          ) : null}
         </div>
-      )}
+      ) : null}
 
-      {!hasBound && (
+      {!hasBound ? (
         <div className="cr__form">
           <input
             value={inputValue}
@@ -354,7 +364,7 @@ export default function ConnectRouter({ usi, onDone }: Props) {
             pattern="[A-Za-z0-9-]*"
           />
         </div>
-      )}
+      ) : null}
 
       <div className="cr__actionsGrid cr__actionsGrid--2 cr__mt12">
         {!hasBound ? (
@@ -362,6 +372,7 @@ export default function ConnectRouter({ usi, onDone }: Props) {
             className="btn btn--primary cr__btnFull"
             onClick={bind}
             disabled={!canBind}
+            type="button"
           >
             {busy ? t("common.wait") : t("router.bind")}
           </button>
@@ -370,6 +381,7 @@ export default function ConnectRouter({ usi, onDone }: Props) {
             className="btn btn--danger cr__btnFull"
             onClick={unbind}
             disabled={busy}
+            type="button"
           >
             {busy ? t("common.wait") : t("router.unbind")}
           </button>
@@ -379,19 +391,16 @@ export default function ConnectRouter({ usi, onDone }: Props) {
           className="btn cr__btnFull"
           onClick={() => load({ silent: false })}
           disabled={busy}
+          type="button"
         >
           {t("common.refresh")}
         </button>
       </div>
 
       {hasBound ? (
-        <div className="cr__note cr__mt10">
-          {t("router.one_device")}
-        </div>
+        <div className="cr__note cr__mt10">{t("router.one_device")}</div>
       ) : (
-        <div className="cr__note cr__mt10">
-          {t("router.code_format")}
-        </div>
+        <div className="cr__note cr__mt10">{t("router.code_format")}</div>
       )}
     </div>
   )

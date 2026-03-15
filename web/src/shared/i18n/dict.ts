@@ -802,6 +802,8 @@ export const RU: Dict = {
 
   "router.bound_at": "Привязан:",
   "router.last_seen": "Последний контакт:",
+  "router.status_title": "Статус привязки",
+  "router.status_short": "status",
 
   "router.input_placeholder": "Например: N8JD-6TQ4",
 
@@ -1620,6 +1622,8 @@ export const EN: Dict = {
 
   "router.bind": "Link router",
   "router.unbind": "Unlink router",
+  "router.status_title": "Binding status",
+  "router.status_short": "status",
 
   "router.one_device": "Only one router can be linked to this service at a time.",
   "router.code_format": "Code format: XXXX-XXXX (letters and numbers)."
