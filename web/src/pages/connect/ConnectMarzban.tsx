@@ -134,9 +134,7 @@ export default function ConnectMarzban({ usi }: Props) {
 
     try {
       const r = (await apiFetch(
-        `/services/${encodeURIComponent(
-          String(usi)
-        )}/connect/marzban`
+        `/services/${encodeURIComponent(String(usi))}/connect/marzban`
       )) as any
 
       const url = String(
@@ -147,14 +145,14 @@ export default function ConnectMarzban({ usi }: Props) {
 
       setSubscriptionUrl(url)
 
-      toast.success(t("connect.sub_ready"), {
-        description: t("connect.sub_ready_desc"),
+      toast.success(t("connect.sub_ready", "Subscription is ready"), {
+        description: t("connect.sub_ready_desc", "You can now import it into the client."),
       })
     } catch {
       setError("load_failed")
 
-      toast.error(t("connect.sub_prepare_error"), {
-        description: t("connect.sub_prepare_error_desc"),
+      toast.error(t("connect.sub_prepare_error", "Could not prepare subscription"), {
+        description: t("connect.sub_prepare_error_desc", "Please try again in a moment."),
       })
     } finally {
       setLoading(false)
@@ -190,7 +188,7 @@ export default function ConnectMarzban({ usi }: Props) {
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
 
-      toast.success(t("connect.copy_link"))
+      toast.success(t("connect.copy_link", "Link copied"))
     }
   }
 
@@ -199,24 +197,23 @@ export default function ConnectMarzban({ usi }: Props) {
 
     openLinkSafe(importLink)
 
-    toast.info(t("connect.open_client"))
+    toast.info(t("connect.open_client", "Opening client"))
   }
 
   return (
     <div className="cm">
-
       <div className="pre">
-        {loading && t("connect.loading")}
-        {error && t("connect.error")}
-        {ready && t("connect.ready")}
+        {loading && t("connect.loading", "Loading...")}
+        {error && t("connect.error", "Error")}
+        {ready && t("connect.ready", "Ready")}
       </div>
 
       {error && (
         <div className="pre">
-          {t("connect.load_failed")}
+          {t("connect.load_failed", "Could not load subscription")}
           <div>
             <button className="btn" onClick={load}>
-              {t("common.retry")}
+              {t("common.retry", "Retry")}
             </button>
           </div>
         </div>
@@ -224,61 +221,61 @@ export default function ConnectMarzban({ usi }: Props) {
 
       <div className="card">
         <div className="card__body">
-
           <div className="services-cat__title">
-            {t("connect.step_install")}
+            {t("connect.step_install", "1. Install app")}
           </div>
 
           <p className="p">
-            {tr(t("connect.install_text"), {
-              client: client.title,
-              platform: platformLabel(platform),
-            })}
+            {tr(
+              t("connect.install_text", "Install {client} for {platform} first."),
+              {
+                client: client.title,
+                platform: platformLabel(platform),
+              }
+            )}
           </p>
 
           <div className="actions actions--2">
-
             <button
               className="btn btn--primary"
               onClick={() => openLinkSafe(client.market)}
               disabled={loading}
             >
-              {t("connect.open_store")} {client.storeLabel}
+              {t("connect.open_store", "Open")} {client.storeLabel}
             </button>
 
             {client.direct ? (
               <button
                 className="btn"
-                onClick={() => openLinkSafe(client.direct!)}
+                onClick={() => {
+                  if (!client.direct) return
+                  openLinkSafe(client.direct)
+                }}
               >
-                {t("connect.download_direct")}
+                {t("connect.download_direct", "Direct download")}
               </button>
             ) : null}
-
           </div>
-
         </div>
       </div>
 
       <div className="card">
         <div className="card__body">
-
           <div className="services-cat__title">
-            {t("connect.step_import")}
+            {t("connect.step_import", "2. Import subscription")}
           </div>
 
           <p className="p">
-            {t("connect.import_text")}
+            {t("connect.import_text", "Add the subscription to the app using the button below.")}
           </p>
 
           <div className="actions actions--2">
-
             <button
               className="btn btn--primary"
               onClick={openAutoImport}
               disabled={!ready}
             >
-              {loading ? t("connect.wait") : t("connect.add_sub")}
+              {loading ? t("connect.wait", "Please wait") : t("connect.add_sub", "Add subscription")}
             </button>
 
             <button
@@ -287,32 +284,28 @@ export default function ConnectMarzban({ usi }: Props) {
               disabled={!ready}
             >
               {moreOpen
-                ? t("connect.hide_methods")
-                : t("connect.more_methods")}
+                ? t("connect.hide_methods", "Hide other methods")
+                : t("connect.more_methods", "More methods")}
             </button>
-
           </div>
 
           {moreOpen && ready && (
             <div className="pre">
-
               <div className="actions actions--1">
                 <button className="btn" onClick={copySub}>
                   {copied
-                    ? t("connect.copied")
-                    : t("connect.copy_link")}
+                    ? t("connect.copied", "Copied")
+                    : t("connect.copy_link", "Copy link")}
                 </button>
               </div>
 
               <div className="actions actions--1">
                 <button className="btn" onClick={openQr}>
-                  {t("connect.show_qr")}
+                  {t("connect.show_qr", "Show QR")}
                 </button>
               </div>
-
             </div>
           )}
-
         </div>
       </div>
 
@@ -326,11 +319,9 @@ export default function ConnectMarzban({ usi }: Props) {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="card__body">
-
               <div className="row so__spaceBetween">
-
                 <div className="overlay__title">
-                  {t("connect.qr_title")}
+                  {t("connect.qr_title", "QR code")}
                 </div>
 
                 <button
@@ -339,15 +330,13 @@ export default function ConnectMarzban({ usi }: Props) {
                 >
                   ✕
                 </button>
-
               </div>
 
               <p className="p">
-                {t("connect.qr_text")}
+                {t("connect.qr_text", "Scan this QR code in the client app.")}
               </p>
 
               <div className="pre">
-
                 {qrDataUrl && (
                   <img
                     src={qrDataUrl}
@@ -356,20 +345,16 @@ export default function ConnectMarzban({ usi }: Props) {
                     decoding="async"
                   />
                 )}
-
               </div>
 
               <div className="actions actions--1">
-
                 <button
                   className="btn btn--primary"
                   onClick={() => setQrOpen(false)}
                 >
-                  {t("common.close")}
+                  {t("common.close", "Close")}
                 </button>
-
               </div>
-
             </div>
           </div>
         </div>

@@ -285,7 +285,7 @@ function Modal({
 }
 
 const ConnectAmneziaWG = React.lazy(() => import("./connect/ConnectAmneziaWG"));
-const ConnectMarzban = React.lazy(() => import("./connect/ConnectMarzban.tsx"));
+const ConnectMarzban = React.lazy(() => import("./connect/ConnectMarzban"));
 const ConnectRouter = React.lazy(() => import("./connect/ConnectRouter"));
 
 function ConnectInline({
@@ -308,8 +308,8 @@ function ConnectInline({
       <div className="svc__connectBody">
         <Suspense fallback={<div className="p">{t("services.loading_short", "Loading…")}</div>}>
           {kind === "amneziawg" ? <ConnectAmneziaWG usi={service.userServiceId} service={service} onDone={onDone} /> : null}
-          {kind === "marzban" ? <ConnectMarzban usi={service.userServiceId} service={service} onDone={onDone} /> : null}
-          {kind === "marzban_router" ? <ConnectRouter usi={service.userServiceId} service={service} onDone={onDone} /> : null}
+          {kind === "marzban" ? <ConnectMarzban usi={service.userServiceId} /> : null}
+          {kind === "marzban_router" ? <ConnectRouter usi={service.userServiceId} onDone={onDone} /> : null}
           {kind === "unknown" ? <div className="pre">{t("services.connect.unavailable", "No connection helper for this service type yet.")}</div> : null}
         </Suspense>
       </div>
@@ -390,7 +390,8 @@ function ServiceCard({
 
           <div className="svc__right">
             <span className="badge">
-              {fmtMoney(s.price, s.currency)} / {s.periodMonths || 1}{t("services.month_short", "mo")}
+              {fmtMoney(s.price, s.currency)} / {s.periodMonths || 1}
+              {t("services.month_short", "mo")}
             </span>
           </div>
         </div>
@@ -408,7 +409,11 @@ function ServiceCard({
                 className="btn btn--primary"
                 onClick={onToggleConnect}
                 disabled={!canShowConnect}
-                title={!canShowConnect ? t("services.connect.only_active", "Connection is available only for active services.") : t("services.connect.open", "Open connection")}
+                title={
+                  !canShowConnect
+                    ? t("services.connect.only_active", "Connection is available only for active services.")
+                    : t("services.connect.open", "Open connection")
+                }
               >
                 {connectOpen ? t("services.connect.hide", "Hide connection") : t("services.connect.button", "Connection")}
               </button>
@@ -910,7 +915,8 @@ export function Services() {
                 {t("services.modal.type", "Type")}: <b>{kindTitle(detectKind(stopTarget.category), t)}</b>
               </div>
               <div>
-                {t("services.modal.plan", "Plan")}: <b>{fmtMoney(stopTarget.price, stopTarget.currency)}</b> / {stopTarget.periodMonths || 1}{t("services.month_short", "mo")}
+                {t("services.modal.plan", "Plan")}: <b>{fmtMoney(stopTarget.price, stopTarget.currency)}</b> / {stopTarget.periodMonths || 1}
+                {t("services.month_short", "mo")}
               </div>
               {stopTarget.expireAt ? (
                 <div>
@@ -959,7 +965,8 @@ export function Services() {
                 {t("services.modal.type", "Type")}: <b>{kindTitle(detectKind(deleteTarget.category), t)}</b>
               </div>
               <div>
-                {t("services.modal.plan", "Plan")}: <b>{fmtMoney(deleteTarget.price, deleteTarget.currency)}</b> / {deleteTarget.periodMonths || 1}{t("services.month_short", "mo")}
+                {t("services.modal.plan", "Plan")}: <b>{fmtMoney(deleteTarget.price, deleteTarget.currency)}</b> / {deleteTarget.periodMonths || 1}
+                {t("services.month_short", "mo")}
               </div>
               {deleteTarget.expireAt ? (
                 <div>

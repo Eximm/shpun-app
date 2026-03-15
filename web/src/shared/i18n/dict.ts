@@ -766,7 +766,50 @@ export const RU: Dict = {
   "connect.qr_title": "QR-код подписки",
   "connect.qr_text": "Откройте приложение на другом устройстве и импортируйте подписку через QR.",
 
-  "connect.open_client": "Открываем приложение"
+  "connect.open_client": "Открываем приложение",
+
+  // ROUTER
+  "router.hint": "Введите код с экрана роутера, чтобы привязать устройство к этой услуге.",
+  "router.loading": "Загрузка состояния…",
+
+  "router.status_updated": "Статус обновлён",
+  "router.status_updated_desc": "Состояние роутера обновлено.",
+
+  "router.status_error": "Не удалось обновить статус",
+  "router.load_error": "Не удалось загрузить состояние роутера",
+
+  "router.code_invalid": "Неверный код",
+  "router.code_invalid_desc": "Код должен быть в формате XXXX-XXXX: только латинские буквы и цифры.",
+
+  "router.binding": "Привязываем роутер",
+  "router.binding_desc": "Это займёт пару секунд.",
+
+  "router.bind_ok": "Роутер привязан",
+  "router.bind_ok_desc": "Теперь он подключён к этой услуге.",
+
+  "router.bind_error": "Не удалось привязать роутер",
+
+  "router.unbinding": "Отвязываем роутер",
+  "router.unbinding_desc": "Это займёт пару секунд.",
+
+  "router.unbind_ok": "Роутер отвязан",
+  "router.unbind_ok_desc": "Теперь можно привязать другой роутер.",
+
+  "router.unbind_error": "Не удалось отвязать роутер",
+
+  "router.bound": "Роутер привязан:",
+  "router.not_bound": "Роутер ещё не привязан.",
+
+  "router.bound_at": "Привязан:",
+  "router.last_seen": "Последний контакт:",
+
+  "router.input_placeholder": "Например: N8JD-6TQ4",
+
+  "router.bind": "Привязать роутер",
+  "router.unbind": "Отвязать роутер",
+
+  "router.one_device": "Один роутер может быть привязан к услуге одновременно.",
+  "router.code_format": "Формат кода: XXXX-XXXX (латинские буквы и цифры)."
 
 };
 
@@ -1536,7 +1579,49 @@ export const EN: Dict = {
   "connect.qr_title": "Subscription QR code",
   "connect.qr_text": "Open the client on another device and import the subscription via QR.",
 
-  "connect.open_client": "Opening the app"
+  "connect.open_client": "Opening the app",
   
+  // Router
+  "router.hint": "Enter the code from your router screen to link it to this service.",
+  "router.loading": "Loading router status…",
+
+  "router.status_updated": "Status updated",
+  "router.status_updated_desc": "Router state has been refreshed.",
+
+  "router.status_error": "Failed to update status",
+  "router.load_error": "Failed to load router state",
+
+  "router.code_invalid": "Invalid code",
+  "router.code_invalid_desc": "The code must be in format XXXX-XXXX using Latin letters and numbers.",
+
+  "router.binding": "Linking router",
+  "router.binding_desc": "This will take a few seconds.",
+
+  "router.bind_ok": "Router linked",
+  "router.bind_ok_desc": "It is now connected to this service.",
+
+  "router.bind_error": "Failed to link router",
+
+  "router.unbinding": "Unlinking router",
+  "router.unbinding_desc": "This will take a few seconds.",
+
+  "router.unbind_ok": "Router unlinked",
+  "router.unbind_ok_desc": "You can now link another router.",
+
+  "router.unbind_error": "Failed to unlink router",
+
+  "router.bound": "Router linked:",
+  "router.not_bound": "Router is not linked yet.",
+
+  "router.bound_at": "Linked at:",
+  "router.last_seen": "Last contact:",
+
+  "router.input_placeholder": "Example: N8JD-6TQ4",
+
+  "router.bind": "Link router",
+  "router.unbind": "Unlink router",
+
+  "router.one_device": "Only one router can be linked to this service at a time.",
+  "router.code_format": "Code format: XXXX-XXXX (letters and numbers)."
 
 };
