@@ -164,19 +164,19 @@ function mapAuthError(raw: string, t: (k: string, fb?: string) => string): strin
 
   switch (code) {
     case "login_and_password_required":
-      return t("login.err.login_and_password_required", "Введите логин и пароль.");
+      return t("login.err.login_and_password_required", "Введите e-mail и пароль.");
     case "login_required":
-      return t("login.err.login_required", "Введите логин.");
+      return t("login.err.login_required", "Введите e-mail.");
     case "password_required":
       return t("login.err.password_required", "Введите пароль.");
     case "invalid_credentials":
-      return t("login.err.invalid_credentials", "Неверный логин или пароль.");
+      return t("login.err.invalid_credentials", "Неверный e-mail или пароль.");
     case "password_too_short":
     case "password_too_short_or_weak":
       return t("login.err.password_too_short", "Пароль слишком короткий. Минимум 8 символов.");
     case "login_taken":
     case "user_exists":
-      return t("login.err.login_taken", "Этот логин уже занят.");
+      return t("login.err.login_taken", "Этот e-mail уже занят.");
     case "not_authenticated":
       return t("login.err.not_authenticated", "Нужно войти заново.");
     case "no_shm_session":
@@ -259,6 +259,7 @@ export function Login() {
 
   const [authModal, setAuthModal] = useState<AuthModal>("none");
   const [login, setLogin] = useState("");
+  const [clientName, setClientName] = useState("");
   const [password, setPassword] = useState("");
   const [password2, setPassword2] = useState("");
 
@@ -300,6 +301,10 @@ export function Login() {
     setShowPassword(false);
     setShowPassword2(false);
 
+    if (next !== "register") {
+      setClientName("");
+    }
+
     if (next === "register") {
       const pending = readPendingPartnerId();
       const effective = pending > 0 ? pending : partnerId;
@@ -313,6 +318,7 @@ export function Login() {
     setPassword2("");
     setShowPassword(false);
     setShowPassword2(false);
+    setClientName("");
   }
 
   async function goAfterAuth(r?: AuthResponse, provider?: string) {
@@ -333,6 +339,7 @@ export function Login() {
     clearPendingPartnerId();
     setPartnerId(0);
     setPartnerIdInput("");
+    setClientName("");
 
     if (next === "set_password") {
       nav("/set-password", {
@@ -403,12 +410,16 @@ export function Login() {
 
     setLoading(true);
     try {
+      const trimmedLogin = login.trim();
+      const trimmedClientName = clientName.trim();
+
       const r = await apiFetch<AuthResponse>("/auth/password", {
         method: "POST",
         body: {
-          login: login.trim(),
+          login: trimmedLogin,
           password,
           mode: "register",
+          client: trimmedClientName || trimmedLogin,
           ...(finalPartnerId > 0 ? { partner_id: finalPartnerId } : {}),
         },
       });
@@ -606,7 +617,7 @@ export function Login() {
             <div>
               <div className="modal__title">
                 {authModal === "login"
-                  ? t("login.password.form_title_login", "Вход по логину и паролю")
+                  ? t("login.password.form_title_login", "Вход по e-mail и паролю")
                   : t("login.password.form_title_register", "Регистрация")}
               </div>
               <p className="p">
@@ -649,17 +660,34 @@ export function Login() {
               }}
             >
               <div className="field">
-                <label className="field__label">{t("login.password.login", "Логин")}</label>
+                <label className="field__label">{t("login.password.login", "E-mail")}</label>
                 <input
                   className="input"
-                  placeholder={t("login.password.login_ph", "Введите логин")}
+                  placeholder={t("login.password.login_ph", "Введите e-mail")}
                   value={login}
                   onChange={(e) => setLogin(e.target.value)}
                   autoComplete="username"
                   disabled={loading}
-                  inputMode="text"
+                  inputMode="email"
                 />
               </div>
+
+              {authModal === "register" && (
+                <div className="field">
+                  <label className="field__label">
+                    {t("login.password.client", "Имя клиента (необязательно)")}
+                  </label>
+                  <input
+                    className="input"
+                    placeholder={t("login.password.client_ph", "Как к вам обращаться")}
+                    value={clientName}
+                    onChange={(e) => setClientName(e.target.value)}
+                    autoComplete="name"
+                    disabled={loading}
+                    inputMode="text"
+                  />
+                </div>
+              )}
 
               <div className="field">
                 <label className="field__label">{t("login.password.password", "Пароль")}</label>
@@ -799,7 +827,7 @@ export function Login() {
                         "login.desc.web.partner",
                         "Вы открыли приглашение. Зарегистрируйтесь или войдите через Telegram."
                       )
-                    : t("login.desc.web", "Войдите через Telegram или по логину и паролю.")}
+                    : t("login.desc.web", "Войдите через Telegram или по e-mail и паролю.")}
                 </p>
               )}
             </div>
@@ -863,7 +891,7 @@ export function Login() {
           )}
 
           <div className="auth__divider login__dividerMt14">
-            <span>{t("login.divider.password", "Логин и пароль")}</span>
+            <span>{t("login.divider.password", "E-mail и пароль")}</span>
           </div>
 
           <div className="auth__actions">
@@ -873,7 +901,7 @@ export function Login() {
               onClick={() => openModal("login")}
               disabled={loading}
             >
-              {t("login.password.open_login", "Войти по логину")}
+              {t("login.password.open_login", "Войти по e-mail")}
             </button>
 
             <button

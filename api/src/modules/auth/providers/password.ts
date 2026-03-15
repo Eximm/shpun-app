@@ -1,5 +1,3 @@
-// api/src/modules/auth/providers/password.ts
-
 import type { AuthResult } from "../authService.js";
 import { shmFetch } from "../../../shared/shm/shmClient.js";
 
@@ -11,6 +9,11 @@ function normalizeLogin(v: unknown) {
 
 function normalizePassword(v: unknown) {
   return String(v ?? "").trim();
+}
+
+function normalizeClient(v: unknown, fallbackLogin: string) {
+  const s = String(v ?? "").trim();
+  return s || fallbackLogin;
 }
 
 function normalizeMode(v: unknown): Mode {
@@ -50,12 +53,14 @@ async function withTimeout<T>(
 async function shmRegister(
   login: string,
   password: string,
+  client: string,
   partnerId: number,
   signal: AbortSignal
 ) {
   const body: Record<string, any> = {
     login,
     password,
+    client,
   };
 
   if (partnerId > 0) {
@@ -118,6 +123,7 @@ async function shmLogin(
 export async function passwordAuth(body: any): Promise<AuthResult> {
   const login = normalizeLogin(body?.login);
   const password = normalizePassword(body?.password);
+  const client = normalizeClient(body?.client, login);
   const mode = normalizeMode(body?.mode);
   const partnerId = normalizePartnerId(body?.partner_id);
 
@@ -136,7 +142,7 @@ export async function passwordAuth(body: any): Promise<AuthResult> {
   try {
     return await withTimeout(12_000, async (signal) => {
       if (mode === "register") {
-        const reg = await shmRegister(login, password, partnerId, signal);
+        const reg = await shmRegister(login, password, client, partnerId, signal);
         if (!reg.ok) {
           return {
             ok: false,
