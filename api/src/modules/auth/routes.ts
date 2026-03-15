@@ -537,7 +537,16 @@ export async function authRoutes(app: FastifyInstance) {
     const modeRaw = String(body?.mode ?? "login").trim().toLowerCase();
     const mode = modeRaw === "register" ? "register" : "login";
 
-    const result = await handleAuth("password", { ...body, mode });
+  const clientIp =
+    String(req.headers["x-forwarded-for"] ?? "").split(",")[0].trim() ||
+    String(req.headers["x-real-ip"] ?? "").trim() ||
+    req.ip;
+
+  const result = await handleAuth("password", {
+    ...body,
+    mode,
+    client_ip: clientIp,
+  });
     if (!result.ok) {
       return reply.code(result.status || 400).send(result);
     }
