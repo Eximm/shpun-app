@@ -1,10 +1,4 @@
 ﻿// FILE: api/src/shared/shm/shmClient.ts
-/**
- * Важно:
- * SHM_BASE должен указывать на /shm/ (с любым количеством слешей на конце — мы нормализуем)
- * Пример:
- *   SHM_BASE="https://bill.shpyn.online/shm/"
- */
 
 export type ShmResult<T = unknown> = {
   ok: boolean
@@ -40,9 +34,7 @@ function dbg(label: string, data: Record<string, any>) {
         shm: { label, ...data },
       })
     )
-  } catch {
-    // ignore
-  }
+  } catch {}
 }
 
 function clip(s: string, n = 400) {
@@ -91,9 +83,10 @@ function isProbablyHtml(text: string, contentType: string) {
 
 export async function shmFetch<T = unknown>(
   sessionId: string | null,
-  path: string, // path без ведущего слеша, например "v1/user"
+  path: string,
   opts?: ShmFetchOpts
 ): Promise<ShmResult<T>> {
+
   const cleanPath = path.startsWith('/') ? path.slice(1) : path
   const url = new URL(cleanPath, SHM_BASE)
 
@@ -111,18 +104,17 @@ export async function shmFetch<T = unknown>(
     ...(opts?.headers ?? {}),
   }
 
-  // session-id не логируем
   if (sessionId) headers['session-id'] = sessionId
 
   let body: any = opts?.body ?? undefined
 
-  // если body объект — отправляем JSON
   if (body && typeof body === 'object' && !(body instanceof String)) {
     if (!headers['Content-Type']) headers['Content-Type'] = 'application/json'
     body = JSON.stringify(body)
   }
 
   const startedAt = Date.now()
+
   dbg('request', {
     method,
     url: sanitizeUrlForLog(url),
@@ -142,7 +134,6 @@ export async function shmFetch<T = unknown>(
     const text = await res.text().catch(() => '')
     const ms = Date.now() - startedAt
 
-    // SHM иногда отдаёт JSON без корректного content-type — парсим мягко всегда
     const parsed = safeJsonParse(text)
     const json = parsed !== null ? (parsed as T) : undefined
 
@@ -159,15 +150,19 @@ export async function shmFetch<T = unknown>(
     })
 
     return { ok: res.ok, status: res.status, json, text }
+
   } catch (e: any) {
+
     const ms = Date.now() - startedAt
     const msg = String(e?.message ?? e ?? 'unknown_fetch_error')
+
     dbg('fetch_error', {
       method,
       url: sanitizeUrlForLog(url),
       ms,
       error: clip(msg, 300),
     })
+
     return { ok: false, status: 502, text: `fetch_error:${msg}` }
   }
 }
@@ -184,11 +179,20 @@ export function assertOkVoid(r: ShmResult<any>, label = 'shm_request_failed'): v
   throw new Error(`${label}:${r.status}:${detail}`)
 }
 
+function ipHeaders(clientIp?: string) {
+  if (!clientIp) return undefined
+  return {
+    'X-Real-IP': clientIp,
+    'X-Forwarded-For': clientIp,
+  }
+}
+
 // =====================
 // AUTH
 // =====================
 
-export async function shmAuthWithPassword(login: string, password: string) {
+export async function shmAuthWithPassword(login: string, password: string, clientIp?: string) {
+
   const body = toFormUrlEncoded({ login, password })
 
   return await shmFetch<{
@@ -198,22 +202,30 @@ export async function shmAuthWithPassword(login: string, password: string) {
     msg?: string
   }>(null, 'user/auth.cgi', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      ...(ipHeaders(clientIp) ?? {})
+    },
     body,
   })
 }
 
-export async function shmTelegramWebAppAuth(initData: string) {
+export async function shmTelegramWebAppAuth(initData: string, clientIp?: string) {
+
   const clean = String(initData ?? '').trim()
+
   return await shmFetch<{ session_id?: string }>(null, 'v1/telegram/webapp/auth', {
     method: 'GET',
+    headers: ipHeaders(clientIp),
     query: { initData: clean },
   })
 }
 
-export async function shmTelegramWebAuth(widgetPayload: Record<string, any>) {
+export async function shmTelegramWebAuth(widgetPayload: Record<string, any>, clientIp?: string) {
+
   return await shmFetch<{ session_id?: string }>(null, 'v1/telegram/web/auth', {
     method: 'POST',
+    headers: ipHeaders(clientIp),
     body: widgetPayload ?? {},
   })
 }
