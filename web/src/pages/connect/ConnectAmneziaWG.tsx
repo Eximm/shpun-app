@@ -1,10 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import QRCode from 'qrcode'
 import { apiFetch } from '../../shared/api/client'
-
-// ✅ toasts + mood (типизированные ключи — только из payments-mood)
 import { toast } from '../../shared/ui/toast'
-import { getMood } from '../../shared/payments-mood'
 
 type Props = {
   usi: number
@@ -28,7 +25,7 @@ const APK_LINK = 'https://github.com/amnezia-vpn/amneziawg-android/releases/late
 function detectOS(): Platform {
   const ua = navigator.userAgent || navigator.vendor || (window as any).opera || ''
   const isAndroid = /android/i.test(ua)
-  const isAppleTouch = /\bMac\b/.test(ua) && (navigator as any).maxTouchPoints > 1 // iPadOS
+  const isAppleTouch = /\bMac\b/.test(ua) && (navigator as any).maxTouchPoints > 1
   const isiOS = /iPad|iPhone|iPod/.test(ua) || isAppleTouch
   if (isAndroid) return 'android'
   if (isiOS) return 'ios'
@@ -62,12 +59,11 @@ function openLinkSafe(url: string) {
 function normalizeProfileText(text: string) {
   let t = String(text ?? '')
   if (!t) return ''
-  if (t.charCodeAt(0) === 0xfeff) t = t.slice(1) // BOM
+  if (t.charCodeAt(0) === 0xfeff) t = t.slice(1)
   return t.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim()
 }
 
 function downloadTextFile(filename: string, text: string) {
-  // важно: не text/plain, иначе iOS/Telegram WebView может приписать .txt
   const blob = new Blob([text], { type: 'application/octet-stream' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -134,7 +130,6 @@ export default function ConnectAmneziaWG({ usi }: Props) {
   const [qrOpen, setQrOpen] = useState(false)
   const [qrDataUrl, setQrDataUrl] = useState<string>('')
 
-  // ✅ prevent “profile ready” toast from repeating
   const didToastReadyRef = useRef(false)
 
   async function load() {
@@ -155,11 +150,10 @@ export default function ConnectAmneziaWG({ usi }: Props) {
       setConfigText(picked.text)
       setConfigName(picked.name || `vpn${usi}.conf`)
 
-      // ✅ small toast once
       if (!didToastReadyRef.current) {
         didToastReadyRef.current = true
         toast.success('Профиль готов', {
-          description: getMood('payment_success', { seed: String(usi) }) ?? 'Можно импортировать в AmneziaWG.',
+          description: 'Можно импортировать его в AmneziaWG.',
         })
       }
     } catch (e: any) {
@@ -198,10 +192,10 @@ export default function ConnectAmneziaWG({ usi }: Props) {
       setQrOpen(true)
 
       toast.info('QR-код готов', {
-        description: getMood('payment_checking', { seed: String(usi) }) ?? 'Откройте AmneziaWG и импортируйте по QR.',
+        description: 'Откройте AmneziaWG и импортируйте профиль по QR.',
       })
     } catch (e: any) {
-      toast.error('Не удалось построить QR', {
+      toast.error('Не удалось показать QR-код', {
         description: String(e?.message || 'Попробуйте ещё раз.'),
       })
     }
@@ -211,8 +205,8 @@ export default function ConnectAmneziaWG({ usi }: Props) {
     if (!configText) return
     downloadTextFile(configName || `vpn${usi}.conf`, configText)
 
-    toast.success('Скачивание началось', {
-      description: getMood('payment_success', { seed: String(usi) }) ?? 'Файл .conf сохранится в загрузках.',
+    toast.success('Конфиг скачивается', {
+      description: 'Файл .conf появится в загрузках.',
     })
   }
 
@@ -220,17 +214,16 @@ export default function ConnectAmneziaWG({ usi }: Props) {
     if (!configText) return
     const ok = await copyToClipboard(configText)
     if (ok) {
-      toast.success('Скопировано', {
-        description: getMood('payment_success', { seed: String(usi) }) ?? 'Профиль в буфере обмена.',
+      toast.success('Конфиг скопирован', {
+        description: 'Теперь его можно вставить в нужное приложение или поле импорта.',
       })
     } else {
-      toast.error('Не удалось скопировать', {
+      toast.error('Не удалось скопировать конфиг', {
         description: 'Браузер запретил копирование. Попробуйте другой способ.',
       })
     }
   }
 
-  // Step 2: основной способ всегда — скачать .conf (для всех устройств)
   const main2Label = 'Скачать конфиг (.conf)'
   const main2Action = downloadConf
 
@@ -259,7 +252,6 @@ export default function ConnectAmneziaWG({ usi }: Props) {
         </div>
       ) : null}
 
-      {/* device picker */}
       <div className="row cawg__rowTop">
         <div className="p cawg__label">Устройство:</div>
 
@@ -275,7 +267,6 @@ export default function ConnectAmneziaWG({ usi }: Props) {
         </button>
       </div>
 
-      {/* Step 1 */}
       <div className="card" style={{ marginTop: 12 }}>
         <div className="card__body">
           <div className="services-cat__title">1) Установите приложение</div>
@@ -307,7 +298,6 @@ export default function ConnectAmneziaWG({ usi }: Props) {
         </div>
       </div>
 
-      {/* Step 2 */}
       <div className="card" style={{ marginTop: 12 }}>
         <div className="card__body">
           <div className="services-cat__title">2) Добавьте профиль</div>
@@ -333,7 +323,6 @@ export default function ConnectAmneziaWG({ usi }: Props) {
             </button>
           </div>
 
-          {/* More ways */}
           {moreOpen && ready ? (
             <div style={{ marginTop: 10 }}>
               <div className="pre" style={{ opacity: 0.95 }}>
@@ -354,7 +343,6 @@ export default function ConnectAmneziaWG({ usi }: Props) {
         </div>
       </div>
 
-      {/* picker overlay */}
       {platformPickerOpen ? (
         <div className="overlay" role="dialog" aria-modal="true" onClick={() => setPlatformPickerOpen(false)}>
           <div className="card overlay__card" onClick={(e) => e.stopPropagation()}>
@@ -412,7 +400,6 @@ export default function ConnectAmneziaWG({ usi }: Props) {
         </div>
       ) : null}
 
-      {/* QR overlay */}
       {qrOpen ? (
         <div className="overlay" role="dialog" aria-modal="true" onClick={() => setQrOpen(false)}>
           <div className="card overlay__card" onClick={(e) => e.stopPropagation()}>

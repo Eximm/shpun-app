@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { apiFetch } from '../../shared/api/client'
-
-// ✅ toasts + mood (типизированные ключи — только из payments-mood)
 import { toast } from '../../shared/ui/toast'
-import { getMood } from '../../shared/payments-mood'
 
 type ApiRouterItem = {
   code?: string
@@ -12,7 +9,6 @@ type ApiRouterItem = {
   created_at?: number
   last_seen_at?: number
 
-  // допускаем другие варианты полей (на всякий)
   cleanCode?: string
   createdAt?: number
   lastSeenAt?: number
@@ -99,7 +95,6 @@ export default function ConnectRouter({ usi, onDone }: Props) {
     const normalized = String(first.status || '').toLowerCase()
     if (normalized === 'bound' || normalized === 'active' || normalized === 'ok') return true
     if (normalized === 'unbound' || normalized === 'removed' || normalized === 'none' || normalized === 'new') return false
-    // если статус непонятный, но код есть — считаем, что привязан (чтобы не скрывать существующую связку)
     return !!(shownClean || shownCode)
   }, [first, shownClean, shownCode])
 
@@ -119,10 +114,9 @@ export default function ConnectRouter({ usi, onDone }: Props) {
 
       setRouters(extractRouters(r))
 
-      // ✅ не спамим тостом на mount
       if (!silent) {
-        toast.info('Обновлено', {
-          description: getMood('payment_checking', { seed: String(usi) }) ?? 'Статус роутера обновлён.',
+        toast.info('Статус обновлён', {
+          description: 'Состояние роутера обновлено.',
         })
       }
     } catch (e: any) {
@@ -131,7 +125,9 @@ export default function ConnectRouter({ usi, onDone }: Props) {
       setRouters([])
 
       if (!silent) {
-        toast.error('Не удалось обновить', { description: msg })
+        toast.error('Не удалось обновить статус', {
+          description: msg,
+        })
       }
     } finally {
       setLoading(false)
@@ -143,7 +139,7 @@ export default function ConnectRouter({ usi, onDone }: Props) {
 
     if (!clean) return
     if (clean.length !== 8) {
-      const msg = 'Код должен быть в формате XXXX-XXXX (латинские буквы и цифры).'
+      const msg = 'Код должен быть в формате XXXX-XXXX: только латинские буквы и цифры.'
       setError(msg)
       toast.error('Неверный код', { description: msg })
       return
@@ -153,7 +149,7 @@ export default function ConnectRouter({ usi, onDone }: Props) {
     setError(null)
 
     toast.info('Привязываем роутер', {
-      description: getMood('payment_checking', { seed: String(usi) }) ?? 'Пара секунд…',
+      description: 'Это займёт пару секунд.',
     })
 
     try {
@@ -174,12 +170,12 @@ export default function ConnectRouter({ usi, onDone }: Props) {
       onDone?.()
 
       toast.success('Роутер привязан', {
-        description: getMood('payment_success', { seed: String(usi) }) ?? 'Готово.',
+        description: 'Теперь он подключён к этой услуге.',
       })
     } catch (e: any) {
       const msg = e?.message || 'Не удалось привязать роутер'
       setError(msg)
-      toast.error('Не удалось привязать', { description: msg })
+      toast.error('Не удалось привязать роутер', { description: msg })
     } finally {
       setBusy(false)
     }
@@ -194,7 +190,7 @@ export default function ConnectRouter({ usi, onDone }: Props) {
     setError(null)
 
     toast.info('Отвязываем роутер', {
-      description: getMood('payment_checking', { seed: String(usi) }) ?? 'Пара секунд…',
+      description: 'Это займёт пару секунд.',
     })
 
     try {
@@ -214,19 +210,18 @@ export default function ConnectRouter({ usi, onDone }: Props) {
       onDone?.()
 
       toast.success('Роутер отвязан', {
-        description: getMood('payment_success', { seed: String(usi) }) ?? 'Готово.',
+        description: 'Теперь можно привязать другой роутер.',
       })
     } catch (e: any) {
       const msg = e?.message || 'Не удалось отвязать роутер'
       setError(msg)
-      toast.error('Не удалось отвязать', { description: msg })
+      toast.error('Не удалось отвязать роутер', { description: msg })
     } finally {
       setBusy(false)
     }
   }
 
   useEffect(() => {
-    // ✅ первичная загрузка без тостов
     load({ silent: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usi])

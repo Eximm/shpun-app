@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import QRCode from 'qrcode'
 import { apiFetch } from '../../shared/api/client'
+import { toast } from '../../shared/ui/toast'
 
 type Props = {
   usi: number
@@ -13,10 +14,6 @@ type Chip = 'auto' | Platform
 
 const IOS_HIDDIFY_URL = 'https://apps.apple.com/us/app/hiddify-proxy-vpn/id6596777532'
 
-/**
- * Ссылки на клиент.
- * Важно: iOS — строго Hiddify по ссылке выше.
- */
 const CLIENT_LINKS: Record<
   Platform,
   { title: string; market: string; direct?: string; storeLabel: string }
@@ -40,7 +37,6 @@ const CLIENT_LINKS: Record<
   mac: {
     title: 'Hiddify',
     market: 'https://github.com/hiddify/hiddify-app/releases',
-    // если хочешь прямой dmg — можешь вернуть direct:
     direct: 'https://github.com/hiddify/hiddify-app/releases/latest/download/Hiddify-MacOS.dmg',
     storeLabel: 'страницу скачивания',
   },
@@ -55,7 +51,7 @@ const CLIENT_LINKS: Record<
 function detectOS(): Platform {
   const ua = navigator.userAgent || navigator.vendor || (window as any).opera || ''
   const isAndroid = /android/i.test(ua)
-  const isAppleTouch = /\bMac\b/.test(ua) && (navigator as any).maxTouchPoints > 1 // iPadOS
+  const isAppleTouch = /\bMac\b/.test(ua) && (navigator as any).maxTouchPoints > 1
   const isiOS = /iPad|iPhone|iPod/.test(ua) || isAppleTouch
   if (isAndroid) return 'android'
   if (isiOS) return 'ios'
@@ -112,17 +108,7 @@ async function copyToClipboard(text: string) {
   }
 }
 
-/**
- * Deep-link автодобавления подписки.
- * Мы делаем одинаково: авто-импорт для Android/iOS/Windows.
- *
- * Важно:
- * - для Android/iOS работает Hiddify scheme
- * - для Windows тоже используем hiddify:// (в хиддифи он поддерживается)
- */
 function buildAutoImportLink(platform: Platform, subscriptionUrl: string) {
-  // Hiddify использует install-sub/?url=...
-  // (Этот формат у тебя уже был для android)
   const u = encodeURIComponent(subscriptionUrl)
 
   if (platform === 'android' || platform === 'ios' || platform === 'windows' || platform === 'mac' || platform === 'linux') {
@@ -165,9 +151,21 @@ export default function ConnectMarzban({ usi }: Props) {
       const url = String(r?.subscription_url ?? r?.subscriptionUrl ?? '').trim()
       if (!url) throw new Error('subscription_url_missing')
       setSubscriptionUrl(url)
+
+      toast.success('Подписка готова', {
+        description: 'Её можно добавить в приложение.',
+      })
     } catch (e: any) {
       setSubscriptionUrl('')
-      setError(e?.message || 'Не удалось загрузить ссылку подписки')
+      const msg = e?.message || 'Не удалось загрузить ссылку подписки'
+      setError(msg)
+
+      toast.error('Не удалось подготовить подписку', {
+        description:
+          msg === 'subscription_url_missing'
+            ? 'Ссылка подписки пока недоступна. Попробуйте чуть позже.'
+            : String(msg),
+      })
     } finally {
       setLoading(false)
     }
@@ -194,8 +192,14 @@ export default function ConnectMarzban({ usi }: Props) {
       const dataUrl = await QRCode.toDataURL(subscriptionUrl, { margin: 2, width: 360 })
       setQrDataUrl(dataUrl)
       setQrOpen(true)
-    } catch {
-      alert('Не удалось построить QR-код')
+
+      toast.info('QR-код готов', {
+        description: 'Откройте клиент на другом устройстве и импортируйте подписку по QR.',
+      })
+    } catch (e: any) {
+      toast.error('Не удалось показать QR-код', {
+        description: String(e?.message || 'Попробуйте ещё раз.'),
+      })
     }
   }
 
@@ -203,8 +207,25 @@ export default function ConnectMarzban({ usi }: Props) {
     if (!subscriptionUrl) return
     const ok = await copyToClipboard(subscriptionUrl)
     setCopied(ok)
-    if (ok) setTimeout(() => setCopied(false), 1500)
-    if (!ok) alert('Не удалось скопировать. Скопируйте вручную из ссылки подписки.')
+    if (ok) {
+      setTimeout(() => setCopied(false), 1500)
+      toast.success('Ссылка подписки скопирована', {
+        description: 'Теперь её можно вставить в клиент вручную.',
+      })
+    } else {
+      toast.error('Не удалось скопировать ссылку', {
+        description: 'Попробуйте ещё раз или используйте QR-код.',
+      })
+    }
+  }
+
+  function openAutoImport() {
+    if (!ready || !autoImportHref) return
+    openLinkSafe(autoImportHref)
+
+    toast.info('Открываем приложение', {
+      description: 'Если Hiddify установлен, подписка добавится автоматически.',
+    })
   }
 
   const client = CLIENT_LINKS[platform]
@@ -228,7 +249,6 @@ export default function ConnectMarzban({ usi }: Props) {
         </div>
       ) : null}
 
-      {/* устройство: кнопка -> overlay (как в AmneziaWG) */}
       <div className="row cawg__rowTop">
         <div className="p cawg__label">Устройство:</div>
 
@@ -244,7 +264,6 @@ export default function ConnectMarzban({ usi }: Props) {
         </button>
       </div>
 
-      {/* Шаг 1 */}
       <div className="card" style={{ marginTop: 12 }}>
         <div className="card__body">
           <div className="services-cat__title">1) Установите приложение</div>
@@ -280,7 +299,6 @@ export default function ConnectMarzban({ usi }: Props) {
         </div>
       </div>
 
-      {/* Шаг 2 */}
       <div className="card" style={{ marginTop: 12 }}>
         <div className="card__body">
           <div className="services-cat__title">2) Добавьте подписку</div>
@@ -292,7 +310,7 @@ export default function ConnectMarzban({ usi }: Props) {
           <div className="actions actions--2" style={{ marginTop: 10 }}>
             <button
               className="btn btn--primary"
-              onClick={() => openLinkSafe(autoImportHref)}
+              onClick={openAutoImport}
               disabled={!ready}
               type="button"
               title={!ready ? 'Подписка ещё не готова' : undefined}
@@ -305,7 +323,6 @@ export default function ConnectMarzban({ usi }: Props) {
             </button>
           </div>
 
-          {/* Другие способы: копировать + QR */}
           {moreOpen && ready ? (
             <div style={{ marginTop: 10 }}>
               <div className="pre" style={{ opacity: 0.95 }}>
@@ -326,7 +343,6 @@ export default function ConnectMarzban({ usi }: Props) {
         </div>
       </div>
 
-      {/* platform picker overlay */}
       {platformPickerOpen ? (
         <div className="overlay" role="dialog" aria-modal="true" onClick={() => setPlatformPickerOpen(false)}>
           <div className="card overlay__card" onClick={(e) => e.stopPropagation()}>
@@ -384,7 +400,6 @@ export default function ConnectMarzban({ usi }: Props) {
         </div>
       ) : null}
 
-      {/* QR overlay */}
       {qrOpen ? (
         <div className="overlay" role="dialog" aria-modal="true" onClick={() => setQrOpen(false)}>
           <div className="card overlay__card" onClick={(e) => e.stopPropagation()}>
