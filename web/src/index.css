@@ -2772,3 +2772,87 @@ button, a { -webkit-tap-highlight-color: transparent; }
     padding: 0 14px;
   }
 }
+/*BottomNav*/
+.bottomNav__iconWrap {
+  position: relative;
+}
+
+.bottomNav__dot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 99px;
+  background: currentColor;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35);
+}
+
+/* AmneziaHelper */
+.cawg__topHint {
+  margin-top: 0;
+}
+
+.cawg__errorBox {
+  margin-top: 10px;
+}
+
+.cawg__errorActions {
+  margin-top: 10px;
+}
+
+.cawg__card {
+  margin-top: 12px;
+}
+
+.cawg__subText {
+  opacity: 0.82;
+  margin-top: 6px;
+}
+
+.cawg__actions {
+  margin-top: 10px;
+}
+
+.cawg__inlineHint {
+  display: inline-block;
+  margin-left: 6px;
+}
+
+.cawg__moreWrap {
+  margin-top: 10px;
+}
+
+.cawg__moreBox {
+  opacity: 0.95;
+}
+
+.cawg__moreActionsTop {
+  margin-top: 0;
+}
+
+.cawg__moreActionsBottom {
+  margin-top: 10px;
+}
+
+.cawg__modalHead {
+  align-items: center;
+}
+
+.cawg__pickLabel {
+  font-weight: 700;
+}
+
+.cawg__qrBox {
+  display: flex;
+  justify-content: center;
+  padding: 12px;
+  overflow: hidden;
+}
+
+.cawg__qrImage {
+  width: 360px;
+  max-width: 100%;
+  height: auto;
+  border-radius: 14px;
+}

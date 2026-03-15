@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiFetch } from "../shared/api/client";
+import { useI18n } from "../shared/i18n";
 import { PageStatusCard } from "../shared/ui/PageStatusCard";
 
 import { toast } from "../shared/ui/toast";
@@ -70,6 +71,8 @@ function formatCardPretty(card?: string) {
 }
 
 export function Payments() {
+  const { t } = useI18n();
+
   const [page, setPage] = useState<"main" | "card">("main");
   const [loading, setLoading] = useState(true);
 
@@ -133,8 +136,7 @@ export function Payments() {
       }
     } catch (e: unknown) {
       setErr(e);
-      // user-friendly toast
-      toastApiError(e, { title: "Не удалось загрузить оплату" });
+      toastApiError(e, { title: t("payments.toast.load_failed", "Не удалось открыть оплату") });
     } finally {
       setLoading(false);
     }
@@ -146,12 +148,12 @@ export function Payments() {
 
     try {
       const r = (await apiFetch("/payments/requisites", { method: "GET" })) as RequisitesResp;
-      if (!r?.ok) throw r; // keep raw payload if backend returned it
+      if (!r?.ok) throw r;
       setRequisites(r.requisites ?? null);
     } catch (e: unknown) {
       setRequisites(null);
       setReqError(e);
-      toastApiError(e, { title: "Реквизиты недоступны" });
+      toastApiError(e, { title: t("payments.toast.requisites_unavailable", "Реквизиты сейчас недоступны") });
     } finally {
       setReqLoading(false);
     }
@@ -170,26 +172,34 @@ export function Payments() {
   function openOverlayForExternalPay(seed: string) {
     setOverlay({
       open: true,
-      title: "Окно оплаты открыто ✅",
+      title: t("payments.overlay.title", "Страница оплаты открыта ✅"),
       text:
-        "Если оплата открылась в новой вкладке — завершите её там и вернитесь сюда.\n" +
-        "После оплаты можно закрыть вкладку и нажать “Обновить статус”.",
+        t(
+          "payments.overlay.text",
+          "Если страница оплаты открылась в новой вкладке, завершите оплату там и вернитесь сюда.\nПосле оплаты нажмите «Проверить оплату».",
+        ),
     });
 
-    toast.info("Окно оплаты открыто", {
-      description: getMood("payment_checking", { seed }) ?? "После оплаты нажмите “Обновить статус”.",
+    toast.info(t("payments.toast.payment_opened", "Страница оплаты открыта"), {
+      description:
+        getMood("payment_checking", { seed }) ??
+        t("payments.toast.payment_opened.desc", "После оплаты нажмите «Проверить оплату»."),
     });
   }
 
   async function handlePay(ps: PaySystem) {
     if (!ps?.shm_url) {
-      toast.error("Оплата недоступна", { description: "У этого способа оплаты нет ссылки." });
+      toast.error(t("payments.toast.method_unavailable", "Этот способ оплаты сейчас недоступен"), {
+        description: t("payments.toast.method_unavailable.desc", "Для него не настроена ссылка на оплату."),
+      });
       return;
     }
 
     if (!amountNumber || amountNumber < 1) {
-      setUploadMsg("Введите корректную сумму.");
-      toast.error("Введите сумму", { description: "Нужна сумма больше 0." });
+      setUploadMsg(t("payments.validation.amount_invalid", "Введите корректную сумму."));
+      toast.error(t("payments.toast.enter_amount", "Введите сумму"), {
+        description: t("payments.toast.enter_amount.desc", "Сумма должна быть больше 0."),
+      });
       return;
     }
 
@@ -201,36 +211,44 @@ export function Payments() {
   }
 
   async function removeAutopayment() {
-    const ok = window.confirm("Отвязать сохраненный способ оплаты?");
+    const ok = window.confirm(t("payments.autopay.confirm_remove", "Отвязать сохранённый способ оплаты?"));
     if (!ok) return;
 
     try {
       await apiFetch("/payments/autopayment", { method: "DELETE" });
-      setUploadMsg("Автоплатёж удалён.");
-      toast.success("Готово", { description: "Автоплатёж удалён." });
+      setUploadMsg(t("payments.autopay.removed", "Автоплатёж отключён."));
+      toast.success(t("payments.toast.done", "Готово"), {
+        description: t("payments.autopay.removed", "Автоплатёж отключён."),
+      });
     } catch (e: unknown) {
-      const n = normalizeError(e, { title: "Не удалось отвязать" });
-      setUploadMsg(n.description || "Не удалось удалить автоплатёж");
-      toastApiError(e, { title: "Не удалось отвязать" });
+      const n = normalizeError(e, { title: t("payments.autopay.remove_failed", "Не удалось отключить автоплатёж") });
+      setUploadMsg(n.description || t("payments.autopay.remove_failed_desc", "Не удалось отключить автоплатёж."));
+      toastApiError(e, { title: t("payments.autopay.remove_failed", "Не удалось отключить автоплатёж") });
     }
   }
 
   async function uploadReceipt(file: File) {
     if (!amountNumber || amountNumber < 1) {
-      setUploadMsg("Сначала введите сумму (в рублях).");
-      toast.error("Введите сумму", { description: "Перед отправкой квитанции нужна сумма." });
+      setUploadMsg(t("payments.receipt.amount_first", "Сначала укажите сумму в рублях."));
+      toast.error(t("payments.toast.enter_amount", "Введите сумму"), {
+        description: t("payments.receipt.amount_first.desc", "Перед отправкой квитанции нужно указать сумму."),
+      });
       return;
     }
     if (file.size > 2 * 1024 * 1024) {
-      setUploadMsg("Файл слишком большой. Максимум 2MB.");
-      toast.error("Файл слишком большой", { description: "Максимум 2MB." });
+      setUploadMsg(t("payments.receipt.file_too_large", "Файл слишком большой. Максимум — 2 MB."));
+      toast.error(t("payments.receipt.file_too_large.title", "Файл слишком большой"), {
+        description: t("payments.receipt.file_too_large.desc", "Загрузите файл размером до 2 MB."),
+      });
       return;
     }
 
     setUploading(true);
     setUploadMsg(null);
 
-    toast.info("Отправляем квитанцию", { description: "Пара секунд…" });
+    toast.info(t("payments.receipt.uploading", "Отправляем квитанцию"), {
+      description: t("payments.receipt.uploading.desc", "Это займёт пару секунд."),
+    });
 
     try {
       const fd = new FormData();
@@ -250,20 +268,19 @@ export function Payments() {
       } catch {}
 
       if (!res.ok || !json?.ok) {
-        // Keep raw error payload if present, so normalizeError can map code/message.
         throw json ?? { status: res.status, message: `Upload failed (${res.status})` };
       }
 
-      setUploadMsg("✅ Квитанция отправлена на проверку.");
-      toast.success("Квитанция отправлена", {
-        description: "Принято. Проверка — вручную.",
+      setUploadMsg(t("payments.receipt.sent_msg", "✅ Квитанция отправлена на проверку."));
+      toast.success(t("payments.receipt.sent", "Квитанция отправлена"), {
+        description: t("payments.receipt.sent.desc", "Мы получили её и проверим вручную."),
       });
 
       setTimeout(() => setUploadMsg(null), 5000);
     } catch (e: unknown) {
-      const n = normalizeError(e, { title: "Не удалось отправить" });
-      setUploadMsg(n.description || "Ошибка при отправке квитанции");
-      toastApiError(e, { title: "Не удалось отправить" });
+      const n = normalizeError(e, { title: t("payments.receipt.send_failed", "Не удалось отправить квитанцию") });
+      setUploadMsg(n.description || t("payments.receipt.send_failed_desc", "Не удалось отправить квитанцию."));
+      toastApiError(e, { title: t("payments.receipt.send_failed", "Не удалось отправить квитанцию") });
     } finally {
       setUploading(false);
     }
@@ -275,31 +292,34 @@ export function Payments() {
     return (
       <div className="section">
         <div className="page-status">
-          <PageStatusCard title="Оплата" text="Загрузка..." />
+          <PageStatusCard
+            title={t("payments.page.title", "Оплата")}
+            text={t("payments.loading", "Загрузка…")}
+          />
         </div>
       </div>
     );
   }
 
   if (err) {
-    const n = normalizeError(err, { title: "Оплата" });
+    const n = normalizeError(err, { title: t("payments.page.title", "Оплата") });
 
     return (
       <div className="section">
         <div className="card">
           <div className="card__body">
-            <div className="h1">Оплата</div>
+            <div className="h1">{t("payments.page.title", "Оплата")}</div>
 
             <div className="p payments__mt6">
-              {n.description ?? "Не удалось загрузить оплату. Попробуйте ещё раз."}
+              {n.description ?? t("payments.error.text", "Не удалось загрузить способы оплаты. Попробуйте ещё раз.")}
             </div>
 
             <div className="actions actions--2 payments__mt12">
               <button className="btn btn--primary" onClick={load}>
-                Повторить
+                {t("payments.error.retry", "Повторить")}
               </button>
               <Link className="btn" to="/">
-                На главную
+                {t("payments.error.home", "На главную")}
               </Link>
             </div>
           </div>
@@ -310,7 +330,6 @@ export function Payments() {
 
   return (
     <div className="section payments">
-      {/* Overlay */}
       {overlay?.open ? (
         <div className="overlay" onClick={() => setOverlay(null)}>
           <div className="overlay__card card" onClick={(e) => e.stopPropagation()}>
@@ -323,14 +342,16 @@ export function Payments() {
                   className="btn btn--primary"
                   onClick={() => {
                     setOverlay(null);
-                    toast.info("Обновляем статус", { description: "Проверяем данные…" });
+                    toast.info(t("payments.toast.checking_status", "Проверяем оплату"), {
+                      description: t("payments.toast.checking_status.desc", "Обновляем данные…"),
+                    });
                     load();
                   }}
                 >
-                  Обновить статус
+                  {t("payments.overlay.refresh", "Проверить оплату")}
                 </button>
                 <button className="btn" onClick={() => setOverlay(null)}>
-                  Закрыть
+                  {t("payments.overlay.close", "Закрыть")}
                 </button>
               </div>
             </div>
@@ -338,21 +359,23 @@ export function Payments() {
         </div>
       ) : null}
 
-      {/* Header */}
       <div className="card">
         <div className="card__body">
           <div className="home-block-head">
             <div>
-              <div className="h1">Оплата</div>
+              <div className="h1">{t("payments.page.title", "Оплата")}</div>
               <div className="p payments__mt6">
-                Введите сумму и выберите способ — пополнение баланса происходит автоматически после успешной оплаты.
+                {t(
+                  "payments.page.sub",
+                  "Укажите сумму и выберите удобный способ оплаты. После успешной оплаты баланс пополнится автоматически.",
+                )}
               </div>
             </div>
           </div>
 
           {(import.meta as any)?.env?.DEV && forecast ? (
             <div className="pre payments__mt12">
-              <b>Forecast (dev only):</b>
+              <b>{t("payments.dev.forecast", "Forecast (dev only):")}</b>
               <div className="payments__sp8" />
               {JSON.stringify(forecast, null, 2)}
             </div>
@@ -360,18 +383,19 @@ export function Payments() {
         </div>
       </div>
 
-      {/* Amount */}
       <div className="section">
         <div className="card">
           <div className="card__body">
-            <div className="h1 payments__h18">Сумма</div>
-            <div className="p payments__mt6">Если сумма не подставилась автоматически — впишите вручную.</div>
+            <div className="h1 payments__h18">{t("payments.amount.title", "Сумма")}</div>
+            <div className="p payments__mt6">
+              {t("payments.amount.sub", "Если сумма не подставилась автоматически, укажите её вручную.")}
+            </div>
 
             <input
               className="input payments__amountInput"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              placeholder="Сумма (₽)"
+              placeholder={t("payments.amount.placeholder", "Сумма (₽)")}
               inputMode="numeric"
               autoComplete="off"
             />
@@ -394,48 +418,64 @@ export function Payments() {
         </div>
       </div>
 
-      {/* Pay methods */}
       {page === "main" ? (
         <div className="section">
           <div className="card">
             <div className="card__body">
-              <div className="h1 payments__h18">Способы оплаты</div>
-              <div className="p payments__mt6">Внешние оплаты откроются в новой вкладке.</div>
+              <div className="h1 payments__h18">{t("payments.methods.title", "Способы оплаты")}</div>
+              <div className="p payments__mt6">
+                {t("payments.methods.sub", "Внешняя оплата откроется в новой вкладке.")}
+              </div>
 
               <div className="actions actions--1 payments__mt12">
                 <button
                   className="btn payments__w100"
                   onClick={() => {
                     if (!amountNumber) {
-                      setUploadMsg("Введите сумму.");
-                      toast.error("Введите сумму", { description: "Нужна сумма для перевода по реквизитам." });
+                      setUploadMsg(t("payments.validation.enter_amount", "Введите сумму."));
+                      toast.error(t("payments.toast.enter_amount", "Введите сумму"), {
+                        description: t("payments.card_transfer.need_amount", "Для перевода по реквизитам нужно указать сумму."),
+                      });
                       return;
                     }
                     setPage("card");
                   }}
                 >
-                  Перевод по реквизитам 💳
+                  {t("payments.methods.card_transfer", "Перевод по карте 💳")}
                 </button>
               </div>
 
               <div className="payments__mt12" />
 
               {paySystems.length === 0 ? (
-                <div className="pre">Платёжные способы не найдены.</div>
+                <div className="pre">{t("payments.methods.empty", "Способы оплаты пока недоступны.")}</div>
               ) : (
                 <div className="kv">
                   {paySystems.map((ps, idx) => (
                     <div className="kv__item" key={ps.shm_url || idx}>
                       <div className="row payments__rowBetween">
-                        <div className="kv__k">{ps.recurring ? "Автоплатёж" : isStars(ps) ? "Stars / внешняя" : "Внешняя оплата"}</div>
-                        <span className="badge">{ps.recurring ? "recurring" : "one-time"}</span>
+                        <div className="kv__k">
+                          {ps.recurring
+                            ? t("payments.methods.type.autopay", "Автоплатёж")
+                            : isStars(ps)
+                              ? t("payments.methods.type.stars", "Оплата через Telegram Stars")
+                              : t("payments.methods.type.external", "Внешняя оплата")}
+                        </div>
+                        <span className="badge">
+                          {ps.recurring
+                            ? t("payments.methods.badge.recurring", "recurring")
+                            : t("payments.methods.badge.one_time", "one-time")}
+                        </span>
                       </div>
 
-                      <div className="kv__v payments__mt6">{ps.name || "Payment method"}</div>
+                      <div className="kv__v payments__mt6">
+                        {ps.name || t("payments.methods.name_fallback", "Способ оплаты")}
+                      </div>
 
                       <div className="actions actions--1 payments__mt10">
                         <button className="btn btn--primary payments__w100" onClick={() => handlePay(ps)}>
-                          Оплатить {amountNumber ? `· ${fmtMoney(amountNumber, "RUB")}` : ""}
+                          {t("payments.methods.pay", "Оплатить")}
+                          {amountNumber ? ` · ${fmtMoney(amountNumber, "RUB")}` : ""}
                         </button>
                       </div>
 
@@ -444,9 +484,9 @@ export function Payments() {
                           <button
                             className="btn btn--danger payments__w100"
                             onClick={removeAutopayment}
-                            title="Отвязать автоплатёж"
+                            title={t("payments.autopay.remove", "Отключить автоплатёж")}
                           >
-                            Отвязать
+                            {t("payments.autopay.remove_short", "Отключить")}
                           </button>
                         </div>
                       ) : null}
@@ -456,55 +496,61 @@ export function Payments() {
               )}
 
               <div className="p payments__mt12 payments__finePrint">
-                Если Telegram у пользователя заблокирован — это не мешает оплате и отправке квитанции: всё идёт через наш
-                сервер.
+                {t(
+                  "payments.methods.note",
+                  "Даже если Telegram недоступен, оплата и отправка квитанции продолжат работать через приложение.",
+                )}
               </div>
             </div>
           </div>
         </div>
       ) : (
-        /* Card transfer page — clean */
         <div className="section">
           <div className="card">
             <div className="card__body">
               <div className="home-block-head">
                 <div>
-                  <div className="h1">Перевод по реквизитам</div>
-                  <div className="p payments__mt6">Сделайте перевод и отправьте квитанцию. Проверка — вручную.</div>
-                </div>
-              </div>
-
-              {/* Amount */}
-              <div className="kv payments__mt12">
-                <div className="kv__item">
-                  <div className="kv__k">Сумма к переводу</div>
-                  <div className="kv__v payments__amountBig">{amountNumber ? fmtMoney(amountNumber, "RUB") : "—"}</div>
-                </div>
-              </div>
-
-              {/* IMPORTANT */}
-              <div className="card payments__warnCard">
-                <div className="card__body payments__warnBody">
-                  <div className="payments__bold">Важно</div>
-                  <div className="p payments__mt6 payments__opacity95">
-                    Квитанция обязательна. Без квитанции перевод не будет зачислен — это ручная проверка.
+                  <div className="h1">{t("payments.card_page.title", "Перевод по карте")}</div>
+                  <div className="p payments__mt6">
+                    {t("payments.card_page.sub", "Сделайте перевод и отправьте квитанцию. Мы проверим её вручную.")}
                   </div>
                 </div>
               </div>
 
-              {/* Requisites */}
+              <div className="kv payments__mt12">
+                <div className="kv__item">
+                  <div className="kv__k">{t("payments.card_page.amount_label", "Сумма перевода")}</div>
+                  <div className="kv__v payments__amountBig">
+                    {amountNumber ? fmtMoney(amountNumber, "RUB") : "—"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="card payments__warnCard">
+                <div className="card__body payments__warnBody">
+                  <div className="payments__bold">{t("payments.card_page.important", "Важно")}</div>
+                  <div className="p payments__mt6 payments__opacity95">
+                    {t(
+                      "payments.card_page.important_text",
+                      "После перевода обязательно отправьте квитанцию. Без неё мы не сможем проверить и зачислить платёж.",
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <div className="card payments__flatCard">
                 <div className="card__body">
-                  <div className="h1 payments__h18">Реквизиты</div>
+                  <div className="h1 payments__h18">{t("payments.requisites.title", "Реквизиты")}</div>
 
                   {reqLoading ? (
-                    <div className="p payments__mt6">Загрузка реквизитов…</div>
+                    <div className="p payments__mt6">{t("payments.requisites.loading", "Загружаем реквизиты…")}</div>
                   ) : reqError ? (
                     <div className="pre payments__mt12">
-                      {normalizeError(reqError, { title: "Реквизиты" }).description ?? "Реквизиты пока недоступны. Попробуйте позже."}
+                      {normalizeError(reqError, { title: t("payments.requisites.title", "Реквизиты") }).description ??
+                        t("payments.requisites.error", "Реквизиты пока недоступны. Попробуйте немного позже.")}
                     </div>
                   ) : !requisites ? (
-                    <div className="pre payments__mt12">Реквизиты не заполнены.</div>
+                    <div className="pre payments__mt12">{t("payments.requisites.empty", "Реквизиты пока не добавлены.")}</div>
                   ) : (
                     (() => {
                       const holder = String(requisites.holder ?? "").trim();
@@ -516,17 +562,17 @@ export function Payments() {
                           <div className="kv payments__mt12">
                             {holder ? (
                               <div className="kv__item">
-                                <div className="kv__k">Получатель</div>
+                                <div className="kv__k">{t("payments.requisites.holder", "Получатель")}</div>
                                 <div className="kv__v payments__bold">{holder}</div>
                               </div>
                             ) : null}
 
                             {cardPretty ? (
                               <div className="kv__item">
-                                <div className="kv__k">Номер карты</div>
+                                <div className="kv__k">{t("payments.requisites.card", "Номер карты")}</div>
                                 <div className="kv__v payments__cardNumber">{cardPretty}</div>
                                 <div className="row payments__mt8 payments__gap8 payments__alignCenter">
-                                  <span className="badge">МИР</span>
+                                  <span className="badge">{t("payments.requisites.card_badge", "МИР")}</span>
                                 </div>
                               </div>
                             ) : null}
@@ -538,16 +584,23 @@ export function Payments() {
                               onClick={() => {
                                 if (cardRaw) {
                                   copyText(cardRaw);
-                                  toast.success("Скопировано", { description: "Номер карты в буфере обмена." });
+                                  toast.success(t("payments.requisites.copied", "Скопировано"), {
+                                    description: t(
+                                      "payments.requisites.copied.desc",
+                                      "Номер карты скопирован в буфер обмена.",
+                                    ),
+                                  });
                                 }
                               }}
                               disabled={!cardRaw}
                             >
-                              Скопировать карту
+                              {t("payments.requisites.copy_card", "Скопировать номер карты")}
                             </button>
 
                             <label className="btn payments__fileBtn">
-                              {uploading ? "⏳ Отправляем…" : "🧾 Отправить квитанцию"}
+                              {uploading
+                                ? t("payments.receipt.uploading_short", "⏳ Отправляем…")
+                                : t("payments.receipt.upload_btn", "🧾 Отправить квитанцию")}
                               <input
                                 type="file"
                                 accept=".jpg,.jpeg,.png,.pdf"
@@ -565,7 +618,9 @@ export function Payments() {
 
                           {uploadMsg ? <div className="pre payments__mt12">{uploadMsg}</div> : null}
 
-                          <div className="p payments__mt10 payments__finePrint">Поддерживаются JPG/PNG/PDF до 2MB.</div>
+                          <div className="p payments__mt10 payments__finePrint">
+                            {t("payments.receipt.supported", "Поддерживаются JPG, PNG и PDF до 2 MB.")}
+                          </div>
                         </>
                       );
                     })()
@@ -575,7 +630,7 @@ export function Payments() {
 
               <div className="actions actions--1 payments__mt12">
                 <button className="btn payments__w100" onClick={() => setPage("main")}>
-                  ⇦ Назад к способам оплаты
+                  {t("payments.card_page.back", "⇦ Назад к способам оплаты")}
                 </button>
               </div>
             </div>
@@ -583,20 +638,22 @@ export function Payments() {
         </div>
       )}
 
-      {/* Secondary navigation — bottom */}
       <div className="section">
         <div className="card">
           <div className="card__body">
-            <div className="h1 payments__h18">История</div>
+            <div className="h1 payments__h18">{t("payments.history.title", "История")}</div>
             <div className="p payments__mt6">
-              Если нужно проверить операции или посмотреть отправленные квитанции — откройте разделы ниже.
+              {t(
+                "payments.history.sub",
+                "Здесь можно посмотреть прошлые операции и отправленные квитанции.",
+              )}
             </div>
             <div className="actions actions--2 payments__mt12">
               <Link className="btn" to="/payments/history">
-                История операций
+                {t("payments.history.operations", "История операций")}
               </Link>
               <Link className="btn" to="/payments/receipts">
-                Квитанции
+                {t("payments.history.receipts", "Квитанции")}
               </Link>
             </div>
           </div>

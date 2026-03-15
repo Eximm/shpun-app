@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { apiFetch } from '../shared/api/client'
+import { useI18n } from '../shared/i18n'
 
 type Pay = {
   id: number
@@ -97,8 +98,9 @@ function CollapseToggle(props: {
   preview: number
   disabled?: boolean
   onToggle: () => void
+  t: (key: string, fallback?: string) => string
 }) {
-  const { shownAll, total, preview, disabled, onToggle } = props
+  const { shownAll, total, preview, disabled, onToggle, t } = props
   if (total <= preview) return null
 
   const hidden = Math.max(0, total - preview)
@@ -106,13 +108,17 @@ function CollapseToggle(props: {
   return (
     <div className="paymentsHist__collapseRow">
       <button className="btn paymentsHist__collapseBtn" onClick={onToggle} disabled={disabled}>
-        {shownAll ? 'Свернуть' : `Показать ещё ${hidden}`}
+        {shownAll
+          ? t('paymentsHistory.collapse.hide', 'Свернуть')
+          : t('paymentsHistory.collapse.show_more', `Показать ещё ${hidden}`).replace('{count}', String(hidden))}
       </button>
     </div>
   )
 }
 
 export function PaymentsHistory() {
+  const { t } = useI18n()
+
   const [err, setErr] = useState<string | null>(null)
 
   const [paysLoading, setPaysLoading] = useState(true)
@@ -124,7 +130,6 @@ export function PaymentsHistory() {
   const [paysResp, setPaysResp] = useState<PagedResp<Pay> | null>(null)
   const [withdrawsResp, setWithdrawsResp] = useState<PagedResp<Withdraw> | null>(null)
 
-  // UI-only collapse state (per section)
   const [paysExpanded, setPaysExpanded] = useState(false)
   const [withdrawsExpanded, setWithdrawsExpanded] = useState(false)
 
@@ -158,11 +163,10 @@ export function PaymentsHistory() {
     setErr(null)
     try {
       await Promise.all([loadPays(nextPaysPage), loadWithdraws(nextWithdrawsPage)])
-      // после обновления страницы возвращаемся к компактному виду
       setPaysExpanded(false)
       setWithdrawsExpanded(false)
     } catch (e: any) {
-      setErr(e?.message || 'Failed to load payments history')
+      setErr(e?.message || t('paymentsHistory.error.load_failed', 'Не удалось загрузить историю операций.'))
     }
   }
 
@@ -192,45 +196,51 @@ export function PaymentsHistory() {
         <div className="card__body">
           <div className="home-block-head">
             <div>
-              <div className="h1">🧾 История операций</div>
-              </div>
+              <div className="h1">{t('paymentsHistory.title', '🧾 История операций')}</div>
+            </div>
             <Link className="btn" to="/payments">
-              Назад
+              {t('paymentsHistory.back', 'Назад')}
             </Link>
           </div>
 
           <div className="actions actions--2 paymentsHist__mt12">
             <button className="btn" onClick={() => loadAll()} disabled={busy}>
-              ⟳ Обновить
+              {t('paymentsHistory.refresh', '⟳ Обновить')}
             </button>
             <Link className="btn" to="/payments/receipts">
-              Квитанции
+              {t('paymentsHistory.receipts', 'Отправленные квитанции')}
             </Link>
           </div>
 
-          {err ? <div className="pre paymentsHist__mt12">Ошибка: {String(err)}</div> : null}
+          {err ? (
+            <div className="pre paymentsHist__mt12">
+              {t('paymentsHistory.error.prefix', 'Ошибка')}: {String(err)}
+            </div>
+          ) : null}
         </div>
       </div>
 
-      {/* Pays */}
       <div className="section">
         <div className="card">
           <div className="card__body">
-            <div className="h1 paymentsHist__h18">Пополнения</div>
+            <div className="h1 paymentsHist__h18">{t('paymentsHistory.topups.title', 'Пополнения')}</div>
             <div className="p paymentsHist__mt6">
               {paysLoading
-                ? 'Загрузка…'
+                ? t('paymentsHistory.loading', 'Загрузка…')
                 : pays.length
-                ? `Страница: ${paysResp?.page ?? paysPage} · Показано: ${paysView.length}/${pays.length}`
-                : 'Пока нет данных'}
+                ? t('paymentsHistory.page_info', 'Страница: {page} · Показано: {shown}/{total}')
+                    .replace('{page}', String(paysResp?.page ?? paysPage))
+                    .replace('{shown}', String(paysView.length))
+                    .replace('{total}', String(pays.length))
+                : t('paymentsHistory.empty.short', 'Пока пусто')}
             </div>
 
             <div className="list paymentsHist__mt10">
               {paysLoading ? (
                 <div className="list__item">
                   <div className="list__main">
-                    <div className="list__title">Загружаем…</div>
-                    <div className="list__sub">Подождите</div>
+                    <div className="list__title">{t('paymentsHistory.loading_items', 'Загружаем…')}</div>
+                    <div className="list__sub">{t('paymentsHistory.loading_wait', 'Подождите немного')}</div>
                   </div>
                 </div>
               ) : paysView.length ? (
@@ -248,7 +258,9 @@ export function PaymentsHistory() {
                           <span className="paymentsHist__dot" />
                           <span className="paymentsHist__date">{fmtDate(dt)}</span>
                         </div>
-                        <div className="list__sub">Платёжная система: {ps}</div>
+                        <div className="list__sub">
+                          {t('paymentsHistory.topups.system', 'Способ оплаты')}: {ps}
+                        </div>
                       </div>
                     </div>
                   )
@@ -256,8 +268,8 @@ export function PaymentsHistory() {
               ) : (
                 <div className="list__item">
                   <div className="list__main">
-                    <div className="list__title">Нет пополнений</div>
-                    <div className="list__sub">Когда будут платежи — они появятся здесь</div>
+                    <div className="list__title">{t('paymentsHistory.topups.empty.title', 'Пополнений пока не было')}</div>
+                    <div className="list__sub">{t('paymentsHistory.topups.empty.sub', 'Когда появятся новые пополнения, они будут здесь.')}</div>
                   </div>
                 </div>
               )}
@@ -269,6 +281,7 @@ export function PaymentsHistory() {
               preview={PREVIEW_ROWS}
               disabled={paysLoading}
               onToggle={() => setPaysExpanded((v) => !v)}
+              t={t}
             />
 
             <Pager
@@ -290,25 +303,27 @@ export function PaymentsHistory() {
         </div>
       </div>
 
-      {/* Withdraws */}
       <div className="section">
         <div className="card">
           <div className="card__body">
-            <div className="h1 paymentsHist__h18">Списания</div>
+            <div className="h1 paymentsHist__h18">{t('paymentsHistory.withdrawals.title', 'Списания')}</div>
             <div className="p paymentsHist__mt6">
               {withdrawsLoading
-                ? 'Загрузка…'
+                ? t('paymentsHistory.loading', 'Загрузка…')
                 : withdraws.length
-                ? `Страница: ${withdrawsResp?.page ?? withdrawsPage} · Показано: ${withdrawsView.length}/${withdraws.length}`
-                : 'Пока нет данных'}
+                ? t('paymentsHistory.page_info', 'Страница: {page} · Показано: {shown}/{total}')
+                    .replace('{page}', String(withdrawsResp?.page ?? withdrawsPage))
+                    .replace('{shown}', String(withdrawsView.length))
+                    .replace('{total}', String(withdraws.length))
+                : t('paymentsHistory.empty.short', 'Пока пусто')}
             </div>
 
             <div className="list paymentsHist__mt10">
               {withdrawsLoading ? (
                 <div className="list__item">
                   <div className="list__main">
-                    <div className="list__title">Загружаем…</div>
-                    <div className="list__sub">Подождите</div>
+                    <div className="list__title">{t('paymentsHistory.loading_items', 'Загружаем…')}</div>
+                    <div className="list__sub">{t('paymentsHistory.loading_wait', 'Подождите немного')}</div>
                   </div>
                 </div>
               ) : withdrawsView.length ? (
@@ -329,17 +344,17 @@ export function PaymentsHistory() {
                     months && qnt ? `${months}м × ${qnt}` : months ? `${months}м` : qnt ? `× ${qnt}` : ''
 
                   const subParts = [
-                    `ID: ${compactId(wid)}`,
-                    serviceId ? `Service: ${serviceId}` : null,
-                    usi ? `USI: ${usi}` : null,
-                    period ? `Период: ${period}` : null,
-                    end ? `До: ${fmtDate(end)}` : null,
+                    `${t('paymentsHistory.withdrawals.id', 'ID')}: ${compactId(wid)}`,
+                    serviceId ? `${t('paymentsHistory.withdrawals.service', 'Услуга')}: ${serviceId}` : null,
+                    usi ? `${t('paymentsHistory.withdrawals.usi', 'USI')}: ${usi}` : null,
+                    period ? `${t('paymentsHistory.withdrawals.period', 'Период')}: ${period}` : null,
+                    end ? `${t('paymentsHistory.withdrawals.until', 'До')}: ${fmtDate(end)}` : null,
                   ].filter(Boolean)
 
                   const moneyParts = [
-                    cost ? `Стоимость: ${fmtMoney(cost, 'RUB')}` : null,
-                    discount ? `Скидка: ${fmtMoney(discount, 'RUB')}` : null,
-                    bonus ? `Бонусы: ${fmtMoney(bonus, 'RUB')}` : null,
+                    cost ? `${t('paymentsHistory.withdrawals.cost', 'Стоимость')}: ${fmtMoney(cost, 'RUB')}` : null,
+                    discount ? `${t('paymentsHistory.withdrawals.discount', 'Скидка')}: ${fmtMoney(discount, 'RUB')}` : null,
+                    bonus ? `${t('paymentsHistory.withdrawals.bonus', 'Бонусы')}: ${fmtMoney(bonus, 'RUB')}` : null,
                   ].filter(Boolean)
 
                   return (
@@ -366,8 +381,8 @@ export function PaymentsHistory() {
               ) : (
                 <div className="list__item">
                   <div className="list__main">
-                    <div className="list__title">Нет списаний</div>
-                    <div className="list__sub">Когда будут списания — они появятся здесь</div>
+                    <div className="list__title">{t('paymentsHistory.withdrawals.empty.title', 'Списаний пока не было')}</div>
+                    <div className="list__sub">{t('paymentsHistory.withdrawals.empty.sub', 'Когда появятся списания, они будут здесь.')}</div>
                   </div>
                 </div>
               )}
@@ -379,6 +394,7 @@ export function PaymentsHistory() {
               preview={PREVIEW_ROWS}
               disabled={withdrawsLoading}
               onToggle={() => setWithdrawsExpanded((v) => !v)}
+              t={t}
             />
 
             <Pager

@@ -1,6 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiFetch } from "../shared/api/client";
+import { useI18n } from "../shared/i18n";
 import { buildFeedPreview, shouldShowFeedMore, isNewsEvent } from "../shared/ui/newsPreview";
 
 type NotifLevel = "info" | "success" | "error";
@@ -52,13 +53,13 @@ function chipKindByLevel(level?: NotifLevel): "ok" | "warn" | "soft" {
   return "soft";
 }
 
-function chipTextByEvent(e: NotifEvent) {
-  const t = normalizeType(e.type);
+function chipTextByEvent(e: NotifEvent, t: (key: string, fallback?: string) => string) {
+  const type = normalizeType(e.type);
 
-  if (t === "broadcast.news" || t.startsWith("broadcast.news.")) return "NEWS";
-  if (t === "service.blocked") return "ALERT";
+  if (type === "broadcast.news" || type.startsWith("broadcast.news.")) return t("feed.chip.news", "NEWS");
+  if (type === "service.blocked") return t("feed.chip.alert", "ALERT");
 
-  return "INFO";
+  return t("feed.chip.info", "INFO");
 }
 
 function FilterBtn({
@@ -82,11 +83,11 @@ function FilterBtn({
   );
 }
 
-function catLabel(cat: Category) {
-  if (cat === "money") return "Деньги";
-  if (cat === "services") return "Услуги";
-  if (cat === "news") return "Новости";
-  return "Все";
+function catLabel(cat: Category, t: (key: string, fallback?: string) => string) {
+  if (cat === "money") return t("feed.filter.money", "Деньги");
+  if (cat === "services") return t("feed.filter.services", "Услуги");
+  if (cat === "news") return t("feed.filter.news", "Новости");
+  return t("feed.filter.all", "Все");
 }
 
 function pluralRu(n: number, one: string, few: string, many: string) {
@@ -117,12 +118,12 @@ function eventLink(e: NotifEvent): string | null {
     return to;
   }
 
-  const t = normalizeType(e.type);
+  const type = normalizeType(e.type);
 
-  if (t === "broadcast.news" || t.startsWith("broadcast.news.") || t.startsWith("broadcast.")) return null;
-  if (t.startsWith("balance.") || t.startsWith("payment.") || t.startsWith("invoice.")) return "/payments";
+  if (type === "broadcast.news" || type.startsWith("broadcast.news.") || type.startsWith("broadcast.")) return null;
+  if (type.startsWith("balance.") || type.startsWith("payment.") || type.startsWith("invoice.")) return "/payments";
 
-  if (t.startsWith("service.") || t.startsWith("services.")) {
+  if (type.startsWith("service.") || type.startsWith("services.")) {
     const usi = pick(e.meta, "service.id") ?? pick(e.meta, "usi") ?? pick(e.meta, "service.usi");
     if (usi != null) return `/services?usi=${encodeURIComponent(String(usi))}`;
     return "/services";
@@ -164,6 +165,7 @@ function buildFeedUrl(cat: Category, cursor?: Cursor | null) {
 
 export function Feed() {
   const nav = useNavigate();
+  const { t } = useI18n();
 
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<NotifEvent[]>([]);
@@ -252,33 +254,38 @@ export function Feed() {
     return items.filter((e) => categoryOf(e) === cat);
   }, [items, cat]);
 
-  const countText = `${filtered.length} ${pluralRu(filtered.length, "сообщение", "сообщения", "сообщений")}`;
+  const countText = `${filtered.length} ${pluralRu(
+    filtered.length,
+    t("feed.count.one", "сообщение"),
+    t("feed.count.few", "сообщения"),
+    t("feed.count.many", "сообщений"),
+  )}`;
 
   return (
     <>
       <div className="section">
         <div className="card">
           <div className="card__body">
-            <h1 className="h1">Инфоцентр</h1>
-            <p className="p">Здесь всё, что важно.</p>
+            <h1 className="h1">{t("feed.title", "Инфоцентр")}</h1>
+            <p className="p">{t("feed.subtitle", "Здесь всё, что важно.")}</p>
 
             <div className="actions actions--4" style={{ marginTop: 12 }}>
               <FilterBtn active={cat === "all"} onClick={() => setCat("all")}>
-                Все
+                {t("feed.filter.all", "Все")}
               </FilterBtn>
               <FilterBtn active={cat === "money"} onClick={() => setCat("money")}>
-                Деньги
+                {t("feed.filter.money", "Деньги")}
               </FilterBtn>
               <FilterBtn active={cat === "services"} onClick={() => setCat("services")}>
-                Услуги
+                {t("feed.filter.services", "Услуги")}
               </FilterBtn>
               <FilterBtn active={cat === "news"} onClick={() => setCat("news")}>
-                Новости
+                {t("feed.filter.news", "Новости")}
               </FilterBtn>
             </div>
 
             <p className="p" style={{ marginTop: 10, opacity: 0.85 }}>
-              {catLabel(cat)} · {countText}
+              {catLabel(cat, t)} · {countText}
             </p>
 
             <div className="list" style={{ marginTop: 12 }}>
@@ -290,14 +297,17 @@ export function Feed() {
                 </>
               ) : filtered.length === 0 ? (
                 <div className="pre">
-                  <div style={{ fontWeight: 900, marginBottom: 6 }}>Пока здесь тихо</div>
+                  <div style={{ fontWeight: 900, marginBottom: 6 }}>{t("feed.empty.title", "Пока здесь тихо")}</div>
                   <div style={{ opacity: 0.85 }}>
-                    Как только появятся пополнения, продления или новости — они будут в Инфоцентре.
+                    {t(
+                      "feed.empty.text",
+                      "Как только появятся пополнения, продления или новости — они будут в Инфоцентре.",
+                    )}
                   </div>
                 </div>
               ) : (
                 filtered.map((e) => {
-                  const title = e.title || "Сообщение";
+                  const title = e.title || t("feed.item.fallback", "Сообщение");
                   const preview = buildFeedPreview(e);
                   const news = isNewsEvent(e);
                   const hasFullView = shouldShowFeedMore(e, preview);
@@ -316,7 +326,7 @@ export function Feed() {
                       <div key={e.event_id} className="list__item feed-newsCard">
                         <div className="feed-newsCard__top">
                           <div className="kicker">{dt}</div>
-                          <span className={`chip chip--${chipKindByLevel(e.level)}`}>{chipTextByEvent(e)}</span>
+                          <span className={`chip chip--${chipKindByLevel(e.level)}`}>{chipTextByEvent(e, t)}</span>
                         </div>
 
                         <div className="feed-newsCard__title">{title}</div>
@@ -334,7 +344,7 @@ export function Feed() {
                                 setOpenedEvent(e);
                               }}
                             >
-                              Подробнее
+                              {t("feed.more", "Подробнее")}
                             </button>
                           </div>
                         ) : null}
@@ -369,7 +379,7 @@ export function Feed() {
                       </div>
 
                       <div className="list__side">
-                        <span className={`chip chip--${chipKindByLevel(e.level)}`}>{chipTextByEvent(e)}</span>
+                        <span className={`chip chip--${chipKindByLevel(e.level)}`}>{chipTextByEvent(e, t)}</span>
                       </div>
                     </div>
                   );
@@ -380,7 +390,11 @@ export function Feed() {
             {filtered.length > 0 ? (
               <div className="actions actions--1" style={{ marginTop: 12 }}>
                 <button className="btn btn--accent" onClick={loadMore} disabled={!hasMore || loading} type="button">
-                  {loading ? "Загружаю…" : hasMore ? "Загрузить ещё" : "Больше нет"}
+                  {loading
+                    ? t("feed.load.loading", "Загружаю…")
+                    : hasMore
+                      ? t("feed.load.more", "Загрузить ещё")
+                      : t("feed.load.end", "Больше нет")}
                 </button>
               </div>
             ) : null}
@@ -388,40 +402,36 @@ export function Feed() {
         </div>
       </div>
 
-    {openedEvent ? (
-      <div
-        className="modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="feed-modal-title"
-        onClick={() => setOpenedEvent(null)}
-      >
-        <div className="modal__card card feed-modalCard" onClick={(ev) => ev.stopPropagation()}>
-          <div className="card__body">
-            <div className="feed-modalCard__head">
-              <div className="kicker">{formatDateTime(openedEvent.ts)}</div>
-              <div id="feed-modal-title" className="modal__title feed-modalCard__title">
-                {openedEvent.title || "Сообщение"}
+      {openedEvent ? (
+        <div
+          className="modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="feed-modal-title"
+          onClick={() => setOpenedEvent(null)}
+        >
+          <div className="modal__card card feed-modalCard" onClick={(ev) => ev.stopPropagation()}>
+            <div className="card__body">
+              <div className="feed-modalCard__head">
+                <div className="kicker">{formatDateTime(openedEvent.ts)}</div>
+                <div id="feed-modal-title" className="modal__title feed-modalCard__title">
+                  {openedEvent.title || t("feed.item.fallback", "Сообщение")}
+                </div>
               </div>
-            </div>
 
-            <div className="modal__content feed-modalCard__content">
-              <div className="list__sub feed__fulltext">{openedEvent.message || ""}</div>
-            </div>
+              <div className="modal__content feed-modalCard__content">
+                <div className="list__sub feed__fulltext">{openedEvent.message || ""}</div>
+              </div>
 
-            <div className="feed-modalCard__actions">
-              <button
-                type="button"
-                className="btn btn--soft"
-                onClick={() => setOpenedEvent(null)}
-              >
-                Закрыть
-              </button>
+              <div className="feed-modalCard__actions">
+                <button type="button" className="btn btn--soft" onClick={() => setOpenedEvent(null)}>
+                  {t("feed.modal.close", "Закрыть")}
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    ) : null}
+      ) : null}
     </>
   );
 }

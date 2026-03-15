@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useMe } from "../auth/useMe";
 import { hasNewNotifications } from "../notifications/notifyState";
+import { useI18n } from "../../shared/i18n";
 
 function Tab({
   to,
@@ -19,7 +20,7 @@ function Tab({
 }) {
   return (
     <NavLink to={to} end={end} className={({ isActive }) => "tab" + (isActive ? " tab--active" : "")}>
-      <span className="tab__icon" aria-hidden="true" style={{ position: "relative" }}>
+      <span className="tab__icon bottomNav__iconWrap" aria-hidden="true">
         {icon}
         {badge}
       </span>
@@ -32,26 +33,13 @@ function Tab({
 }
 
 function Dot() {
-  return (
-    <span
-      aria-hidden="true"
-      style={{
-        position: "absolute",
-        top: -2,
-        right: -2,
-        width: 8,
-        height: 8,
-        borderRadius: 99,
-        background: "currentColor",
-        boxShadow: "0 0 0 2px rgba(0,0,0,.35)",
-      }}
-    />
-  );
+  return <span aria-hidden="true" className="bottomNav__dot" />;
 }
 
 const CHECK_MS = 60_000;
 
 export function BottomNav() {
+  const { t } = useI18n();
   const loc = useLocation();
   const { me } = useMe() as any;
 
@@ -75,7 +63,6 @@ export function BottomNav() {
     if (!uid) return;
     if (inFlightRef.current) return;
 
-    // если мы уже на /feed — badge не нужен
     if (onFeed) {
       setHasNew(false);
       return;
@@ -99,10 +86,8 @@ export function BottomNav() {
       return;
     }
 
-    // initial
     void check();
 
-    // periodic
     clearTimer();
     timerRef.current = window.setInterval(() => void check(), CHECK_MS);
 
@@ -119,18 +104,17 @@ export function BottomNav() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uid, onFeed]);
 
-  // также: когда пользователь открыл /feed, сразу убираем точку
   useEffect(() => {
     if (onFeed) setHasNew(false);
   }, [onFeed]);
 
   return (
-    <nav className="bottomnav" role="navigation" aria-label="App navigation">
+    <nav className="bottomnav" role="navigation" aria-label={t("bottomNav.aria", "Навигация по приложению")}>
       <div className="bottomnav__inner">
         <Tab
           to="/"
           end
-          label="Главная"
+          label={t("bottomNav.home", "Главная")}
           icon={
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
               <path
@@ -145,7 +129,7 @@ export function BottomNav() {
 
         <Tab
           to="/feed"
-          label="Новости"
+          label={t("bottomNav.feed", "Новости")}
           badge={hasNew ? <Dot /> : null}
           icon={
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
@@ -162,7 +146,7 @@ export function BottomNav() {
 
         <Tab
           to="/services"
-          label="Услуги"
+          label={t("bottomNav.services", "Услуги")}
           icon={
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
               <path d="M7 7h10M7 12h10M7 17h10" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
@@ -172,10 +156,14 @@ export function BottomNav() {
 
         <Tab
           to="/payments"
-          label="Оплата"
+          label={t("bottomNav.payments", "Оплата")}
           icon={
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-              <path d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7Z" stroke="currentColor" strokeWidth="1.7" />
+              <path
+                d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7Z"
+                stroke="currentColor"
+                strokeWidth="1.7"
+              />
               <path d="M4 9h16" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
             </svg>
           }
@@ -183,7 +171,7 @@ export function BottomNav() {
 
         <Tab
           to="/profile"
-          label="Профиль"
+          label={t("bottomNav.profile", "Профиль")}
           icon={
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
               <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" stroke="currentColor" strokeWidth="1.7" />
