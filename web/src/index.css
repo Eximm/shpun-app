@@ -2856,3 +2856,93 @@ button, a { -webkit-tap-highlight-color: transparent; }
   height: auto;
   border-radius: 14px;
 }
+
+/* Feeds page */
+.feed-filters {
+  margin-top: 12px;
+}
+
+.feed-count {
+  margin-top: 10px;
+  opacity: 0.85;
+}
+
+.feed-list {
+  margin-top: 12px;
+}
+
+.feed-empty-title {
+  font-weight: 900;
+  margin-bottom: 6px;
+}
+
+.feed-empty-text {
+  opacity: 0.85;
+}
+
+.feed-loadMore {
+  margin-top: 14px;
+  width: 100%;
+}
+
+/* Connect Marzban */
+
+.cm__status{
+  margin-top:0;
+}
+
+.cm__error{
+  margin-top:10px;
+}
+
+.cm__errorActions{
+  margin-top:10px;
+}
+
+.cm__card{
+  margin-top:12px;
+}
+
+.cm__text{
+  opacity:.82;
+  margin-top:6px;
+}
+
+.cm__actions{
+  margin-top:10px;
+}
+
+.cm__more{
+  margin-top:10px;
+}
+
+.cm__qrBtn{
+  margin-top:10px;
+}
+
+.cm__qrHead{
+  align-items:center;
+}
+
+.cm__qrText{
+  margin-top:8px;
+  opacity:.82;
+}
+
+.cm__qrBox{
+  margin-top:12px;
+  display:flex;
+  justify-content:center;
+  padding:12px;
+}
+
+.cm__qrImage{
+  width:360px;
+  max-width:100%;
+  height:auto;
+  border-radius:14px;
+}
+
+.cm__qrClose{
+  margin-top:12px;
+}
