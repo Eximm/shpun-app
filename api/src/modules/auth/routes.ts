@@ -110,34 +110,6 @@ async function shmGetUserIdentity(sessionId: string): Promise<{ userId: number; 
   return { userId, login };
 }
 
-function normalizeIp(raw: unknown): string {
-  let ip = String(raw ?? "").trim();
-  if (!ip) return "";
-
-  if (ip.includes(",")) {
-    ip = ip.split(",")[0].trim();
-  }
-
-  if (ip.startsWith("::ffff:")) {
-    ip = ip.slice(7);
-  }
-
-  if (ip === "::1") {
-    return "127.0.0.1";
-  }
-
-  return ip;
-}
-
-function getRequestIp(req: any): string {
-  return normalizeIp(
-    req?.ip ??
-      req?.headers?.["x-forwarded-for"] ??
-      req?.headers?.["x-real-ip"] ??
-      ""
-  );
-}
-
 function isHttps(req: any): boolean {
   const xf = String(req.headers?.["x-forwarded-proto"] ?? "")
     .split(",")[0]
@@ -302,34 +274,6 @@ async function getPasswordSetFlag(shmSessionId: string): Promise<0 | 1> {
   }
 }
 
-async function touchAuthMeta(
-  req: any,
-  shmSessionId: string,
-  provider: "telegram" | "password"
-): Promise<void> {
-  const ip = getRequestIp(req);
-  const ua = String(req?.headers?.["user-agent"] ?? "");
-
-  try {
-    await callShmTemplate(shmSessionId, "auth.touch", {
-      ip,
-      provider,
-      ua,
-    });
-
-    dbg(req, "auth_touch:ok", {
-      provider,
-      ip,
-    });
-  } catch (e: any) {
-    dbg(req, "auth_touch:failed", {
-      provider,
-      ip,
-      error: String(e?.message ?? e ?? ""),
-    });
-  }
-}
-
 function withAuthOk(url: string): string {
   try {
     const u = new URL(url, "http://local");
@@ -411,13 +355,9 @@ export async function authRoutes(app: FastifyInstance) {
         await callShmTemplate(shmSessionId, "auth.telegram", {
           telegram_id: tgId,
           telegram_login: tgLogin ?? "",
-          ip: getRequestIp(req),
-          ua: String(req.headers["user-agent"] ?? ""),
         });
       }
     } catch {}
-
-    await touchAuthMeta(req, shmSessionId, "telegram");
 
     const ps = await getPasswordSetFlag(shmSessionId);
     const next: "set_password" | "home" = ps === 1 ? "home" : "set_password";
@@ -496,12 +436,8 @@ export async function authRoutes(app: FastifyInstance) {
       await callShmTemplate(shmSessionId, "auth.telegram", {
         telegram_id: body?.id != null ? String(body.id) : "",
         telegram_login: body?.username != null ? String(body.username) : "",
-        ip: getRequestIp(req),
-        ua: String(req.headers["user-agent"] ?? ""),
       });
     } catch {}
-
-    await touchAuthMeta(req, shmSessionId, "telegram");
 
     const ps = await getPasswordSetFlag(shmSessionId);
     const next: "set_password" | "home" = ps === 1 ? "home" : "set_password";
@@ -574,12 +510,8 @@ export async function authRoutes(app: FastifyInstance) {
       await callShmTemplate(shmSessionId, "auth.telegram", {
         telegram_id: payload?.id != null ? String(payload.id) : "",
         telegram_login: payload?.username != null ? String(payload.username) : "",
-        ip: getRequestIp(req),
-        ua: String(req.headers["user-agent"] ?? ""),
       });
     } catch {}
-
-    await touchAuthMeta(req, shmSessionId, "telegram");
 
     const ps = await getPasswordSetFlag(shmSessionId);
     const next: "set_password" | "home" = ps === 1 ? "home" : "set_password";
@@ -633,8 +565,6 @@ export async function authRoutes(app: FastifyInstance) {
     const localSid = reuseOrCreateSid(req);
 
     putSession(localSid, { shmSessionId, shmUserId, createdAt: Date.now() });
-
-    await touchAuthMeta(req, shmSessionId, "password");
 
     if (mode === "register") {
       try {
