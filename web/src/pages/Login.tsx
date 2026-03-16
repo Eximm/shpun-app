@@ -164,9 +164,9 @@ function mapAuthError(raw: string, t: (k: string, fb?: string) => string): strin
 
   switch (code) {
     case "login_and_password_required":
-      return t("login.err.login_and_password_required", "Введите e-mail и пароль.");
+      return t("login.err.login_and_password_required", "Введителогин или e-mail и пароль.");
     case "login_required":
-      return t("login.err.login_required", "Введите e-mail.");
+      return t("login.err.login_required", "Введите логин или e-mail.");
     case "password_required":
       return t("login.err.password_required", "Введите пароль.");
     case "invalid_credentials":
@@ -663,7 +663,7 @@ export function Login() {
                 <label className="field__label">{t("login.password.login", "E-mail")}</label>
                 <input
                   className="input"
-                  placeholder={t("login.password.login_ph", "Введите e-mail")}
+                  placeholder={t("login.password.login_ph", "Введите логин или e-mail")}
                   value={login}
                   onChange={(e) => setLogin(e.target.value)}
                   autoComplete="username"
