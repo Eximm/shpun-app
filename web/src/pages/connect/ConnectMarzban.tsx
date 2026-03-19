@@ -248,10 +248,6 @@ function Accordion(props: {
               {props.subtitle}
             </div>
           </div>
-
-          <span className="badge" aria-hidden>
-            {props.opened ? '▴' : '▾'}
-          </span>
         </div>
       </button>
 
@@ -427,12 +423,12 @@ export default function ConnectMarzban({ usi }: Props) {
 
     tryOpenScheme(v2rayAutoImportHref, {
       fallbackToast: isIOSPlatform(platform)
-        ? 'На iOS v2RayTun может открываться нестабильно. Лучше использовать Hiddify или ручной импорт.'
+        ? 'Если v2RayTun не открылся внутри Telegram, используйте Hiddify или ручной импорт ниже.'
         : 'Если v2RayTun не открылся, используйте ручной импорт по ссылке или QR.',
     })
 
     toast.info('Пытаемся открыть v2RayTun', {
-      description: 'Если приложение установлено, подписка будет передана в клиент.',
+      description: 'Если приложение установлено, подписка добавится автоматически.',
     })
   }
 
@@ -507,7 +503,7 @@ export default function ConnectMarzban({ usi }: Props) {
           {ready ? (
             <div className="actions actions--1" style={{ marginTop: 10 }}>
               <button className="btn" onClick={() => setAdvancedOpen((v) => !v)} type="button">
-                {advancedOpen ? 'Скрыть дополнительные варианты' : 'Другие варианты'}
+                {advancedOpen ? 'Скрыть дополнительные варианты' : 'Показать дополнительные варианты'}
               </button>
             </div>
           ) : null}
@@ -538,8 +534,8 @@ export default function ConnectMarzban({ usi }: Props) {
                 Открыть {primaryClient.storeLabel}
               </button>
 
-              <button className="btn" onClick={openHiddifyAutoImport} type="button">
-                Открыть в Hiddify
+              <button className="btn btn--primary" onClick={openHiddifyAutoImport} type="button">
+                Добавить подписку
               </button>
             </div>
 
@@ -558,30 +554,26 @@ export default function ConnectMarzban({ usi }: Props) {
 
           <Accordion
             title="v2RayTun — альтернативный клиент"
-            subtitle="Запасной вариант, если Hiddify не подходит."
+            subtitle="Альтернативный вариант, если Hiddify не подходит."
             opened={openAccordions.v2ray}
             onToggle={() => toggleAccordion('v2ray')}
           >
             <p className="p" style={{ opacity: 0.82, marginTop: 0 }}>
-              Можно использовать <b>{secondaryClient.title}</b> как альтернативный клиент.
-              {platform === 'ios'
-                ? ' На iOS автооткрытие может работать менее стабильно, чем у Hiddify.'
-                : platform === 'android'
-                  ? ' Обычно импорт туда занимает больше времени, чем в Hiddify.'
-                  : ''}
+              Установите <b>{secondaryClient.title}</b> для {platformLabel(platform)} и добавьте в него
+              подписку.
             </p>
 
             <div className="actions actions--2" style={{ marginTop: 10 }}>
               <button
-                className="btn"
+                className="btn btn--primary"
                 onClick={() => openLinkSafe(secondaryClient.market)}
                 type="button"
               >
                 Скачать v2RayTun
               </button>
 
-              <button className="btn" onClick={openV2RayAutoImport} type="button">
-                Попробовать открыть в v2RayTun
+              <button className="btn btn--primary" onClick={openV2RayAutoImport} type="button">
+                Добавить подписку
               </button>
             </div>
 
@@ -626,13 +618,23 @@ export default function ConnectMarzban({ usi }: Props) {
       ) : null}
 
       {platformPickerOpen ? (
-        <div className="overlay" role="dialog" aria-modal="true" onClick={() => setPlatformPickerOpen(false)}>
+        <div
+          className="overlay"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setPlatformPickerOpen(false)}
+        >
           <div className="card overlay__card" onClick={(e) => e.stopPropagation()}>
             <div className="card__body">
               <div className="row so__spaceBetween" style={{ alignItems: 'center' }}>
                 <div className="overlay__title">Выберите устройство</div>
 
-                <button className="btn" type="button" onClick={() => setPlatformPickerOpen(false)} aria-label="Закрыть">
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => setPlatformPickerOpen(false)}
+                  aria-label="Закрыть"
+                >
                   ✕
                 </button>
               </div>
@@ -674,7 +676,11 @@ export default function ConnectMarzban({ usi }: Props) {
               </div>
 
               <div className="actions actions--1 so__mt12">
-                <button className="btn so__btnFull" type="button" onClick={() => setPlatformPickerOpen(false)}>
+                <button
+                  className="btn so__btnFull"
+                  type="button"
+                  onClick={() => setPlatformPickerOpen(false)}
+                >
                   Закрыть
                 </button>
               </div>
