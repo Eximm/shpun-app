@@ -117,6 +117,38 @@ function openLinkSafe(url: string) {
   window.open(url, '_blank', 'noopener,noreferrer')
 }
 
+function openCustomScheme(url: string) {
+  try {
+    const a = document.createElement('a')
+    a.href = url
+    a.style.display = 'none'
+    document.body.appendChild(a)
+    a.click()
+
+    setTimeout(() => {
+      try {
+        window.location.href = url
+      } catch {
+        // ignore
+      }
+    }, 300)
+
+    setTimeout(() => {
+      try {
+        window.open(url, '_self')
+      } catch {
+        // ignore
+      }
+    }, 700)
+  } catch {
+    try {
+      window.location.href = url
+    } catch {
+      // ignore
+    }
+  }
+}
+
 async function copyToClipboard(text: string) {
   try {
     await navigator.clipboard.writeText(text)
@@ -140,7 +172,7 @@ async function copyToClipboard(text: string) {
 }
 
 function buildV2RayTunImportLink(subscriptionUrl: string) {
-  return `v2raytun://import/${encodeURIComponent(subscriptionUrl)}`
+  return `v2raytun://import/${subscriptionUrl}`
 }
 
 function buildHiddifyImportLink(subscriptionUrl: string) {
@@ -266,10 +298,10 @@ export default function ConnectMarzban({ usi }: Props) {
   function openPrimaryAutoImport() {
     if (!ready || !primaryAutoImportHref) return
 
-    openLinkSafe(primaryAutoImportHref)
+    openCustomScheme(primaryAutoImportHref)
 
     toast.info('Открываем приложение', {
-      description: 'Если v2RayTun установлен, подписка добавится автоматически.',
+      description: 'Если v2RayTun установлен, подписка будет передана в приложение.',
     })
   }
 
