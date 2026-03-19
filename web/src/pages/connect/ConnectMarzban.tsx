@@ -12,12 +12,41 @@ type Props = {
 type Platform = 'android' | 'ios' | 'windows' | 'mac' | 'linux'
 type Chip = 'auto' | Platform
 
-const IOS_HIDDIFY_URL = 'https://apps.apple.com/us/app/hiddify-proxy-vpn/id6596777532'
-
-const CLIENT_LINKS: Record<
+type ClientLinks = Record<
   Platform,
   { title: string; market: string; direct?: string; storeLabel: string }
-> = {
+>
+
+const V2RAYTUN_LINKS: ClientLinks = {
+  android: {
+    title: 'v2RayTun',
+    market: 'https://play.google.com/store/apps/details?id=com.v2raytun.android',
+    direct: 'https://github.com/DigneZzZ/v2raytun/releases/latest',
+    storeLabel: 'Google Play',
+  },
+  ios: {
+    title: 'v2RayTun',
+    market: 'https://apps.apple.com/us/app/v2raytun/id6476628951',
+    storeLabel: 'App Store',
+  },
+  windows: {
+    title: 'v2RayTun',
+    market: 'https://v2raytun.com/',
+    storeLabel: 'официальный сайт',
+  },
+  mac: {
+    title: 'v2RayTun',
+    market: 'https://apps.apple.com/us/app/v2raytun/id6476628951',
+    storeLabel: 'App Store',
+  },
+  linux: {
+    title: 'v2RayTun',
+    market: 'https://v2raytun.com/',
+    storeLabel: 'официальный сайт',
+  },
+}
+
+const HIDDIFY_LINKS: ClientLinks = {
   android: {
     title: 'Hiddify',
     market: 'https://play.google.com/store/apps/details?id=app.hiddify.com',
@@ -26,7 +55,7 @@ const CLIENT_LINKS: Record<
   },
   ios: {
     title: 'Hiddify',
-    market: IOS_HIDDIFY_URL,
+    market: 'https://apps.apple.com/us/app/hiddify-proxy-vpn/id6596777532',
     storeLabel: 'App Store',
   },
   windows: {
@@ -53,6 +82,7 @@ function detectOS(): Platform {
   const isAndroid = /android/i.test(ua)
   const isAppleTouch = /\bMac\b/.test(ua) && (navigator as any).maxTouchPoints > 1
   const isiOS = /iPad|iPhone|iPod/.test(ua) || isAppleTouch
+
   if (isAndroid) return 'android'
   if (isiOS) return 'ios'
   if (/Win/i.test(ua)) return 'windows'
@@ -83,6 +113,7 @@ function openLinkSafe(url: string) {
   } catch {
     // ignore
   }
+
   window.open(url, '_blank', 'noopener,noreferrer')
 }
 
@@ -108,14 +139,12 @@ async function copyToClipboard(text: string) {
   }
 }
 
-function buildAutoImportLink(platform: Platform, subscriptionUrl: string) {
-  const u = encodeURIComponent(subscriptionUrl)
+function buildV2RayTunImportLink(subscriptionUrl: string) {
+  return `v2raytun://import/${encodeURIComponent(subscriptionUrl)}`
+}
 
-  if (platform === 'android' || platform === 'ios' || platform === 'windows' || platform === 'mac' || platform === 'linux') {
-    return `hiddify://install-sub/?url=${u}`
-  }
-
-  return `hiddify://install-sub/?url=${u}`
+function buildHiddifyImportLink(subscriptionUrl: string) {
+  return `hiddify://install-sub/?url=${encodeURIComponent(subscriptionUrl)}`
 }
 
 export default function ConnectMarzban({ usi }: Props) {
@@ -129,16 +158,16 @@ export default function ConnectMarzban({ usi }: Props) {
   const [platformPickerOpen, setPlatformPickerOpen] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
 
-  const [subscriptionUrl, setSubscriptionUrl] = useState<string>('')
-
+  const [subscriptionUrl, setSubscriptionUrl] = useState('')
   const [copied, setCopied] = useState(false)
 
   const [qrOpen, setQrOpen] = useState(false)
-  const [qrDataUrl, setQrDataUrl] = useState<string>('')
+  const [qrDataUrl, setQrDataUrl] = useState('')
 
   async function load() {
     setLoading(true)
     setError(null)
+
     try {
       const r = (await apiFetch(`/services/${encodeURIComponent(String(usi))}/connect/marzban`, {
         method: 'GET',
@@ -150,6 +179,7 @@ export default function ConnectMarzban({ usi }: Props) {
 
       const url = String(r?.subscription_url ?? r?.subscriptionUrl ?? '').trim()
       if (!url) throw new Error('subscription_url_missing')
+
       setSubscriptionUrl(url)
 
       toast.success('Подписка готова', {
@@ -178,16 +208,28 @@ export default function ConnectMarzban({ usi }: Props) {
 
   const ready = !loading && !error && !!subscriptionUrl
 
+  const primaryClient = V2RAYTUN_LINKS[platform]
+  const hiddifyClient = HIDDIFY_LINKS[platform]
+
+  const primaryAutoImportHref = ready ? buildV2RayTunImportLink(subscriptionUrl) : ''
+  const hiddifyAutoImportHref = ready ? buildHiddifyImportLink(subscriptionUrl) : ''
+
   const topHint = useMemo(() => {
     const pName = platformLabel(platform)
+
     if (loading) return `Готовим подключение для: ${pName}…`
     if (error) return `Не удалось подготовить подключение для: ${pName}.`
-    if (isMobile(platform)) return `Устройство: ${pName}. Шаги ниже помогут установить приложение и добавить подписку.`
-    return `Устройство: ${pName}. Шаги ниже помогут установить приложение и добавить подписку.`
+
+    if (isMobile(platform)) {
+      return `Устройство: ${pName}. Установите v2RayTun и добавьте подписку в один клик.`
+    }
+
+    return `Устройство: ${pName}. Установите клиент и добавьте подписку.`
   }, [platform, loading, error])
 
   async function openQr() {
     if (!subscriptionUrl) return
+
     try {
       const dataUrl = await QRCode.toDataURL(subscriptionUrl, { margin: 2, width: 360 })
       setQrDataUrl(dataUrl)
@@ -205,8 +247,10 @@ export default function ConnectMarzban({ usi }: Props) {
 
   async function copySub() {
     if (!subscriptionUrl) return
+
     const ok = await copyToClipboard(subscriptionUrl)
     setCopied(ok)
+
     if (ok) {
       setTimeout(() => setCopied(false), 1500)
       toast.success('Ссылка подписки скопирована', {
@@ -219,17 +263,25 @@ export default function ConnectMarzban({ usi }: Props) {
     }
   }
 
-  function openAutoImport() {
-    if (!ready || !autoImportHref) return
-    openLinkSafe(autoImportHref)
+  function openPrimaryAutoImport() {
+    if (!ready || !primaryAutoImportHref) return
+
+    openLinkSafe(primaryAutoImportHref)
 
     toast.info('Открываем приложение', {
-      description: 'Если Hiddify установлен, подписка добавится автоматически.',
+      description: 'Если v2RayTun установлен, подписка добавится автоматически.',
     })
   }
 
-  const client = CLIENT_LINKS[platform]
-  const autoImportHref = ready ? buildAutoImportLink(platform, subscriptionUrl) : ''
+  function openHiddifyAutoImport() {
+    if (!ready || !hiddifyAutoImportHref) return
+
+    openLinkSafe(hiddifyAutoImportHref)
+
+    toast.info('Открываем Hiddify', {
+      description: 'Если Hiddify установлен, подписка добавится автоматически.',
+    })
+  }
 
   return (
     <div className="cm">
@@ -269,30 +321,46 @@ export default function ConnectMarzban({ usi }: Props) {
           <div className="services-cat__title">1) Установите приложение</div>
 
           <p className="p" style={{ opacity: 0.82, marginTop: 6 }}>
-            Установите <b>{client.title}</b> для {platformLabel(platform)}.
+            Установите <b>{primaryClient.title}</b> для {platformLabel(platform)}.
+            {platform === 'android' ? ' Если на устройстве нет Google Play, используйте прямую загрузку APK.' : ''}
           </p>
 
           <div className="actions actions--2" style={{ marginTop: 10 }}>
             <button
               className="btn btn--primary"
-              onClick={() => openLinkSafe(client.market)}
+              onClick={() => openLinkSafe(primaryClient.market)}
               disabled={loading}
               type="button"
             >
-              Открыть {client.storeLabel}
+              Открыть {primaryClient.storeLabel}
             </button>
 
-            {platform === 'android' && client.direct ? (
-              <button className="btn" onClick={() => openLinkSafe(client.direct!)} disabled={loading} type="button">
+            {platform === 'android' && primaryClient.direct ? (
+              <button
+                className="btn"
+                onClick={() => primaryClient.direct && openLinkSafe(primaryClient.direct)}
+                disabled={loading}
+                type="button"
+              >
                 Скачать APK
               </button>
-            ) : client.direct ? (
-              <button className="btn" onClick={() => openLinkSafe(client.direct!)} disabled={loading} type="button">
+            ) : primaryClient.direct ? (
+              <button
+                className="btn"
+                onClick={() => primaryClient.direct && openLinkSafe(primaryClient.direct)}
+                disabled={loading}
+                type="button"
+              >
                 Скачать напрямую
               </button>
             ) : (
-              <button className="btn" onClick={() => openLinkSafe(client.market)} disabled={loading} type="button">
-                Скачать напрямую
+              <button
+                className="btn"
+                onClick={() => openLinkSafe(primaryClient.market)}
+                disabled={loading}
+                type="button"
+              >
+                Открыть страницу
               </button>
             )}
           </div>
@@ -304,13 +372,13 @@ export default function ConnectMarzban({ usi }: Props) {
           <div className="services-cat__title">2) Добавьте подписку</div>
 
           <p className="p" style={{ opacity: 0.82, marginTop: 6 }}>
-            Нажмите “Добавить подписку” — мы откроем приложение и импортируем подписку автоматически.
+            Нажмите «Добавить подписку» — мы откроем <b>v2RayTun</b> и импортируем подписку автоматически.
           </p>
 
           <div className="actions actions--2" style={{ marginTop: 10 }}>
             <button
               className="btn btn--primary"
-              onClick={openAutoImport}
+              onClick={openPrimaryAutoImport}
               disabled={!ready}
               type="button"
               title={!ready ? 'Подписка ещё не готова' : undefined}
@@ -326,6 +394,8 @@ export default function ConnectMarzban({ usi }: Props) {
           {moreOpen && ready ? (
             <div style={{ marginTop: 10 }}>
               <div className="pre" style={{ opacity: 0.95 }}>
+                <div style={{ fontWeight: 700, marginBottom: 8 }}>Ручное подключение</div>
+
                 <div className="actions actions--1" style={{ marginTop: 0 }}>
                   <button className="btn btn--soft so__btnFull" type="button" onClick={copySub}>
                     {copied ? '✅ Ссылка скопирована' : 'Скопировать ссылку подписки'}
@@ -337,6 +407,44 @@ export default function ConnectMarzban({ usi }: Props) {
                     Показать QR
                   </button>
                 </div>
+
+                <div
+                  style={{
+                    height: 1,
+                    background: 'rgba(255,255,255,0.08)',
+                    marginTop: 14,
+                    marginBottom: 14,
+                  }}
+                />
+
+                <div style={{ fontWeight: 700, marginBottom: 8 }}>Другой клиент: Hiddify</div>
+
+                <p className="p" style={{ opacity: 0.82, marginTop: 0 }}>
+                  Можно использовать Hiddify как альтернативный способ подключения.
+                  {platform === 'android' ? ' Если на устройстве нет Google Play, используйте прямую загрузку APK.' : ''}
+                </p>
+
+                <div className="actions actions--2" style={{ marginTop: 10 }}>
+                  <button className="btn" type="button" onClick={() => openLinkSafe(hiddifyClient.market)}>
+                    Скачать Hiddify
+                  </button>
+
+                  <button className="btn" type="button" onClick={openHiddifyAutoImport}>
+                    Открыть в Hiddify
+                  </button>
+                </div>
+
+                {hiddifyClient.direct ? (
+                  <div className="actions actions--1" style={{ marginTop: 10 }}>
+                    <button
+                      className="btn so__btnFull"
+                      type="button"
+                      onClick={() => hiddifyClient.direct && openLinkSafe(hiddifyClient.direct)}
+                    >
+                      {platform === 'android' ? 'Скачать Hiddify APK' : 'Скачать Hiddify напрямую'}
+                    </button>
+                  </div>
+                ) : null}
               </div>
             </div>
           ) : null}
