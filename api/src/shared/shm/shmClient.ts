@@ -391,22 +391,30 @@ export async function shmShpunAppTemplate<T = any>(
     session_id: shmSessionId,
     action,
     ...(extraParams ?? {}),
-  }
+  };
 
-  return await shmFetch<T>(null, 'v1/template/shpun_app', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  return await shmFetch<T>(null, "v1/template/shpun_app", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: toFormUrlEncoded(flat),
-  })
+  });
 }
 
+// =====================
+// BASIC
+// =====================
+
 export async function shmShpunAppStatus(shmSessionId: string) {
-  return await shmShpunAppTemplate<any>(shmSessionId, 'status')
+  return await shmShpunAppTemplate<any>(shmSessionId, "status");
 }
 
 export async function shmShpunAppAdminStatus(shmSessionId: string) {
-  return await shmShpunAppTemplate<any>(shmSessionId, 'admin.status')
+  return await shmShpunAppTemplate<any>(shmSessionId, "admin.status");
 }
+
+// =====================
+// ADMIN SETTINGS (только для админа)
+// =====================
 
 export async function shmShpunAppAdminSettingsGet(shmSessionId: string) {
   return await shmShpunAppTemplate<any>(shmSessionId, "admin.settings.get");
@@ -421,24 +429,35 @@ export async function shmShpunAppAdminSettingsSet(
   });
 }
 
+// =====================
+// PUBLIC ORDER RULES (используется при заказе)
+// =====================
+
+export async function shmShpunAppOrderRulesGet(shmSessionId: string) {
+  return await shmShpunAppTemplate<any>(shmSessionId, "order.rules.get");
+}
+
+// =====================
+// REFERRALS
+// =====================
+
 export async function shmShpunAppReferralsStatus(shmSessionId: string) {
-  return await shmShpunAppTemplate<any>(shmSessionId, 'referrals.status')
+  return await shmShpunAppTemplate<any>(shmSessionId, "referrals.status");
 }
 
 export async function shmShpunAppReferralsList(
   shmSessionId: string,
   opts?: { limit?: number; offset?: number }
 ) {
-  return await shmShpunAppTemplate<any>(shmSessionId, 'referrals.list', {
+  return await shmShpunAppTemplate<any>(shmSessionId, "referrals.list", {
     limit: opts?.limit ?? 7,
     offset: opts?.offset ?? 0,
-  })
+  });
 }
 
 export async function shmShpunAppReferralsLink(shmSessionId: string) {
-  return await shmShpunAppTemplate<any>(shmSessionId, 'referrals.link')
+  return await shmShpunAppTemplate<any>(shmSessionId, "referrals.link");
 }
-
 /**
  * ✅ NEW: Payments requisites via shpun_app template (private, authed)
  *

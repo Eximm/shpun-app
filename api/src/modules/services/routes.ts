@@ -7,7 +7,7 @@ import {
   shmGetServiceOrder,
   shmGetUserServices,
   shmShpunAppConnectGet,
-  shmShpunAppAdminSettingsGet,
+  shmShpunAppOrderRulesGet,
   shmShpunAppRouterBind,
   shmShpunAppRouterList,
   shmShpunAppRouterUnbind,
@@ -688,10 +688,10 @@ export async function servicesRoutes(app: FastifyInstance) {
     let orderBlockMode: "off" | "same_type" | "any" = "off";
 
     try {
-      const settingsRes = await shmShpunAppAdminSettingsGet(shmSessionId);
+      const settingsRes = await shmShpunAppOrderRulesGet(shmSessionId);
 
       if (settingsRes.ok) {
-        const modeRaw = String((settingsRes.json as any)?.settings?.orderBlockMode ?? "off").trim();
+        const modeRaw = String((settingsRes.json as any)?.orderBlockMode ?? "off").trim();
         if (modeRaw === "off" || modeRaw === "same_type" || modeRaw === "any") {
           orderBlockMode = modeRaw;
         }
