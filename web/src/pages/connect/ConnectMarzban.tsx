@@ -115,12 +115,6 @@ function platformLabel(p: Platform) {
   return 'Linux'
 }
 
-function runtimeLabel(r: RuntimeMode) {
-  if (r === 'telegram-miniapp') return 'Telegram'
-  if (r === 'standalone-app') return 'приложение'
-  return 'браузер'
-}
-
 function openLinkSafe(url: string) {
   try {
     const tg: any = (window as any).Telegram?.WebApp
@@ -148,7 +142,7 @@ function closeTelegramMiniAppSoon(delay = 150) {
 
 function tryOpenScheme(url: string, runtime: RuntimeMode, opts?: { fallbackToast?: string }) {
   const fallbackToast =
-    opts?.fallbackToast || 'Если приложение не открылось, используйте ручной импорт по ссылке или QR.'
+    opts?.fallbackToast || 'Если приложение не открылось, используйте ссылку или QR-код ниже.'
 
   try {
     const a = document.createElement('a')
@@ -353,10 +347,10 @@ export default function ConnectMarzban({ usi }: Props) {
       const msg = e?.message || 'Не удалось загрузить ссылку подписки'
       setError(msg)
 
-      toast.error('Не удалось подготовить подписку', {
+      toast.error('Не удалось подготовить подключение', {
         description:
           msg === 'subscription_url_missing'
-            ? 'Ссылка подписки пока недоступна. Попробуйте чуть позже.'
+            ? 'Ссылка пока недоступна. Попробуйте чуть позже.'
             : String(msg),
       })
     } finally {
@@ -388,31 +382,20 @@ export default function ConnectMarzban({ usi }: Props) {
 
   const topHint = useMemo(() => {
     const pName = platformLabel(platform)
-    const rName = runtimeLabel(runtime)
 
-    if (loading) return `Готовим подключение для: ${pName} (${rName})…`
-    if (error) return `Не удалось подготовить подключение для: ${pName} (${rName}).`
-
-    if (runtime === 'telegram-miniapp') {
-      if (platform === 'ios') {
-        return `Устройство: ${pName}. Режим: ${rName}. Основной клиент — v2RayTun. После нажатия миниапп передаст ссылку во внешний клиент и закроется. Если не сработает, ниже есть ручной импорт.`
-      }
-      if (platform === 'android') {
-        return `Устройство: ${pName}. Режим: ${rName}. Основной клиент — Hiddify. После нажатия миниапп попытается открыть клиент и закрыться. Если приложение не откроется, используйте ссылку или QR.`
-      }
-      return `Устройство: ${pName}. Режим: ${rName}. Автоимпорт зависит от клиента и системы. Ниже доступны ручные варианты подключения.`
-    }
+    if (loading) return `Готовим подключение для ${pName}…`
+    if (error) return `Не удалось подготовить подключение для ${pName}.`
 
     if (platform === 'ios') {
-      return `Устройство: ${pName}. Основной клиент — v2RayTun. Hiddify оставлен как альтернативный вариант.`
+      return 'Подписка готова. Для iPhone и iPad рекомендуем v2RayTun.'
     }
 
     if (platform === 'android') {
-      return `Устройство: ${pName}. Основной клиент — Hiddify. Обычно подписка импортируется туда быстрее.`
+      return 'Подписка готова. Для Android рекомендуем Hiddify.'
     }
 
-    return `Устройство: ${pName}. Основной клиент — ${primaryClient.title}, также доступен альтернативный вариант.`
-  }, [platform, runtime, loading, error, primaryClient.title])
+    return `Подписка готова. Рекомендуемый клиент для ${pName}: ${primaryClient.title}.`
+  }, [platform, loading, error, primaryClient.title])
 
   function toggleAccordion(key: AccordionKey) {
     userTouchedAccordionsRef.current = true
@@ -428,7 +411,7 @@ export default function ConnectMarzban({ usi }: Props) {
       setQrOpen(true)
 
       toast.info('QR-код готов', {
-        description: 'Откройте клиент на другом устройстве и импортируйте подписку по QR.',
+        description: 'Откройте клиент на другом устройстве и добавьте подписку по QR-коду.',
       })
     } catch (e: any) {
       toast.error('Не удалось показать QR-код', {
@@ -445,8 +428,8 @@ export default function ConnectMarzban({ usi }: Props) {
 
     if (ok) {
       setTimeout(() => setCopied(false), 1500)
-      toast.success('Ссылка подписки скопирована', {
-        description: 'Теперь её можно вставить в клиент вручную.',
+      toast.success('Ссылка скопирована', {
+        description: 'Теперь вставьте её в приложение вручную.',
       })
     } else {
       toast.error('Не удалось скопировать ссылку', {
@@ -461,16 +444,16 @@ export default function ConnectMarzban({ usi }: Props) {
     tryOpenScheme(hiddifyAutoImportHref, runtime, {
       fallbackToast:
         runtime === 'telegram-miniapp'
-          ? 'В Telegram автоимпорт может открыться не на всех устройствах. Используйте ручной импорт по ссылке или QR.'
+          ? 'Если приложение не открылось, используйте ссылку или QR-код ниже.'
           : platform === 'ios'
-            ? 'Если Hiddify не открылся, используйте ручной импорт ниже.'
-            : 'Если Hiddify не открылся, используйте ручной импорт по ссылке или QR.',
+            ? 'Если Hiddify не открылся, используйте ручное подключение ниже.'
+            : 'Если Hiddify не открылся, используйте ссылку или QR-код ниже.',
     })
 
-    toast.info('Пытаемся открыть Hiddify', {
+    toast.info('Открываем Hiddify', {
       description:
         runtime === 'telegram-miniapp'
-          ? 'Миниапп передаст ссылку в клиент и закроется.'
+          ? 'Если ничего не произошло, используйте другой способ ниже.'
           : 'Если приложение установлено, подписка добавится автоматически.',
     })
   }
@@ -481,17 +464,17 @@ export default function ConnectMarzban({ usi }: Props) {
     tryOpenScheme(v2rayAutoImportHref, runtime, {
       fallbackToast:
         runtime === 'telegram-miniapp'
-          ? 'В Telegram автоимпорт может открыться не на всех устройствах. Используйте ручной импорт по ссылке или QR.'
+          ? 'Если приложение не открылось, используйте ссылку или QR-код ниже.'
           : platform === 'ios'
-            ? 'Если v2RayTun не открылся, используйте ручной импорт ниже.'
-            : 'Если v2RayTun не открылся, используйте ручной импорт по ссылке или QR.',
+            ? 'Если v2RayTun не открылся, используйте ручное подключение ниже.'
+            : 'Если v2RayTun не открылся, используйте ссылку или QR-код ниже.',
     })
 
-    toast.info('Пытаемся открыть v2RayTun', {
+    toast.info('Открываем v2RayTun', {
       description:
         runtime === 'telegram-miniapp'
-          ? 'Миниапп передаст ссылку в клиент и закроется.'
-          : 'Если приложение установлено, подписка будет передана в клиент.',
+          ? 'Если ничего не произошло, используйте другой способ ниже.'
+          : 'Если приложение установлено, подписка будет добавлена автоматически.',
     })
   }
 
@@ -508,32 +491,32 @@ export default function ConnectMarzban({ usi }: Props) {
 
   const quickPrimaryDescription = (() => {
     if (platform === 'android') {
-      return 'Основной клиент — Hiddify. Обычно подписка добавляется быстрее. При отсутствии Google Play можно использовать прямую загрузку.'
+      return 'Рекомендуем Hiddify. Обычно это самый простой способ подключения.'
     }
     if (platform === 'ios') {
-      return 'Основной клиент — v2RayTun. На iPhone и iPad рекомендуем начать с него. Если автоимпорт внутри Telegram не сработает, ниже есть ручной вариант.'
+      return 'Рекомендуем v2RayTun. Если не получится открыть сразу, ниже есть другие способы.'
     }
-    return `Основной клиент — ${primaryClient.title}. Это рекомендуемый вариант для подключения.`
+    return `Рекомендуем ${primaryClient.title} для быстрого подключения.`
   })()
 
   function renderHiddifyAccordion() {
     return (
       <Accordion
-        title={primaryKind === 'hiddify' ? 'Hiddify — основной клиент' : 'Hiddify — альтернативный клиент'}
+        title={primaryKind === 'hiddify' ? 'Hiddify — рекомендуемый вариант' : 'Hiddify — другой вариант'}
         subtitle={
           primaryKind === 'hiddify'
-            ? 'Рекомендуемый способ подключения для большинства устройств.'
-            : 'Запасной вариант, если основной клиент вам не подходит.'
+            ? 'Самый простой способ для большинства устройств.'
+            : 'Попробуйте его, если основной вариант не подошёл.'
         }
         opened={openAccordion === 'hiddify'}
         onToggle={() => toggleAccordion('hiddify')}
       >
         <p className="p" style={{ opacity: 0.82, marginTop: 0 }}>
-          Установите <b>Hiddify</b> для {platformLabel(platform)} и добавьте в него подписку.
+          Установите <b>Hiddify</b> и добавьте в него подписку.
           {platform === 'android' && hiddifyClient.direct
-            ? ' Если Google Play недоступен, используйте прямую загрузку APK.'
+            ? ' Если Google Play недоступен, можно скачать APK напрямую.'
             : platform === 'ios'
-              ? ' На iPhone это альтернативный вариант.'
+              ? ' На iPhone это запасной вариант.'
               : ''}
         </p>
 
@@ -543,7 +526,7 @@ export default function ConnectMarzban({ usi }: Props) {
           </button>
 
           <button className="btn btn--primary" onClick={openHiddifyAutoImport} type="button">
-            Открыть в Hiddify
+            Добавить в Hiddify
           </button>
         </div>
 
@@ -554,7 +537,7 @@ export default function ConnectMarzban({ usi }: Props) {
               type="button"
               onClick={() => hiddifyClient.direct && openLinkSafe(hiddifyClient.direct)}
             >
-              {platform === 'android' ? 'Скачать Hiddify APK' : 'Скачать Hiddify напрямую'}
+              {platform === 'android' ? 'Скачать APK' : 'Скачать напрямую'}
             </button>
           </div>
         ) : null}
@@ -565,22 +548,21 @@ export default function ConnectMarzban({ usi }: Props) {
   function renderV2RayAccordion() {
     return (
       <Accordion
-        title={primaryKind === 'v2ray' ? 'v2RayTun — основной клиент' : 'v2RayTun — альтернативный клиент'}
+        title={primaryKind === 'v2ray' ? 'v2RayTun — рекомендуемый вариант' : 'v2RayTun — другой вариант'}
         subtitle={
           primaryKind === 'v2ray'
-            ? 'Рекомендуемый способ подключения для Apple-устройств.'
-            : 'Запасной вариант, если Hiddify не подходит.'
+            ? 'Лучший вариант для iPhone и iPad.'
+            : 'Попробуйте его, если Hiddify не подошёл.'
         }
         opened={openAccordion === 'v2ray'}
         onToggle={() => toggleAccordion('v2ray')}
       >
         <p className="p" style={{ opacity: 0.82, marginTop: 0 }}>
-          Можно использовать <b>{v2rayClient.title}</b>
-          {primaryKind === 'v2ray' ? ' как основной клиент.' : ' как альтернативный клиент.'}
+          Установите <b>{v2rayClient.title}</b> и добавьте в него подписку.
           {platform === 'ios'
-            ? ' На iPhone и iPad это рекомендуемый вариант.'
+            ? ' Для iPhone и iPad это основной вариант.'
             : platform === 'android'
-              ? ' На Android он доступен как запасной вариант.'
+              ? ' На Android его можно использовать как альтернативу.'
               : ''}
         </p>
 
@@ -590,7 +572,7 @@ export default function ConnectMarzban({ usi }: Props) {
           </button>
 
           <button className="btn btn--primary" onClick={openV2RayAutoImport} type="button">
-            Открыть в v2RayTun
+            Добавить в v2RayTun
           </button>
         </div>
 
@@ -612,7 +594,7 @@ export default function ConnectMarzban({ usi }: Props) {
   return (
     <div className="cm">
       <div className="pre" style={{ marginTop: 0 }}>
-        {ready ? '✅ Подписка готова. ' : error ? '⚠️ Подписка не готова. ' : '… '}
+        {ready ? '✅ ' : error ? '⚠️ ' : '… '}
         {topHint}
       </div>
 
@@ -622,7 +604,7 @@ export default function ConnectMarzban({ usi }: Props) {
 
           <div style={{ marginTop: 10 }}>
             <button className="btn" onClick={load} type="button">
-              Повторить
+              Попробовать снова
             </button>
           </div>
         </div>
@@ -638,7 +620,7 @@ export default function ConnectMarzban({ usi }: Props) {
           disabled={loading}
           aria-label="Выбор устройства"
         >
-          {chip === 'auto' ? `✨ Текущее (${platformLabel(autoPlatform)})` : platformLabel(platform)}{' '}
+          {chip === 'auto' ? `Текущее: ${platformLabel(autoPlatform)}` : platformLabel(platform)}{' '}
           <span aria-hidden>▾</span>
         </button>
       </div>
@@ -666,7 +648,7 @@ export default function ConnectMarzban({ usi }: Props) {
               onClick={openPrimaryAutoImport}
               disabled={!ready}
               type="button"
-              title={!ready ? 'Подписка ещё не готова' : undefined}
+              title={!ready ? 'Подключение ещё готовится' : undefined}
             >
               {loading ? 'Подождите…' : 'Добавить подписку'}
             </button>
@@ -675,7 +657,7 @@ export default function ConnectMarzban({ usi }: Props) {
           {ready ? (
             <div className="actions actions--1" style={{ marginTop: 10 }}>
               <button className="btn" onClick={() => setAdvancedOpen((v) => !v)} type="button">
-                {advancedOpen ? 'Скрыть дополнительные варианты' : 'Другие варианты'}
+                {advancedOpen ? 'Скрыть другие способы' : 'Другие способы'}
               </button>
             </div>
           ) : null}
@@ -688,22 +670,18 @@ export default function ConnectMarzban({ usi }: Props) {
           {primaryKind === 'hiddify' ? renderV2RayAccordion() : renderHiddifyAccordion()}
 
           <Accordion
-            title="Ручное подключение"
-            subtitle="Если автоимпорт не сработал, используйте ссылку подписки или QR."
+            title="Подключить вручную"
+            subtitle="Подойдёт, если приложение не открылось автоматически."
             opened={openAccordion === 'manual'}
             onToggle={() => toggleAccordion('manual')}
           >
             <p className="p" style={{ opacity: 0.82, marginTop: 0 }}>
-              {runtime === 'telegram-miniapp'
-                ? 'В Telegram ручной импорт остаётся самым надёжным запасным вариантом.'
-                : platform === 'ios'
-                  ? 'Для iPhone ручной импорт — надёжный запасной вариант.'
-                  : 'Этот способ подойдёт, если приложение не открылось автоматически.'}
+              Скопируйте ссылку подписки или откройте QR-код и добавьте подписку в приложение вручную.
             </p>
 
             <div className="actions actions--1" style={{ marginTop: 10 }}>
               <button className="btn btn--soft so__btnFull" type="button" onClick={copySub}>
-                {copied ? '✅ Ссылка скопирована' : 'Скопировать ссылку подписки'}
+                {copied ? '✅ Ссылка скопирована' : 'Скопировать ссылку'}
               </button>
             </div>
 
@@ -739,7 +717,7 @@ export default function ConnectMarzban({ usi }: Props) {
                 >
                   <div className="row so__spaceBetween">
                     <div className="kv__k" style={{ fontWeight: 700 }}>
-                      ✨ Текущее
+                      Текущее устройство
                     </div>
                     <span className="badge">{platformLabel(autoPlatform)}</span>
                   </div>
@@ -787,7 +765,7 @@ export default function ConnectMarzban({ usi }: Props) {
               </div>
 
               <p className="p so__mt8" style={{ opacity: 0.82 }}>
-                Откройте клиент на другом устройстве и импортируйте подписку через QR.
+                Откройте приложение на другом устройстве и добавьте подписку по QR-коду.
               </p>
 
               <div
