@@ -40,7 +40,7 @@
   --container: 920px;
   --pad: 18px;
 
-  --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial,
+  --font: "Segoe UI", Inter, Roboto, Arial, sans-serif,
     "Apple Color Emoji", "Segoe UI Emoji";
 
   /* App-like touch sizes */
@@ -1950,7 +1950,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .svc__connectBody{
   margin-top: 10px;
 }
-/* Services top header — в стиле Home (левый блок + кнопка справа) */
+/* Services top header — stronger conversion header */
 .services-top {
   display: flex;
   align-items: flex-start;
@@ -1958,15 +1958,22 @@ button, a { -webkit-tap-highlight-color: transparent; }
   gap: 12px;
 }
 
+.services-top__left {
+  min-width: 0;
+}
+
 .services-top__title {
-  font-weight: 700;
-  font-size: 20px;
+  font-weight: 800;
+  font-size: 22px;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
 }
 
 .services-top__sub {
-  opacity: 0.75;
-  margin-top: 4px;
+  opacity: 0.78;
+  margin-top: 6px;
   font-size: 13px;
+  line-height: 1.4;
 }
 
 /* meta badges layout */
@@ -1974,18 +1981,18 @@ button, a { -webkit-tap-highlight-color: transparent; }
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 12px;
 }
 
 @media (min-width: 768px) {
   .services-head__meta--wide {
-    justify-content: space-between;
+    justify-content: flex-start;
   }
 }
 
-/* single CTA */
+/* header actions */
 .services-head__actions {
-  margin-top: 12px;
+  margin-top: 14px;
   display: grid;
   grid-template-columns: 1fr;
   gap: 10px;
@@ -1993,12 +2000,14 @@ button, a { -webkit-tap-highlight-color: transparent; }
 
 .services-head__cta {
   width: 100%;
+  min-height: 48px;
+  font-weight: 800;
+  border-radius: 16px;
 }
 
 .services-head__refresh {
   width: 100%;
 }
-
 
 /* Collapsible category header */
 .services-cat__head--toggle {
@@ -2043,6 +2052,81 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .svc__dot {
   opacity: 0.6;
   margin: 0 2px;
+}
+
+/* Empty state: bright conversion block */
+.services-empty {
+  position: relative;
+  overflow: hidden;
+  text-align: center;
+  padding: 22px 18px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(124, 92, 255, 0.34);
+  background:
+    radial-gradient(700px 220px at 50% -10%, rgba(124, 92, 255, 0.18), transparent 58%),
+    radial-gradient(560px 180px at 50% 120%, rgba(77, 215, 255, 0.10), transparent 55%),
+    rgba(255,255,255,0.035);
+  box-shadow:
+    0 20px 50px rgba(0,0,0,0.30),
+    inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+.services-empty__title {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.services-empty__text {
+  margin: 10px auto 0;
+  max-width: 520px;
+  color: rgba(255,255,255,0.72);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.services-empty__actions {
+  margin-top: 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.services-empty .services-head__cta {
+  min-height: 52px;
+  font-size: 15px;
+  font-weight: 800;
+  box-shadow:
+    0 14px 30px rgba(124, 92, 255, 0.24),
+    0 10px 22px rgba(77, 215, 255, 0.16);
+}
+
+.services-empty__hint {
+  margin-top: 10px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.56);
+  line-height: 1.35;
+  font-weight: 400;
+}
+
+@media (max-width: 520px) {
+  .services-top__title {
+    font-size: 20px;
+  }
+
+  .services-empty {
+    padding: 20px 14px 16px;
+    border-radius: 18px;
+  }
+
+  .services-empty__title {
+    font-size: 18px;
+  }
+
+  .services-empty__text {
+    font-size: 13px;
+    font-weight: 400;
+  }
 }
 /* select для темной темы: чтобы в дропдауне не пропадал текст */
 .so__select{
@@ -2815,4 +2899,154 @@ button, a { -webkit-tap-highlight-color: transparent; }
   margin-top: 14px;
   width: 100%;
 }
+/* ============================================================
+   Services — Empty state (no services)
+   ============================================================ */
 
+.services-empty {
+  margin-top: 6px;
+  padding: 20px;
+  border-radius: 18px;
+  text-align: center;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+}
+
+.services-empty__title {
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+}
+
+.services-empty__text {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: rgba(255,255,255,0.65);
+}
+
+.services-empty__actions {
+  margin-top: 14px;
+}
+
+/* ============================================================
+   Services — Empty state (no services)
+   ============================================================ */
+
+.services-empty {
+  margin-top: 6px;
+  padding: 20px;
+  border-radius: 18px;
+  text-align: center;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+}
+
+.services-empty__title {
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+}
+
+.services-empty__text {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: rgba(255,255,255,0.65);
+}
+
+.services-empty__actions {
+  margin-top: 14px;
+}
+
+/* ============================================================
+   ServicesOrder — Recommended (Marzban)
+   ============================================================ */
+
+.so__kindCard--recommended {
+  border: 1px solid rgba(124,92,255,0.45);
+  background:
+    radial-gradient(800px 200px at 0% 0%, rgba(124,92,255,0.12), transparent 55%),
+    rgba(255,255,255,0.04);
+  box-shadow:
+    0 14px 34px rgba(124,92,255,0.18),
+    0 6px 18px rgba(0,0,0,0.25);
+}
+
+.so__badgeRecommended {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 900;
+  color: rgba(124,92,255,0.95);
+  background: rgba(124,92,255,0.12);
+  border: 1px solid rgba(124,92,255,0.35);
+  border-radius: 999px;
+  padding: 4px 8px;
+  margin-bottom: 6px;
+}
+
+/* ============================================================
+   ServicesOrder — Tariff focus
+   ============================================================ */
+
+.so__tariffCard--focus {
+  border: 1px solid rgba(77,215,255,0.35);
+  background:
+    radial-gradient(800px 200px at 0% 0%, rgba(77,215,255,0.12), transparent 55%),
+    rgba(255,255,255,0.04);
+  box-shadow:
+    0 14px 34px rgba(77,215,255,0.18),
+    0 6px 18px rgba(0,0,0,0.25);
+}
+
+/* ============================================================
+   ServicesOrder — Payment highlight
+   ============================================================ */
+
+.so__payBox {
+  margin-top: 14px;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(124,92,255,0.35);
+  background:
+    radial-gradient(800px 200px at 0% 0%, rgba(124,92,255,0.12), transparent 55%),
+    rgba(255,255,255,0.04);
+}
+
+.so__payAmount {
+  margin-top: 4px;
+  font-size: 22px;
+  font-weight: 950;
+  letter-spacing: -0.01em;
+}
+
+.so__payBtn {
+  margin-top: 12px;
+  width: 100%;
+}
+/* ============================================================
+   BottomNav — accent on Services when user has no active services
+   ============================================================ */
+
+.tab--accent {
+  border-color: rgba(124,92,255,0.28);
+  background: linear-gradient(
+    180deg,
+    rgba(124,92,255,0.14),
+    rgba(77,215,255,0.08)
+  );
+  box-shadow:
+    0 10px 24px rgba(124,92,255,0.16),
+    0 6px 16px rgba(0,0,0,0.18);
+}
+
+.tab--accent .tab__icon {
+  transform: scale(1.04);
+}
+
+.tab--accent .tab__label {
+  color: rgba(255,255,255,0.92);
+  font-weight: 900;
+}

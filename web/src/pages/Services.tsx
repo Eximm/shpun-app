@@ -390,7 +390,8 @@ function ServiceCard({
 
           <div className="svc__right">
             <span className="badge">
-              {fmtMoney(s.price, s.currency)} / {s.periodMonths || 1}{t("services.month_short", "mo")}
+              {fmtMoney(s.price, s.currency)} / {s.periodMonths || 1}
+              {t("services.month_short", "mo")}
             </span>
           </div>
         </div>
@@ -408,7 +409,11 @@ function ServiceCard({
                 className="btn btn--primary"
                 onClick={onToggleConnect}
                 disabled={!canShowConnect}
-                title={!canShowConnect ? t("services.connect.only_active", "Connection is available only for active services.") : t("services.connect.open", "Open connection")}
+                title={
+                  !canShowConnect
+                    ? t("services.connect.only_active", "Connection is available only for active services.")
+                    : t("services.connect.open", "Open connection")
+                }
               >
                 {connectOpen ? t("services.connect.hide", "Hide connection") : t("services.connect.button", "Connection")}
               </button>
@@ -492,7 +497,7 @@ function readGroupsState(): Record<ServiceKind, boolean> | null {
 
     return {
       amneziawg: pick("amneziawg", false),
-      marzban: pick("marzban", false),
+      marzban: pick("marzban", true),
       marzban_router: pick("marzban_router", false),
       unknown: pick("unknown", false),
     };
@@ -545,7 +550,7 @@ export function Services() {
     return (
       readGroupsState() ?? {
         amneziawg: false,
-        marzban: false,
+        marzban: true,
         marzban_router: false,
         unknown: false,
       }
@@ -816,6 +821,8 @@ export function Services() {
   const stopErrText = stopError ? normalizeError(stopError, { title: t("services.toast.block_failed", "Could not block") }).description : null;
   const deleteErrText = deleteError ? normalizeError(deleteError, { title: t("services.toast.delete_failed", "Could not delete") }).description : null;
 
+  const hasServices = items.length > 0;
+
   return (
     <div className="section">
       <div className="card">
@@ -827,44 +834,79 @@ export function Services() {
             </div>
           </div>
 
-          <div className="services-head__meta services-head__meta--wide">
-            <span className="badge">
-              {t("services.meta.active", "Active")}: <b>{s?.active ?? fallbackActive}</b>
-            </span>
-            <span className="badge">
-              {t("services.meta.attention", "Attention")}: <b>{(s?.blocked ?? 0) + (s?.notPaid ?? 0) || fallbackAttention}</b>
-            </span>
-            <span className="badge">
-              {t("services.meta.monthly", "Per month")}: <b>{fmtMoney(s?.monthlyCost ?? 0, s?.currency ?? "RUB")}</b>
-            </span>
-
-            {discountPercent > 0 ? (
+          {hasServices ? (
+            <div className="services-head__meta services-head__meta--wide">
               <span className="badge">
-                {t("services.meta.discount", "Discount")}: <b>-{Math.round(discountPercent)}%</b>
+                {t("services.meta.active", "Active")}: <b>{s?.active ?? fallbackActive}</b>
               </span>
-            ) : null}
-          </div>
+
+              <span className="badge">
+                {t("services.meta.attention", "Attention")}: <b>{(s?.blocked ?? 0) + (s?.notPaid ?? 0) || fallbackAttention}</b>
+              </span>
+
+              {discountPercent > 0 ? (
+                <span className="badge">
+                  {t("services.meta.discount", "Discount")}: <b>-{Math.round(discountPercent)}%</b>
+                </span>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="services-head__actions">
             <button className="btn btn--primary services-head__cta" onClick={() => go("/services/order")}>
-              {t("services.order", "Order")}
+              {t("services.order_vpn", "Order VPN")}
             </button>
 
-            <button
-              className="btn services-head__cta"
-              onClick={() => load({ silent: false, toastOnSuccess: true })}
-              title={t("services.refresh_status", "Refresh status")}
-            >
-              {t("services.refresh", "Refresh")}
-            </button>
+            {hasServices ? (
+              <button
+                className="btn services-head__cta"
+                onClick={() => load({ silent: false, toastOnSuccess: true })}
+                title={t("services.refresh_status", "Refresh status")}
+              >
+                {t("services.refresh", "Refresh")}
+              </button>
+            ) : null}
           </div>
         </div>
       </div>
 
-      <Section kind="amneziawg" />
-      <Section kind="marzban" />
-      <Section kind="marzban_router" />
-      <Section kind="unknown" />
+      {!hasServices ? (
+        <div className="section">
+          <div className="card">
+            <div className="card__body">
+              <div className="services-empty">
+                <div className="services-empty__title">
+                  {t("services.empty.title", "You have no active services yet")}
+                </div>
+
+                <div className="services-empty__text">
+                  {t(
+                    "services.empty.text",
+                    "Choose a plan and get full access to the service in just a couple of minutes."
+                  )}
+                </div>
+
+                <div className="services-empty__actions">
+                  <button className="btn btn--primary services-head__cta" onClick={() => go("/services/order")}>
+                    {t("services.order_vpn", "Choose plan")}
+                  </button>
+                </div>
+
+                <div className="services-empty__hint">
+                  {t("services.empty.hint", "Quick setup, clear pricing, and easy connection after purchase.")}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          <Section kind="marzban" />
+          <Section kind="marzban_router" />
+          <Section kind="amneziawg" />
+          <Section kind="unknown" />
+        </>
+      )}
 
       <Modal
         title={
@@ -910,7 +952,8 @@ export function Services() {
                 {t("services.modal.type", "Type")}: <b>{kindTitle(detectKind(stopTarget.category), t)}</b>
               </div>
               <div>
-                {t("services.modal.plan", "Plan")}: <b>{fmtMoney(stopTarget.price, stopTarget.currency)}</b> / {stopTarget.periodMonths || 1}{t("services.month_short", "mo")}
+                {t("services.modal.plan", "Plan")}: <b>{fmtMoney(stopTarget.price, stopTarget.currency)}</b> / {stopTarget.periodMonths || 1}
+                {t("services.month_short", "mo")}
               </div>
               {stopTarget.expireAt ? (
                 <div>
@@ -959,7 +1002,8 @@ export function Services() {
                 {t("services.modal.type", "Type")}: <b>{kindTitle(detectKind(deleteTarget.category), t)}</b>
               </div>
               <div>
-                {t("services.modal.plan", "Plan")}: <b>{fmtMoney(deleteTarget.price, deleteTarget.currency)}</b> / {deleteTarget.periodMonths || 1}{t("services.month_short", "mo")}
+                {t("services.modal.plan", "Plan")}: <b>{fmtMoney(deleteTarget.price, deleteTarget.currency)}</b> / {deleteTarget.periodMonths || 1}
+                {t("services.month_short", "mo")}
               </div>
               {deleteTarget.expireAt ? (
                 <div>

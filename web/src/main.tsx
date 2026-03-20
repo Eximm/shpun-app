@@ -32,6 +32,7 @@ import { BottomNav } from "./app/layout/BottomNav";
 import { I18nProvider, useI18n } from "./shared/i18n";
 import { ToastProvider } from "./shared/ui/toast/ToastProvider";
 import { useBillingNotifications } from "./app/notifications/useBillingNotifications";
+import { apiFetch } from "./shared/api/client";
 
 if (import.meta.env.PROD) {
   import("virtual:pwa-register")
@@ -59,6 +60,13 @@ if (import.meta.env.PROD) {
     })
     .catch(() => {});
 }
+
+type ServicesSummaryResp = {
+  ok: true;
+  summary?: {
+    active?: number;
+  };
+};
 
 function AppShell({ children }: { children: React.ReactNode }) {
   const { t } = useI18n();
@@ -101,6 +109,65 @@ function AuthedLayout() {
       <Outlet />
     </AuthGate>
   );
+}
+
+function LandingRoute() {
+  const loc = useLocation();
+  const [state, setState] = React.useState<"loading" | "home" | "services">("loading");
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function decide() {
+      try {
+        const alreadyRedirected = sessionStorage.getItem("landing_checked") === "1";
+
+        const resp = await apiFetch<ServicesSummaryResp>("/services", { method: "GET" });
+        const active = Number(resp?.summary?.active ?? 0);
+
+        if (cancelled) return;
+
+        // если уже проверяли — не мешаем пользователю
+        if (alreadyRedirected) {
+          setState("home");
+          return;
+        }
+
+        // первый заход
+        sessionStorage.setItem("landing_checked", "1");
+
+        if (active > 0) {
+          setState("home");
+        } else {
+          setState("services");
+        }
+      } catch {
+        if (cancelled) return;
+        setState("home");
+      }
+    }
+
+    void decide();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loc.search]);
+
+  if (state === "loading") {
+    return (
+      <div className="section">
+        <div className="card">
+          <div className="card__body">
+            <h1 className="h1">Shpun App</h1>
+            <p className="p">Загрузка…</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return state === "home" ? <Home /> : <Services />;
 }
 
 function AppPathRedirect() {
@@ -155,7 +222,8 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                 <Route path="/app" element={<AppPathRedirect />} />
 
                 <Route element={<AuthedLayout />}>
-                  <Route path="/" element={<Home />} />
+                  <Route path="/" element={<LandingRoute />} />
+                  <Route path="/home" element={<Home />} />
                   <Route path="/referrals" element={<Referrals />} />
                   <Route path="/feed" element={<Feed />} />
                   <Route path="/dashboard" element={<Dashboard />} />
@@ -170,7 +238,6 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                   <Route path="/admin/broadcasts" element={<AdminBroadcasts />} />
                 </Route>
 
-                <Route path="/home" element={<Navigate to="/" replace />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </PageContainer>

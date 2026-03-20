@@ -64,6 +64,7 @@ const KIND_META: Record<
     title: string
     descr: string
     shortDescr: string
+    recommended?: boolean
   }
 > = {
   marzban: {
@@ -71,6 +72,7 @@ const KIND_META: Record<
     descr:
       'Высокая стабильность и скорость. Подходит для телефонов, ПК и планшетов. Доступ ко всем серверам.',
     shortDescr: 'Стабильно и быстро. Для телефона, ПК и планшета. Все серверы.',
+    recommended: true,
   },
   marzban_router: {
     title: 'Router VPN',
@@ -550,11 +552,7 @@ export function ServicesOrder() {
 
               {payOpenError ? <div className="pre so__mt12">Причина: {payOpenError}</div> : null}
 
-              {lastPayUrl ? (
-                <div className="pre so__mt12 so__lastPayUrl">
-                  {lastPayUrl}
-                </div>
-              ) : null}
+              {lastPayUrl ? <div className="pre so__mt12 so__lastPayUrl">{lastPayUrl}</div> : null}
 
               {copied ? <div className="pre so__mt12">✅ Ссылка скопирована</div> : null}
 
@@ -629,35 +627,50 @@ export function ServicesOrder() {
           <div className="card">
             <div className="card__body">
               <div className="row so__spaceBetween">
-                <div className="h1 so__h18">Выберите тип услуги</div>
+                <div>
+                  <div className="h1 so__h18">Выберите тип услуги</div>
+                  <p className="p so__mt6 so__muted">Если не уверены, выбирайте Marzban.</p>
+                </div>
 
                 <button className="btn" onClick={() => navigate(-1)}>
                   ⇦ Назад
                 </button>
               </div>
 
-              <p className="p so__mt6 so__muted">Подберём подходящий вариант под ваше устройство.</p>
-
               <div className="kv so__kindGrid">
-                {(['marzban', 'marzban_router', 'amneziawg'] as Kind[]).map((k) => (
-                  <button key={k} type="button" className="kv__item so__kindCard" onClick={() => setKind(k)} title="Выбрать">
-                    <div className="row so__spaceBetween">
-                      <div className="services-cat__headLeft">
-                        <div className="services-cat__titleRow">
-                          <div className="services-cat__title so__kindCardTitle">{KIND_META[k].title}</div>
+                {(['marzban', 'marzban_router', 'amneziawg'] as Kind[]).map((k) => {
+                  const isRecommended = !!KIND_META[k].recommended
+
+                  return (
+                    <button
+                      key={k}
+                      type="button"
+                      className={`kv__item so__kindCard ${isRecommended ? 'so__kindCard--recommended' : ''}`}
+                      onClick={() => setKind(k)}
+                      title="Выбрать"
+                    >
+                      <div className="row so__spaceBetween">
+                        <div className="services-cat__headLeft">
+                          {isRecommended ? <div className="so__badgeRecommended">Рекомендуем</div> : null}
+
+                          <div className="services-cat__titleRow">
+                            <div className="services-cat__title so__kindCardTitle">{KIND_META[k].title}</div>
+                          </div>
+
+                          <p className="p so__kindCardDescr">{KIND_META[k].shortDescr}</p>
                         </div>
 
-                        <p className="p so__kindCardDescr">{KIND_META[k].shortDescr}</p>
+                        <span className="badge">{grouped[k].length}</span>
                       </div>
 
-                      <span className="badge">{grouped[k].length}</span>
-                    </div>
-
-                    <div className="actions actions--1 so__mt12">
-                      <span className="btn btn--primary so__btnFull">Выбрать</span>
-                    </div>
-                  </button>
-                ))}
+                      <div className="actions actions--1 so__mt12">
+                        <span className="btn btn--primary so__btnFull">
+                          {k === 'marzban' ? 'Выбрать Marzban' : 'Выбрать'}
+                        </span>
+                      </div>
+                    </button>
+                  )
+                })}
               </div>
             </div>
           </div>
@@ -669,7 +682,12 @@ export function ServicesOrder() {
           <div className="card">
             <div className="card__body">
               <div className="row so__spaceBetween">
-                <div className="h1 so__h18">{selectedKindMeta?.title}</div>
+                <div>
+                  <div className="h1 so__h18">{selectedKindMeta?.title}</div>
+                  {kind === 'marzban' ? (
+                    <p className="p so__mt6 so__muted">Рекомендуемый вариант для большинства пользователей.</p>
+                  ) : null}
+                </div>
 
                 <button className="btn" onClick={() => setKind(null)}>
                   ⇦ Назад
@@ -687,8 +705,13 @@ export function ServicesOrder() {
               ) : null}
 
               <div className="kv so__tariffList">
-                {grouped[kind].map((t) => (
-                  <button key={t.serviceId} type="button" className="kv__item so__tariffBtn" onClick={() => setSelected(t)}>
+                {grouped[kind].map((t, idx) => (
+                  <button
+                    key={t.serviceId}
+                    type="button"
+                    className={`kv__item so__tariffBtn ${idx === 0 ? 'so__tariffCard--focus' : ''}`}
+                    onClick={() => setSelected(t)}
+                  >
                     <div className="row so__spaceBetween">
                       <div className="kv__k so__payMethodTitle">{t.title}</div>
                       <span className="badge">
@@ -697,6 +720,10 @@ export function ServicesOrder() {
                     </div>
 
                     {t.descr ? <div className="kv__v so__mt6 so__muted">{t.descr}</div> : null}
+
+                    <div className="actions actions--1 so__mt12">
+                      <span className="btn btn--primary so__btnFull">Заказать</span>
+                    </div>
                   </button>
                 ))}
               </div>
@@ -750,37 +777,38 @@ export function ServicesOrder() {
                     <div className="kv__k">Покрывается балансом</div>
                     <div className="kv__v">{fmtMoney(priceCalc.balanceUsed, currency)}</div>
                   </div>
-
-                  <div className="kv__item so__calcCard so__calcCard--accent">
-                    <div className="kv__k">К оплате</div>
-                    <div className="kv__v so__calcValueStrong">{needTopup > 0 ? fmtMoney(needTopup, currency) : '0'}</div>
-                  </div>
                 </div>
 
-                {!created ? (
-                  <div className="actions actions--1 so__mt12">
-                    <button className="btn btn--primary so__btnFull" onClick={createOrder} disabled={creating}>
-                      {creating ? 'Создаём…' : needTopup > 0 ? 'Заказать и оплатить' : 'Подключить'}
+                <div className="so__payBox">
+                  <div className="kv__k">К оплате</div>
+                  <div className="so__payAmount">{needTopup > 0 ? fmtMoney(needTopup, currency) : '0'}</div>
+
+                  {!created ? (
+                    <button className="btn btn--primary so__payBtn" onClick={createOrder} disabled={creating}>
+                      {creating ? 'Создаём…' : needTopup > 0 ? `Заказать и оплатить ${fmtMoney(toPay, currency)}` : 'Подключить'}
                     </button>
-                  </div>
-                ) : (
-                  <div className="pre so__createdBox">
-                    Услуга создана. USI: <b>{created.userServiceId}</b>, статус: <b>{created.status}</b>
-                  </div>
-                )}
+                  ) : (
+                    <div className="pre so__createdBox">
+                      Услуга создана. USI: <b>{created.userServiceId}</b>, статус: <b>{created.status}</b>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {created && shouldShowPay ? (
                 <div className="so__pay so__mt12">
                   <div className="card so__cardFlat">
                     <div className="card__body">
-                      <div className="h1 so__h18">Оплата</div>
-                      <p className="p so__muted">
-                        Выберите способ оплаты. Мы откроем оплату, а вы сможете вернуться и проверить статус.
-                      </p>
+                      <div className="row so__spaceBetween">
+                        <div>
+                          <div className="h1 so__h18">Оплата</div>
+                          <p className="p so__muted">Выберите способ оплаты и завершите заказ.</p>
+                        </div>
+                        <span className="badge">{fmtMoney(toPay, currency)}</span>
+                      </div>
 
                       {paySystems.length === 0 ? (
-                        <div className="pre">Способы оплаты не найдены.</div>
+                        <div className="pre so__mt12">Способы оплаты не найдены.</div>
                       ) : (
                         <div className="kv so__payMethods">
                           {paySystems.map((ps, idx) => (

@@ -4,6 +4,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import { useMe } from "../auth/useMe";
 import { hasNewNotifications } from "../notifications/notifyState";
 import { useI18n } from "../../shared/i18n";
+import { apiFetch } from "../../shared/api/client";
 
 function Tab({
   to,
@@ -11,15 +12,25 @@ function Tab({
   icon,
   end,
   badge,
+  accent,
 }: {
   to: string;
   label: string;
   icon: React.ReactNode;
   end?: boolean;
   badge?: React.ReactNode;
+  accent?: boolean;
 }) {
   return (
-    <NavLink to={to} end={end} className={({ isActive }) => "tab" + (isActive ? " tab--active" : "")}>
+    <NavLink
+      to={to}
+      end={end}
+      className={({ isActive }) =>
+        "tab" +
+        (isActive ? " tab--active" : "") +
+        (accent ? " tab--accent" : "")
+      }
+    >
       <span className="tab__icon bottomNav__iconWrap" aria-hidden="true">
         {icon}
         {badge}
@@ -38,6 +49,13 @@ function Dot() {
 
 const CHECK_MS = 60_000;
 
+type ServicesSummaryResp = {
+  ok: true;
+  summary?: {
+    active?: number;
+  };
+};
+
 export function BottomNav() {
   const { t } = useI18n();
   const loc = useLocation();
@@ -49,6 +67,8 @@ export function BottomNav() {
   }, [me?.profile?.id, me?.profile?.user_id, me?.id]);
 
   const [hasNew, setHasNew] = useState(false);
+  const [hasActiveServices, setHasActiveServices] = useState<boolean>(true);
+
   const inFlightRef = useRef(false);
   const timerRef = useRef<number | null>(null);
 
@@ -59,7 +79,7 @@ export function BottomNav() {
     timerRef.current = null;
   }
 
-  async function check() {
+  async function checkNotifications() {
     if (!uid) return;
     if (inFlightRef.current) return;
 
@@ -79,6 +99,17 @@ export function BottomNav() {
     }
   }
 
+  async function checkServicesSummary() {
+    try {
+      const resp = await apiFetch<ServicesSummaryResp>("/services", { method: "GET" });
+      const active = Number(resp?.summary?.active ?? 0);
+      setHasActiveServices(active > 0);
+    } catch {
+      // если не удалось проверить — не делаем агрессивный акцент
+      setHasActiveServices(true);
+    }
+  }
+
   useEffect(() => {
     if (!uid) {
       setHasNew(false);
@@ -86,13 +117,17 @@ export function BottomNav() {
       return;
     }
 
-    void check();
+    void checkNotifications();
+    void checkServicesSummary();
 
     clearTimer();
-    timerRef.current = window.setInterval(() => void check(), CHECK_MS);
+    timerRef.current = window.setInterval(() => void checkNotifications(), CHECK_MS);
 
     const onVis = () => {
-      if (document.visibilityState === "visible") void check();
+      if (document.visibilityState === "visible") {
+        void checkNotifications();
+        void checkServicesSummary();
+      }
     };
 
     document.addEventListener("visibilitychange", onVis);
@@ -107,6 +142,8 @@ export function BottomNav() {
   useEffect(() => {
     if (onFeed) setHasNew(false);
   }, [onFeed]);
+
+  const servicesAccent = !hasActiveServices;
 
   return (
     <nav className="bottomnav" role="navigation" aria-label={t("bottomNav.aria", "Навигация по приложению")}>
@@ -147,6 +184,7 @@ export function BottomNav() {
         <Tab
           to="/services"
           label={t("bottomNav.services", "Услуги")}
+          accent={servicesAccent}
           icon={
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
               <path d="M7 7h10M7 12h10M7 17h10" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />

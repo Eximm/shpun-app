@@ -380,6 +380,10 @@ export const RU: Dict = {
   "services.pay": "Оплатить / пополнить",
   "services.topup": "Пополнить / оплатить",
   "services.support": "В поддержку",
+  "services.order_vpn": "Выбрать тариф",
+  "services.empty.title": "У вас пока нет активных услуг",
+  "services.empty.text": "Выберите тариф и получите доступ к сервису всего за пару минут.",
+  "services.empty.hint": "Быстрое подключение, понятная цена и простой запуск после покупки.",
 
   "services.connect.title": "Подключение",
   "services.connect.button": "Подключение",
@@ -1194,6 +1198,10 @@ export const EN: Dict = {
   "services.pay": "Pay / top up",
   "services.topup": "Top up / pay",
   "services.support": "Support",
+  "services.order_vpn": "Choose plan",
+  "services.empty.title": "You have no active services yet",
+  "services.empty.text": "Choose a plan and get full access in just a couple of minutes.",
+  "services.empty.hint": "Quick setup, transparent pricing, and easy connection after purchase.",
 
   "services.connect.title": "Connection",
   "services.connect.button": "Connection",
