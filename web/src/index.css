@@ -269,6 +269,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 }
 
 .btn--primary {
+  font-weight: 700;
   border: 0;
   color: #060814;
 
@@ -2217,29 +2218,73 @@ button, a { -webkit-tap-highlight-color: transparent; }
 }
 
 .payments__warnCard {
-  margin-top: 12px;
-  box-shadow: none;
-  border: 1px solid rgba(255, 100, 100, 0.25);
-  background: rgba(255, 100, 100, 0.10);
+  border: 1px solid rgba(255, 90, 90, 0.35);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 80, 80, 0.12),
+    rgba(255, 120, 120, 0.05)
+  );
+  box-shadow: 0 0 0 1px rgba(255, 80, 80, 0.1),
+              0 10px 30px rgba(255, 60, 60, 0.08);
 }
 
-.payments__warnBody { padding: 12px; }
-
+.payments__warnBody .pre {
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 12px;
+  padding: 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
 .payments__cardNumber {
   font-size: 18px;
-  font-weight: 900;
-  letter-spacing: 0.4px;
+  font-weight: 700;
+  letter-spacing: 1px;
 }
 
 /* File upload label */
 .payments__fileBtn {
+  position: relative;
+  overflow: hidden;
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 
-.payments__fileInput { display: none; }
+.payments__fileBtn.btn--danger {
+  background: linear-gradient(135deg, #ff4d4d, #ff7a7a);
+  border: none;
+  color: #fff;
+  font-weight: 800;
+  box-shadow: 0 6px 20px rgba(255, 70, 70, 0.35);
+}
 
+.payments__fileBtn.btn--danger:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 30px rgba(255, 70, 70, 0.45);
+}
+
+.payments__fileBtn.btn--danger:active {
+  transform: translateY(0) scale(0.99);
+}
+
+.payments__fileInput {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+}
+
+.payments__receiptNotice {
+  border: 1px dashed rgba(255, 120, 120, 0.5);
+  background: rgba(255, 80, 80, 0.08);
+  border-radius: 12px;
+  padding: 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #ffbaba;
+}
 /* PaymentsHistory helpers */
 .paymentsHist__mt6 { margin-top: 6px; }
 .paymentsHist__mt10 { margin-top: 10px; }

@@ -261,6 +261,50 @@ export function ServicesOrder() {
   const moodChecking = (seed: string) => getMood('payment_checking', { seed }) ?? 'Пара секунд…'
   const moodSuccess = (seed: string, amount?: number) => getMood('payment_success', { seed, amount }) ?? 'Принято.'
 
+  const calcCards = useMemo(() => {
+    if (!selected) return []
+
+    const items: Array<{ key: string; title: string; value: string }> = [
+      {
+        key: 'base',
+        title: 'Базовая стоимость',
+        value: fmtMoney(priceCalc.base, selected.currency),
+      },
+    ]
+
+    if (hasDiscount && priceCalc.discounted !== priceCalc.base) {
+      items.push({
+        key: 'discounted',
+        title: 'Со скидкой',
+        value: fmtMoney(priceCalc.discounted, selected.currency),
+      })
+    }
+
+    items.push({
+      key: 'period',
+      title: 'Период',
+      value: selected.periodHuman,
+    })
+
+    if (priceCalc.bonusUsed > 0) {
+      items.push({
+        key: 'bonus',
+        title: 'Бонусы',
+        value: `-${fmtMoney(priceCalc.bonusUsed, currency)}`,
+      })
+    }
+
+    if (priceCalc.balanceUsed > 0) {
+      items.push({
+        key: 'balance',
+        title: 'Покрывается балансом',
+        value: fmtMoney(priceCalc.balanceUsed, currency),
+      })
+    }
+
+    return items
+  }, [selected, priceCalc, hasDiscount, currency])
+
   useEffect(() => {
     void loadTariffs()
 
@@ -749,50 +793,29 @@ export function ServicesOrder() {
 
               <div className={`so__details ${detailsCollapsed ? 'is-collapsed' : ''}`}>
                 <div className="so__calcGrid">
-                  <div className="kv__item so__calcCard">
-                    <div className="kv__k">Базовая стоимость</div>
-                    <div className="kv__v">{fmtMoney(priceCalc.base, selected.currency)}</div>
-                  </div>
-
-                  {hasDiscount ? (
-                    <div className="kv__item so__calcCard">
-                      <div className="kv__k">Со скидкой</div>
-                      <div className="kv__v">{fmtMoney(priceCalc.discounted, selected.currency)}</div>
+                  {calcCards.map((item) => (
+                    <div key={item.key} className="kv__item so__calcCard">
+                      <div className="kv__k">{item.title}</div>
+                      <div className="kv__v">{item.value}</div>
                     </div>
-                  ) : null}
-
-                  <div className="kv__item so__calcCard">
-                    <div className="kv__k">Период</div>
-                    <div className="kv__v">{selected.periodHuman}</div>
-                  </div>
-
-                  <div className="kv__item so__calcCard">
-                    <div className="kv__k">Бонусы</div>
-                    <div className="kv__v">
-                      {priceCalc.bonusUsed > 0 ? `-${fmtMoney(priceCalc.bonusUsed, currency)}` : fmtMoney(0, currency)}
-                    </div>
-                  </div>
-
-                  <div className="kv__item so__calcCard">
-                    <div className="kv__k">Покрывается балансом</div>
-                    <div className="kv__v">{fmtMoney(priceCalc.balanceUsed, currency)}</div>
-                  </div>
+                  ))}
                 </div>
 
-                <div className="so__payBox">
-                  <div className="kv__k">К оплате</div>
-                  <div className="so__payAmount">{needTopup > 0 ? fmtMoney(needTopup, currency) : '0'}</div>
-
-                  {!created ? (
-                    <button className="btn btn--primary so__payBtn" onClick={createOrder} disabled={creating}>
-                      {creating ? 'Создаём…' : needTopup > 0 ? `Заказать и оплатить ${fmtMoney(toPay, currency)}` : 'Подключить'}
+                {!created ? (
+                  <div className="actions actions--1 so__mt12">
+                    <button className="btn btn--primary so__btnFull" onClick={createOrder} disabled={creating}>
+                      {creating
+                        ? 'Создаём…'
+                        : needTopup > 0
+                          ? `Заказать и оплатить ${fmtMoney(toPay, currency)}`
+                          : 'Подключить'}
                     </button>
-                  ) : (
-                    <div className="pre so__createdBox">
-                      Услуга создана. USI: <b>{created.userServiceId}</b>, статус: <b>{created.status}</b>
-                    </div>
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  <div className="pre so__createdBox">
+                    Услуга создана. USI: <b>{created.userServiceId}</b>, статус: <b>{created.status}</b>
+                  </div>
+                )}
               </div>
 
               {created && shouldShowPay ? (

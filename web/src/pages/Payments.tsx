@@ -76,26 +76,22 @@ export function Payments() {
   const [page, setPage] = useState<"main" | "card">("main");
   const [loading, setLoading] = useState(true);
 
-  // IMPORTANT: keep raw error, never store "shm_error" as UI string
   const [err, setErr] = useState<unknown>(null);
 
   const [amount, setAmount] = useState<string>("");
   const [paySystems, setPaySystems] = useState<PaySystem[]>([]);
   const [forecast, setForecast] = useState<any>(null);
 
-  // card requisites
   const [reqLoading, setReqLoading] = useState(false);
   const [reqError, setReqError] = useState<unknown>(null);
   const [requisites, setRequisites] = useState<RequisitesResp["requisites"] | null>(null);
 
-  // overlay
   const [overlay, setOverlay] = useState<{
     open: boolean;
     title: string;
     text: string;
   } | null>(null);
 
-  // receipt upload
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
 
@@ -112,7 +108,6 @@ export function Payments() {
       const ps = (await apiFetch("/payments/paysystems", { method: "GET" })) as PaysystemsResp;
       const rawItems = ps?.items || [];
 
-      // фильтр старых Stars из miniapp
       const filtered = rawItems.filter((x) => {
         const n = String(x?.name || "");
         if (n === "Telegram Stars Rescue") return false;
@@ -122,7 +117,6 @@ export function Payments() {
 
       setPaySystems(filtered);
 
-      // forecast (dev only)
       try {
         const fc = (await apiFetch("/payments/forecast", { method: "GET" })) as ForecastResp;
         setForecast(fc?.raw ?? null);
@@ -173,11 +167,10 @@ export function Payments() {
     setOverlay({
       open: true,
       title: t("payments.overlay.title", "Страница оплаты открыта ✅"),
-      text:
-        t(
-          "payments.overlay.text",
-          "Если страница оплаты открылась в новой вкладке, завершите оплату там и вернитесь сюда.\nПосле оплаты нажмите «Проверить оплату».",
-        ),
+      text: t(
+        "payments.overlay.text",
+        "Если страница оплаты открылась в новой вкладке, завершите оплату там и вернитесь сюда.\nПосле оплаты нажмите «Проверить оплату».",
+      ),
     });
 
     toast.info(t("payments.toast.payment_opened", "Страница оплаты открыта"), {
@@ -235,6 +228,7 @@ export function Payments() {
       });
       return;
     }
+
     if (file.size > 2 * 1024 * 1024) {
       setUploadMsg(t("payments.receipt.file_too_large", "Файл слишком большой. Максимум — 2 MB."));
       toast.error(t("payments.receipt.file_too_large.title", "Файл слишком большой"), {
@@ -292,10 +286,7 @@ export function Payments() {
     return (
       <div className="section">
         <div className="page-status">
-          <PageStatusCard
-            title={t("payments.page.title", "Оплата")}
-            text={t("payments.loading", "Загрузка…")}
-          />
+          <PageStatusCard title={t("payments.page.title", "Оплата")} text={t("payments.loading", "Загрузка…")} />
         </div>
       </div>
     );
@@ -374,7 +365,7 @@ export function Payments() {
           </div>
 
           {(import.meta as any)?.env?.DEV && forecast ? (
-            <div className="pre payments__mt12">
+            <div className="payments__receiptNotice payments__mt12">
               <b>{t("payments.dev.forecast", "Forecast (dev only):")}</b>
               <div className="payments__sp8" />
               {JSON.stringify(forecast, null, 2)}
@@ -434,7 +425,10 @@ export function Payments() {
                     if (!amountNumber) {
                       setUploadMsg(t("payments.validation.enter_amount", "Введите сумму."));
                       toast.error(t("payments.toast.enter_amount", "Введите сумму"), {
-                        description: t("payments.card_transfer.need_amount", "Для перевода по реквизитам нужно указать сумму."),
+                        description: t(
+                          "payments.card_transfer.need_amount",
+                          "Для перевода по реквизитам нужно указать сумму.",
+                        ),
                       });
                       return;
                     }
@@ -512,7 +506,10 @@ export function Payments() {
                 <div>
                   <div className="h1">{t("payments.card_page.title", "Перевод по карте")}</div>
                   <div className="p payments__mt6">
-                    {t("payments.card_page.sub", "Сделайте перевод и отправьте квитанцию. Мы проверим её вручную.")}
+                    {t(
+                      "payments.card_page.sub",
+                      "Сделайте перевод и сразу отправьте квитанцию. Без квитанции платёж не будет зачислен.",
+                    )}
                   </div>
                 </div>
               </div>
@@ -520,20 +517,29 @@ export function Payments() {
               <div className="kv payments__mt12">
                 <div className="kv__item">
                   <div className="kv__k">{t("payments.card_page.amount_label", "Сумма перевода")}</div>
-                  <div className="kv__v payments__amountBig">
-                    {amountNumber ? fmtMoney(amountNumber, "RUB") : "—"}
-                  </div>
+                  <div className="kv__v payments__amountBig">{amountNumber ? fmtMoney(amountNumber, "RUB") : "—"}</div>
                 </div>
               </div>
 
               <div className="card payments__warnCard">
                 <div className="card__body payments__warnBody">
-                  <div className="payments__bold">{t("payments.card_page.important", "Важно")}</div>
+                  <div className="payments__bold">
+                    {t("payments.card_page.receipt_required", "Квитанция обязательна")}
+                  </div>
+
                   <div className="p payments__mt6 payments__opacity95">
                     {t(
-                      "payments.card_page.important_text",
-                      "После перевода обязательно отправьте квитанцию. Без неё мы не сможем проверить и зачислить платёж.",
+                      "payments.card_page.receipt_required_text",
+                      "Без отправки квитанции платёж не будет принят в обработку и не будет зачислен на баланс.",
                     )}
+                  </div>
+
+                  <div className="pre payments__mt12">
+                    <div>1. {t("payments.card_page.step_1", "Скопируйте номер карты и сделайте перевод.")}</div>
+                    <div>
+                      2. {t("payments.card_page.step_2", "Сразу после перевода нажмите «Отправить квитанцию».")}
+                    </div>
+                    <div>3. {t("payments.card_page.step_3", "Дождитесь проверки и зачисления платежа.")}</div>
                   </div>
                 </div>
               </div>
@@ -587,7 +593,7 @@ export function Payments() {
                                   toast.success(t("payments.requisites.copied", "Скопировано"), {
                                     description: t(
                                       "payments.requisites.copied.desc",
-                                      "Номер карты скопирован в буфер обмена.",
+                                      "Номер карты скопирован. После перевода обязательно отправьте квитанцию.",
                                     ),
                                   });
                                 }
@@ -597,10 +603,13 @@ export function Payments() {
                               {t("payments.requisites.copy_card", "Скопировать номер карты")}
                             </button>
 
-                            <label className="btn payments__fileBtn">
-                              {uploading
-                                ? t("payments.receipt.uploading_short", "⏳ Отправляем…")
-                                : t("payments.receipt.upload_btn", "🧾 Отправить квитанцию")}
+                            <label className="btn btn--danger payments__fileBtn">
+                              <span>
+                                {uploading
+                                  ? t("payments.receipt.uploading_short", "⏳ Отправляем…")
+                                  : t("payments.receipt.upload_btn", "🧾 Я перевёл — отправить квитанцию")}
+                              </span>
+
                               <input
                                 type="file"
                                 accept=".jpg,.jpeg,.png,.pdf"
@@ -617,6 +626,13 @@ export function Payments() {
                           </div>
 
                           {uploadMsg ? <div className="pre payments__mt12">{uploadMsg}</div> : null}
+
+                          <div className="pre payments__mt12">
+                            {t(
+                              "payments.receipt.required_notice",
+                              "Перевод без квитанции не зачисляется. После оплаты обязательно загрузите JPG, PNG или PDF до 2 MB.",
+                            )}
+                          </div>
 
                           <div className="p payments__mt10 payments__finePrint">
                             {t("payments.receipt.supported", "Поддерживаются JPG, PNG и PDF до 2 MB.")}
@@ -643,10 +659,7 @@ export function Payments() {
           <div className="card__body">
             <div className="h1 payments__h18">{t("payments.history.title", "История")}</div>
             <div className="p payments__mt6">
-              {t(
-                "payments.history.sub",
-                "Здесь можно посмотреть прошлые операции и отправленные квитанции.",
-              )}
+              {t("payments.history.sub", "Здесь можно посмотреть прошлые операции и отправленные квитанции.")}
             </div>
             <div className="actions actions--2 payments__mt12">
               <Link className="btn" to="/payments/history">

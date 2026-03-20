@@ -347,7 +347,6 @@ function ServiceCard({
 
   const allowDelete = canDeleteStatus(s.status);
   const allowStop = canStopStatus(s.status);
-
   const canShowConnect = kind !== "unknown" && s.status === "active";
 
   const compactMeta = (() => {
@@ -583,7 +582,9 @@ export function Services() {
 
       if (toastOnSuccess) {
         toast.info(t("services.toast.updated", "Updated"), {
-          description: getMood("payment_checking", { seed: String(newItems.length) }) ?? t("services.toast.updated_desc", "Service statuses updated."),
+          description:
+            getMood("payment_checking", { seed: String(newItems.length) }) ??
+            t("services.toast.updated_desc", "Service statuses updated."),
         });
       }
     } catch (e: unknown) {
@@ -615,7 +616,9 @@ export function Services() {
       setExpandedId(usi);
 
       toast.success(t("services.toast.blocked", "Blocked"), {
-        description: getMood("payment_success", { seed: String(usi) }) ?? t("services.toast.blocked_desc", "Service has been blocked."),
+        description:
+          getMood("payment_success", { seed: String(usi) }) ??
+          t("services.toast.blocked_desc", "Service has been blocked."),
       });
 
       await load({ silent: true });
@@ -641,7 +644,9 @@ export function Services() {
       setConnectOpenId((cur) => (cur === usi ? null : cur));
 
       toast.success(t("services.toast.deleted", "Service deleted"), {
-        description: getMood("payment_success", { seed: String(usi) }) ?? t("services.toast.deleted_desc", "Done. Service was removed from the list."),
+        description:
+          getMood("payment_success", { seed: String(usi) }) ??
+          t("services.toast.deleted_desc", "Done. Service was removed from the list."),
       });
 
       await load({ silent: true });
@@ -684,10 +689,17 @@ export function Services() {
         toast.error(title, { description: t("services.toast.service_blocked", "Service is blocked. Action required.") });
       } else if (after === "not_paid") {
         toast.info(title, { description: t("services.toast.service_not_paid", "Payment required.") });
-      } else if (after === "active" && (before === "pending" || before === "not_paid" || before === "blocked" || before === "init")) {
-        toast.success(title, { description: getMood("payment_success", { seed }) ?? t("services.toast.service_active", "Service activated.") });
+      } else if (
+        after === "active" &&
+        (before === "pending" || before === "not_paid" || before === "blocked" || before === "init")
+      ) {
+        toast.success(title, {
+          description: getMood("payment_success", { seed }) ?? t("services.toast.service_active", "Service activated."),
+        });
       } else if (after === "removed") {
-        toast.success(title, { description: getMood("payment_success", { seed }) ?? t("services.toast.service_removed", "Service completed.") });
+        toast.success(title, {
+          description: getMood("payment_success", { seed }) ?? t("services.toast.service_removed", "Service completed."),
+        });
       }
     }
 
@@ -818,8 +830,13 @@ export function Services() {
     );
   };
 
-  const stopErrText = stopError ? normalizeError(stopError, { title: t("services.toast.block_failed", "Could not block") }).description : null;
-  const deleteErrText = deleteError ? normalizeError(deleteError, { title: t("services.toast.delete_failed", "Could not delete") }).description : null;
+  const stopErrText = stopError
+    ? normalizeError(stopError, { title: t("services.toast.block_failed", "Could not block") }).description
+    : null;
+
+  const deleteErrText = deleteError
+    ? normalizeError(deleteError, { title: t("services.toast.delete_failed", "Could not delete") }).description
+    : null;
 
   const hasServices = items.length > 0;
 
@@ -853,8 +870,11 @@ export function Services() {
           ) : null}
 
           <div className="services-head__actions">
-            <button className="btn btn--primary services-head__cta" onClick={() => go("/services/order")}>
-              {t("services.order_vpn", "Order VPN")}
+            <button
+              className={`services-head__cta ${hasServices ? "btn btn--primary" : "btn btn--primary"}`}
+              onClick={() => go("/services/order")}
+            >
+              {hasServices ? "Подключить ещё" : "Выбрать тариф"}
             </button>
 
             {hasServices ? (
@@ -880,20 +900,13 @@ export function Services() {
                 </div>
 
                 <div className="services-empty__text">
-                  {t(
-                    "services.empty.text",
-                    "Choose a plan and get full access to the service in just a couple of minutes."
-                  )}
+                  Выберите тариф и подключите доступ.
                 </div>
 
                 <div className="services-empty__actions">
-                  <button className="btn btn--primary services-head__cta" onClick={() => go("/services/order")}>
-                    {t("services.order_vpn", "Choose plan")}
+                  <button className="btn btn--danger services-head__cta" onClick={() => go("/services/order")}>
+                    Выбрать тариф
                   </button>
-                </div>
-
-                <div className="services-empty__hint">
-                  {t("services.empty.hint", "Quick setup, clear pricing, and easy connection after purchase.")}
                 </div>
               </div>
             </div>
@@ -936,7 +949,10 @@ export function Services() {
             </div>
 
             <div className="p">
-              {t("services.modal.stop.text", "We will block service “{title}”. After that it will stop working.").replace("{title}", stopTarget.title)}
+              {t("services.modal.stop.text", "We will block service “{title}”. After that it will stop working.").replace(
+                "{title}",
+                stopTarget.title
+              )}
             </div>
 
             <div className="pre">
