@@ -12,6 +12,8 @@ type Props = {
 type Platform = 'android' | 'ios' | 'windows' | 'mac' | 'linux'
 type Chip = 'auto' | Platform
 type AccordionKey = 'hiddify' | 'v2ray' | 'manual'
+type RuntimeMode = 'telegram-miniapp' | 'browser' | 'standalone-app'
+type ClientKind = 'hiddify' | 'v2ray'
 
 type ClientLinks = Record<
   Platform,
@@ -92,6 +94,19 @@ function detectOS(): Platform {
   return 'windows'
 }
 
+function detectRuntime(): RuntimeMode {
+  const tg: any = (window as any).Telegram?.WebApp
+  const isTelegramMiniApp = !!tg
+
+  const isStandalone =
+    window.matchMedia?.('(display-mode: standalone)')?.matches ||
+    (window.navigator as any).standalone === true
+
+  if (isTelegramMiniApp) return 'telegram-miniapp'
+  if (isStandalone) return 'standalone-app'
+  return 'browser'
+}
+
 function platformLabel(p: Platform) {
   if (p === 'android') return 'Android'
   if (p === 'ios') return 'iOS'
@@ -100,8 +115,10 @@ function platformLabel(p: Platform) {
   return 'Linux'
 }
 
-function isIOSPlatform(p: Platform) {
-  return p === 'ios'
+function runtimeLabel(r: RuntimeMode) {
+  if (r === 'telegram-miniapp') return 'Telegram'
+  if (r === 'standalone-app') return 'приложение'
+  return 'браузер'
 }
 
 function openLinkSafe(url: string) {
@@ -118,69 +135,50 @@ function openLinkSafe(url: string) {
   window.open(url, '_blank', 'noopener,noreferrer')
 }
 
-function tryOpenScheme(url: string, opts?: { fallbackToast?: string }) {
+function closeTelegramMiniAppSoon(delay = 150) {
+  setTimeout(() => {
+    try {
+      const tg: any = (window as any).Telegram?.WebApp
+      if (tg && typeof tg.close === 'function') tg.close()
+    } catch {
+      // ignore
+    }
+  }, delay)
+}
+
+function tryOpenScheme(url: string, runtime: RuntimeMode, opts?: { fallbackToast?: string }) {
   const fallbackToast =
     opts?.fallbackToast || 'Если приложение не открылось, используйте ручной импорт по ссылке или QR.'
 
-  let hidden = false
-  const onVisibilityChange = () => {
-    if (document.hidden) hidden = true
-  }
-
-  document.addEventListener('visibilitychange', onVisibilityChange, { once: true })
-
   try {
-    window.location.href = url
+    const a = document.createElement('a')
+    a.href = url
+    a.rel = 'noopener noreferrer'
+    a.style.display = 'none'
+
+    if (runtime === 'telegram-miniapp') {
+      a.target = '_blank'
+    }
+
+    document.body.appendChild(a)
+    a.click()
+
+    setTimeout(() => {
+      try {
+        document.body.removeChild(a)
+      } catch {
+        // ignore
+      }
+    }, 300)
+
+    if (runtime === 'telegram-miniapp') {
+      closeTelegramMiniAppSoon(150)
+    }
   } catch {
-    // ignore
+    toast.info('Не получилось открыть приложение', {
+      description: fallbackToast,
+    })
   }
-
-  setTimeout(() => {
-    if (hidden) return
-    try {
-      const a = document.createElement('a')
-      a.href = url
-      a.style.display = 'none'
-      document.body.appendChild(a)
-      a.click()
-      setTimeout(() => {
-        try {
-          document.body.removeChild(a)
-        } catch {
-          // ignore
-        }
-      }, 250)
-    } catch {
-      // ignore
-    }
-  }, 250)
-
-  setTimeout(() => {
-    if (hidden) return
-    try {
-      const iframe = document.createElement('iframe')
-      iframe.style.display = 'none'
-      iframe.src = url
-      document.body.appendChild(iframe)
-      setTimeout(() => {
-        try {
-          document.body.removeChild(iframe)
-        } catch {
-          // ignore
-        }
-      }, 1000)
-    } catch {
-      // ignore
-    }
-  }, 550)
-
-  setTimeout(() => {
-    if (!hidden) {
-      toast.info('Не получилось открыть приложение', {
-        description: fallbackToast,
-      })
-    }
-  }, 1300)
 }
 
 async function copyToClipboard(text: string) {
@@ -205,11 +203,17 @@ async function copyToClipboard(text: string) {
   }
 }
 
-function buildV2RayTunImportLink(subscriptionUrl: string) {
+function buildV2RayTunImportLink(subscriptionUrl: string, platform: Platform) {
+  if (platform === 'android') {
+    return `intent://import/${encodeURIComponent(subscriptionUrl)}#Intent;scheme=v2raytun;package=com.v2raytun.android;end`
+  }
   return `v2raytun://import/${subscriptionUrl}`
 }
 
-function buildHiddifyImportLink(subscriptionUrl: string) {
+function buildHiddifyImportLink(subscriptionUrl: string, platform: Platform) {
+  if (platform === 'android') {
+    return `intent://install-sub/?url=${encodeURIComponent(subscriptionUrl)}#Intent;scheme=hiddify;package=app.hiddify.com;end`
+  }
   return `hiddify://install-sub/?url=${encodeURIComponent(subscriptionUrl)}`
 }
 
@@ -248,6 +252,10 @@ function Accordion(props: {
               {props.subtitle}
             </div>
           </div>
+
+          <span className="badge" aria-hidden>
+            {props.opened ? '▴' : '▾'}
+          </span>
         </div>
       </button>
 
@@ -270,6 +278,8 @@ export default function ConnectMarzban({ usi }: Props) {
   const [error, setError] = useState<string | null>(null)
 
   const autoPlatform = useMemo(() => detectOS(), [])
+  const runtime = useMemo(() => detectRuntime(), [])
+
   const [chip, setChip] = useState<Chip>('auto')
   const platform: Platform = chip === 'auto' ? autoPlatform : chip
 
@@ -328,40 +338,55 @@ export default function ConnectMarzban({ usi }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usi])
 
+  const primaryKind: ClientKind = platform === 'ios' ? 'v2ray' : 'hiddify'
+  
   useEffect(() => {
     if (userTouchedAccordionsRef.current) return
 
     setOpenAccordions({
-      hiddify: true,
-      v2ray: false,
-      manual: platform === 'ios',
+      hiddify: primaryKind === 'hiddify',
+      v2ray: primaryKind === 'v2ray',
+      manual: platform === 'ios' || runtime === 'telegram-miniapp',
     })
-  }, [platform])
+  }, [platform, runtime, primaryKind])
 
   const ready = !loading && !error && !!subscriptionUrl
 
-  const primaryClient = HIDDIFY_LINKS[platform]
-  const secondaryClient = V2RAYTUN_LINKS[platform]
+  const hiddifyClient = HIDDIFY_LINKS[platform]
+  const v2rayClient = V2RAYTUN_LINKS[platform]
 
-  const hiddifyAutoImportHref = ready ? buildHiddifyImportLink(subscriptionUrl) : ''
-  const v2rayAutoImportHref = ready ? buildV2RayTunImportLink(subscriptionUrl) : ''
+  const primaryClient = primaryKind === 'hiddify' ? hiddifyClient : v2rayClient
+  
+  const hiddifyAutoImportHref = ready ? buildHiddifyImportLink(subscriptionUrl, platform) : ''
+  const v2rayAutoImportHref = ready ? buildV2RayTunImportLink(subscriptionUrl, platform) : ''
 
   const topHint = useMemo(() => {
     const pName = platformLabel(platform)
+    const rName = runtimeLabel(runtime)
 
-    if (loading) return `Готовим подключение для: ${pName}…`
-    if (error) return `Не удалось подготовить подключение для: ${pName}.`
+    if (loading) return `Готовим подключение для: ${pName} (${rName})…`
+    if (error) return `Не удалось подготовить подключение для: ${pName} (${rName}).`
+
+    if (runtime === 'telegram-miniapp') {
+      if (platform === 'ios') {
+        return `Устройство: ${pName}. Режим: ${rName}. Основной клиент — v2RayTun. После нажатия миниапп передаст ссылку во внешний клиент и закроется. Если не сработает, ниже есть ручной импорт.`
+      }
+      if (platform === 'android') {
+        return `Устройство: ${pName}. Режим: ${rName}. Основной клиент — Hiddify. После нажатия миниапп попытается открыть клиент и закрыться. Если приложение не откроется, используйте ссылку или QR.`
+      }
+      return `Устройство: ${pName}. Режим: ${rName}. Автоимпорт зависит от клиента и системы. Ниже доступны ручные варианты подключения.`
+    }
 
     if (platform === 'ios') {
-      return `Устройство: ${pName}. Рекомендуем Hiddify. Если автоимпорт не сработает внутри Telegram, ниже есть ручной импорт по ссылке и QR.`
+      return `Устройство: ${pName}. Основной клиент — v2RayTun. Hiddify оставлен как альтернативный вариант.`
     }
 
     if (platform === 'android') {
-      return `Устройство: ${pName}. Рекомендуем Hiddify — обычно подписка импортируется туда быстрее.`
+      return `Устройство: ${pName}. Основной клиент — Hiddify. Обычно подписка импортируется туда быстрее.`
     }
 
-    return `Устройство: ${pName}. Рекомендуемый клиент — Hiddify, также доступен альтернативный вариант.`
-  }, [platform, loading, error])
+    return `Устройство: ${pName}. Основной клиент — ${primaryClient.title}, также доступен альтернативный вариант.`
+  }, [platform, runtime, loading, error, primaryClient.title])
 
   function toggleAccordion(key: AccordionKey) {
     userTouchedAccordionsRef.current = true
@@ -407,29 +432,155 @@ export default function ConnectMarzban({ usi }: Props) {
   function openHiddifyAutoImport() {
     if (!ready || !hiddifyAutoImportHref) return
 
-    tryOpenScheme(hiddifyAutoImportHref, {
-      fallbackToast: isIOSPlatform(platform)
-        ? 'Если Hiddify не открылся внутри Telegram, сначала установите приложение, затем попробуйте ещё раз или используйте ручной импорт ниже.'
-        : 'Если Hiddify не открылся, используйте ручной импорт по ссылке или QR.',
+    tryOpenScheme(hiddifyAutoImportHref, runtime, {
+      fallbackToast:
+        runtime === 'telegram-miniapp'
+          ? 'В Telegram автоимпорт может открыться не на всех устройствах. Используйте ручной импорт по ссылке или QR.'
+          : platform === 'ios'
+            ? 'Если Hiddify не открылся, используйте ручной импорт ниже.'
+            : 'Если Hiddify не открылся, используйте ручной импорт по ссылке или QR.',
     })
 
     toast.info('Пытаемся открыть Hiddify', {
-      description: 'Если приложение установлено, подписка добавится автоматически.',
+      description:
+        runtime === 'telegram-miniapp'
+          ? 'Миниапп передаст ссылку в клиент и закроется.'
+          : 'Если приложение установлено, подписка добавится автоматически.',
     })
   }
 
   function openV2RayAutoImport() {
     if (!ready || !v2rayAutoImportHref) return
 
-    tryOpenScheme(v2rayAutoImportHref, {
-      fallbackToast: isIOSPlatform(platform)
-        ? 'Если v2RayTun не открылся внутри Telegram, используйте Hiddify или ручной импорт ниже.'
-        : 'Если v2RayTun не открылся, используйте ручной импорт по ссылке или QR.',
+    tryOpenScheme(v2rayAutoImportHref, runtime, {
+      fallbackToast:
+        runtime === 'telegram-miniapp'
+          ? 'В Telegram автоимпорт может открыться не на всех устройствах. Используйте ручной импорт по ссылке или QR.'
+          : platform === 'ios'
+            ? 'Если v2RayTun не открылся, используйте ручной импорт ниже.'
+            : 'Если v2RayTun не открылся, используйте ручной импорт по ссылке или QR.',
     })
 
     toast.info('Пытаемся открыть v2RayTun', {
-      description: 'Если приложение установлено, подписка добавится автоматически.',
+      description:
+        runtime === 'telegram-miniapp'
+          ? 'Миниапп передаст ссылку в клиент и закроется.'
+          : 'Если приложение установлено, подписка будет передана в клиент.',
     })
+  }
+
+  function openPrimaryAutoImport() {
+    if (primaryKind === 'hiddify') {
+      openHiddifyAutoImport()
+      return
+    }
+    openV2RayAutoImport()
+  }
+
+  const quickInstallLabel =
+    primaryKind === 'hiddify' ? 'Скачать Hiddify' : 'Скачать v2RayTun'
+
+  const quickPrimaryDescription = (() => {
+    if (platform === 'android') {
+      return 'Основной клиент — Hiddify. Обычно подписка добавляется быстрее. При отсутствии Google Play можно использовать прямую загрузку.'
+    }
+    if (platform === 'ios') {
+      return 'Основной клиент — v2RayTun. На iPhone и iPad рекомендуем начать с него. Если автоимпорт внутри Telegram не сработает, ниже есть ручной вариант.'
+    }
+    return `Основной клиент — ${primaryClient.title}. Это рекомендуемый вариант для подключения.`
+  })()
+
+  function renderHiddifyAccordion() {
+    return (
+      <Accordion
+        title={primaryKind === 'hiddify' ? 'Hiddify — основной клиент' : 'Hiddify — альтернативный клиент'}
+        subtitle={
+          primaryKind === 'hiddify'
+            ? 'Рекомендуемый способ подключения для большинства устройств.'
+            : 'Запасной вариант, если основной клиент вам не подходит.'
+        }
+        opened={openAccordions.hiddify}
+        onToggle={() => toggleAccordion('hiddify')}
+      >
+        <p className="p" style={{ opacity: 0.82, marginTop: 0 }}>
+          Установите <b>Hiddify</b> для {platformLabel(platform)} и добавьте в него подписку.
+          {platform === 'android' && hiddifyClient.direct
+            ? ' Если Google Play недоступен, используйте прямую загрузку APK.'
+            : platform === 'ios'
+              ? ' На iPhone это альтернативный вариант.'
+              : ''}
+        </p>
+
+        <div className="actions actions--2" style={{ marginTop: 10 }}>
+          <button className="btn btn--primary" onClick={() => openLinkSafe(hiddifyClient.market)} type="button">
+            Открыть {hiddifyClient.storeLabel}
+          </button>
+
+          <button className="btn" onClick={openHiddifyAutoImport} type="button">
+            Открыть в Hiddify
+          </button>
+        </div>
+
+        {hiddifyClient.direct ? (
+          <div className="actions actions--1" style={{ marginTop: 10 }}>
+            <button
+              className="btn so__btnFull"
+              type="button"
+              onClick={() => hiddifyClient.direct && openLinkSafe(hiddifyClient.direct)}
+            >
+              {platform === 'android' ? 'Скачать Hiddify APK' : 'Скачать Hiddify напрямую'}
+            </button>
+          </div>
+        ) : null}
+      </Accordion>
+    )
+  }
+
+  function renderV2RayAccordion() {
+    return (
+      <Accordion
+        title={primaryKind === 'v2ray' ? 'v2RayTun — основной клиент' : 'v2RayTun — альтернативный клиент'}
+        subtitle={
+          primaryKind === 'v2ray'
+            ? 'Рекомендуемый способ подключения для Apple-устройств.'
+            : 'Запасной вариант, если Hiddify не подходит.'
+        }
+        opened={openAccordions.v2ray}
+        onToggle={() => toggleAccordion('v2ray')}
+      >
+        <p className="p" style={{ opacity: 0.82, marginTop: 0 }}>
+          Можно использовать <b>{v2rayClient.title}</b>
+          {primaryKind === 'v2ray' ? ' как основной клиент.' : ' как альтернативный клиент.'}
+          {platform === 'ios'
+            ? ' На iPhone и iPad это рекомендуемый вариант.'
+            : platform === 'android'
+              ? ' На Android он доступен как запасной вариант.'
+              : ''}
+        </p>
+
+        <div className="actions actions--2" style={{ marginTop: 10 }}>
+          <button className="btn" onClick={() => openLinkSafe(v2rayClient.market)} type="button">
+            Скачать v2RayTun
+          </button>
+
+          <button className="btn" onClick={openV2RayAutoImport} type="button">
+            Открыть в v2RayTun
+          </button>
+        </div>
+
+        {v2rayClient.direct ? (
+          <div className="actions actions--1" style={{ marginTop: 10 }}>
+            <button
+              className="btn so__btnFull"
+              type="button"
+              onClick={() => v2rayClient.direct && openLinkSafe(v2rayClient.direct)}
+            >
+              {platform === 'android' ? 'Скачать APK' : 'Скачать напрямую'}
+            </button>
+          </div>
+        ) : null}
+      </Accordion>
+    )
   }
 
   return (
@@ -471,12 +622,7 @@ export default function ConnectMarzban({ usi }: Props) {
           <div className="services-cat__title">Быстрое подключение</div>
 
           <p className="p" style={{ opacity: 0.82, marginTop: 6 }}>
-            Основной клиент — <b>{primaryClient.title}</b>.
-            {platform === 'android'
-              ? ' Обычно подписка добавляется быстрее. При отсутствии Google Play можно использовать прямую загрузку.'
-              : platform === 'ios'
-                ? ' На iPhone и iPad рекомендуем начать с него. Если автоимпорт внутри Telegram не сработает, ниже есть ручной вариант.'
-                : ' Это рекомендуемый вариант для подключения.'}
+            {quickPrimaryDescription}
           </p>
 
           <div className="actions actions--2" style={{ marginTop: 10 }}>
@@ -486,12 +632,12 @@ export default function ConnectMarzban({ usi }: Props) {
               disabled={loading}
               type="button"
             >
-              Скачать Hiddify
+              {quickInstallLabel}
             </button>
 
             <button
               className="btn btn--primary"
-              onClick={openHiddifyAutoImport}
+              onClick={openPrimaryAutoImport}
               disabled={!ready}
               type="button"
               title={!ready ? 'Подписка ещё не готова' : undefined}
@@ -503,7 +649,7 @@ export default function ConnectMarzban({ usi }: Props) {
           {ready ? (
             <div className="actions actions--1" style={{ marginTop: 10 }}>
               <button className="btn" onClick={() => setAdvancedOpen((v) => !v)} type="button">
-                {advancedOpen ? 'Скрыть дополнительные варианты' : 'Показать дополнительные варианты'}
+                {advancedOpen ? 'Скрыть дополнительные варианты' : 'Другие варианты'}
               </button>
             </div>
           ) : null}
@@ -512,83 +658,8 @@ export default function ConnectMarzban({ usi }: Props) {
 
       {advancedOpen && ready ? (
         <>
-          <Accordion
-            title="Hiddify — основной клиент"
-            subtitle="Рекомендуемый способ подключения для большинства устройств."
-            opened={openAccordions.hiddify}
-            onToggle={() => toggleAccordion('hiddify')}
-          >
-            <p className="p" style={{ opacity: 0.82, marginTop: 0 }}>
-              Установите <b>Hiddify</b> для {platformLabel(platform)} и добавьте в него подписку.
-              {platform === 'android' && primaryClient.direct
-                ? ' Если Google Play недоступен, используйте прямую загрузку APK.'
-                : ''}
-            </p>
-
-            <div className="actions actions--2" style={{ marginTop: 10 }}>
-              <button
-                className="btn btn--primary"
-                onClick={() => openLinkSafe(primaryClient.market)}
-                type="button"
-              >
-                Открыть {primaryClient.storeLabel}
-              </button>
-
-              <button className="btn btn--primary" onClick={openHiddifyAutoImport} type="button">
-                Добавить подписку
-              </button>
-            </div>
-
-            {primaryClient.direct ? (
-              <div className="actions actions--1" style={{ marginTop: 10 }}>
-                <button
-                  className="btn so__btnFull"
-                  type="button"
-                  onClick={() => primaryClient.direct && openLinkSafe(primaryClient.direct)}
-                >
-                  {platform === 'android' ? 'Скачать Hiddify APK' : 'Скачать Hiddify напрямую'}
-                </button>
-              </div>
-            ) : null}
-          </Accordion>
-
-          <Accordion
-            title="v2RayTun — альтернативный клиент"
-            subtitle="Альтернативный вариант, если Hiddify не подходит."
-            opened={openAccordions.v2ray}
-            onToggle={() => toggleAccordion('v2ray')}
-          >
-            <p className="p" style={{ opacity: 0.82, marginTop: 0 }}>
-              Установите <b>{secondaryClient.title}</b> для {platformLabel(platform)} и добавьте в него
-              подписку.
-            </p>
-
-            <div className="actions actions--2" style={{ marginTop: 10 }}>
-              <button
-                className="btn btn--primary"
-                onClick={() => openLinkSafe(secondaryClient.market)}
-                type="button"
-              >
-                Скачать v2RayTun
-              </button>
-
-              <button className="btn btn--primary" onClick={openV2RayAutoImport} type="button">
-                Добавить подписку
-              </button>
-            </div>
-
-            {secondaryClient.direct ? (
-              <div className="actions actions--1" style={{ marginTop: 10 }}>
-                <button
-                  className="btn so__btnFull"
-                  type="button"
-                  onClick={() => secondaryClient.direct && openLinkSafe(secondaryClient.direct)}
-                >
-                  {platform === 'android' ? 'Скачать APK' : 'Скачать напрямую'}
-                </button>
-              </div>
-            ) : null}
-          </Accordion>
+          {primaryKind === 'hiddify' ? renderHiddifyAccordion() : renderV2RayAccordion()}
+          {primaryKind === 'hiddify' ? renderV2RayAccordion() : renderHiddifyAccordion()}
 
           <Accordion
             title="Ручное подключение"
@@ -597,9 +668,11 @@ export default function ConnectMarzban({ usi }: Props) {
             onToggle={() => toggleAccordion('manual')}
           >
             <p className="p" style={{ opacity: 0.82, marginTop: 0 }}>
-              {platform === 'ios'
-                ? 'Для iPhone ручной импорт — надёжный запасной вариант.'
-                : 'Этот способ подойдёт, если приложение не открылось автоматически.'}
+              {runtime === 'telegram-miniapp'
+                ? 'В Telegram ручной импорт остаётся самым надёжным запасным вариантом.'
+                : platform === 'ios'
+                  ? 'Для iPhone ручной импорт — надёжный запасной вариант.'
+                  : 'Этот способ подойдёт, если приложение не открылось автоматически.'}
             </p>
 
             <div className="actions actions--1" style={{ marginTop: 10 }}>
@@ -618,23 +691,13 @@ export default function ConnectMarzban({ usi }: Props) {
       ) : null}
 
       {platformPickerOpen ? (
-        <div
-          className="overlay"
-          role="dialog"
-          aria-modal="true"
-          onClick={() => setPlatformPickerOpen(false)}
-        >
+        <div className="overlay" role="dialog" aria-modal="true" onClick={() => setPlatformPickerOpen(false)}>
           <div className="card overlay__card" onClick={(e) => e.stopPropagation()}>
             <div className="card__body">
               <div className="row so__spaceBetween" style={{ alignItems: 'center' }}>
                 <div className="overlay__title">Выберите устройство</div>
 
-                <button
-                  className="btn"
-                  type="button"
-                  onClick={() => setPlatformPickerOpen(false)}
-                  aria-label="Закрыть"
-                >
+                <button className="btn" type="button" onClick={() => setPlatformPickerOpen(false)} aria-label="Закрыть">
                   ✕
                 </button>
               </div>
@@ -676,11 +739,7 @@ export default function ConnectMarzban({ usi }: Props) {
               </div>
 
               <div className="actions actions--1 so__mt12">
-                <button
-                  className="btn so__btnFull"
-                  type="button"
-                  onClick={() => setPlatformPickerOpen(false)}
-                >
+                <button className="btn so__btnFull" type="button" onClick={() => setPlatformPickerOpen(false)}>
                   Закрыть
                 </button>
               </div>
