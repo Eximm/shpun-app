@@ -224,26 +224,58 @@ function Accordion(props: {
   onToggle: () => void
   children: React.ReactNode
 }) {
+  const cardRef = useRef<HTMLDivElement | null>(null)
+  const innerRef = useRef<HTMLDivElement | null>(null)
+  const [maxHeight, setMaxHeight] = useState(0)
+
+  useEffect(() => {
+    const el = innerRef.current
+    if (!el) return
+
+    if (props.opened) {
+      setMaxHeight(el.scrollHeight)
+    } else {
+      setMaxHeight(0)
+    }
+  }, [props.opened, props.children])
+
+  useEffect(() => {
+    const el = innerRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+
+    const ro = new ResizeObserver(() => {
+      if (props.opened) {
+        setMaxHeight(el.scrollHeight)
+      }
+    })
+
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [props.opened])
+
+  useEffect(() => {
+    if (!props.opened) return
+
+    const id = window.setTimeout(() => {
+      cardRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+      })
+    }, 180)
+
+    return () => window.clearTimeout(id)
+  }, [props.opened])
+
   return (
     <div
-      className="card"
-      style={{
-        marginTop: 10,
-        overflow: 'hidden',
-      }}
+      ref={cardRef}
+      className="card cawg__accCard"
     >
       <button
         type="button"
         onClick={props.onToggle}
-        className="kv__item"
-        style={{
-          width: '100%',
-          textAlign: 'left',
-          border: 'none',
-          background: 'transparent',
-          cursor: 'pointer',
-          padding: 14,
-        }}
+        className="kv__item cawg__accToggle"
+        aria-expanded={props.opened}
       >
         <div className="row so__spaceBetween" style={{ alignItems: 'center', gap: 12 }}>
           <div>
@@ -253,22 +285,26 @@ function Accordion(props: {
             </div>
           </div>
 
-          <span className="badge" aria-hidden>
-            {props.opened ? '▴' : '▾'}
+          <span
+            className={`badge cawg__accBadge ${props.opened ? 'is-open' : ''}`}
+            aria-hidden
+          >
+            ▾
           </span>
         </div>
       </button>
 
-      {props.opened ? (
+      <div
+        className={`cawg__accBody ${props.opened ? 'is-open' : ''}`}
+        style={{ maxHeight: `${maxHeight}px` }}
+      >
         <div
-          className="card__body"
-          style={{
-            borderTop: '1px solid rgba(255,255,255,0.08)',
-          }}
+          ref={innerRef}
+          className="card__body cawg__accBodyInner"
         >
           {props.children}
         </div>
-      ) : null}
+      </div>
     </div>
   )
 }
@@ -286,12 +322,7 @@ export default function ConnectMarzban({ usi }: Props) {
   const [platformPickerOpen, setPlatformPickerOpen] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
 
-  const [openAccordions, setOpenAccordions] = useState<Record<AccordionKey, boolean>>({
-    hiddify: true,
-    v2ray: false,
-    manual: false,
-  })
-
+  const [openAccordion, setOpenAccordion] = useState<AccordionKey>('hiddify')
   const userTouchedAccordionsRef = useRef(false)
 
   const [subscriptionUrl, setSubscriptionUrl] = useState('')
@@ -339,15 +370,10 @@ export default function ConnectMarzban({ usi }: Props) {
   }, [usi])
 
   const primaryKind: ClientKind = platform === 'ios' ? 'v2ray' : 'hiddify'
-  
+
   useEffect(() => {
     if (userTouchedAccordionsRef.current) return
-
-    setOpenAccordions({
-      hiddify: primaryKind === 'hiddify',
-      v2ray: primaryKind === 'v2ray',
-      manual: platform === 'ios' || runtime === 'telegram-miniapp',
-    })
+    setOpenAccordion(primaryKind)
   }, [platform, runtime, primaryKind])
 
   const ready = !loading && !error && !!subscriptionUrl
@@ -356,7 +382,7 @@ export default function ConnectMarzban({ usi }: Props) {
   const v2rayClient = V2RAYTUN_LINKS[platform]
 
   const primaryClient = primaryKind === 'hiddify' ? hiddifyClient : v2rayClient
-  
+
   const hiddifyAutoImportHref = ready ? buildHiddifyImportLink(subscriptionUrl, platform) : ''
   const v2rayAutoImportHref = ready ? buildV2RayTunImportLink(subscriptionUrl, platform) : ''
 
@@ -390,7 +416,7 @@ export default function ConnectMarzban({ usi }: Props) {
 
   function toggleAccordion(key: AccordionKey) {
     userTouchedAccordionsRef.current = true
-    setOpenAccordions((prev) => ({ ...prev, [key]: !prev[key] }))
+    setOpenAccordion(key)
   }
 
   async function openQr() {
@@ -499,7 +525,7 @@ export default function ConnectMarzban({ usi }: Props) {
             ? 'Рекомендуемый способ подключения для большинства устройств.'
             : 'Запасной вариант, если основной клиент вам не подходит.'
         }
-        opened={openAccordions.hiddify}
+        opened={openAccordion === 'hiddify'}
         onToggle={() => toggleAccordion('hiddify')}
       >
         <p className="p" style={{ opacity: 0.82, marginTop: 0 }}>
@@ -516,7 +542,7 @@ export default function ConnectMarzban({ usi }: Props) {
             Открыть {hiddifyClient.storeLabel}
           </button>
 
-          <button className="btn" onClick={openHiddifyAutoImport} type="button">
+          <button className="btn btn--primary" onClick={openHiddifyAutoImport} type="button">
             Открыть в Hiddify
           </button>
         </div>
@@ -545,7 +571,7 @@ export default function ConnectMarzban({ usi }: Props) {
             ? 'Рекомендуемый способ подключения для Apple-устройств.'
             : 'Запасной вариант, если Hiddify не подходит.'
         }
-        opened={openAccordions.v2ray}
+        opened={openAccordion === 'v2ray'}
         onToggle={() => toggleAccordion('v2ray')}
       >
         <p className="p" style={{ opacity: 0.82, marginTop: 0 }}>
@@ -559,11 +585,11 @@ export default function ConnectMarzban({ usi }: Props) {
         </p>
 
         <div className="actions actions--2" style={{ marginTop: 10 }}>
-          <button className="btn" onClick={() => openLinkSafe(v2rayClient.market)} type="button">
+          <button className="btn btn--primary" onClick={() => openLinkSafe(v2rayClient.market)} type="button">
             Скачать v2RayTun
           </button>
 
-          <button className="btn" onClick={openV2RayAutoImport} type="button">
+          <button className="btn btn--primary" onClick={openV2RayAutoImport} type="button">
             Открыть в v2RayTun
           </button>
         </div>
@@ -664,7 +690,7 @@ export default function ConnectMarzban({ usi }: Props) {
           <Accordion
             title="Ручное подключение"
             subtitle="Если автоимпорт не сработал, используйте ссылку подписки или QR."
-            opened={openAccordions.manual}
+            opened={openAccordion === 'manual'}
             onToggle={() => toggleAccordion('manual')}
           >
             <p className="p" style={{ opacity: 0.82, marginTop: 0 }}>

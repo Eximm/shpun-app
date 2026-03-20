@@ -3031,6 +3031,55 @@ button, a { -webkit-tap-highlight-color: transparent; }
   padding: 4px 8px;
   margin-bottom: 6px;
 }
+/* ConnectMarzban accordion */
+.cawg__accCard {
+  margin-top: 10px;
+  overflow: hidden;
+  scroll-margin-top: 88px;
+}
+
+.cawg__accToggle {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 14px;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.cawg__accToggle:hover {
+  background: rgba(255,255,255,0.05);
+}
+
+.cawg__accToggle:active {
+  transform: none;
+}
+
+.cawg__accBadge {
+  transition: transform 220ms ease;
+}
+
+.cawg__accBadge.is-open {
+  transform: rotate(180deg);
+}
+
+.cawg__accBody {
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transition:
+    max-height 300ms ease,
+    opacity 220ms ease;
+}
+
+.cawg__accBody.is-open {
+  opacity: 1;
+}
+
+.cawg__accBodyInner {
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
 
 /* ============================================================
    ServicesOrder — Tariff focus
