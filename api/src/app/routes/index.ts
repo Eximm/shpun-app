@@ -2,6 +2,7 @@
 
 import type { FastifyInstance } from 'fastify'
 
+import { adminRoutes } from "../../modules/admin/routes.js";
 import { authRoutes } from '../../modules/auth/routes.js'
 import { userRoutes } from '../../modules/user/routes.js'
 import { servicesRoutes } from '../../modules/services/routes.js'
@@ -19,6 +20,7 @@ export async function registerRoutes(app: FastifyInstance) {
       await paymentsRoutes(api)
       await activityRoutes(api)
       await referralsRoutes(api)
+      await adminRoutes(api)
 
       // 🔔 Billing HTTP Push + Notifications
       await pushRoutes(api)

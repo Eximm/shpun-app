@@ -161,6 +161,30 @@ function saveAmneziaWarnDismissed() {
   }
 }
 
+function getCreateOrderErrorInfo(e: any): { title: string; description: string } {
+  const errorCode = String(e?.error || e?.code || '').trim()
+  const message = String(e?.message || '').trim()
+
+  if (errorCode === 'unpaid_order_exists') {
+    return {
+      title: 'Есть неоплаченная услуга',
+      description: 'Сначала оплатите или удалите уже созданную неоплаченную услугу, чтобы оформить новую.',
+    }
+  }
+
+  if (errorCode === 'unpaid_same_service_exists') {
+    return {
+      title: 'Есть неоплаченный заказ этого типа',
+      description: 'Сначала оплатите или удалите неоплаченную услугу этого типа, чтобы оформить новую.',
+    }
+  }
+
+  return {
+    title: 'Не удалось создать услугу',
+    description: message || 'Не удалось создать заказ. Попробуйте ещё раз.',
+  }
+}
+
 export function ServicesOrder() {
   const navigate = useNavigate()
   const { me, loading: meLoading, error: meError, refetch } = useMe()
@@ -383,9 +407,9 @@ export function ServicesOrder() {
         })
       }
     } catch (e: any) {
-      const msg = e?.message || 'Failed to create service'
-      setErr(msg)
-      toast.error('Не удалось создать услугу', { description: msg })
+      const info = getCreateOrderErrorInfo(e)
+      setErr(info.description)
+      toast.error(info.title, { description: info.description })
     } finally {
       setCreating(false)
     }

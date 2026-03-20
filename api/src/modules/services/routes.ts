@@ -7,6 +7,7 @@ import {
   shmGetServiceOrder,
   shmGetUserServices,
   shmShpunAppConnectGet,
+  shmShpunAppAdminSettingsGet,
   shmShpunAppRouterBind,
   shmShpunAppRouterList,
   shmShpunAppRouterUnbind,
@@ -678,6 +679,98 @@ export async function servicesRoutes(app: FastifyInstance) {
 
     if (!serviceId || !Number.isFinite(serviceId)) {
       return reply.code(400).send({ ok: false, error: "bad_request", details: "service_id_required" });
+    }
+
+    // =====================
+    // ORDER BLOCK CHECK
+    // =====================
+
+    let orderBlockMode: "off" | "same_type" | "any" = "off";
+
+    try {
+      const settingsRes = await shmShpunAppAdminSettingsGet(shmSessionId);
+
+      if (settingsRes.ok) {
+        const modeRaw = String((settingsRes.json as any)?.settings?.orderBlockMode ?? "off").trim();
+        if (modeRaw === "off" || modeRaw === "same_type" || modeRaw === "any") {
+          orderBlockMode = modeRaw;
+        }
+      }
+    } catch {
+      // fail-open: если настройки не прочитались, не ломаем оформление заказа
+    }
+
+    if (orderBlockMode !== "off") {
+      const servicesRes = await shmGetUserServices(shmSessionId, {
+        limit: 50,
+        offset: 0,
+        filter: {},
+      });
+
+      if (!servicesRes.ok) {
+        if (servicesRes.status === 401 || servicesRes.status === 403) return sendNotAuthenticated(reply);
+        return sendShmError(reply, {
+          status: servicesRes.status,
+          details: servicesRes.json ?? servicesRes.text,
+          debug,
+          message: "Не удалось проверить существующие услуги. Попробуйте ещё раз.",
+        });
+      }
+
+      const rawServices = (servicesRes.json as any)?.data ?? [];
+      const userServices = Array.isArray(rawServices) ? rawServices : [];
+
+      const unpaidServices = userServices.filter((x: any) => {
+        const status = String(x?.status ?? "").trim().toUpperCase();
+        return status === "NOT PAID";
+      });
+
+      if (unpaidServices.length > 0) {
+        if (orderBlockMode === "any") {
+          return reply.code(409).send({
+            ok: false,
+            error: "unpaid_order_exists",
+            message: "У вас уже есть неоплаченная услуга. Оплатите её или удалите, чтобы создать новую.",
+          });
+        }
+
+        if (orderBlockMode === "same_type") {
+          const orderListRes = await shmGetServiceOrder(shmSessionId);
+
+          if (!orderListRes.ok) {
+            if (orderListRes.status === 401 || orderListRes.status === 403) return sendNotAuthenticated(reply);
+            return sendShmError(reply, {
+              status: orderListRes.status,
+              details: orderListRes.json ?? orderListRes.text,
+              debug,
+              message: "Не удалось проверить тип услуги. Попробуйте ещё раз.",
+            });
+          }
+
+          const orderItems = (orderListRes.json as any)?.data ?? [];
+          const availableServices = Array.isArray(orderItems) ? orderItems : [];
+
+          const requestedService =
+            availableServices.find((x: any) => Number(x?.service_id ?? 0) === serviceId) ?? null;
+
+          const requestedCategory = String(requestedService?.category ?? "").trim();
+
+          if (requestedCategory) {
+            const hasSameTypeUnpaid = unpaidServices.some((x: any) => {
+              const existingCategory = String(x?.service?.category ?? x?.category ?? "").trim();
+              return existingCategory === requestedCategory;
+            });
+
+            if (hasSameTypeUnpaid) {
+              return reply.code(409).send({
+                ok: false,
+                error: "unpaid_same_service_exists",
+                message: "У вас уже есть неоплаченная услуга этого типа. Оплатите её или удалите, чтобы создать новую.",
+              });
+            }
+          }
+        }
+      }
     }
 
     const r = await shmCreateServiceOrder(shmSessionId, serviceId);

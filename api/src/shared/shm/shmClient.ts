@@ -408,6 +408,19 @@ export async function shmShpunAppAdminStatus(shmSessionId: string) {
   return await shmShpunAppTemplate<any>(shmSessionId, 'admin.status')
 }
 
+export async function shmShpunAppAdminSettingsGet(shmSessionId: string) {
+  return await shmShpunAppTemplate<any>(shmSessionId, "admin.settings.get");
+}
+
+export async function shmShpunAppAdminSettingsSet(
+  shmSessionId: string,
+  orderBlockMode: "off" | "same_type" | "any"
+) {
+  return await shmShpunAppTemplate<any>(shmSessionId, "admin.settings.set", {
+    orderBlockMode,
+  });
+}
+
 export async function shmShpunAppReferralsStatus(shmSessionId: string) {
   return await shmShpunAppTemplate<any>(shmSessionId, 'referrals.status')
 }
