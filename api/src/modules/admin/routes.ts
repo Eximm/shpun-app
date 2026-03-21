@@ -181,7 +181,11 @@ export async function adminRoutes(app: FastifyInstance) {
     const ttlHours = Number((req.body as any)?.ttlHours);
 
     if (!Number.isFinite(ttlHours) || ttlHours <= 0 || ttlHours > 720) {
-      return reply.code(400).send({ ok: false, error: "bad_ttl" });
+      return reply.code(400).send({
+        ok: false,
+        error: "bad_ttl",
+        got: (req.body as any)?.ttlHours,
+      });
     }
 
     const r = await shmShpunAppAdminSettingsSet(s.shmSessionId, {
@@ -189,12 +193,20 @@ export async function adminRoutes(app: FastifyInstance) {
     });
 
     if (!r.ok) {
-      return reply.code(502).send({ ok: false, error: "shm_error" });
+      return reply.code(502).send({
+        ok: false,
+        error: "shm_error",
+        details: r.json ?? r.text ?? null,
+      });
     }
 
     setCachedTrialDeviceTtlHours(ttlHours);
 
-    return reply.send({ ok: true, ttlHours });
+    return reply.send({
+      ok: true,
+      ttlHours,
+      shm: r.json ?? r.text ?? null,
+    });
   });
 
   app.get("/admin/trial-protection/events", async (req, reply) => {
