@@ -153,13 +153,10 @@ export default function ConnectRouter({ usi, onDone }: Props) {
     })
 
     try {
-      const r = (await apiFetch(
-        `/services/${encodeURIComponent(String(usi))}/router/bind`,
-        {
-          method: 'POST',
-          body: { code: clean },
-        } as any
-      )) as any
+      const r = (await apiFetch(`/services/${encodeURIComponent(String(usi))}/router/bind`, {
+        method: 'POST',
+        body: { code: clean },
+      } as any)) as any
 
       if (r && (r.ok === false || r.ok === 0) && (r.error || r.message)) {
         throw new Error(String(r.error || r.message))
@@ -194,13 +191,10 @@ export default function ConnectRouter({ usi, onDone }: Props) {
     })
 
     try {
-      const r = (await apiFetch(
-        `/services/${encodeURIComponent(String(usi))}/router/unbind`,
-        {
-          method: 'POST',
-          body: { code: clean },
-        } as any
-      )) as any
+      const r = (await apiFetch(`/services/${encodeURIComponent(String(usi))}/router/unbind`, {
+        method: 'POST',
+        body: { code: clean },
+      } as any)) as any
 
       if (r && (r.ok === false || r.ok === 0) && (r.error || r.message)) {
         throw new Error(String(r.error || r.message))
@@ -233,97 +227,128 @@ export default function ConnectRouter({ usi, onDone }: Props) {
   const statusToneClass =
     st.tone === 'good' ? 'cr__badge--good' : st.tone === 'bad' ? 'cr__badge--bad' : 'cr__badge--muted'
 
-  const actionsCols = 'cr__actionsGrid--2'
+  const primaryButtonText = busy
+    ? 'Подождите…'
+    : hasBound
+      ? 'Отвязать роутер'
+      : 'Привязать роутер'
 
   return (
-    <div className="cr">
-      <div className="p cr__hintTop">Введите код с экрана роутера, чтобы привязать устройство к этой услуге.</div>
-
-      {loading ? <div className="p">Загрузка состояния…</div> : null}
-
-      {error ? <div className="pre cr__mt10">{error}</div> : null}
-
-      {!loading ? (
-        <div className="pre cr__mt10 cr__state">
-          <div className="cr__stateMain">
-            {hasBound ? (
-              <>
-                <div>
-                  ✅ Роутер привязан: <b>{shownPretty || '—'}</b>
-                </div>
-
-                {first?.created_at ? (
-                  <div className="cr__meta cr__mt6">
-                    Привязан: <b>{fmtTs(first.created_at)}</b>
-                  </div>
-                ) : null}
-
-                {first?.last_seen_at ? (
-                  <div className="cr__meta">
-                    Последний контакт: <b>{fmtTs(first.last_seen_at)}</b>
-                  </div>
-                ) : null}
-              </>
-            ) : (
-              <div>Роутер ещё не привязан.</div>
-            )}
-          </div>
-
-          {first ? (
-            <span className={`cr__badge ${statusToneClass}`} title="Статус привязки">
-              <span className="cr__badgeK">status</span>
-              <b className="cr__badgeV">{st.label}</b>
-            </span>
-          ) : null}
-        </div>
-      ) : null}
-
-      {!hasBound ? (
-        <div className="cr__form">
-          <input
-            value={inputValue}
-            onChange={(e) => {
-              setError(null)
-              setCode(e.target.value)
-            }}
-            onBlur={() => setCode((cur) => toPretty9(cur))}
-            placeholder="Например: N8JD-6TQ4"
-            className="input cr__input"
-            disabled={busy}
-            inputMode="text"
-            lang="en"
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
-            autoComplete="off"
-            pattern="[A-Za-z0-9-]*"
-          />
-        </div>
-      ) : null}
-
-      <div className={`cr__actionsGrid ${actionsCols} cr__mt12`}>
-        {!hasBound ? (
-          <button className="btn btn--primary cr__btnFull" onClick={bind} disabled={!canBind}>
-            {busy ? 'Подождите…' : 'Привязать роутер'}
-          </button>
-        ) : (
-          <button className="btn btn--danger cr__btnFull" onClick={unbind} disabled={busy}>
-            {busy ? 'Подождите…' : 'Отвязать роутер'}
-          </button>
-        )}
-
-        <button className="btn cr__btnFull" onClick={() => load({ silent: false })} disabled={busy}>
-          Обновить
-        </button>
+    <div className="cm cr">
+      <div className="pre">
+        Введите код с экрана роутера, чтобы привязать устройство к этой услуге.
       </div>
 
-      {hasBound ? (
-        <div className="cr__note cr__mt10">Один роутер может быть привязан к услуге одновременно.</div>
-      ) : (
-        <div className="cr__note cr__mt10">
-          Формат кода: <b>XXXX-XXXX</b> (только латинские буквы и цифры).
+      {loading ? (
+        <div className="section">
+          <div className="p">Загрузка состояния…</div>
         </div>
-      )}
+      ) : null}
+
+      {error ? (
+        <div className="pre cr__mt10">
+          {error}
+        </div>
+      ) : null}
+
+      {!loading ? (
+        <div className="card section">
+          <div className="card__body">
+            <div className="section">
+              <div className="pre cr__state">
+                <div className="cr__stateMain">
+                  {hasBound ? (
+                    <>
+                      <div>
+                        ✅ Роутер привязан: <b>{shownPretty || '—'}</b>
+                      </div>
+
+                      {first?.created_at ? (
+                        <div className="cr__meta cr__mt6">
+                          Привязан: <b>{fmtTs(first.created_at)}</b>
+                        </div>
+                      ) : null}
+
+                      {first?.last_seen_at ? (
+                        <div className="cr__meta">
+                          Последний контакт: <b>{fmtTs(first.last_seen_at)}</b>
+                        </div>
+                      ) : null}
+                    </>
+                  ) : (
+                    <div>Роутер ещё не привязан.</div>
+                  )}
+                </div>
+
+                {first ? (
+                  <span className={`cr__badge ${statusToneClass}`} title="Статус привязки">
+                    <span className="cr__badgeK">status</span>
+                    <b className="cr__badgeV">{st.label}</b>
+                  </span>
+                ) : null}
+              </div>
+            </div>
+
+            {!hasBound ? (
+              <div className="section">
+                <input
+                  value={inputValue}
+                  onChange={(e) => {
+                    setError(null)
+                    setCode(e.target.value)
+                  }}
+                  onBlur={() => setCode((cur) => toPretty9(cur))}
+                  placeholder="Например: N8JD-6TQ4"
+                  className="input cr__input"
+                  disabled={busy}
+                  inputMode="text"
+                  lang="en"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  autoComplete="off"
+                  pattern="[A-Za-z0-9-]*"
+                />
+              </div>
+            ) : null}
+
+            <div className="section">
+              <div className="actions actions--2">
+                {!hasBound ? (
+                  <button className="btn btn--primary so__btnFull" onClick={bind} disabled={!canBind} type="button">
+                    {primaryButtonText}
+                  </button>
+                ) : (
+                  <button className="btn btn--danger so__btnFull" onClick={unbind} disabled={busy} type="button">
+                    {primaryButtonText}
+                  </button>
+                )}
+
+                <button
+                  className="btn so__btnFull"
+                  onClick={() => load({ silent: false })}
+                  disabled={busy}
+                  type="button"
+                >
+                  Обновить
+                </button>
+              </div>
+            </div>
+
+            <div className="section">
+              <div className="pre">
+                {hasBound ? (
+                  <>Один роутер может быть привязан к услуге одновременно.</>
+                ) : (
+                  <>
+                    Формат кода: <b>XXXX-XXXX</b> (только латинские буквы и цифры).
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

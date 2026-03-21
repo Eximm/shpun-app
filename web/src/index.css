@@ -3032,6 +3032,27 @@ button, a { -webkit-tap-highlight-color: transparent; }
   margin-bottom: 6px;
 }
 /* ConnectMarzban accordion */
+
+.cm .card__body > .section:first-of-type {
+  margin-top: 14px;
+}
+
+.cm .pre {
+  background: rgba(255,255,255,0.03);
+  border-color: rgba(255,255,255,0.08);
+  padding: 14px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.cm .section + .section {
+  margin-top: 14px;
+}
+
+.cm .actions + .actions {
+  margin-top: 10px;
+}
+
 .cawg__accCard {
   margin-top: 10px;
   overflow: hidden;

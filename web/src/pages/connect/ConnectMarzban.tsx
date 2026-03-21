@@ -542,15 +542,18 @@ export default function ConnectMarzban({ usi }: Props) {
   }
 
   function stepOneText(clientTitle: string) {
-    return `Установите ${clientTitle} для ${platformLabel(platform)} и вернитесь сюда, чтобы импортировать подписку в приложение.`
+    return t('connect.step_install_desc', {
+      client: clientTitle,
+      platform: platformLabel(platform),
+    })
   }
 
   function stepTwoText() {
-    return 'После установки вернитесь сюда и добавьте подписку в приложение.'
+    return t('connect.step_import_desc')
   }
 
   function otherMethodsText() {
-    return 'Можно отсканировать QR или скопировать ссылку для ручного добавления в приложение.'
+    return t('connect.methods_desc')
   }
 
   function renderInstallActions(client: ClientKind) {
@@ -594,37 +597,33 @@ export default function ConnectMarzban({ usi }: Props) {
         opened={opened}
         onToggle={() => toggleAccordion(client)}
       >
-        <div className="card section">
-          <div className="card__body">
-            <div className="pre">
-              <b>{t('connect.step_install')}</b>
-              <br />
-              {stepOneText(links.title)}
-            </div>
-
-            {renderInstallActions(client)}
+        <div className="section">
+          <div className="pre">
+            <b>{t('connect.step_install')}</b>
+            <br />
+            {stepOneText(links.title)}
           </div>
+
+          {renderInstallActions(client)}
         </div>
 
-        <div className="card section">
-          <div className="card__body">
-            <div className="pre">
-              <b>{t('connect.step_import')}</b>
-              <br />
-              {started ? stepTwoText() : stepTwoText()}
-            </div>
+        <div className="section">
+          <div className="pre">
+            <b>{t('connect.step_import')}</b>
+            <br />
+            {stepTwoText()}
+          </div>
 
-            <div className="actions actions--1">
-              <button
-                className="btn btn--primary so__btnFull"
-                type="button"
-                onClick={openAutoImport}
-                disabled={!ready}
-                title={!ready ? t('connect.wait') : undefined}
-              >
-                {loading ? t('connect.wait') : t('connect.add_sub')}
-              </button>
-            </div>
+          <div className="actions actions--1">
+            <button
+              className="btn btn--primary so__btnFull"
+              type="button"
+              onClick={openAutoImport}
+              disabled={!ready}
+              title={!ready ? t('connect.wait') : undefined}
+            >
+              {loading ? t('connect.wait') : t('connect.add_sub')}
+            </button>
           </div>
         </div>
 
@@ -686,57 +685,53 @@ export default function ConnectMarzban({ usi }: Props) {
             })}
           </p>
 
-          <div className="card section">
-            <div className="card__body">
-              <div className="pre">
-                <b>{t('connect.step_install')}</b>
-                <br />
-                {stepOneText(primaryClient.title)}
-              </div>
+          <div className="section">
+            <div className="pre">
+              <b>{t('connect.step_install')}</b>
+              <br />
+              {stepOneText(primaryClient.title)}
+            </div>
 
-              {renderInstallActions(primaryKind)}
+            {renderInstallActions(primaryKind)}
+          </div>
+
+          <div className="section">
+            <div className="pre">
+              <b>{t('connect.step_import')}</b>
+              <br />
+              {stepTwoText()}
+            </div>
+
+            <div className="actions actions--1">
+              <button
+                className="btn btn--primary so__btnFull"
+                onClick={openPrimaryAutoImport}
+                disabled={!ready}
+                type="button"
+                title={!ready ? t('connect.wait') : undefined}
+              >
+                {loading ? t('connect.wait') : t('connect.add_sub')}
+              </button>
             </div>
           </div>
 
-          <div className="card section">
-            <div className="card__body">
-              <div className="pre">
-                <b>{t('connect.step_import')}</b>
-                <br />
-                {stepTwoText()}
-              </div>
+          <div className="section">
+            <div className="pre">
+              <b>{t('connect.more_methods')}</b>
+              <br />
+              {otherMethodsText()}
+            </div>
 
-              <div className="actions actions--1">
-                <button
-                  className="btn btn--primary so__btnFull"
-                  onClick={openPrimaryAutoImport}
-                  disabled={!ready}
-                  type="button"
-                  title={!ready ? t('connect.wait') : undefined}
-                >
-                  {loading ? t('connect.wait') : t('connect.add_sub')}
-                </button>
-              </div>
-
-              <div className="section">
-                <div className="pre">
-                  <b>{t('connect.more_methods')}</b>
-                  <br />
-                  {otherMethodsText()}
-                </div>
-
-                <div className="actions actions--1">
-                  <button
-                    className="btn btn--accent so__btnFull"
-                    onClick={() => setAdvancedOpen((v) => !v)}
-                    type="button"
-                  >
-                    {advancedOpen
-                      ? `▴ ${t('connect.hide_methods')}`
-                      : `▾ ${t('connect.more_methods')}`}
-                  </button>
-                </div>
-              </div>
+            <div className="actions actions--1">
+              <button
+                className="btn btn--accent so__btnFull"
+                onClick={() => setAdvancedOpen((v) => !v)}
+                type="button"
+              >
+                {advancedOpen
+                  ? `▴ ${t('connect.hide_methods')}`
+                  : `▾ ${t('connect.more_methods')}`}
+              </button>
             </div>
           </div>
         </div>
@@ -753,35 +748,31 @@ export default function ConnectMarzban({ usi }: Props) {
             opened={openAccordion === 'manual'}
             onToggle={() => toggleAccordion('manual')}
           >
-            <div className="card section">
-              <div className="card__body">
-                <div className="pre">
-                  <b>📋 {t('connect.copy_link')}</b>
-                  <br />
-                  {'Скопируйте ссылку для ручного добавления в приложение.'}
-                </div>
+            <div className="section">
+              <div className="pre">
+                <b>📋 {t('connect.copy_link')}</b>
+                <br />
+                {t('connect.copy_link_desc')}
+              </div>
 
-                <div className="actions actions--1">
-                  <button className="btn btn--primary so__btnFull" type="button" onClick={copySub}>
-                    {copied ? `✅ ${t('connect.copied')}` : `📋 ${t('connect.copy_link')}`}
-                  </button>
-                </div>
+              <div className="actions actions--1">
+                <button className="btn btn--primary so__btnFull" type="button" onClick={copySub}>
+                  {copied ? `✅ ${t('connect.copied')}` : `📋 ${t('connect.copy_link')}`}
+                </button>
               </div>
             </div>
 
-            <div className="card section">
-              <div className="card__body">
-                <div className="pre">
-                  <b>📱 {t('connect.show_qr')}</b>
-                  <br />
-                  {'Отсканируйте QR для ручного добавления в приложение.'}
-                </div>
+            <div className="section">
+              <div className="pre">
+                <b>📱 {t('connect.show_qr')}</b>
+                <br />
+                {t('connect.show_qr_desc')}
+              </div>
 
-                <div className="actions actions--1">
-                  <button className="btn btn--primary so__btnFull" type="button" onClick={openQr}>
-                    📱 {t('connect.show_qr')}
-                  </button>
-                </div>
+              <div className="actions actions--1">
+                <button className="btn btn--primary so__btnFull" type="button" onClick={openQr}>
+                  📱 {t('connect.show_qr')}
+                </button>
               </div>
             </div>
           </Accordion>

@@ -51,7 +51,7 @@ function useDict() {
     return formatText(dict[key] || key, vars)
   }
 
-  return { t, lang }
+  return { t }
 }
 
 function detectOS(): Platform {
@@ -280,7 +280,7 @@ export default function ConnectAmneziaWG({ usi }: Props) {
           ? t('connectAmneziaWG.status.ready')
           : error
             ? t('connectAmneziaWG.status.not_ready')
-            : t('connectAmneziaWG.status.loading')}
+            : t('connectAmneziaWG.status.loading')}{' '}
         {topHint}
       </div>
 
@@ -317,133 +317,128 @@ export default function ConnectAmneziaWG({ usi }: Props) {
 
       <div className="card section">
         <div className="card__body">
-          <div className="card section">
-            <div className="card__body">
-              <div className="pre">
-                <b>{t('connectAmneziaWG.step1.title')}</b>
-                <br />
-                {t('connectAmneziaWG.step1.sub')}
-                <b>AmneziaWG</b>
-                {t('connectAmneziaWG.step1.sub_for', { platform: platformLabel(platform) })}
-              </div>
+          <div className="section">
+            <div className="pre">
+              <b>{t('connectAmneziaWG.step1.title')}</b>
+              <br />
+              {t('connectAmneziaWG.step1.sub')}
+              <b>AmneziaWG</b>
+              {t('connectAmneziaWG.step1.sub_for', { platform: platformLabel(platform) })}
+            </div>
 
-              <div className="actions actions--2">
+            <div className="actions actions--2">
+              <button
+                className="btn btn--primary"
+                onClick={() => openLinkSafe(APP_LINKS[platform])}
+                disabled={loading}
+                type="button"
+              >
+                {t('connectAmneziaWG.step1.open_store', { store: storeLabel })}
+              </button>
+
+              {platform === 'android' ? (
                 <button
-                  className="btn btn--primary"
+                  className="btn btn--accent"
+                  onClick={() => openLinkSafe(APK_LINK)}
+                  disabled={loading}
+                  type="button"
+                >
+                  {t('connectAmneziaWG.step1.download_apk')}
+                </button>
+              ) : (
+                <button
+                  className="btn btn--accent"
                   onClick={() => openLinkSafe(APP_LINKS[platform])}
                   disabled={loading}
                   type="button"
                 >
-                  {t('connectAmneziaWG.step1.open_store', { store: storeLabel })}
+                  {t('connectAmneziaWG.step1.download_direct')}
                 </button>
-
-                {platform === 'android' ? (
-                  <button
-                    className="btn btn--accent"
-                    onClick={() => openLinkSafe(APK_LINK)}
-                    disabled={loading}
-                    type="button"
-                  >
-                    {t('connectAmneziaWG.step1.download_apk')}
-                  </button>
-                ) : (
-                  <button
-                    className="btn btn--accent"
-                    onClick={() => openLinkSafe(APP_LINKS[platform])}
-                    disabled={loading}
-                    type="button"
-                  >
-                    {t('connectAmneziaWG.step1.download_direct')}
-                  </button>
-                )}
-              </div>
+              )}
             </div>
           </div>
 
-          <div className="card section">
-            <div className="card__body">
-              <div className="pre">
-                <b>{t('connectAmneziaWG.step2.title')}</b>
-                <br />
-                {t('connectAmneziaWG.step2.sub_1')}
-                <b>.conf</b>
-                {t('connectAmneziaWG.step2.sub_2')}
-                <b>AmneziaWG</b>.{' '}
-                {t('connectAmneziaWG.step2.more_hint')}
-              </div>
+          <div className="section">
+            <div className="pre">
+              <b>{t('connectAmneziaWG.step2.title')}</b>
+              <br />
+              {t('connectAmneziaWG.step2.sub_1')}
+              <b>.conf</b>
+              {t('connectAmneziaWG.step2.sub_2')}
+              <b>AmneziaWG</b>. {t('connectAmneziaWG.step2.more_hint')}
+            </div>
 
-              <div className="actions actions--1">
-                <button
-                  className="btn btn--primary so__btnFull"
-                  onClick={downloadConf}
-                  disabled={!ready}
-                  type="button"
-                  title={!ready ? t('connectAmneziaWG.step2.not_ready_title') : undefined}
-                >
-                  {loading ? t('connectAmneziaWG.wait') : t('connectAmneziaWG.step2.download_conf')}
-                </button>
+            <div className="actions actions--1">
+              <button
+                className="btn btn--primary so__btnFull"
+                onClick={downloadConf}
+                disabled={!ready}
+                type="button"
+                title={!ready ? t('connectAmneziaWG.step2.not_ready_title') : undefined}
+              >
+                {loading ? t('connectAmneziaWG.wait') : t('connectAmneziaWG.step2.download_conf')}
+              </button>
+            </div>
+          </div>
+
+          <div className="section">
+            <div className="pre">
+              <b>{t('connectAmneziaWG.step2.show_more')}</b>
+              <br />
+              {t('connectAmneziaWG.step2.more_hint')}
+            </div>
+
+            <div className="actions actions--1">
+              <button
+                className="btn btn--accent so__btnFull"
+                onClick={() => setMoreOpen((v) => !v)}
+                disabled={!ready}
+                type="button"
+              >
+                {moreOpen
+                  ? `▴ ${t('connectAmneziaWG.step2.hide_more')}`
+                  : `▾ ${t('connectAmneziaWG.step2.show_more')}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {moreOpen && ready ? (
+        <div className="section">
+          <div className="card">
+            <div className="card__body">
+              <div className="section">
+                <div className="pre">
+                  <b>📱 {t('connectAmneziaWG.step2.show_qr')}</b>
+                  <br />
+                  {t('connectAmneziaWG.qr.sub')}
+                </div>
+
+                <div className="actions actions--1">
+                  <button className="btn btn--primary so__btnFull" type="button" onClick={openQr}>
+                    📱 {t('connectAmneziaWG.step2.show_qr')}
+                  </button>
+                </div>
               </div>
 
               <div className="section">
                 <div className="pre">
-                  <b>{t('connectAmneziaWG.step2.show_more')}</b>
+                  <b>📋 {t('connectAmneziaWG.step2.copy_conf')}</b>
                   <br />
-                  {t('connectAmneziaWG.step2.more_hint')}
+                  {t('connectAmneziaWG.toast.copy_failed.desc')}
                 </div>
 
                 <div className="actions actions--1">
-                  <button
-                    className="btn btn--accent so__btnFull"
-                    onClick={() => setMoreOpen((v) => !v)}
-                    disabled={!ready}
-                    type="button"
-                  >
-                    {moreOpen
-                      ? `▴ ${t('connectAmneziaWG.step2.hide_more')}`
-                      : `▾ ${t('connectAmneziaWG.step2.show_more')}`}
+                  <button className="btn btn--primary so__btnFull" type="button" onClick={copyConf}>
+                    📋 {t('connectAmneziaWG.step2.copy_conf')}
                   </button>
                 </div>
               </div>
             </div>
           </div>
-
-          {moreOpen && ready ? (
-            <div className="section">
-              <div className="card">
-                <div className="card__body">
-                  <div className="pre">
-                    <b>📱 {t('connectAmneziaWG.step2.show_qr')}</b>
-                    <br />
-                    {t('connectAmneziaWG.qr.sub')}
-                  </div>
-
-                  <div className="actions actions--1">
-                    <button className="btn btn--primary so__btnFull" type="button" onClick={openQr}>
-                      📱 {t('connectAmneziaWG.step2.show_qr')}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="card section">
-                <div className="card__body">
-                  <div className="pre">
-                    <b>📋 {t('connectAmneziaWG.step2.copy_conf')}</b>
-                    <br />
-                    {t('connectAmneziaWG.toast.copy_failed.desc')}
-                  </div>
-
-                  <div className="actions actions--1">
-                    <button className="btn btn--primary so__btnFull" type="button" onClick={copyConf}>
-                      📋 {t('connectAmneziaWG.step2.copy_conf')}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : null}
         </div>
-      </div>
+      ) : null}
 
       {platformPickerOpen ? (
         <div className="overlay" role="dialog" aria-modal="true" onClick={() => setPlatformPickerOpen(false)}>
@@ -452,7 +447,12 @@ export default function ConnectAmneziaWG({ usi }: Props) {
               <div className="row so__spaceBetween">
                 <div className="overlay__title">{t('connectAmneziaWG.device.modal_title')}</div>
 
-                <button className="btn" type="button" onClick={() => setPlatformPickerOpen(false)} aria-label={t('connectAmneziaWG.close')}>
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => setPlatformPickerOpen(false)}
+                  aria-label={t('connectAmneziaWG.close')}
+                >
                   ✕
                 </button>
               </div>
@@ -506,7 +506,12 @@ export default function ConnectAmneziaWG({ usi }: Props) {
               <div className="row so__spaceBetween">
                 <div className="overlay__title">{t('connectAmneziaWG.qr.title')}</div>
 
-                <button className="btn" type="button" onClick={() => setQrOpen(false)} aria-label={t('connectAmneziaWG.close')}>
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => setQrOpen(false)}
+                  aria-label={t('connectAmneziaWG.close')}
+                >
                   ✕
                 </button>
               </div>

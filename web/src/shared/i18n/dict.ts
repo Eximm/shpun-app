@@ -772,6 +772,12 @@ export const RU: Dict = {
 
   "connect.open_client": "Открываем приложение",
 
+  "connect.step_install_desc": "Установите {client} для {platform} и вернитесь сюда, чтобы импортировать подписку в приложение.",
+  "connect.step_import_desc": "После установки вернитесь сюда и добавьте подписку в приложение.",
+  "connect.methods_desc": "Можно отсканировать QR или скопировать ссылку для ручного добавления в приложение.",
+  "connect.copy_link_desc": "Скопируйте ссылку для ручного добавления в приложение.",
+  "connect.show_qr_desc": "Отсканируйте QR для ручного добавления в приложение.",
+
   // ROUTER
   "router.hint": "Введите код с экрана роутера, чтобы привязать устройство к этой услуге.",
   "router.loading": "Загрузка состояния…",
@@ -1590,6 +1596,12 @@ export const EN: Dict = {
   "connect.qr_text": "Open the client on another device and import the subscription via QR.",
 
   "connect.open_client": "Opening the app",
+
+  "connect.step_install_desc": "Install {client} for {platform} and come back here to import the subscription into the app.",
+  "connect.step_import_desc": "After installation, come back here and add the subscription in the app.",
+  "connect.methods_desc": "You can scan the QR code or copy the link for manual import into the app.",
+  "connect.copy_link_desc": "Copy the link for manual import into the app.",
+  "connect.show_qr_desc": "Scan the QR code for manual import into the app.",
   
   // Router
   "router.hint": "Enter the code from your router screen to link it to this service.",
