@@ -14,7 +14,15 @@ function nowTs(): number {
   return Math.floor(Date.now() / 1000);
 }
 
+let cachedMode: TrialDeviceMode | null = null;
+
+export function setCachedTrialDeviceMode(mode: TrialDeviceMode | null) {
+  cachedMode = mode;
+}
+
 export function getTrialDeviceMode(): TrialDeviceMode {
+  if (cachedMode) return cachedMode;
+
   const raw = String(process.env.TRIAL_DEVICE_MODE ?? "observe").trim().toLowerCase();
   if (raw === "off" || raw === "observe" || raw === "enforce") return raw;
   return "observe";

@@ -422,11 +422,12 @@ export async function shmShpunAppAdminSettingsGet(shmSessionId: string) {
 
 export async function shmShpunAppAdminSettingsSet(
   shmSessionId: string,
-  orderBlockMode: "off" | "same_type" | "any"
+  payload: {
+    orderBlockMode?: "off" | "same_type" | "any";
+    trialDeviceMode?: "off" | "observe" | "enforce";
+  }
 ) {
-  return await shmShpunAppTemplate<any>(shmSessionId, "admin.settings.set", {
-    orderBlockMode,
-  });
+  return await shmShpunAppTemplate<any>(shmSessionId, "admin.settings.set", payload);
 }
 
 // =====================

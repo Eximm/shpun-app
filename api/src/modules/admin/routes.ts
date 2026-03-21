@@ -6,7 +6,11 @@ import {
   shmShpunAppAdminStatus,
 } from "../../shared/shm/shmClient.js";
 import { linkDb } from "../../shared/linkdb/db.js";
-import { getTrialDeviceMode, getTrialDeviceTtlHours } from "../device/deviceService.js";
+import {
+  getTrialDeviceMode,
+  getTrialDeviceTtlHours,
+  setCachedTrialDeviceMode,
+} from "../device/deviceService.js";
 import { ensureDeviceTables } from "../device/deviceRepo.js";
 
 async function ensureAdmin(shmSessionId: string) {
@@ -19,6 +23,10 @@ function toPositiveInt(v: unknown, fallback: number, max = 200) {
   const n = Number(v);
   if (!Number.isFinite(n) || n <= 0) return fallback;
   return Math.min(Math.floor(n), max);
+}
+
+function isTrialDeviceMode(v: unknown): v is "off" | "observe" | "enforce" {
+  return v === "off" || v === "observe" || v === "enforce";
 }
 
 export async function adminRoutes(app: FastifyInstance) {
@@ -49,7 +57,9 @@ export async function adminRoutes(app: FastifyInstance) {
 
     const mode = (req.body as any)?.orderBlockMode;
 
-    const r = await shmShpunAppAdminSettingsSet(s.shmSessionId, mode);
+    const r = await shmShpunAppAdminSettingsSet(s.shmSessionId, {
+      orderBlockMode: mode,
+    });
 
     if (!r.ok) {
       return reply.code(502).send({ ok: false, error: "shm_error" });
@@ -68,7 +78,20 @@ export async function adminRoutes(app: FastifyInstance) {
 
     ensureDeviceTables();
 
-    const mode = getTrialDeviceMode();
+    let mode = getTrialDeviceMode();
+
+    try {
+      const settingsRes = await shmShpunAppAdminSettingsGet(s.shmSessionId);
+      const settingsMode = settingsRes?.json?.settings?.trialDeviceMode ?? settingsRes?.json?.trialDeviceMode;
+
+      if (isTrialDeviceMode(settingsMode)) {
+        mode = settingsMode;
+        setCachedTrialDeviceMode(settingsMode);
+      }
+    } catch {
+      // fallback to cached/env mode
+    }
+
     const ttlHours = getTrialDeviceTtlHours();
 
     const nowTs = Math.floor(Date.now() / 1000);
@@ -108,6 +131,33 @@ export async function adminRoutes(app: FastifyInstance) {
       reuse24h: Number(reuse24hRow?.cnt ?? 0),
       blocks24h: Number(blocks24hRow?.cnt ?? 0),
     });
+  });
+
+  app.put("/admin/trial-protection/mode", async (req, reply) => {
+    const s = getSessionFromRequest(req);
+    if (!s?.shmSessionId) return reply.code(401).send({ ok: false });
+
+    if (!(await ensureAdmin(s.shmSessionId))) {
+      return reply.code(403).send({ ok: false, error: "not_admin" });
+    }
+
+    const mode = String((req.body as any)?.mode ?? "").trim();
+
+    if (!isTrialDeviceMode(mode)) {
+      return reply.code(400).send({ ok: false, error: "bad_mode" });
+    }
+
+    const r = await shmShpunAppAdminSettingsSet(s.shmSessionId, {
+      trialDeviceMode: mode,
+    });
+
+    if (!r.ok) {
+      return reply.code(502).send({ ok: false, error: "shm_error" });
+    }
+
+    setCachedTrialDeviceMode(mode);
+
+    return reply.send({ ok: true, mode });
   });
 
   app.get("/admin/trial-protection/events", async (req, reply) => {

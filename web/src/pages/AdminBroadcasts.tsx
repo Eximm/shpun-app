@@ -552,9 +552,12 @@ function OrderRulesSection() {
 function TrialProtectionSection() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [savingMode, setSavingMode] = useState(false);
   const [status, setStatus] = useState<TrialProtectionStatusResp | null>(null);
   const [events, setEvents] = useState<TrialProtectionEventItem[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [okText, setOkText] = useState<string | null>(null);
+  const [modeDraft, setModeDraft] = useState<TrialDeviceMode>("observe");
 
   async function load(opts?: { silent?: boolean }) {
     const silent = Boolean(opts?.silent);
@@ -574,6 +577,7 @@ function TrialProtectionSection() {
       ]);
 
       setStatus(statusResp);
+      setModeDraft(statusResp.mode);
       setEvents(Array.isArray(eventsResp.items) ? eventsResp.items : []);
     } catch (e: any) {
       setError(e?.message || "Не удалось загрузить данные Trial Protection.");
@@ -591,6 +595,26 @@ function TrialProtectionSection() {
     void load();
   }, []);
 
+  async function saveMode() {
+    setSavingMode(true);
+    setError(null);
+    setOkText(null);
+
+    try {
+      const r = await apiFetch<{ ok: true; mode: TrialDeviceMode }>("/admin/trial-protection/mode", {
+        method: "PUT",
+        body: { mode: modeDraft },
+      });
+
+      setOkText(`Режим сохранён: ${r.mode}`);
+      await load({ silent: true });
+    } catch (e: any) {
+      setError(e?.message || "Не удалось сохранить режим.");
+    } finally {
+      setSavingMode(false);
+    }
+  }
+
   const sortedEvents = useMemo(
     () => events.slice().sort((a, b) => (b.created_at || 0) - (a.created_at || 0)),
     [events],
@@ -601,6 +625,8 @@ function TrialProtectionSection() {
     if (decision === "observe") return <span className="chip chip--warn">OBSERVE</span>;
     return <span className="chip chip--ok">ALLOW</span>;
   }
+
+  const modeChanged = modeDraft !== (status?.mode || "observe");
 
   return (
     <>
@@ -621,13 +647,14 @@ function TrialProtectionSection() {
           ) : (
             <>
               {error ? <div className="pre" style={{ marginTop: 12 }}>{error}</div> : null}
+              {okText ? <div className="pre" style={{ marginTop: 12 }}>{okText}</div> : null}
 
               <div className="grid2" style={{ marginTop: 12 }}>
                 <div className="mini">
                   <div className="mini__title">Текущее состояние</div>
                   <div className="mini__list">
                     <div className="list__sub">
-                      Режим защиты и базовые counters. Переключение режима добавим следующим шагом через backend.
+                      Текущий режим anti-abuse для тестовых услуг.
                     </div>
                     <div>
                       <span
@@ -654,6 +681,51 @@ function TrialProtectionSection() {
                     <div>
                       <span className="chip chip--soft">{status?.ttlHours ?? "—"}h</span>
                     </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="list" style={{ marginTop: 12 }}>
+                <div className="list__item">
+                  <div className="list__main">
+                    <div className="list__title">Режим работы</div>
+                    <div className="list__sub" style={{ marginTop: 8 }}>
+                      <label style={{ display: "block", marginBottom: 10 }}>
+                        <input
+                          type="radio"
+                          name="trialDeviceMode"
+                          value="off"
+                          checked={modeDraft === "off"}
+                          onChange={() => setModeDraft("off")}
+                        />{" "}
+                        <strong>off</strong> — защита отключена
+                      </label>
+
+                      <label style={{ display: "block", marginBottom: 10 }}>
+                        <input
+                          type="radio"
+                          name="trialDeviceMode"
+                          value="observe"
+                          checked={modeDraft === "observe"}
+                          onChange={() => setModeDraft("observe")}
+                        />{" "}
+                        <strong>observe</strong> — только наблюдение и логирование
+                      </label>
+
+                      <label style={{ display: "block" }}>
+                        <input
+                          type="radio"
+                          name="trialDeviceMode"
+                          value="enforce"
+                          checked={modeDraft === "enforce"}
+                          onChange={() => setModeDraft("enforce")}
+                        />{" "}
+                        <strong>enforce</strong> — блокировать повторный trial на устройстве
+                      </label>
+                    </div>
+                  </div>
+                  <div className="list__side">
+                    <span className="chip chip--soft">{status?.mode || "—"}</span>
                   </div>
                 </div>
               </div>
@@ -692,9 +764,22 @@ function TrialProtectionSection() {
                 </div>
               </div>
 
-              <div className="actions actions--1" style={{ marginTop: 12 }}>
-                <button className="btn btn--accent" type="button" onClick={() => void load({ silent: true })} disabled={refreshing}>
+              <div className="actions actions--2" style={{ marginTop: 12 }}>
+                <button
+                  className="btn btn--soft"
+                  type="button"
+                  onClick={() => void load({ silent: true })}
+                  disabled={refreshing || savingMode}
+                >
                   {refreshing ? "Обновляю…" : "Обновить"}
+                </button>
+                <button
+                  className="btn btn--accent"
+                  type="button"
+                  onClick={saveMode}
+                  disabled={savingMode || !modeChanged}
+                >
+                  {savingMode ? "Сохраняю…" : "Сохранить режим"}
                 </button>
               </div>
             </>
@@ -775,7 +860,6 @@ function TrialProtectionSection() {
     </>
   );
 }
-
 export function AdminBroadcasts() {
   const { me, loading: meLoading } = useMe() as any;
   const isAdmin = Boolean(me?.profile?.isAdmin || me?.admin?.isAdmin);
