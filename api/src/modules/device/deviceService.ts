@@ -3,15 +3,31 @@ import {
   getDeviceByToken,
   insertTrialProtectionEvent,
   markDeviceTrialUsed,
+  resetDeviceTrialUsage,
+  resetExpiredDeviceTrialUsage,
   touchDevice,
 } from "./deviceRepo.js";
 
 export type TrialDeviceMode = "off" | "observe" | "enforce";
 
+function nowTs(): number {
+  return Math.floor(Date.now() / 1000);
+}
+
 export function getTrialDeviceMode(): TrialDeviceMode {
   const raw = String(process.env.TRIAL_DEVICE_MODE ?? "observe").trim().toLowerCase();
   if (raw === "off" || raw === "observe" || raw === "enforce") return raw;
   return "observe";
+}
+
+export function getTrialDeviceTtlHours(): number {
+  const raw = Number(process.env.TRIAL_DEVICE_TTL_HOURS ?? 72);
+  if (!Number.isFinite(raw) || raw <= 0) return 72;
+  return Math.floor(raw);
+}
+
+export function getTrialDeviceTtlSeconds(): number {
+  return getTrialDeviceTtlHours() * 60 * 60;
 }
 
 export function normalizeDeviceToken(v: unknown): string {
@@ -32,6 +48,18 @@ export function getRequestUserAgent(req: any): string {
   return String(req?.headers?.["user-agent"] ?? "").trim().slice(0, 500);
 }
 
+function cleanupExpiredTrialUsage() {
+  const ttlSeconds = getTrialDeviceTtlSeconds();
+  const cutoffTs = nowTs() - ttlSeconds;
+  resetExpiredDeviceTrialUsage(cutoffTs);
+}
+
+function isTrialExpired(trialUsedAt: number | null | undefined): boolean {
+  if (!trialUsedAt) return false;
+  const ttlSeconds = getTrialDeviceTtlSeconds();
+  return trialUsedAt < nowTs() - ttlSeconds;
+}
+
 export function registerDeviceSeen(input: {
   deviceToken: string;
   ip?: string | null;
@@ -39,7 +67,9 @@ export function registerDeviceSeen(input: {
 }) {
   if (!input.deviceToken) return null;
 
-  const now = Math.floor(Date.now() / 1000);
+  cleanupExpiredTrialUsage();
+
+  const now = nowTs();
   const existing = getDeviceByToken(input.deviceToken);
 
   if (!existing) {
@@ -50,6 +80,10 @@ export function registerDeviceSeen(input: {
       userAgent: input.userAgent,
     });
     return getDeviceByToken(input.deviceToken);
+  }
+
+  if (isTrialExpired(existing.trial_used_at)) {
+    resetDeviceTrialUsage(input.deviceToken);
   }
 
   touchDevice({
@@ -64,8 +98,18 @@ export function registerDeviceSeen(input: {
 
 export function hasDeviceUsedTrial(deviceToken: string): boolean {
   if (!deviceToken) return false;
+
+  cleanupExpiredTrialUsage();
+
   const row = getDeviceByToken(deviceToken);
-  return !!row?.trial_used_at;
+  if (!row?.trial_used_at) return false;
+
+  if (isTrialExpired(row.trial_used_at)) {
+    resetDeviceTrialUsage(deviceToken);
+    return false;
+  }
+
+  return true;
 }
 
 export function rememberTrialUsed(input: {
@@ -74,7 +118,7 @@ export function rememberTrialUsed(input: {
 }) {
   if (!input.deviceToken) return;
 
-  const now = Math.floor(Date.now() / 1000);
+  const now = nowTs();
   markDeviceTrialUsed({
     deviceToken: input.deviceToken,
     now,
@@ -93,7 +137,7 @@ export function logTrialEvent(input: {
   meta?: unknown;
 }) {
   insertTrialProtectionEvent({
-    createdAt: Math.floor(Date.now() / 1000),
+    createdAt: nowTs(),
     deviceToken: input.deviceToken ?? null,
     userId: input.userId ?? null,
     ip: input.ip ?? null,

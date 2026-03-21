@@ -18,6 +18,7 @@ type ListResp = { ok: true; items: BroadcastItem[] };
 type DeleteResp = { ok: true; originId: string; deleted: number };
 
 type OrderBlockMode = "off" | "same_type" | "any";
+type TrialDeviceMode = "off" | "observe" | "enforce";
 
 type AdminSettingsResp = {
   ok: 1 | true;
@@ -31,7 +32,34 @@ type AdminSettingsSaveResp = {
   orderBlockMode?: OrderBlockMode;
 };
 
-type AdminTab = "overview" | "broadcasts" | "orderRules";
+type TrialProtectionStatusResp = {
+  ok: true;
+  mode: TrialDeviceMode;
+  ttlHours: number;
+  devicesWithTrial: number;
+  reuse24h: number;
+  blocks24h?: number;
+};
+
+type TrialProtectionEventItem = {
+  id: number;
+  created_at: number;
+  event_type: string;
+  decision: "allow" | "observe" | "block";
+  reason?: string | null;
+  device_token?: string | null;
+  ip?: string | null;
+  user_agent?: string | null;
+  user_id?: number | null;
+  meta_json?: string | null;
+};
+
+type TrialProtectionEventsResp = {
+  ok: true;
+  items: TrialProtectionEventItem[];
+};
+
+type AdminTab = "overview" | "broadcasts" | "orderRules" | "trialProtection";
 
 const PREVIEW_LIMIT = 180;
 
@@ -51,6 +79,24 @@ function truncateText(text: string | null | undefined, limit: number) {
   if (!source) return "";
   if (source.length <= limit) return source;
   return source.slice(0, limit).trimEnd() + "…";
+}
+
+function shortDeviceToken(token?: string | null) {
+  const s = String(token || "").trim();
+  if (!s) return "—";
+  if (s.length <= 18) return s;
+  return `${s.slice(0, 8)}…${s.slice(-6)}`;
+}
+
+function parseMetaJson(metaJson?: string | null): Record<string, any> | null {
+  const raw = String(metaJson || "").trim();
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 function SectionSwitcher({
@@ -120,16 +166,33 @@ function OverviewSection({ onOpenTab }: { onOpenTab: (tab: AdminTab) => void }) 
           </div>
         </div>
 
-        <div className="list" style={{ marginTop: 12 }}>
-          <div className="list__item">
-            <div className="list__main">
-              <div className="list__title">Дальнейшее расширение</div>
+        <div className="grid2" style={{ marginTop: 12 }}>
+          <div className="mini">
+            <div className="mini__title">Trial Protection</div>
+            <div className="mini__list">
+              <div className="list__sub">
+                Anti-abuse для тестовых услуг: режим работы, TTL устройств и журнал повторных попыток.
+              </div>
+              <div>
+                <span className="chip chip--warn">Новый модуль</span>
+              </div>
+              <div className="actions actions--1">
+                <button className="btn btn--soft" type="button" onClick={() => onOpenTab("trialProtection")}>
+                  Открыть раздел
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="mini">
+            <div className="mini__title">Дальнейшее расширение</div>
+            <div className="mini__list">
               <div className="list__sub">
                 Сюда потом можно добавить feature flags, диагностику, системные тумблеры и прочие admin-функции.
               </div>
-            </div>
-            <div className="list__side">
-              <span className="chip chip--soft">FUTURE</span>
+              <div>
+                <span className="chip chip--soft">FUTURE</span>
+              </div>
             </div>
           </div>
         </div>
@@ -486,6 +549,233 @@ function OrderRulesSection() {
   );
 }
 
+function TrialProtectionSection() {
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [status, setStatus] = useState<TrialProtectionStatusResp | null>(null);
+  const [events, setEvents] = useState<TrialProtectionEventItem[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  async function load(opts?: { silent?: boolean }) {
+    const silent = Boolean(opts?.silent);
+
+    if (silent) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+
+    setError(null);
+
+    try {
+      const [statusResp, eventsResp] = await Promise.all([
+        apiFetch<TrialProtectionStatusResp>("/admin/trial-protection/status", { method: "GET" }),
+        apiFetch<TrialProtectionEventsResp>("/admin/trial-protection/events?limit=30", { method: "GET" }),
+      ]);
+
+      setStatus(statusResp);
+      setEvents(Array.isArray(eventsResp.items) ? eventsResp.items : []);
+    } catch (e: any) {
+      setError(e?.message || "Не удалось загрузить данные Trial Protection.");
+      if (!silent) {
+        setStatus(null);
+        setEvents([]);
+      }
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const sortedEvents = useMemo(
+    () => events.slice().sort((a, b) => (b.created_at || 0) - (a.created_at || 0)),
+    [events],
+  );
+
+  function renderDecisionChip(decision: TrialProtectionEventItem["decision"]) {
+    if (decision === "block") return <span className="chip chip--bad">BLOCK</span>;
+    if (decision === "observe") return <span className="chip chip--warn">OBSERVE</span>;
+    return <span className="chip chip--ok">ALLOW</span>;
+  }
+
+  return (
+    <>
+      <div className="card">
+        <div className="card__body">
+          <div className="kicker">Trial protection</div>
+          <h2 className="h2">Защита тестовых доступов</h2>
+          <p className="p">
+            Контроль использования trial-услуг на уровне устройств: режим работы, TTL и повторные попытки.
+          </p>
+
+          {loading ? (
+            <div className="list" style={{ marginTop: 12 }}>
+              <div className="skeleton h1" />
+              <div className="skeleton p" />
+              <div className="skeleton p" />
+            </div>
+          ) : (
+            <>
+              {error ? <div className="pre" style={{ marginTop: 12 }}>{error}</div> : null}
+
+              <div className="grid2" style={{ marginTop: 12 }}>
+                <div className="mini">
+                  <div className="mini__title">Текущее состояние</div>
+                  <div className="mini__list">
+                    <div className="list__sub">
+                      Режим защиты и базовые counters. Переключение режима добавим следующим шагом через backend.
+                    </div>
+                    <div>
+                      <span
+                        className={`chip ${
+                          status?.mode === "enforce"
+                            ? "chip--bad"
+                            : status?.mode === "observe"
+                              ? "chip--warn"
+                              : "chip--soft"
+                        }`}
+                      >
+                        {status?.mode || "unknown"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mini">
+                  <div className="mini__title">TTL окна</div>
+                  <div className="mini__list">
+                    <div className="list__sub">
+                      Через сколько часов trial-lock на устройстве автоматически сбрасывается.
+                    </div>
+                    <div>
+                      <span className="chip chip--soft">{status?.ttlHours ?? "—"}h</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid2" style={{ marginTop: 12 }}>
+                <div className="list__item">
+                  <div className="list__main">
+                    <div className="list__title">Устройств с активным trial-lock</div>
+                    <div className="list__sub">{status?.devicesWithTrial ?? 0}</div>
+                  </div>
+                  <div className="list__side">
+                    <span className="chip chip--soft">DEVICES</span>
+                  </div>
+                </div>
+
+                <div className="list__item">
+                  <div className="list__main">
+                    <div className="list__title">Повторные попытки за 24 часа</div>
+                    <div className="list__sub">{status?.reuse24h ?? 0}</div>
+                  </div>
+                  <div className="list__side">
+                    <span className="chip chip--warn">24H</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="list" style={{ marginTop: 12 }}>
+                <div className="list__item">
+                  <div className="list__main">
+                    <div className="list__title">Блокировок за 24 часа</div>
+                    <div className="list__sub">{status?.blocks24h ?? 0}</div>
+                  </div>
+                  <div className="list__side">
+                    <span className="chip chip--bad">BLOCKS</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="actions actions--1" style={{ marginTop: 12 }}>
+                <button className="btn btn--accent" type="button" onClick={() => void load({ silent: true })} disabled={refreshing}>
+                  {refreshing ? "Обновляю…" : "Обновить"}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="card" style={{ marginTop: 16 }}>
+        <div className="card__body">
+          <div className="kicker">Events</div>
+          <h2 className="h2">Последние события</h2>
+          <p className="p">
+            Последние записи anti-abuse журнала. Здесь видно reuse устройства, решение системы и связанный service id.
+          </p>
+
+          {loading ? (
+            <div className="list" style={{ marginTop: 12 }}>
+              <div className="skeleton h1" />
+              <div className="skeleton p" />
+              <div className="skeleton p" />
+            </div>
+          ) : error ? (
+            <div className="pre" style={{ marginTop: 12 }}>{error}</div>
+          ) : sortedEvents.length === 0 ? (
+            <div className="pre" style={{ marginTop: 12 }}>Событий пока нет.</div>
+          ) : (
+            <div className="list" style={{ marginTop: 12 }}>
+              {sortedEvents.map((item) => {
+                const meta = parseMetaJson(item.meta_json);
+                const serviceId = meta?.serviceId ?? meta?.service_id ?? null;
+
+                return (
+                  <div key={item.id} className="list__item">
+                    <div className="list__main">
+                      <div className="kicker">{formatDateTime(item.created_at)}</div>
+
+                      <div className="list__title" style={{ marginTop: 6 }}>
+                        {item.event_type}
+                      </div>
+
+                      <div className="list__sub">
+                        <strong>reason:</strong> {item.reason || "—"}
+                      </div>
+
+                      <div className="list__sub">
+                        <strong>device:</strong> {shortDeviceToken(item.device_token)}
+                      </div>
+
+                      <div className="list__sub">
+                        <strong>ip:</strong> {item.ip || "—"}
+                      </div>
+
+                      <div className="list__sub">
+                        <strong>user:</strong> {item.user_id ?? "—"}
+                      </div>
+
+                      <div className="list__sub">
+                        <strong>service:</strong> {serviceId ?? "—"}
+                      </div>
+
+                      {item.user_agent ? (
+                        <div className="list__sub">
+                          <strong>ua:</strong> {truncateText(item.user_agent, 140)}
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="list__side">
+                      {renderDecisionChip(item.decision)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
 export function AdminBroadcasts() {
   const { me, loading: meLoading } = useMe() as any;
   const isAdmin = Boolean(me?.profile?.isAdmin || me?.admin?.isAdmin);
@@ -531,12 +821,18 @@ export function AdminBroadcasts() {
             />
           </div>
 
-          <div className="actions actions--1" style={{ marginTop: 10 }}>
+          <div className="actions actions--2" style={{ marginTop: 10 }}>
             <SectionSwitcher
               active={tab === "orderRules"}
               onClick={() => setTab("orderRules")}
               title="Правила заказов"
               subtitle="Управление orderBlockMode"
+            />
+            <SectionSwitcher
+              active={tab === "trialProtection"}
+              onClick={() => setTab("trialProtection")}
+              title="Trial Protection"
+              subtitle="Anti-abuse и устройства"
             />
           </div>
         </div>
@@ -546,6 +842,7 @@ export function AdminBroadcasts() {
         {tab === "overview" ? <OverviewSection onOpenTab={setTab} /> : null}
         {tab === "broadcasts" ? <BroadcastsSection /> : null}
         {tab === "orderRules" ? <OrderRulesSection /> : null}
+        {tab === "trialProtection" ? <TrialProtectionSection /> : null}
       </div>
     </div>
   );

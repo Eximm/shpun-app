@@ -131,6 +131,33 @@ export function markDeviceTrialUsed(input: {
     .run(input.now, input.userId ?? null, input.deviceToken);
 }
 
+export function resetDeviceTrialUsage(deviceToken: string) {
+  ensureDeviceTables();
+
+  linkDb
+    .prepare(`
+      UPDATE trial_devices
+      SET trial_used_at = NULL,
+          trial_user_id = NULL
+      WHERE device_token = ?
+    `)
+    .run(deviceToken);
+}
+
+export function resetExpiredDeviceTrialUsage(cutoffTs: number) {
+  ensureDeviceTables();
+
+  linkDb
+    .prepare(`
+      UPDATE trial_devices
+      SET trial_used_at = NULL,
+          trial_user_id = NULL
+      WHERE trial_used_at IS NOT NULL
+        AND trial_used_at < ?
+    `)
+    .run(cutoffTs);
+}
+
 export function insertTrialProtectionEvent(input: {
   createdAt: number;
   deviceToken?: string | null;

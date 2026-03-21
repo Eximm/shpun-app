@@ -1,18 +1,16 @@
 import type { FastifyInstance } from "fastify";
 import { getSessionFromRequest } from "../../shared/session/sessionStore.js";
-import {
-  shmShpunAppAdminSettingsGet,
-  shmShpunAppAdminSettingsSet,
-  shmShpunAppAdminStatus,
-} from "../../shared/shm/shmClient.js";
 import { linkDb } from "../../shared/linkdb/db.js";
 import { getTrialDeviceMode, getTrialDeviceTtlHours } from "../device/deviceService.js";
-import { ensureDeviceTables } from "../device/deviceRepo.js";
 
-async function ensureAdmin(shmSessionId: string) {
-  const r = await shmShpunAppAdminStatus(shmSessionId);
-  const isAdmin = r.ok && (r.json?.is_admin === 1 || r.json?.is_admin === true);
-  return isAdmin;
+function ensureAuthed(req: any, reply: any): string | null {
+  const session = getSessionFromRequest(req as any);
+  const shmSessionId = session?.shmSessionId || null;
+  if (!shmSessionId) {
+    reply.code(401).send({ ok: false, error: "not_authenticated" });
+    return null;
+  }
+  return shmSessionId;
 }
 
 function toPositiveInt(v: unknown, fallback: number, max = 200) {
@@ -21,52 +19,10 @@ function toPositiveInt(v: unknown, fallback: number, max = 200) {
   return Math.min(Math.floor(n), max);
 }
 
-export async function adminRoutes(app: FastifyInstance) {
-  app.get("/admin/settings", async (req, reply) => {
-    const s = getSessionFromRequest(req);
-    if (!s?.shmSessionId) return reply.code(401).send({ ok: false });
-
-    if (!(await ensureAdmin(s.shmSessionId))) {
-      return reply.code(403).send({ ok: false, error: "not_admin" });
-    }
-
-    const r = await shmShpunAppAdminSettingsGet(s.shmSessionId);
-
-    if (!r.ok) {
-      return reply.code(502).send({ ok: false, error: "shm_error" });
-    }
-
-    return reply.send(r.json);
-  });
-
-  app.put("/admin/settings/order-rules", async (req, reply) => {
-    const s = getSessionFromRequest(req);
-    if (!s?.shmSessionId) return reply.code(401).send({ ok: false });
-
-    if (!(await ensureAdmin(s.shmSessionId))) {
-      return reply.code(403).send({ ok: false, error: "not_admin" });
-    }
-
-    const mode = (req.body as any)?.orderBlockMode;
-
-    const r = await shmShpunAppAdminSettingsSet(s.shmSessionId, mode);
-
-    if (!r.ok) {
-      return reply.code(502).send({ ok: false, error: "shm_error" });
-    }
-
-    return reply.send(r.json);
-  });
-
+export async function trialProtectionAdminRoutes(app: FastifyInstance) {
   app.get("/admin/trial-protection/status", async (req, reply) => {
-    const s = getSessionFromRequest(req);
-    if (!s?.shmSessionId) return reply.code(401).send({ ok: false });
-
-    if (!(await ensureAdmin(s.shmSessionId))) {
-      return reply.code(403).send({ ok: false, error: "not_admin" });
-    }
-
-    ensureDeviceTables();
+    const shmSessionId = ensureAuthed(req, reply);
+    if (!shmSessionId) return;
 
     const mode = getTrialDeviceMode();
     const ttlHours = getTrialDeviceTtlHours();
@@ -111,14 +67,8 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   app.get("/admin/trial-protection/events", async (req, reply) => {
-    const s = getSessionFromRequest(req);
-    if (!s?.shmSessionId) return reply.code(401).send({ ok: false });
-
-    if (!(await ensureAdmin(s.shmSessionId))) {
-      return reply.code(403).send({ ok: false, error: "not_admin" });
-    }
-
-    ensureDeviceTables();
+    const shmSessionId = ensureAuthed(req, reply);
+    if (!shmSessionId) return;
 
     const q = (req.query ?? {}) as any;
     const limit = toPositiveInt(q?.limit, 30, 200);
