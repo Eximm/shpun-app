@@ -11,8 +11,13 @@ import {
   getTrialDeviceTtlHours,
   setCachedTrialDeviceMode,
   setCachedTrialDeviceTtlHours,
+  logTrialEvent,
 } from "../device/deviceService.js";
-import { ensureDeviceTables } from "../device/deviceRepo.js";
+import {
+  ensureDeviceTables,
+  listTrialDevices,
+  resetDeviceTrialUsage,
+} from "../device/deviceRepo.js";
 
 async function ensureAdmin(shmSessionId: string) {
   const r = await shmShpunAppAdminStatus(shmSessionId);
@@ -28,10 +33,6 @@ function toPositiveInt(v: unknown, fallback: number, max = 200) {
 
 function isTrialDeviceMode(v: unknown): v is "off" | "observe" | "enforce" {
   return v === "off" || v === "observe" || v === "enforce";
-}
-
-function isPositiveNumber(v: unknown): v is number {
-  return typeof v === "number" && Number.isFinite(v) && v > 0;
 }
 
 export async function adminRoutes(app: FastifyInstance) {
@@ -181,11 +182,7 @@ export async function adminRoutes(app: FastifyInstance) {
     const ttlHours = Number((req.body as any)?.ttlHours);
 
     if (!Number.isFinite(ttlHours) || ttlHours <= 0 || ttlHours > 720) {
-      return reply.code(400).send({
-        ok: false,
-        error: "bad_ttl",
-        got: (req.body as any)?.ttlHours,
-      });
+      return reply.code(400).send({ ok: false, error: "bad_ttl" });
     }
 
     const r = await shmShpunAppAdminSettingsSet(s.shmSessionId, {
@@ -193,20 +190,12 @@ export async function adminRoutes(app: FastifyInstance) {
     });
 
     if (!r.ok) {
-      return reply.code(502).send({
-        ok: false,
-        error: "shm_error",
-        details: r.json ?? r.text ?? null,
-      });
+      return reply.code(502).send({ ok: false, error: "shm_error" });
     }
 
     setCachedTrialDeviceTtlHours(ttlHours);
 
-    return reply.send({
-      ok: true,
-      ttlHours,
-      shm: r.json ?? r.text ?? null,
-    });
+    return reply.send({ ok: true, ttlHours });
   });
 
   app.get("/admin/trial-protection/events", async (req, reply) => {
@@ -242,5 +231,48 @@ export async function adminRoutes(app: FastifyInstance) {
       .all(limit);
 
     return reply.send({ ok: true, items });
+  });
+
+  app.get("/admin/trial-protection/devices", async (req, reply) => {
+    const s = getSessionFromRequest(req);
+    if (!s?.shmSessionId) return reply.code(401).send({ ok: false });
+
+    if (!(await ensureAdmin(s.shmSessionId))) {
+      return reply.code(403).send({ ok: false, error: "not_admin" });
+    }
+
+    ensureDeviceTables();
+
+    const q = (req.query ?? {}) as any;
+    const limit = toPositiveInt(q?.limit, 50, 200);
+    const items = listTrialDevices(limit);
+
+    return reply.send({ ok: true, items });
+  });
+
+  app.post("/admin/trial-protection/reset-device", async (req, reply) => {
+    const s = getSessionFromRequest(req);
+    if (!s?.shmSessionId) return reply.code(401).send({ ok: false });
+
+    if (!(await ensureAdmin(s.shmSessionId))) {
+      return reply.code(403).send({ ok: false, error: "not_admin" });
+    }
+
+    const deviceToken = String((req.body as any)?.deviceToken ?? "").trim();
+    if (!deviceToken) {
+      return reply.code(400).send({ ok: false, error: "device_token_required" });
+    }
+
+    resetDeviceTrialUsage(deviceToken);
+
+    logTrialEvent({
+      deviceToken,
+      eventType: "device_trial_reset_by_admin",
+      decision: "allow",
+      reason: "manual_admin_reset",
+      meta: { by: "admin" },
+    });
+
+    return reply.send({ ok: true, deviceToken, reset: true });
   });
 }

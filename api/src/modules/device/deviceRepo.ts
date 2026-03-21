@@ -158,6 +158,28 @@ export function resetExpiredDeviceTrialUsage(cutoffTs: number) {
     .run(cutoffTs);
 }
 
+export function listTrialDevices(limit: number) {
+  ensureDeviceTables();
+
+  return linkDb
+    .prepare(`
+      SELECT
+        id,
+        device_token,
+        first_seen_at,
+        last_seen_at,
+        first_ip,
+        last_ip,
+        user_agent,
+        trial_used_at,
+        trial_user_id
+      FROM trial_devices
+      ORDER BY last_seen_at DESC, id DESC
+      LIMIT ?
+    `)
+    .all(limit);
+}
+
 export function insertTrialProtectionEvent(input: {
   createdAt: number;
   deviceToken?: string | null;

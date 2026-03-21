@@ -59,6 +59,29 @@ type TrialProtectionEventsResp = {
   items: TrialProtectionEventItem[];
 };
 
+type TrialDeviceItem = {
+  id: number;
+  device_token: string;
+  first_seen_at: number | null;
+  last_seen_at: number | null;
+  first_ip?: string | null;
+  last_ip?: string | null;
+  user_agent?: string | null;
+  trial_used_at?: number | null;
+  trial_user_id?: number | null;
+};
+
+type TrialDevicesResp = {
+  ok: true;
+  items: TrialDeviceItem[];
+};
+
+type ResetDeviceResp = {
+  ok: true;
+  deviceToken: string;
+  reset: true;
+};
+
 type AdminTab = "overview" | "broadcasts" | "orderRules" | "trialProtection";
 
 const PREVIEW_LIMIT = 180;
@@ -67,7 +90,8 @@ function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
 
-function formatDateTime(tsSec: number) {
+function formatDateTime(tsSec?: number | null) {
+  if (!tsSec || !Number.isFinite(tsSec)) return "—";
   const d = new Date(tsSec * 1000);
   return `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.${d.getFullYear()} ${pad2(d.getHours())}:${pad2(
     d.getMinutes(),
@@ -99,6 +123,11 @@ function parseMetaJson(metaJson?: string | null): Record<string, any> | null {
   }
 }
 
+function copyText(text: string) {
+  if (!text) return;
+  void navigator.clipboard?.writeText(text);
+}
+
 function SectionSwitcher({
   active,
   onClick,
@@ -122,6 +151,54 @@ function SectionSwitcher({
   );
 }
 
+function ModalShell({
+  title,
+  kicker,
+  onClose,
+  children,
+}: {
+  title: string;
+  kicker?: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const onKeyDown = (ev: KeyboardEvent) => {
+      if (ev.key === "Escape") onClose();
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [onClose]);
+
+  return (
+    <div className="modal" role="dialog" aria-modal="true" onClick={onClose}>
+      <div className="modal__card card" onClick={(ev) => ev.stopPropagation()}>
+        <div className="card__body">
+          <div className="modal__head">
+            <div>
+              {kicker ? <div className="kicker">{kicker}</div> : null}
+              <div className="modal__title">{title}</div>
+            </div>
+
+            <button type="button" className="btn btn--soft modal__close" onClick={onClose} aria-label="Закрыть">
+              ✕
+            </button>
+          </div>
+
+          <div className="modal__content">{children}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function OverviewSection({ onOpenTab }: { onOpenTab: (tab: AdminTab) => void }) {
   return (
     <div className="card">
@@ -134,9 +211,7 @@ function OverviewSection({ onOpenTab }: { onOpenTab: (tab: AdminTab) => void }) 
           <div className="mini">
             <div className="mini__title">Broadcasts</div>
             <div className="mini__list">
-              <div className="list__sub">
-                Просмотр и удаление broadcast-новостей, которые были разосланы пользователям.
-              </div>
+              <div className="list__sub">Просмотр и удаление broadcast-новостей, которые были разосланы пользователям.</div>
               <div>
                 <span className="chip chip--ok">Готово</span>
               </div>
@@ -151,9 +226,7 @@ function OverviewSection({ onOpenTab }: { onOpenTab: (tab: AdminTab) => void }) 
           <div className="mini">
             <div className="mini__title">Правила заказов</div>
             <div className="mini__list">
-              <div className="list__sub">
-                Управление ограничением новых заказов, если у пользователя уже есть неоплаченная услуга.
-              </div>
+              <div className="list__sub">Управление ограничением новых заказов, если у пользователя уже есть неоплаченная услуга.</div>
               <div>
                 <span className="chip chip--ok">Подключено</span>
               </div>
@@ -170,11 +243,9 @@ function OverviewSection({ onOpenTab }: { onOpenTab: (tab: AdminTab) => void }) 
           <div className="mini">
             <div className="mini__title">Trial Protection</div>
             <div className="mini__list">
-              <div className="list__sub">
-                Anti-abuse для тестовых услуг: режим работы, TTL устройств и журнал повторных попыток.
-              </div>
+              <div className="list__sub">Anti-abuse для тестовых услуг: режим работы, TTL устройств, журнал событий и ручной reset.</div>
               <div>
-                <span className="chip chip--warn">Новый модуль</span>
+                <span className="chip chip--warn">Активно</span>
               </div>
               <div className="actions actions--1">
                 <button className="btn btn--soft" type="button" onClick={() => onOpenTab("trialProtection")}>
@@ -187,9 +258,7 @@ function OverviewSection({ onOpenTab }: { onOpenTab: (tab: AdminTab) => void }) 
           <div className="mini">
             <div className="mini__title">Дальнейшее расширение</div>
             <div className="mini__list">
-              <div className="list__sub">
-                Сюда потом можно добавить feature flags, диагностику, системные тумблеры и прочие admin-функции.
-              </div>
+              <div className="list__sub">Сюда потом можно добавить whitelist, фильтры, поиск по IP и более глубокую диагностику.</div>
               <div>
                 <span className="chip chip--soft">FUTURE</span>
               </div>
@@ -226,23 +295,6 @@ function BroadcastsSection() {
     void load();
   }, []);
 
-  useEffect(() => {
-    if (!opened) return;
-
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    const onKeyDown = (ev: KeyboardEvent) => {
-      if (ev.key === "Escape") setOpened(null);
-    };
-
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.body.style.overflow = prevOverflow;
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [opened]);
-
   async function removeOne(originId: string) {
     const ok = window.confirm(`Удалить broadcast у всех пользователей?\n\n${originId}`);
     if (!ok) return;
@@ -263,10 +315,7 @@ function BroadcastsSection() {
     }
   }
 
-  const sorted = useMemo(
-    () => items.slice().sort((a, b) => (b.ts || 0) - (a.ts || 0)),
-    [items],
-  );
+  const sorted = useMemo(() => items.slice().sort((a, b) => (b.ts || 0) - (a.ts || 0)), [items]);
 
   return (
     <>
@@ -339,60 +388,30 @@ function BroadcastsSection() {
       </div>
 
       {opened ? (
-        <div
-          className="modal"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="admin-broadcast-title"
-          onClick={() => setOpened(null)}
-        >
-          <div className="modal__card card" onClick={(ev) => ev.stopPropagation()}>
-            <div className="card__body">
-              <div className="modal__head">
-                <div>
-                  <div className="kicker">{formatDateTime(opened.ts)}</div>
-                  <div id="admin-broadcast-title" className="modal__title">
-                    {opened.title || "Без заголовка"}
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  className="btn btn--soft modal__close"
-                  onClick={() => setOpened(null)}
-                  aria-label="Закрыть"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <div className="modal__content">
-                <div className="list__sub feed__fulltext">
-                  <strong>origin:</strong> {opened.origin_id}
-                </div>
-                <div className="list__sub" style={{ marginTop: 8 }}>
-                  <strong>copies:</strong> {opened.copies}
-                </div>
-                {opened.message ? (
-                  <div className="list__sub feed__fulltext" style={{ marginTop: 14 }}>
-                    {opened.message}
-                  </div>
-                ) : null}
-
-                <div className="actions actions--1" style={{ marginTop: 16 }}>
-                  <button
-                    className="btn btn--danger"
-                    type="button"
-                    disabled={deletingId === opened.origin_id}
-                    onClick={() => removeOne(opened.origin_id)}
-                  >
-                    {deletingId === opened.origin_id ? "Удаляю…" : "Удалить у всех"}
-                  </button>
-                </div>
-              </div>
-            </div>
+        <ModalShell title={opened.title || "Без заголовка"} kicker={formatDateTime(opened.ts)} onClose={() => setOpened(null)}>
+          <div className="list__sub feed__fulltext">
+            <strong>origin:</strong> {opened.origin_id}
           </div>
-        </div>
+          <div className="list__sub" style={{ marginTop: 8 }}>
+            <strong>copies:</strong> {opened.copies}
+          </div>
+          {opened.message ? (
+            <div className="list__sub feed__fulltext" style={{ marginTop: 14 }}>
+              {opened.message}
+            </div>
+          ) : null}
+
+          <div className="actions actions--1" style={{ marginTop: 16 }}>
+            <button
+              className="btn btn--danger"
+              type="button"
+              disabled={deletingId === opened.origin_id}
+              onClick={() => removeOne(opened.origin_id)}
+            >
+              {deletingId === opened.origin_id ? "Удаляю…" : "Удалить у всех"}
+            </button>
+          </div>
+        </ModalShell>
       ) : null}
     </>
   );
@@ -435,8 +454,7 @@ function OrderRulesSection() {
     try {
       const r = await apiFetch<AdminSettingsSaveResp>("/admin/settings/order-rules", {
         method: "PUT",
-        body: JSON.stringify({ orderBlockMode: mode }),
-        headers: { "Content-Type": "application/json" },
+        body: { orderBlockMode: mode },
       });
 
       const nextMode: OrderBlockMode = r?.orderBlockMode || mode;
@@ -457,9 +475,7 @@ function OrderRulesSection() {
       <div className="card__body">
         <div className="kicker">Order rules</div>
         <h2 className="h2">Правила оформления услуг</h2>
-        <p className="p">
-          Эта настройка управляет блокировкой новых заказов, если у пользователя уже есть неоплаченная услуга.
-        </p>
+        <p className="p">Эта настройка управляет блокировкой новых заказов, если у пользователя уже есть неоплаченная услуга.</p>
 
         {loading ? (
           <div className="list" style={{ marginTop: 12 }}>
@@ -516,9 +532,7 @@ function OrderRulesSection() {
               <div className="list__item">
                 <div className="list__main">
                   <div className="list__title">Как это будет работать</div>
-                  <div className="list__sub">
-                    Проверка выполняется на backend при создании заказа. Интерфейс только управляет режимом.
-                  </div>
+                  <div className="list__sub">Проверка выполняется на backend при создании заказа. Интерфейс только управляет режимом.</div>
                 </div>
                 <div className="list__side">
                   <span className="chip chip--soft">API</span>
@@ -533,12 +547,7 @@ function OrderRulesSection() {
               <button className="btn btn--soft" type="button" onClick={load} disabled={loading || saving}>
                 Обновить
               </button>
-              <button
-                className="btn btn--accent"
-                type="button"
-                onClick={save}
-                disabled={saving || !changed}
-              >
+              <button className="btn btn--accent" type="button" onClick={save} disabled={saving || !changed}>
                 {saving ? "Сохраняю…" : "Сохранить"}
               </button>
             </div>
@@ -554,10 +563,18 @@ function TrialProtectionSection() {
   const [refreshing, setRefreshing] = useState(false);
   const [savingMode, setSavingMode] = useState(false);
   const [savingTtl, setSavingTtl] = useState(false);
+  const [resettingDevice, setResettingDevice] = useState<string | null>(null);
+
   const [status, setStatus] = useState<TrialProtectionStatusResp | null>(null);
   const [events, setEvents] = useState<TrialProtectionEventItem[]>([]);
+  const [devices, setDevices] = useState<TrialDeviceItem[]>([]);
+
+  const [openedEvent, setOpenedEvent] = useState<TrialProtectionEventItem | null>(null);
+  const [openedDevice, setOpenedDevice] = useState<TrialDeviceItem | null>(null);
+
   const [error, setError] = useState<string | null>(null);
   const [okText, setOkText] = useState<string | null>(null);
+
   const [modeDraft, setModeDraft] = useState<TrialDeviceMode>("observe");
   const [ttlDraft, setTtlDraft] = useState<string>("72");
 
@@ -573,20 +590,23 @@ function TrialProtectionSection() {
     setError(null);
 
     try {
-      const [statusResp, eventsResp] = await Promise.all([
+      const [statusResp, eventsResp, devicesResp] = await Promise.all([
         apiFetch<TrialProtectionStatusResp>("/admin/trial-protection/status", { method: "GET" }),
-        apiFetch<TrialProtectionEventsResp>("/admin/trial-protection/events?limit=30", { method: "GET" }),
+        apiFetch<TrialProtectionEventsResp>("/admin/trial-protection/events?limit=20", { method: "GET" }),
+        apiFetch<TrialDevicesResp>("/admin/trial-protection/devices?limit=20", { method: "GET" }),
       ]);
 
       setStatus(statusResp);
       setModeDraft(statusResp.mode);
       setTtlDraft(String(statusResp.ttlHours));
       setEvents(Array.isArray(eventsResp.items) ? eventsResp.items : []);
+      setDevices(Array.isArray(devicesResp.items) ? devicesResp.items : []);
     } catch (e: any) {
       setError(e?.message || "Не удалось загрузить данные Trial Protection.");
       if (!silent) {
         setStatus(null);
         setEvents([]);
+        setDevices([]);
       }
     } finally {
       setLoading(false);
@@ -640,9 +660,40 @@ function TrialProtectionSection() {
     }
   }
 
+  async function resetDevice(deviceToken: string) {
+    const ok = window.confirm(`Сбросить trial-lock для устройства?\n\n${deviceToken}`);
+    if (!ok) return;
+
+    setResettingDevice(deviceToken);
+    setError(null);
+    setOkText(null);
+
+    try {
+      const r = await apiFetch<ResetDeviceResp>("/admin/trial-protection/reset-device", {
+        method: "POST",
+        body: { deviceToken },
+      });
+
+      setOkText(`Сброс выполнен: ${shortDeviceToken(r.deviceToken)}`);
+      if (openedDevice?.device_token === deviceToken) {
+        setOpenedDevice(null);
+      }
+      await load({ silent: true });
+    } catch (e: any) {
+      setError(e?.message || "Не удалось сбросить устройство.");
+    } finally {
+      setResettingDevice(null);
+    }
+  }
+
   const sortedEvents = useMemo(
     () => events.slice().sort((a, b) => (b.created_at || 0) - (a.created_at || 0)),
     [events],
+  );
+
+  const sortedDevices = useMemo(
+    () => devices.slice().sort((a, b) => (b.last_seen_at || 0) - (a.last_seen_at || 0)),
+    [devices],
   );
 
   function renderDecisionChip(decision: TrialProtectionEventItem["decision"]) {
@@ -660,9 +711,7 @@ function TrialProtectionSection() {
         <div className="card__body">
           <div className="kicker">Trial protection</div>
           <h2 className="h2">Защита тестовых доступов</h2>
-          <p className="p">
-            Контроль использования trial-услуг на уровне устройств: режим работы, TTL и повторные попытки.
-          </p>
+          <p className="p">Контроль использования trial-услуг на уровне устройств: режим работы, TTL и повторные попытки.</p>
 
           {loading ? (
             <div className="list" style={{ marginTop: 12 }}>
@@ -679,9 +728,7 @@ function TrialProtectionSection() {
                 <div className="mini">
                   <div className="mini__title">Текущее состояние</div>
                   <div className="mini__list">
-                    <div className="list__sub">
-                      Текущий режим anti-abuse для тестовых услуг.
-                    </div>
+                    <div className="list__sub">Текущий режим anti-abuse для тестовых услуг.</div>
                     <div>
                       <span
                         className={`chip ${
@@ -701,9 +748,7 @@ function TrialProtectionSection() {
                 <div className="mini">
                   <div className="mini__title">TTL окна</div>
                   <div className="mini__list">
-                    <div className="list__sub">
-                      Через сколько часов trial-lock на устройстве автоматически сбрасывается.
-                    </div>
+                    <div className="list__sub">Через сколько часов trial-lock на устройстве автоматически сбрасывается.</div>
                     <div>
                       <span className="chip chip--soft">{status?.ttlHours ?? "—"}h</span>
                     </div>
@@ -848,9 +893,7 @@ function TrialProtectionSection() {
         <div className="card__body">
           <div className="kicker">Events</div>
           <h2 className="h2">Последние события</h2>
-          <p className="p">
-            Последние записи anti-abuse журнала. Здесь видно reuse устройства, решение системы и связанный service id.
-          </p>
+          <p className="p">Короткий журнал событий anti-abuse. Полная информация открывается в модальном окне.</p>
 
           {loading ? (
             <div className="list" style={{ marginTop: 12 }}>
@@ -864,59 +907,266 @@ function TrialProtectionSection() {
             <div className="pre" style={{ marginTop: 12 }}>Событий пока нет.</div>
           ) : (
             <div className="list" style={{ marginTop: 12 }}>
-              {sortedEvents.map((item) => {
-                const meta = parseMetaJson(item.meta_json);
-                const serviceId = meta?.serviceId ?? meta?.service_id ?? null;
-
-                return (
-                  <div key={item.id} className="list__item">
-                    <div className="list__main">
-                      <div className="kicker">{formatDateTime(item.created_at)}</div>
-
-                      <div className="list__title" style={{ marginTop: 6 }}>
-                        {item.event_type}
-                      </div>
-
-                      <div className="list__sub">
-                        <strong>reason:</strong> {item.reason || "—"}
-                      </div>
-
-                      <div className="list__sub">
-                        <strong>device:</strong> {shortDeviceToken(item.device_token)}
-                      </div>
-
-                      <div className="list__sub">
-                        <strong>ip:</strong> {item.ip || "—"}
-                      </div>
-
-                      <div className="list__sub">
-                        <strong>user:</strong> {item.user_id ?? "—"}
-                      </div>
-
-                      <div className="list__sub">
-                        <strong>service:</strong> {serviceId ?? "—"}
-                      </div>
-
-                      {item.user_agent ? (
-                        <div className="list__sub">
-                          <strong>ua:</strong> {truncateText(item.user_agent, 140)}
-                        </div>
-                      ) : null}
-                    </div>
-
-                    <div className="list__side">
-                      {renderDecisionChip(item.decision)}
-                    </div>
+              {sortedEvents.map((item) => (
+                <div
+                  key={item.id}
+                  className="list__item is-clickable"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setOpenedEvent(item)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") setOpenedEvent(item);
+                  }}
+                >
+                  <div className="list__main">
+                    <div className="kicker">{formatDateTime(item.created_at)}</div>
+                    <div className="list__title" style={{ marginTop: 6 }}>{item.event_type}</div>
+                    <div className="list__sub">{item.reason || "Без причины"}</div>
                   </div>
-                );
-              })}
+
+                  <div className="list__side">{renderDecisionChip(item.decision)}</div>
+                </div>
+              ))}
             </div>
           )}
         </div>
       </div>
+
+      <div className="card" style={{ marginTop: 16 }}>
+        <div className="card__body">
+          <div className="kicker">Devices</div>
+          <h2 className="h2">Устройства</h2>
+          <p className="p">Последние замеченные устройства. Здесь можно вручную сбросить trial-lock для конкретного device token.</p>
+
+          {loading ? (
+            <div className="list" style={{ marginTop: 12 }}>
+              <div className="skeleton h1" />
+              <div className="skeleton p" />
+              <div className="skeleton p" />
+            </div>
+          ) : error ? (
+            <div className="pre" style={{ marginTop: 12 }}>{error}</div>
+          ) : sortedDevices.length === 0 ? (
+            <div className="pre" style={{ marginTop: 12 }}>Устройств пока нет.</div>
+          ) : (
+            <div className="list" style={{ marginTop: 12 }}>
+              {sortedDevices.map((item) => (
+                <div key={item.id} className="list__item">
+                  <div
+                    className="list__main"
+                    style={{ cursor: "pointer" }}
+                    onClick={() => setOpenedDevice(item)}
+                  >
+                    <div className="kicker">{formatDateTime(item.last_seen_at)}</div>
+                    <div className="list__title" style={{ marginTop: 6 }}>{shortDeviceToken(item.device_token)}</div>
+                    <div className="list__sub">
+                      trial: {item.trial_used_at ? "yes" : "no"}<span className="paymentsHist__dot" />ip: {item.last_ip || "—"}
+                    </div>
+                  </div>
+
+                  <div className="list__side" style={{ gap: 8 }}>
+                    <button
+                      className="btn btn--soft"
+                      type="button"
+                      onClick={() => {
+                        copyText(item.device_token);
+                        setOkText(`Скопирован token: ${shortDeviceToken(item.device_token)}`);
+                      }}
+                    >
+                      Copy
+                    </button>
+                    <button
+                      className="btn btn--danger"
+                      type="button"
+                      disabled={resettingDevice === item.device_token}
+                      onClick={() => resetDevice(item.device_token)}
+                    >
+                      {resettingDevice === item.device_token ? "Сброс…" : "Reset"}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {openedEvent ? (
+        <ModalShell
+          title={openedEvent.event_type}
+          kicker={formatDateTime(openedEvent.created_at)}
+          onClose={() => setOpenedEvent(null)}
+        >
+          {(() => {
+            const meta = parseMetaJson(openedEvent.meta_json);
+            const serviceId = meta?.serviceId ?? meta?.service_id ?? null;
+
+            return (
+              <>
+                <div className="list">
+                  <div className="list__item">
+                    <div className="list__main">
+                      <div className="list__title">Решение</div>
+                      <div className="list__sub">{openedEvent.decision}</div>
+                    </div>
+                    <div className="list__side">{renderDecisionChip(openedEvent.decision)}</div>
+                  </div>
+
+                  <div className="list__item">
+                    <div className="list__main">
+                      <div className="list__title">Причина</div>
+                      <div className="list__sub">{openedEvent.reason || "—"}</div>
+                    </div>
+                  </div>
+
+                  <div className="list__item">
+                    <div className="list__main">
+                      <div className="list__title">Устройство</div>
+                      <div className="list__sub feed__fulltext">{openedEvent.device_token || "—"}</div>
+                    </div>
+                  </div>
+
+                  <div className="list__item">
+                    <div className="list__main">
+                      <div className="list__title">IP</div>
+                      <div className="list__sub">{openedEvent.ip || "—"}</div>
+                    </div>
+                  </div>
+
+                  <div className="list__item">
+                    <div className="list__main">
+                      <div className="list__title">User ID</div>
+                      <div className="list__sub">{openedEvent.user_id ?? "—"}</div>
+                    </div>
+                  </div>
+
+                  <div className="list__item">
+                    <div className="list__main">
+                      <div className="list__title">Service ID</div>
+                      <div className="list__sub">{serviceId ?? "—"}</div>
+                    </div>
+                  </div>
+
+                  <div className="list__item">
+                    <div className="list__main">
+                      <div className="list__title">User-Agent</div>
+                      <div className="list__sub feed__fulltext">{openedEvent.user_agent || "—"}</div>
+                    </div>
+                  </div>
+
+                  <div className="list__item">
+                    <div className="list__main">
+                      <div className="list__title">Meta JSON</div>
+                      <div className="list__sub feed__fulltext">{openedEvent.meta_json || "—"}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="actions actions--2" style={{ marginTop: 16 }}>
+                  <button
+                    className="btn btn--soft"
+                    type="button"
+                    onClick={() => copyText(openedEvent.device_token || "")}
+                  >
+                    Copy device
+                  </button>
+                  <button
+                    className="btn btn--soft"
+                    type="button"
+                    onClick={() => copyText(openedEvent.meta_json || "")}
+                  >
+                    Copy meta
+                  </button>
+                </div>
+              </>
+            );
+          })()}
+        </ModalShell>
+      ) : null}
+
+      {openedDevice ? (
+        <ModalShell
+          title={shortDeviceToken(openedDevice.device_token)}
+          kicker={`Last seen: ${formatDateTime(openedDevice.last_seen_at)}`}
+          onClose={() => setOpenedDevice(null)}
+        >
+          <div className="list">
+            <div className="list__item">
+              <div className="list__main">
+                <div className="list__title">Device token</div>
+                <div className="list__sub feed__fulltext">{openedDevice.device_token}</div>
+              </div>
+            </div>
+
+            <div className="list__item">
+              <div className="list__main">
+                <div className="list__title">First seen</div>
+                <div className="list__sub">{formatDateTime(openedDevice.first_seen_at)}</div>
+              </div>
+            </div>
+
+            <div className="list__item">
+              <div className="list__main">
+                <div className="list__title">Last seen</div>
+                <div className="list__sub">{formatDateTime(openedDevice.last_seen_at)}</div>
+              </div>
+            </div>
+
+            <div className="list__item">
+              <div className="list__main">
+                <div className="list__title">Trial used at</div>
+                <div className="list__sub">{formatDateTime(openedDevice.trial_used_at)}</div>
+              </div>
+            </div>
+
+            <div className="list__item">
+              <div className="list__main">
+                <div className="list__title">First IP</div>
+                <div className="list__sub">{openedDevice.first_ip || "—"}</div>
+              </div>
+            </div>
+
+            <div className="list__item">
+              <div className="list__main">
+                <div className="list__title">Last IP</div>
+                <div className="list__sub">{openedDevice.last_ip || "—"}</div>
+              </div>
+            </div>
+
+            <div className="list__item">
+              <div className="list__main">
+                <div className="list__title">Trial user ID</div>
+                <div className="list__sub">{openedDevice.trial_user_id ?? "—"}</div>
+              </div>
+            </div>
+
+            <div className="list__item">
+              <div className="list__main">
+                <div className="list__title">User-Agent</div>
+                <div className="list__sub feed__fulltext">{openedDevice.user_agent || "—"}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="actions actions--2" style={{ marginTop: 16 }}>
+            <button className="btn btn--soft" type="button" onClick={() => copyText(openedDevice.device_token)}>
+              Copy token
+            </button>
+            <button
+              className="btn btn--danger"
+              type="button"
+              disabled={resettingDevice === openedDevice.device_token}
+              onClick={() => resetDevice(openedDevice.device_token)}
+            >
+              {resettingDevice === openedDevice.device_token ? "Сброс…" : "Reset device"}
+            </button>
+          </div>
+        </ModalShell>
+      ) : null}
     </>
   );
 }
+
 export function AdminBroadcasts() {
   const { me, loading: meLoading } = useMe() as any;
   const isAdmin = Boolean(me?.profile?.isAdmin || me?.admin?.isAdmin);
