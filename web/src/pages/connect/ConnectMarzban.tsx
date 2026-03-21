@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import QRCode from 'qrcode'
 import { apiFetch } from '../../shared/api/client'
 import { toast } from '../../shared/ui/toast'
+import { RU, EN, type Lang } from '../../shared/i18n/dict'
 
 type Props = {
   usi: number
@@ -17,7 +18,7 @@ type ClientKind = 'hiddify' | 'v2ray'
 
 type ClientLinks = Record<
   Platform,
-  { title: string; market: string; direct?: string; storeLabel: string }
+  { title: string; market: string; direct?: string; storeLabelKey: string }
 >
 
 const V2RAYTUN_LINKS: ClientLinks = {
@@ -25,27 +26,27 @@ const V2RAYTUN_LINKS: ClientLinks = {
     title: 'v2RayTun',
     market: 'https://play.google.com/store/apps/details?id=com.v2raytun.android',
     direct: 'https://github.com/DigneZzZ/v2raytun/releases/latest',
-    storeLabel: 'Google Play',
+    storeLabelKey: 'connectAmneziaWG.store.google_play',
   },
   ios: {
     title: 'v2RayTun',
     market: 'https://apps.apple.com/us/app/v2raytun/id6476628951',
-    storeLabel: 'App Store',
+    storeLabelKey: 'connectAmneziaWG.store.app_store',
   },
   windows: {
     title: 'v2RayTun',
     market: 'https://v2raytun.com/',
-    storeLabel: 'официальный сайт',
+    storeLabelKey: 'connectAmneziaWG.store.download_page',
   },
   mac: {
     title: 'v2RayTun',
     market: 'https://apps.apple.com/us/app/v2raytun/id6476628951',
-    storeLabel: 'App Store',
+    storeLabelKey: 'connectAmneziaWG.store.app_store',
   },
   linux: {
     title: 'v2RayTun',
     market: 'https://v2raytun.com/',
-    storeLabel: 'официальный сайт',
+    storeLabelKey: 'connectAmneziaWG.store.download_page',
   },
 }
 
@@ -54,30 +55,61 @@ const HIDDIFY_LINKS: ClientLinks = {
     title: 'Hiddify',
     market: 'https://play.google.com/store/apps/details?id=app.hiddify.com',
     direct: 'https://github.com/hiddify/hiddify-app/releases/latest/download/Hiddify-Android-arm64.apk',
-    storeLabel: 'Google Play',
+    storeLabelKey: 'connectAmneziaWG.store.google_play',
   },
   ios: {
     title: 'Hiddify',
     market: 'https://apps.apple.com/us/app/hiddify-proxy-vpn/id6596777532',
-    storeLabel: 'App Store',
+    storeLabelKey: 'connectAmneziaWG.store.app_store',
   },
   windows: {
     title: 'Hiddify',
     market: 'https://github.com/hiddify/hiddify-app/releases',
-    storeLabel: 'страницу скачивания',
+    storeLabelKey: 'connectAmneziaWG.store.download_page',
   },
   mac: {
     title: 'Hiddify',
     market: 'https://github.com/hiddify/hiddify-app/releases',
     direct: 'https://github.com/hiddify/hiddify-app/releases/latest/download/Hiddify-MacOS.dmg',
-    storeLabel: 'страницу скачивания',
+    storeLabelKey: 'connectAmneziaWG.store.download_page',
   },
   linux: {
     title: 'Hiddify',
     market: 'https://github.com/hiddify/hiddify-app/releases',
     direct: 'https://github.com/hiddify/hiddify-app/releases/latest/download/Hiddify-Linux-x64.AppImage',
-    storeLabel: 'страницу скачивания',
+    storeLabelKey: 'connectAmneziaWG.store.download_page',
   },
+}
+
+function detectLang(): Lang {
+  try {
+    const saved = String(localStorage.getItem('lang') || '').trim().toLowerCase()
+    if (saved === 'ru' || saved === 'en') return saved
+  } catch {
+    // ignore
+  }
+
+  const docLang = String(document?.documentElement?.lang || '').trim().toLowerCase()
+  if (docLang === 'ru' || docLang === 'en') return docLang as Lang
+
+  const navLang = String(navigator.language || '').toLowerCase()
+  return navLang.startsWith('ru') ? 'ru' : 'en'
+}
+
+function formatText(template: string, vars?: Record<string, string | number>) {
+  if (!vars) return template
+  return template.replace(/\{(\w+)\}/g, (_, key) => String(vars[key] ?? ''))
+}
+
+function useDict() {
+  const lang = useMemo(() => detectLang(), [])
+  const dict = lang === 'ru' ? RU : EN
+
+  function t(key: string, vars?: Record<string, string | number>) {
+    return formatText(dict[key] || key, vars)
+  }
+
+  return { t }
 }
 
 function detectOS(): Platform {
@@ -140,10 +172,7 @@ function closeTelegramMiniAppSoon(delay = 150) {
   }, delay)
 }
 
-function tryOpenScheme(url: string, runtime: RuntimeMode, opts?: { fallbackToast?: string }) {
-  const fallbackToast =
-    opts?.fallbackToast || 'Если приложение не открылось, используйте ссылку или QR-код ниже.'
-
+function tryOpenScheme(url: string, runtime: RuntimeMode, onFail?: () => void) {
   try {
     const a = document.createElement('a')
     a.href = url
@@ -169,9 +198,7 @@ function tryOpenScheme(url: string, runtime: RuntimeMode, opts?: { fallbackToast
       closeTelegramMiniAppSoon(150)
     }
   } catch {
-    toast.info('Не получилось открыть приложение', {
-      description: fallbackToast,
-    })
+    onFail?.()
   }
 }
 
@@ -211,6 +238,27 @@ function buildHiddifyImportLink(subscriptionUrl: string, platform: Platform) {
   return `hiddify://install-sub/?url=${encodeURIComponent(subscriptionUrl)}`
 }
 
+function installStateKey(usi: number, platform: Platform, client: ClientKind) {
+  return `connect_marzban_install_started:${usi}:${platform}:${client}`
+}
+
+function readInstallState(usi: number, platform: Platform, client: ClientKind) {
+  try {
+    return localStorage.getItem(installStateKey(usi, platform, client)) === '1'
+  } catch {
+    return false
+  }
+}
+
+function writeInstallState(usi: number, platform: Platform, client: ClientKind, value: boolean) {
+  try {
+    if (value) localStorage.setItem(installStateKey(usi, platform, client), '1')
+    else localStorage.removeItem(installStateKey(usi, platform, client))
+  } catch {
+    // ignore
+  }
+}
+
 function Accordion(props: {
   title: string
   subtitle: string
@@ -225,12 +273,7 @@ function Accordion(props: {
   useEffect(() => {
     const el = innerRef.current
     if (!el) return
-
-    if (props.opened) {
-      setMaxHeight(el.scrollHeight)
-    } else {
-      setMaxHeight(0)
-    }
+    setMaxHeight(props.opened ? el.scrollHeight : 0)
   }, [props.opened, props.children])
 
   useEffect(() => {
@@ -238,9 +281,7 @@ function Accordion(props: {
     if (!el || typeof ResizeObserver === 'undefined') return
 
     const ro = new ResizeObserver(() => {
-      if (props.opened) {
-        setMaxHeight(el.scrollHeight)
-      }
+      if (props.opened) setMaxHeight(el.scrollHeight)
     })
 
     ro.observe(el)
@@ -261,30 +302,24 @@ function Accordion(props: {
   }, [props.opened])
 
   return (
-    <div
-      ref={cardRef}
-      className="card cawg__accCard"
-    >
+    <div ref={cardRef} className="card cawg__accCard">
       <button
         type="button"
         onClick={props.onToggle}
         className="kv__item cawg__accToggle"
         aria-expanded={props.opened}
       >
-        <div className="row so__spaceBetween" style={{ alignItems: 'center', gap: 12 }}>
+        <div className="row so__spaceBetween">
           <div>
-            <div style={{ fontWeight: 700 }}>{props.title}</div>
-            <div className="p" style={{ opacity: 0.72, marginTop: 4 }}>
-              {props.subtitle}
-            </div>
+            <div className="kv__v">{props.title}</div>
+            <div className="p">{props.subtitle}</div>
           </div>
 
-          <span
-            className={`badge cawg__accBadge ${props.opened ? 'is-open' : ''}`}
-            aria-hidden
-          >
-            ▾
-          </span>
+          <div className="list__side">
+            <span className={`badge cawg__accBadge ${props.opened ? 'is-open' : ''}`} aria-hidden>
+              ▾
+            </span>
+          </div>
         </div>
       </button>
 
@@ -292,10 +327,7 @@ function Accordion(props: {
         className={`cawg__accBody ${props.opened ? 'is-open' : ''}`}
         style={{ maxHeight: `${maxHeight}px` }}
       >
-        <div
-          ref={innerRef}
-          className="card__body cawg__accBodyInner"
-        >
+        <div ref={innerRef} className="card__body cawg__accBodyInner">
           {props.children}
         </div>
       </div>
@@ -304,6 +336,8 @@ function Accordion(props: {
 }
 
 export default function ConnectMarzban({ usi }: Props) {
+  const { t } = useDict()
+
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -325,6 +359,11 @@ export default function ConnectMarzban({ usi }: Props) {
   const [qrOpen, setQrOpen] = useState(false)
   const [qrDataUrl, setQrDataUrl] = useState('')
 
+  const [installStarted, setInstallStarted] = useState<Record<ClientKind, boolean>>({
+    hiddify: false,
+    v2ray: false,
+  })
+
   async function load() {
     setLoading(true)
     setError(null)
@@ -344,13 +383,13 @@ export default function ConnectMarzban({ usi }: Props) {
       setSubscriptionUrl(url)
     } catch (e: any) {
       setSubscriptionUrl('')
-      const msg = e?.message || 'Не удалось загрузить ссылку подписки'
+      const msg = e?.message || t('connect.load_failed')
       setError(msg)
 
-      toast.error('Не удалось подготовить подключение', {
+      toast.error(t('connect.sub_prepare_error'), {
         description:
           msg === 'subscription_url_missing'
-            ? 'Ссылка пока недоступна. Попробуйте чуть позже.'
+            ? t('connect.sub_prepare_error_desc')
             : String(msg),
       })
     } finally {
@@ -368,38 +407,43 @@ export default function ConnectMarzban({ usi }: Props) {
   useEffect(() => {
     if (userTouchedAccordionsRef.current) return
     setOpenAccordion(primaryKind)
-  }, [platform, runtime, primaryKind])
+  }, [platform, primaryKind])
+
+  useEffect(() => {
+    setInstallStarted({
+      hiddify: readInstallState(usi, platform, 'hiddify'),
+      v2ray: readInstallState(usi, platform, 'v2ray'),
+    })
+  }, [usi, platform])
 
   const ready = !loading && !error && !!subscriptionUrl
 
   const hiddifyClient = HIDDIFY_LINKS[platform]
   const v2rayClient = V2RAYTUN_LINKS[platform]
-
   const primaryClient = primaryKind === 'hiddify' ? hiddifyClient : v2rayClient
 
   const hiddifyAutoImportHref = ready ? buildHiddifyImportLink(subscriptionUrl, platform) : ''
   const v2rayAutoImportHref = ready ? buildV2RayTunImportLink(subscriptionUrl, platform) : ''
 
   const topHint = useMemo(() => {
-    const pName = platformLabel(platform)
-
-    if (loading) return `Готовим подключение для ${pName}…`
-    if (error) return `Не удалось подготовить подключение для ${pName}.`
-
-    if (platform === 'ios') {
-      return 'Подписка готова. Для iPhone и iPad рекомендуем v2RayTun.'
-    }
-
-    if (platform === 'android') {
-      return 'Подписка готова. Для Android рекомендуем Hiddify.'
-    }
-
-    return `Подписка готова. Рекомендуемый клиент для ${pName}: ${primaryClient.title}.`
-  }, [platform, loading, error, primaryClient.title])
+    if (loading) return t('connect.loading')
+    if (error) return t('connect.error')
+    return `${t('connect.ready')} ${t('connect.sub_ready_desc')}`
+  }, [loading, error, t])
 
   function toggleAccordion(key: AccordionKey) {
     userTouchedAccordionsRef.current = true
     setOpenAccordion(key)
+  }
+
+  function markInstallStarted(client: ClientKind) {
+    writeInstallState(usi, platform, client, true)
+    setInstallStarted((prev) => ({ ...prev, [client]: true }))
+  }
+
+  function resetInstallStarted(client: ClientKind) {
+    writeInstallState(usi, platform, client, false)
+    setInstallStarted((prev) => ({ ...prev, [client]: false }))
   }
 
   async function openQr() {
@@ -410,12 +454,12 @@ export default function ConnectMarzban({ usi }: Props) {
       setQrDataUrl(dataUrl)
       setQrOpen(true)
 
-      toast.info('QR-код готов', {
-        description: 'Откройте клиент на другом устройстве и добавьте подписку по QR-коду.',
+      toast.info(t('connect.qr_title'), {
+        description: t('connect.qr_text'),
       })
-    } catch (e: any) {
-      toast.error('Не удалось показать QR-код', {
-        description: String(e?.message || 'Попробуйте ещё раз.'),
+    } catch {
+      toast.error(t('connect.qr_title'), {
+        description: t('connect.sub_prepare_error_desc'),
       })
     }
   }
@@ -428,12 +472,12 @@ export default function ConnectMarzban({ usi }: Props) {
 
     if (ok) {
       setTimeout(() => setCopied(false), 1500)
-      toast.success('Ссылка скопирована', {
-        description: 'Теперь вставьте её в приложение вручную.',
+      toast.success(t('connect.copied'), {
+        description: t('connect.import_text'),
       })
     } else {
-      toast.error('Не удалось скопировать ссылку', {
-        description: 'Попробуйте ещё раз или используйте QR-код.',
+      toast.error(t('connect.copy_link'), {
+        description: t('connect.sub_prepare_error_desc'),
       })
     }
   }
@@ -441,149 +485,153 @@ export default function ConnectMarzban({ usi }: Props) {
   function openHiddifyAutoImport() {
     if (!ready || !hiddifyAutoImportHref) return
 
-    tryOpenScheme(hiddifyAutoImportHref, runtime, {
-      fallbackToast:
-        runtime === 'telegram-miniapp'
-          ? 'Если приложение не открылось, используйте ссылку или QR-код ниже.'
-          : platform === 'ios'
-            ? 'Если Hiddify не открылся, используйте ручное подключение ниже.'
-            : 'Если Hiddify не открылся, используйте ссылку или QR-код ниже.',
+    tryOpenScheme(hiddifyAutoImportHref, runtime, () => {
+      toast.info(t('connect.open_client'), {
+        description: t('connect.more_methods'),
+      })
     })
 
-    toast.info('Открываем Hiddify', {
-      description:
-        runtime === 'telegram-miniapp'
-          ? 'Если ничего не произошло, используйте другой способ ниже.'
-          : 'Если приложение установлено, подписка добавится автоматически.',
+    toast.info(t('connect.open_client'), {
+      description: t('connect.import_text'),
     })
   }
 
   function openV2RayAutoImport() {
     if (!ready || !v2rayAutoImportHref) return
 
-    tryOpenScheme(v2rayAutoImportHref, runtime, {
-      fallbackToast:
-        runtime === 'telegram-miniapp'
-          ? 'Если приложение не открылось, используйте ссылку или QR-код ниже.'
-          : platform === 'ios'
-            ? 'Если v2RayTun не открылся, используйте ручное подключение ниже.'
-            : 'Если v2RayTun не открылся, используйте ссылку или QR-код ниже.',
+    tryOpenScheme(v2rayAutoImportHref, runtime, () => {
+      toast.info(t('connect.open_client'), {
+        description: t('connect.more_methods'),
+      })
     })
 
-    toast.info('Открываем v2RayTun', {
-      description:
-        runtime === 'telegram-miniapp'
-          ? 'Если ничего не произошло, используйте другой способ ниже.'
-          : 'Если приложение установлено, подписка будет добавлена автоматически.',
+    toast.info(t('connect.open_client'), {
+      description: t('connect.import_text'),
     })
   }
 
   function openPrimaryAutoImport() {
-    if (primaryKind === 'hiddify') {
-      openHiddifyAutoImport()
-      return
-    }
-    openV2RayAutoImport()
+    if (primaryKind === 'hiddify') openHiddifyAutoImport()
+    else openV2RayAutoImport()
   }
 
-  const quickInstallLabel =
-    primaryKind === 'hiddify' ? 'Скачать Hiddify' : 'Скачать v2RayTun'
+  function openClientStore(client: ClientKind) {
+    const links = client === 'hiddify' ? hiddifyClient : v2rayClient
+    markInstallStarted(client)
+    openLinkSafe(links.market)
+  }
 
-  const quickPrimaryDescription = (() => {
-    if (platform === 'android') {
-      return 'Рекомендуем Hiddify. Обычно это самый простой способ подключения.'
-    }
-    if (platform === 'ios') {
-      return 'Рекомендуем v2RayTun. Если не получится открыть сразу, ниже есть другие способы.'
-    }
-    return `Рекомендуем ${primaryClient.title} для быстрого подключения.`
-  })()
+  function openClientDirect(client: ClientKind) {
+    const links = client === 'hiddify' ? hiddifyClient : v2rayClient
+    if (!links.direct) return
+    markInstallStarted(client)
+    openLinkSafe(links.direct)
+  }
 
-  function renderHiddifyAccordion() {
-    return (
-      <Accordion
-        title={primaryKind === 'hiddify' ? 'Hiddify — рекомендуемый вариант' : 'Hiddify — другой вариант'}
-        subtitle={
-          primaryKind === 'hiddify'
-            ? 'Самый простой способ для большинства устройств.'
-            : 'Попробуйте его, если основной вариант не подошёл.'
-        }
-        opened={openAccordion === 'hiddify'}
-        onToggle={() => toggleAccordion('hiddify')}
-      >
-        <p className="p" style={{ opacity: 0.82, marginTop: 0 }}>
-          Установите <b>Hiddify</b> и добавьте в него подписку.
-          {platform === 'android' && hiddifyClient.direct
-            ? ' Если Google Play недоступен, можно скачать APK напрямую.'
-            : platform === 'ios'
-              ? ' На iPhone это запасной вариант.'
-              : ''}
-        </p>
+  function clientStoreLabel(client: ClientKind) {
+    const links = client === 'hiddify' ? hiddifyClient : v2rayClient
+    return t(links.storeLabelKey)
+  }
 
-        <div className="actions actions--2" style={{ marginTop: 10 }}>
-          <button className="btn btn--primary" onClick={() => openLinkSafe(hiddifyClient.market)} type="button">
-            Открыть {hiddifyClient.storeLabel}
+  function clientSubtitle(client: ClientKind) {
+    const links = client === 'hiddify' ? hiddifyClient : v2rayClient
+    return t('connect.install_text', {
+      client: links.title,
+      platform: platformLabel(platform),
+    })
+  }
+
+  function stepOneText(clientTitle: string) {
+    return `Установите ${clientTitle} для ${platformLabel(platform)} и вернитесь сюда, чтобы импортировать подписку в приложение.`
+  }
+
+  function stepTwoText() {
+    return 'После установки вернитесь сюда и добавьте подписку в приложение.'
+  }
+
+  function otherMethodsText() {
+    return 'Можно отсканировать QR или скопировать ссылку для ручного добавления в приложение.'
+  }
+
+  function renderInstallActions(client: ClientKind) {
+    const links = client === 'hiddify' ? hiddifyClient : v2rayClient
+
+    if (links.direct) {
+      return (
+        <div className="actions actions--2">
+          <button className="btn btn--primary" type="button" onClick={() => openClientStore(client)}>
+            {t('connectAmneziaWG.step1.open_store', { store: clientStoreLabel(client) })}
           </button>
 
-          <button className="btn btn--primary" onClick={openHiddifyAutoImport} type="button">
-            Добавить в Hiddify
+          <button className="btn btn--accent" type="button" onClick={() => openClientDirect(client)}>
+            {platform === 'android'
+              ? t('connectAmneziaWG.step1.download_apk')
+              : t('connectAmneziaWG.step1.download_direct')}
           </button>
         </div>
+      )
+    }
 
-        {hiddifyClient.direct ? (
-          <div className="actions actions--1" style={{ marginTop: 10 }}>
-            <button
-              className="btn so__btnFull"
-              type="button"
-              onClick={() => hiddifyClient.direct && openLinkSafe(hiddifyClient.direct)}
-            >
-              {platform === 'android' ? 'Скачать APK' : 'Скачать напрямую'}
-            </button>
-          </div>
-        ) : null}
-      </Accordion>
+    return (
+      <div className="actions actions--1">
+        <button className="btn btn--primary" type="button" onClick={() => openClientStore(client)}>
+          {t('connectAmneziaWG.step1.open_store', { store: clientStoreLabel(client) })}
+        </button>
+      </div>
     )
   }
 
-  function renderV2RayAccordion() {
+  function renderClientAccordion(client: ClientKind) {
+    const links = client === 'hiddify' ? hiddifyClient : v2rayClient
+    const started = installStarted[client]
+    const opened = openAccordion === client
+    const openAutoImport = client === 'hiddify' ? openHiddifyAutoImport : openV2RayAutoImport
+
     return (
       <Accordion
-        title={primaryKind === 'v2ray' ? 'v2RayTun — рекомендуемый вариант' : 'v2RayTun — другой вариант'}
-        subtitle={
-          primaryKind === 'v2ray'
-            ? 'Лучший вариант для iPhone и iPad.'
-            : 'Попробуйте его, если Hiddify не подошёл.'
-        }
-        opened={openAccordion === 'v2ray'}
-        onToggle={() => toggleAccordion('v2ray')}
+        title={links.title}
+        subtitle={clientSubtitle(client)}
+        opened={opened}
+        onToggle={() => toggleAccordion(client)}
       >
-        <p className="p" style={{ opacity: 0.82, marginTop: 0 }}>
-          Установите <b>{v2rayClient.title}</b> и добавьте в него подписку.
-          {platform === 'ios'
-            ? ' Для iPhone и iPad это основной вариант.'
-            : platform === 'android'
-              ? ' На Android его можно использовать как альтернативу.'
-              : ''}
-        </p>
+        <div className="card section">
+          <div className="card__body">
+            <div className="pre">
+              <b>{t('connect.step_install')}</b>
+              <br />
+              {stepOneText(links.title)}
+            </div>
 
-        <div className="actions actions--2" style={{ marginTop: 10 }}>
-          <button className="btn btn--primary" onClick={() => openLinkSafe(v2rayClient.market)} type="button">
-            Скачать v2RayTun
-          </button>
-
-          <button className="btn btn--primary" onClick={openV2RayAutoImport} type="button">
-            Добавить в v2RayTun
-          </button>
+            {renderInstallActions(client)}
+          </div>
         </div>
 
-        {v2rayClient.direct ? (
-          <div className="actions actions--1" style={{ marginTop: 10 }}>
-            <button
-              className="btn so__btnFull"
-              type="button"
-              onClick={() => v2rayClient.direct && openLinkSafe(v2rayClient.direct)}
-            >
-              {platform === 'android' ? 'Скачать APK' : 'Скачать напрямую'}
+        <div className="card section">
+          <div className="card__body">
+            <div className="pre">
+              <b>{t('connect.step_import')}</b>
+              <br />
+              {started ? stepTwoText() : stepTwoText()}
+            </div>
+
+            <div className="actions actions--1">
+              <button
+                className="btn btn--primary so__btnFull"
+                type="button"
+                onClick={openAutoImport}
+                disabled={!ready}
+                title={!ready ? t('connect.wait') : undefined}
+              >
+                {loading ? t('connect.wait') : t('connect.add_sub')}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {started ? (
+          <div className="actions actions--1">
+            <button className="btn so__btnFull" type="button" onClick={() => resetInstallStarted(client)}>
+              {t('connect.step_install')}
             </button>
           </div>
         ) : null}
@@ -593,115 +641,166 @@ export default function ConnectMarzban({ usi }: Props) {
 
   return (
     <div className="cm">
-      <div className="pre" style={{ marginTop: 0 }}>
+      <div className="pre">
         {ready ? '✅ ' : error ? '⚠️ ' : '… '}
         {topHint}
       </div>
 
       {!loading && error ? (
-        <div className="pre" style={{ marginTop: 10 }}>
+        <div className="pre">
           {String(error)}
 
-          <div style={{ marginTop: 10 }}>
+          <div className="actions actions--1">
             <button className="btn" onClick={load} type="button">
-              Попробовать снова
+              {t('connectAmneziaWG.retry')}
             </button>
           </div>
         </div>
       ) : null}
 
-      <div className="row cawg__rowTop" style={{ marginTop: 12 }}>
-        <div className="p cawg__label">Устройство:</div>
+      <div className="section">
+        <div className="row cawg__rowTop">
+          <div className="p cawg__label">{t('connectAmneziaWG.device.label')}</div>
 
-        <button
-          className="btn cawg__deviceBtn"
-          type="button"
-          onClick={() => setPlatformPickerOpen(true)}
-          disabled={loading}
-          aria-label="Выбор устройства"
-        >
-          {chip === 'auto' ? `Текущее: ${platformLabel(autoPlatform)}` : platformLabel(platform)}{' '}
-          <span aria-hidden>▾</span>
-        </button>
+          <button
+            className="btn cawg__deviceBtn"
+            type="button"
+            onClick={() => setPlatformPickerOpen(true)}
+            disabled={loading}
+            aria-label={t('connectAmneziaWG.device.pick_aria')}
+          >
+            {chip === 'auto'
+              ? t('connectAmneziaWG.device.current', { platform: platformLabel(autoPlatform) })
+              : platformLabel(platform)}
+            <span aria-hidden>▾</span>
+          </button>
+        </div>
       </div>
 
-      <div className="card" style={{ marginTop: 12 }}>
+      <div className="card section">
         <div className="card__body">
-          <div className="services-cat__title">Быстрое подключение</div>
-
-          <p className="p" style={{ opacity: 0.82, marginTop: 6 }}>
-            {quickPrimaryDescription}
+          <p className="p">
+            {t('connect.install_text', {
+              client: primaryClient.title,
+              platform: platformLabel(platform),
+            })}
           </p>
 
-          <div className="actions actions--2" style={{ marginTop: 10 }}>
-            <button
-              className="btn btn--primary"
-              onClick={() => openLinkSafe(primaryClient.market)}
-              disabled={loading}
-              type="button"
-            >
-              {quickInstallLabel}
-            </button>
+          <div className="card section">
+            <div className="card__body">
+              <div className="pre">
+                <b>{t('connect.step_install')}</b>
+                <br />
+                {stepOneText(primaryClient.title)}
+              </div>
 
-            <button
-              className="btn btn--primary"
-              onClick={openPrimaryAutoImport}
-              disabled={!ready}
-              type="button"
-              title={!ready ? 'Подключение ещё готовится' : undefined}
-            >
-              {loading ? 'Подождите…' : 'Добавить подписку'}
-            </button>
+              {renderInstallActions(primaryKind)}
+            </div>
           </div>
 
-          {ready ? (
-            <div className="actions actions--1" style={{ marginTop: 10 }}>
-              <button className="btn" onClick={() => setAdvancedOpen((v) => !v)} type="button">
-                {advancedOpen ? 'Скрыть другие способы' : 'Другие способы'}
-              </button>
+          <div className="card section">
+            <div className="card__body">
+              <div className="pre">
+                <b>{t('connect.step_import')}</b>
+                <br />
+                {stepTwoText()}
+              </div>
+
+              <div className="actions actions--1">
+                <button
+                  className="btn btn--primary so__btnFull"
+                  onClick={openPrimaryAutoImport}
+                  disabled={!ready}
+                  type="button"
+                  title={!ready ? t('connect.wait') : undefined}
+                >
+                  {loading ? t('connect.wait') : t('connect.add_sub')}
+                </button>
+              </div>
+
+              <div className="section">
+                <div className="pre">
+                  <b>{t('connect.more_methods')}</b>
+                  <br />
+                  {otherMethodsText()}
+                </div>
+
+                <div className="actions actions--1">
+                  <button
+                    className="btn btn--accent so__btnFull"
+                    onClick={() => setAdvancedOpen((v) => !v)}
+                    type="button"
+                  >
+                    {advancedOpen
+                      ? `▴ ${t('connect.hide_methods')}`
+                      : `▾ ${t('connect.more_methods')}`}
+                  </button>
+                </div>
+              </div>
             </div>
-          ) : null}
+          </div>
         </div>
       </div>
 
       {advancedOpen && ready ? (
-        <>
-          {primaryKind === 'hiddify' ? renderHiddifyAccordion() : renderV2RayAccordion()}
-          {primaryKind === 'hiddify' ? renderV2RayAccordion() : renderHiddifyAccordion()}
+        <div className="section">
+          {primaryKind === 'hiddify' ? renderClientAccordion('hiddify') : renderClientAccordion('v2ray')}
+          {primaryKind === 'hiddify' ? renderClientAccordion('v2ray') : renderClientAccordion('hiddify')}
 
           <Accordion
-            title="Подключить вручную"
-            subtitle="Подойдёт, если приложение не открылось автоматически."
+            title={t('connect.more_methods')}
+            subtitle={otherMethodsText()}
             opened={openAccordion === 'manual'}
             onToggle={() => toggleAccordion('manual')}
           >
-            <p className="p" style={{ opacity: 0.82, marginTop: 0 }}>
-              Скопируйте ссылку подписки или откройте QR-код и добавьте подписку в приложение вручную.
-            </p>
+            <div className="card section">
+              <div className="card__body">
+                <div className="pre">
+                  <b>📋 {t('connect.copy_link')}</b>
+                  <br />
+                  {'Скопируйте ссылку для ручного добавления в приложение.'}
+                </div>
 
-            <div className="actions actions--1" style={{ marginTop: 10 }}>
-              <button className="btn btn--soft so__btnFull" type="button" onClick={copySub}>
-                {copied ? '✅ Ссылка скопирована' : 'Скопировать ссылку'}
-              </button>
+                <div className="actions actions--1">
+                  <button className="btn btn--primary so__btnFull" type="button" onClick={copySub}>
+                    {copied ? `✅ ${t('connect.copied')}` : `📋 ${t('connect.copy_link')}`}
+                  </button>
+                </div>
+              </div>
             </div>
 
-            <div className="actions actions--1" style={{ marginTop: 10 }}>
-              <button className="btn so__btnFull" type="button" onClick={openQr}>
-                Показать QR-код
-              </button>
+            <div className="card section">
+              <div className="card__body">
+                <div className="pre">
+                  <b>📱 {t('connect.show_qr')}</b>
+                  <br />
+                  {'Отсканируйте QR для ручного добавления в приложение.'}
+                </div>
+
+                <div className="actions actions--1">
+                  <button className="btn btn--primary so__btnFull" type="button" onClick={openQr}>
+                    📱 {t('connect.show_qr')}
+                  </button>
+                </div>
+              </div>
             </div>
           </Accordion>
-        </>
+        </div>
       ) : null}
 
       {platformPickerOpen ? (
         <div className="overlay" role="dialog" aria-modal="true" onClick={() => setPlatformPickerOpen(false)}>
           <div className="card overlay__card" onClick={(e) => e.stopPropagation()}>
             <div className="card__body">
-              <div className="row so__spaceBetween" style={{ alignItems: 'center' }}>
-                <div className="overlay__title">Выберите устройство</div>
+              <div className="row so__spaceBetween">
+                <div className="overlay__title">{t('connectAmneziaWG.device.modal_title')}</div>
 
-                <button className="btn" type="button" onClick={() => setPlatformPickerOpen(false)} aria-label="Закрыть">
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => setPlatformPickerOpen(false)}
+                  aria-label={t('services.close')}
+                >
                   ✕
                 </button>
               </div>
@@ -716,9 +815,7 @@ export default function ConnectMarzban({ usi }: Props) {
                   }}
                 >
                   <div className="row so__spaceBetween">
-                    <div className="kv__k" style={{ fontWeight: 700 }}>
-                      Текущее устройство
-                    </div>
+                    <div className="kv__k">{t('connectAmneziaWG.device.current_short')}</div>
                     <span className="badge">{platformLabel(autoPlatform)}</span>
                   </div>
                 </button>
@@ -734,9 +831,7 @@ export default function ConnectMarzban({ usi }: Props) {
                     }}
                   >
                     <div className="row so__spaceBetween">
-                      <div className="kv__k" style={{ fontWeight: 700 }}>
-                        {platformLabel(p)}
-                      </div>
+                      <div className="kv__k">{platformLabel(p)}</div>
                     </div>
                   </button>
                 ))}
@@ -744,7 +839,7 @@ export default function ConnectMarzban({ usi }: Props) {
 
               <div className="actions actions--1 so__mt12">
                 <button className="btn so__btnFull" type="button" onClick={() => setPlatformPickerOpen(false)}>
-                  Закрыть
+                  {t('services.close')}
                 </button>
               </div>
             </div>
@@ -756,46 +851,31 @@ export default function ConnectMarzban({ usi }: Props) {
         <div className="overlay" role="dialog" aria-modal="true" onClick={() => setQrOpen(false)}>
           <div className="card overlay__card" onClick={(e) => e.stopPropagation()}>
             <div className="card__body">
-              <div className="row so__spaceBetween" style={{ alignItems: 'center' }}>
-                <div className="overlay__title">QR-код подписки</div>
+              <div className="row so__spaceBetween">
+                <div className="overlay__title">{t('connect.qr_title')}</div>
 
-                <button className="btn" type="button" onClick={() => setQrOpen(false)} aria-label="Закрыть">
+                <button className="btn" type="button" onClick={() => setQrOpen(false)} aria-label={t('services.close')}>
                   ✕
                 </button>
               </div>
 
-              <p className="p so__mt8" style={{ opacity: 0.82 }}>
-                Откройте приложение на другом устройстве и добавьте подписку по QR-коду.
-              </p>
+              <p className="p so__mt8">{t('connect.qr_text')}</p>
 
-              <div
-                className="pre so__mt12"
-                style={{
-                  display: 'flex',
-                  justifyContent: 'center',
-                  padding: 12,
-                  overflow: 'hidden',
-                }}
-              >
+              <div className="pre so__mt12">
                 {qrDataUrl ? (
                   <img
                     src={qrDataUrl}
-                    alt="QR Code"
+                    alt={t('connectAmneziaWG.qr.alt')}
                     loading="lazy"
                     decoding="async"
-                    style={{
-                      width: 360,
-                      maxWidth: '100%',
-                      height: 'auto',
-                      borderRadius: 14,
-                    }}
+                    width={360}
                   />
                 ) : null}
               </div>
 
               <div className="actions actions--1 so__mt12">
                 <button className="btn btn--primary so__btnFull" onClick={() => setQrOpen(false)} type="button">
-                  Закрыть
+                  {t('services.close')}
                 </button>
               </div>
             </div>
