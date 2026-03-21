@@ -1,6 +1,7 @@
 // web/src/shared/api/client.ts
 
 const API_BASE = "/api";
+const DEVICE_TOKEN_KEY = "shpun_device_token";
 
 /**
  * ApiError — normalized error for UX
@@ -31,6 +32,32 @@ export function isNotAuthenticated(e: unknown): boolean {
 export type ApiFetchInit = Omit<RequestInit, "body"> & {
   body?: unknown;
 };
+
+function generateDeviceToken(): string {
+  try {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+  } catch {
+    // ignore
+  }
+
+  return `dev_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
+}
+
+function getDeviceToken(): string {
+  try {
+    const existing = localStorage.getItem(DEVICE_TOKEN_KEY)?.trim();
+    if (existing) return existing;
+
+    const created = generateDeviceToken();
+    localStorage.setItem(DEVICE_TOKEN_KEY, created);
+    return created;
+  } catch {
+    // fallback if localStorage is unavailable
+    return generateDeviceToken();
+  }
+}
 
 function isJsonBodyCandidate(x: unknown): boolean {
   if (x === null || x === undefined) return false;
@@ -104,6 +131,12 @@ function pickUserMessage(data: any, fallback: string) {
 
 export async function apiFetch<T = unknown>(path: string, init: ApiFetchInit = {}): Promise<T> {
   const headers = new Headers(init.headers || {});
+
+  const deviceToken = getDeviceToken();
+  if (deviceToken && !headers.has("x-device-token")) {
+    headers.set("x-device-token", deviceToken);
+  }
+
   let body: BodyInit | null | undefined;
 
   const rawBody = init.body;

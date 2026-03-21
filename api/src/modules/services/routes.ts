@@ -15,6 +15,17 @@ import {
   shmStorageManageGetText,
 } from "../../shared/shm/shmClient.js";
 
+import {
+  getRequestDeviceToken,
+  getRequestIp,
+  getRequestUserAgent,
+  getTrialDeviceMode,
+  hasDeviceUsedTrial,
+  logTrialEvent,
+  registerDeviceSeen,
+  rememberTrialUsed,
+} from "../device/deviceService.js";
+
 function mapStatus(raw?: string) {
   const s = String(raw || "").toUpperCase();
   if (s === "ACTIVE") return "active";
@@ -667,7 +678,6 @@ export async function servicesRoutes(app: FastifyInstance) {
 
     return reply.send({ ok: true, items });
   });
-
   app.put("/services/order", async (req, reply) => {
     const shmSessionId = ensureAuthed(req, reply);
     if (!shmSessionId) return;
@@ -679,6 +689,48 @@ export async function servicesRoutes(app: FastifyInstance) {
 
     if (!serviceId || !Number.isFinite(serviceId)) {
       return reply.code(400).send({ ok: false, error: "bad_request", details: "service_id_required" });
+    }
+
+    const deviceToken = getRequestDeviceToken(req);
+    const ip = getRequestIp(req);
+    const userAgent = getRequestUserAgent(req);
+    const trialDeviceMode = getTrialDeviceMode();
+
+    if (deviceToken) {
+      registerDeviceSeen({ deviceToken, ip, userAgent });
+    } else {
+      logTrialEvent({
+        eventType: "device_token_missing",
+        decision: "observe",
+        reason: "missing_device_token",
+        ip,
+        userAgent,
+        meta: { serviceId },
+      });
+    }
+
+    let isTrialService = false;
+
+    try {
+      const orderListRes = await shmGetServiceOrder(shmSessionId);
+
+      if (orderListRes.ok) {
+        const raw = (orderListRes.json as any)?.data ?? [];
+        const list = Array.isArray(raw) ? raw : [];
+
+        const svc = list.find((x: any) => Number(x?.service_id ?? 0) === serviceId) ?? null;
+
+        if (svc) {
+          const price = Number(svc?.cost ?? 0);
+          const title = String(svc?.name ?? "").toUpperCase();
+
+          if (price === 0 || title.includes("TEST")) {
+            isTrialService = true;
+          }
+        }
+      }
+    } catch {
+      // fail-open: если список тарифов не прочитался, не ломаем оформление заказа
     }
 
     // =====================
@@ -773,6 +825,30 @@ export async function servicesRoutes(app: FastifyInstance) {
       }
     }
 
+    if (trialDeviceMode !== "off" && deviceToken && isTrialService) {
+      const alreadyUsed = hasDeviceUsedTrial(deviceToken);
+
+      if (alreadyUsed) {
+        logTrialEvent({
+          deviceToken,
+          ip,
+          userAgent,
+          eventType: "trial_reuse_detected",
+          decision: trialDeviceMode === "enforce" ? "block" : "observe",
+          reason: "trial_already_used_on_device",
+          meta: { serviceId },
+        });
+
+        if (trialDeviceMode === "enforce") {
+          return reply.code(409).send({
+            ok: false,
+            error: "trial_already_used",
+            message: "Пробный доступ уже был активирован на этом устройстве.",
+          });
+        }
+      }
+    }
+
     const r = await shmCreateServiceOrder(shmSessionId, serviceId);
 
     if (!r.ok) {
@@ -792,6 +868,42 @@ export async function servicesRoutes(app: FastifyInstance) {
         error: "shm_bad_response",
         message: "Сервер вернул некорректный ответ. Попробуйте ещё раз.",
         details: debug ? (r.json ?? r.text) : undefined,
+      });
+    }
+
+    if (deviceToken) {
+      logTrialEvent({
+        deviceToken,
+        ip,
+        userAgent,
+        eventType: "service_order_created",
+        decision: "allow",
+        reason: "order_created",
+        meta: {
+          serviceId,
+          userServiceId: Number(us?.user_service_id ?? 0) || 0,
+          status: String(us?.status ?? ""),
+          price: us?.service?.cost ?? null,
+          category: us?.service?.category ?? null,
+          isTrialService,
+        },
+      });
+    }
+
+    if (deviceToken && isTrialService) {
+      rememberTrialUsed({
+        deviceToken,
+        userId: null,
+      });
+
+      logTrialEvent({
+        deviceToken,
+        ip,
+        userAgent,
+        eventType: "trial_marked_used",
+        decision: "allow",
+        reason: "trial_registered_on_device",
+        meta: { serviceId },
       });
     }
 
