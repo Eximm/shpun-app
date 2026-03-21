@@ -10,6 +10,7 @@ import {
   getTrialDeviceMode,
   getTrialDeviceTtlHours,
   setCachedTrialDeviceMode,
+  setCachedTrialDeviceTtlHours,
 } from "../device/deviceService.js";
 import { ensureDeviceTables } from "../device/deviceRepo.js";
 
@@ -27,6 +28,10 @@ function toPositiveInt(v: unknown, fallback: number, max = 200) {
 
 function isTrialDeviceMode(v: unknown): v is "off" | "observe" | "enforce" {
   return v === "off" || v === "observe" || v === "enforce";
+}
+
+function isPositiveNumber(v: unknown): v is number {
+  return typeof v === "number" && Number.isFinite(v) && v > 0;
 }
 
 export async function adminRoutes(app: FastifyInstance) {
@@ -79,20 +84,25 @@ export async function adminRoutes(app: FastifyInstance) {
     ensureDeviceTables();
 
     let mode = getTrialDeviceMode();
+    let ttlHours = getTrialDeviceTtlHours();
 
     try {
       const settingsRes = await shmShpunAppAdminSettingsGet(s.shmSessionId);
-      const settingsMode = settingsRes?.json?.settings?.trialDeviceMode ?? settingsRes?.json?.trialDeviceMode;
+      const settings = settingsRes?.json?.settings ?? settingsRes?.json ?? {};
 
-      if (isTrialDeviceMode(settingsMode)) {
-        mode = settingsMode;
-        setCachedTrialDeviceMode(settingsMode);
+      if (isTrialDeviceMode(settings?.trialDeviceMode)) {
+        mode = settings.trialDeviceMode;
+        setCachedTrialDeviceMode(settings.trialDeviceMode);
+      }
+
+      const ttlRaw = Number(settings?.trialDeviceTtlHours);
+      if (Number.isFinite(ttlRaw) && ttlRaw > 0) {
+        ttlHours = ttlRaw;
+        setCachedTrialDeviceTtlHours(ttlRaw);
       }
     } catch {
-      // fallback to cached/env mode
+      // fallback to cached/env values
     }
-
-    const ttlHours = getTrialDeviceTtlHours();
 
     const nowTs = Math.floor(Date.now() / 1000);
     const since24h = nowTs - 24 * 60 * 60;
@@ -158,6 +168,33 @@ export async function adminRoutes(app: FastifyInstance) {
     setCachedTrialDeviceMode(mode);
 
     return reply.send({ ok: true, mode });
+  });
+
+  app.put("/admin/trial-protection/ttl", async (req, reply) => {
+    const s = getSessionFromRequest(req);
+    if (!s?.shmSessionId) return reply.code(401).send({ ok: false });
+
+    if (!(await ensureAdmin(s.shmSessionId))) {
+      return reply.code(403).send({ ok: false, error: "not_admin" });
+    }
+
+    const ttlHours = Number((req.body as any)?.ttlHours);
+
+    if (!Number.isFinite(ttlHours) || ttlHours <= 0 || ttlHours > 720) {
+      return reply.code(400).send({ ok: false, error: "bad_ttl" });
+    }
+
+    const r = await shmShpunAppAdminSettingsSet(s.shmSessionId, {
+      trialDeviceTtlHours: ttlHours,
+    });
+
+    if (!r.ok) {
+      return reply.code(502).send({ ok: false, error: "shm_error" });
+    }
+
+    setCachedTrialDeviceTtlHours(ttlHours);
+
+    return reply.send({ ok: true, ttlHours });
   });
 
   app.get("/admin/trial-protection/events", async (req, reply) => {

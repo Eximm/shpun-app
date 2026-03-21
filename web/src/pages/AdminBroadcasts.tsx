@@ -553,11 +553,13 @@ function TrialProtectionSection() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [savingMode, setSavingMode] = useState(false);
+  const [savingTtl, setSavingTtl] = useState(false);
   const [status, setStatus] = useState<TrialProtectionStatusResp | null>(null);
   const [events, setEvents] = useState<TrialProtectionEventItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [okText, setOkText] = useState<string | null>(null);
   const [modeDraft, setModeDraft] = useState<TrialDeviceMode>("observe");
+  const [ttlDraft, setTtlDraft] = useState<string>("72");
 
   async function load(opts?: { silent?: boolean }) {
     const silent = Boolean(opts?.silent);
@@ -578,6 +580,7 @@ function TrialProtectionSection() {
 
       setStatus(statusResp);
       setModeDraft(statusResp.mode);
+      setTtlDraft(String(statusResp.ttlHours));
       setEvents(Array.isArray(eventsResp.items) ? eventsResp.items : []);
     } catch (e: any) {
       setError(e?.message || "Не удалось загрузить данные Trial Protection.");
@@ -615,6 +618,28 @@ function TrialProtectionSection() {
     }
   }
 
+  async function saveTtl() {
+    setSavingTtl(true);
+    setError(null);
+    setOkText(null);
+
+    try {
+      const ttlHours = Number(ttlDraft);
+
+      const r = await apiFetch<{ ok: true; ttlHours: number }>("/admin/trial-protection/ttl", {
+        method: "PUT",
+        body: { ttlHours },
+      });
+
+      setOkText(`TTL сохранён: ${r.ttlHours}h`);
+      await load({ silent: true });
+    } catch (e: any) {
+      setError(e?.message || "Не удалось сохранить TTL.");
+    } finally {
+      setSavingTtl(false);
+    }
+  }
+
   const sortedEvents = useMemo(
     () => events.slice().sort((a, b) => (b.created_at || 0) - (a.created_at || 0)),
     [events],
@@ -627,6 +652,7 @@ function TrialProtectionSection() {
   }
 
   const modeChanged = modeDraft !== (status?.mode || "observe");
+  const ttlChanged = ttlDraft !== String(status?.ttlHours ?? "72");
 
   return (
     <>
@@ -728,6 +754,26 @@ function TrialProtectionSection() {
                     <span className="chip chip--soft">{status?.mode || "—"}</span>
                   </div>
                 </div>
+
+                <div className="list__item">
+                  <div className="list__main">
+                    <div className="list__title">TTL в часах</div>
+                    <div className="list__sub" style={{ marginTop: 8 }}>
+                      <input
+                        className="input"
+                        type="number"
+                        min="0.01"
+                        max="720"
+                        step="0.01"
+                        value={ttlDraft}
+                        onChange={(e) => setTtlDraft(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="list__side">
+                    <span className="chip chip--soft">{status?.ttlHours ?? "—"}h</span>
+                  </div>
+                </div>
               </div>
 
               <div className="grid2" style={{ marginTop: 12 }}>
@@ -769,7 +815,7 @@ function TrialProtectionSection() {
                   className="btn btn--soft"
                   type="button"
                   onClick={() => void load({ silent: true })}
-                  disabled={refreshing || savingMode}
+                  disabled={refreshing || savingMode || savingTtl}
                 >
                   {refreshing ? "Обновляю…" : "Обновить"}
                 </button>
@@ -780,6 +826,17 @@ function TrialProtectionSection() {
                   disabled={savingMode || !modeChanged}
                 >
                   {savingMode ? "Сохраняю…" : "Сохранить режим"}
+                </button>
+              </div>
+
+              <div className="actions actions--1" style={{ marginTop: 10 }}>
+                <button
+                  className="btn btn--accent"
+                  type="button"
+                  onClick={saveTtl}
+                  disabled={savingTtl || !ttlChanged}
+                >
+                  {savingTtl ? "Сохраняю TTL…" : "Сохранить TTL"}
                 </button>
               </div>
             </>

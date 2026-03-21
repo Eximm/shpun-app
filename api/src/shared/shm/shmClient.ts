@@ -425,6 +425,7 @@ export async function shmShpunAppAdminSettingsSet(
   payload: {
     orderBlockMode?: "off" | "same_type" | "any";
     trialDeviceMode?: "off" | "observe" | "enforce";
+    trialDeviceTtlHours?: number;
   }
 ) {
   return await shmShpunAppTemplate<any>(shmSessionId, "admin.settings.set", payload);

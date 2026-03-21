@@ -10,14 +10,19 @@ import {
 
 export type TrialDeviceMode = "off" | "observe" | "enforce";
 
+let cachedMode: TrialDeviceMode | null = null;
+let cachedTtlHours: number | null = null;
+
 function nowTs(): number {
   return Math.floor(Date.now() / 1000);
 }
 
-let cachedMode: TrialDeviceMode | null = null;
-
 export function setCachedTrialDeviceMode(mode: TrialDeviceMode | null) {
   cachedMode = mode;
+}
+
+export function setCachedTrialDeviceTtlHours(v: number | null) {
+  cachedTtlHours = v;
 }
 
 export function getTrialDeviceMode(): TrialDeviceMode {
@@ -29,9 +34,13 @@ export function getTrialDeviceMode(): TrialDeviceMode {
 }
 
 export function getTrialDeviceTtlHours(): number {
+  if (cachedTtlHours != null && Number.isFinite(cachedTtlHours) && cachedTtlHours > 0) {
+    return cachedTtlHours;
+  }
+
   const raw = Number(process.env.TRIAL_DEVICE_TTL_HOURS ?? 72);
   if (!Number.isFinite(raw) || raw <= 0) return 72;
-  return Math.floor(raw);
+  return raw;
 }
 
 export function getTrialDeviceTtlSeconds(): number {
