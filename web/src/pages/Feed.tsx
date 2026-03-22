@@ -376,6 +376,22 @@ export function Feed() {
                           {title}
                         </div>
                         {preview ? <div className="list__sub">{preview}</div> : null}
+
+                        {hasFullView ? (
+                          <div className="feed__more" style={{ marginTop: 8 }}>
+                            <button
+                              type="button"
+                              className="btn btn--soft"
+                              onClick={(ev) => {
+                                ev.preventDefault();
+                                ev.stopPropagation();
+                                setOpenedEvent(e);
+                              }}
+                            >
+                              {t("feed.more", "Подробнее")}
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
 
                       <div className="list__side">
