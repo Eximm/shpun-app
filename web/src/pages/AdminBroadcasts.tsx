@@ -149,11 +149,9 @@ function SectionSwitcher({
 }) {
   return (
     <button className={`btn ${active ? "btn--accent" : "btn--soft"}`} type="button" onClick={onClick}>
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
+      <div className="admin-switcher__body">
         <span>{title}</span>
-        <span className="muted" style={{ fontSize: 12 }}>
-          {subtitle}
-        </span>
+        <span className="muted admin-switcher__subtitle">{subtitle}</span>
       </div>
     </button>
   );
@@ -215,7 +213,7 @@ function OverviewSection({ onOpenTab }: { onOpenTab: (tab: AdminTab) => void }) 
         <h2 className="h2">Разделы админки</h2>
         <p className="p">Здесь собираем административные инструменты в одном месте, без отдельного зоопарка страниц.</p>
 
-        <div className="grid2" style={{ marginTop: 12 }}>
+        <div className="grid2 admin-gap-top-md">
           <div className="mini">
             <div className="mini__title">Broadcasts</div>
             <div className="mini__list">
@@ -249,7 +247,7 @@ function OverviewSection({ onOpenTab }: { onOpenTab: (tab: AdminTab) => void }) 
           </div>
         </div>
 
-        <div className="grid2" style={{ marginTop: 12 }}>
+        <div className="grid2 admin-gap-top-md">
           <div className="mini">
             <div className="mini__title">Trial Protection</div>
             <div className="mini__list">
@@ -339,15 +337,15 @@ function BroadcastsSection() {
           <h2 className="h2">Управление broadcast-новостями</h2>
           <p className="p">Здесь можно просматривать и удалять broadcast-новости у всех пользователей.</p>
 
-          <div className="actions actions--1" style={{ marginTop: 12 }}>
+          <div className="actions actions--1 admin-gap-top-md">
             <button className="btn btn--accent" type="button" onClick={load} disabled={loading}>
               {loading ? "Обновляю…" : "Обновить"}
             </button>
           </div>
 
-          {error ? <div className="pre" style={{ marginTop: 12 }}>{error}</div> : null}
+          {error ? <div className="pre admin-gap-top-md">{error}</div> : null}
 
-          <div className="list" style={{ marginTop: 12 }}>
+          <div className="list admin-gap-top-md">
             {loading && !sorted.length ? (
               <>
                 <div className="skeleton h1" />
@@ -364,18 +362,18 @@ function BroadcastsSection() {
                   <div key={item.origin_id} className="list__item">
                     <div className="list__main">
                       <div className="kicker">{formatDateTime(item.ts)}</div>
-                      <div className="list__title" style={{ marginTop: 6 }}>
+                      <div className="list__title admin-gap-top-xs">
                         {item.title || "Без заголовка"}
                       </div>
                       {preview ? <div className="list__sub">{preview}</div> : null}
-                      <div className="list__sub" style={{ marginTop: 8 }}>
+                      <div className="list__sub admin-gap-top-sm">
                         <strong>origin:</strong> {item.origin_id}
                       </div>
                       <div className="list__sub">
                         <strong>copies:</strong> {item.copies}
                       </div>
 
-                      <div className="actions actions--2" style={{ marginTop: 12 }}>
+                      <div className="actions actions--2 admin-gap-top-md">
                         <button className="btn btn--soft" type="button" onClick={() => setOpened(item)}>
                           Открыть
                         </button>
@@ -406,16 +404,16 @@ function BroadcastsSection() {
           <div className="list__sub feed__fulltext">
             <strong>origin:</strong> {opened.origin_id}
           </div>
-          <div className="list__sub" style={{ marginTop: 8 }}>
+          <div className="list__sub admin-gap-top-sm">
             <strong>copies:</strong> {opened.copies}
           </div>
           {opened.message ? (
-            <div className="list__sub feed__fulltext" style={{ marginTop: 14 }}>
+            <div className="list__sub feed__fulltext admin-gap-top-lg">
               {opened.message}
             </div>
           ) : null}
 
-          <div className="actions actions--1" style={{ marginTop: 16 }}>
+          <div className="actions actions--1 admin-gap-top-xl">
             <button
               className="btn btn--danger"
               type="button"
@@ -492,19 +490,19 @@ function OrderRulesSection() {
         <p className="p">Эта настройка управляет блокировкой новых заказов, если у пользователя уже есть неоплаченная услуга.</p>
 
         {loading ? (
-          <div className="list" style={{ marginTop: 12 }}>
+          <div className="list admin-gap-top-md">
             <div className="skeleton h1" />
             <div className="skeleton p" />
             <div className="skeleton p" />
           </div>
         ) : (
           <>
-            <div className="list" style={{ marginTop: 12 }}>
+            <div className="list admin-gap-top-md">
               <div className="list__item">
                 <div className="list__main">
                   <div className="list__title">Режим блокировки</div>
-                  <div className="list__sub" style={{ marginTop: 8 }}>
-                    <label style={{ display: "block", marginBottom: 10 }}>
+                  <div className="list__sub admin-gap-top-sm">
+                    <label className="admin-radio">
                       <input
                         type="radio"
                         name="orderBlockMode"
@@ -515,7 +513,7 @@ function OrderRulesSection() {
                       <strong>off</strong> — не ограничивать новые заказы
                     </label>
 
-                    <label style={{ display: "block", marginBottom: 10 }}>
+                    <label className="admin-radio">
                       <input
                         type="radio"
                         name="orderBlockMode"
@@ -526,7 +524,7 @@ function OrderRulesSection() {
                       <strong>same_type</strong> — нельзя оформить новую услугу того же типа, если уже есть неоплаченная
                     </label>
 
-                    <label style={{ display: "block" }}>
+                    <label className="admin-radio admin-radio--last">
                       <input
                         type="radio"
                         name="orderBlockMode"
@@ -554,10 +552,10 @@ function OrderRulesSection() {
               </div>
             </div>
 
-            {error ? <div className="pre" style={{ marginTop: 12 }}>{error}</div> : null}
-            {okText ? <div className="pre" style={{ marginTop: 12 }}>{okText}</div> : null}
+            {error ? <div className="pre admin-gap-top-md">{error}</div> : null}
+            {okText ? <div className="pre admin-gap-top-md">{okText}</div> : null}
 
-            <div className="actions actions--2" style={{ marginTop: 12 }}>
+            <div className="actions actions--2 admin-gap-top-md">
               <button className="btn btn--soft" type="button" onClick={load} disabled={loading || saving}>
                 Обновить
               </button>
@@ -753,17 +751,17 @@ function TrialProtectionSection() {
           <p className="p">Контроль использования trial-услуг на уровне устройств: режим работы, TTL и повторные попытки.</p>
 
           {loading ? (
-            <div className="list" style={{ marginTop: 12 }}>
+            <div className="list admin-gap-top-md">
               <div className="skeleton h1" />
               <div className="skeleton p" />
               <div className="skeleton p" />
             </div>
           ) : (
             <>
-              {error ? <div className="pre" style={{ marginTop: 12 }}>{error}</div> : null}
-              {okText ? <div className="pre" style={{ marginTop: 12 }}>{okText}</div> : null}
+              {error ? <div className="pre admin-gap-top-md">{error}</div> : null}
+              {okText ? <div className="pre admin-gap-top-md">{okText}</div> : null}
 
-              <div className="grid2" style={{ marginTop: 12 }}>
+              <div className="grid2 admin-gap-top-md">
                 <div className="mini">
                   <div className="mini__title">Текущее состояние</div>
                   <div className="mini__list">
@@ -795,12 +793,12 @@ function TrialProtectionSection() {
                 </div>
               </div>
 
-              <div className="list" style={{ marginTop: 12 }}>
+              <div className="list admin-gap-top-md">
                 <div className="list__item">
                   <div className="list__main">
                     <div className="list__title">Режим работы</div>
-                    <div className="list__sub" style={{ marginTop: 8 }}>
-                      <label style={{ display: "block", marginBottom: 10 }}>
+                    <div className="list__sub admin-gap-top-sm">
+                      <label className="admin-radio">
                         <input
                           type="radio"
                           name="trialDeviceMode"
@@ -811,7 +809,7 @@ function TrialProtectionSection() {
                         <strong>off</strong> — защита отключена
                       </label>
 
-                      <label style={{ display: "block", marginBottom: 10 }}>
+                      <label className="admin-radio">
                         <input
                           type="radio"
                           name="trialDeviceMode"
@@ -822,7 +820,7 @@ function TrialProtectionSection() {
                         <strong>observe</strong> — только наблюдение и логирование
                       </label>
 
-                      <label style={{ display: "block" }}>
+                      <label className="admin-radio admin-radio--last">
                         <input
                           type="radio"
                           name="trialDeviceMode"
@@ -842,7 +840,7 @@ function TrialProtectionSection() {
                 <div className="list__item">
                   <div className="list__main">
                     <div className="list__title">TTL в часах</div>
-                    <div className="list__sub" style={{ marginTop: 8 }}>
+                    <div className="list__sub admin-gap-top-sm">
                       <input
                         className="input"
                         type="number"
@@ -860,7 +858,7 @@ function TrialProtectionSection() {
                 </div>
               </div>
 
-              <div className="grid2" style={{ marginTop: 12 }}>
+              <div className="grid2 admin-gap-top-md">
                 <div className="list__item">
                   <div className="list__main">
                     <div className="list__title">Устройств с активным trial-lock</div>
@@ -882,7 +880,7 @@ function TrialProtectionSection() {
                 </div>
               </div>
 
-              <div className="grid2" style={{ marginTop: 12 }}>
+              <div className="grid2 admin-gap-top-md">
                 <div className="list__item">
                   <div className="list__main">
                     <div className="list__title">Повторные попытки за 24 часа</div>
@@ -904,7 +902,7 @@ function TrialProtectionSection() {
                 </div>
               </div>
 
-              <div className="actions actions--2" style={{ marginTop: 12 }}>
+              <div className="actions actions--2 admin-gap-top-md">
                 <button
                   className="btn btn--soft"
                   type="button"
@@ -923,7 +921,7 @@ function TrialProtectionSection() {
                 </button>
               </div>
 
-              <div className="actions actions--2" style={{ marginTop: 10 }}>
+              <div className="actions actions--2 admin-gap-top-sm">
                 <button
                   className="btn btn--accent"
                   type="button"
@@ -946,24 +944,24 @@ function TrialProtectionSection() {
         </div>
       </div>
 
-      <div className="card" style={{ marginTop: 16 }}>
+      <div className="card admin-gap-top-xl">
         <div className="card__body">
           <div className="kicker">Events</div>
           <h2 className="h2">Последние события</h2>
           <p className="p">Короткий журнал событий anti-abuse. Полная информация открывается в модальном окне.</p>
 
           {loading ? (
-            <div className="list" style={{ marginTop: 12 }}>
+            <div className="list admin-gap-top-md">
               <div className="skeleton h1" />
               <div className="skeleton p" />
               <div className="skeleton p" />
             </div>
           ) : error ? (
-            <div className="pre" style={{ marginTop: 12 }}>{error}</div>
+            <div className="pre admin-gap-top-md">{error}</div>
           ) : sortedEvents.length === 0 ? (
-            <div className="pre" style={{ marginTop: 12 }}>Событий пока нет.</div>
+            <div className="pre admin-gap-top-md">Событий пока нет.</div>
           ) : (
-            <div className="list" style={{ marginTop: 12 }}>
+            <div className="list admin-gap-top-md">
               {sortedEvents.map((item) => (
                 <div
                   key={item.id}
@@ -977,7 +975,7 @@ function TrialProtectionSection() {
                 >
                   <div className="list__main">
                     <div className="kicker">{formatDateTime(item.created_at)}</div>
-                    <div className="list__title" style={{ marginTop: 6 }}>{item.event_type}</div>
+                    <div className="list__title admin-gap-top-xs">{item.event_type}</div>
                     <div className="list__sub">{item.reason || "Без причины"}</div>
                   </div>
 
@@ -989,33 +987,32 @@ function TrialProtectionSection() {
         </div>
       </div>
 
-      <div className="card" style={{ marginTop: 16 }}>
+      <div className="card admin-gap-top-xl">
         <div className="card__body">
           <div className="kicker">Devices</div>
           <h2 className="h2">Устройства</h2>
           <p className="p">Последние замеченные устройства. Здесь можно вручную сбросить trial-lock для конкретного device token.</p>
 
           {loading ? (
-            <div className="list" style={{ marginTop: 12 }}>
+            <div className="list admin-gap-top-md">
               <div className="skeleton h1" />
               <div className="skeleton p" />
               <div className="skeleton p" />
             </div>
           ) : error ? (
-            <div className="pre" style={{ marginTop: 12 }}>{error}</div>
+            <div className="pre admin-gap-top-md">{error}</div>
           ) : sortedDevices.length === 0 ? (
-            <div className="pre" style={{ marginTop: 12 }}>Устройств пока нет.</div>
+            <div className="pre admin-gap-top-md">Устройств пока нет.</div>
           ) : (
-            <div className="list" style={{ marginTop: 12 }}>
+            <div className="list admin-gap-top-md">
               {sortedDevices.map((item) => (
                 <div key={item.id} className="list__item">
                   <div
-                    className="list__main"
-                    style={{ cursor: "pointer" }}
+                    className="list__main admin-clickable"
                     onClick={() => setOpenedDevice(item)}
                   >
                     <div className="kicker">{formatDateTime(item.last_seen_at)}</div>
-                    <div className="list__title" style={{ marginTop: 6 }}>{shortDeviceToken(item.device_token)}</div>
+                    <div className="list__title admin-gap-top-xs">{shortDeviceToken(item.device_token)}</div>
                     <div className="list__sub">
                       trial: {Number(item.active_trial_count ?? 0) > 0 ? "yes" : "no"}
                       <span className="paymentsHist__dot" />
@@ -1025,7 +1022,7 @@ function TrialProtectionSection() {
                     </div>
                   </div>
 
-                  <div className="list__side" style={{ gap: 8 }}>
+                  <div className="list__side admin-list-side-gap">
                     <button
                       className="btn btn--soft"
                       type="button"
@@ -1139,7 +1136,7 @@ function TrialProtectionSection() {
                   </div>
                 </div>
 
-                <div className="actions actions--2" style={{ marginTop: 16 }}>
+                <div className="actions actions--2 admin-gap-top-xl">
                   <button
                     className="btn btn--soft"
                     type="button"
@@ -1232,7 +1229,7 @@ function TrialProtectionSection() {
             </div>
           </div>
 
-          <div className="actions actions--2" style={{ marginTop: 16 }}>
+          <div className="actions actions--2 admin-gap-top-xl">
             <button className="btn btn--soft" type="button" onClick={() => copyText(openedDevice.device_token)}>
               Copy token
             </button>
@@ -1281,7 +1278,7 @@ export function AdminBroadcasts() {
           <h1 className="h1">Мини-админка</h1>
           <p className="p">Базовая административная страница для управления служебными функциями приложения.</p>
 
-          <div className="grid2" style={{ marginTop: 12 }}>
+          <div className="grid2 admin-gap-top-md">
             <SectionSwitcher
               active={tab === "overview"}
               onClick={() => setTab("overview")}
@@ -1296,7 +1293,7 @@ export function AdminBroadcasts() {
             />
           </div>
 
-          <div className="actions actions--2" style={{ marginTop: 10 }}>
+          <div className="actions actions--2 admin-gap-top-sm">
             <SectionSwitcher
               active={tab === "orderRules"}
               onClick={() => setTab("orderRules")}
@@ -1313,7 +1310,7 @@ export function AdminBroadcasts() {
         </div>
       </div>
 
-      <div style={{ marginTop: 16 }}>
+      <div className="admin-gap-top-xl">
         {tab === "overview" ? <OverviewSection onOpenTab={setTab} /> : null}
         {tab === "broadcasts" ? <BroadcastsSection /> : null}
         {tab === "orderRules" ? <OrderRulesSection /> : null}

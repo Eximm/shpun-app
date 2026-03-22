@@ -3165,3 +3165,55 @@ button, a { -webkit-tap-highlight-color: transparent; }
   color: rgba(255,255,255,0.92);
   font-weight: 900;
 }
+
+/* ============================================================
+   ADMIN PANEL
+   ============================================================ */
+
+   .admin-switcher__body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.admin-switcher__subtitle {
+  font-size: 12px;
+}
+
+.admin-gap-top-xs {
+  margin-top: 6px;
+}
+
+.admin-gap-top-sm {
+  margin-top: 10px;
+}
+
+.admin-gap-top-md {
+  margin-top: 12px;
+}
+
+.admin-gap-top-lg {
+  margin-top: 14px;
+}
+
+.admin-gap-top-xl {
+  margin-top: 16px;
+}
+
+.admin-clickable {
+  cursor: pointer;
+}
+
+.admin-list-side-gap {
+  gap: 8px;
+}
+
+.admin-radio {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.admin-radio--last {
+  margin-bottom: 0;
+}
