@@ -424,20 +424,15 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         const sessionId = ensureAuthSessionId(uid);
         const seenKey = onboardingSeenKey(uid, mode, sessionId);
 
-        // Уже спрашивали / уже обработали в этой авторизации -> не показываем.
         if (readSeen(seenKey)) return;
 
-        // Сразу помечаем как обработанное для текущей авторизации.
-        // Это и блокирует повтор при reload / reopen / навигации.
         writeSeen(seenKey);
 
-        // Browser mode -> install prompt
         if (!s.standalone) {
           setPushPromptOpen(true);
           return;
         }
 
-        // Installed PWA -> ask for push only if actually disabled
         if (!isPushSupported()) return;
 
         const pushEnabled = !s.disabledByUser && s.permission === "granted" && s.hasSubscription;
@@ -507,8 +502,47 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     setPushPromptOpen(false);
   }
 
-  if (!me && !loading && !authRequired) {
-    return <Navigate to="/login" replace state={{ from: loc.pathname + (loc.search || "") }} />;
+  const loginState = { from: loc.pathname + (loc.search || "") };
+
+  if (authRequired) {
+    return <Navigate to="/login" replace state={loginState} />;
+  }
+
+  if (loading) {
+    return (
+      <>
+        <PushOnboardingModal
+          open={false}
+          busy={false}
+          standalone={false}
+          permission="unsupported"
+          onAccept={() => {}}
+          onDismiss={() => {}}
+        />
+
+        <div
+          className="app-loader"
+          style={{
+            opacity: 1,
+            transition: "opacity 180ms ease",
+            pointerEvents: "auto",
+          }}
+        >
+          <div className="app-loader__card">
+            <div className="app-loader__shine" />
+            <div className="app-loader__brandRow">
+              <div className="app-loader__mark" />
+              <div className="app-loader__title">Shpun App</div>
+            </div>
+            <div className="app-loader__text">Проверяем авторизацию…</div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  if (!me) {
+    return <Navigate to="/login" replace state={loginState} />;
   }
 
   return (
@@ -530,7 +564,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
           style={{
             opacity: fadeOut ? 0 : 1,
             transition: "opacity 180ms ease",
-            pointerEvents: loading ? "auto" : "none",
+            pointerEvents: "none",
           }}
         >
           <div className="app-loader__card">

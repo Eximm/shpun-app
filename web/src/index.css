@@ -2672,6 +2672,27 @@ button, a { -webkit-tap-highlight-color: transparent; }
    Login page (styles moved from inline + small fixes)
    ============================================================ */
 
+  /* Login: email validation */
+.input--invalid{
+  border-color: rgba(255,77,109,0.52);
+  box-shadow: 0 0 0 4px rgba(255,77,109,0.12);
+  background: rgba(255,77,109,0.06);
+}
+
+.input--invalid:focus{
+  border-color: rgba(255,77,109,0.62);
+  box-shadow: 0 0 0 4px rgba(255,77,109,0.16);
+  background: rgba(255,77,109,0.08);
+}
+
+.login__fieldError{
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 700;
+  color: #ffb3c1;
+}
+
 .login__headerCard {
   margin-top: 10px;
   background: linear-gradient(135deg, rgba(124,92,255,0.14), rgba(77,215,255,0.08));

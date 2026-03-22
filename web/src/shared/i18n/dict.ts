@@ -96,6 +96,16 @@ export const RU: Dict = {
   "login.err.init_data_required": "Откройте приложение в Telegram для быстрого входа.",
   "login.err.tg_failed": "Не удалось войти через Telegram. Попробуйте ещё раз.",
   "login.err.generic": "Не удалось выполнить вход. Попробуйте ещё раз.",
+  "login.password.login_ph_register": "Введите ваш e-mail",
+
+  "login.err.register_failed": "Не удалось создать аккаунт. Попробуйте ещё раз.",
+  "login.err.email_required": "Введите e-mail.",
+  "login.err.email_invalid_format": "Это не похоже на настоящий e-mail. Введите действительный адрес.",
+  "login.err.email_invalid_generic": "Проверьте e-mail и введите действительный адрес.",
+  "login.err.email_domain_invalid": "Домен в e-mail выглядит некорректно. Проверьте адрес.",
+  "login.err.email_disposable": "Временные e-mail не подходят. Введите постоянный адрес.",
+  "login.err.email_domain_unresolvable": "Не удалось подтвердить домен e-mail. Проверьте адрес.",
+  "login.err.email_check_failed": "Не удалось проверить e-mail. Попробуйте другой адрес.",
 
   // home
   "home.loading.title": "Shpun",
@@ -920,6 +930,16 @@ export const EN: Dict = {
   "login.err.init_data_required": "Open the app in Telegram for a quick sign-in.",
   "login.err.tg_failed": "Could not sign in with Telegram. Please try again.",
   "login.err.generic": "Could not sign in. Please try again.",
+  "login.password.login_ph_register": "Enter your e-mail",
+
+  "login.err.register_failed": "Could not create the account. Please try again.",
+  "login.err.email_required": "Enter your e-mail.",
+  "login.err.email_invalid_format": "This does not look like a real e-mail. Enter a valid address.",
+  "login.err.email_invalid_generic": "Check the e-mail and enter a valid address.",
+  "login.err.email_domain_invalid": "The e-mail domain looks invalid. Please check the address.",
+  "login.err.email_disposable": "Temporary e-mail addresses are not allowed. Enter a permanent address.",
+  "login.err.email_domain_unresolvable": "Could not verify the e-mail domain. Please check the address.",
+  "login.err.email_check_failed": "Could not verify the e-mail. Please try a different address.",
 
   // home
   "home.loading.title": "Shpun",

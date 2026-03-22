@@ -1,5 +1,6 @@
 // web/src/shared/ui/toast/toastApiError.ts
 
+import { isNotAuthenticated } from "../../api/client";
 import { normalizeError } from "../../api/errorText";
 import { toast } from "./toast";
 
@@ -13,6 +14,12 @@ export function toastApiError(
     force?: boolean;
   }
 ) {
+  // Для auth-ошибок тост не показываем:
+  // AuthGate сам покажет единый toast и уведёт на /login.
+  if (isNotAuthenticated(err) && !opts?.force) {
+    return;
+  }
+
   const n = normalizeError(err, { title: opts?.title });
 
   // DEV-only: keep raw details out of UI, but available for debugging

@@ -38,6 +38,11 @@ function getTelegramBotUsername(): string {
 type Mode = "telegram" | "web";
 type AuthModal = "none" | "login" | "register";
 
+type RegisterEmailClientCode =
+  | "email_required"
+  | "email_invalid_format"
+  | "email_non_ascii";
+
 const PARTNER_LS_KEY = "partner_id_pending";
 const AUTH_PENDING_KEY = "auth:pending";
 const AUTH_PENDING_AT_KEY = "auth:pending_at";
@@ -138,6 +143,23 @@ function looksLikeCode(s: string) {
   return /^[a-z0-9_:.|-]+$/i.test(v) && !/\s/.test(v);
 }
 
+function normalizeEmailInput(value: string): string {
+  return String(value || "").trim().toLowerCase();
+}
+
+function validateRegisterEmailClient(value: string): RegisterEmailClientCode | null {
+  const email = normalizeEmailInput(value);
+  if (!email) return "email_required";
+
+  const asciiOnlyRe = /^[\x00-\x7F]+$/;
+  if (!asciiOnlyRe.test(email)) return "email_non_ascii";
+
+  const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRe.test(email)) return "email_invalid_format";
+
+  return null;
+}
+
 function mapRedirectError(e: string, t: (k: string, fb?: string) => string): string {
   const code = String(e || "").trim();
   if (!code) return "";
@@ -164,7 +186,7 @@ function mapAuthError(raw: string, t: (k: string, fb?: string) => string): strin
 
   switch (code) {
     case "login_and_password_required":
-      return t("login.err.login_and_password_required", "Введителогин или e-mail и пароль.");
+      return t("login.err.login_and_password_required", "Введите логин или e-mail и пароль.");
     case "login_required":
       return t("login.err.login_required", "Введите логин или e-mail.");
     case "password_required":
@@ -188,6 +210,26 @@ function mapAuthError(raw: string, t: (k: string, fb?: string) => string): strin
       return t("login.err.tg_failed", "Не удалось войти через Telegram. Попробуйте ещё раз.");
     case "shm_register_failed":
       return t("login.err.register_failed", "Не удалось создать аккаунт. Попробуйте ещё раз.");
+
+    case "email_required":
+      return t("login.err.email_required", "Введите e-mail.");
+    case "email_non_ascii":
+      return t("login.err.email_non_ascii", "Используйте e-mail только латиницей. Кириллица в адресе не поддерживается.");
+    case "email_invalid_format":
+      return t("login.err.email_invalid_format", "Это не похоже на настоящий e-mail. Введите действительный адрес.");
+    case "email_local_too_short":
+    case "email_local_invalid":
+      return t("login.err.email_invalid_generic", "Проверьте e-mail и введите действительный адрес.");
+    case "email_domain_invalid":
+    case "email_domain_numeric":
+      return t("login.err.email_domain_invalid", "Домен в e-mail выглядит некорректно. Проверьте адрес.");
+    case "email_disposable":
+      return t("login.err.email_disposable", "Временные e-mail не подходят. Введите постоянный адрес.");
+    case "email_domain_unresolvable":
+      return t("login.err.email_domain_unresolvable", "Не удалось подтвердить домен e-mail. Проверьте адрес.");
+    case "email_check_failed":
+      return t("login.err.email_check_failed", "Не удалось проверить e-mail. Попробуйте другой адрес.");
+
     default:
       return t("login.err.generic", "Не удалось выполнить вход. Попробуйте ещё раз.");
   }
@@ -272,6 +314,8 @@ export function Login() {
     return pending > 0 ? String(pending) : "";
   });
 
+  const [emailTouched, setEmailTouched] = useState(false);
+
   const autoLoginStarted = useRef(false);
   const widgetWrapRef = useRef<HTMLDivElement | null>(null);
   const referralHandledRef = useRef(false);
@@ -289,8 +333,25 @@ export function Login() {
   const canPasswordLogin = login.trim().length > 0 && password.length > 0;
   const passwordsMatch = password2.length === 0 ? true : password === password2;
   const currentPartnerId = normalizePartnerId(partnerIdInput);
+
+  const registerEmailCode =
+    authModal === "register" ? validateRegisterEmailClient(login) : null;
+
+  const registerEmailMessage =
+    registerEmailCode === "email_required"
+      ? t("login.err.email_required", "Введите e-mail.")
+      : registerEmailCode === "email_non_ascii"
+        ? t("login.err.email_non_ascii", "Используйте e-mail только латиницей. Кириллица в адресе не поддерживается.")
+        : registerEmailCode === "email_invalid_format"
+          ? t("login.err.email_invalid_format", "Это не похоже на настоящий e-mail. Введите действительный адрес.")
+          : "";
+
   const canPasswordRegister =
-    login.trim().length > 0 && password.length > 0 && password2.length > 0 && password === password2;
+    login.trim().length > 0 &&
+    password.length > 0 &&
+    password2.length > 0 &&
+    password === password2 &&
+    !registerEmailCode;
 
   const botUsername = useMemo(() => getTelegramBotUsername(), []);
 
@@ -300,6 +361,7 @@ export function Login() {
     setPassword2("");
     setShowPassword(false);
     setShowPassword2(false);
+    setEmailTouched(false);
 
     if (next !== "register") {
       setClientName("");
@@ -319,6 +381,7 @@ export function Login() {
     setShowPassword(false);
     setShowPassword2(false);
     setClientName("");
+    setEmailTouched(false);
   }
 
   async function goAfterAuth(r?: AuthResponse, provider?: string) {
@@ -392,6 +455,13 @@ export function Login() {
   }
 
   async function passwordRegister() {
+    setEmailTouched(true);
+
+    if (registerEmailCode) {
+      toastError(registerEmailCode);
+      return;
+    }
+
     if (!canPasswordRegister) {
       if (!login.trim() || !password) {
         toastError("login_and_password_required");
@@ -410,16 +480,16 @@ export function Login() {
 
     setLoading(true);
     try {
-      const trimmedLogin = login.trim();
+      const normalizedEmail = normalizeEmailInput(login);
       const trimmedClientName = clientName.trim();
 
       const r = await apiFetch<AuthResponse>("/auth/password", {
         method: "POST",
         body: {
-          login: trimmedLogin,
+          login: normalizedEmail,
           password,
           mode: "register",
-          client: trimmedClientName || trimmedLogin,
+          client: trimmedClientName || normalizedEmail,
           ...(finalPartnerId > 0 ? { partner_id: finalPartnerId } : {}),
         },
       });
@@ -662,14 +732,24 @@ export function Login() {
               <div className="field">
                 <label className="field__label">{t("login.password.login", "E-mail")}</label>
                 <input
-                  className="input"
-                  placeholder={t("login.password.login_ph", "Введите логин или e-mail")}
+                  className={`input ${authModal === "register" && emailTouched && registerEmailCode ? "input--invalid" : ""}`}
+                  placeholder={
+                    authModal === "register"
+                      ? t("login.password.login_ph_register", "Введите ваш e-mail")
+                      : t("login.password.login_ph", "Введите логин или e-mail")
+                  }
                   value={login}
                   onChange={(e) => setLogin(e.target.value)}
+                  onBlur={() => {
+                    if (authModal === "register") setEmailTouched(true);
+                  }}
                   autoComplete="username"
                   disabled={loading}
                   inputMode="email"
                 />
+                {authModal === "register" && emailTouched && registerEmailMessage && (
+                  <div className="login__fieldError">{registerEmailMessage}</div>
+                )}
               </div>
 
               {authModal === "register" && (

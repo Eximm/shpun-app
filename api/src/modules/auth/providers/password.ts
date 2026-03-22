@@ -1,5 +1,6 @@
 import type { AuthResult } from "../authService.js";
 import { shmFetch } from "../../../shared/shm/shmClient.js";
+import { validateRegistrationEmail } from "../../../shared/utils/email.js";
 
 type Mode = "login" | "register";
 
@@ -119,7 +120,7 @@ async function shmLogin(
     return {
       ok: false,
       status: r.status || 401,
-      error: "shm_auth_failed",
+      error: "invalid_credentials",
       detail: r.json ?? r.text,
     };
   }
@@ -155,7 +156,7 @@ async function shmSetClientName(
 }
 
 export async function passwordAuth(body: any): Promise<AuthResult> {
-  const login = normalizeLogin(body?.login);
+  let login = normalizeLogin(body?.login);
   const password = normalizePassword(body?.password);
   const client = normalizeClient(body?.client, login);
   const mode = normalizeMode(body?.mode);
@@ -166,12 +167,26 @@ export async function passwordAuth(body: any): Promise<AuthResult> {
     return { ok: false, status: 400, error: "login_and_password_required" };
   }
 
-  if (login.length < 3) {
-    return { ok: false, status: 400, error: "login_too_short" };
-  }
-
   if (password.length < 8) {
     return { ok: false, status: 400, error: "password_too_short" };
+  }
+
+  /* =========================
+     EMAIL VALIDATION (ONLY REGISTER)
+  ========================= */
+
+  if (mode === "register") {
+    const emailCheck = await validateRegistrationEmail(login);
+
+    if (!emailCheck.ok) {
+      return {
+        ok: false,
+        status: 400,
+        error: emailCheck.code || "email_invalid",
+      };
+    }
+
+    login = emailCheck.normalized;
   }
 
   try {
@@ -200,9 +215,7 @@ export async function passwordAuth(body: any): Promise<AuthResult> {
         if (auth.ok && auth.shmSessionId) {
           try {
             await shmSetClientName(auth.shmSessionId, client, signal);
-          } catch {
-            // имя не критично
-          }
+          } catch {}
         }
 
         return auth;

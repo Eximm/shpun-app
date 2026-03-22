@@ -25,7 +25,7 @@ export function isAuthError(e: unknown): boolean {
 }
 
 export function isNotAuthenticated(e: unknown): boolean {
-  return e instanceof ApiError && (e.status === 401 || e.status === 403) && e.code === "not_authenticated";
+  return e instanceof ApiError && (e.status === 401 || e.status === 403);
 }
 
 // ✅ Our own init type: allow body to be an object (we will serialize it)

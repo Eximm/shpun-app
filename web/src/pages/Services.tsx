@@ -4,7 +4,6 @@ import { PageStatusCard } from "../shared/ui/PageStatusCard";
 
 import { toast } from "../shared/ui/toast";
 import { toastApiError } from "../shared/ui/toast/toastApiError";
-import { getMood } from "../shared/payments-mood";
 
 import { useMe } from "../app/auth/useMe";
 import { normalizeError } from "../shared/api/errorText";
@@ -582,9 +581,7 @@ export function Services() {
 
       if (toastOnSuccess) {
         toast.info(t("services.toast.updated", "Updated"), {
-          description:
-            getMood("payment_checking", { seed: String(newItems.length) }) ??
-            t("services.toast.updated_desc", "Service statuses updated."),
+          description: t("services.toast.updated_desc", "Service statuses updated."),
         });
       }
     } catch (e: unknown) {
@@ -616,9 +613,7 @@ export function Services() {
       setExpandedId(usi);
 
       toast.success(t("services.toast.blocked", "Blocked"), {
-        description:
-          getMood("payment_success", { seed: String(usi) }) ??
-          t("services.toast.blocked_desc", "Service has been blocked."),
+        description: t("services.toast.blocked_desc", "Service has been blocked."),
       });
 
       await load({ silent: true });
@@ -644,9 +639,7 @@ export function Services() {
       setConnectOpenId((cur) => (cur === usi ? null : cur));
 
       toast.success(t("services.toast.deleted", "Service deleted"), {
-        description:
-          getMood("payment_success", { seed: String(usi) }) ??
-          t("services.toast.deleted_desc", "Done. Service was removed from the list."),
+        description: t("services.toast.deleted_desc", "Done. Service was removed from the list."),
       });
 
       await load({ silent: true });
@@ -683,7 +676,6 @@ export function Services() {
       if (!before || !after || before === after) continue;
 
       const title = it.title ? it.title : `${t("services.item", "Service")} #${id}`;
-      const seed = String(id);
 
       if (after === "blocked") {
         toast.error(title, { description: t("services.toast.service_blocked", "Service is blocked. Action required.") });
@@ -694,11 +686,11 @@ export function Services() {
         (before === "pending" || before === "not_paid" || before === "blocked" || before === "init")
       ) {
         toast.success(title, {
-          description: getMood("payment_success", { seed }) ?? t("services.toast.service_active", "Service activated."),
+          description: t("services.toast.service_active", "Service activated."),
         });
       } else if (after === "removed") {
         toast.success(title, {
-          description: getMood("payment_success", { seed }) ?? t("services.toast.service_removed", "Service completed."),
+          description: t("services.toast.service_removed", "Service completed."),
         });
       }
     }

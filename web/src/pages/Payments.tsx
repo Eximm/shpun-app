@@ -32,6 +32,13 @@ type RequisitesResp = {
   raw?: any;
 };
 
+type ReceiptUploadResp = {
+  ok?: boolean;
+  message?: string;
+  error?: string;
+  [k: string]: any;
+};
+
 function fmtMoney(n: number, cur = "RUB") {
   const v = Number(n || 0);
   try {
@@ -249,20 +256,13 @@ export function Payments() {
       fd.append("file", file);
       fd.append("amount", String(amountNumber));
 
-      const res = await fetch("/api/payments/receipt", {
+      const json = (await apiFetch("/payments/receipt", {
         method: "POST",
         body: fd,
-        credentials: "include",
-      });
+      })) as ReceiptUploadResp;
 
-      const text = await res.text();
-      let json: any = null;
-      try {
-        json = JSON.parse(text);
-      } catch {}
-
-      if (!res.ok || !json?.ok) {
-        throw json ?? { status: res.status, message: `Upload failed (${res.status})` };
+      if (!json?.ok) {
+        throw json ?? { message: "receipt_upload_failed" };
       }
 
       setUploadMsg(t("payments.receipt.sent_msg", "✅ Квитанция отправлена на проверку."));
