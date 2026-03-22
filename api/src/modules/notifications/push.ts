@@ -82,16 +82,6 @@ const stmtListUsersWithPushSubs = linkDb.prepare(`
   WHERE user_id IS NOT NULL AND user_id > 0
 `);
 
-function safeJsonPreview(v: any, maxLen = 1200): string {
-  try {
-    const s = JSON.stringify(v);
-    if (!s) return "";
-    return s.length > maxLen ? `${s.slice(0, maxLen)}…` : s;
-  } catch {
-    return "[unserializable]";
-  }
-}
-
 function endpointTail(endpoint: string, n = 28) {
   const s = String(endpoint || "");
   return s.length > n ? "…" + s.slice(-n) : s;
@@ -104,10 +94,12 @@ export async function pushRoutes(app: FastifyInstance) {
     if (secret) {
       const signRaw = (req.headers as any)["x-shpun-sign"];
       const sign = String(signRaw ?? "").trim();
+
       if (!sign) {
         console.warn("BILLING_PUSH_REJECT", { reason: "missing_signature" });
         return reply.code(401).send({ ok: false, error: "missing_signature" });
       }
+
       if (sign !== secret) {
         console.warn("BILLING_PUSH_REJECT", { reason: "bad_signature" });
         return reply.code(401).send({ ok: false, error: "bad_signature" });
@@ -118,16 +110,21 @@ export async function pushRoutes(app: FastifyInstance) {
     const formatted = formatIncoming(body);
 
     console.info("BILLING_PUSH_IN", {
-      raw: safeJsonPreview(body),
-      formatted: safeJsonPreview(formatted),
+      event_id: (body as any)?.event_id ?? null,
+      type: (body as any)?.type ?? null,
+      user_id: (body as any)?.user_id ?? null,
+      target: (body as any)?.target ?? null,
+      toast: (body as any)?.toast ?? null,
+      push: (body as any)?.push ?? null,
     });
 
     const r = putEvent(formatted);
     if (!r.ok) {
       console.warn("BILLING_PUSH_STORE_FAIL", {
+        event_id: (body as any)?.event_id ?? null,
+        type: (body as any)?.type ?? null,
+        user_id: (body as any)?.user_id ?? null,
         error: r.error,
-        raw: safeJsonPreview(body),
-        formatted: safeJsonPreview(formatted),
       });
       return reply.code(400).send({ ok: false, error: r.error });
     }
@@ -139,45 +136,45 @@ export async function pushRoutes(app: FastifyInstance) {
     const broadcast = isBroadcastEvent(formatted);
     const active = uid > 0 ? isUserActive(uid) : null;
 
-    console.info("BILLING_PUSH_STORED", {
+    console.info("BILLING_PUSH_DECISION", {
       event_id: eventId,
       ts: eventTs,
       uid,
       type: String(formatted?.type ?? ""),
       target: String((formatted as any)?.target ?? ""),
-      dedup: Boolean(r.dedup),
-      delivered: r.delivered ?? null,
       wantsPush,
       body_push: (body as any)?.push ?? null,
       formatted_push: (formatted as any)?.push ?? null,
-      isBroadcast: broadcast,
       active,
+      isBroadcast: broadcast,
+      dedup: Boolean(r.dedup),
     });
 
     try {
       if (!wantsPush) {
-        console.info("BILLING_PUSH_SKIP", {
-          reason: "push_flag_false",
+        console.info("BILLING_PUSH_RESULT", {
           event_id: eventId,
           uid,
-          body_push: (body as any)?.push ?? null,
-          formatted_push: (formatted as any)?.push ?? null,
+          ok: true,
+          mode: "skip",
+          reason: "push_flag_false",
+          sent: 0,
+          failed: 0,
+          removed: 0,
         });
       } else if (uid > 0) {
         if (active) {
-          console.info("BILLING_PUSH_SKIP", {
-            reason: "user_active",
+          console.info("BILLING_PUSH_RESULT", {
             event_id: eventId,
             uid,
+            ok: true,
+            mode: "skip",
+            reason: "user_active",
+            sent: 0,
+            failed: 0,
+            removed: 0,
           });
         } else {
-          console.info("BILLING_PUSH_SEND_START", {
-            mode: "single",
-            event_id: eventId,
-            uid,
-            type: String(formatted?.type ?? ""),
-          });
-
           const payloadEvent = {
             ...formatted,
             event_id: eventId,
@@ -186,27 +183,20 @@ export async function pushRoutes(app: FastifyInstance) {
 
           const wp = await sendWebPushToUser(uid, payloadEvent);
 
-          console.info("BILLING_PUSH_SEND_RESULT", {
-            mode: "single",
+          console.info("BILLING_PUSH_RESULT", {
             event_id: eventId,
             uid,
-            result: wp,
+            ok: Boolean(wp?.ok),
+            mode: "single",
+            reason: null,
+            sent: Number(wp?.sent ?? 0),
+            failed: Number(wp?.failed ?? 0),
+            removed: Number(wp?.removed ?? 0),
+            error: (wp as any)?.error ?? null,
           });
         }
       } else if (broadcast) {
         const rows = stmtListUsersWithPushSubs.all() as Array<{ user_id: number }>;
-
-        console.info("BILLING_PUSH_BROADCAST_START", {
-          event_id: eventId,
-          type: String(formatted?.type ?? ""),
-          candidates: rows.length,
-        });
-
-        const payloadEvent = {
-          ...formatted,
-          event_id: eventId,
-          ts: eventTs,
-        };
 
         let totalCandidates = 0;
         let skippedInvalid = 0;
@@ -215,6 +205,12 @@ export async function pushRoutes(app: FastifyInstance) {
         let sentUsers = 0;
         let failedUsers = 0;
         let removedSubs = 0;
+
+        const payloadEvent = {
+          ...formatted,
+          event_id: eventId,
+          ts: eventTs,
+        };
 
         for (const row of rows) {
           const targetUid = Number(row.user_id);
@@ -239,13 +235,9 @@ export async function pushRoutes(app: FastifyInstance) {
               if (Number(wp?.sent ?? 0) > 0) sentUsers += 1;
               if (Number(wp?.failed ?? 0) > 0 && Number(wp?.sent ?? 0) <= 0) failedUsers += 1;
               removedSubs += Number(wp?.removed ?? 0) || 0;
+            } else {
+              failedUsers += 1;
             }
-
-            console.info("BILLING_PUSH_BROADCAST_USER_RESULT", {
-              event_id: eventId,
-              targetUid,
-              result: wp,
-            });
           } catch (e: any) {
             failedUsers += 1;
             console.warn("BILLING_PUSH_BROADCAST_USER_FAIL", {
@@ -256,8 +248,12 @@ export async function pushRoutes(app: FastifyInstance) {
           }
         }
 
-        console.info("BILLING_PUSH_BROADCAST_DONE", {
+        console.info("BILLING_PUSH_RESULT", {
           event_id: eventId,
+          uid: null,
+          ok: true,
+          mode: "broadcast",
+          reason: null,
           totalCandidates,
           skippedInvalid,
           skippedActive,
@@ -267,12 +263,15 @@ export async function pushRoutes(app: FastifyInstance) {
           removedSubs,
         });
       } else {
-        console.info("BILLING_PUSH_SKIP", {
-          reason: "no_target_user_and_not_broadcast",
+        console.info("BILLING_PUSH_RESULT", {
           event_id: eventId,
           uid,
-          type: String(formatted?.type ?? ""),
-          target: String((formatted as any)?.target ?? ""),
+          ok: true,
+          mode: "skip",
+          reason: "no_target_user_and_not_broadcast",
+          sent: 0,
+          failed: 0,
+          removed: 0,
         });
       }
     } catch (e: any) {
@@ -280,7 +279,6 @@ export async function pushRoutes(app: FastifyInstance) {
         event_id: eventId,
         uid,
         msg: String(e?.message || e || ""),
-        stack: String(e?.stack || ""),
       });
     }
 
@@ -349,7 +347,6 @@ export async function pushRoutes(app: FastifyInstance) {
         endpointPresent: Boolean(endpoint),
         p256dhPresent: Boolean(p256dh),
         authPresent: Boolean(auth),
-        raw: safeJsonPreview(subBody),
       });
       return reply.code(400).send({ ok: false, error: "bad_subscription" });
     }
