@@ -127,9 +127,9 @@ export function formatIncoming(e: BillingPushEvent): BillingPushEvent {
     meta = setShort(meta, "💰 Баланс пополнен", a ? `+${a}` : "");
   } else if (type === "service.blocked") {
     title = "⛔ Услуга заблокирована";
-    message = `${namePart}${idPart} · проверьте статус услуги в приложении`;
+    message = `${namePart}${idPart} · проверьте статус услуги`;
 
-    meta = setShort(meta, "⛔ Заблокировано", `${namePart}${idPart} · проверьте статус`);
+    meta = setShort(meta, "⛔ Заблокирована", `${namePart}${idPart} · проверьте статус`);
   } else if (type === "service.activated") {
     const expire = pick(meta, "expire");
 
@@ -169,12 +169,27 @@ export function formatIncoming(e: BillingPushEvent): BillingPushEvent {
     title = "⏳ Скоро нужна оплата";
 
     const fullParts: string[] = [];
-    if (Number.isFinite(cnt) && cnt > 0) fullParts.push(`Услуг: ${cnt}`);
-    if (t) fullParts.push(`нужно ${t}`);
+
+    if (Number.isFinite(cnt) && cnt > 0 && t) {
+      fullParts.push(
+        cnt === 1
+          ? `По 1 услуге скоро потребуется оплата на ${t}`
+          : `По ${cnt} услугам скоро потребуется оплата на ${t}`
+      );
+    } else if (t) {
+      fullParts.push(`Скоро потребуется оплата на ${t}`);
+    } else if (Number.isFinite(cnt) && cnt > 0) {
+      fullParts.push(
+        cnt === 1
+          ? "По 1 услуге скоро потребуется оплата"
+          : `По ${cnt} услугам скоро потребуется оплата`
+      );
+    }
+
     if (b) fullParts.push(`баланс ${b}`);
     if (bn) fullParts.push(`бонус ${bn}`);
 
-    message = fullParts.length ? fullParts.join(" · ") : "Проверьте оплату услуг";
+    message = fullParts.length ? fullParts.join(" · ") : "Проверьте ближайшую оплату услуг";
 
     let shortMessage = "Проверьте оплату";
     if (Number.isFinite(cnt) && cnt > 0 && t) shortMessage = `Услуг: ${cnt} · нужно ${t}`;
