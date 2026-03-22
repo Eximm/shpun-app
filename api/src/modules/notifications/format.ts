@@ -104,7 +104,7 @@ export function formatIncoming(e: BillingPushEvent): BillingPushEvent {
 
   let push = parseBoolLike((e as any).push);
   if (push === undefined) {
-    push = false;
+    push = Boolean(toast);
   }
 
   const metaRaw = (e as any).meta || {};
