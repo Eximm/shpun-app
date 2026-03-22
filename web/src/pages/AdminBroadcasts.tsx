@@ -674,7 +674,7 @@ function TrialProtectionSection() {
   }
 
   async function clearEvents() {
-    const ok = window.confirm("Очистить журнал событий Trial Protection?\n\nПоследние 20 записей останутся.");
+    const ok = window.confirm("Очистить журнал событий Trial Protection полностью?");
     if (!ok) return;
 
     setClearingEvents(true);
@@ -684,7 +684,7 @@ function TrialProtectionSection() {
     try {
       const r = await apiFetch<ClearEventsResp>("/admin/trial-protection/clear-events", {
         method: "POST",
-        body: { keepLatest: 20 },
+        body: { keepLatest: 0 },
       });
 
       setOkText(`Журнал очищен. Удалено записей: ${r.deleted}`);
@@ -989,9 +989,9 @@ function TrialProtectionSection() {
 
       <div className="card admin-gap-top-xl">
         <div className="card__body">
-          <div className="kicker">Devices</div>
-          <h2 className="h2">Устройства</h2>
-          <p className="p">Последние замеченные устройства. Здесь можно вручную сбросить trial-lock для конкретного device token.</p>
+          <div className="kicker">Violators</div>
+          <h2 className="h2">Активные блокировки</h2>
+          <p className="p">Здесь отображаются только устройства, у которых сейчас есть активные trial-group блокировки.</p>
 
           {loading ? (
             <div className="list admin-gap-top-md">
@@ -1002,7 +1002,7 @@ function TrialProtectionSection() {
           ) : error ? (
             <div className="pre admin-gap-top-md">{error}</div>
           ) : sortedDevices.length === 0 ? (
-            <div className="pre admin-gap-top-md">Устройств пока нет.</div>
+            <div className="pre admin-gap-top-md">Активных блокировок сейчас нет.</div>
           ) : (
             <div className="list admin-gap-top-md">
               {sortedDevices.map((item) => (
@@ -1014,9 +1014,7 @@ function TrialProtectionSection() {
                     <div className="kicker">{formatDateTime(item.last_seen_at)}</div>
                     <div className="list__title admin-gap-top-xs">{shortDeviceToken(item.device_token)}</div>
                     <div className="list__sub">
-                      trial: {Number(item.active_trial_count ?? 0) > 0 ? "yes" : "no"}
-                      <span className="paymentsHist__dot" />
-                      groups: {Number(item.active_trial_count ?? 0)}
+                      active groups: {Number(item.active_trial_count ?? 0)}
                       <span className="paymentsHist__dot" />
                       ip: {item.last_ip || "—"}
                     </div>

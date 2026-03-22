@@ -15,7 +15,6 @@ import {
 } from "../device/deviceService.js";
 import {
   ensureDeviceTables,
-  listTrialDevicesWithUsage,
   resetDeviceTrialUsage,
   deleteAllTrialUsageByDevice,
 } from "../device/deviceRepo.js";
@@ -264,7 +263,72 @@ export async function adminRoutes(app: FastifyInstance) {
 
     const q = (req.query ?? {}) as any;
     const limit = toPositiveInt(q?.limit, 50, 200);
-    const items = listTrialDevicesWithUsage(limit);
+    const showAll = String(q?.all ?? "").trim() === "1";
+
+    const items = showAll
+      ? linkDb
+          .prepare(`
+            SELECT
+              d.id,
+              d.device_token,
+              d.first_seen_at,
+              d.last_seen_at,
+              d.first_ip,
+              d.last_ip,
+              d.user_agent,
+              d.trial_used_at,
+              d.trial_user_id,
+              COUNT(u.id) AS active_trial_count,
+              MAX(u.used_at) AS last_trial_used_at
+            FROM trial_devices d
+            LEFT JOIN trial_device_usage u
+              ON u.device_token = d.device_token
+            GROUP BY
+              d.id,
+              d.device_token,
+              d.first_seen_at,
+              d.last_seen_at,
+              d.first_ip,
+              d.last_ip,
+              d.user_agent,
+              d.trial_used_at,
+              d.trial_user_id
+            ORDER BY d.last_seen_at DESC, d.id DESC
+            LIMIT ?
+          `)
+          .all(limit)
+      : linkDb
+          .prepare(`
+            SELECT
+              d.id,
+              d.device_token,
+              d.first_seen_at,
+              d.last_seen_at,
+              d.first_ip,
+              d.last_ip,
+              d.user_agent,
+              d.trial_used_at,
+              d.trial_user_id,
+              COUNT(u.id) AS active_trial_count,
+              MAX(u.used_at) AS last_trial_used_at
+            FROM trial_devices d
+            JOIN trial_device_usage u
+              ON u.device_token = d.device_token
+            GROUP BY
+              d.id,
+              d.device_token,
+              d.first_seen_at,
+              d.last_seen_at,
+              d.first_ip,
+              d.last_ip,
+              d.user_agent,
+              d.trial_used_at,
+              d.trial_user_id
+            HAVING COUNT(u.id) > 0
+            ORDER BY d.last_seen_at DESC, d.id DESC
+            LIMIT ?
+          `)
+          .all(limit);
 
     return reply.send({ ok: true, items });
   });
@@ -314,7 +378,7 @@ export async function adminRoutes(app: FastifyInstance) {
     ensureDeviceTables();
 
     const body = (req.body ?? {}) as any;
-    const keepLatest = toPositiveInt(body?.keepLatest, 0, 10000);
+    const keepLatest = Math.max(0, Number(body?.keepLatest ?? 0)) || 0;
 
     let deleted = 0;
 
@@ -342,18 +406,6 @@ export async function adminRoutes(app: FastifyInstance) {
       const result = linkDb.prepare(`DELETE FROM trial_protection_events`).run();
       deleted = Number(result?.changes ?? 0);
     }
-
-    logTrialEvent({
-      userId: getSessionUserId(req),
-      eventType: "trial_events_cleared_by_admin",
-      decision: "allow",
-      reason: "manual_admin_clear_events",
-      meta: {
-        by: "admin",
-        keepLatest,
-        deleted,
-      },
-    });
 
     return reply.send({ ok: true, deleted, keepLatest });
   });
