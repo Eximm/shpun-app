@@ -1,3 +1,4 @@
+// FILE: api/src/modules/notifications/webpush.ts
 import webpush from "web-push";
 import { listSubscriptions, removeSubscription, type PushSub } from "./subscriptions.js";
 
@@ -30,7 +31,6 @@ function ensureVapid(): boolean {
   webpush.setVapidDetails(subj, pub, priv);
   vapidConfigured = true;
   vapidOk = true;
-  console.info("WEBPUSH_VAPID_OK", { subj });
   return true;
 }
 
@@ -85,7 +85,6 @@ export async function sendWebPushToUser(userId: number, formattedEvent: any) {
 
   const subs = listSubscriptions(userId);
   if (!subs.length) {
-    console.info("WEBPUSH_NO_SUBS", { userId });
     return { ok: true, sent: 0, failed: 0, removed: 0 };
   }
 
@@ -100,21 +99,30 @@ export async function sendWebPushToUser(userId: number, formattedEvent: any) {
     const tail = endpointTail(sub.endpoint);
 
     try {
-      const res: any = await sendToSub(sub, payload);
-      const statusCode = Number(res?.statusCode ?? 0);
-      console.info("WEBPUSH_OK", { userId, host, endpoint: tail, statusCode });
+      await sendToSub(sub, payload);
       sent += 1;
     } catch (e: any) {
       const code = Number(e?.statusCode || e?.status || 0);
       const msg = String(e?.message || "");
-      console.warn("WEBPUSH_FAIL", { userId, host, endpoint: tail, code, msg });
 
-      // 404/410 => подписка умерла, удаляем
+      console.warn("WEBPUSH_FAIL", {
+        userId,
+        host,
+        endpoint: tail,
+        code,
+        msg,
+      });
+
       if (code === 404 || code === 410) {
         try {
           removeSubscription(userId, sub.endpoint);
           removed += 1;
-          console.warn("WEBPUSH_SUB_REMOVED", { userId, host, endpoint: tail, code });
+          console.warn("WEBPUSH_SUB_REMOVED", {
+            userId,
+            host,
+            endpoint: tail,
+            code,
+          });
         } catch (rmErr: any) {
           console.warn("WEBPUSH_SUB_REMOVE_FAIL", {
             userId,
