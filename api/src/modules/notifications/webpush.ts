@@ -34,16 +34,28 @@ function ensureVapid(): boolean {
   return true;
 }
 
+function shortTitle(ev: any) {
+  return String(ev?.meta?.short?.title || ev?.title || "ShpunApp").slice(0, 80);
+}
+
+function shortBody(ev: any) {
+  return String(ev?.meta?.short?.message || ev?.body || ev?.message || "").slice(0, 160);
+}
+
 // короткий payload
 function buildPushPayload(ev: any) {
-  const title = String(ev?.title || "ShpunApp").slice(0, 80);
-  const body = String(ev?.body ?? ev?.message ?? "").slice(0, 160);
+  const title = shortTitle(ev);
+  const body = shortBody(ev);
   const type = String(ev?.type || "").trim();
 
   let link = "/feed";
-  if (type.startsWith("balance.") || type.startsWith("payment.") || type.startsWith("invoice.")) link = "/payments";
-  else if (type.startsWith("service.") || type.startsWith("services.")) link = "/services";
-  else if (type.startsWith("broadcast.")) link = "/feed";
+  if (type.startsWith("balance.") || type.startsWith("payment.") || type.startsWith("invoice.")) {
+    link = "/payments";
+  } else if (type.startsWith("service.") || type.startsWith("services.")) {
+    link = "/services";
+  } else if (type.startsWith("broadcast.")) {
+    link = "/feed";
+  }
 
   return JSON.stringify({
     title,

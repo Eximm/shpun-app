@@ -25,17 +25,6 @@ function pick(obj: any, path: string): any {
   }
 }
 
-function firstForecastItem(meta: any) {
-  const items = pick(meta, "items");
-  if (!Array.isArray(items) || !items.length) return null;
-  const it = items[0] ?? {};
-  const id = pick(it, "id") ?? pick(it, "usi") ?? pick(it, "service.id");
-  const name = pick(it, "name") ?? pick(it, "service.name");
-  const expire = pick(it, "expire") ?? pick(it, "expiresAt");
-  const total = pick(it, "next.total") ?? pick(it, "nextTotal") ?? pick(it, "total");
-  return { id, name, expire, total };
-}
-
 /**
  * bool normalization:
  * billing may send "", "1", 1, "true", true, etc.
@@ -80,6 +69,16 @@ function addActionToMeta(type: string, metaIn: any) {
   return meta;
 }
 
+function setShort(meta: any, title: string, message: string) {
+  return {
+    ...meta,
+    short: {
+      title: compact(title, 80),
+      message: compact(message, 160),
+    },
+  };
+}
+
 export function formatIncoming(e: BillingPushEvent): BillingPushEvent {
   const type = String(e.type || "").trim();
 
@@ -108,10 +107,12 @@ export function formatIncoming(e: BillingPushEvent): BillingPushEvent {
   }
 
   const metaRaw = (e as any).meta || {};
-  const meta = addActionToMeta(type, metaRaw);
+  let meta = addActionToMeta(type, metaRaw);
 
   const serviceId = pick(meta, "service.id") ?? pick(meta, "usi");
   const serviceName = pick(meta, "service.name") ?? pick(meta, "name");
+  const idPart = serviceId ? ` #${serviceId}` : "";
+  const namePart = serviceName ? String(serviceName) : "Услуга";
 
   let title = (e as any).title || "";
   let message = (e as any).message || "";
@@ -119,66 +120,80 @@ export function formatIncoming(e: BillingPushEvent): BillingPushEvent {
   if (type === "balance.credited") {
     const amount = pick(meta, "amount") ?? pick(meta, "money") ?? pick(meta, "sum");
     const a = rub(amount);
-    title = a ? `💰 ${a}` : "💰 Пополнение";
-    message = "Баланс пополнен";
+
+    title = "💰 Баланс пополнен";
+    message = a ? `Зачислено ${a} на баланс аккаунта.` : "Баланс успешно пополнен.";
+
+    meta = setShort(meta, "💰 Баланс пополнен", a ? `+${a}` : "");
   } else if (type === "service.blocked") {
-    title = "⛔ Услуга приостановлена";
-    const name = serviceName ? String(serviceName) : "Услуга";
-    const idPart = serviceId ? ` #${serviceId}` : "";
-    message = `${name}${idPart} · нужно пополнение`;
+    title = "⛔ Услуга заблокирована";
+    message = `${namePart}${idPart} · проверьте статус услуги в приложении`;
+
+    meta = setShort(meta, "⛔ Заблокировано", `${namePart}${idPart} · проверьте статус`);
   } else if (type === "service.activated") {
-    title = "✅ Активировано";
-    const name = serviceName ? String(serviceName) : "Услуга";
-    const idPart = serviceId ? ` #${serviceId}` : "";
     const expire = pick(meta, "expire");
-    message = expire ? `${name}${idPart} · до ${String(expire)}` : `${name}${idPart} · активировано`;
+
+    title = "✅ Активировано";
+    message = expire
+      ? `${namePart}${idPart} · до ${String(expire)}`
+      : `${namePart}${idPart} · услуга активирована`;
+
+    meta = setShort(
+      meta,
+      "✅ Активировано",
+      expire ? `${namePart}${idPart} · до ${String(expire)}` : `${namePart}${idPart}`,
+    );
   } else if (type === "service.renewed") {
-    title = "✅ Продлено";
-    const name = serviceName ? String(serviceName) : "Услуга";
-    const idPart = serviceId ? ` #${serviceId}` : "";
     const expireNew = pick(meta, "expire_new") ?? pick(meta, "expireNew") ?? pick(meta, "expire");
-    message = expireNew ? `${name}${idPart} · до ${String(expireNew)}` : `${name}${idPart} · продлено`;
+
+    title = "✅ Продлено";
+    message = expireNew
+      ? `${namePart}${idPart} · до ${String(expireNew)}`
+      : `${namePart}${idPart} · услуга продлена`;
+
+    meta = setShort(
+      meta,
+      "✅ Продлено",
+      expireNew ? `${namePart}${idPart} · до ${String(expireNew)}` : `${namePart}${idPart}`,
+    );
   } else if (type === "service.forecast") {
-    title = "⏳ Скоро нужна оплата";
-
     const total = pick(meta, "total");
-    const t = rub(total);
-
-    const cnt = Number(pick(meta, "items_count") ?? pick(meta, "count"));
+    const cnt = Number(pick(meta, "items_count") ?? pick(meta, "count") ?? 0);
     const balance = pick(meta, "balance");
     const bonus = pick(meta, "bonus") ?? pick(meta, "get_bonus");
 
+    const t = rub(total);
     const b = rub(balance);
     const bn = rub(bonus);
 
-    const it = firstForecastItem(meta);
-    if (it) {
-      const name = it.name ? String(it.name) : "Услуга";
-      const idPart = it.id ? ` #${it.id}` : "";
-      const ex = it.expire ? `до ${String(it.expire)}` : "";
-      const p = rub(it.total);
-      message = `${name}${idPart}${ex ? ` · ${ex}` : ""}${p ? ` · ~${p}` : ""}`;
-      if (Number.isFinite(cnt) && cnt > 1) message += ` (и ещё ${cnt - 1})`;
-      if (!p && t) message += ` · всего ~${t}`;
-    } else if (t) {
-      message = `Нужно ~${t}`;
-      if (Number.isFinite(cnt) && cnt > 0) message += ` · услуг: ${cnt}`;
-      if (b) message += ` · баланс ${b}`;
-      if (bn) message += ` (+${bn} бонус)`;
-    } else if (Number.isFinite(cnt) && cnt > 0) {
-      message = `Услуг под риском: ${cnt}`;
-    } else {
-      message = "Проверьте оплату услуг";
-    }
+    title = "⏳ Скоро нужна оплата";
+
+    const fullParts: string[] = [];
+    if (Number.isFinite(cnt) && cnt > 0) fullParts.push(`Услуг: ${cnt}`);
+    if (t) fullParts.push(`нужно ${t}`);
+    if (b) fullParts.push(`баланс ${b}`);
+    if (bn) fullParts.push(`бонус ${bn}`);
+
+    message = fullParts.length ? fullParts.join(" · ") : "Проверьте оплату услуг";
+
+    let shortMessage = "Проверьте оплату";
+    if (Number.isFinite(cnt) && cnt > 0 && t) shortMessage = `Услуг: ${cnt} · нужно ${t}`;
+    else if (t) shortMessage = `Нужно ${t}`;
+    else if (Number.isFinite(cnt) && cnt > 0) shortMessage = `Услуг: ${cnt}`;
+
+    meta = setShort(meta, "💳 Скоро нужна оплата", shortMessage);
   } else if (type === "broadcast.news") {
     title = title || "📢 Сообщение";
     message = message || "";
+
+    meta = setShort(meta, "📰 Новость", "Откройте Инфоцентр");
   } else {
     title = title || "Сообщение";
+    meta = setShort(meta, title, message || "");
   }
 
   title = compact(title, 80);
-  message = String(message || "").trim();
+  message = compact(String(message || "").trim(), 220);
 
   return {
     ...e,

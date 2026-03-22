@@ -11,6 +11,13 @@ type BillingPushEvent = {
   title?: string;
   message?: string;
   toast?: boolean;
+  meta?: {
+    short?: {
+      title?: string;
+      message?: string;
+    };
+    [k: string]: any;
+  };
 };
 
 type Cursor = { ts: number; id: string };
@@ -82,8 +89,8 @@ function normalize(s: string) {
 function makeShownKey(ev: BillingPushEvent): string | null {
   const eventId = normalize(ev.event_id);
   const lvl = normalize(ev.level || "info");
-  const title = normalize(ev.title || "");
-  const msg = normalize(ev.message || "");
+  const title = normalize(ev.meta?.short?.title || ev.title || "");
+  const msg = normalize(ev.meta?.short?.message || ev.message || "");
 
   if (eventId) return `id:${eventId}`;
 
@@ -167,20 +174,14 @@ function getToastView(ev: BillingPushEvent): {
   description: string;
   level: "info" | "success" | "error";
 } {
-  const type = String(ev.type ?? "").trim();
   const level = ev.level || "info";
 
-  if (type === "broadcast.news") {
-    return {
-      title: "📰 Свежая новость",
-      description: "Загляните в Инфоцентр",
-      level,
-    };
-  }
+  const shortTitle = String(ev.meta?.short?.title || "").trim();
+  const shortMessage = String(ev.meta?.short?.message || "").trim();
 
   return {
-    title: ev.title || "Уведомление",
-    description: ev.message || "",
+    title: shortTitle || ev.title || "Уведомление",
+    description: shortMessage || ev.message || "",
     level,
   };
 }
