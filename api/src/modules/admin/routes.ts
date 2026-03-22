@@ -15,8 +15,9 @@ import {
 } from "../device/deviceService.js";
 import {
   ensureDeviceTables,
-  listTrialDevices,
+  listTrialDevicesWithUsage,
   resetDeviceTrialUsage,
+  deleteAllTrialUsageByDevice,
 } from "../device/deviceRepo.js";
 
 async function ensureAdmin(shmSessionId: string) {
@@ -37,7 +38,7 @@ function isTrialDeviceMode(v: unknown): v is "off" | "observe" | "enforce" {
 
 function getSessionUserId(req: any): number | null {
   const s = getSessionFromRequest(req);
-  const raw = (s as any)?.userId ?? (s as any)?.uid ?? (s as any)?.user_id ?? null;
+  const raw = s?.userId ?? null;
   const n = Number(raw);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
@@ -117,9 +118,15 @@ export async function adminRoutes(app: FastifyInstance) {
 
     const devicesWithTrialRow = linkDb
       .prepare(`
+        SELECT COUNT(DISTINCT device_token) as cnt
+        FROM trial_device_usage
+      `)
+      .get() as { cnt?: number } | undefined;
+
+    const activeTrialGroupsRow = linkDb
+      .prepare(`
         SELECT COUNT(*) as cnt
-        FROM trial_devices
-        WHERE trial_used_at IS NOT NULL
+        FROM trial_device_usage
       `)
       .get() as { cnt?: number } | undefined;
 
@@ -127,7 +134,8 @@ export async function adminRoutes(app: FastifyInstance) {
       .prepare(`
         SELECT COUNT(*) as cnt
         FROM trial_protection_events
-        WHERE event_type = 'trial_reuse_detected'
+        WHERE event_type IN ('trial_group_check', 'trial_group_block')
+          AND reason IN ('trial_group_already_used_on_device', 'trial_already_used_in_group')
           AND created_at >= ?
       `)
       .get(since24h) as { cnt?: number } | undefined;
@@ -136,7 +144,10 @@ export async function adminRoutes(app: FastifyInstance) {
       .prepare(`
         SELECT COUNT(*) as cnt
         FROM trial_protection_events
-        WHERE decision = 'block'
+        WHERE (
+          event_type = 'trial_group_block'
+          OR decision = 'block'
+        )
           AND created_at >= ?
       `)
       .get(since24h) as { cnt?: number } | undefined;
@@ -146,6 +157,7 @@ export async function adminRoutes(app: FastifyInstance) {
       mode,
       ttlHours,
       devicesWithTrial: Number(devicesWithTrialRow?.cnt ?? 0),
+      activeTrialGroups: Number(activeTrialGroupsRow?.cnt ?? 0),
       reuse24h: Number(reuse24hRow?.cnt ?? 0),
       blocks24h: Number(blocks24hRow?.cnt ?? 0),
     });
@@ -252,7 +264,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
     const q = (req.query ?? {}) as any;
     const limit = toPositiveInt(q?.limit, 50, 200);
-    const items = listTrialDevices(limit);
+    const items = listTrialDevicesWithUsage(limit);
 
     return reply.send({ ok: true, items });
   });
@@ -273,6 +285,7 @@ export async function adminRoutes(app: FastifyInstance) {
     }
 
     resetDeviceTrialUsage(deviceToken);
+    deleteAllTrialUsageByDevice(deviceToken);
 
     logTrialEvent({
       deviceToken,
@@ -280,9 +293,68 @@ export async function adminRoutes(app: FastifyInstance) {
       eventType: "device_trial_reset_by_admin",
       decision: "allow",
       reason: "manual_admin_reset",
-      meta: { by: "admin", adminUserId },
+      meta: {
+        by: "admin",
+        adminUserId,
+        resetScope: "all_groups",
+      },
     });
 
     return reply.send({ ok: true, deviceToken, reset: true });
+  });
+
+  app.post("/admin/trial-protection/clear-events", async (req, reply) => {
+    const s = getSessionFromRequest(req);
+    if (!s?.shmSessionId) return reply.code(401).send({ ok: false });
+
+    if (!(await ensureAdmin(s.shmSessionId))) {
+      return reply.code(403).send({ ok: false, error: "not_admin" });
+    }
+
+    ensureDeviceTables();
+
+    const body = (req.body ?? {}) as any;
+    const keepLatest = toPositiveInt(body?.keepLatest, 0, 10000);
+
+    let deleted = 0;
+
+    if (keepLatest > 0) {
+      const row = linkDb
+        .prepare(`
+          SELECT id
+          FROM trial_protection_events
+          ORDER BY id DESC
+          LIMIT 1 OFFSET ?
+        `)
+        .get(keepLatest - 1) as { id?: number } | undefined;
+
+      if (row?.id) {
+        const result = linkDb
+          .prepare(`
+            DELETE FROM trial_protection_events
+            WHERE id < ?
+          `)
+          .run(row.id);
+
+        deleted = Number(result?.changes ?? 0);
+      }
+    } else {
+      const result = linkDb.prepare(`DELETE FROM trial_protection_events`).run();
+      deleted = Number(result?.changes ?? 0);
+    }
+
+    logTrialEvent({
+      userId: getSessionUserId(req),
+      eventType: "trial_events_cleared_by_admin",
+      decision: "allow",
+      reason: "manual_admin_clear_events",
+      meta: {
+        by: "admin",
+        keepLatest,
+        deleted,
+      },
+    });
+
+    return reply.send({ ok: true, deleted, keepLatest });
   });
 }

@@ -20,10 +20,10 @@ import {
   getRequestIp,
   getRequestUserAgent,
   getTrialDeviceMode,
-  hasDeviceUsedTrial,
+  hasDeviceUsedTrialInGroup,
+  rememberTrialUsedInGroup,
   logTrialEvent,
   registerDeviceSeen,
-  rememberTrialUsed,
 } from "../device/deviceService.js";
 
 function mapStatus(raw?: string) {
@@ -105,9 +105,55 @@ function isDebug(req: any) {
 function normalizeProfileText(text: string) {
   if (!text) return "";
   let t = text;
-  if (t.charCodeAt(0) === 0xfeff) t = t.slice(1); // remove BOM
-  t = t.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim(); // normalize newlines
+  if (t.charCodeAt(0) === 0xfeff) t = t.slice(1);
+  t = t.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
   return t;
+}
+
+function parseHoursFromHumanPeriod(human: string): number | null {
+  const s = String(human || "").trim().toLowerCase();
+  if (!s) return null;
+
+  const m = s.match(/(\d+(?:[.,]\d+)?)/);
+  if (!m) return null;
+
+  const value = Number(String(m[1]).replace(",", "."));
+  if (!Number.isFinite(value) || value <= 0) return null;
+
+  if (s.includes("ч")) return value;
+  if (s.includes("hour")) return value;
+  if (s.includes("day") || s.includes("д")) return value * 24;
+  if (s.includes("week") || s.includes("нед")) return value * 24 * 7;
+  if (s.includes("month") || s.includes("мес")) return value * 24 * 30;
+  if (s.includes("year") || s.includes("год") || s.includes("лет")) return value * 24 * 365;
+
+  return null;
+}
+
+function isTrialServiceCandidate(x: any) {
+  const title = String(x?.name ?? "").toUpperCase();
+  const category = String(x?.category ?? "").trim();
+  const periodRaw = pickPeriodRaw(x?.period);
+  const parsed = parseShmPeriod(periodRaw);
+  const periodHuman = String(parsed?.human ?? "").trim();
+  const periodHours = parseHoursFromHumanPeriod(periodHuman);
+
+  const hasTestInTitle = title.includes("TEST");
+  const isShortPeriod = periodHours != null ? periodHours <= 24 : false;
+
+  return {
+    isTrialService: hasTestInTitle && isShortPeriod,
+    trialGroup: category || null,
+    trialMeta: {
+      title: String(x?.name ?? ""),
+      category: category || null,
+      periodRaw,
+      periodHuman,
+      periodHours,
+      hasTestInTitle,
+      isShortPeriod,
+    },
+  };
 }
 
 /* ============================================================
@@ -121,7 +167,7 @@ function sendNotAuthenticated(reply: any) {
 function sendShmError(
   reply: any,
   opts: {
-    httpCode?: number; // default 502
+    httpCode?: number;
     status?: number;
     details?: any;
     debug?: boolean;
@@ -140,7 +186,7 @@ function sendShmError(
 function sendTemplateError(
   reply: any,
   opts: {
-    httpCode?: number; // default 502
+    httpCode?: number;
     status?: number;
     details?: any;
     debug?: boolean;
@@ -159,7 +205,7 @@ function sendTemplateError(
 function sendStorageError(
   reply: any,
   opts: {
-    httpCode?: number; // default 502
+    httpCode?: number;
     status?: number;
     details?: any;
     debug?: boolean;
@@ -243,10 +289,6 @@ export async function servicesRoutes(app: FastifyInstance) {
     return reply.send({ ok: true, items, summary });
   });
 
-  /**
-   * ✅ STOP / BLOCK service
-   * POST /api/services/:usi/stop
-   */
   app.post("/services/:usi/stop", async (req, reply) => {
     const shmSessionId = ensureAuthed(req, reply);
     if (!shmSessionId) return;
@@ -342,15 +384,6 @@ export async function servicesRoutes(app: FastifyInstance) {
     return reply.send({ ok: true, removed: true, usi });
   });
 
-  // ---------------------
-  // CONNECT (Marzban / AmneziaWG)
-  // ---------------------
-
-  /**
-   * Универсальная ручка: вернуть данные для подключения услуги.
-   * GET /api/services/:usi/connect/:kind
-   * kind: marzban | amneziawg
-   */
   app.get("/services/:usi/connect/:kind", async (req, reply) => {
     const shmSessionId = ensureAuthed(req, reply);
     if (!shmSessionId) return;
@@ -474,10 +507,6 @@ export async function servicesRoutes(app: FastifyInstance) {
 
     return reply.code(400).send({ ok: false, error: "unknown_kind", details: kind, message: "Неизвестный тип подключения." });
   });
-
-  // ---------------------
-  // ROUTERS
-  // ---------------------
 
   app.get("/services/:usi/router", async (req, reply) => {
     const shmSessionId = ensureAuthed(req, reply);
@@ -638,10 +667,6 @@ export async function servicesRoutes(app: FastifyInstance) {
     return reply.send({ ok: true, unbound: j?.unbound ?? 0, clean_code: j?.clean_code ?? "" });
   });
 
-  // =====================
-  // /api/services/order
-  // =====================
-
   app.get("/services/order", async (req, reply) => {
     const shmSessionId = ensureAuthed(req, reply);
     if (!shmSessionId) return;
@@ -720,6 +745,8 @@ export async function servicesRoutes(app: FastifyInstance) {
     }
 
     let isTrialService = false;
+    let trialGroup: string | null = null;
+    let trialMeta: Record<string, any> | null = null;
 
     try {
       const orderListRes = await shmGetServiceOrder(shmSessionId);
@@ -731,21 +758,15 @@ export async function servicesRoutes(app: FastifyInstance) {
         const svc = list.find((x: any) => Number(x?.service_id ?? 0) === serviceId) ?? null;
 
         if (svc) {
-          const price = Number(svc?.cost ?? 0);
-          const title = String(svc?.name ?? "").toUpperCase();
-
-          if (price === 0 || title.includes("TEST")) {
-            isTrialService = true;
-          }
+          const trialInfo = isTrialServiceCandidate(svc);
+          isTrialService = trialInfo.isTrialService;
+          trialGroup = trialInfo.trialGroup;
+          trialMeta = trialInfo.trialMeta;
         }
       }
     } catch {
       // fail-open: если список тарифов не прочитался, не ломаем оформление заказа
     }
-
-    // =====================
-    // ORDER BLOCK CHECK
-    // =====================
 
     let orderBlockMode: "off" | "same_type" | "any" = "off";
 
@@ -759,7 +780,7 @@ export async function servicesRoutes(app: FastifyInstance) {
         }
       }
     } catch {
-      // fail-open: если настройки не прочитались, не ломаем оформление заказа
+      // fail-open
     }
 
     if (orderBlockMode !== "off") {
@@ -835,28 +856,47 @@ export async function servicesRoutes(app: FastifyInstance) {
       }
     }
 
-    if (trialDeviceMode !== "off" && deviceToken && isTrialService) {
-      const alreadyUsed = hasDeviceUsedTrial(deviceToken);
+    if (trialDeviceMode !== "off" && deviceToken && isTrialService && trialGroup) {
+      const alreadyUsed = hasDeviceUsedTrialInGroup(deviceToken, trialGroup);
 
-      if (alreadyUsed) {
+      logTrialEvent({
+        deviceToken,
+        userId,
+        ip,
+        userAgent,
+        eventType: "trial_group_check",
+        decision: alreadyUsed ? (trialDeviceMode === "enforce" ? "block" : "observe") : "allow",
+        reason: alreadyUsed ? "trial_group_already_used_on_device" : "trial_group_not_used_yet",
+        meta: {
+          serviceId,
+          trialGroup,
+          isTrialService,
+          ...trialMeta,
+        },
+      });
+
+      if (alreadyUsed && trialDeviceMode === "enforce") {
         logTrialEvent({
           deviceToken,
           userId,
           ip,
           userAgent,
-          eventType: "trial_reuse_detected",
-          decision: trialDeviceMode === "enforce" ? "block" : "observe",
-          reason: "trial_already_used_on_device",
-          meta: { serviceId },
+          eventType: "trial_group_block",
+          decision: "block",
+          reason: "trial_already_used_in_group",
+          meta: {
+            serviceId,
+            trialGroup,
+            isTrialService,
+            ...trialMeta,
+          },
         });
 
-        if (trialDeviceMode === "enforce") {
-          return reply.code(409).send({
-            ok: false,
-            error: "trial_already_used",
-            message: "Пробный доступ уже был активирован на этом устройстве.",
-          });
-        }
+        return reply.code(409).send({
+          ok: false,
+          error: "trial_already_used",
+          message: "Пробный доступ для этой группы услуг уже был использован на этом устройстве.",
+        });
       }
     }
 
@@ -896,16 +936,20 @@ export async function servicesRoutes(app: FastifyInstance) {
           userServiceId: Number(us?.user_service_id ?? 0) || 0,
           status: String(us?.status ?? ""),
           price: us?.service?.cost ?? null,
-          category: us?.service?.category ?? null,
+          category: us?.service?.category ?? trialGroup ?? null,
           isTrialService,
+          trialGroup,
+          ...trialMeta,
         },
       });
     }
 
-    if (deviceToken && isTrialService) {
-      rememberTrialUsed({
+    if (deviceToken && isTrialService && trialGroup) {
+      rememberTrialUsedInGroup({
         deviceToken,
+        trialGroup,
         userId,
+        serviceId,
       });
 
       logTrialEvent({
@@ -913,10 +957,15 @@ export async function servicesRoutes(app: FastifyInstance) {
         userId,
         ip,
         userAgent,
-        eventType: "trial_marked_used",
+        eventType: "trial_group_allowed",
         decision: "allow",
-        reason: "trial_registered_on_device",
-        meta: { serviceId },
+        reason: "trial_registered_on_device_for_group",
+        meta: {
+          serviceId,
+          trialGroup,
+          isTrialService,
+          ...trialMeta,
+        },
       });
     }
 

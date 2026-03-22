@@ -1,4 +1,3 @@
-// FILE: web/src/pages/AdminBroadcasts.tsx
 import { useEffect, useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useMe } from "../app/auth/useMe";
@@ -37,6 +36,7 @@ type TrialProtectionStatusResp = {
   mode: TrialDeviceMode;
   ttlHours: number;
   devicesWithTrial: number;
+  activeTrialGroups?: number;
   reuse24h: number;
   blocks24h?: number;
 };
@@ -82,6 +82,12 @@ type ResetDeviceResp = {
   ok: true;
   deviceToken: string;
   reset: true;
+};
+
+type ClearEventsResp = {
+  ok: true;
+  deleted: number;
+  keepLatest: number;
 };
 
 type AdminTab = "overview" | "broadcasts" | "orderRules" | "trialProtection";
@@ -228,7 +234,9 @@ function OverviewSection({ onOpenTab }: { onOpenTab: (tab: AdminTab) => void }) 
           <div className="mini">
             <div className="mini__title">Правила заказов</div>
             <div className="mini__list">
-              <div className="list__sub">Управление ограничением новых заказов, если у пользователя уже есть неоплаченная услуга.</div>
+              <div className="list__sub">
+                Управление ограничением новых заказов, если у пользователя уже есть неоплаченная услуга.
+              </div>
               <div>
                 <span className="chip chip--ok">Подключено</span>
               </div>
@@ -245,7 +253,9 @@ function OverviewSection({ onOpenTab }: { onOpenTab: (tab: AdminTab) => void }) 
           <div className="mini">
             <div className="mini__title">Trial Protection</div>
             <div className="mini__list">
-              <div className="list__sub">Anti-abuse для тестовых услуг: режим работы, TTL устройств, журнал событий и ручной reset.</div>
+              <div className="list__sub">
+                Anti-abuse для тестовых услуг: режим работы, TTL устройств, журнал событий и ручной reset.
+              </div>
               <div>
                 <span className="chip chip--warn">Активно</span>
               </div>
@@ -260,7 +270,9 @@ function OverviewSection({ onOpenTab }: { onOpenTab: (tab: AdminTab) => void }) 
           <div className="mini">
             <div className="mini__title">Дальнейшее расширение</div>
             <div className="mini__list">
-              <div className="list__sub">Сюда потом можно добавить whitelist, фильтры, поиск по IP и более глубокую диагностику.</div>
+              <div className="list__sub">
+                Сюда потом можно добавить whitelist, фильтры, поиск по IP и более глубокую диагностику.
+              </div>
               <div>
                 <span className="chip chip--soft">FUTURE</span>
               </div>
@@ -566,6 +578,7 @@ function TrialProtectionSection() {
   const [savingMode, setSavingMode] = useState(false);
   const [savingTtl, setSavingTtl] = useState(false);
   const [resettingDevice, setResettingDevice] = useState<string | null>(null);
+  const [clearingEvents, setClearingEvents] = useState(false);
 
   const [status, setStatus] = useState<TrialProtectionStatusResp | null>(null);
   const [events, setEvents] = useState<TrialProtectionEventItem[]>([]);
@@ -659,6 +672,30 @@ function TrialProtectionSection() {
       setError(e?.message || "Не удалось сохранить TTL.");
     } finally {
       setSavingTtl(false);
+    }
+  }
+
+  async function clearEvents() {
+    const ok = window.confirm("Очистить журнал событий Trial Protection?\n\nПоследние 20 записей останутся.");
+    if (!ok) return;
+
+    setClearingEvents(true);
+    setError(null);
+    setOkText(null);
+
+    try {
+      const r = await apiFetch<ClearEventsResp>("/admin/trial-protection/clear-events", {
+        method: "POST",
+        body: { keepLatest: 20 },
+      });
+
+      setOkText(`Журнал очищен. Удалено записей: ${r.deleted}`);
+      if (openedEvent) setOpenedEvent(null);
+      await load({ silent: true });
+    } catch (e: any) {
+      setError(e?.message || "Не удалось очистить журнал.");
+    } finally {
+      setClearingEvents(false);
     }
   }
 
@@ -836,6 +873,18 @@ function TrialProtectionSection() {
 
                 <div className="list__item">
                   <div className="list__main">
+                    <div className="list__title">Активных trial-group</div>
+                    <div className="list__sub">{status?.activeTrialGroups ?? 0}</div>
+                  </div>
+                  <div className="list__side">
+                    <span className="chip chip--soft">GROUPS</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid2" style={{ marginTop: 12 }}>
+                <div className="list__item">
+                  <div className="list__main">
                     <div className="list__title">Повторные попытки за 24 часа</div>
                     <div className="list__sub">{status?.reuse24h ?? 0}</div>
                   </div>
@@ -843,9 +892,7 @@ function TrialProtectionSection() {
                     <span className="chip chip--warn">24H</span>
                   </div>
                 </div>
-              </div>
 
-              <div className="list" style={{ marginTop: 12 }}>
                 <div className="list__item">
                   <div className="list__main">
                     <div className="list__title">Блокировок за 24 часа</div>
@@ -862,7 +909,7 @@ function TrialProtectionSection() {
                   className="btn btn--soft"
                   type="button"
                   onClick={() => void load({ silent: true })}
-                  disabled={refreshing || savingMode || savingTtl}
+                  disabled={refreshing || savingMode || savingTtl || clearingEvents}
                 >
                   {refreshing ? "Обновляю…" : "Обновить"}
                 </button>
@@ -876,7 +923,7 @@ function TrialProtectionSection() {
                 </button>
               </div>
 
-              <div className="actions actions--1" style={{ marginTop: 10 }}>
+              <div className="actions actions--2" style={{ marginTop: 10 }}>
                 <button
                   className="btn btn--accent"
                   type="button"
@@ -884,6 +931,14 @@ function TrialProtectionSection() {
                   disabled={savingTtl || !ttlChanged}
                 >
                   {savingTtl ? "Сохраняю TTL…" : "Сохранить TTL"}
+                </button>
+                <button
+                  className="btn btn--danger"
+                  type="button"
+                  onClick={clearEvents}
+                  disabled={clearingEvents}
+                >
+                  {clearingEvents ? "Очищаю журнал…" : "Очистить журнал"}
                 </button>
               </div>
             </>
@@ -962,7 +1017,7 @@ function TrialProtectionSection() {
                     <div className="kicker">{formatDateTime(item.last_seen_at)}</div>
                     <div className="list__title" style={{ marginTop: 6 }}>{shortDeviceToken(item.device_token)}</div>
                     <div className="list__sub">
-                      trial: {(Number(item.active_trial_count ?? 0) > 0) ? "yes" : "no"}
+                      trial: {Number(item.active_trial_count ?? 0) > 0 ? "yes" : "no"}
                       <span className="paymentsHist__dot" />
                       groups: {Number(item.active_trial_count ?? 0)}
                       <span className="paymentsHist__dot" />
@@ -1006,6 +1061,8 @@ function TrialProtectionSection() {
           {(() => {
             const meta = parseMetaJson(openedEvent.meta_json);
             const serviceId = meta?.serviceId ?? meta?.service_id ?? null;
+            const trialGroup = meta?.trialGroup ?? meta?.trial_group ?? meta?.category ?? null;
+            const periodHuman = meta?.periodHuman ?? meta?.period_human ?? null;
 
             return (
               <>
@@ -1050,6 +1107,20 @@ function TrialProtectionSection() {
                     <div className="list__main">
                       <div className="list__title">Service ID</div>
                       <div className="list__sub">{serviceId ?? "—"}</div>
+                    </div>
+                  </div>
+
+                  <div className="list__item">
+                    <div className="list__main">
+                      <div className="list__title">Trial group</div>
+                      <div className="list__sub">{trialGroup ?? "—"}</div>
+                    </div>
+                  </div>
+
+                  <div className="list__item">
+                    <div className="list__main">
+                      <div className="list__title">Период</div>
+                      <div className="list__sub">{periodHuman ?? "—"}</div>
                     </div>
                   </div>
 
