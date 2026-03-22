@@ -35,6 +35,13 @@ function isTrialDeviceMode(v: unknown): v is "off" | "observe" | "enforce" {
   return v === "off" || v === "observe" || v === "enforce";
 }
 
+function getSessionUserId(req: any): number | null {
+  const s = getSessionFromRequest(req);
+  const raw = (s as any)?.userId ?? (s as any)?.uid ?? (s as any)?.user_id ?? null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 export async function adminRoutes(app: FastifyInstance) {
   app.get("/admin/settings", async (req, reply) => {
     const s = getSessionFromRequest(req);
@@ -258,6 +265,8 @@ export async function adminRoutes(app: FastifyInstance) {
       return reply.code(403).send({ ok: false, error: "not_admin" });
     }
 
+    const adminUserId = getSessionUserId(req);
+
     const deviceToken = String((req.body as any)?.deviceToken ?? "").trim();
     if (!deviceToken) {
       return reply.code(400).send({ ok: false, error: "device_token_required" });
@@ -267,10 +276,11 @@ export async function adminRoutes(app: FastifyInstance) {
 
     logTrialEvent({
       deviceToken,
+      userId: adminUserId,
       eventType: "device_trial_reset_by_admin",
       decision: "allow",
       reason: "manual_admin_reset",
-      meta: { by: "admin" },
+      meta: { by: "admin", adminUserId },
     });
 
     return reply.send({ ok: true, deviceToken, reset: true });

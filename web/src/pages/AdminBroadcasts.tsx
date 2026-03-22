@@ -69,6 +69,8 @@ type TrialDeviceItem = {
   user_agent?: string | null;
   trial_used_at?: number | null;
   trial_user_id?: number | null;
+  active_trial_count?: number;
+  last_trial_used_at?: number | null;
 };
 
 type TrialDevicesResp = {
@@ -960,7 +962,11 @@ function TrialProtectionSection() {
                     <div className="kicker">{formatDateTime(item.last_seen_at)}</div>
                     <div className="list__title" style={{ marginTop: 6 }}>{shortDeviceToken(item.device_token)}</div>
                     <div className="list__sub">
-                      trial: {item.trial_used_at ? "yes" : "no"}<span className="paymentsHist__dot" />ip: {item.last_ip || "—"}
+                      trial: {(Number(item.active_trial_count ?? 0) > 0) ? "yes" : "no"}
+                      <span className="paymentsHist__dot" />
+                      groups: {Number(item.active_trial_count ?? 0)}
+                      <span className="paymentsHist__dot" />
+                      ip: {item.last_ip || "—"}
                     </div>
                   </div>
 
@@ -1114,8 +1120,15 @@ function TrialProtectionSection() {
 
             <div className="list__item">
               <div className="list__main">
-                <div className="list__title">Trial used at</div>
-                <div className="list__sub">{formatDateTime(openedDevice.trial_used_at)}</div>
+                <div className="list__title">Активных trial-group</div>
+                <div className="list__sub">{Number(openedDevice.active_trial_count ?? 0)}</div>
+              </div>
+            </div>
+
+            <div className="list__item">
+              <div className="list__main">
+                <div className="list__title">Последний trial usage</div>
+                <div className="list__sub">{formatDateTime(openedDevice.last_trial_used_at)}</div>
               </div>
             </div>
 

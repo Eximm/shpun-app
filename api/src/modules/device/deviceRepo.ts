@@ -12,6 +12,15 @@ export type DeviceRow = {
   trial_user_id: number | null;
 };
 
+export type TrialDeviceUsageRow = {
+  id: number;
+  device_token: string;
+  trial_group: string;
+  used_at: number;
+  user_id: number | null;
+  service_id: number | null;
+};
+
 let inited = false;
 
 export function ensureDeviceTables() {
@@ -29,6 +38,27 @@ export function ensureDeviceTables() {
       trial_used_at INTEGER,
       trial_user_id INTEGER
     );
+
+    CREATE TABLE IF NOT EXISTS trial_device_usage (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      device_token TEXT NOT NULL,
+      trial_group TEXT NOT NULL,
+      used_at INTEGER NOT NULL,
+      user_id INTEGER,
+      service_id INTEGER
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_trial_usage_device_group_unique
+      ON trial_device_usage(device_token, trial_group);
+
+    CREATE INDEX IF NOT EXISTS idx_trial_usage_device_token
+      ON trial_device_usage(device_token);
+
+    CREATE INDEX IF NOT EXISTS idx_trial_usage_trial_group
+      ON trial_device_usage(trial_group);
+
+    CREATE INDEX IF NOT EXISTS idx_trial_usage_used_at
+      ON trial_device_usage(used_at);
 
     CREATE TABLE IF NOT EXISTS trial_protection_events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -158,6 +188,79 @@ export function resetExpiredDeviceTrialUsage(cutoffTs: number) {
     .run(cutoffTs);
 }
 
+export function getTrialUsageByDeviceAndGroup(
+  deviceToken: string,
+  trialGroup: string
+): TrialDeviceUsageRow | null {
+  ensureDeviceTables();
+
+  const row = linkDb
+    .prepare(`
+      SELECT *
+      FROM trial_device_usage
+      WHERE device_token = ?
+        AND trial_group = ?
+      LIMIT 1
+    `)
+    .get(deviceToken, trialGroup) as TrialDeviceUsageRow | undefined;
+
+  return row ?? null;
+}
+
+export function upsertTrialUsage(input: {
+  deviceToken: string;
+  trialGroup: string;
+  usedAt: number;
+  userId?: number | null;
+  serviceId?: number | null;
+}) {
+  ensureDeviceTables();
+
+  linkDb
+    .prepare(`
+      INSERT INTO trial_device_usage (
+        device_token, trial_group, used_at, user_id, service_id
+      ) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(device_token, trial_group) DO UPDATE SET
+        used_at = excluded.used_at,
+        user_id = COALESCE(excluded.user_id, trial_device_usage.user_id),
+        service_id = COALESCE(excluded.service_id, trial_device_usage.service_id)
+    `)
+    .run(
+      input.deviceToken,
+      input.trialGroup,
+      input.usedAt,
+      input.userId ?? null,
+      input.serviceId ?? null
+    );
+}
+
+export function deleteTrialUsageByDeviceAndGroup(
+  deviceToken: string,
+  trialGroup: string
+) {
+  ensureDeviceTables();
+
+  linkDb
+    .prepare(`
+      DELETE FROM trial_device_usage
+      WHERE device_token = ?
+        AND trial_group = ?
+    `)
+    .run(deviceToken, trialGroup);
+}
+
+export function deleteExpiredTrialUsage(cutoffTs: number) {
+  ensureDeviceTables();
+
+  linkDb
+    .prepare(`
+      DELETE FROM trial_device_usage
+      WHERE used_at < ?
+    `)
+    .run(cutoffTs);
+}
+
 export function listTrialDevices(limit: number) {
   ensureDeviceTables();
 
@@ -211,4 +314,51 @@ export function insertTrialProtectionEvent(input: {
       input.reason ?? null,
       input.metaJson ?? null
     );
+}
+
+export function deleteAllTrialUsageByDevice(deviceToken: string) {
+  ensureDeviceTables();
+
+  linkDb
+    .prepare(`
+      DELETE FROM trial_device_usage
+      WHERE device_token = ?
+    `)
+    .run(deviceToken);
+}
+
+export function listTrialDevicesWithUsage(limit: number) {
+  ensureDeviceTables();
+
+  return linkDb
+    .prepare(`
+      SELECT
+        d.id,
+        d.device_token,
+        d.first_seen_at,
+        d.last_seen_at,
+        d.first_ip,
+        d.last_ip,
+        d.user_agent,
+        d.trial_used_at,
+        d.trial_user_id,
+        COUNT(u.id) AS active_trial_count,
+        MAX(u.used_at) AS last_trial_used_at
+      FROM trial_devices d
+      LEFT JOIN trial_device_usage u
+        ON u.device_token = d.device_token
+      GROUP BY
+        d.id,
+        d.device_token,
+        d.first_seen_at,
+        d.last_seen_at,
+        d.first_ip,
+        d.last_ip,
+        d.user_agent,
+        d.trial_used_at,
+        d.trial_user_id
+      ORDER BY d.last_seen_at DESC, d.id DESC
+      LIMIT ?
+    `)
+    .all(limit);
 }

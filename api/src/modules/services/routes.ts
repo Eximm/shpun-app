@@ -78,6 +78,13 @@ function ensureAuthed(req: any, reply: any): string | null {
   return shmSessionId;
 }
 
+function getSessionUserId(req: any): number | null {
+  const session = getSessionFromRequest(req as any);
+  const raw = session?.userId ?? null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 async function loadUserServiceByUsi(shmSessionId: string, usi: number) {
   const r = await shmGetUserServices(shmSessionId, { limit: 50, offset: 0, filter: {} });
   if (!r.ok) {
@@ -678,11 +685,13 @@ export async function servicesRoutes(app: FastifyInstance) {
 
     return reply.send({ ok: true, items });
   });
+
   app.put("/services/order", async (req, reply) => {
     const shmSessionId = ensureAuthed(req, reply);
     if (!shmSessionId) return;
 
     const debug = isDebug(req);
+    const userId = getSessionUserId(req);
 
     const body = (req.body ?? {}) as any;
     const serviceId = Number(body?.service_id ?? body?.serviceId ?? 0);
@@ -700,6 +709,7 @@ export async function servicesRoutes(app: FastifyInstance) {
       registerDeviceSeen({ deviceToken, ip, userAgent });
     } else {
       logTrialEvent({
+        userId,
         eventType: "device_token_missing",
         decision: "observe",
         reason: "missing_device_token",
@@ -831,6 +841,7 @@ export async function servicesRoutes(app: FastifyInstance) {
       if (alreadyUsed) {
         logTrialEvent({
           deviceToken,
+          userId,
           ip,
           userAgent,
           eventType: "trial_reuse_detected",
@@ -874,6 +885,7 @@ export async function servicesRoutes(app: FastifyInstance) {
     if (deviceToken) {
       logTrialEvent({
         deviceToken,
+        userId,
         ip,
         userAgent,
         eventType: "service_order_created",
@@ -893,11 +905,12 @@ export async function servicesRoutes(app: FastifyInstance) {
     if (deviceToken && isTrialService) {
       rememberTrialUsed({
         deviceToken,
-        userId: null,
+        userId,
       });
 
       logTrialEvent({
         deviceToken,
+        userId,
         ip,
         userAgent,
         eventType: "trial_marked_used",

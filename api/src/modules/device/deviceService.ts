@@ -1,11 +1,14 @@
 import {
   createDevice,
   getDeviceByToken,
+  getTrialUsageByDeviceAndGroup,
   insertTrialProtectionEvent,
   markDeviceTrialUsed,
   resetDeviceTrialUsage,
   resetExpiredDeviceTrialUsage,
   touchDevice,
+  upsertTrialUsage,
+  deleteExpiredTrialUsage,
 } from "./deviceRepo.js";
 
 export type TrialDeviceMode = "off" | "observe" | "enforce";
@@ -65,10 +68,19 @@ export function getRequestUserAgent(req: any): string {
   return String(req?.headers?.["user-agent"] ?? "").trim().slice(0, 500);
 }
 
+/* ============================================================
+   CLEANUP
+============================================================ */
+
 function cleanupExpiredTrialUsage() {
   const ttlSeconds = getTrialDeviceTtlSeconds();
   const cutoffTs = nowTs() - ttlSeconds;
+
+  // legacy single-trial-per-device
   resetExpiredDeviceTrialUsage(cutoffTs);
+
+  // current trial-group usage
+  deleteExpiredTrialUsage(cutoffTs);
 }
 
 function isTrialExpired(trialUsedAt: number | null | undefined): boolean {
@@ -76,6 +88,10 @@ function isTrialExpired(trialUsedAt: number | null | undefined): boolean {
   const ttlSeconds = getTrialDeviceTtlSeconds();
   return trialUsedAt < nowTs() - ttlSeconds;
 }
+
+/* ============================================================
+   DEVICE TRACKING
+============================================================ */
 
 export function registerDeviceSeen(input: {
   deviceToken: string;
@@ -113,6 +129,40 @@ export function registerDeviceSeen(input: {
   return getDeviceByToken(input.deviceToken);
 }
 
+/* ============================================================
+   GROUP-BASED TRIAL LOGIC
+============================================================ */
+
+export function hasDeviceUsedTrialInGroup(deviceToken: string, trialGroup: string): boolean {
+  if (!deviceToken || !trialGroup) return false;
+
+  cleanupExpiredTrialUsage();
+
+  const row = getTrialUsageByDeviceAndGroup(deviceToken, trialGroup);
+  return !!row;
+}
+
+export function rememberTrialUsedInGroup(input: {
+  deviceToken: string;
+  trialGroup: string;
+  userId?: number | null;
+  serviceId?: number | null;
+}) {
+  if (!input.deviceToken || !input.trialGroup) return;
+
+  upsertTrialUsage({
+    deviceToken: input.deviceToken,
+    trialGroup: input.trialGroup,
+    usedAt: nowTs(),
+    userId: input.userId ?? null,
+    serviceId: input.serviceId ?? null,
+  });
+}
+
+/* ============================================================
+   LEGACY COMPATIBILITY
+============================================================ */
+
 export function hasDeviceUsedTrial(deviceToken: string): boolean {
   if (!deviceToken) return false;
 
@@ -142,6 +192,10 @@ export function rememberTrialUsed(input: {
     userId: input.userId ?? null,
   });
 }
+
+/* ============================================================
+   LOGGING
+============================================================ */
 
 export function logTrialEvent(input: {
   deviceToken?: string | null;
