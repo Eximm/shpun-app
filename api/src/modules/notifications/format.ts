@@ -161,6 +161,7 @@ export function formatIncoming(e: BillingPushEvent): BillingPushEvent {
     const cnt = Number(pick(meta, "items_count") ?? pick(meta, "count") ?? 0);
     const balance = pick(meta, "balance");
     const bonus = pick(meta, "bonus") ?? pick(meta, "get_bonus");
+    const items = Array.isArray(pick(meta, "items")) ? pick(meta, "items") : [];
 
     const t = rub(total);
     const b = rub(balance);
@@ -168,28 +169,42 @@ export function formatIncoming(e: BillingPushEvent): BillingPushEvent {
 
     title = "⏳ Скоро нужна оплата";
 
-    const fullParts: string[] = [];
+    if (items.length > 0) {
+      const it = items[0] ?? {};
+      const firstName = String(it?.name ?? "").trim() || "Услуга";
+      const firstExpire = String(it?.expire ?? "").trim();
+      const firstTotal = rub(it?.total);
 
-    if (Number.isFinite(cnt) && cnt > 0 && t) {
-      fullParts.push(
-        cnt === 1
-          ? `По 1 услуге скоро потребуется оплата на ${t}`
-          : `По ${cnt} услугам скоро потребуется оплата на ${t}`
-      );
-    } else if (t) {
-      fullParts.push(`Скоро потребуется оплата на ${t}`);
-    } else if (Number.isFinite(cnt) && cnt > 0) {
-      fullParts.push(
-        cnt === 1
-          ? "По 1 услуге скоро потребуется оплата"
-          : `По ${cnt} услугам скоро потребуется оплата`
-      );
+      const parts1: string[] = [firstName];
+      if (firstExpire) parts1.push(`до ${firstExpire}`);
+      if (firstTotal) parts1.push(firstTotal);
+
+      const lines: string[] = [parts1.join(" · ")];
+
+      if (items.length > 1 && t) {
+        lines.push(`+ ещё ${items.length - 1} · всего ${t}`);
+      } else if (items.length > 1) {
+        lines.push(`+ ещё ${items.length - 1}`);
+      } else if (t && t !== firstTotal) {
+        lines.push(`Всего ${t}`);
+      }
+
+      const parts3: string[] = [];
+      if (b) parts3.push(`баланс ${b}`);
+      if (bn) parts3.push(`бонус ${bn}`);
+      if (parts3.length) lines.push(parts3.join(" · "));
+
+      message = lines.join("\n");
+    } else {
+      const parts: string[] = [];
+
+      if (Number.isFinite(cnt) && cnt > 0) parts.push(`Услуг: ${cnt}`);
+      if (t) parts.push(`нужно ${t}`);
+      if (b) parts.push(`баланс ${b}`);
+      if (bn) parts.push(`бонус ${bn}`);
+
+      message = parts.length ? parts.join(" · ") : "Проверьте ближайшую оплату услуг";
     }
-
-    if (b) fullParts.push(`баланс ${b}`);
-    if (bn) fullParts.push(`бонус ${bn}`);
-
-    message = fullParts.length ? fullParts.join(" · ") : "Проверьте ближайшую оплату услуг";
 
     let shortMessage = "Проверьте оплату";
     if (Number.isFinite(cnt) && cnt > 0 && t) shortMessage = `Услуг: ${cnt} · нужно ${t}`;
