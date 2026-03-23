@@ -564,9 +564,12 @@ button, a { -webkit-tap-highlight-color: transparent; }
 }
 
 .kicker,
-.list__title,
-.list__sub {
+.list__title {
   padding-right: 84px;
+}
+
+.list__sub {
+  padding-right: 0;
 }
 
 .list__title {
