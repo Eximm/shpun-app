@@ -561,6 +561,11 @@ button, a { -webkit-tap-highlight-color: transparent; }
   min-width: 0;
   width: 100%;
   box-sizing: border-box;
+}
+
+.kicker,
+.list__title,
+.list__sub {
   padding-right: 84px;
 }
 
@@ -592,6 +597,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .feed__more {
   margin-top: 14px;
   width: 100%;
+  padding-right: 0;
 }
 
 .feed__more .btn {
