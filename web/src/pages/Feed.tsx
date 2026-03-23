@@ -478,26 +478,20 @@ export function Feed() {
                 <div className="list__sub feed__fulltext">{openedEvent.message || ""}</div>
               </div>
 
-              <div className="feed-modalCard__actions">
-                {openedIsForecast && openedLink && openedLink.startsWith("/payments") ? (
-                  <div className="feed-modalCard__actions">
-                    <button
-                      type="button"
-                      className="btn btn--accent"
-                      onClick={() => {
-                        setOpenedEvent(null);
-                        nav(openedLink);
-                      }}
-                    >
-                      {t("feed.modal.openPayments", "Перейти к оплате")}
-                    </button>
-                  </div>
-                ) : null}
-
-                <button type="button" className="btn btn--soft" onClick={() => setOpenedEvent(null)}>
-                  {t("feed.modal.close", "Закрыть")}
-                </button>
-              </div>
+              {openedIsForecast && openedLink && openedLink.startsWith("/payments") ? (
+                <div className="feed-modalCard__actions">
+                  <button
+                    type="button"
+                    className="btn btn--accent"
+                    onClick={() => {
+                      setOpenedEvent(null);
+                      nav(openedLink);
+                    }}
+                  >
+                    {t("feed.modal.openPayments", "Перейти к оплате")}
+                  </button>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
