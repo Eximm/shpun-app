@@ -573,10 +573,10 @@ button, a { -webkit-tap-highlight-color: transparent; }
 }
 
 .list__sub {
-  margin-top: 4px;
+  margin-top: 8px;
   font-size: 13px;
   color: rgba(255,255,255,0.70);
-  line-height: 1.35;
+  line-height: 1.45;
 }
 
 .list__title {
@@ -642,10 +642,11 @@ button, a { -webkit-tap-highlight-color: transparent; }
 
 .feed-newsCard__title {
   margin-top: 8px;
+  margin-bottom: 10px;
   font-size: 1.1rem;
   font-weight: 900;
-  line-height: 1.25;
-  padding-right: 84px;
+  line-height: 1.28;
+  padding-right: 0;
 }
 
 .feed-news__preview {
@@ -655,8 +656,9 @@ button, a { -webkit-tap-highlight-color: transparent; }
   line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  margin-top: 8px;
-  padding-right: 84px;
+  margin-top: 0;
+  padding-right: 0;
+  line-height: 1.45;
 }
 
 .home-news__preview {
@@ -666,7 +668,8 @@ button, a { -webkit-tap-highlight-color: transparent; }
   line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  padding-right: 84px;
+  padding-right: 0;
+  line-height: 1.45;
 }
 
 .feed-modalCard__head {

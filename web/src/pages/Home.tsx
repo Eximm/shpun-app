@@ -620,8 +620,14 @@ export function Home() {
                     <Link key={n.event_id} to="/feed" className="home-link">
                       <div className="list__item">
                         <div className="list__main">
-                          <div className="list__title">{n.title || t("home.news.item.fallback", "Сообщение")}</div>
-                          {preview ? <div className="list__sub home-news__preview">{preview}</div> : null}
+                          <div className="list__title" style={{ paddingRight: 0 }}>
+                            {n.title || t("home.news.item.fallback", "Сообщение")}
+                          </div>
+                          {preview ? (
+                          <div className="list__sub home-news__preview" style={{ paddingRight: 0 }}>
+                            {preview}
+                          </div>
+                        ) : null}
                         </div>
                         <div className="list__side">
                           <span className="chip chip--soft">{fmtFeedDate(n.ts, t("home.news.today", "Сегодня"))}</span>
