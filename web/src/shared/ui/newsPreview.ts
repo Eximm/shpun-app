@@ -65,6 +65,12 @@ function buildNewsPreviewText(message: string | null | undefined, limit: number)
   return smartTrim(cleaned, limit);
 }
 
+function buildForecastPreviewText(message: string | null | undefined) {
+  const cleaned = cleanInlineText(message);
+  if (!cleaned) return "";
+  return smartTrim(cleaned, 120);
+}
+
 function buildGenericPreviewText(message: string | null | undefined, limit: number) {
   const cleaned = cleanInlineText(message);
   if (!cleaned) return "";
@@ -76,6 +82,11 @@ export function isNewsEvent(e: PreviewEventLike) {
   return t === "broadcast.news" || t.startsWith("broadcast.news.") || t.startsWith("broadcast.");
 }
 
+export function isForecastEvent(e: PreviewEventLike) {
+  const t = normalizeType(e.type);
+  return t === "service.forecast";
+}
+
 export function buildHomeNewsPreview(e: PreviewEventLike) {
   return isNewsEvent(e)
     ? buildNewsPreviewText(e.message, 96)
@@ -83,13 +94,13 @@ export function buildHomeNewsPreview(e: PreviewEventLike) {
 }
 
 export function buildFeedPreview(e: PreviewEventLike) {
-  return isNewsEvent(e)
-    ? buildNewsPreviewText(e.message, 165)
-    : buildGenericPreviewText(e.message, 140);
+  if (isNewsEvent(e)) return buildNewsPreviewText(e.message, 165);
+  if (isForecastEvent(e)) return buildForecastPreviewText(e.message);
+  return buildGenericPreviewText(e.message, 140);
 }
 
 export function shouldShowFeedMore(e: PreviewEventLike, preview: string) {
-  if (isNewsEvent(e)) return true;
+  if (isNewsEvent(e) || isForecastEvent(e)) return true;
   const full = cleanInlineText(e.message);
   return full.length > preview.length;
 }
