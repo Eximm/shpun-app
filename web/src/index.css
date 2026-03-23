@@ -573,7 +573,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 }
 
 .list__sub {
-  margin-top: 12px;
+  margin-top: 14px;
   font-size: 13px;
   color: rgba(255,255,255,0.70);
   line-height: 1.45;

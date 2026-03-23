@@ -1,5 +1,6 @@
 // FILE: web/src/pages/Profile.tsx
-import { Children, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useMe } from "../app/auth/useMe";
 import { apiFetch } from "../shared/api/client";
@@ -28,7 +29,7 @@ async function copyToClipboard(text: string) {
 
 function formatDate(v?: string | null) {
   const s = String(v ?? "").trim();
-  return s ? s : "—";
+  return s || "—";
 }
 
 function isStandalonePwa(): boolean {
@@ -60,32 +61,16 @@ function CardTitle({
   right,
 }: {
   icon?: string;
-  children: any;
-  right?: any;
+  children: React.ReactNode;
+  right?: React.ReactNode;
 }) {
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 12,
-      }}
-    >
-      <div
-        className="h1"
-        style={{
-          fontSize: 18,
-          margin: 0,
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-        }}
-      >
-        {icon ? <span aria-hidden="true">{icon}</span> : null}
-        <span>{children}</span>
+    <div className="row">
+      <div className="h1">
+        {icon ? `${icon} ` : ""}
+        {children}
       </div>
-      {right}
+      <div style={{ marginLeft: "auto" }}>{right}</div>
     </div>
   );
 }
@@ -97,11 +82,12 @@ function Badge({
   text: string;
   tone?: "ok" | "soon" | "neutral";
 }) {
-  let className = "badge";
-
-  if (tone === "ok") className += " chip--ok";
-  if (tone === "soon") className += " chip--warn";
-
+  const className =
+    tone === "ok"
+      ? "chip chip--ok"
+      : tone === "soon"
+        ? "chip chip--warn"
+        : "chip";
   return <span className={className}>{text}</span>;
 }
 
@@ -114,101 +100,23 @@ function RowLine({
 }: {
   icon?: string;
   label: string;
-  value?: any;
-  right?: any;
-  hint?: any;
+  value?: React.ReactNode;
+  right?: React.ReactNode;
+  hint?: React.ReactNode;
 }) {
-  const rightCount = right ? Children.count(right) : 0;
-
   return (
-    <div
-      style={{
-        padding: "10px 12px",
-        borderRadius: 14,
-        border: "1px solid rgba(255,255,255,.08)",
-        background: "rgba(255,255,255,.02)",
-        transition: "transform 120ms ease, background 120ms ease, border-color 120ms ease",
-      }}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,.04)";
-        (e.currentTarget as HTMLDivElement).style.borderColor = "rgba(255,255,255,.14)";
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,.02)";
-        (e.currentTarget as HTMLDivElement).style.borderColor = "rgba(255,255,255,.08)";
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            minWidth: 0,
-          }}
-        >
-          {icon ? (
-            <span
-              aria-hidden="true"
-              style={{
-                opacity: 0.9,
-                width: 22,
-                display: "inline-flex",
-                justifyContent: "center",
-              }}
-            >
-              {icon}
-            </span>
-          ) : null}
-
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 12, opacity: 0.7 }}>{label}</div>
-            {value != null ? (
-              <div
-                style={{
-                  fontSize: 14,
-                  fontWeight: 600,
-                  marginTop: 2,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {value}
-              </div>
-            ) : null}
-          </div>
+    <div className="profile-row">
+      <div className="profile-row__main">
+        <div className="profile-row__label">
+          {icon ? <span aria-hidden="true">{icon}</span> : null}
+          <span>{label}</span>
         </div>
-
-        {right ? (
-          rightCount <= 1 ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>{right}</div>
-          ) : (
-            <div
-              className="rowline__right rowline__right--grid"
-              style={{
-                display: "grid",
-                gridAutoFlow: "column",
-                gridAutoColumns: "120px",
-                gap: 10,
-                alignItems: "center",
-                justifyContent: "end",
-              }}
-            >
-              {right}
-            </div>
-          )
-        ) : null}
+        {value != null ? <div className="profile-row__value">{value}</div> : null}
       </div>
 
-      {hint ? <div style={{ marginTop: 6, fontSize: 12, opacity: 0.7 }}>{hint}</div> : null}
+      {right ? <div className="profile-row__right">{right}</div> : null}
+
+      {hint ? <div className="profile-row__hint">{hint}</div> : null}
     </div>
   );
 }
@@ -222,61 +130,32 @@ function Modal({
 }: {
   open: boolean;
   title: string;
-  children: any;
+  children: React.ReactNode;
   onClose: () => void;
   closeLabel: string;
 }) {
   if (!open) return null;
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      onMouseDown={onClose}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,.55)",
-        display: "flex",
-        alignItems: "flex-start",
-        justifyContent: "center",
-        padding: 16,
-        zIndex: 9999,
-      }}
-    >
-      <div
-        className="card"
-        onMouseDown={(e) => e.stopPropagation()}
-        style={{ width: "min(680px, 100%)" }}
-      >
+
+  return createPortal(
+    <div role="dialog" aria-modal="true" onMouseDown={onClose} className="modal">
+      <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()}>
         <div className="card__body">
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 12,
-            }}
-          >
-            <div className="h1" style={{ fontSize: 18, margin: 0 }}>
-              {title}
-            </div>
-            <button className="btn" onClick={onClose} aria-label={closeLabel}>
+          <div className="modal__head">
+            <div className="modal__title">{title}</div>
+            <button className="btn modal__close" onClick={onClose} aria-label={closeLabel} type="button">
               ✕
             </button>
           </div>
-          <div style={{ marginTop: 12 }}>{children}</div>
+          <div className="modal__content">{children}</div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
 function Toast({ text }: { text: string }) {
-  return (
-    <div className="pre" style={{ marginTop: 12 }}>
-      {text}
-    </div>
-  );
+  return <div className="pre">{text}</div>;
 }
 
 function Segmented({
@@ -352,7 +231,6 @@ export function Profile() {
     setPhone(ph);
     setSavedFullName(fn);
     setSavedPhone(ph);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.fullName, profile?.full_name, profile?.displayName, profile?.phone]);
 
   async function savePersonal() {
@@ -392,8 +270,7 @@ export function Profile() {
 
   useEffect(() => {
     if (!telegramLocal && me?.telegram) setTelegramLocal(me.telegram);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [me?.telegram]);
+  }, [me?.telegram, telegramLocal]);
 
   const telegramLogin = useMemo(() => {
     const raw = telegramRaw?.login ?? telegramRaw?.username ?? "";
@@ -469,8 +346,7 @@ export function Profile() {
     setLoggingOut(true);
 
     try {
-      const uid =
-        Number(profile?.id ?? me?.profile?.id ?? me?.id ?? 0) || 0;
+      const uid = Number(profile?.id ?? me?.profile?.id ?? me?.id ?? 0) || 0;
 
       if (uid) {
         try {
@@ -540,8 +416,11 @@ export function Profile() {
     try {
       await deferredPrompt.prompt();
       const choice = await deferredPrompt.userChoice;
-      if (choice?.outcome === "accepted") showToast(t("profile.pwa.toast.started", "Установка запущена"));
-      else showToast(t("profile.pwa.toast.cancelled", "Установка отменена"));
+      if (choice?.outcome === "accepted") {
+        showToast(t("profile.pwa.toast.started", "Установка запущена"));
+      } else {
+        showToast(t("profile.pwa.toast.cancelled", "Установка отменена"));
+      }
     } catch {
       showToast(t("profile.pwa.toast.failed", "Не удалось запустить установку"));
     } finally {
@@ -600,10 +479,14 @@ export function Profile() {
         }
 
         const ok = await enablePushByUserGesture();
-        if (ok) showToast(t("profile.push.toast.enabled", "Уведомления включены"));
-        else {
-          if (pushState.permission === "denied") showToast(t("profile.push.toast.denied", "Уведомления запрещены в браузере."));
-          else showToast(t("profile.push.toast.failed", "Не удалось включить уведомления."));
+        if (ok) {
+          showToast(t("profile.push.toast.enabled", "Уведомления включены"));
+        } else {
+          if (pushState.permission === "denied") {
+            showToast(t("profile.push.toast.denied", "Уведомления запрещены в браузере."));
+          } else {
+            showToast(t("profile.push.toast.failed", "Не удалось включить уведомления."));
+          }
         }
       }
     } finally {
@@ -632,11 +515,12 @@ export function Profile() {
           <div className="card__body">
             <h1 className="h1">{t("profile.title", "Профиль")}</h1>
             <p className="p">{t("profile.error.text", "Не удалось загрузить данные.")}</p>
-            <div className="row" style={{ marginTop: 14 }}>
-              <button className="btn btn--primary" onClick={() => refetch?.()}>
+
+            <div className="actions actions--2">
+              <button className="btn btn--primary" onClick={() => refetch?.()} type="button">
                 {t("profile.error.retry", "Повторить")}
               </button>
-              <button className="btn btn--danger" onClick={logout} disabled={loggingOut}>
+              <button className="btn btn--danger" onClick={logout} disabled={loggingOut} type="button">
                 {loggingOut ? "…" : t("profile.logout", "Выйти")}
               </button>
             </div>
@@ -648,9 +532,13 @@ export function Profile() {
 
   const personalNameView = savedFullName || profile?.displayName || "—";
   const personalPhoneView = savedPhone || "—";
-  const telegramStatusBadge = telegramLogin
-    ? <Badge text={t("profile.telegram.badge.linked", "Подключен")} tone="ok" />
-    : <Badge text={t("profile.telegram.badge.unlinked", "Не подключен")} />;
+
+  const telegramStatusBadge = telegramLogin ? (
+    <Badge text={t("profile.telegram.badge.linked", "Подключен")} tone="ok" />
+  ) : (
+    <Badge text={t("profile.telegram.badge.unlinked", "Не подключен")} />
+  );
+
   const soonBadge = <Badge text={t("profile.soon", "Скоро")} tone="soon" />;
 
   const langHint = t("profile.language.hint", "Сохраняется автоматически.");
@@ -659,9 +547,11 @@ export function Profile() {
     ? t("profile.pwa.installed", "Установлено")
     : t("profile.pwa.not_installed", "Не установлено");
 
-  const pwaBadge = standalone
-    ? <Badge text={t("profile.pwa.installed", "Установлено")} tone="ok" />
-    : <Badge text={t("profile.pwa.not_installed", "Не установлено")} />;
+  const pwaBadge = standalone ? (
+    <Badge text={t("profile.pwa.installed", "Установлено")} tone="ok" />
+  ) : (
+    <Badge text={t("profile.pwa.not_installed", "Не установлено")} />
+  );
 
   const pwaBtnText = isIOS()
     ? t("profile.pwa.button.how", "Как установить")
@@ -683,16 +573,15 @@ export function Profile() {
     pushState.hasSubscription &&
     !pushState.disabledByUser;
 
-  const pushBadge =
-    pushEnabled ? (
-      <Badge text={t("profile.push.enabled", "Включены")} tone="ok" />
-    ) : pushState.permission === "denied" ? (
-      <Badge text={t("profile.push.permission.denied", "Запрещены")} />
-    ) : pushState.permission === "granted" ? (
-      <Badge text={t("profile.push.permission.granted", "Разрешены")} tone="ok" />
-    ) : (
-      <Badge text={pushPermText} />
-    );
+  const pushBadge = pushEnabled ? (
+    <Badge text={t("profile.push.enabled", "Включены")} tone="ok" />
+  ) : pushState.permission === "denied" ? (
+    <Badge text={t("profile.push.permission.denied", "Запрещены")} />
+  ) : pushState.permission === "granted" ? (
+    <Badge text={t("profile.push.permission.granted", "Разрешены")} tone="ok" />
+  ) : (
+    <Badge text={pushPermText} />
+  );
 
   const pushHint = !pushState.supported
     ? t("profile.push.hint.unsupported", "В этом браузере уведомления недоступны.")
@@ -715,7 +604,7 @@ export function Profile() {
           <CardTitle
             icon="👤"
             right={
-              <button className="btn" onClick={() => refetch?.()} title={t("profile.refresh", "Обновить")}>
+              <button className="btn" onClick={() => refetch?.()} title={t("profile.refresh", "Обновить")} type="button">
                 {t("profile.refresh", "Обновить")}
               </button>
             }
@@ -727,45 +616,40 @@ export function Profile() {
 
           {toast ? <Toast text={toast} /> : null}
 
-          <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
+          <div className="actions actions--1">
             {isAdmin ? (
-              <button className="btn btn--accent" onClick={() => nav("/admin/broadcasts")} style={{ width: "100%" }}>
+              <button className="btn btn--accent" onClick={() => nav("/admin/broadcasts")} type="button">
                 🛠 Broadcasts
               </button>
             ) : null}
 
-            <button className="btn" onClick={goChangePassword} style={{ width: "100%" }}>
+            <button className="btn" onClick={goChangePassword} type="button">
               🔐 {t("profile.change_password", "Сменить пароль")}
             </button>
 
-            <button
-              className="btn btn--danger"
-              onClick={logout}
-              disabled={loggingOut}
-              style={{ width: "100%" }}
-            >
+            <button className="btn btn--danger" onClick={logout} disabled={loggingOut} type="button">
               🚪 {loggingOut ? "…" : t("profile.logout", "Выйти")}
             </button>
           </div>
         </div>
       </div>
 
-      <div className="section" style={{ marginTop: 14 }}>
+      <div className="section">
         <div className="card">
           <div className="card__body">
             <CardTitle
               icon="🪪"
               right={
                 !editPersonal ? (
-                  <button className="btn" onClick={() => setEditPersonal(true)}>
+                  <button className="btn" onClick={() => setEditPersonal(true)} type="button">
                     {t("profile.personal.edit", "Изменить")}
                   </button>
                 ) : (
-                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                    <button className="btn btn--primary" onClick={savePersonal} disabled={savingPersonal}>
+                  <div className="row">
+                    <button className="btn btn--primary" onClick={savePersonal} disabled={savingPersonal} type="button">
                       {savingPersonal ? "…" : t("profile.personal.save", "Сохранить")}
                     </button>
-                    <button className="btn" onClick={cancelPersonal} disabled={savingPersonal}>
+                    <button className="btn" onClick={cancelPersonal} disabled={savingPersonal} type="button">
                       {t("profile.personal.cancel", "Отмена")}
                     </button>
                   </div>
@@ -775,13 +659,9 @@ export function Profile() {
               {t("profile.personal.title", "Личные данные")}
             </CardTitle>
 
-            {personalError ? (
-              <div className="pre" style={{ marginTop: 10 }}>
-                {personalError}
-              </div>
-            ) : null}
+            {personalError ? <div className="pre">{personalError}</div> : null}
 
-            <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+            <div className="profile-list">
               <RowLine
                 icon="🙍"
                 label={t("profile.personal.name", "Имя")}
@@ -792,7 +672,6 @@ export function Profile() {
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       placeholder={t("profile.personal.name_ph", "Полное имя")}
-                      style={{ width: "100%" }}
                     />
                   ) : (
                     personalNameView
@@ -810,7 +689,6 @@ export function Profile() {
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       placeholder="+47…"
-                      style={{ width: "100%" }}
                     />
                   ) : (
                     personalPhoneView
@@ -828,7 +706,6 @@ export function Profile() {
                       type="button"
                       className="btn"
                       onClick={doCopyLogin}
-                      style={{ padding: "6px 10px", opacity: 0.9 }}
                       title={t("profile.personal.copy", "Скопировать")}
                     >
                       {copied ? "✓" : "📋"}
@@ -837,15 +714,15 @@ export function Profile() {
                 }
               />
 
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                  gap: 10,
-                }}
-              >
-                <RowLine icon="🆔" label={t("profile.personal.id", "ID")} value={profile?.id ?? "—"} />
-                <RowLine icon="📅" label={t("profile.personal.created", "Создан")} value={formatDate(created)} />
+              <div className="kv kv--2">
+                <div className="kv__item">
+                  <div className="kv__k">{t("profile.personal.id", "ID")}</div>
+                  <div className="kv__v">{profile?.id ?? "—"}</div>
+                </div>
+                <div className="kv__item">
+                  <div className="kv__k">{t("profile.personal.created", "Создан")}</div>
+                  <div className="kv__v">{formatDate(created)}</div>
+                </div>
               </div>
 
               <RowLine
@@ -858,20 +735,20 @@ export function Profile() {
         </div>
       </div>
 
-      <div className="section" style={{ marginTop: 14 }}>
+      <div className="section">
         <div className="card">
           <div className="card__body">
             <CardTitle icon="🔑">{t("profile.auth.title", "Вход и привязки")}</CardTitle>
 
-            <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+            <div className="profile-list">
               <RowLine
                 icon="✈️"
                 label="Telegram"
-                value={telegramLogin ? `${telegramLogin}` : t("profile.telegram.unlinked", "Не подключен")}
+                value={telegramLogin ? telegramLogin : t("profile.telegram.unlinked", "Не подключен")}
                 right={
                   <>
                     {telegramStatusBadge}
-                    <button className="btn" onClick={() => setTgModal(true)}>
+                    <button className="btn" onClick={() => setTgModal(true)} type="button">
                       {telegramLogin
                         ? t("profile.telegram.change", "Изменить")
                         : t("profile.telegram.link", "Подключить")}
@@ -888,7 +765,7 @@ export function Profile() {
         </div>
       </div>
 
-      <div className="section" style={{ marginTop: 14 }}>
+      <div className="section">
         <div className="card">
           <div className="card__body">
             <CardTitle icon="⚙️">{t("profile.settings.title", "Настройки")}</CardTitle>
@@ -943,7 +820,10 @@ export function Profile() {
                   </div>
 
                   <div className="profile-row__value">
-                    {pushEnabled ? t("profile.push.enabled", "Включены") : t("profile.push.disabled", "Выключены")} • {pushPermText}
+                    {pushEnabled
+                      ? t("profile.push.enabled", "Включены")
+                      : t("profile.push.disabled", "Выключены")}{" "}
+                    • {pushPermText}
                   </div>
 
                   <div className="profile-row__hint">{pushHint}</div>
@@ -991,17 +871,17 @@ export function Profile() {
         onClose={() => setIosInstallModal(false)}
         closeLabel={t("profile.modal.close", "Закрыть")}
       >
-        <div className="p" style={{ marginTop: 0 }}>
-          {t("profile.pwa.ios_modal.text", "На iPhone приложение устанавливается через меню «Поделиться».")}
-        </div>
-        <div className="pre" style={{ marginTop: 10 }}>
+        <p className="p">{t("profile.pwa.ios_modal.text", "На iPhone приложение устанавливается через меню «Поделиться».")}</p>
+
+        <div className="pre">
           {t(
             "profile.pwa.ios_modal.steps",
             "1) Откройте меню «Поделиться»\n2) Выберите «На экран Домой»\n3) Подтвердите добавление"
           )}
         </div>
-        <div className="row" style={{ marginTop: 12, justifyContent: "flex-end" }}>
-          <button className="btn btn--primary" onClick={() => setIosInstallModal(false)}>
+
+        <div className="actions actions--1">
+          <button className="btn btn--primary" onClick={() => setIosInstallModal(false)} type="button">
             {t("profile.ok", "Понятно")}
           </button>
         </div>
@@ -1017,29 +897,22 @@ export function Profile() {
         onClose={() => setTgModal(false)}
         closeLabel={t("profile.modal.close", "Закрыть")}
       >
-        <div className="p" style={{ marginTop: 0 }}>
-          {t("profile.telegram.modal.label", "Telegram логин без @")}
-        </div>
+        <p className="p">{t("profile.telegram.modal.label", "Telegram логин без @")}</p>
 
         <input
           className="input"
           value={tgLoginDraft}
           onChange={(e) => setTgLoginDraft(e.target.value)}
           placeholder={t("profile.telegram.modal.placeholder", "например: shpunbest")}
-          style={{ width: "100%", marginTop: 8 }}
         />
 
-        {tgError ? (
-          <div className="pre" style={{ marginTop: 10 }}>
-            {tgError}
-          </div>
-        ) : null}
+        {tgError ? <div className="pre">{tgError}</div> : null}
 
-        <div className="row" style={{ marginTop: 12, justifyContent: "flex-end" }}>
-          <button className="btn" onClick={() => setTgModal(false)} disabled={savingTg}>
+        <div className="actions actions--2">
+          <button className="btn" onClick={() => setTgModal(false)} disabled={savingTg} type="button">
             {t("profile.personal.cancel", "Отмена")}
           </button>
-          <button className="btn btn--primary" onClick={saveTelegramLogin} disabled={savingTg}>
+          <button className="btn btn--primary" onClick={saveTelegramLogin} disabled={savingTg} type="button">
             {savingTg ? "…" : t("profile.personal.save", "Сохранить")}
           </button>
         </div>
