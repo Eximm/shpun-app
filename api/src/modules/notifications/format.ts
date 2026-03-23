@@ -213,7 +213,7 @@ export function formatIncoming(e: BillingPushEvent): BillingPushEvent {
   }
 
   title = compact(title, 80);
-  message = compact(String(message || "").trim(), 220);
+  message = String(message || "").trim();
 
   return {
     ...e,
