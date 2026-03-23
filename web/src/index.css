@@ -536,7 +536,11 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .chip--soft { opacity: 0.92; }
 
 /* List cards */
-.list { display: flex; flex-direction: column; gap: 10px; }
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
 
 .list__item {
   position: relative;
@@ -558,20 +562,22 @@ button, a { -webkit-tap-highlight-color: transparent; }
 }
 
 .list__main {
-  min-width: 0;
   width: 100%;
+  min-width: 0;
   box-sizing: border-box;
 }
 
+/* 🔑 Safe area под правый бейдж (INFO / дата и т.д.) */
 .kicker,
-.list__title {
+.list__title,
+.list__sub,
+.feed-newsCard__title,
+.feed-news__preview,
+.home-news__preview {
   padding-right: 84px;
 }
 
-.list__sub {
-  padding-right: 0;
-}
-
+/* Заголовок */
 .list__title {
   font-weight: 900;
   letter-spacing: 0.1px;
@@ -580,6 +586,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
   text-overflow: ellipsis;
 }
 
+/* Текст превью */
 .list__sub {
   margin-top: 4px;
   font-size: 13px;
@@ -587,14 +594,28 @@ button, a { -webkit-tap-highlight-color: transparent; }
   line-height: 1.35;
 }
 
+/* Правая зона (бейдж INFO / ALERT) */
 .list__side {
   position: absolute;
   top: 12px;
   right: 12px;
   display: flex;
   align-items: flex-start;
+  pointer-events: none;
 }
 
+/* Кнопка должна быть на всю ширину без safe-area */
+.feed__more {
+  margin-top: 14px;
+  width: 100%;
+  padding-right: 0;
+}
+
+.feed__more .btn {
+  width: 100%;
+  justify-content: center;
+  padding: 12px 16px;
+}
 /* feed helpers */
 
 .feed__more {
