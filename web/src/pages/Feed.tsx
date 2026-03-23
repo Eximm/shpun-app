@@ -2,12 +2,7 @@
 import { useNavigate } from "react-router-dom";
 import { apiFetch } from "../shared/api/client";
 import { useI18n } from "../shared/i18n";
-import {
-  buildFeedPreview,
-  shouldShowFeedMore,
-  isNewsEvent,
-  isForecastEvent,
-} from "../shared/ui/newsPreview";
+import { buildFeedPreview, shouldShowFeedMore, isNewsEvent } from "../shared/ui/newsPreview";
 
 type NotifLevel = "info" | "success" | "error";
 type NotifEvent = {
@@ -168,6 +163,18 @@ function buildFeedUrl(cat: Category, cursor?: Cursor | null) {
   return url;
 }
 
+function getCardTitle(e: NotifEvent, t: (key: string, fallback?: string) => string) {
+  const shortTitle = pick(e.meta, "short.title");
+  if (typeof shortTitle === "string" && shortTitle.trim()) return shortTitle.trim();
+  return e.title || t("feed.item.fallback", "Сообщение");
+}
+
+function getCardPreview(e: NotifEvent) {
+  const shortMessage = pick(e.meta, "short.message");
+  if (typeof shortMessage === "string" && shortMessage.trim()) return shortMessage.trim();
+  return buildFeedPreview(e);
+}
+
 export function Feed() {
   const nav = useNavigate();
   const { t } = useI18n();
@@ -266,6 +273,8 @@ export function Feed() {
     t("feed.count.many", "сообщений"),
   )}`;
 
+  const openedLink = openedEvent ? eventLink(openedEvent) : null;
+
   return (
     <>
       <div className="section">
@@ -312,10 +321,9 @@ export function Feed() {
                 </div>
               ) : (
                 filtered.map((e) => {
-                  const title = e.title || t("feed.item.fallback", "Сообщение");
-                  const preview = buildFeedPreview(e);
+                  const title = getCardTitle(e, t);
+                  const preview = getCardPreview(e);
                   const news = isNewsEvent(e);
-                  const forecast = isForecastEvent(e);
                   const hasFullView = shouldShowFeedMore(e, preview);
                   const dt = formatDateTime(e.ts);
 
@@ -327,7 +335,7 @@ export function Feed() {
                     nav(link);
                   };
 
-                  if (news || forecast) {
+                  if (news) {
                     return (
                       <div key={e.event_id} className="list__item feed-newsCard">
                         <div className="feed-newsCard__top">
@@ -446,6 +454,21 @@ export function Feed() {
               </div>
 
               <div className="feed-modalCard__actions">
+                {openedLink ? (
+                  <button
+                    type="button"
+                    className="btn btn--accent"
+                    onClick={() => {
+                      setOpenedEvent(null);
+                      nav(openedLink);
+                    }}
+                  >
+                    {openedLink.startsWith("/payments")
+                      ? t("feed.modal.openPayments", "Перейти к оплате")
+                      : t("feed.modal.openTarget", "Перейти")}
+                  </button>
+                ) : null}
+
                 <button type="button" className="btn btn--soft" onClick={() => setOpenedEvent(null)}>
                   {t("feed.modal.close", "Закрыть")}
                 </button>
