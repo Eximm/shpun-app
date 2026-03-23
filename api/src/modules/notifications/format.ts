@@ -14,7 +14,7 @@ function compact(s: string, max = 220) {
 function rub(v: any) {
   const n = Number(v);
   if (!Number.isFinite(n)) return "";
-  return `${Math.trunc(n)} ₽`;
+  return `${Math.trunc(n)}\u00A0₽`;
 }
 
 function pick(obj: any, path: string): any {

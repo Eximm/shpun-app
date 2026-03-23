@@ -110,6 +110,7 @@ function pick(obj: any, path: string) {
 function cleanText(s: any) {
   return String(s ?? "")
     .replace(/\r/g, "\n")
+    .replace(/(\d)\s₽/g, "$1\u00A0₽")
     .replace(/\s+/g, " ")
     .trim();
 }
