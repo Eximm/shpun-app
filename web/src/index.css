@@ -560,7 +560,10 @@ button, a { -webkit-tap-highlight-color: transparent; }
   transform: translateY(1px);
 }
 
-.list__main { min-width: 0; }
+.list__main {
+  min-width: 0;
+  flex: 1 1 auto;
+}
 
 .list__title {
   font-weight: 900;
@@ -651,13 +654,26 @@ button, a { -webkit-tap-highlight-color: transparent; }
 
 .feed-modalCard__actions {
   margin-top: 18px;
+  display: flex;
+  flex-direction: column;
 }
 
 .feed-modalCard__actions .btn {
   width: 100%;
   justify-content: center;
+}
+
+.feed__more {
+  margin-top: 14px;
+  width: 100%;
+}
+
+.feed__more .btn {
+  width: 100%;
+  justify-content: center;
   padding: 12px 16px;
 }
+
 /* Two-column block */
 .grid2 {
   display: grid;
