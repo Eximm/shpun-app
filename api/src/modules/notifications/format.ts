@@ -196,10 +196,13 @@ export function formatIncoming(e: BillingPushEvent): BillingPushEvent {
       message = parts.length ? parts.join(" · ") : "Проверьте ближайшую оплату услуг";
     }
 
-    let shortMessage = "Проверьте оплату";
-    if (Number.isFinite(cnt) && cnt > 0 && t) shortMessage = `Услуг: ${cnt} · нужно ${t}`;
-    else if (t) shortMessage = `Нужно ${t}`;
-    else if (Number.isFinite(cnt) && cnt > 0) shortMessage = `Услуг: ${cnt}`;
+    const shortParts: string[] = [];
+    if (Number.isFinite(cnt) && cnt > 0) shortParts.push(`Услуг: ${cnt}`);
+    if (t) shortParts.push(`нужно ${t}`);
+    if (b) shortParts.push(`баланс ${b}`);
+    if (bn) shortParts.push(`бонус ${bn}`);
+
+    const shortMessage = shortParts.length ? shortParts.join(" · ") : "Проверьте оплату";
 
     meta = setShort(meta, "💳 Скоро нужна оплата", shortMessage);
   } else if (type === "broadcast.news") {
