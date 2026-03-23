@@ -107,6 +107,17 @@ function pick(obj: any, path: string) {
   }
 }
 
+function cleanText(s: any) {
+  return String(s ?? "")
+    .replace(/\r/g, "\n")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isForecastEvent(e: NotifEvent) {
+  return normalizeType(e.type) === "service.forecast";
+}
+
 function eventLink(e: NotifEvent): string | null {
   const actionTo = pick(e.meta, "action.to");
   if (typeof actionTo === "string" && actionTo.trim()) {
@@ -164,15 +175,28 @@ function buildFeedUrl(cat: Category, cursor?: Cursor | null) {
 }
 
 function getCardTitle(e: NotifEvent, t: (key: string, fallback?: string) => string) {
-  const shortTitle = pick(e.meta, "short.title");
-  if (typeof shortTitle === "string" && shortTitle.trim()) return shortTitle.trim();
   return e.title || t("feed.item.fallback", "Сообщение");
 }
 
 function getCardPreview(e: NotifEvent) {
-  const shortMessage = pick(e.meta, "short.message");
-  if (typeof shortMessage === "string" && shortMessage.trim()) return shortMessage.trim();
+  if (isForecastEvent(e)) {
+    const shortMessage = pick(e.meta, "short.message");
+    if (typeof shortMessage === "string" && shortMessage.trim()) return shortMessage.trim();
+  }
   return buildFeedPreview(e);
+}
+
+function canOpenDetails(e: NotifEvent, preview: string) {
+  if (isNewsEvent(e)) return true;
+  if (isForecastEvent(e)) return true;
+
+  const full = cleanText(e.message);
+  const short = cleanText(preview);
+
+  if (!full || !short) return false;
+  if (full === short) return false;
+
+  return shouldShowFeedMore(e, preview);
 }
 
 export function Feed() {
@@ -274,6 +298,7 @@ export function Feed() {
   )}`;
 
   const openedLink = openedEvent ? eventLink(openedEvent) : null;
+  const openedIsForecast = openedEvent ? isForecastEvent(openedEvent) : false;
 
   return (
     <>
@@ -324,11 +349,11 @@ export function Feed() {
                   const title = getCardTitle(e, t);
                   const preview = getCardPreview(e);
                   const news = isNewsEvent(e);
-                  const hasFullView = shouldShowFeedMore(e, preview);
+                  const hasFullView = canOpenDetails(e, preview);
                   const dt = formatDateTime(e.ts);
 
                   const link = eventLink(e);
-                  const clickable = !!link;
+                  const clickable = !!link && !hasFullView;
 
                   const onOpen = () => {
                     if (!link) return;
@@ -454,7 +479,7 @@ export function Feed() {
               </div>
 
               <div className="feed-modalCard__actions">
-                {openedLink ? (
+                {openedIsForecast && openedLink && openedLink.startsWith("/payments") ? (
                   <button
                     type="button"
                     className="btn btn--accent"
@@ -463,9 +488,7 @@ export function Feed() {
                       nav(openedLink);
                     }}
                   >
-                    {openedLink.startsWith("/payments")
-                      ? t("feed.modal.openPayments", "Перейти к оплате")
-                      : t("feed.modal.openTarget", "Перейти")}
+                    {t("feed.modal.openPayments", "Перейти к оплате")}
                   </button>
                 ) : null}
 
