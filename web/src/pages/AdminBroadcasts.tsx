@@ -148,6 +148,52 @@ function copyText(text: string) {
   void navigator.clipboard?.writeText(text);
 }
 
+function AdminTabButton({
+  active,
+  title,
+  subtitle,
+  onClick,
+}: {
+  active: boolean;
+  title: string;
+  subtitle: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className={`btn admin-tabBtn ${active ? "btn--accent admin-tabBtn--active" : "btn--soft"}`}
+      type="button"
+      onClick={onClick}
+    >
+      <span className="admin-tabBtn__title">{title}</span>
+      <span className="admin-tabBtn__sub">{subtitle}</span>
+    </button>
+  );
+}
+
+function AdminMetric({
+  label,
+  value,
+  tone = "soft",
+}: {
+  label: string;
+  value: React.ReactNode;
+  tone?: "soft" | "ok" | "warn" | "bad";
+}) {
+  const chipClass =
+    tone === "ok" ? "chip--ok" : tone === "warn" ? "chip--warn" : tone === "bad" ? "chip--bad" : "chip--soft";
+
+  return (
+    <div className="admin-metric">
+      <div className="admin-metric__label">{label}</div>
+      <div className="admin-metric__value">{value}</div>
+      <div className="admin-metric__meta">
+        <span className={`chip ${chipClass}`}>LIVE</span>
+      </div>
+    </div>
+  );
+}
+
 function ModalShell({
   title,
   kicker,
@@ -196,52 +242,6 @@ function ModalShell({
 
           <div className="modal__content admin-modal__content">{children}</div>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function AdminTabButton({
-  active,
-  title,
-  subtitle,
-  onClick,
-}: {
-  active: boolean;
-  title: string;
-  subtitle: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      className={`btn admin-tabBtn ${active ? "btn--accent admin-tabBtn--active" : "btn--soft"}`}
-      type="button"
-      onClick={onClick}
-    >
-      <span className="admin-tabBtn__title">{title}</span>
-      <span className="admin-tabBtn__sub">{subtitle}</span>
-    </button>
-  );
-}
-
-function AdminMetric({
-  label,
-  value,
-  tone = "soft",
-}: {
-  label: string;
-  value: React.ReactNode;
-  tone?: "soft" | "ok" | "warn" | "bad";
-}) {
-  const chipClass =
-    tone === "ok" ? "chip--ok" : tone === "warn" ? "chip--warn" : tone === "bad" ? "chip--bad" : "chip--soft";
-
-  return (
-    <div className="admin-metric">
-      <div className="admin-metric__label">{label}</div>
-      <div className="admin-metric__value">{value}</div>
-      <div className="admin-metric__meta">
-        <span className={`chip ${chipClass}`}>LIVE</span>
       </div>
     </div>
   );
@@ -800,7 +800,11 @@ function TrialProtectionSection() {
           ) : (
             <>
               <div className="admin-metricsGrid admin-gap-top-md">
-                <AdminMetric label="Mode" value={status?.mode || "—"} tone={status?.mode === "enforce" ? "bad" : status?.mode === "observe" ? "warn" : "soft"} />
+                <AdminMetric
+                  label="Mode"
+                  value={status?.mode || "—"}
+                  tone={status?.mode === "enforce" ? "bad" : status?.mode === "observe" ? "warn" : "soft"}
+                />
                 <AdminMetric label="TTL" value={`${status?.ttlHours ?? "—"}h`} />
                 <AdminMetric label="Active devices" value={status?.devicesWithTrial ?? 0} />
                 <AdminMetric label="Blocks 24h" value={status?.blocks24h ?? 0} tone="bad" />
