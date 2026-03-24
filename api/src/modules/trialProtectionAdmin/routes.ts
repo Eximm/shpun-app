@@ -2,11 +2,6 @@ import type { FastifyInstance } from "fastify";
 import { getSessionFromRequest } from "../../shared/session/sessionStore.js";
 import { linkDb } from "../../shared/linkdb/db.js";
 import { getTrialDeviceMode, getTrialDeviceTtlHours } from "../device/deviceService.js";
-import {
-  deleteAllTrialUsageByDevice,
-  resetDeviceTrialUsage,
-  setDeviceBlocked,
-} from "../device/deviceRepo.js";
 
 function ensureAuthed(req: any, reply: any): string | null {
   const session = getSessionFromRequest(req as any);
@@ -57,15 +52,6 @@ function countEvents(params: {
   return Number(row?.cnt ?? 0);
 }
 
-function tryParseMeta(metaJson: unknown) {
-  if (!metaJson) return null;
-  try {
-    return JSON.parse(String(metaJson));
-  } catch {
-    return null;
-  }
-}
-
 export async function trialProtectionAdminRoutes(app: FastifyInstance) {
   app.get("/admin/trial-protection/status", async (req, reply) => {
     const shmSessionId = ensureAuthed(req, reply);
@@ -112,39 +98,21 @@ export async function trialProtectionAdminRoutes(app: FastifyInstance) {
       devicesWithTrial: Number(devicesWithTrialRow?.cnt ?? 0),
       distinctDevices24h: Number(distinctDevices24hRow?.cnt ?? 0),
       distinctIps24h: Number(distinctIps24hRow?.cnt ?? 0),
-      attempts24h: countEvents({
-        sinceTs: since24h,
-        eventType: "trial_group_check",
-      }) + countEvents({
-        sinceTs: since24h,
-        eventType: "trial_group_block",
-      }),
-      allows24h: countEvents({
-        sinceTs: since24h,
-        eventType: "trial_group_check",
-        decision: "allow",
-      }),
-      observes24h: countEvents({
-        sinceTs: since24h,
-        eventType: "trial_group_check",
-        decision: "observe",
-      }),
-      blocks24h: countEvents({
-        sinceTs: since24h,
-        eventType: "trial_group_check",
-        decision: "block",
-      }),
+      attempts24h: countEvents({ sinceTs: since24h, eventType: "trial_group_check" }),
+      allows24h: countEvents({ sinceTs: since24h, decision: "allow" }),
+      observes24h: countEvents({ sinceTs: since24h, decision: "observe" }),
+      blocks24h: countEvents({ sinceTs: since24h, decision: "block" }),
       reuseDevice24h: countEvents({
         sinceTs: since24h,
-        reason: "trial_already_used_in_group_on_device",
+        reason: "trial_group_already_used_on_device",
       }),
       reuseIp24h: countEvents({
         sinceTs: since24h,
-        reason: "trial_already_used_in_group_on_ip",
+        reason: "trial_group_already_used_on_ip",
       }),
       abuseIpPrefix24h: countEvents({
         sinceTs: since24h,
-        reason: "trial_abuse_detected_on_ip_prefix",
+        reason: "trial_group_abuse_on_ip_prefix",
       }),
       blockDevice24h: countEvents({
         sinceTs: since24h,
@@ -161,10 +129,6 @@ export async function trialProtectionAdminRoutes(app: FastifyInstance) {
       missingDeviceToken24h: countEvents({
         sinceTs: since24h,
         reason: "missing_device_token",
-      }),
-      manualBlocks24h: countEvents({
-        sinceTs: since24h,
-        reason: "device_manually_blocked",
       }),
     });
   });
@@ -193,58 +157,8 @@ export async function trialProtectionAdminRoutes(app: FastifyInstance) {
         ORDER BY id DESC
         LIMIT ?
       `)
-      .all(limit)
-      .map((row: any) => ({
-        ...row,
-        meta: tryParseMeta(row.meta_json),
-      }));
+      .all(limit);
 
     return reply.send({ ok: true, items });
-  });
-
-  app.post("/admin/trial-protection/device/reset", async (req, reply) => {
-    const shmSessionId = ensureAuthed(req, reply);
-    if (!shmSessionId) return;
-
-    const deviceToken = String((req.body as any)?.deviceToken ?? "").trim();
-    if (!deviceToken) {
-      return reply.code(400).send({ ok: false, error: "device_token_required" });
-    }
-
-    resetDeviceTrialUsage(deviceToken);
-    deleteAllTrialUsageByDevice(deviceToken);
-    setDeviceBlocked(deviceToken, false);
-
-    return reply.send({ ok: true });
-  });
-
-  app.post("/admin/trial-protection/device/block", async (req, reply) => {
-    const shmSessionId = ensureAuthed(req, reply);
-    if (!shmSessionId) return;
-
-    const deviceToken = String((req.body as any)?.deviceToken ?? "").trim();
-    if (!deviceToken) {
-      return reply.code(400).send({ ok: false, error: "device_token_required" });
-    }
-
-    setDeviceBlocked(deviceToken, true);
-
-    return reply.send({ ok: true });
-  });
-
-  app.post("/admin/trial-protection/device/unblock", async (req, reply) => {
-    const shmSessionId = ensureAuthed(req, reply);
-    if (!shmSessionId) return;
-
-    const deviceToken = String((req.body as any)?.deviceToken ?? "").trim();
-    if (!deviceToken) {
-      return reply.code(400).send({ ok: false, error: "device_token_required" });
-    }
-
-    setDeviceBlocked(deviceToken, false);
-    resetDeviceTrialUsage(deviceToken);
-    deleteAllTrialUsageByDevice(deviceToken);
-
-    return reply.send({ ok: true });
   });
 }
