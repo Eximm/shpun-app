@@ -26,6 +26,7 @@ import {
   rememberTrialUsedInGroup,
   logTrialEvent,
   registerDeviceSeen,
+  isDeviceManuallyBlocked,
 } from "../device/deviceService.js";
 
 function mapStatus(raw?: string) {
@@ -858,7 +859,31 @@ export async function servicesRoutes(app: FastifyInstance) {
       }
     }
 
-  if (trialDeviceMode !== "off" && deviceToken && isTrialService && trialGroup) {
+    if (trialDeviceMode !== "off" && deviceToken && isTrialService && trialGroup) {
+    if (isDeviceManuallyBlocked(deviceToken)) {
+      logTrialEvent({
+        deviceToken,
+        userId,
+        ip,
+        userAgent,
+        eventType: "trial_group_block",
+        decision: "block",
+        reason: "device_manually_blocked",
+        meta: {
+          serviceId,
+          trialGroup,
+          isTrialService,
+          ...trialMeta,
+        },
+      });
+
+      return reply.code(409).send({
+        ok: false,
+        error: "trial_already_used",
+        message: "Пробный доступ для этого устройства заблокирован.",
+      });
+    }
+
     const alreadyUsed = hasDeviceUsedTrialInGroup(deviceToken, trialGroup);
 
     const risk = getTrialRiskProfile({
@@ -885,11 +910,11 @@ export async function servicesRoutes(app: FastifyInstance) {
         ? (trialDeviceMode === "enforce" ? "block" : "observe")
         : "allow",
       reason: alreadyUsed
-        ? "trial_group_already_used_on_device"
+        ? "trial_already_used_in_group_on_device"
         : ipReuseRow
-          ? "trial_group_already_used_on_ip"
+          ? "trial_already_used_in_group_on_ip"
           : risk.highRisk
-            ? "trial_group_abuse_on_ip_prefix"
+            ? "trial_abuse_detected_on_ip_prefix"
             : "trial_group_not_used_yet",
       meta: {
         serviceId,
@@ -908,7 +933,6 @@ export async function servicesRoutes(app: FastifyInstance) {
         ...trialMeta,
       },
     });
-
     if (alreadyUsed && trialDeviceMode === "enforce") {
       logTrialEvent({
         deviceToken,

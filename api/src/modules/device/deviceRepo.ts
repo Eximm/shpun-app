@@ -10,6 +10,7 @@ export type DeviceRow = {
   user_agent: string | null;
   trial_used_at: number | null;
   trial_user_id: number | null;
+  is_blocked: number | null;
 };
 
 export type TrialDeviceUsageRow = {
@@ -36,7 +37,8 @@ export function ensureDeviceTables() {
       last_ip TEXT,
       user_agent TEXT,
       trial_used_at INTEGER,
-      trial_user_id INTEGER
+      trial_user_id INTEGER,
+      is_blocked INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS trial_device_usage (
@@ -104,6 +106,15 @@ export function ensureDeviceTables() {
       ON trial_protection_events(reason, created_at);
   `);
 
+  try {
+    linkDb.exec(`
+      ALTER TABLE trial_devices
+      ADD COLUMN is_blocked INTEGER NOT NULL DEFAULT 0
+    `);
+  } catch {
+    // column already exists
+  }
+
   inited = true;
 }
 
@@ -153,7 +164,7 @@ export function touchDevice(input: {
     .prepare(`
       UPDATE trial_devices
       SET last_seen_at = ?,
-          last_ip = ?,
+          last_ip = COALESCE(?, last_ip),
           user_agent = COALESCE(?, user_agent)
       WHERE device_token = ?
     `)
@@ -296,7 +307,8 @@ export function listTrialDevices(limit: number) {
         last_ip,
         user_agent,
         trial_used_at,
-        trial_user_id
+        trial_user_id,
+        is_blocked
       FROM trial_devices
       ORDER BY last_seen_at DESC, id DESC
       LIMIT ?
@@ -348,6 +360,18 @@ export function deleteAllTrialUsageByDevice(deviceToken: string) {
     .run(deviceToken);
 }
 
+export function setDeviceBlocked(deviceToken: string, isBlocked: boolean) {
+  ensureDeviceTables();
+
+  linkDb
+    .prepare(`
+      UPDATE trial_devices
+      SET is_blocked = ?
+      WHERE device_token = ?
+    `)
+    .run(isBlocked ? 1 : 0, deviceToken);
+}
+
 export function listTrialDevicesWithUsage(limit: number) {
   ensureDeviceTables();
 
@@ -363,6 +387,7 @@ export function listTrialDevicesWithUsage(limit: number) {
         d.user_agent,
         d.trial_used_at,
         d.trial_user_id,
+        d.is_blocked,
         COUNT(u.id) AS active_trial_count,
         MAX(u.used_at) AS last_trial_used_at
       FROM trial_devices d
@@ -377,7 +402,8 @@ export function listTrialDevicesWithUsage(limit: number) {
         d.last_ip,
         d.user_agent,
         d.trial_used_at,
-        d.trial_user_id
+        d.trial_user_id,
+        d.is_blocked
       ORDER BY d.last_seen_at DESC, d.id DESC
       LIMIT ?
     `)
@@ -502,7 +528,9 @@ export function countRecentTrialAttemptsByIpPrefix(input: {
           AND ip LIKE ?
           AND json_extract(meta_json, '$.trialGroup') = ?
       `)
-      .get(input.sinceTs, `${input.ipPrefix}%`, trialGroup) as { cnt?: number } | undefined;
+      .get(input.sinceTs, `${input.ipPrefix}%`, trialGroup) as
+      | { cnt?: number }
+      | undefined;
 
     return Number(row?.cnt ?? 0);
   }
@@ -538,7 +566,9 @@ export function countRecentDistinctDevicesByIpPrefix(input: {
           OR first_ip LIKE ?
         )
     `)
-    .get(input.sinceTs, `${input.ipPrefix}%`, `${input.ipPrefix}%`) as { cnt?: number } | undefined;
+    .get(input.sinceTs, `${input.ipPrefix}%`, `${input.ipPrefix}%`) as
+    | { cnt?: number }
+    | undefined;
 
   return Number(row?.cnt ?? 0);
 }

@@ -74,10 +74,6 @@ export function getRequestUserAgent(req: any): string {
   return String(req?.headers?.["user-agent"] ?? "").trim().slice(0, 500);
 }
 
-/* ============================================================
-   CLEANUP
-============================================================ */
-
 function cleanupExpiredTrialUsage() {
   const ttlSeconds = getTrialDeviceTtlSeconds();
   const cutoffTs = nowTs() - ttlSeconds;
@@ -91,10 +87,6 @@ function isTrialExpired(trialUsedAt: number | null | undefined): boolean {
   const ttlSeconds = getTrialDeviceTtlSeconds();
   return trialUsedAt < nowTs() - ttlSeconds;
 }
-
-/* ============================================================
-   DEVICE TRACKING
-============================================================ */
 
 export function registerDeviceSeen(input: {
   deviceToken: string;
@@ -131,10 +123,6 @@ export function registerDeviceSeen(input: {
 
   return getDeviceByToken(input.deviceToken);
 }
-
-/* ============================================================
-   GROUP-BASED TRIAL LOGIC
-============================================================ */
 
 export function hasDeviceUsedTrialInGroup(deviceToken: string, trialGroup: string): boolean {
   if (!deviceToken || !trialGroup) return false;
@@ -191,18 +179,20 @@ export function getTrialRiskProfile(input: {
   const distinctDevicesThreshold = Math.max(3, Number(input.ipPrefixDistinctDevicesThreshold ?? 3) || 3);
   const uaAttemptThreshold = Math.max(2, Number(input.ipPrefixUserAgentAttemptThreshold ?? 2) || 2);
 
-  const exactIpReuseRow = ip && trialGroup
-    ? hasIpUsedTrialInGroup({ ip, deviceToken, trialGroup })
-    : null;
+  const exactIpReuseRow =
+    ip && trialGroup
+      ? hasIpUsedTrialInGroup({ ip, deviceToken, trialGroup })
+      : null;
 
-  const ipPrefixUsageCount = ipPrefix && trialGroup
-    ? countRecentTrialUsageByIpPrefix({
-        ipPrefix,
-        trialGroup,
-        sinceTs,
-        excludeDeviceToken: deviceToken || null,
-      })
-    : 0;
+  const ipPrefixUsageCount =
+    ipPrefix && trialGroup
+      ? countRecentTrialUsageByIpPrefix({
+          ipPrefix,
+          trialGroup,
+          sinceTs,
+          excludeDeviceToken: deviceToken || null,
+        })
+      : 0;
 
   const ipPrefixAttemptCount = ipPrefix
     ? countRecentTrialAttemptsByIpPrefix({
@@ -219,14 +209,15 @@ export function getTrialRiskProfile(input: {
       })
     : 0;
 
-  const ipPrefixUserAgentAttemptCount = ipPrefix && userAgent
-    ? countRecentTrialAttemptsByIpPrefixAndUserAgent({
-        ipPrefix,
-        userAgent,
-        sinceTs,
-        trialGroup: trialGroup || null,
-      })
-    : 0;
+  const ipPrefixUserAgentAttemptCount =
+    ipPrefix && userAgent
+      ? countRecentTrialAttemptsByIpPrefixAndUserAgent({
+          ipPrefix,
+          userAgent,
+          sinceTs,
+          trialGroup: trialGroup || null,
+        })
+      : 0;
 
   const ipPrefixUsageMatched = ipPrefixUsageCount >= usageThreshold;
   const ipPrefixAttemptMatched = ipPrefixAttemptCount >= attemptThreshold;
@@ -282,10 +273,6 @@ export function rememberTrialUsedInGroup(input: {
   });
 }
 
-/* ============================================================
-   LEGACY COMPATIBILITY
-============================================================ */
-
 export function hasDeviceUsedTrial(deviceToken: string): boolean {
   if (!deviceToken) return false;
 
@@ -316,9 +303,11 @@ export function rememberTrialUsed(input: {
   });
 }
 
-/* ============================================================
-   LOGGING
-============================================================ */
+export function isDeviceManuallyBlocked(deviceToken: string): boolean {
+  if (!deviceToken) return false;
+  const row = getDeviceByToken(deviceToken);
+  return Number(row?.is_blocked ?? 0) === 1;
+}
 
 export function logTrialEvent(input: {
   deviceToken?: string | null;
