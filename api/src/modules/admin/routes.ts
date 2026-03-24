@@ -17,6 +17,7 @@ import {
   ensureDeviceTables,
   resetDeviceTrialUsage,
   deleteAllTrialUsageByDevice,
+  setDeviceBlocked,
 } from "../device/deviceRepo.js";
 
 async function ensureAdmin(shmSessionId: string) {
@@ -40,6 +41,48 @@ function getSessionUserId(req: any): number | null {
   const raw = s?.userId ?? null;
   const n = Number(raw);
   return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function countEvents(params: {
+  sinceTs: number;
+  eventType?: string;
+  decision?: "allow" | "observe" | "block";
+  reason?: string;
+}) {
+  const where: string[] = ["created_at >= ?"];
+  const values: any[] = [params.sinceTs];
+
+  if (params.eventType) {
+    where.push("event_type = ?");
+    values.push(params.eventType);
+  }
+  if (params.decision) {
+    where.push("decision = ?");
+    values.push(params.decision);
+  }
+  if (params.reason) {
+    where.push("reason = ?");
+    values.push(params.reason);
+  }
+
+  const row = linkDb
+    .prepare(`
+      SELECT COUNT(*) as cnt
+      FROM trial_protection_events
+      WHERE ${where.join(" AND ")}
+    `)
+    .get(...values) as { cnt?: number } | undefined;
+
+  return Number(row?.cnt ?? 0);
+}
+
+function tryParseMeta(metaJson: unknown) {
+  if (!metaJson) return null;
+  try {
+    return JSON.parse(String(metaJson));
+  } catch {
+    return null;
+  }
 }
 
 export async function adminRoutes(app: FastifyInstance) {
@@ -129,27 +172,33 @@ export async function adminRoutes(app: FastifyInstance) {
       `)
       .get() as { cnt?: number } | undefined;
 
-    const reuse24hRow = linkDb
+    const distinctDevices24hRow = linkDb
       .prepare(`
-        SELECT COUNT(*) as cnt
+        SELECT COUNT(DISTINCT device_token) as cnt
         FROM trial_protection_events
-        WHERE event_type IN ('trial_group_check', 'trial_group_block')
-          AND reason IN ('trial_group_already_used_on_device', 'trial_already_used_in_group')
-          AND created_at >= ?
+        WHERE created_at >= ?
+          AND device_token IS NOT NULL
+          AND device_token != ''
       `)
       .get(since24h) as { cnt?: number } | undefined;
 
-    const blocks24hRow = linkDb
+    const distinctIps24hRow = linkDb
       .prepare(`
-        SELECT COUNT(*) as cnt
+        SELECT COUNT(DISTINCT ip) as cnt
         FROM trial_protection_events
-        WHERE (
-          event_type = 'trial_group_block'
-          OR decision = 'block'
-        )
-          AND created_at >= ?
+        WHERE created_at >= ?
+          AND ip IS NOT NULL
+          AND ip != ''
       `)
       .get(since24h) as { cnt?: number } | undefined;
+
+    const activeBlockedDevicesRow = linkDb
+      .prepare(`
+        SELECT COUNT(*) as cnt
+        FROM trial_devices
+        WHERE is_blocked = 1
+      `)
+      .get() as { cnt?: number } | undefined;
 
     return reply.send({
       ok: true,
@@ -157,8 +206,60 @@ export async function adminRoutes(app: FastifyInstance) {
       ttlHours,
       devicesWithTrial: Number(devicesWithTrialRow?.cnt ?? 0),
       activeTrialGroups: Number(activeTrialGroupsRow?.cnt ?? 0),
-      reuse24h: Number(reuse24hRow?.cnt ?? 0),
-      blocks24h: Number(blocks24hRow?.cnt ?? 0),
+      activeBlockedDevices: Number(activeBlockedDevicesRow?.cnt ?? 0),
+      distinctDevices24h: Number(distinctDevices24hRow?.cnt ?? 0),
+      distinctIps24h: Number(distinctIps24hRow?.cnt ?? 0),
+      attempts24h: countEvents({
+        sinceTs: since24h,
+        eventType: "trial_group_check",
+      }),
+      allows24h: countEvents({
+        sinceTs: since24h,
+        eventType: "trial_group_check",
+        decision: "allow",
+      }),
+      observes24h: countEvents({
+        sinceTs: since24h,
+        eventType: "trial_group_check",
+        decision: "observe",
+      }),
+      blocks24h: countEvents({
+        sinceTs: since24h,
+        eventType: "trial_group_check",
+        decision: "block",
+      }),
+      reuseDevice24h: countEvents({
+        sinceTs: since24h,
+        reason: "trial_already_used_in_group_on_device",
+      }),
+      reuseIp24h: countEvents({
+        sinceTs: since24h,
+        reason: "trial_already_used_in_group_on_ip",
+      }),
+      abuseIpPrefix24h: countEvents({
+        sinceTs: since24h,
+        reason: "trial_abuse_detected_on_ip_prefix",
+      }),
+      blockDevice24h: countEvents({
+        sinceTs: since24h,
+        reason: "trial_already_used_in_group_on_device",
+      }),
+      blockIp24h: countEvents({
+        sinceTs: since24h,
+        reason: "trial_already_used_in_group_on_ip",
+      }),
+      blockIpPrefix24h: countEvents({
+        sinceTs: since24h,
+        reason: "trial_abuse_detected_on_ip_prefix",
+      }),
+      missingDeviceToken24h: countEvents({
+        sinceTs: since24h,
+        reason: "missing_device_token",
+      }),
+      manualBlocks24h: countEvents({
+        sinceTs: since24h,
+        reason: "device_manually_blocked",
+      }),
     });
   });
 
@@ -246,7 +347,11 @@ export async function adminRoutes(app: FastifyInstance) {
         ORDER BY id DESC
         LIMIT ?
       `)
-      .all(limit);
+      .all(limit)
+      .map((row: any) => ({
+        ...row,
+        meta: tryParseMeta(row.meta_json),
+      }));
 
     return reply.send({ ok: true, items });
   });
@@ -278,6 +383,7 @@ export async function adminRoutes(app: FastifyInstance) {
               d.user_agent,
               d.trial_used_at,
               d.trial_user_id,
+              d.is_blocked,
               COUNT(u.id) AS active_trial_count,
               MAX(u.used_at) AS last_trial_used_at
             FROM trial_devices d
@@ -292,7 +398,8 @@ export async function adminRoutes(app: FastifyInstance) {
               d.last_ip,
               d.user_agent,
               d.trial_used_at,
-              d.trial_user_id
+              d.trial_user_id,
+              d.is_blocked
             ORDER BY d.last_seen_at DESC, d.id DESC
             LIMIT ?
           `)
@@ -309,6 +416,7 @@ export async function adminRoutes(app: FastifyInstance) {
               d.user_agent,
               d.trial_used_at,
               d.trial_user_id,
+              d.is_blocked,
               COUNT(u.id) AS active_trial_count,
               MAX(u.used_at) AS last_trial_used_at
             FROM trial_devices d
@@ -323,8 +431,9 @@ export async function adminRoutes(app: FastifyInstance) {
               d.last_ip,
               d.user_agent,
               d.trial_used_at,
-              d.trial_user_id
-            HAVING COUNT(u.id) > 0
+              d.trial_user_id,
+              d.is_blocked
+            HAVING COUNT(u.id) > 0 OR d.is_blocked = 1
             ORDER BY d.last_seen_at DESC, d.id DESC
             LIMIT ?
           `)
@@ -365,6 +474,70 @@ export async function adminRoutes(app: FastifyInstance) {
     });
 
     return reply.send({ ok: true, deviceToken, reset: true });
+  });
+
+  app.post("/admin/trial-protection/block-device", async (req, reply) => {
+    const s = getSessionFromRequest(req);
+    if (!s?.shmSessionId) return reply.code(401).send({ ok: false });
+
+    if (!(await ensureAdmin(s.shmSessionId))) {
+      return reply.code(403).send({ ok: false, error: "not_admin" });
+    }
+
+    const adminUserId = getSessionUserId(req);
+
+    const deviceToken = String((req.body as any)?.deviceToken ?? "").trim();
+    if (!deviceToken) {
+      return reply.code(400).send({ ok: false, error: "device_token_required" });
+    }
+
+    setDeviceBlocked(deviceToken, true);
+
+    logTrialEvent({
+      deviceToken,
+      userId: adminUserId,
+      eventType: "device_blocked_by_admin",
+      decision: "block",
+      reason: "manual_admin_block",
+      meta: {
+        by: "admin",
+        adminUserId,
+      },
+    });
+
+    return reply.send({ ok: true, deviceToken, blocked: true });
+  });
+
+  app.post("/admin/trial-protection/unblock-device", async (req, reply) => {
+    const s = getSessionFromRequest(req);
+    if (!s?.shmSessionId) return reply.code(401).send({ ok: false });
+
+    if (!(await ensureAdmin(s.shmSessionId))) {
+      return reply.code(403).send({ ok: false, error: "not_admin" });
+    }
+
+    const adminUserId = getSessionUserId(req);
+
+    const deviceToken = String((req.body as any)?.deviceToken ?? "").trim();
+    if (!deviceToken) {
+      return reply.code(400).send({ ok: false, error: "device_token_required" });
+    }
+
+    setDeviceBlocked(deviceToken, false);
+
+    logTrialEvent({
+      deviceToken,
+      userId: adminUserId,
+      eventType: "device_unblocked_by_admin",
+      decision: "allow",
+      reason: "manual_admin_unblock",
+      meta: {
+        by: "admin",
+        adminUserId,
+      },
+    });
+
+    return reply.send({ ok: true, deviceToken, blocked: false });
   });
 
   app.post("/admin/trial-protection/clear-events", async (req, reply) => {
