@@ -3585,3 +3585,112 @@ button, a { -webkit-tap-highlight-color: transparent; }
     font-size: 16px;
   }
 }
+/* ============================================================
+   ADMIN PANEL — extra compact lists / Telegram fit
+   append to the end of web/src/index.css
+   ============================================================ */
+
+.admin-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.admin-dateGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-dateTitle {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(11, 15, 23, 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.70);
+}
+
+.admin-compactList {
+  gap: 8px;
+}
+
+.admin-compactItem {
+  padding: 10px 12px;
+}
+
+.admin-listSubCompact {
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: rgba(255,255,255,0.66);
+}
+
+.admin-token {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.admin-rowActions {
+  align-self: stretch;
+}
+
+.admin-rowActions .btn {
+  min-height: 40px;
+}
+
+.admin-inlineMeta strong {
+  font-weight: 900;
+  color: rgba(255,255,255,0.88);
+}
+
+.admin-modal__content .actions .btn {
+  min-height: 42px;
+}
+
+@media (max-width: 720px) {
+  .admin-dateTitle {
+    top: 0;
+  }
+
+  .admin-rowActions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 420px) {
+  .admin-compactItem {
+    padding: 9px 10px;
+  }
+
+  .admin-dateTitle {
+    font-size: 10px;
+    padding: 5px 9px;
+  }
+
+  .admin-listSubCompact {
+    font-size: 11.5px;
+  }
+
+  .admin-rowActions {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-modal__content {
+    padding-right: 0;
+  }
+}

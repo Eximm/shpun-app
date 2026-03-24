@@ -21,7 +21,6 @@ import {
   getRequestUserAgent,
   getTrialDeviceMode,
   hasDeviceUsedTrialInGroup,
-  hasIpUsedTrialInGroup,
   getTrialRiskProfile,
   rememberTrialUsedInGroup,
   logTrialEvent,
@@ -733,19 +732,7 @@ export async function servicesRoutes(app: FastifyInstance) {
     const userAgent = getRequestUserAgent(req);
     const trialDeviceMode = getTrialDeviceMode();
 
-    if (deviceToken) {
-      registerDeviceSeen({ deviceToken, ip, userAgent });
-    } else {
-      logTrialEvent({
-        userId,
-        eventType: "device_token_missing",
-        decision: "observe",
-        reason: "missing_device_token",
-        ip,
-        userAgent,
-        meta: { serviceId },
-      });
-    }
+    registerDeviceSeen({ deviceToken, ip, userAgent });
 
     let isTrialService = false;
     let trialGroup: string | null = null;
@@ -859,157 +846,168 @@ export async function servicesRoutes(app: FastifyInstance) {
       }
     }
 
-    if (trialDeviceMode !== "off" && deviceToken && isTrialService && trialGroup) {
-    if (isDeviceManuallyBlocked(deviceToken)) {
-      logTrialEvent({
-        deviceToken,
-        userId,
+    if (trialDeviceMode !== "off" && isTrialService && trialGroup) {
+      if (isDeviceManuallyBlocked(deviceToken)) {
+        logTrialEvent({
+          deviceToken,
+          userId,
+          ip,
+          userAgent,
+          eventType: "trial_group_block",
+          decision: "block",
+          reason: "device_manually_blocked",
+          meta: {
+            serviceId,
+            trialGroup,
+            isTrialService,
+            ...trialMeta,
+          },
+        });
+
+        return reply.code(409).send({
+          ok: false,
+          error: "trial_already_used",
+          message: "Пробный доступ для этого устройства заблокирован.",
+        });
+      }
+
+      const alreadyUsed = hasDeviceUsedTrialInGroup(deviceToken, trialGroup);
+
+      const risk = getTrialRiskProfile({
         ip,
         userAgent,
-        eventType: "trial_group_block",
-        decision: "block",
-        reason: "device_manually_blocked",
-        meta: {
-          serviceId,
-          trialGroup,
-          isTrialService,
-          ...trialMeta,
-        },
-      });
-
-      return reply.code(409).send({
-        ok: false,
-        error: "trial_already_used",
-        message: "Пробный доступ для этого устройства заблокирован.",
-      });
-    }
-
-    const alreadyUsed = hasDeviceUsedTrialInGroup(deviceToken, trialGroup);
-
-    const risk = getTrialRiskProfile({
-      ip,
-      userAgent,
-      deviceToken,
-      trialGroup,
-      ipPrefixUsageThreshold: 2,
-      ipPrefixAttemptThreshold: 3,
-      ipPrefixDistinctDevicesThreshold: 3,
-      ipPrefixUserAgentAttemptThreshold: 2,
-    });
-
-    const ipReuseRow = risk.exactIpReuseRow;
-    const shouldFlag = alreadyUsed || risk.highRisk;
-
-    logTrialEvent({
-      deviceToken,
-      userId,
-      ip,
-      userAgent,
-      eventType: "trial_group_check",
-      decision: shouldFlag
-        ? (trialDeviceMode === "enforce" ? "block" : "observe")
-        : "allow",
-      reason: alreadyUsed
-        ? "trial_already_used_in_group_on_device"
-        : ipReuseRow
-          ? "trial_already_used_in_group_on_ip"
-          : risk.highRisk
-            ? "trial_abuse_detected_on_ip_prefix"
-            : "trial_group_not_used_yet",
-      meta: {
-        serviceId,
+        deviceToken,
         trialGroup,
-        isTrialService,
-        ipReuse: !!ipReuseRow,
-        ipReuseUsage: ipReuseRow
-          ? {
-              usedAt: ipReuseRow.used_at,
-              userId: ipReuseRow.user_id,
-              serviceId: ipReuseRow.service_id,
-              deviceToken: ipReuseRow.device_token,
-            }
-          : null,
-        risk,
-        ...trialMeta,
-      },
-    });
-    if (alreadyUsed && trialDeviceMode === "enforce") {
+        ipPrefixUsageThreshold: 2,
+        ipPrefixAttemptThreshold: 3,
+        ipPrefixDistinctDevicesThreshold: 3,
+        ipPrefixUserAgentAttemptThreshold: 2,
+        ipPrefixDistinctUsersThreshold: 3,
+      });
+
+      const ipReuseRow = risk.exactIpReuseRow;
+      const shouldFlag = alreadyUsed || risk.highRisk;
+
       logTrialEvent({
         deviceToken,
         userId,
         ip,
         userAgent,
-        eventType: "trial_group_block",
-        decision: "block",
-        reason: "trial_already_used_in_group_on_device",
+        eventType: "trial_group_check",
+        decision: shouldFlag
+          ? (trialDeviceMode === "enforce" ? "block" : "observe")
+          : "allow",
+        reason: alreadyUsed
+          ? "trial_already_used_in_group_on_device"
+          : ipReuseRow
+            ? "trial_already_used_in_group_on_ip"
+            : risk.highRisk
+              ? "trial_abuse_detected_on_ip_prefix"
+              : "trial_group_not_used_yet",
         meta: {
           serviceId,
           trialGroup,
           isTrialService,
-          ...trialMeta,
-        },
-      });
-
-      return reply.code(409).send({
-        ok: false,
-        error: "trial_already_used",
-        message: "Пробный доступ для этой группы услуг уже был использован на этом устройстве.",
-      });
-    }
-
-    if (ipReuseRow && trialDeviceMode === "enforce") {
-      logTrialEvent({
-        deviceToken,
-        userId,
-        ip,
-        userAgent,
-        eventType: "trial_group_block",
-        decision: "block",
-        reason: "trial_already_used_in_group_on_ip",
-        meta: {
-          serviceId,
-          trialGroup,
-          isTrialService,
-          reusedFromDeviceToken: ipReuseRow.device_token,
-          reusedFromUserId: ipReuseRow.user_id,
-          reusedFromServiceId: ipReuseRow.service_id,
-          reusedFromUsedAt: ipReuseRow.used_at,
-          ...trialMeta,
-        },
-      });
-
-      return reply.code(409).send({
-        ok: false,
-        error: "trial_already_used",
-        message: "Пробный доступ для этой группы услуг уже был использован ранее.",
-      });
-    }
-
-    if (risk.highRisk && trialDeviceMode === "enforce") {
-      logTrialEvent({
-        deviceToken,
-        userId,
-        ip,
-        userAgent,
-        eventType: "trial_group_block",
-        decision: "block",
-        reason: "trial_abuse_detected_on_ip_prefix",
-        meta: {
-          serviceId,
-          trialGroup,
-          isTrialService,
+          ipReuse: !!ipReuseRow,
+          ipReuseUsage: ipReuseRow
+            ? {
+                usedAt: ipReuseRow.used_at,
+                userId: ipReuseRow.user_id,
+                serviceId: ipReuseRow.service_id,
+                deviceToken: ipReuseRow.device_token,
+              }
+            : null,
           risk,
           ...trialMeta,
         },
       });
 
-      return reply.code(409).send({
-        ok: false,
-        error: "trial_already_used",
-        message: "Пробный доступ для этой группы услуг уже был использован ранее.",
-      });
+      if (alreadyUsed && trialDeviceMode === "enforce") {
+        logTrialEvent({
+          deviceToken,
+          userId,
+          ip,
+          userAgent,
+          eventType: "trial_group_block",
+          decision: "block",
+          reason: "trial_already_used_in_group_on_device",
+          meta: {
+            serviceId,
+            trialGroup,
+            isTrialService,
+            ...trialMeta,
+          },
+        });
+
+        return reply.code(409).send({
+          ok: false,
+          error: "trial_already_used",
+          message: "Пробный доступ для этой группы услуг уже был использован на этом устройстве.",
+        });
+      }
+
+      if (ipReuseRow && trialDeviceMode === "enforce") {
+        logTrialEvent({
+          deviceToken,
+          userId,
+          ip,
+          userAgent,
+          eventType: "trial_group_block",
+          decision: "block",
+          reason: "trial_already_used_in_group_on_ip",
+          meta: {
+            serviceId,
+            trialGroup,
+            isTrialService,
+            reusedFromDeviceToken: ipReuseRow.device_token,
+            reusedFromUserId: ipReuseRow.user_id,
+            reusedFromServiceId: ipReuseRow.service_id,
+            reusedFromUsedAt: ipReuseRow.used_at,
+            ...trialMeta,
+          },
+        });
+
+        return reply.code(409).send({
+          ok: false,
+          error: "trial_already_used",
+          message: "Пробный доступ для этой группы услуг уже был использован ранее.",
+        });
+      }
+
+      if (risk.highRisk && trialDeviceMode === "enforce") {
+        logTrialEvent({
+          deviceToken,
+          userId,
+          ip,
+          userAgent,
+          eventType: "trial_group_block",
+          decision: "block",
+          reason: "trial_abuse_detected_on_ip_prefix",
+          meta: {
+            serviceId,
+            trialGroup,
+            isTrialService,
+            risk,
+            ...trialMeta,
+          },
+        });
+
+        return reply.code(409).send({
+          ok: false,
+          error: "trial_already_used",
+          message: "Пробный доступ для этой группы услуг уже был использован ранее.",
+        });
+      }
+
+      const alreadyUsedBeforeCreate = hasDeviceUsedTrialInGroup(deviceToken, trialGroup);
+      if (alreadyUsedBeforeCreate && trialDeviceMode === "enforce") {
+        return reply.code(409).send({
+          ok: false,
+          error: "trial_already_used",
+          message: "Пробный доступ уже был использован.",
+        });
+      }
     }
-  }
 
     const r = await shmCreateServiceOrder(shmSessionId, serviceId);
 
@@ -1033,29 +1031,27 @@ export async function servicesRoutes(app: FastifyInstance) {
       });
     }
 
-    if (deviceToken) {
-      logTrialEvent({
-        deviceToken,
-        userId,
-        ip,
-        userAgent,
-        eventType: "service_order_created",
-        decision: "allow",
-        reason: "order_created",
-        meta: {
-          serviceId,
-          userServiceId: Number(us?.user_service_id ?? 0) || 0,
-          status: String(us?.status ?? ""),
-          price: us?.service?.cost ?? null,
-          category: us?.service?.category ?? trialGroup ?? null,
-          isTrialService,
-          trialGroup,
-          ...trialMeta,
-        },
-      });
-    }
+    logTrialEvent({
+      deviceToken,
+      userId,
+      ip,
+      userAgent,
+      eventType: "service_order_created",
+      decision: "allow",
+      reason: "order_created",
+      meta: {
+        serviceId,
+        userServiceId: Number(us?.user_service_id ?? 0) || 0,
+        status: String(us?.status ?? ""),
+        price: us?.service?.cost ?? null,
+        category: us?.service?.category ?? trialGroup ?? null,
+        isTrialService,
+        trialGroup,
+        ...trialMeta,
+      },
+    });
 
-    if (deviceToken && isTrialService && trialGroup) {
+    if (isTrialService && trialGroup) {
       rememberTrialUsedInGroup({
         deviceToken,
         trialGroup,

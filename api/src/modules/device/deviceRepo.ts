@@ -623,3 +623,61 @@ export function countRecentTrialAttemptsByIpPrefixAndUserAgent(input: {
 
   return Number(row?.cnt ?? 0);
 }
+
+export function countDistinctUsersByIpPrefix(input: {
+  ipPrefix: string;
+  sinceTs: number;
+  trialGroup?: string | null;
+}): number {
+  ensureDeviceTables();
+
+  if (!input.ipPrefix) return 0;
+
+  const trialGroup = String(input.trialGroup ?? "").trim();
+
+  if (trialGroup) {
+    const row = linkDb
+      .prepare(`
+        SELECT COUNT(DISTINCT u.user_id) as cnt
+        FROM trial_device_usage u
+        INNER JOIN trial_devices d
+          ON d.device_token = u.device_token
+        WHERE u.used_at >= ?
+          AND u.user_id IS NOT NULL
+          AND u.trial_group = ?
+          AND (
+            d.last_ip LIKE ?
+            OR d.first_ip LIKE ?
+          )
+      `)
+      .get(
+        input.sinceTs,
+        trialGroup,
+        `${input.ipPrefix}%`,
+        `${input.ipPrefix}%`
+      ) as { cnt?: number } | undefined;
+
+    return Number(row?.cnt ?? 0);
+  }
+
+  const row = linkDb
+    .prepare(`
+      SELECT COUNT(DISTINCT u.user_id) as cnt
+      FROM trial_device_usage u
+      INNER JOIN trial_devices d
+        ON d.device_token = u.device_token
+      WHERE u.used_at >= ?
+        AND u.user_id IS NOT NULL
+        AND (
+          d.last_ip LIKE ?
+          OR d.first_ip LIKE ?
+        )
+    `)
+    .get(
+      input.sinceTs,
+      `${input.ipPrefix}%`,
+      `${input.ipPrefix}%`
+    ) as { cnt?: number } | undefined;
+
+  return Number(row?.cnt ?? 0);
+}

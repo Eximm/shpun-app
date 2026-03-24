@@ -213,6 +213,7 @@ export async function trialProtectionAdminRoutes(app: FastifyInstance) {
 
     resetDeviceTrialUsage(deviceToken);
     deleteAllTrialUsageByDevice(deviceToken);
+    setDeviceBlocked(deviceToken, false);
 
     return reply.send({ ok: true });
   });
@@ -241,6 +242,8 @@ export async function trialProtectionAdminRoutes(app: FastifyInstance) {
     }
 
     setDeviceBlocked(deviceToken, false);
+    resetDeviceTrialUsage(deviceToken);
+    deleteAllTrialUsageByDevice(deviceToken);
 
     return reply.send({ ok: true });
   });
