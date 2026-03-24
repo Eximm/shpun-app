@@ -115,6 +115,9 @@ export async function trialProtectionAdminRoutes(app: FastifyInstance) {
       attempts24h: countEvents({
         sinceTs: since24h,
         eventType: "trial_group_check",
+      }) + countEvents({
+        sinceTs: since24h,
+        eventType: "trial_group_block",
       }),
       allows24h: countEvents({
         sinceTs: since24h,
