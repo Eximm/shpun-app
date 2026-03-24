@@ -19,6 +19,39 @@ function toPositiveInt(v: unknown, fallback: number, max = 200) {
   return Math.min(Math.floor(n), max);
 }
 
+function countEvents(params: {
+  sinceTs: number;
+  eventType?: string;
+  decision?: "allow" | "observe" | "block";
+  reason?: string;
+}) {
+  const where: string[] = ["created_at >= ?"];
+  const values: any[] = [params.sinceTs];
+
+  if (params.eventType) {
+    where.push("event_type = ?");
+    values.push(params.eventType);
+  }
+  if (params.decision) {
+    where.push("decision = ?");
+    values.push(params.decision);
+  }
+  if (params.reason) {
+    where.push("reason = ?");
+    values.push(params.reason);
+  }
+
+  const row = linkDb
+    .prepare(`
+      SELECT COUNT(*) as cnt
+      FROM trial_protection_events
+      WHERE ${where.join(" AND ")}
+    `)
+    .get(...values) as { cnt?: number } | undefined;
+
+  return Number(row?.cnt ?? 0);
+}
+
 export async function trialProtectionAdminRoutes(app: FastifyInstance) {
   app.get("/admin/trial-protection/status", async (req, reply) => {
     const shmSessionId = ensureAuthed(req, reply);
@@ -38,21 +71,23 @@ export async function trialProtectionAdminRoutes(app: FastifyInstance) {
       `)
       .get() as { cnt?: number } | undefined;
 
-    const reuse24hRow = linkDb
+    const distinctDevices24hRow = linkDb
       .prepare(`
-        SELECT COUNT(*) as cnt
+        SELECT COUNT(DISTINCT device_token) as cnt
         FROM trial_protection_events
-        WHERE event_type = 'trial_reuse_detected'
-          AND created_at >= ?
+        WHERE created_at >= ?
+          AND device_token IS NOT NULL
+          AND device_token != ''
       `)
       .get(since24h) as { cnt?: number } | undefined;
 
-    const blocks24hRow = linkDb
+    const distinctIps24hRow = linkDb
       .prepare(`
-        SELECT COUNT(*) as cnt
+        SELECT COUNT(DISTINCT ip) as cnt
         FROM trial_protection_events
-        WHERE decision = 'block'
-          AND created_at >= ?
+        WHERE created_at >= ?
+          AND ip IS NOT NULL
+          AND ip != ''
       `)
       .get(since24h) as { cnt?: number } | undefined;
 
@@ -61,8 +96,40 @@ export async function trialProtectionAdminRoutes(app: FastifyInstance) {
       mode,
       ttlHours,
       devicesWithTrial: Number(devicesWithTrialRow?.cnt ?? 0),
-      reuse24h: Number(reuse24hRow?.cnt ?? 0),
-      blocks24h: Number(blocks24hRow?.cnt ?? 0),
+      distinctDevices24h: Number(distinctDevices24hRow?.cnt ?? 0),
+      distinctIps24h: Number(distinctIps24hRow?.cnt ?? 0),
+      attempts24h: countEvents({ sinceTs: since24h, eventType: "trial_group_check" }),
+      allows24h: countEvents({ sinceTs: since24h, decision: "allow" }),
+      observes24h: countEvents({ sinceTs: since24h, decision: "observe" }),
+      blocks24h: countEvents({ sinceTs: since24h, decision: "block" }),
+      reuseDevice24h: countEvents({
+        sinceTs: since24h,
+        reason: "trial_group_already_used_on_device",
+      }),
+      reuseIp24h: countEvents({
+        sinceTs: since24h,
+        reason: "trial_group_already_used_on_ip",
+      }),
+      abuseIpPrefix24h: countEvents({
+        sinceTs: since24h,
+        reason: "trial_group_abuse_on_ip_prefix",
+      }),
+      blockDevice24h: countEvents({
+        sinceTs: since24h,
+        reason: "trial_already_used_in_group_on_device",
+      }),
+      blockIp24h: countEvents({
+        sinceTs: since24h,
+        reason: "trial_already_used_in_group_on_ip",
+      }),
+      blockIpPrefix24h: countEvents({
+        sinceTs: since24h,
+        reason: "trial_abuse_detected_on_ip_prefix",
+      }),
+      missingDeviceToken24h: countEvents({
+        sinceTs: since24h,
+        reason: "missing_device_token",
+      }),
     });
   });
 

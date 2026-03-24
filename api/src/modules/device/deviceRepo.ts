@@ -76,11 +76,32 @@ export function ensureDeviceTables() {
     CREATE INDEX IF NOT EXISTS idx_trial_devices_token
       ON trial_devices(device_token);
 
+    CREATE INDEX IF NOT EXISTS idx_trial_devices_last_ip
+      ON trial_devices(last_ip);
+
+    CREATE INDEX IF NOT EXISTS idx_trial_devices_first_ip
+      ON trial_devices(first_ip);
+
+    CREATE INDEX IF NOT EXISTS idx_trial_devices_last_seen_at
+      ON trial_devices(last_seen_at);
+
     CREATE INDEX IF NOT EXISTS idx_trial_events_created_at
       ON trial_protection_events(created_at);
 
     CREATE INDEX IF NOT EXISTS idx_trial_events_device_token
       ON trial_protection_events(device_token);
+
+    CREATE INDEX IF NOT EXISTS idx_trial_events_ip
+      ON trial_protection_events(ip);
+
+    CREATE INDEX IF NOT EXISTS idx_trial_events_ip_created_at
+      ON trial_protection_events(ip, created_at);
+
+    CREATE INDEX IF NOT EXISTS idx_trial_events_event_type_created_at
+      ON trial_protection_events(event_type, created_at);
+
+    CREATE INDEX IF NOT EXISTS idx_trial_events_reason_created_at
+      ON trial_protection_events(reason, created_at);
   `);
 
   inited = true;
@@ -361,4 +382,214 @@ export function listTrialDevicesWithUsage(limit: number) {
       LIMIT ?
     `)
     .all(limit);
+}
+
+export function getIpPrefix(ip: string): string {
+  const v = String(ip ?? "").trim();
+  if (!v) return "";
+
+  if (v.includes(".")) {
+    const parts = v.split(".");
+    if (parts.length === 4) return parts.slice(0, 3).join(".");
+  }
+
+  if (v.includes(":")) {
+    const parts = v.split(":");
+    return parts.slice(0, 4).join(":");
+  }
+
+  return v;
+}
+
+export function getRecentTrialUsageByIpAndGroup(input: {
+  ip: string;
+  trialGroup: string;
+  sinceTs: number;
+  excludeDeviceToken?: string | null;
+}): TrialDeviceUsageRow | null {
+  ensureDeviceTables();
+
+  if (!input.ip || !input.trialGroup) return null;
+
+  const row = linkDb
+    .prepare(`
+      SELECT
+        u.id,
+        u.device_token,
+        u.trial_group,
+        u.used_at,
+        u.user_id,
+        u.service_id
+      FROM trial_device_usage u
+      INNER JOIN trial_devices d
+        ON d.device_token = u.device_token
+      WHERE u.trial_group = ?
+        AND u.used_at >= ?
+        AND (
+          d.last_ip = ?
+          OR d.first_ip = ?
+        )
+        AND (? IS NULL OR u.device_token != ?)
+      ORDER BY u.used_at DESC
+      LIMIT 1
+    `)
+    .get(
+      input.trialGroup,
+      input.sinceTs,
+      input.ip,
+      input.ip,
+      input.excludeDeviceToken ?? null,
+      input.excludeDeviceToken ?? null
+    ) as TrialDeviceUsageRow | undefined;
+
+  return row ?? null;
+}
+
+export function countRecentTrialUsageByIpPrefix(input: {
+  ipPrefix: string;
+  trialGroup: string;
+  sinceTs: number;
+  excludeDeviceToken?: string | null;
+}): number {
+  ensureDeviceTables();
+
+  if (!input.ipPrefix || !input.trialGroup) return 0;
+
+  const row = linkDb
+    .prepare(`
+      SELECT COUNT(*) as cnt
+      FROM trial_device_usage u
+      INNER JOIN trial_devices d
+        ON d.device_token = u.device_token
+      WHERE u.trial_group = ?
+        AND u.used_at >= ?
+        AND (
+          d.last_ip LIKE ?
+          OR d.first_ip LIKE ?
+        )
+        AND (? IS NULL OR u.device_token != ?)
+    `)
+    .get(
+      input.trialGroup,
+      input.sinceTs,
+      `${input.ipPrefix}%`,
+      `${input.ipPrefix}%`,
+      input.excludeDeviceToken ?? null,
+      input.excludeDeviceToken ?? null
+    ) as { cnt?: number } | undefined;
+
+  return Number(row?.cnt ?? 0);
+}
+
+export function countRecentTrialAttemptsByIpPrefix(input: {
+  ipPrefix: string;
+  sinceTs: number;
+  trialGroup?: string | null;
+}): number {
+  ensureDeviceTables();
+
+  if (!input.ipPrefix) return 0;
+
+  const trialGroup = String(input.trialGroup ?? "").trim();
+
+  if (trialGroup) {
+    const row = linkDb
+      .prepare(`
+        SELECT COUNT(*) as cnt
+        FROM trial_protection_events
+        WHERE event_type = 'trial_group_check'
+          AND created_at >= ?
+          AND ip LIKE ?
+          AND json_extract(meta_json, '$.trialGroup') = ?
+      `)
+      .get(input.sinceTs, `${input.ipPrefix}%`, trialGroup) as { cnt?: number } | undefined;
+
+    return Number(row?.cnt ?? 0);
+  }
+
+  const row = linkDb
+    .prepare(`
+      SELECT COUNT(*) as cnt
+      FROM trial_protection_events
+      WHERE event_type = 'trial_group_check'
+        AND created_at >= ?
+        AND ip LIKE ?
+    `)
+    .get(input.sinceTs, `${input.ipPrefix}%`) as { cnt?: number } | undefined;
+
+  return Number(row?.cnt ?? 0);
+}
+
+export function countRecentDistinctDevicesByIpPrefix(input: {
+  ipPrefix: string;
+  sinceTs: number;
+}): number {
+  ensureDeviceTables();
+
+  if (!input.ipPrefix) return 0;
+
+  const row = linkDb
+    .prepare(`
+      SELECT COUNT(DISTINCT device_token) as cnt
+      FROM trial_devices
+      WHERE last_seen_at >= ?
+        AND (
+          last_ip LIKE ?
+          OR first_ip LIKE ?
+        )
+    `)
+    .get(input.sinceTs, `${input.ipPrefix}%`, `${input.ipPrefix}%`) as { cnt?: number } | undefined;
+
+  return Number(row?.cnt ?? 0);
+}
+
+export function countRecentTrialAttemptsByIpPrefixAndUserAgent(input: {
+  ipPrefix: string;
+  userAgent: string;
+  sinceTs: number;
+  trialGroup?: string | null;
+}): number {
+  ensureDeviceTables();
+
+  if (!input.ipPrefix || !input.userAgent) return 0;
+
+  const trialGroup = String(input.trialGroup ?? "").trim();
+
+  if (trialGroup) {
+    const row = linkDb
+      .prepare(`
+        SELECT COUNT(*) as cnt
+        FROM trial_protection_events
+        WHERE event_type = 'trial_group_check'
+          AND created_at >= ?
+          AND ip LIKE ?
+          AND user_agent = ?
+          AND json_extract(meta_json, '$.trialGroup') = ?
+      `)
+      .get(
+        input.sinceTs,
+        `${input.ipPrefix}%`,
+        input.userAgent,
+        trialGroup
+      ) as { cnt?: number } | undefined;
+
+    return Number(row?.cnt ?? 0);
+  }
+
+  const row = linkDb
+    .prepare(`
+      SELECT COUNT(*) as cnt
+      FROM trial_protection_events
+      WHERE event_type = 'trial_group_check'
+        AND created_at >= ?
+        AND ip LIKE ?
+        AND user_agent = ?
+    `)
+    .get(
+      input.sinceTs,
+      `${input.ipPrefix}%`,
+      input.userAgent
+    ) as { cnt?: number } | undefined;
+
+  return Number(row?.cnt ?? 0);
 }

@@ -1,6 +1,8 @@
 import {
   createDevice,
   getDeviceByToken,
+  getIpPrefix,
+  getRecentTrialUsageByIpAndGroup,
   getTrialUsageByDeviceAndGroup,
   insertTrialProtectionEvent,
   markDeviceTrialUsed,
@@ -9,6 +11,10 @@ import {
   touchDevice,
   upsertTrialUsage,
   deleteExpiredTrialUsage,
+  countRecentTrialAttemptsByIpPrefix,
+  countRecentTrialAttemptsByIpPrefixAndUserAgent,
+  countRecentTrialUsageByIpPrefix,
+  countRecentDistinctDevicesByIpPrefix,
 } from "./deviceRepo.js";
 
 export type TrialDeviceMode = "off" | "observe" | "enforce";
@@ -76,10 +82,7 @@ function cleanupExpiredTrialUsage() {
   const ttlSeconds = getTrialDeviceTtlSeconds();
   const cutoffTs = nowTs() - ttlSeconds;
 
-  // legacy single-trial-per-device
   resetExpiredDeviceTrialUsage(cutoffTs);
-
-  // current trial-group usage
   deleteExpiredTrialUsage(cutoffTs);
 }
 
@@ -140,6 +143,126 @@ export function hasDeviceUsedTrialInGroup(deviceToken: string, trialGroup: strin
 
   const row = getTrialUsageByDeviceAndGroup(deviceToken, trialGroup);
   return !!row;
+}
+
+export function hasIpUsedTrialInGroup(input: {
+  ip?: string | null;
+  deviceToken?: string | null;
+  trialGroup: string;
+}) {
+  const ip = String(input.ip ?? "").trim();
+  const deviceToken = String(input.deviceToken ?? "").trim();
+
+  if (!ip || !input.trialGroup) return null;
+
+  cleanupExpiredTrialUsage();
+
+  const sinceTs = nowTs() - getTrialDeviceTtlSeconds();
+
+  return getRecentTrialUsageByIpAndGroup({
+    ip,
+    trialGroup: input.trialGroup,
+    sinceTs,
+    excludeDeviceToken: deviceToken || null,
+  });
+}
+
+export function getTrialRiskProfile(input: {
+  ip?: string | null;
+  userAgent?: string | null;
+  deviceToken?: string | null;
+  trialGroup: string;
+  ipPrefixUsageThreshold?: number;
+  ipPrefixAttemptThreshold?: number;
+  ipPrefixDistinctDevicesThreshold?: number;
+  ipPrefixUserAgentAttemptThreshold?: number;
+}) {
+  const ip = String(input.ip ?? "").trim();
+  const userAgent = String(input.userAgent ?? "").trim();
+  const deviceToken = String(input.deviceToken ?? "").trim();
+  const trialGroup = String(input.trialGroup ?? "").trim();
+
+  const ttlSeconds = getTrialDeviceTtlSeconds();
+  const sinceTs = nowTs() - ttlSeconds;
+  const ipPrefix = getIpPrefix(ip);
+
+  const usageThreshold = Math.max(2, Number(input.ipPrefixUsageThreshold ?? 2) || 2);
+  const attemptThreshold = Math.max(3, Number(input.ipPrefixAttemptThreshold ?? 3) || 3);
+  const distinctDevicesThreshold = Math.max(3, Number(input.ipPrefixDistinctDevicesThreshold ?? 3) || 3);
+  const uaAttemptThreshold = Math.max(2, Number(input.ipPrefixUserAgentAttemptThreshold ?? 2) || 2);
+
+  const exactIpReuseRow = ip && trialGroup
+    ? hasIpUsedTrialInGroup({ ip, deviceToken, trialGroup })
+    : null;
+
+  const ipPrefixUsageCount = ipPrefix && trialGroup
+    ? countRecentTrialUsageByIpPrefix({
+        ipPrefix,
+        trialGroup,
+        sinceTs,
+        excludeDeviceToken: deviceToken || null,
+      })
+    : 0;
+
+  const ipPrefixAttemptCount = ipPrefix
+    ? countRecentTrialAttemptsByIpPrefix({
+        ipPrefix,
+        sinceTs,
+        trialGroup: trialGroup || null,
+      })
+    : 0;
+
+  const ipPrefixDistinctDevices = ipPrefix
+    ? countRecentDistinctDevicesByIpPrefix({
+        ipPrefix,
+        sinceTs,
+      })
+    : 0;
+
+  const ipPrefixUserAgentAttemptCount = ipPrefix && userAgent
+    ? countRecentTrialAttemptsByIpPrefixAndUserAgent({
+        ipPrefix,
+        userAgent,
+        sinceTs,
+        trialGroup: trialGroup || null,
+      })
+    : 0;
+
+  const ipPrefixUsageMatched = ipPrefixUsageCount >= usageThreshold;
+  const ipPrefixAttemptMatched = ipPrefixAttemptCount >= attemptThreshold;
+  const ipPrefixDistinctDevicesMatched = ipPrefixDistinctDevices >= distinctDevicesThreshold;
+  const ipPrefixUserAgentMatched = ipPrefixUserAgentAttemptCount >= uaAttemptThreshold;
+
+  const mediumSignals = [
+    ipPrefixUsageMatched,
+    ipPrefixAttemptMatched,
+    ipPrefixDistinctDevicesMatched,
+    ipPrefixUserAgentMatched,
+  ].filter(Boolean).length;
+
+  const highRisk =
+    !!exactIpReuseRow ||
+    mediumSignals >= 2 ||
+    (ipPrefixUsageMatched && ipPrefixUserAgentMatched);
+
+  return {
+    exactIpReuseRow,
+    ipPrefix,
+    mediumSignals,
+    highRisk,
+    ipPrefixUsageCount,
+    ipPrefixUsageThreshold: usageThreshold,
+    ipPrefixUsageMatched,
+    ipPrefixAttemptCount,
+    ipPrefixAttemptThreshold: attemptThreshold,
+    ipPrefixAttemptMatched,
+    ipPrefixDistinctDevices,
+    ipPrefixDistinctDevicesThreshold: distinctDevicesThreshold,
+    ipPrefixDistinctDevicesMatched,
+    ipPrefixUserAgentAttemptCount,
+    ipPrefixUserAgentAttemptThreshold: uaAttemptThreshold,
+    ipPrefixUserAgentMatched,
+  };
 }
 
 export function rememberTrialUsedInGroup(input: {
