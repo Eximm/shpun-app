@@ -37,7 +37,7 @@ type TrialProtectionStatusResp = {
   ttlHours: number;
   devicesWithTrial: number;
   activeTrialGroups?: number;
-  reuse24h?: number;
+  activeBlockedDevices?: number;
   blocks24h?: number;
   attempts24h?: number;
   allows24h?: number;
@@ -51,6 +51,7 @@ type TrialProtectionStatusResp = {
   blockIp24h?: number;
   blockIpPrefix24h?: number;
   missingDeviceToken24h?: number;
+  manualBlocks24h?: number;
 };
 
 type TrialProtectionEventItem = {
@@ -64,6 +65,7 @@ type TrialProtectionEventItem = {
   user_agent?: string | null;
   user_id?: number | null;
   meta_json?: string | null;
+  meta?: Record<string, any> | null;
 };
 
 type TrialProtectionEventsResp = {
@@ -83,6 +85,7 @@ type TrialDeviceItem = {
   trial_user_id?: number | null;
   active_trial_count?: number;
   last_trial_used_at?: number | null;
+  is_blocked?: number | null;
 };
 
 type TrialDevicesResp = {
@@ -94,6 +97,12 @@ type ResetDeviceResp = {
   ok: true;
   deviceToken: string;
   reset: true;
+};
+
+type BlockDeviceResp = {
+  ok: true;
+  deviceToken: string;
+  blocked: boolean;
 };
 
 type ClearEventsResp = {
@@ -285,7 +294,7 @@ function OverviewSection({ onOpenTab }: { onOpenTab: (tab: AdminTab) => void }) 
           <div className="mini admin-miniCard">
             <div className="mini__title">Trial Protection</div>
             <div className="mini__list">
-              <div className="list__sub">Anti-abuse, режимы, TTL, журнал и reset по устройствам.</div>
+              <div className="list__sub">Anti-abuse, режимы, TTL, журнал и активные блокировки.</div>
               <div><span className="chip chip--warn">CONTROL</span></div>
               <div className="actions actions--1">
                 <button className="btn btn--soft" type="button" onClick={() => onOpenTab("trialProtection")}>
@@ -606,6 +615,8 @@ function TrialProtectionSection() {
   const [savingMode, setSavingMode] = useState(false);
   const [savingTtl, setSavingTtl] = useState(false);
   const [resettingDevice, setResettingDevice] = useState<string | null>(null);
+  const [blockingDevice, setBlockingDevice] = useState<string | null>(null);
+  const [unblockingDevice, setUnblockingDevice] = useState<string | null>(null);
   const [clearingEvents, setClearingEvents] = useState(false);
 
   const [status, setStatus] = useState<TrialProtectionStatusResp | null>(null);
@@ -633,7 +644,7 @@ function TrialProtectionSection() {
       const [statusResp, eventsResp, devicesResp] = await Promise.all([
         apiFetch<TrialProtectionStatusResp>("/admin/trial-protection/status", { method: "GET" }),
         apiFetch<TrialProtectionEventsResp>("/admin/trial-protection/events?limit=20", { method: "GET" }),
-        apiFetch<TrialDevicesResp>("/admin/trial-protection/devices?limit=20", { method: "GET" }),
+        apiFetch<TrialDevicesResp>("/admin/trial-protection/devices?limit=50&all=1", { method: "GET" }),
       ]);
 
       setStatus(statusResp);
@@ -745,6 +756,54 @@ function TrialProtectionSection() {
       setError(e?.message || "Не удалось сбросить устройство.");
     } finally {
       setResettingDevice(null);
+    }
+  }
+
+  async function blockDevice(deviceToken: string) {
+    const ok = window.confirm(`Заблокировать устройство вручную?\n\n${deviceToken}`);
+    if (!ok) return;
+
+    setBlockingDevice(deviceToken);
+    setError(null);
+    setOkText(null);
+
+    try {
+      const r = await apiFetch<BlockDeviceResp>("/admin/trial-protection/block-device", {
+        method: "POST",
+        body: { deviceToken },
+      });
+
+      setOkText(`Устройство заблокировано: ${shortDeviceToken(r.deviceToken)}`);
+      await load({ silent: true });
+    } catch (e: any) {
+      setError(e?.message || "Не удалось заблокировать устройство.");
+    } finally {
+      setBlockingDevice(null);
+    }
+  }
+
+  async function unblockDevice(deviceToken: string) {
+    const ok = window.confirm(
+      `Снять ручную блокировку устройства?\n\n${deviceToken}\n\nЭто не очистит reuse по IP и не сбросит trial history.`,
+    );
+    if (!ok) return;
+
+    setUnblockingDevice(deviceToken);
+    setError(null);
+    setOkText(null);
+
+    try {
+      const r = await apiFetch<BlockDeviceResp>("/admin/trial-protection/unblock-device", {
+        method: "POST",
+        body: { deviceToken },
+      });
+
+      setOkText(`Ручная блокировка снята: ${shortDeviceToken(r.deviceToken)}`);
+      await load({ silent: true });
+    } catch (e: any) {
+      setError(e?.message || "Не удалось разблокировать устройство.");
+    } finally {
+      setUnblockingDevice(null);
     }
   }
 
@@ -897,8 +956,14 @@ function TrialProtectionSection() {
                 <AdminMetric label="Observe 24h" value={status?.observes24h ?? 0} tone="warn" />
                 <AdminMetric label="Distinct devices 24h" value={status?.distinctDevices24h ?? 0} />
                 <AdminMetric label="Missing token 24h" value={status?.missingDeviceToken24h ?? 0} tone="warn" />
+                <AdminMetric label="Manual blocks 24h" value={status?.manualBlocks24h ?? 0} tone="bad" />
                 <AdminMetric label="Block device 24h" value={status?.blockDevice24h ?? 0} tone="bad" />
-                <AdminMetric label="Block ip/prefix 24h" value={(status?.blockIp24h ?? 0) + (status?.blockIpPrefix24h ?? 0)} tone="bad" />
+                <AdminMetric
+                  label="Block ip/prefix 24h"
+                  value={(status?.blockIp24h ?? 0) + (status?.blockIpPrefix24h ?? 0)}
+                  tone="bad"
+                />
+                <AdminMetric label="Blocked now" value={status?.activeBlockedDevices ?? 0} tone="bad" />
               </div>
             </>
           )}
@@ -951,7 +1016,7 @@ function TrialProtectionSection() {
         <div className="card__body">
           <div className="kicker">Violators</div>
           <h2 className="h2">Активные блокировки</h2>
-          <p className="p">Компактный список устройств с быстрым reset и открытием деталей.</p>
+          <p className="p">Компактный список устройств с быстрым управлением и открытием деталей.</p>
 
           {loading ? (
             <div className="list admin-gap-top-md">
@@ -974,6 +1039,8 @@ function TrialProtectionSection() {
                       groups: {Number(item.active_trial_count ?? 0)}
                       <span className="paymentsHist__dot" />
                       ip: {item.last_ip || "—"}
+                      <span className="paymentsHist__dot" />
+                      manual block: {Number(item.is_blocked ?? 0) === 1 ? "yes" : "no"}
                     </div>
                   </div>
 
@@ -988,6 +1055,27 @@ function TrialProtectionSection() {
                     >
                       Copy
                     </button>
+
+                    {Number(item.is_blocked ?? 0) === 1 ? (
+                      <button
+                        className="btn btn--soft"
+                        type="button"
+                        disabled={unblockingDevice === item.device_token}
+                        onClick={() => unblockDevice(item.device_token)}
+                      >
+                        {unblockingDevice === item.device_token ? "Снятие…" : "Unblock"}
+                      </button>
+                    ) : (
+                      <button
+                        className="btn btn--soft"
+                        type="button"
+                        disabled={blockingDevice === item.device_token}
+                        onClick={() => blockDevice(item.device_token)}
+                      >
+                        {blockingDevice === item.device_token ? "Блок…" : "Block"}
+                      </button>
+                    )}
+
                     <button
                       className="btn btn--danger"
                       type="button"
@@ -1011,7 +1099,7 @@ function TrialProtectionSection() {
           onClose={() => setOpenedEvent(null)}
         >
           {(() => {
-            const meta = parseMetaJson(openedEvent.meta_json);
+            const meta = openedEvent.meta ?? parseMetaJson(openedEvent.meta_json);
             const serviceId = meta?.serviceId ?? meta?.service_id ?? null;
             const trialGroup = meta?.trialGroup ?? meta?.trial_group ?? meta?.category ?? null;
             const periodHuman = meta?.periodHuman ?? meta?.period_human ?? null;
@@ -1066,14 +1154,36 @@ function TrialProtectionSection() {
             <div className="list__item admin-tightItem"><div className="list__main"><div className="list__title">Последний trial usage</div><div className="list__sub">{formatDateTime(openedDevice.last_trial_used_at)}</div></div></div>
             <div className="list__item admin-tightItem"><div className="list__main"><div className="list__title">First IP</div><div className="list__sub">{openedDevice.first_ip || "—"}</div></div></div>
             <div className="list__item admin-tightItem"><div className="list__main"><div className="list__title">Last IP</div><div className="list__sub">{openedDevice.last_ip || "—"}</div></div></div>
+            <div className="list__item admin-tightItem"><div className="list__main"><div className="list__title">Manual block</div><div className="list__sub">{Number(openedDevice.is_blocked ?? 0) === 1 ? "yes" : "no"}</div></div></div>
             <div className="list__item admin-tightItem"><div className="list__main"><div className="list__title">Trial user ID</div><div className="list__sub">{openedDevice.trial_user_id ?? "—"}</div></div></div>
             <div className="list__item admin-tightItem"><div className="list__main"><div className="list__title">User-Agent</div><div className="list__sub feed__fulltext">{openedDevice.user_agent || "—"}</div></div></div>
           </div>
 
-          <div className="actions actions--2 admin-gap-top-lg">
+          <div className="actions actions--3 admin-gap-top-lg">
             <button className="btn btn--soft" type="button" onClick={() => copyText(openedDevice.device_token)}>
               Copy token
             </button>
+
+            {Number(openedDevice.is_blocked ?? 0) === 1 ? (
+              <button
+                className="btn btn--soft"
+                type="button"
+                disabled={unblockingDevice === openedDevice.device_token}
+                onClick={() => unblockDevice(openedDevice.device_token)}
+              >
+                {unblockingDevice === openedDevice.device_token ? "Снятие…" : "Unblock"}
+              </button>
+            ) : (
+              <button
+                className="btn btn--soft"
+                type="button"
+                disabled={blockingDevice === openedDevice.device_token}
+                onClick={() => blockDevice(openedDevice.device_token)}
+              >
+                {blockingDevice === openedDevice.device_token ? "Блок…" : "Block"}
+              </button>
+            )}
+
             <button
               className="btn btn--danger"
               type="button"
