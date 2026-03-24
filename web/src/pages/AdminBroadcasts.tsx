@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useMe } from "../app/auth/useMe";
 import { apiFetch } from "../shared/api/client";
@@ -73,32 +73,47 @@ type TrialProtectionEventsResp = {
   items: TrialProtectionEventItem[];
 };
 
+type TrialDeviceItem = {
+  id: number;
+  device_token: string;
+  first_seen_at: number | null;
+  last_seen_at: number | null;
+  first_ip?: string | null;
+  last_ip?: string | null;
+  user_agent?: string | null;
+  trial_used_at?: number | null;
+  trial_user_id?: number | null;
+  active_trial_count?: number;
+  last_trial_used_at?: number | null;
+  is_blocked?: number | null;
+};
+
+type TrialDevicesResp = {
+  ok: true;
+  items: TrialDeviceItem[];
+};
+
 type ResetDeviceResp = {
   ok: true;
+  deviceToken: string;
+  reset: true;
 };
 
 type BlockDeviceResp = {
   ok: true;
+  deviceToken: string;
+  blocked: boolean;
+};
+
+type ClearEventsResp = {
+  ok: true;
+  deleted: number;
+  keepLatest: number;
 };
 
 type AdminTab = "overview" | "broadcasts" | "orderRules" | "trialProtection";
 
-type DerivedDeviceItem = {
-  deviceToken: string;
-  lastSeenAt: number;
-  firstSeenAt: number;
-  lastIp: string | null;
-  lastUserAgent: string | null;
-  lastUserId: number | null;
-  totalEvents: number;
-  blockEvents: number;
-  allowEvents: number;
-  observeEvents: number;
-  lastDecision: "allow" | "observe" | "block";
-  lastReason: string | null;
-};
-
-const PREVIEW_LIMIT = 140;
+const PREVIEW_LIMIT = 160;
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
@@ -110,12 +125,6 @@ function formatDateTime(tsSec?: number | null) {
   return `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.${d.getFullYear()} ${pad2(d.getHours())}:${pad2(
     d.getMinutes(),
   )}`;
-}
-
-function formatDateLabel(tsSec?: number | null) {
-  if (!tsSec || !Number.isFinite(tsSec)) return "Без даты";
-  const d = new Date(tsSec * 1000);
-  return `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.${d.getFullYear()}`;
 }
 
 function truncateText(text: string | null | undefined, limit: number) {
@@ -148,72 +157,6 @@ function copyText(text: string) {
   void navigator.clipboard?.writeText(text);
 }
 
-function groupByDay<T>(items: T[], getTs: (item: T) => number | null | undefined) {
-  const groups = new Map<string, T[]>();
-
-  for (const item of items) {
-    const ts = getTs(item);
-    const key = formatDateLabel(ts);
-    const arr = groups.get(key) || [];
-    arr.push(item);
-    groups.set(key, arr);
-  }
-
-  return Array.from(groups.entries()).map(([date, values]) => ({
-    date,
-    items: values,
-  }));
-}
-
-function deriveDevicesFromEvents(events: TrialProtectionEventItem[]): DerivedDeviceItem[] {
-  const map = new Map<string, DerivedDeviceItem>();
-
-  for (const item of events) {
-    const deviceToken = String(item.device_token || "").trim();
-    if (!deviceToken) continue;
-
-    const existing = map.get(deviceToken);
-
-    if (!existing) {
-      map.set(deviceToken, {
-        deviceToken,
-        lastSeenAt: item.created_at || 0,
-        firstSeenAt: item.created_at || 0,
-        lastIp: item.ip || null,
-        lastUserAgent: item.user_agent || null,
-        lastUserId: item.user_id ?? null,
-        totalEvents: 1,
-        blockEvents: item.decision === "block" ? 1 : 0,
-        allowEvents: item.decision === "allow" ? 1 : 0,
-        observeEvents: item.decision === "observe" ? 1 : 0,
-        lastDecision: item.decision,
-        lastReason: item.reason ?? null,
-      });
-      continue;
-    }
-
-    existing.totalEvents += 1;
-    if (item.decision === "block") existing.blockEvents += 1;
-    if (item.decision === "allow") existing.allowEvents += 1;
-    if (item.decision === "observe") existing.observeEvents += 1;
-
-    if ((item.created_at || 0) > existing.lastSeenAt) {
-      existing.lastSeenAt = item.created_at || 0;
-      existing.lastIp = item.ip || null;
-      existing.lastUserAgent = item.user_agent || null;
-      existing.lastUserId = item.user_id ?? null;
-      existing.lastDecision = item.decision;
-      existing.lastReason = item.reason ?? null;
-    }
-
-    if ((item.created_at || 0) < existing.firstSeenAt) {
-      existing.firstSeenAt = item.created_at || 0;
-    }
-  }
-
-  return Array.from(map.values()).sort((a, b) => b.lastSeenAt - a.lastSeenAt);
-}
-
 function AdminTabButton({
   active,
   title,
@@ -243,7 +186,7 @@ function AdminMetric({
   tone = "soft",
 }: {
   label: string;
-  value: ReactNode;
+  value: React.ReactNode;
   tone?: "soft" | "ok" | "warn" | "bad";
 }) {
   const chipClass =
@@ -269,7 +212,7 @@ function ModalShell({
   title: string;
   kicker?: string;
   onClose: () => void;
-  children: ReactNode;
+  children: React.ReactNode;
 }) {
   useEffect(() => {
     const prevBodyOverflow = document.body.style.overflow;
@@ -319,7 +262,7 @@ function OverviewSection({ onOpenTab }: { onOpenTab: (tab: AdminTab) => void }) 
       <div className="card__body">
         <div className="kicker">Overview</div>
         <h2 className="h2">Разделы админки</h2>
-        <p className="p">Убраны перегруженные блоки, оставлены только рабочие инструменты под текущий backend.</p>
+        <p className="p">Все основные инструменты управления собраны в одном компактном экране.</p>
 
         <div className="admin-overviewGrid admin-gap-top-md">
           <div className="mini admin-miniCard">
@@ -351,7 +294,7 @@ function OverviewSection({ onOpenTab }: { onOpenTab: (tab: AdminTab) => void }) 
           <div className="mini admin-miniCard">
             <div className="mini__title">Trial Protection</div>
             <div className="mini__list">
-              <div className="list__sub">Статус, журнал, устройства из событий и ручные действия.</div>
+              <div className="list__sub">Anti-abuse, режимы, TTL, журнал и активные блокировки.</div>
               <div><span className="chip chip--warn">CONTROL</span></div>
               <div className="actions actions--1">
                 <button className="btn btn--soft" type="button" onClick={() => onOpenTab("trialProtection")}>
@@ -362,10 +305,10 @@ function OverviewSection({ onOpenTab }: { onOpenTab: (tab: AdminTab) => void }) 
           </div>
 
           <div className="mini admin-miniCard">
-            <div className="mini__title">Telegram fit</div>
+            <div className="mini__title">Дальнейшее расширение</div>
             <div className="mini__list">
-              <div className="list__sub">Компактные списки, группировка по датам и безопасные модалки.</div>
-              <div><span className="chip chip--soft">UPDATED</span></div>
+              <div className="list__sub">Поиск по IP, фильтры, whitelist и дополнительная диагностика.</div>
+              <div><span className="chip chip--soft">FUTURE</span></div>
             </div>
           </div>
         </div>
@@ -384,7 +327,6 @@ function BroadcastsSection() {
   async function load() {
     setLoading(true);
     setError(null);
-
     try {
       const r = await apiFetch<ListResp>("/admin/broadcasts?limit=200", { method: "GET" });
       setItems(Array.isArray(r.items) ? r.items : []);
@@ -405,7 +347,6 @@ function BroadcastsSection() {
     if (!ok) return;
 
     setDeletingId(originId);
-
     try {
       const encoded = encodeURIComponent(originId);
       const r = await apiFetch<DeleteResp>(`/admin/broadcast/${encoded}`, { method: "DELETE" });
@@ -422,7 +363,6 @@ function BroadcastsSection() {
   }
 
   const sorted = useMemo(() => items.slice().sort((a, b) => (b.ts || 0) - (a.ts || 0)), [items]);
-  const groups = useMemo(() => groupByDay(sorted, (item) => item.ts), [sorted]);
 
   return (
     <>
@@ -432,7 +372,7 @@ function BroadcastsSection() {
             <div>
               <div className="kicker">Broadcasts</div>
               <h2 className="h2">Управление broadcast-новостями</h2>
-              <p className="p">Список компактный, сгруппирован по датам, длинные тексты уходят в модалку.</p>
+              <p className="p">Компактный список с быстрым открытием и удалением.</p>
             </div>
 
             <button className="btn btn--accent" type="button" onClick={load} disabled={loading}>
@@ -442,71 +382,63 @@ function BroadcastsSection() {
 
           {error ? <div className="pre admin-gap-top-md">{error}</div> : null}
 
-          {loading && !sorted.length ? (
-            <div className="list admin-gap-top-md">
-              <div className="skeleton h1" />
-              <div className="skeleton p" />
-              <div className="skeleton p" />
-            </div>
-          ) : groups.length === 0 ? (
-            <div className="pre admin-gap-top-md">Broadcast-новостей пока нет.</div>
-          ) : (
-            <div className="admin-groups admin-gap-top-md">
-              {groups.map((group) => (
-                <div key={group.date} className="admin-dateGroup">
-                  <div className="admin-dateTitle">{group.date}</div>
+          <div className="list admin-gap-top-md">
+            {loading && !sorted.length ? (
+              <>
+                <div className="skeleton h1" />
+                <div className="skeleton p" />
+                <div className="skeleton p" />
+              </>
+            ) : sorted.length === 0 ? (
+              <div className="pre">Broadcast-новостей пока нет.</div>
+            ) : (
+              sorted.map((item) => {
+                const preview = truncateText(item.message, PREVIEW_LIMIT);
 
-                  <div className="list admin-compactList">
-                    {group.items.map((item) => {
-                      const preview = truncateText(item.message, PREVIEW_LIMIT);
+                return (
+                  <div key={item.origin_id} className="list__item admin-rowCard">
+                    <div className="list__main">
+                      <div className="kicker">{formatDateTime(item.ts)}</div>
+                      <div className="list__title admin-gap-top-xs">{item.title || "Без заголовка"}</div>
+                      {preview ? <div className="list__sub">{preview}</div> : null}
+                      <div className="admin-inlineMeta admin-gap-top-sm">
+                        <span><strong>origin:</strong> {item.origin_id}</span>
+                        <span><strong>copies:</strong> {item.copies}</span>
+                      </div>
+                    </div>
 
-                      return (
-                        <div key={item.origin_id} className="list__item admin-compactItem">
-                          <div className="list__main">
-                            <div className="kicker">{formatDateTime(item.ts)}</div>
-                            <div className="list__title admin-gap-top-xs">{item.title || "Без заголовка"}</div>
-                            {preview ? <div className="list__sub admin-listSubCompact">{preview}</div> : null}
-                            <div className="admin-inlineMeta admin-gap-top-sm">
-                              <span><strong>copies:</strong> {item.copies}</span>
-                              <span><strong>origin:</strong> {truncateText(item.origin_id, 32)}</span>
-                            </div>
-                          </div>
-
-                          <div className="admin-rowActions">
-                            <button className="btn btn--soft" type="button" onClick={() => setOpened(item)}>
-                              Открыть
-                            </button>
-                            <button
-                              className="btn btn--danger"
-                              type="button"
-                              disabled={deletingId === item.origin_id}
-                              onClick={() => removeOne(item.origin_id)}
-                            >
-                              {deletingId === item.origin_id ? "Удаляю…" : "Удалить"}
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
+                    <div className="admin-rowActions">
+                      <button className="btn btn--soft" type="button" onClick={() => setOpened(item)}>
+                        Открыть
+                      </button>
+                      <button
+                        className="btn btn--danger"
+                        type="button"
+                        disabled={deletingId === item.origin_id}
+                        onClick={() => removeOne(item.origin_id)}
+                      >
+                        {deletingId === item.origin_id ? "Удаляю…" : "Удалить"}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                );
+              })
+            )}
+          </div>
         </div>
       </div>
 
       {opened ? (
         <ModalShell title={opened.title || "Без заголовка"} kicker={formatDateTime(opened.ts)} onClose={() => setOpened(null)}>
           <div className="list">
-            <div className="list__item admin-tightItem">
+            <div className="list__item">
               <div className="list__main">
                 <div className="list__title">origin</div>
                 <div className="list__sub feed__fulltext">{opened.origin_id}</div>
               </div>
             </div>
 
-            <div className="list__item admin-tightItem">
+            <div className="list__item">
               <div className="list__main">
                 <div className="list__title">copies</div>
                 <div className="list__sub">{opened.copies}</div>
@@ -514,7 +446,7 @@ function BroadcastsSection() {
             </div>
 
             {opened.message ? (
-              <div className="list__item admin-tightItem">
+              <div className="list__item">
                 <div className="list__main">
                   <div className="list__title">message</div>
                   <div className="list__sub feed__fulltext">{opened.message}</div>
@@ -650,6 +582,13 @@ function OrderRulesSection() {
                   <span className="chip chip--soft">{savedMode}</span>
                 </div>
               </div>
+
+              <div className="list__item admin-tightItem">
+                <div className="list__main">
+                  <div className="list__title">Как это работает</div>
+                  <div className="list__sub">Проверка идёт на backend в момент создания заказа.</div>
+                </div>
+              </div>
             </div>
 
             {error ? <div className="pre admin-gap-top-md">{error}</div> : null}
@@ -673,16 +612,25 @@ function OrderRulesSection() {
 function TrialProtectionSection() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [savingMode, setSavingMode] = useState(false);
+  const [savingTtl, setSavingTtl] = useState(false);
   const [resettingDevice, setResettingDevice] = useState<string | null>(null);
   const [blockingDevice, setBlockingDevice] = useState<string | null>(null);
   const [unblockingDevice, setUnblockingDevice] = useState<string | null>(null);
+  const [clearingEvents, setClearingEvents] = useState(false);
 
   const [status, setStatus] = useState<TrialProtectionStatusResp | null>(null);
   const [events, setEvents] = useState<TrialProtectionEventItem[]>([]);
+  const [devices, setDevices] = useState<TrialDeviceItem[]>([]);
+
   const [openedEvent, setOpenedEvent] = useState<TrialProtectionEventItem | null>(null);
-  const [openedDevice, setOpenedDevice] = useState<DerivedDeviceItem | null>(null);
+  const [openedDevice, setOpenedDevice] = useState<TrialDeviceItem | null>(null);
+
   const [error, setError] = useState<string | null>(null);
   const [okText, setOkText] = useState<string | null>(null);
+
+  const [modeDraft, setModeDraft] = useState<TrialDeviceMode>("observe");
+  const [ttlDraft, setTtlDraft] = useState<string>("72");
 
   async function load(opts?: { silent?: boolean }) {
     const silent = Boolean(opts?.silent);
@@ -693,18 +641,23 @@ function TrialProtectionSection() {
     setError(null);
 
     try {
-      const [statusResp, eventsResp] = await Promise.all([
+      const [statusResp, eventsResp, devicesResp] = await Promise.all([
         apiFetch<TrialProtectionStatusResp>("/admin/trial-protection/status", { method: "GET" }),
-        apiFetch<TrialProtectionEventsResp>("/admin/trial-protection/events?limit=80", { method: "GET" }),
+        apiFetch<TrialProtectionEventsResp>("/admin/trial-protection/events?limit=20", { method: "GET" }),
+        apiFetch<TrialDevicesResp>("/admin/trial-protection/devices?limit=50&all=1", { method: "GET" }),
       ]);
 
       setStatus(statusResp);
+      setModeDraft(statusResp.mode);
+      setTtlDraft(String(statusResp.ttlHours));
       setEvents(Array.isArray(eventsResp.items) ? eventsResp.items : []);
+      setDevices(Array.isArray(devicesResp.items) ? devicesResp.items : []);
     } catch (e: any) {
-      setError(e?.message || "Не удалось загрузить Trial Protection.");
+      setError(e?.message || "Не удалось загрузить данные Trial Protection.");
       if (!silent) {
         setStatus(null);
         setEvents([]);
+        setDevices([]);
       }
     } finally {
       setLoading(false);
@@ -716,8 +669,74 @@ function TrialProtectionSection() {
     void load();
   }, []);
 
+  async function saveMode() {
+    setSavingMode(true);
+    setError(null);
+    setOkText(null);
+
+    try {
+      const r = await apiFetch<{ ok: true; mode: TrialDeviceMode }>("/admin/trial-protection/mode", {
+        method: "PUT",
+        body: { mode: modeDraft },
+      });
+
+      setOkText(`Режим сохранён: ${r.mode}`);
+      await load({ silent: true });
+    } catch (e: any) {
+      setError(e?.message || "Не удалось сохранить режим.");
+    } finally {
+      setSavingMode(false);
+    }
+  }
+
+  async function saveTtl() {
+    setSavingTtl(true);
+    setError(null);
+    setOkText(null);
+
+    try {
+      const ttlHours = Number(ttlDraft);
+
+      const r = await apiFetch<{ ok: true; ttlHours: number }>("/admin/trial-protection/ttl", {
+        method: "PUT",
+        body: { ttlHours },
+      });
+
+      setOkText(`TTL сохранён: ${r.ttlHours}h`);
+      await load({ silent: true });
+    } catch (e: any) {
+      setError(e?.message || "Не удалось сохранить TTL.");
+    } finally {
+      setSavingTtl(false);
+    }
+  }
+
+  async function clearEvents() {
+    const ok = window.confirm("Очистить журнал событий Trial Protection полностью?");
+    if (!ok) return;
+
+    setClearingEvents(true);
+    setError(null);
+    setOkText(null);
+
+    try {
+      const r = await apiFetch<ClearEventsResp>("/admin/trial-protection/clear-events", {
+        method: "POST",
+        body: { keepLatest: 0 },
+      });
+
+      setOkText(`Журнал очищен. Удалено записей: ${r.deleted}`);
+      if (openedEvent) setOpenedEvent(null);
+      await load({ silent: true });
+    } catch (e: any) {
+      setError(e?.message || "Не удалось очистить журнал.");
+    } finally {
+      setClearingEvents(false);
+    }
+  }
+
   async function resetDevice(deviceToken: string) {
-    const ok = window.confirm(`Сбросить trial-state для устройства?\n\n${deviceToken}`);
+    const ok = window.confirm(`Сбросить trial-lock для устройства?\n\n${deviceToken}`);
     if (!ok) return;
 
     setResettingDevice(deviceToken);
@@ -725,13 +744,13 @@ function TrialProtectionSection() {
     setOkText(null);
 
     try {
-      await apiFetch<ResetDeviceResp>("/admin/trial-protection/device/reset", {
+      const r = await apiFetch<ResetDeviceResp>("/admin/trial-protection/reset-device", {
         method: "POST",
         body: { deviceToken },
       });
 
-      setOkText(`Сброс выполнен: ${shortDeviceToken(deviceToken)}`);
-      if (openedDevice?.deviceToken === deviceToken) setOpenedDevice(null);
+      setOkText(`Сброс выполнен: ${shortDeviceToken(r.deviceToken)}`);
+      if (openedDevice?.device_token === deviceToken) setOpenedDevice(null);
       await load({ silent: true });
     } catch (e: any) {
       setError(e?.message || "Не удалось сбросить устройство.");
@@ -749,12 +768,12 @@ function TrialProtectionSection() {
     setOkText(null);
 
     try {
-      await apiFetch<BlockDeviceResp>("/admin/trial-protection/device/block", {
+      const r = await apiFetch<BlockDeviceResp>("/admin/trial-protection/block-device", {
         method: "POST",
         body: { deviceToken },
       });
 
-      setOkText(`Устройство заблокировано: ${shortDeviceToken(deviceToken)}`);
+      setOkText(`Устройство заблокировано: ${shortDeviceToken(r.deviceToken)}`);
       await load({ silent: true });
     } catch (e: any) {
       setError(e?.message || "Не удалось заблокировать устройство.");
@@ -765,7 +784,7 @@ function TrialProtectionSection() {
 
   async function unblockDevice(deviceToken: string) {
     const ok = window.confirm(
-      `Снять блокировку и очистить trial-state для устройства?\n\n${deviceToken}`,
+      `Снять ручную блокировку устройства?\n\n${deviceToken}\n\nЭто не очистит reuse по IP и не сбросит trial history.`,
     );
     if (!ok) return;
 
@@ -774,12 +793,12 @@ function TrialProtectionSection() {
     setOkText(null);
 
     try {
-      await apiFetch<BlockDeviceResp>("/admin/trial-protection/device/unblock", {
+      const r = await apiFetch<BlockDeviceResp>("/admin/trial-protection/unblock-device", {
         method: "POST",
         body: { deviceToken },
       });
 
-      setOkText(`Устройство разблокировано: ${shortDeviceToken(deviceToken)}`);
+      setOkText(`Ручная блокировка снята: ${shortDeviceToken(r.deviceToken)}`);
       await load({ silent: true });
     } catch (e: any) {
       setError(e?.message || "Не удалось разблокировать устройство.");
@@ -793,23 +812,19 @@ function TrialProtectionSection() {
     [events],
   );
 
-  const eventGroups = useMemo(
-    () => groupByDay(sortedEvents, (item) => item.created_at),
-    [sortedEvents],
-  );
-
-  const devices = useMemo(() => deriveDevicesFromEvents(sortedEvents), [sortedEvents]);
-
-  const deviceGroups = useMemo(
-    () => groupByDay(devices, (item) => item.lastSeenAt),
+  const sortedDevices = useMemo(
+    () => devices.slice().sort((a, b) => (b.last_seen_at || 0) - (a.last_seen_at || 0)),
     [devices],
   );
 
-  function renderDecisionChip(decision: TrialProtectionEventItem["decision"] | DerivedDeviceItem["lastDecision"]) {
+  function renderDecisionChip(decision: TrialProtectionEventItem["decision"]) {
     if (decision === "block") return <span className="chip chip--bad">BLOCK</span>;
     if (decision === "observe") return <span className="chip chip--warn">OBSERVE</span>;
     return <span className="chip chip--ok">ALLOW</span>;
   }
+
+  const modeChanged = modeDraft !== (status?.mode || "observe");
+  const ttlChanged = ttlDraft !== String(status?.ttlHours ?? "72");
 
   return (
     <>
@@ -819,10 +834,15 @@ function TrialProtectionSection() {
             <div>
               <div className="kicker">Trial protection</div>
               <h2 className="h2">Защита тестовых доступов</h2>
-              <p className="p">Режим и TTL только читаются. Управление идёт через работающие device-action эндпоинты.</p>
+              <p className="p">Компактное управление режимом, TTL, журналом и активными блокировками.</p>
             </div>
 
-            <button className="btn btn--soft" type="button" onClick={() => void load({ silent: true })} disabled={refreshing}>
+            <button
+              className="btn btn--soft"
+              type="button"
+              onClick={() => void load({ silent: true })}
+              disabled={refreshing || savingMode || savingTtl || clearingEvents}
+            >
               {refreshing ? "Обновляю…" : "Обновить"}
             </button>
           </div>
@@ -845,10 +865,90 @@ function TrialProtectionSection() {
                   tone={status?.mode === "enforce" ? "bad" : status?.mode === "observe" ? "warn" : "soft"}
                 />
                 <AdminMetric label="TTL" value={`${status?.ttlHours ?? "—"}h`} />
-                <AdminMetric label="Devices" value={status?.devicesWithTrial ?? 0} />
+                <AdminMetric label="Active devices" value={status?.devicesWithTrial ?? 0} />
                 <AdminMetric label="Blocks 24h" value={status?.blocks24h ?? 0} tone="bad" />
                 <AdminMetric label="Attempts 24h" value={status?.attempts24h ?? 0} tone="warn" />
                 <AdminMetric label="Distinct IPs 24h" value={status?.distinctIps24h ?? 0} />
+              </div>
+
+              <div className="admin-compactGrid admin-gap-top-md">
+                <div className="list__item admin-tightItem">
+                  <div className="list__main">
+                    <div className="list__title">Режим работы</div>
+                    <div className="list__sub admin-gap-top-sm">
+                      <label className="admin-radio">
+                        <input
+                          type="radio"
+                          name="trialDeviceMode"
+                          value="off"
+                          checked={modeDraft === "off"}
+                          onChange={() => setModeDraft("off")}
+                        />{" "}
+                        <strong>off</strong> — защита отключена
+                      </label>
+
+                      <label className="admin-radio">
+                        <input
+                          type="radio"
+                          name="trialDeviceMode"
+                          value="observe"
+                          checked={modeDraft === "observe"}
+                          onChange={() => setModeDraft("observe")}
+                        />{" "}
+                        <strong>observe</strong> — только логирование
+                      </label>
+
+                      <label className="admin-radio admin-radio--last">
+                        <input
+                          type="radio"
+                          name="trialDeviceMode"
+                          value="enforce"
+                          checked={modeDraft === "enforce"}
+                          onChange={() => setModeDraft("enforce")}
+                        />{" "}
+                        <strong>enforce</strong> — блокировать повторный trial
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="list__item admin-tightItem">
+                  <div className="list__main">
+                    <div className="list__title">TTL в часах</div>
+                    <div className="list__sub admin-gap-top-sm">
+                      <input
+                        className="input admin-numberInput"
+                        type="number"
+                        min="0.01"
+                        max="720"
+                        step="0.01"
+                        value={ttlDraft}
+                        onChange={(e) => setTtlDraft(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="admin-inlineMeta admin-gap-top-sm">
+                      <span>reuse device 24h: {status?.reuseDevice24h ?? 0}</span>
+                      <span>reuse ip 24h: {status?.reuseIp24h ?? 0}</span>
+                      <span>ip-prefix abuse 24h: {status?.abuseIpPrefix24h ?? 0}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="actions actions--2 admin-gap-top-md">
+                <button className="btn btn--accent" type="button" onClick={saveMode} disabled={savingMode || !modeChanged}>
+                  {savingMode ? "Сохраняю…" : "Сохранить режим"}
+                </button>
+                <button className="btn btn--accent" type="button" onClick={saveTtl} disabled={savingTtl || !ttlChanged}>
+                  {savingTtl ? "Сохраняю TTL…" : "Сохранить TTL"}
+                </button>
+              </div>
+
+              <div className="actions actions--1 admin-gap-top-sm">
+                <button className="btn btn--danger" type="button" onClick={clearEvents} disabled={clearingEvents}>
+                  {clearingEvents ? "Очищаю журнал…" : "Очистить журнал"}
+                </button>
               </div>
 
               <div className="admin-metricsGrid admin-gap-top-md">
@@ -857,11 +957,13 @@ function TrialProtectionSection() {
                 <AdminMetric label="Distinct devices 24h" value={status?.distinctDevices24h ?? 0} />
                 <AdminMetric label="Missing token 24h" value={status?.missingDeviceToken24h ?? 0} tone="warn" />
                 <AdminMetric label="Manual blocks 24h" value={status?.manualBlocks24h ?? 0} tone="bad" />
+                <AdminMetric label="Block device 24h" value={status?.blockDevice24h ?? 0} tone="bad" />
                 <AdminMetric
-                  label="IP/prefix blocks"
+                  label="Block ip/prefix 24h"
                   value={(status?.blockIp24h ?? 0) + (status?.blockIpPrefix24h ?? 0)}
                   tone="bad"
                 />
+                <AdminMetric label="Blocked now" value={status?.activeBlockedDevices ?? 0} tone="bad" />
               </div>
             </>
           )}
@@ -870,9 +972,9 @@ function TrialProtectionSection() {
 
       <div className="card admin-gap-top-lg">
         <div className="card__body">
-          <div className="kicker">Devices</div>
-          <h2 className="h2">Устройства из журнала событий</h2>
-          <p className="p">Список строится из последних событий, поэтому работает без отдельного devices endpoint.</p>
+          <div className="kicker">Events</div>
+          <h2 className="h2">Последние события</h2>
+          <p className="p">Нажми на запись, чтобы открыть детали в компактном окне.</p>
 
           {loading ? (
             <div className="list admin-gap-top-md">
@@ -880,60 +982,29 @@ function TrialProtectionSection() {
               <div className="skeleton p" />
               <div className="skeleton p" />
             </div>
-          ) : deviceGroups.length === 0 ? (
-            <div className="pre admin-gap-top-md">Устройств в журнале пока нет.</div>
+          ) : error ? (
+            <div className="pre admin-gap-top-md">{error}</div>
+          ) : sortedEvents.length === 0 ? (
+            <div className="pre admin-gap-top-md">Событий пока нет.</div>
           ) : (
-            <div className="admin-groups admin-gap-top-md">
-              {deviceGroups.map((group) => (
-                <div key={group.date} className="admin-dateGroup">
-                  <div className="admin-dateTitle">{group.date}</div>
-
-                  <div className="list admin-compactList">
-                    {group.items.map((item) => (
-                      <div key={item.deviceToken} className="list__item admin-compactItem">
-                        <div className="list__main admin-clickable" onClick={() => setOpenedDevice(item)}>
-                          <div className="kicker">{formatDateTime(item.lastSeenAt)}</div>
-                          <div className="list__title admin-gap-top-xs">{shortDeviceToken(item.deviceToken)}</div>
-                          <div className="admin-inlineMeta admin-gap-top-sm">
-                            <span>events: {item.totalEvents}</span>
-                            <span>blocks: {item.blockEvents}</span>
-                            <span>ip: {item.lastIp || "—"}</span>
-                          </div>
-                          <div className="list__sub admin-listSubCompact">{item.lastReason || "Без причины"}</div>
-                        </div>
-
-                        <div className="admin-rowActions">
-                          <button className="btn btn--soft" type="button" onClick={() => setOpenedDevice(item)}>
-                            Детали
-                          </button>
-                          <button
-                            className="btn btn--soft"
-                            type="button"
-                            disabled={blockingDevice === item.deviceToken}
-                            onClick={() => blockDevice(item.deviceToken)}
-                          >
-                            {blockingDevice === item.deviceToken ? "Блок…" : "Block"}
-                          </button>
-                          <button
-                            className="btn btn--soft"
-                            type="button"
-                            disabled={unblockingDevice === item.deviceToken}
-                            onClick={() => unblockDevice(item.deviceToken)}
-                          >
-                            {unblockingDevice === item.deviceToken ? "Снятие…" : "Unblock"}
-                          </button>
-                          <button
-                            className="btn btn--danger"
-                            type="button"
-                            disabled={resettingDevice === item.deviceToken}
-                            onClick={() => resetDevice(item.deviceToken)}
-                          >
-                            {resettingDevice === item.deviceToken ? "Сброс…" : "Reset"}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+            <div className="list admin-gap-top-md">
+              {sortedEvents.map((item) => (
+                <div
+                  key={item.id}
+                  className="list__item is-clickable admin-rowCard"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setOpenedEvent(item)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") setOpenedEvent(item);
+                  }}
+                >
+                  <div className="list__main">
+                    <div className="kicker">{formatDateTime(item.created_at)}</div>
+                    <div className="list__title admin-gap-top-xs">{item.event_type}</div>
+                    <div className="list__sub">{item.reason || "Без причины"}</div>
                   </div>
+                  <div className="admin-rowActions admin-rowActions--single">{renderDecisionChip(item.decision)}</div>
                 </div>
               ))}
             </div>
@@ -943,9 +1014,9 @@ function TrialProtectionSection() {
 
       <div className="card admin-gap-top-lg">
         <div className="card__body">
-          <div className="kicker">Events</div>
-          <h2 className="h2">Последние события</h2>
-          <p className="p">События сгруппированы по дням, внутри только короткая сводка — детали в модалке.</p>
+          <div className="kicker">Violators</div>
+          <h2 className="h2">Активные блокировки</h2>
+          <p className="p">Компактный список устройств с быстрым управлением и открытием деталей.</p>
 
           {loading ? (
             <div className="list admin-gap-top-md">
@@ -953,42 +1024,66 @@ function TrialProtectionSection() {
               <div className="skeleton p" />
               <div className="skeleton p" />
             </div>
-          ) : eventGroups.length === 0 ? (
-            <div className="pre admin-gap-top-md">Событий пока нет.</div>
+          ) : error ? (
+            <div className="pre admin-gap-top-md">{error}</div>
+          ) : sortedDevices.length === 0 ? (
+            <div className="pre admin-gap-top-md">Активных блокировок сейчас нет.</div>
           ) : (
-            <div className="admin-groups admin-gap-top-md">
-              {eventGroups.map((group) => (
-                <div key={group.date} className="admin-dateGroup">
-                  <div className="admin-dateTitle">{group.date}</div>
+            <div className="list admin-gap-top-md">
+              {sortedDevices.map((item) => (
+                <div key={item.id} className="list__item admin-rowCard">
+                  <div className="list__main admin-clickable" onClick={() => setOpenedDevice(item)}>
+                    <div className="kicker">{formatDateTime(item.last_seen_at)}</div>
+                    <div className="list__title admin-gap-top-xs">{shortDeviceToken(item.device_token)}</div>
+                    <div className="list__sub">
+                      groups: {Number(item.active_trial_count ?? 0)}
+                      <span className="paymentsHist__dot" />
+                      ip: {item.last_ip || "—"}
+                      <span className="paymentsHist__dot" />
+                      manual block: {Number(item.is_blocked ?? 0) === 1 ? "yes" : "no"}
+                    </div>
+                  </div>
 
-                  <div className="list admin-compactList">
-                    {group.items.map((item) => (
-                      <div
-                        key={item.id}
-                        className="list__item admin-compactItem is-clickable"
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => setOpenedEvent(item)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") setOpenedEvent(item);
-                        }}
+                  <div className="admin-rowActions">
+                    <button
+                      className="btn btn--soft"
+                      type="button"
+                      onClick={() => {
+                        copyText(item.device_token);
+                        window.alert(`Скопирован token: ${shortDeviceToken(item.device_token)}`);
+                      }}
+                    >
+                      Copy
+                    </button>
+
+                    {Number(item.is_blocked ?? 0) === 1 ? (
+                      <button
+                        className="btn btn--soft"
+                        type="button"
+                        disabled={unblockingDevice === item.device_token}
+                        onClick={() => unblockDevice(item.device_token)}
                       >
-                        <div className="list__main">
-                          <div className="kicker">{formatDateTime(item.created_at)}</div>
-                          <div className="list__title admin-gap-top-xs">{item.event_type}</div>
-                          <div className="admin-inlineMeta admin-gap-top-sm">
-                            <span>user: {item.user_id ?? "—"}</span>
-                            <span>ip: {item.ip || "—"}</span>
-                            <span>device: {shortDeviceToken(item.device_token)}</span>
-                          </div>
-                          <div className="list__sub admin-listSubCompact">{item.reason || "Без причины"}</div>
-                        </div>
+                        {unblockingDevice === item.device_token ? "Снятие…" : "Unblock"}
+                      </button>
+                    ) : (
+                      <button
+                        className="btn btn--soft"
+                        type="button"
+                        disabled={blockingDevice === item.device_token}
+                        onClick={() => blockDevice(item.device_token)}
+                      >
+                        {blockingDevice === item.device_token ? "Блок…" : "Block"}
+                      </button>
+                    )}
 
-                        <div className="admin-rowActions admin-rowActions--single">
-                          {renderDecisionChip(item.decision)}
-                        </div>
-                      </div>
-                    ))}
+                    <button
+                      className="btn btn--danger"
+                      type="button"
+                      disabled={resettingDevice === item.device_token}
+                      onClick={() => resetDevice(item.device_token)}
+                    >
+                      {resettingDevice === item.device_token ? "Сброс…" : "Reset"}
+                    </button>
                   </div>
                 </div>
               ))}
@@ -1047,53 +1142,55 @@ function TrialProtectionSection() {
 
       {openedDevice ? (
         <ModalShell
-          title={shortDeviceToken(openedDevice.deviceToken)}
-          kicker={`Last seen: ${formatDateTime(openedDevice.lastSeenAt)}`}
+          title={shortDeviceToken(openedDevice.device_token)}
+          kicker={`Last seen: ${formatDateTime(openedDevice.last_seen_at)}`}
           onClose={() => setOpenedDevice(null)}
         >
           <div className="list">
-            <div className="list__item admin-tightItem"><div className="list__main"><div className="list__title">Device token</div><div className="list__sub feed__fulltext">{openedDevice.deviceToken}</div></div></div>
-            <div className="list__item admin-tightItem"><div className="list__main"><div className="list__title">First seen</div><div className="list__sub">{formatDateTime(openedDevice.firstSeenAt)}</div></div></div>
-            <div className="list__item admin-tightItem"><div className="list__main"><div className="list__title">Last seen</div><div className="list__sub">{formatDateTime(openedDevice.lastSeenAt)}</div></div></div>
-            <div className="list__item admin-tightItem"><div className="list__main"><div className="list__title">IP</div><div className="list__sub">{openedDevice.lastIp || "—"}</div></div></div>
-            <div className="list__item admin-tightItem"><div className="list__main"><div className="list__title">User ID</div><div className="list__sub">{openedDevice.lastUserId ?? "—"}</div></div></div>
-            <div className="list__item admin-tightItem"><div className="list__main"><div className="list__title">Всего событий</div><div className="list__sub">{openedDevice.totalEvents}</div></div></div>
-            <div className="list__item admin-tightItem"><div className="list__main"><div className="list__title">Allow / Observe / Block</div><div className="list__sub">{openedDevice.allowEvents} / {openedDevice.observeEvents} / {openedDevice.blockEvents}</div></div></div>
-            <div className="list__item admin-tightItem"><div className="list__main"><div className="list__title">Последнее решение</div><div className="list__sub">{openedDevice.lastDecision}</div></div></div>
-            <div className="list__item admin-tightItem"><div className="list__main"><div className="list__title">Последняя причина</div><div className="list__sub">{openedDevice.lastReason || "—"}</div></div></div>
-            <div className="list__item admin-tightItem"><div className="list__main"><div className="list__title">User-Agent</div><div className="list__sub feed__fulltext">{openedDevice.lastUserAgent || "—"}</div></div></div>
+            <div className="list__item admin-tightItem"><div className="list__main"><div className="list__title">Device token</div><div className="list__sub feed__fulltext">{openedDevice.device_token}</div></div></div>
+            <div className="list__item admin-tightItem"><div className="list__main"><div className="list__title">First seen</div><div className="list__sub">{formatDateTime(openedDevice.first_seen_at)}</div></div></div>
+            <div className="list__item admin-tightItem"><div className="list__main"><div className="list__title">Last seen</div><div className="list__sub">{formatDateTime(openedDevice.last_seen_at)}</div></div></div>
+            <div className="list__item admin-tightItem"><div className="list__main"><div className="list__title">Активных trial-group</div><div className="list__sub">{Number(openedDevice.active_trial_count ?? 0)}</div></div></div>
+            <div className="list__item admin-tightItem"><div className="list__main"><div className="list__title">Последний trial usage</div><div className="list__sub">{formatDateTime(openedDevice.last_trial_used_at)}</div></div></div>
+            <div className="list__item admin-tightItem"><div className="list__main"><div className="list__title">First IP</div><div className="list__sub">{openedDevice.first_ip || "—"}</div></div></div>
+            <div className="list__item admin-tightItem"><div className="list__main"><div className="list__title">Last IP</div><div className="list__sub">{openedDevice.last_ip || "—"}</div></div></div>
+            <div className="list__item admin-tightItem"><div className="list__main"><div className="list__title">Manual block</div><div className="list__sub">{Number(openedDevice.is_blocked ?? 0) === 1 ? "yes" : "no"}</div></div></div>
+            <div className="list__item admin-tightItem"><div className="list__main"><div className="list__title">Trial user ID</div><div className="list__sub">{openedDevice.trial_user_id ?? "—"}</div></div></div>
+            <div className="list__item admin-tightItem"><div className="list__main"><div className="list__title">User-Agent</div><div className="list__sub feed__fulltext">{openedDevice.user_agent || "—"}</div></div></div>
           </div>
 
           <div className="actions actions--3 admin-gap-top-lg">
-            <button className="btn btn--soft" type="button" onClick={() => copyText(openedDevice.deviceToken)}>
+            <button className="btn btn--soft" type="button" onClick={() => copyText(openedDevice.device_token)}>
               Copy token
             </button>
-            <button
-              className="btn btn--soft"
-              type="button"
-              disabled={blockingDevice === openedDevice.deviceToken}
-              onClick={() => blockDevice(openedDevice.deviceToken)}
-            >
-              {blockingDevice === openedDevice.deviceToken ? "Блок…" : "Block"}
-            </button>
-            <button
-              className="btn btn--soft"
-              type="button"
-              disabled={unblockingDevice === openedDevice.deviceToken}
-              onClick={() => unblockDevice(openedDevice.deviceToken)}
-            >
-              {unblockingDevice === openedDevice.deviceToken ? "Снятие…" : "Unblock"}
-            </button>
-          </div>
 
-          <div className="actions actions--1 admin-gap-top-sm">
+            {Number(openedDevice.is_blocked ?? 0) === 1 ? (
+              <button
+                className="btn btn--soft"
+                type="button"
+                disabled={unblockingDevice === openedDevice.device_token}
+                onClick={() => unblockDevice(openedDevice.device_token)}
+              >
+                {unblockingDevice === openedDevice.device_token ? "Снятие…" : "Unblock"}
+              </button>
+            ) : (
+              <button
+                className="btn btn--soft"
+                type="button"
+                disabled={blockingDevice === openedDevice.device_token}
+                onClick={() => blockDevice(openedDevice.device_token)}
+              >
+                {blockingDevice === openedDevice.device_token ? "Блок…" : "Block"}
+              </button>
+            )}
+
             <button
               className="btn btn--danger"
               type="button"
-              disabled={resettingDevice === openedDevice.deviceToken}
-              onClick={() => resetDevice(openedDevice.deviceToken)}
+              disabled={resettingDevice === openedDevice.device_token}
+              onClick={() => resetDevice(openedDevice.device_token)}
             >
-              {resettingDevice === openedDevice.deviceToken ? "Сброс…" : "Reset device"}
+              {resettingDevice === openedDevice.device_token ? "Сброс…" : "Reset device"}
             </button>
           </div>
         </ModalShell>
@@ -1130,7 +1227,7 @@ export function AdminBroadcasts() {
         <div className="card__body">
           <div className="kicker">Admin panel</div>
           <h1 className="h1">Мини-админка</h1>
-          <p className="p">Компактная служебная панель, адаптированная под Telegram WebView.</p>
+          <p className="p">Компактная служебная панель для управления ключевыми функциями приложения.</p>
 
           <div className="admin-tabsGrid admin-gap-top-md">
             <AdminTabButton active={tab === "overview"} onClick={() => setTab("overview")} title="Обзор" subtitle="Структура" />
