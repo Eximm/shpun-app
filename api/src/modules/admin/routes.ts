@@ -137,6 +137,12 @@ export async function adminRoutes(app: FastifyInstance) {
     let mode = getTrialDeviceMode();
     let ttlHours = getTrialDeviceTtlHours();
 
+    let ipPrefixUsageThreshold = 2;
+    let ipPrefixAttemptThreshold = 3;
+    let ipPrefixDistinctDevicesThreshold = 3;
+    let ipPrefixUserAgentAttemptThreshold = 2;
+    let ipPrefixDistinctUsersThreshold = 3;
+
     try {
       const settingsRes = await shmShpunAppAdminSettingsGet(s.shmSessionId);
       const settings = settingsRes?.json?.settings ?? settingsRes?.json ?? {};
@@ -151,8 +157,33 @@ export async function adminRoutes(app: FastifyInstance) {
         ttlHours = ttlRaw;
         setCachedTrialDeviceTtlHours(ttlRaw);
       }
+
+      const usageThresholdRaw = Number(settings?.trialIpPrefixUsageThreshold);
+      if (Number.isFinite(usageThresholdRaw) && usageThresholdRaw >= 1) {
+        ipPrefixUsageThreshold = Math.floor(usageThresholdRaw);
+      }
+
+      const attemptThresholdRaw = Number(settings?.trialIpPrefixAttemptThreshold);
+      if (Number.isFinite(attemptThresholdRaw) && attemptThresholdRaw >= 1) {
+        ipPrefixAttemptThreshold = Math.floor(attemptThresholdRaw);
+      }
+
+      const distinctDevicesThresholdRaw = Number(settings?.trialIpPrefixDistinctDevicesThreshold);
+      if (Number.isFinite(distinctDevicesThresholdRaw) && distinctDevicesThresholdRaw >= 1) {
+        ipPrefixDistinctDevicesThreshold = Math.floor(distinctDevicesThresholdRaw);
+      }
+
+      const userAgentAttemptThresholdRaw = Number(settings?.trialIpPrefixUserAgentAttemptThreshold);
+      if (Number.isFinite(userAgentAttemptThresholdRaw) && userAgentAttemptThresholdRaw >= 1) {
+        ipPrefixUserAgentAttemptThreshold = Math.floor(userAgentAttemptThresholdRaw);
+      }
+
+      const distinctUsersThresholdRaw = Number(settings?.trialIpPrefixDistinctUsersThreshold);
+      if (Number.isFinite(distinctUsersThresholdRaw) && distinctUsersThresholdRaw >= 1) {
+        ipPrefixDistinctUsersThreshold = Math.floor(distinctUsersThresholdRaw);
+      }
     } catch {
-      // fallback to cached/env values
+      // fallback to cached/env/default values
     }
 
     const nowTs = Math.floor(Date.now() / 1000);
@@ -204,6 +235,11 @@ export async function adminRoutes(app: FastifyInstance) {
       ok: true,
       mode,
       ttlHours,
+      ipPrefixUsageThreshold,
+      ipPrefixAttemptThreshold,
+      ipPrefixDistinctDevicesThreshold,
+      ipPrefixUserAgentAttemptThreshold,
+      ipPrefixDistinctUsersThreshold,
       devicesWithTrial: Number(devicesWithTrialRow?.cnt ?? 0),
       activeTrialGroups: Number(activeTrialGroupsRow?.cnt ?? 0),
       activeBlockedDevices: Number(activeBlockedDevicesRow?.cnt ?? 0),
@@ -263,7 +299,7 @@ export async function adminRoutes(app: FastifyInstance) {
     });
   });
 
-  app.put("/admin/trial-protection/mode", async (req, reply) => {
+  app.put("/admin/trial-protection/settings", async (req, reply) => {
     const s = getSessionFromRequest(req);
     if (!s?.shmSessionId) return reply.code(401).send({ ok: false });
 
@@ -271,14 +307,63 @@ export async function adminRoutes(app: FastifyInstance) {
       return reply.code(403).send({ ok: false, error: "not_admin" });
     }
 
-    const mode = String((req.body as any)?.mode ?? "").trim();
+    const body = (req.body ?? {}) as any;
 
+    const mode = String(body?.mode ?? "").trim();
     if (!isTrialDeviceMode(mode)) {
       return reply.code(400).send({ ok: false, error: "bad_mode" });
     }
 
+    const ttlHours = Number(body?.ttlHours);
+    if (!Number.isFinite(ttlHours) || ttlHours <= 0 || ttlHours > 720) {
+      return reply.code(400).send({ ok: false, error: "bad_ttl" });
+    }
+
+    const ipPrefixUsageThreshold = Number(body?.ipPrefixUsageThreshold);
+    if (!Number.isFinite(ipPrefixUsageThreshold) || ipPrefixUsageThreshold < 1 || ipPrefixUsageThreshold > 100) {
+      return reply.code(400).send({ ok: false, error: "bad_ip_prefix_usage_threshold" });
+    }
+
+    const ipPrefixAttemptThreshold = Number(body?.ipPrefixAttemptThreshold);
+    if (!Number.isFinite(ipPrefixAttemptThreshold) || ipPrefixAttemptThreshold < 1 || ipPrefixAttemptThreshold > 200) {
+      return reply.code(400).send({ ok: false, error: "bad_ip_prefix_attempt_threshold" });
+    }
+
+    const ipPrefixDistinctDevicesThreshold = Number(body?.ipPrefixDistinctDevicesThreshold);
+    if (
+      !Number.isFinite(ipPrefixDistinctDevicesThreshold) ||
+      ipPrefixDistinctDevicesThreshold < 1 ||
+      ipPrefixDistinctDevicesThreshold > 200
+    ) {
+      return reply.code(400).send({ ok: false, error: "bad_ip_prefix_distinct_devices_threshold" });
+    }
+
+    const ipPrefixUserAgentAttemptThreshold = Number(body?.ipPrefixUserAgentAttemptThreshold);
+    if (
+      !Number.isFinite(ipPrefixUserAgentAttemptThreshold) ||
+      ipPrefixUserAgentAttemptThreshold < 1 ||
+      ipPrefixUserAgentAttemptThreshold > 200
+    ) {
+      return reply.code(400).send({ ok: false, error: "bad_ip_prefix_user_agent_attempt_threshold" });
+    }
+
+    const ipPrefixDistinctUsersThreshold = Number(body?.ipPrefixDistinctUsersThreshold);
+    if (
+      !Number.isFinite(ipPrefixDistinctUsersThreshold) ||
+      ipPrefixDistinctUsersThreshold < 1 ||
+      ipPrefixDistinctUsersThreshold > 200
+    ) {
+      return reply.code(400).send({ ok: false, error: "bad_ip_prefix_distinct_users_threshold" });
+    }
+
     const r = await shmShpunAppAdminSettingsSet(s.shmSessionId, {
       trialDeviceMode: mode,
+      trialDeviceTtlHours: ttlHours,
+      trialIpPrefixUsageThreshold: Math.floor(ipPrefixUsageThreshold),
+      trialIpPrefixAttemptThreshold: Math.floor(ipPrefixAttemptThreshold),
+      trialIpPrefixDistinctDevicesThreshold: Math.floor(ipPrefixDistinctDevicesThreshold),
+      trialIpPrefixUserAgentAttemptThreshold: Math.floor(ipPrefixUserAgentAttemptThreshold),
+      trialIpPrefixDistinctUsersThreshold: Math.floor(ipPrefixDistinctUsersThreshold),
     });
 
     if (!r.ok) {
@@ -286,37 +371,20 @@ export async function adminRoutes(app: FastifyInstance) {
     }
 
     setCachedTrialDeviceMode(mode);
-
-    return reply.send({ ok: true, mode });
-  });
-
-  app.put("/admin/trial-protection/ttl", async (req, reply) => {
-    const s = getSessionFromRequest(req);
-    if (!s?.shmSessionId) return reply.code(401).send({ ok: false });
-
-    if (!(await ensureAdmin(s.shmSessionId))) {
-      return reply.code(403).send({ ok: false, error: "not_admin" });
-    }
-
-    const ttlHours = Number((req.body as any)?.ttlHours);
-
-    if (!Number.isFinite(ttlHours) || ttlHours <= 0 || ttlHours > 720) {
-      return reply.code(400).send({ ok: false, error: "bad_ttl" });
-    }
-
-    const r = await shmShpunAppAdminSettingsSet(s.shmSessionId, {
-      trialDeviceTtlHours: ttlHours,
-    });
-
-    if (!r.ok) {
-      return reply.code(502).send({ ok: false, error: "shm_error" });
-    }
-
     setCachedTrialDeviceTtlHours(ttlHours);
 
-    return reply.send({ ok: true, ttlHours });
+    return reply.send({
+      ok: true,
+      mode,
+      ttlHours,
+      ipPrefixUsageThreshold: Math.floor(ipPrefixUsageThreshold),
+      ipPrefixAttemptThreshold: Math.floor(ipPrefixAttemptThreshold),
+      ipPrefixDistinctDevicesThreshold: Math.floor(ipPrefixDistinctDevicesThreshold),
+      ipPrefixUserAgentAttemptThreshold: Math.floor(ipPrefixUserAgentAttemptThreshold),
+      ipPrefixDistinctUsersThreshold: Math.floor(ipPrefixDistinctUsersThreshold),
+    });
   });
-
+  
   app.get("/admin/trial-protection/events", async (req, reply) => {
     const s = getSessionFromRequest(req);
     if (!s?.shmSessionId) return reply.code(401).send({ ok: false });

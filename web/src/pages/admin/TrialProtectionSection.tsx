@@ -11,14 +11,14 @@ import type {
   TrialDevicesResp,
   TrialProtectionEventItem,
   TrialProtectionEventsResp,
+  TrialProtectionSettingsSaveResp,
   TrialProtectionStatusResp,
 } from "./types";
 
 export function TrialProtectionSection() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [savingMode, setSavingMode] = useState(false);
-  const [savingTtl, setSavingTtl] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
   const [resettingDevice, setResettingDevice] = useState<string | null>(null);
   const [blockingDevice, setBlockingDevice] = useState<string | null>(null);
   const [unblockingDevice, setUnblockingDevice] = useState<string | null>(null);
@@ -36,6 +36,11 @@ export function TrialProtectionSection() {
 
   const [modeDraft, setModeDraft] = useState<TrialDeviceMode>("observe");
   const [ttlDraft, setTtlDraft] = useState<string>("72");
+  const [ipPrefixUsageThresholdDraft, setIpPrefixUsageThresholdDraft] = useState<string>("2");
+  const [ipPrefixAttemptThresholdDraft, setIpPrefixAttemptThresholdDraft] = useState<string>("3");
+  const [ipPrefixDistinctDevicesThresholdDraft, setIpPrefixDistinctDevicesThresholdDraft] = useState<string>("3");
+  const [ipPrefixUserAgentAttemptThresholdDraft, setIpPrefixUserAgentAttemptThresholdDraft] = useState<string>("2");
+  const [ipPrefixDistinctUsersThresholdDraft, setIpPrefixDistinctUsersThresholdDraft] = useState<string>("3");
 
   async function load(opts?: { silent?: boolean }) {
     const silent = Boolean(opts?.silent);
@@ -55,6 +60,11 @@ export function TrialProtectionSection() {
       setStatus(statusResp);
       setModeDraft(statusResp.mode);
       setTtlDraft(String(statusResp.ttlHours));
+      setIpPrefixUsageThresholdDraft(String(statusResp.ipPrefixUsageThreshold ?? 2));
+      setIpPrefixAttemptThresholdDraft(String(statusResp.ipPrefixAttemptThreshold ?? 3));
+      setIpPrefixDistinctDevicesThresholdDraft(String(statusResp.ipPrefixDistinctDevicesThreshold ?? 3));
+      setIpPrefixUserAgentAttemptThresholdDraft(String(statusResp.ipPrefixUserAgentAttemptThreshold ?? 2));
+      setIpPrefixDistinctUsersThresholdDraft(String(statusResp.ipPrefixDistinctUsersThreshold ?? 3));
       setEvents(Array.isArray(eventsResp.items) ? eventsResp.items : []);
       setDevices(Array.isArray(devicesResp.items) ? devicesResp.items : []);
     } catch (e: any) {
@@ -74,45 +84,36 @@ export function TrialProtectionSection() {
     void load();
   }, []);
 
-  async function saveMode() {
-    setSavingMode(true);
+  async function saveSettings() {
+    setSavingSettings(true);
     setError(null);
     setOkText(null);
 
     try {
-      const r = await apiFetch<{ ok: true; mode: TrialDeviceMode }>("/admin/trial-protection/mode", {
+      const payload = {
+        mode: modeDraft,
+        ttlHours: Number(ttlDraft),
+        ipPrefixUsageThreshold: Number(ipPrefixUsageThresholdDraft),
+        ipPrefixAttemptThreshold: Number(ipPrefixAttemptThresholdDraft),
+        ipPrefixDistinctDevicesThreshold: Number(ipPrefixDistinctDevicesThresholdDraft),
+        ipPrefixUserAgentAttemptThreshold: Number(ipPrefixUserAgentAttemptThresholdDraft),
+        ipPrefixDistinctUsersThreshold: Number(ipPrefixDistinctUsersThresholdDraft),
+      };
+
+      const r = await apiFetch<TrialProtectionSettingsSaveResp>("/admin/trial-protection/settings", {
         method: "PUT",
-        body: { mode: modeDraft },
+        body: payload,
       });
 
-      setOkText(`Режим сохранён: ${r.mode}`);
+      setOkText(
+        `Настройки сохранены: mode=${r.mode}, ttl=${r.ttlHours}h, usage=${r.ipPrefixUsageThreshold}, attempts=${r.ipPrefixAttemptThreshold}, devices=${r.ipPrefixDistinctDevicesThreshold}, ua=${r.ipPrefixUserAgentAttemptThreshold}, users=${r.ipPrefixDistinctUsersThreshold}`,
+      );
+
       await load({ silent: true });
     } catch (e: any) {
-      setError(e?.message || "Не удалось сохранить режим.");
+      setError(e?.message || "Не удалось сохранить настройки.");
     } finally {
-      setSavingMode(false);
-    }
-  }
-
-  async function saveTtl() {
-    setSavingTtl(true);
-    setError(null);
-    setOkText(null);
-
-    try {
-      const ttlHours = Number(ttlDraft);
-
-      const r = await apiFetch<{ ok: true; ttlHours: number }>("/admin/trial-protection/ttl", {
-        method: "PUT",
-        body: { ttlHours },
-      });
-
-      setOkText(`TTL сохранён: ${r.ttlHours}h`);
-      await load({ silent: true });
-    } catch (e: any) {
-      setError(e?.message || "Не удалось сохранить TTL.");
-    } finally {
-      setSavingTtl(false);
+      setSavingSettings(false);
     }
   }
 
@@ -228,8 +229,14 @@ export function TrialProtectionSection() {
     return <span className="chip chip--ok">ALLOW</span>;
   }
 
-  const modeChanged = modeDraft !== (status?.mode || "observe");
-  const ttlChanged = ttlDraft !== String(status?.ttlHours ?? "72");
+  const hasSettingsChanges =
+    modeDraft !== (status?.mode || "observe") ||
+    ttlDraft !== String(status?.ttlHours ?? 72) ||
+    ipPrefixUsageThresholdDraft !== String(status?.ipPrefixUsageThreshold ?? 2) ||
+    ipPrefixAttemptThresholdDraft !== String(status?.ipPrefixAttemptThreshold ?? 3) ||
+    ipPrefixDistinctDevicesThresholdDraft !== String(status?.ipPrefixDistinctDevicesThreshold ?? 3) ||
+    ipPrefixUserAgentAttemptThresholdDraft !== String(status?.ipPrefixUserAgentAttemptThreshold ?? 2) ||
+    ipPrefixDistinctUsersThresholdDraft !== String(status?.ipPrefixDistinctUsersThreshold ?? 3);
 
   return (
     <>
@@ -239,14 +246,14 @@ export function TrialProtectionSection() {
             <div>
               <div className="kicker">Trial protection</div>
               <h2 className="h2">Защита тестовых доступов</h2>
-              <p className="p">Компактное управление режимом, TTL, журналом и активными блокировками.</p>
+              <p className="p">Компактное управление режимом, TTL, порогами, журналом и активными блокировками.</p>
             </div>
 
             <button
               className="btn btn--soft"
               type="button"
               onClick={() => void load({ silent: true })}
-              disabled={refreshing || savingMode || savingTtl || clearingEvents}
+              disabled={refreshing || savingSettings || clearingEvents}
             >
               {refreshing ? "Обновляю…" : "Обновить"}
             </button>
@@ -324,9 +331,9 @@ export function TrialProtectionSection() {
                       <input
                         className="input admin-numberInput"
                         type="number"
-                        min="0.01"
+                        min="1"
                         max="720"
-                        step="0.01"
+                        step="1"
                         value={ttlDraft}
                         onChange={(e) => setTtlDraft(e.target.value)}
                       />
@@ -341,12 +348,101 @@ export function TrialProtectionSection() {
                 </div>
               </div>
 
-              <div className="actions actions--2 admin-gap-top-md">
-                <button className="btn btn--accent" type="button" onClick={saveMode} disabled={savingMode || !modeChanged}>
-                  {savingMode ? "Сохраняю…" : "Сохранить режим"}
-                </button>
-                <button className="btn btn--accent" type="button" onClick={saveTtl} disabled={savingTtl || !ttlChanged}>
-                  {savingTtl ? "Сохраняю TTL…" : "Сохранить TTL"}
+              <div className="admin-compactGrid admin-gap-top-md">
+                <div className="list__item admin-tightItem">
+                  <div className="list__main">
+                    <div className="list__title">Порог usage по prefix</div>
+                    <div className="list__sub admin-gap-top-sm">
+                      <input
+                        className="input admin-numberInput"
+                        type="number"
+                        min="1"
+                        max="100"
+                        step="1"
+                        value={ipPrefixUsageThresholdDraft}
+                        onChange={(e) => setIpPrefixUsageThresholdDraft(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="list__item admin-tightItem">
+                  <div className="list__main">
+                    <div className="list__title">Порог attempts по prefix</div>
+                    <div className="list__sub admin-gap-top-sm">
+                      <input
+                        className="input admin-numberInput"
+                        type="number"
+                        min="1"
+                        max="200"
+                        step="1"
+                        value={ipPrefixAttemptThresholdDraft}
+                        onChange={(e) => setIpPrefixAttemptThresholdDraft(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="list__item admin-tightItem">
+                  <div className="list__main">
+                    <div className="list__title">Порог distinct devices</div>
+                    <div className="list__sub admin-gap-top-sm">
+                      <input
+                        className="input admin-numberInput"
+                        type="number"
+                        min="1"
+                        max="200"
+                        step="1"
+                        value={ipPrefixDistinctDevicesThresholdDraft}
+                        onChange={(e) => setIpPrefixDistinctDevicesThresholdDraft(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="list__item admin-tightItem">
+                  <div className="list__main">
+                    <div className="list__title">Порог attempts по UA</div>
+                    <div className="list__sub admin-gap-top-sm">
+                      <input
+                        className="input admin-numberInput"
+                        type="number"
+                        min="1"
+                        max="200"
+                        step="1"
+                        value={ipPrefixUserAgentAttemptThresholdDraft}
+                        onChange={(e) => setIpPrefixUserAgentAttemptThresholdDraft(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="list__item admin-tightItem">
+                  <div className="list__main">
+                    <div className="list__title">Порог distinct users</div>
+                    <div className="list__sub admin-gap-top-sm">
+                      <input
+                        className="input admin-numberInput"
+                        type="number"
+                        min="1"
+                        max="200"
+                        step="1"
+                        value={ipPrefixDistinctUsersThresholdDraft}
+                        onChange={(e) => setIpPrefixDistinctUsersThresholdDraft(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="actions actions--1 admin-gap-top-md">
+                <button
+                  className="btn btn--accent"
+                  type="button"
+                  onClick={saveSettings}
+                  disabled={savingSettings || !hasSettingsChanges}
+                >
+                  {savingSettings ? "Сохраняю настройки…" : "Сохранить настройки"}
                 </button>
               </div>
 

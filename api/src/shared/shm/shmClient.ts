@@ -426,6 +426,11 @@ export async function shmShpunAppAdminSettingsSet(
     orderBlockMode?: "off" | "same_type" | "any";
     trialDeviceMode?: "off" | "observe" | "enforce";
     trialDeviceTtlHours?: number;
+    trialIpPrefixUsageThreshold?: number;
+    trialIpPrefixAttemptThreshold?: number;
+    trialIpPrefixDistinctDevicesThreshold?: number;
+    trialIpPrefixUserAgentAttemptThreshold?: number;
+    trialIpPrefixDistinctUsersThreshold?: number;
   }
 ) {
   return await shmShpunAppTemplate<any>(shmSessionId, "admin.settings.set", payload);
