@@ -10,6 +10,7 @@ export type DeviceRow = {
   user_agent: string | null;
   trial_used_at: number | null;
   trial_user_id: number | null;
+  last_user_id: number | null;
   is_blocked: number | null;
 };
 
@@ -47,6 +48,7 @@ export function ensureDeviceTables() {
       user_agent TEXT,
       trial_used_at INTEGER,
       trial_user_id INTEGER,
+      last_user_id INTEGER,
       is_blocked INTEGER NOT NULL DEFAULT 0
     );
 
@@ -120,9 +122,14 @@ export function ensureDeviceTables() {
       ALTER TABLE trial_devices
       ADD COLUMN is_blocked INTEGER NOT NULL DEFAULT 0
     `);
-  } catch {
-    // column already exists
-  }
+  } catch {}
+
+  try {
+    linkDb.exec(`
+      ALTER TABLE trial_devices
+      ADD COLUMN last_user_id INTEGER
+    `);
+  } catch {}
 
   inited = true;
 }
@@ -196,10 +203,28 @@ export function markDeviceTrialUsed(input: {
     .prepare(`
       UPDATE trial_devices
       SET trial_used_at = ?,
-          trial_user_id = COALESCE(?, trial_user_id)
+          trial_user_id = COALESCE(?, trial_user_id),
+          last_user_id = COALESCE(?, last_user_id)
       WHERE device_token = ?
     `)
-    .run(input.now, input.userId ?? null, input.deviceToken);
+    .run(input.now, input.userId ?? null, input.userId ?? null, input.deviceToken);
+}
+
+export function markDeviceSeenByUser(input: {
+  deviceToken: string;
+  userId?: number | null;
+}) {
+  ensureDeviceTables();
+
+  if (!input.userId) return;
+
+  linkDb
+    .prepare(`
+      UPDATE trial_devices
+      SET last_user_id = ?
+      WHERE device_token = ?
+    `)
+    .run(input.userId, input.deviceToken);
 }
 
 export function resetDeviceTrialUsage(deviceToken: string) {
@@ -274,6 +299,10 @@ export function upsertTrialUsage(input: {
       input.userId ?? null,
       input.serviceId ?? null,
     );
+
+  if (input.userId) {
+    markDeviceSeenByUser({ deviceToken: input.deviceToken, userId: input.userId });
+  }
 }
 
 export function deleteTrialUsageByDeviceAndGroup(
@@ -317,6 +346,7 @@ export function listTrialDevices(limit: number) {
         user_agent,
         trial_used_at,
         trial_user_id,
+        last_user_id,
         is_blocked
       FROM trial_devices
       ORDER BY last_seen_at DESC, id DESC
@@ -356,6 +386,13 @@ export function insertTrialProtectionEvent(input: {
       input.reason ?? null,
       input.metaJson ?? null,
     );
+
+  if (input.deviceToken && input.userId) {
+    markDeviceSeenByUser({
+      deviceToken: input.deviceToken,
+      userId: input.userId,
+    });
+  }
 }
 
 export function deleteAllTrialUsageByDevice(deviceToken: string) {
@@ -472,6 +509,7 @@ export function listTrialDevicesWithUsage(limit: number) {
         d.user_agent,
         d.trial_used_at,
         d.trial_user_id,
+        d.last_user_id,
         d.is_blocked,
         COUNT(u.id) AS active_trial_count,
         MAX(u.used_at) AS last_trial_used_at
@@ -488,6 +526,7 @@ export function listTrialDevicesWithUsage(limit: number) {
         d.user_agent,
         d.trial_used_at,
         d.trial_user_id,
+        d.last_user_id,
         d.is_blocked
       ORDER BY d.last_seen_at DESC, d.id DESC
       LIMIT ?
@@ -891,8 +930,7 @@ export function listObservedIpPrefixes(input?: {
         d.device_token,
         COALESCE(d.last_ip, d.first_ip, '') as ip,
         d.is_blocked,
-        d.last_seen_at,
-        d.trial_user_id
+        d.last_seen_at
       FROM trial_devices d
       WHERE COALESCE(d.last_ip, d.first_ip, '') != ''
         AND d.last_seen_at >= ?
@@ -903,7 +941,6 @@ export function listObservedIpPrefixes(input?: {
       ip?: string;
       is_blocked?: number;
       last_seen_at?: number | null;
-      trial_user_id?: number | null;
     }>;
 
   const grouped = new Map<string, TrialPrefixStatsRow>();

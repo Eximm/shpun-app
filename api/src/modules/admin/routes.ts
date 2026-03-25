@@ -462,6 +462,7 @@ export async function adminRoutes(app: FastifyInstance) {
         d.user_agent,
         d.trial_used_at,
         d.trial_user_id,
+        d.last_user_id,
         d.is_blocked,
         COUNT(u.id) AS active_trial_count,
         MAX(u.used_at) AS last_trial_used_at
@@ -472,17 +473,18 @@ export async function adminRoutes(app: FastifyInstance) {
       ${baseSelect}
       LEFT JOIN trial_device_usage u
         ON u.device_token = d.device_token
-      GROUP BY
-        d.id,
-        d.device_token,
-        d.first_seen_at,
-        d.last_seen_at,
-        d.first_ip,
-        d.last_ip,
-        d.user_agent,
-        d.trial_used_at,
-        d.trial_user_id,
-        d.is_blocked
+        GROUP BY
+          d.id,
+          d.device_token,
+          d.first_seen_at,
+          d.last_seen_at,
+          d.first_ip,
+          d.last_ip,
+          d.user_agent,
+          d.trial_used_at,
+          d.trial_user_id,
+          d.last_user_id,
+          d.is_blocked
       ORDER BY d.last_seen_at DESC, d.id DESC
     `;
 

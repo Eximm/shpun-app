@@ -94,6 +94,7 @@ export type TrialDeviceItem = {
   user_agent?: string | null;
   trial_used_at?: number | null;
   trial_user_id?: number | null;
+  last_user_id?: number | null;
   active_trial_count?: number;
   last_trial_used_at?: number | null;
   is_blocked?: number | null;

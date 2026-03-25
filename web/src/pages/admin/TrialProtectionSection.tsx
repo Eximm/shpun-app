@@ -660,7 +660,7 @@ export function TrialProtectionSection() {
                           <div className="kicker">{formatDateTime(item.last_seen_at)}</div>
                           <div className="list__title admin-gap-top-xs">{shortDeviceToken(item.device_token)}</div>
                           <div className="list__sub admin-listSubCompact">
-                            <span>uid: {item.trial_user_id ?? "—"}</span>
+                            <span>uid: {item.last_user_id ?? item.trial_user_id ?? "—"}</span>
                             <span className="paymentsHist__dot" />
                             <span>groups: {Number(item.active_trial_count ?? 0)}</span>
                             <span className="paymentsHist__dot" />
@@ -1011,7 +1011,7 @@ export function TrialProtectionSection() {
             <div className="list__item admin-tightItem">
               <div className="list__main">
                 <div className="list__title">User ID</div>
-                <div className="list__sub">{openedDevice.trial_user_id ?? "—"}</div>
+                <div className="list__sub">{openedDevice.last_user_id ?? openedDevice.trial_user_id ?? "—"}</div>
               </div>
             </div>
 
