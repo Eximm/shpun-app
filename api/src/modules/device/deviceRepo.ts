@@ -681,3 +681,118 @@ export function countDistinctUsersByIpPrefix(input: {
 
   return Number(row?.cnt ?? 0);
 }
+
+export function listDeviceTokensByIpPrefix(ipPrefix: string): string[] {
+  ensureDeviceTables();
+
+  if (!ipPrefix) return [];
+
+  const rows = linkDb
+    .prepare(`
+      SELECT DISTINCT device_token
+      FROM trial_devices
+      WHERE
+        (last_ip LIKE ? OR first_ip LIKE ?)
+        AND device_token IS NOT NULL
+        AND device_token != ''
+    `)
+    .all(`${ipPrefix}%`, `${ipPrefix}%`) as Array<{ device_token?: string }>;
+
+  return rows
+    .map((r) => String(r?.device_token ?? "").trim())
+    .filter(Boolean);
+}
+
+export function deleteAllTrialUsageByDeviceTokens(deviceTokens: string[]) {
+  ensureDeviceTables();
+
+  const cleaned = Array.from(
+    new Set(deviceTokens.map((x) => String(x ?? "").trim()).filter(Boolean))
+  );
+
+  if (cleaned.length === 0) return 0;
+
+  const placeholders = cleaned.map(() => "?").join(", ");
+  const result = linkDb
+    .prepare(`
+      DELETE FROM trial_device_usage
+      WHERE device_token IN (${placeholders})
+    `)
+    .run(...cleaned);
+
+  return Number(result?.changes ?? 0);
+}
+
+export function resetTrialUsageByDeviceTokens(deviceTokens: string[]) {
+  ensureDeviceTables();
+
+  const cleaned = Array.from(
+    new Set(deviceTokens.map((x) => String(x ?? "").trim()).filter(Boolean))
+  );
+
+  if (cleaned.length === 0) return 0;
+
+  const placeholders = cleaned.map(() => "?").join(", ");
+  const result = linkDb
+    .prepare(`
+      UPDATE trial_devices
+      SET trial_used_at = NULL,
+          trial_user_id = NULL
+      WHERE device_token IN (${placeholders})
+    `)
+    .run(...cleaned);
+
+  return Number(result?.changes ?? 0);
+}
+
+export function setDevicesBlockedByTokens(deviceTokens: string[], isBlocked: boolean) {
+  ensureDeviceTables();
+
+  const cleaned = Array.from(
+    new Set(deviceTokens.map((x) => String(x ?? "").trim()).filter(Boolean))
+  );
+
+  if (cleaned.length === 0) return 0;
+
+  const placeholders = cleaned.map(() => "?").join(", ");
+  const result = linkDb
+    .prepare(`
+      UPDATE trial_devices
+      SET is_blocked = ?
+      WHERE device_token IN (${placeholders})
+    `)
+    .run(isBlocked ? 1 : 0, ...cleaned);
+
+  return Number(result?.changes ?? 0);
+}
+
+export function deleteTrialProtectionEventsByIpPrefix(input: {
+  ipPrefix: string;
+  sinceTs?: number | null;
+}) {
+  ensureDeviceTables();
+
+  const ipPrefix = String(input.ipPrefix ?? "").trim();
+  if (!ipPrefix) return 0;
+
+  if (input.sinceTs != null) {
+    const result = linkDb
+      .prepare(`
+        DELETE FROM trial_protection_events
+        WHERE ip LIKE ?
+          AND created_at >= ?
+      `)
+      .run(`${ipPrefix}%`, input.sinceTs);
+
+    return Number(result?.changes ?? 0);
+  }
+
+  const result = linkDb
+    .prepare(`
+      DELETE FROM trial_protection_events
+      WHERE ip LIKE ?
+    `)
+    .run(`${ipPrefix}%`);
+
+  return Number(result?.changes ?? 0);
+}

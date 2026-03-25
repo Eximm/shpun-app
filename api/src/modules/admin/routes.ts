@@ -18,6 +18,12 @@ import {
   resetDeviceTrialUsage,
   deleteAllTrialUsageByDevice,
   setDeviceBlocked,
+  listDeviceTokensByIpPrefix,
+  deleteAllTrialUsageByDeviceTokens,
+  resetTrialUsageByDeviceTokens,
+  setDevicesBlockedByTokens,
+  deleteTrialProtectionEventsByIpPrefix,
+  getIpPrefix,
 } from "../device/deviceRepo.js";
 
 async function ensureAdmin(shmSessionId: string) {
@@ -384,7 +390,7 @@ export async function adminRoutes(app: FastifyInstance) {
       ipPrefixDistinctUsersThreshold: Math.floor(ipPrefixDistinctUsersThreshold),
     });
   });
-  
+
   app.get("/admin/trial-protection/events", async (req, reply) => {
     const s = getSessionFromRequest(req);
     if (!s?.shmSessionId) return reply.code(401).send({ ok: false });
@@ -542,6 +548,75 @@ export async function adminRoutes(app: FastifyInstance) {
     });
 
     return reply.send({ ok: true, deviceToken, reset: true });
+  });
+
+   app.post("/admin/trial-protection/reset-prefix", async (req, reply) => {
+    const s = getSessionFromRequest(req);
+    if (!s?.shmSessionId) return reply.code(401).send({ ok: false });
+
+    if (!(await ensureAdmin(s.shmSessionId))) {
+      return reply.code(403).send({ ok: false, error: "not_admin" });
+    }
+
+    ensureDeviceTables();
+
+    const adminUserId = getSessionUserId(req);
+    const body = (req.body ?? {}) as any;
+
+    const rawIp = String(body?.ip ?? "").trim();
+    const rawPrefix = String(body?.ipPrefix ?? "").trim();
+    const clearEvents = Number(body?.clearEvents ?? 1) === 1;
+    const unblockDevices = Number(body?.unblockDevices ?? 1) === 1;
+
+    const ipPrefix = rawPrefix || getIpPrefix(rawIp);
+
+    if (!ipPrefix) {
+      return reply.code(400).send({ ok: false, error: "ip_or_prefix_required" });
+    }
+
+    const ttlHours = getTrialDeviceTtlHours();
+    const sinceTs = Math.floor(Date.now() / 1000) - ttlHours * 60 * 60;
+
+    const deviceTokens = listDeviceTokensByIpPrefix(ipPrefix);
+
+    const resetDevices = resetTrialUsageByDeviceTokens(deviceTokens);
+    const deletedUsage = deleteAllTrialUsageByDeviceTokens(deviceTokens);
+    const unblockedDevices = unblockDevices ? setDevicesBlockedByTokens(deviceTokens, false) : 0;
+    const deletedEvents = clearEvents
+      ? deleteTrialProtectionEventsByIpPrefix({ ipPrefix, sinceTs })
+      : 0;
+
+    logTrialEvent({
+      userId: adminUserId,
+      ip: rawIp || null,
+      eventType: "trial_prefix_reset_by_admin",
+      decision: "allow",
+      reason: "manual_admin_prefix_reset",
+      meta: {
+        by: "admin",
+        adminUserId,
+        ipPrefix,
+        sourceIp: rawIp || null,
+        matchedDevices: deviceTokens.length,
+        resetDevices,
+        deletedUsage,
+        unblockedDevices,
+        deletedEvents,
+        clearEvents,
+        unblockDevices,
+        ttlHours,
+      },
+    });
+
+    return reply.send({
+      ok: true,
+      ipPrefix,
+      matchedDevices: deviceTokens.length,
+      resetDevices,
+      deletedUsage,
+      unblockedDevices,
+      deletedEvents,
+    });
   });
 
   app.post("/admin/trial-protection/block-device", async (req, reply) => {
