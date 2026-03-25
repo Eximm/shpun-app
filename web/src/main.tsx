@@ -25,7 +25,7 @@ import { Referrals } from "./pages/Referrals";
 import { PaymentsHistory } from "./pages/PaymentsHistory";
 import { PaymentsReceipts } from "./pages/PaymentsReceipts";
 import { ServicesRouter } from "./pages/help/ServicesRouter";
-import { AdminBroadcasts } from "./pages/AdminBroadcasts";
+import { AdminPage } from "./pages/AdminPage";
 
 import { AuthGate } from "./app/auth/AuthGate";
 import { BottomNav } from "./app/layout/BottomNav";
@@ -235,7 +235,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                   <Route path="/payments/receipts" element={<PaymentsReceipts />} />
                   <Route path="/profile" element={<Profile />} />
                   <Route path="/set-password" element={<SetPassword />} />
-                  <Route path="/admin/broadcasts" element={<AdminBroadcasts />} />
+                  <Route path="/admin" element={<AdminPage />} />
                 </Route>
 
                 <Route path="*" element={<Navigate to="/" replace />} />
