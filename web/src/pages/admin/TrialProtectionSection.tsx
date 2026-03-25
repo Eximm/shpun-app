@@ -5,7 +5,7 @@ import { copyText, formatDateTime, parseMetaJson, shortDeviceToken } from "./uti
 import type {
   BlockDeviceResp,
   ClearEventsResp,
-  ResetDeviceResp,
+  DeleteDeviceResp,
   ResetPrefixResp,
   TrialDeviceItem,
   TrialDeviceMode,
@@ -23,10 +23,10 @@ export function TrialProtectionSection() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
-  const [resettingDevice, setResettingDevice] = useState<string | null>(null);
-  const [resettingPrefix, setResettingPrefix] = useState<string | null>(null);
+  const [resettingPrefix, setResettingPrefix] = useState(false);
   const [blockingDevice, setBlockingDevice] = useState<string | null>(null);
   const [unblockingDevice, setUnblockingDevice] = useState<string | null>(null);
+  const [deletingDevice, setDeletingDevice] = useState<string | null>(null);
   const [clearingEvents, setClearingEvents] = useState(false);
 
   const [status, setStatus] = useState<TrialProtectionStatusResp | null>(null);
@@ -42,9 +42,11 @@ export function TrialProtectionSection() {
   const [eventsExpanded, setEventsExpanded] = useState(false);
   const [eventsShowAll, setEventsShowAll] = useState(false);
 
-  const [devicesExpanded, setDevicesExpanded] = useState(true);
   const [devicesPage, setDevicesPage] = useState(1);
   const [deviceQuery, setDeviceQuery] = useState("");
+  const [showAllDevices, setShowAllDevices] = useState(false);
+
+  const [networkInput, setNetworkInput] = useState("");
 
   const [modeDraft, setModeDraft] = useState<TrialDeviceMode>("observe");
   const [ttlDraft, setTtlDraft] = useState<string>("72");
@@ -63,10 +65,14 @@ export function TrialProtectionSection() {
     setError(null);
 
     try {
+      const devicesUrl = showAllDevices
+        ? "/admin/trial-protection/devices?all=1"
+        : "/admin/trial-protection/devices";
+
       const [statusResp, eventsResp, devicesResp] = await Promise.all([
         apiFetch<TrialProtectionStatusResp>("/admin/trial-protection/status", { method: "GET" }),
         apiFetch<TrialProtectionEventsResp>("/admin/trial-protection/events?limit=20", { method: "GET" }),
-        apiFetch<TrialDevicesResp>("/admin/trial-protection/devices?all=1", { method: "GET" }),
+        apiFetch<TrialDevicesResp>(devicesUrl, { method: "GET" }),
       ]);
 
       setStatus(statusResp);
@@ -94,7 +100,7 @@ export function TrialProtectionSection() {
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [showAllDevices]);
 
   async function saveSettings() {
     setSavingSettings(true);
@@ -153,43 +159,19 @@ export function TrialProtectionSection() {
     }
   }
 
-  async function resetDevice(deviceToken: string) {
-    const ok = window.confirm(`Очистить историю trial для устройства?\n\n${deviceToken}`);
-    if (!ok) return;
-
-    setResettingDevice(deviceToken);
-    setError(null);
-    setOkText(null);
-
-    try {
-      const r = await apiFetch<ResetDeviceResp>("/admin/trial-protection/reset-device", {
-        method: "POST",
-        body: { deviceToken },
-      });
-
-      setOkText(`История trial очищена: ${shortDeviceToken(r.deviceToken)}`);
-      if (openedDevice?.device_token === deviceToken) setOpenedDevice(null);
-      await load({ silent: true });
-    } catch (e: any) {
-      setError(e?.message || "Не удалось очистить историю устройства.");
-    } finally {
-      setResettingDevice(null);
-    }
-  }
-
-  async function resetPrefix(ipOrPrefix: string) {
-    const raw = String(ipOrPrefix ?? "").trim();
-    if (!raw || raw === "—") {
-      setError("У устройства нет IP/prefix для сброса.");
+  async function resetPrefix(rawValue: string) {
+    const raw = String(rawValue ?? "").trim();
+    if (!raw) {
+      setError("Укажи IP или prefix для очистки сети.");
       return;
     }
 
     const ok = window.confirm(
-      `Снять сетевой trial-lock для IP/prefix?\n\n${raw}\n\nБудут очищены usage и события по этой сети в пределах TTL.`,
+      `Очистить сеть / prefix?\n\n${raw}\n\nЭто снимет сетевой reuse, очистит usage и снимет блокировки по найденным устройствам.\nСами устройства удалены не будут.`,
     );
     if (!ok) return;
 
-    setResettingPrefix(raw);
+    setResettingPrefix(true);
     setError(null);
     setOkText(null);
 
@@ -200,23 +182,19 @@ export function TrialProtectionSection() {
       });
 
       setOkText(
-        `Сетевой reset выполнен: prefix=${r.ipPrefix}, devices=${r.matchedDevices}, usage=${r.deletedUsage}, events=${r.deletedEvents}`,
+        `Сеть очищена: prefix=${r.ipPrefix}, devices=${r.matchedDevices}, usage=${r.deletedUsage}, events=${r.deletedEvents}, unblocked=${r.unblockedDevices}`,
       );
-
-      if (openedDevice?.last_ip === raw || openedDevice?.first_ip === raw) {
-        setOpenedDevice(null);
-      }
 
       await load({ silent: true });
     } catch (e: any) {
-      setError(e?.message || "Не удалось снять сетевой trial-lock.");
+      setError(e?.message || "Не удалось очистить сеть / prefix.");
     } finally {
-      setResettingPrefix(null);
+      setResettingPrefix(false);
     }
   }
 
   async function blockDevice(deviceToken: string) {
-    const ok = window.confirm(`Заблокировать устройство вручную?\n\n${deviceToken}`);
+    const ok = window.confirm(`Заблокировать устройство?\n\n${deviceToken}`);
     if (!ok) return;
 
     setBlockingDevice(deviceToken);
@@ -239,9 +217,7 @@ export function TrialProtectionSection() {
   }
 
   async function unblockDevice(deviceToken: string) {
-    const ok = window.confirm(
-      `Снять ручную блокировку устройства?\n\n${deviceToken}\n\nЭто не очистит reuse по IP и не сбросит trial history.`,
-    );
+    const ok = window.confirm(`Снять блокировку с устройства?\n\n${deviceToken}`);
     if (!ok) return;
 
     setUnblockingDevice(deviceToken);
@@ -254,12 +230,44 @@ export function TrialProtectionSection() {
         body: { deviceToken },
       });
 
-      setOkText(`Ручная блокировка снята: ${shortDeviceToken(r.deviceToken)}`);
+      setOkText(`Устройство разблокировано: ${shortDeviceToken(r.deviceToken)}`);
       await load({ silent: true });
     } catch (e: any) {
       setError(e?.message || "Не удалось разблокировать устройство.");
     } finally {
       setUnblockingDevice(null);
+    }
+  }
+
+  async function deleteDevice(deviceToken: string) {
+    const ok = window.confirm(
+      `Удалить устройство полностью?\n\n${deviceToken}\n\nБудут удалены:\n- устройство\n- trial usage\n- события этого устройства`,
+    );
+    if (!ok) return;
+
+    setDeletingDevice(deviceToken);
+    setError(null);
+    setOkText(null);
+
+    try {
+      const r = await apiFetch<DeleteDeviceResp>("/admin/trial-protection/delete-device", {
+        method: "POST",
+        body: { deviceToken },
+      });
+
+      setOkText(
+        `Устройство удалено: ${shortDeviceToken(r.deviceToken)} · device=${r.deletedDevice}, usage=${r.deletedUsage}, events=${r.deletedEvents}`,
+      );
+
+      if (openedDevice?.device_token === deviceToken) {
+        setOpenedDevice(null);
+      }
+
+      await load({ silent: true });
+    } catch (e: any) {
+      setError(e?.message || "Не удалось удалить устройство.");
+    } finally {
+      setDeletingDevice(null);
     }
   }
 
@@ -296,7 +304,7 @@ export function TrialProtectionSection() {
 
   useEffect(() => {
     setDevicesPage(1);
-  }, [deviceQuery]);
+  }, [deviceQuery, showAllDevices]);
 
   useEffect(() => {
     if (devicesPage > totalDevicesPages) {
@@ -311,10 +319,9 @@ export function TrialProtectionSection() {
   }, [eventsExpanded, eventsShowAll, sortedEvents]);
 
   const visibleDevices = useMemo(() => {
-    if (!devicesExpanded) return [];
     const start = (devicesPage - 1) * DEVICES_PER_PAGE;
     return filteredDevices.slice(start, start + DEVICES_PER_PAGE);
-  }, [devicesExpanded, devicesPage, filteredDevices]);
+  }, [devicesPage, filteredDevices]);
 
   function renderDecisionChip(decision: TrialProtectionEventItem["decision"]) {
     if (decision === "block") return <span className="chip chip--bad">BLOCK</span>;
@@ -339,14 +346,14 @@ export function TrialProtectionSection() {
             <div>
               <div className="kicker">Trial protection</div>
               <h2 className="h2">Защита тестовых доступов</h2>
-              <p className="p">Компактное управление режимом, TTL, порогами и устройствами под контролем.</p>
+              <p className="p">Панель контроля режима, порогов и признаков абьюза.</p>
             </div>
 
             <button
               className="btn btn--soft"
               type="button"
               onClick={() => void load({ silent: true })}
-              disabled={refreshing || savingSettings || clearingEvents}
+              disabled={refreshing || savingSettings || clearingEvents || resettingPrefix}
             >
               {refreshing ? "Обновляю…" : "Обновить"}
             </button>
@@ -563,32 +570,21 @@ export function TrialProtectionSection() {
           <div className="admin-sectionHead">
             <div>
               <div className="kicker">Devices</div>
-              <h2 className="h2">Устройства под контролем</h2>
-              <p className="p">Поиск, компактная выдача и постраничный просмотр без простыни.</p>
+              <h2 className="h2">Устройства</h2>
+              <p className="p">Основной список для управления: просмотр, блокировка и удаление устройства.</p>
             </div>
 
-            <div className="admin-rowActions">
-              <button
-                className="btn btn--soft"
-                type="button"
-                onClick={() => {
-                  setDevicesExpanded((v) => !v);
-                  if (devicesExpanded) {
-                    setDevicesPage(1);
-                    setDeviceQuery("");
-                  }
-                }}
-              >
-                {devicesExpanded ? "Скрыть" : "Показать"}
-              </button>
-            </div>
+            <label className="admin-radio">
+              <input
+                type="checkbox"
+                checked={showAllDevices}
+                onChange={(e) => setShowAllDevices(e.target.checked)}
+              />{" "}
+              Показывать все устройства
+            </label>
           </div>
 
-          {!devicesExpanded ? (
-            <div className="pre admin-gap-top-md">
-              Устройства скрыты. Всего записей: {sortedDevices.length}.
-            </div>
-          ) : loading ? (
+          {loading ? (
             <div className="list admin-gap-top-md">
               <div className="skeleton h1" />
               <div className="skeleton p" />
@@ -610,7 +606,9 @@ export function TrialProtectionSection() {
 
               {visibleDevices.length === 0 ? (
                 <div className="pre admin-gap-top-md">
-                  {deviceQuery.trim() ? "Ничего не найдено по текущему фильтру." : "Устройств под контролем сейчас нет."}
+                  {deviceQuery.trim()
+                    ? "Ничего не найдено по текущему фильтру."
+                    : "Подходящих устройств сейчас нет."}
                 </div>
               ) : (
                 <>
@@ -643,12 +641,9 @@ export function TrialProtectionSection() {
                           <button
                             className="btn btn--soft"
                             type="button"
-                            onClick={() => {
-                              copyText(item.device_token);
-                              window.alert(`Скопирован token: ${shortDeviceToken(item.device_token)}`);
-                            }}
+                            onClick={() => setOpenedDevice(item)}
                           >
-                            Copy
+                            Open
                           </button>
 
                           {Number(item.is_blocked ?? 0) === 1 ? (
@@ -672,21 +667,12 @@ export function TrialProtectionSection() {
                           )}
 
                           <button
-                            className="btn btn--soft"
-                            type="button"
-                            disabled={resettingPrefix === String(item.last_ip || "") || !item.last_ip}
-                            onClick={() => resetPrefix(String(item.last_ip || ""))}
-                          >
-                            {resettingPrefix === String(item.last_ip || "") ? "Сброс сети…" : "Reset prefix"}
-                          </button>
-
-                          <button
                             className="btn btn--danger"
                             type="button"
-                            disabled={resettingDevice === item.device_token}
-                            onClick={() => resetDevice(item.device_token)}
+                            disabled={deletingDevice === item.device_token}
+                            onClick={() => deleteDevice(item.device_token)}
                           >
-                            {resettingDevice === item.device_token ? "Очистка…" : "History"}
+                            {deletingDevice === item.device_token ? "Удаление…" : "Delete"}
                           </button>
                         </div>
                       </div>
@@ -738,9 +724,52 @@ export function TrialProtectionSection() {
         <div className="card__body">
           <div className="admin-sectionHead">
             <div>
+              <div className="kicker">Network cleanup</div>
+              <h2 className="h2">Очистка сети / prefix</h2>
+              <p className="p">
+                Отдельный инструмент для сетевого абьюза. Чистит usage, снимает блокировки и очищает события по сети,
+                но не удаляет сами устройства.
+              </p>
+            </div>
+          </div>
+
+          <div className="admin-compactGrid admin-gap-top-md">
+            <div className="list__item admin-tightItem">
+              <div className="list__main">
+                <div className="list__title">IP или prefix</div>
+                <div className="list__sub admin-gap-top-sm">
+                  <input
+                    className="input"
+                    type="text"
+                    value={networkInput}
+                    onChange={(e) => setNetworkInput(e.target.value)}
+                    placeholder="Например: 109.247.173.185 или 109.247.173"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="actions actions--1 admin-gap-top-md">
+            <button
+              className="btn btn--soft"
+              type="button"
+              disabled={resettingPrefix || !networkInput.trim()}
+              onClick={() => resetPrefix(networkInput)}
+            >
+              {resettingPrefix ? "Очищаю сеть…" : "Очистить сеть / prefix"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="card admin-gap-top-lg">
+        <div className="card__body">
+          <div className="admin-sectionHead">
+            <div>
               <div className="kicker">Events</div>
               <h2 className="h2">Последние события</h2>
-              <p className="p">Свернуто по умолчанию, чтобы не раздувать экран.</p>
+              <p className="p">Диагностика и журнал срабатываний.</p>
             </div>
 
             <div className="admin-rowActions">
@@ -1015,21 +1044,12 @@ export function TrialProtectionSection() {
             )}
 
             <button
-              className="btn btn--soft"
-              type="button"
-              disabled={resettingPrefix === String(openedDevice.last_ip || "") || !openedDevice.last_ip}
-              onClick={() => resetPrefix(String(openedDevice.last_ip || ""))}
-            >
-              {resettingPrefix === String(openedDevice.last_ip || "") ? "Сброс сети…" : "Reset prefix"}
-            </button>
-
-            <button
               className="btn btn--danger"
               type="button"
-              disabled={resettingDevice === openedDevice.device_token}
-              onClick={() => resetDevice(openedDevice.device_token)}
+              disabled={deletingDevice === openedDevice.device_token}
+              onClick={() => deleteDevice(openedDevice.device_token)}
             >
-              {resettingDevice === openedDevice.device_token ? "Очистка…" : "Clear history"}
+              {deletingDevice === openedDevice.device_token ? "Удаление…" : "Delete"}
             </button>
           </div>
         </ModalShell>

@@ -24,6 +24,7 @@ import {
   setDevicesBlockedByTokens,
   deleteTrialProtectionEventsByIpPrefix,
   getIpPrefix,
+  deleteDeviceCompletely,
 } from "../device/deviceRepo.js";
 
 async function ensureAdmin(shmSessionId: string) {
@@ -407,7 +408,7 @@ export async function adminRoutes(app: FastifyInstance) {
     ensureDeviceTables();
 
     const q = (req.query ?? {}) as any;
-    const limit = toPositiveInt(q?.limit, 30, 200);
+    const limit = toPositiveInt(q?.limit, 20, 200);
 
     const items = linkDb
       .prepare(`
@@ -486,7 +487,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
     const activeOnlyQuery = `
       ${baseSelect}
-      JOIN trial_device_usage u
+      LEFT JOIN trial_device_usage u
         ON u.device_token = d.device_token
       GROUP BY
         d.id,
@@ -542,6 +543,47 @@ export async function adminRoutes(app: FastifyInstance) {
     });
 
     return reply.send({ ok: true, deviceToken, reset: true });
+  });
+
+  app.post("/admin/trial-protection/delete-device", async (req, reply) => {
+    const s = getSessionFromRequest(req);
+    if (!s?.shmSessionId) return reply.code(401).send({ ok: false });
+
+    if (!(await ensureAdmin(s.shmSessionId))) {
+      return reply.code(403).send({ ok: false, error: "not_admin" });
+    }
+
+    const adminUserId = getSessionUserId(req);
+
+    const deviceToken = String((req.body as any)?.deviceToken ?? "").trim();
+    if (!deviceToken) {
+      return reply.code(400).send({ ok: false, error: "device_token_required" });
+    }
+
+    const result = deleteDeviceCompletely(deviceToken);
+
+    logTrialEvent({
+      deviceToken,
+      userId: adminUserId,
+      eventType: "device_deleted_by_admin",
+      decision: "allow",
+      reason: "manual_admin_delete",
+      meta: {
+        by: "admin",
+        adminUserId,
+        deletedDevice: result.deletedDevice,
+        deletedUsage: result.deletedUsage,
+        deletedEvents: result.deletedEvents,
+      },
+    });
+
+    return reply.send({
+      ok: true,
+      deviceToken,
+      deletedDevice: result.deletedDevice,
+      deletedUsage: result.deletedUsage,
+      deletedEvents: result.deletedEvents,
+    });
   });
 
   app.post("/admin/trial-protection/reset-prefix", async (req, reply) => {

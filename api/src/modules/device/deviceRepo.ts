@@ -360,6 +360,82 @@ export function deleteAllTrialUsageByDevice(deviceToken: string) {
     .run(deviceToken);
 }
 
+export function deleteTrialProtectionEventsByDevice(deviceToken: string): number {
+  ensureDeviceTables();
+
+  const token = String(deviceToken ?? "").trim();
+  if (!token) return 0;
+
+  const result = linkDb
+    .prepare(`
+      DELETE FROM trial_protection_events
+      WHERE device_token = ?
+    `)
+    .run(token);
+
+  return Number(result?.changes ?? 0);
+}
+
+export function deleteDeviceByToken(deviceToken: string): number {
+  ensureDeviceTables();
+
+  const token = String(deviceToken ?? "").trim();
+  if (!token) return 0;
+
+  const result = linkDb
+    .prepare(`
+      DELETE FROM trial_devices
+      WHERE device_token = ?
+    `)
+    .run(token);
+
+  return Number(result?.changes ?? 0);
+}
+
+export function deleteDeviceCompletely(deviceToken: string) {
+  ensureDeviceTables();
+
+  const token = String(deviceToken ?? "").trim();
+  if (!token) {
+    return {
+      deletedDevice: 0,
+      deletedUsage: 0,
+      deletedEvents: 0,
+    };
+  }
+
+  const tx = linkDb.transaction((safeToken: string) => {
+    const usageResult = linkDb
+      .prepare(`
+        DELETE FROM trial_device_usage
+        WHERE device_token = ?
+      `)
+      .run(safeToken);
+
+    const eventsResult = linkDb
+      .prepare(`
+        DELETE FROM trial_protection_events
+        WHERE device_token = ?
+      `)
+      .run(safeToken);
+
+    const deviceResult = linkDb
+      .prepare(`
+        DELETE FROM trial_devices
+        WHERE device_token = ?
+      `)
+      .run(safeToken);
+
+    return {
+      deletedDevice: Number(deviceResult?.changes ?? 0),
+      deletedUsage: Number(usageResult?.changes ?? 0),
+      deletedEvents: Number(eventsResult?.changes ?? 0),
+    };
+  });
+
+  return tx(token);
+}
+
 export function setDeviceBlocked(deviceToken: string, isBlocked: boolean) {
   ensureDeviceTables();
 
@@ -621,7 +697,7 @@ export function countRecentTrialAttemptsByIpPrefixAndUserAgent(input: {
       input.userAgent
     ) as { cnt?: number } | undefined;
 
-  return Number(row?.cnt ?? 0);
+    return Number(row?.cnt ?? 0);
 }
 
 export function countDistinctUsersByIpPrefix(input: {

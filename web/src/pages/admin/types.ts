@@ -120,6 +120,14 @@ export type ResetPrefixResp = {
   deletedEvents: number;
 };
 
+export type DeleteDeviceResp = {
+  ok: true;
+  deviceToken: string;
+  deletedDevice: number;
+  deletedUsage: number;
+  deletedEvents: number;
+};
+
 export type BlockDeviceResp = {
   ok: true;
   deviceToken: string;
