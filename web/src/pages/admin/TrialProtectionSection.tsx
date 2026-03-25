@@ -34,6 +34,9 @@ export function TrialProtectionSection() {
   const [error, setError] = useState<string | null>(null);
   const [okText, setOkText] = useState<string | null>(null);
 
+  const [eventsExpanded, setEventsExpanded] = useState(false);
+  const [eventsShowAll, setEventsShowAll] = useState(false);
+
   const [modeDraft, setModeDraft] = useState<TrialDeviceMode>("observe");
   const [ttlDraft, setTtlDraft] = useState<string>("72");
   const [ipPrefixUsageThresholdDraft, setIpPrefixUsageThresholdDraft] = useState<string>("2");
@@ -54,7 +57,7 @@ export function TrialProtectionSection() {
       const [statusResp, eventsResp, devicesResp] = await Promise.all([
         apiFetch<TrialProtectionStatusResp>("/admin/trial-protection/status", { method: "GET" }),
         apiFetch<TrialProtectionEventsResp>("/admin/trial-protection/events?limit=20", { method: "GET" }),
-        apiFetch<TrialDevicesResp>("/admin/trial-protection/devices?limit=50&all=1", { method: "GET" }),
+        apiFetch<TrialDevicesResp>("/admin/trial-protection/devices?limit=50", { method: "GET" }),
       ]);
 
       setStatus(statusResp);
@@ -142,7 +145,7 @@ export function TrialProtectionSection() {
   }
 
   async function resetDevice(deviceToken: string) {
-    const ok = window.confirm(`Сбросить trial-lock для устройства?\n\n${deviceToken}`);
+    const ok = window.confirm(`Очистить историю trial для устройства?\n\n${deviceToken}`);
     if (!ok) return;
 
     setResettingDevice(deviceToken);
@@ -155,11 +158,11 @@ export function TrialProtectionSection() {
         body: { deviceToken },
       });
 
-      setOkText(`Сброс выполнен: ${shortDeviceToken(r.deviceToken)}`);
+      setOkText(`История trial очищена: ${shortDeviceToken(r.deviceToken)}`);
       if (openedDevice?.device_token === deviceToken) setOpenedDevice(null);
       await load({ silent: true });
     } catch (e: any) {
-      setError(e?.message || "Не удалось сбросить устройство.");
+      setError(e?.message || "Не удалось очистить историю устройства.");
     } finally {
       setResettingDevice(null);
     }
@@ -223,6 +226,12 @@ export function TrialProtectionSection() {
     [devices],
   );
 
+  const visibleEvents = useMemo(() => {
+    if (!eventsExpanded) return [];
+    if (eventsShowAll) return sortedEvents;
+    return sortedEvents.slice(0, 5);
+  }, [eventsExpanded, eventsShowAll, sortedEvents]);
+
   function renderDecisionChip(decision: TrialProtectionEventItem["decision"]) {
     if (decision === "block") return <span className="chip chip--bad">BLOCK</span>;
     if (decision === "observe") return <span className="chip chip--warn">OBSERVE</span>;
@@ -246,7 +255,7 @@ export function TrialProtectionSection() {
             <div>
               <div className="kicker">Trial protection</div>
               <h2 className="h2">Защита тестовых доступов</h2>
-              <p className="p">Компактное управление режимом, TTL, порогами, журналом и активными блокировками.</p>
+              <p className="p">Компактное управление режимом, TTL, порогами и устройствами под контролем.</p>
             </div>
 
             <button
@@ -277,7 +286,7 @@ export function TrialProtectionSection() {
                   tone={status?.mode === "enforce" ? "bad" : status?.mode === "observe" ? "warn" : "soft"}
                 />
                 <AdminMetric label="TTL" value={`${status?.ttlHours ?? "—"}h`} />
-                <AdminMetric label="Active devices" value={status?.devicesWithTrial ?? 0} />
+                <AdminMetric label="Devices now" value={status?.devicesWithTrial ?? 0} />
                 <AdminMetric label="Blocks 24h" value={status?.blocks24h ?? 0} tone="bad" />
                 <AdminMetric label="Attempts 24h" value={status?.attempts24h ?? 0} tone="warn" />
                 <AdminMetric label="Distinct IPs 24h" value={status?.distinctIps24h ?? 0} />
@@ -446,12 +455,6 @@ export function TrialProtectionSection() {
                 </button>
               </div>
 
-              <div className="actions actions--1 admin-gap-top-sm">
-                <button className="btn btn--danger" type="button" onClick={clearEvents} disabled={clearingEvents}>
-                  {clearingEvents ? "Очищаю журнал…" : "Очистить журнал"}
-                </button>
-              </div>
-
               <div className="admin-metricsGrid admin-gap-top-md">
                 <AdminMetric label="Allow 24h" value={status?.allows24h ?? 0} tone="ok" />
                 <AdminMetric label="Observe 24h" value={status?.observes24h ?? 0} tone="warn" />
@@ -473,51 +476,13 @@ export function TrialProtectionSection() {
 
       <div className="card admin-gap-top-lg">
         <div className="card__body">
-          <div className="kicker">Events</div>
-          <h2 className="h2">Последние события</h2>
-          <p className="p">Нажми на запись, чтобы открыть детали в компактном окне.</p>
-
-          {loading ? (
-            <div className="list admin-gap-top-md">
-              <div className="skeleton h1" />
-              <div className="skeleton p" />
-              <div className="skeleton p" />
+          <div className="admin-sectionHead">
+            <div>
+              <div className="kicker">Devices</div>
+              <h2 className="h2">Устройства под контролем</h2>
+              <p className="p">Показываются устройства с активным trial usage или ручной блокировкой.</p>
             </div>
-          ) : error ? (
-            <div className="pre admin-gap-top-md">{error}</div>
-          ) : sortedEvents.length === 0 ? (
-            <div className="pre admin-gap-top-md">Событий пока нет.</div>
-          ) : (
-            <div className="list admin-gap-top-md">
-              {sortedEvents.map((item) => (
-                <div
-                  key={item.id}
-                  className="list__item is-clickable admin-rowCard"
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setOpenedEvent(item)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") setOpenedEvent(item);
-                  }}
-                >
-                  <div className="list__main">
-                    <div className="kicker">{formatDateTime(item.created_at)}</div>
-                    <div className="list__title admin-gap-top-xs">{item.event_type}</div>
-                    <div className="list__sub">{item.reason || "Без причины"}</div>
-                  </div>
-                  <div className="admin-rowActions admin-rowActions--single">{renderDecisionChip(item.decision)}</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="card admin-gap-top-lg">
-        <div className="card__body">
-          <div className="kicker">Violators</div>
-          <h2 className="h2">Активные блокировки</h2>
-          <p className="p">Компактный список устройств с быстрым управлением и открытием деталей.</p>
+          </div>
 
           {loading ? (
             <div className="list admin-gap-top-md">
@@ -528,7 +493,7 @@ export function TrialProtectionSection() {
           ) : error ? (
             <div className="pre admin-gap-top-md">{error}</div>
           ) : sortedDevices.length === 0 ? (
-            <div className="pre admin-gap-top-md">Активных блокировок сейчас нет.</div>
+            <div className="pre admin-gap-top-md">Устройств под контролем сейчас нет.</div>
           ) : (
             <div className="list admin-gap-top-md">
               {sortedDevices.map((item) => (
@@ -583,12 +548,91 @@ export function TrialProtectionSection() {
                       disabled={resettingDevice === item.device_token}
                       onClick={() => resetDevice(item.device_token)}
                     >
-                      {resettingDevice === item.device_token ? "Сброс…" : "Reset"}
+                      {resettingDevice === item.device_token ? "Очистка…" : "Clear history"}
                     </button>
                   </div>
                 </div>
               ))}
             </div>
+          )}
+        </div>
+      </div>
+
+      <div className="card admin-gap-top-lg">
+        <div className="card__body">
+          <div className="admin-sectionHead">
+            <div>
+              <div className="kicker">Events</div>
+              <h2 className="h2">Последние события</h2>
+              <p className="p">Свернуто по умолчанию, чтобы не раздувать экран.</p>
+            </div>
+
+            <div className="admin-rowActions">
+              <button
+                className="btn btn--soft"
+                type="button"
+                onClick={() => {
+                  setEventsExpanded((v) => !v);
+                  if (eventsExpanded) setEventsShowAll(false);
+                }}
+              >
+                {eventsExpanded ? "Скрыть" : "Показать"}
+              </button>
+
+              {eventsExpanded ? (
+                <button className="btn btn--danger" type="button" onClick={clearEvents} disabled={clearingEvents}>
+                  {clearingEvents ? "Очищаю…" : "Очистить журнал"}
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          {!eventsExpanded ? (
+            <div className="pre admin-gap-top-md">
+              События скрыты. Последних записей: {sortedEvents.length}.
+            </div>
+          ) : loading ? (
+            <div className="list admin-gap-top-md">
+              <div className="skeleton h1" />
+              <div className="skeleton p" />
+              <div className="skeleton p" />
+            </div>
+          ) : error ? (
+            <div className="pre admin-gap-top-md">{error}</div>
+          ) : visibleEvents.length === 0 ? (
+            <div className="pre admin-gap-top-md">Событий пока нет.</div>
+          ) : (
+            <>
+              <div className="list admin-gap-top-md">
+                {visibleEvents.map((item) => (
+                  <div
+                    key={item.id}
+                    className="list__item is-clickable admin-rowCard"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setOpenedEvent(item)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") setOpenedEvent(item);
+                    }}
+                  >
+                    <div className="list__main">
+                      <div className="kicker">{formatDateTime(item.created_at)}</div>
+                      <div className="list__title admin-gap-top-xs">{item.event_type}</div>
+                      <div className="list__sub">{item.reason || "Без причины"}</div>
+                    </div>
+                    <div className="admin-rowActions admin-rowActions--single">{renderDecisionChip(item.decision)}</div>
+                  </div>
+                ))}
+              </div>
+
+              {sortedEvents.length > 5 ? (
+                <div className="actions actions--1 admin-gap-top-md">
+                  <button className="btn btn--soft" type="button" onClick={() => setEventsShowAll((v) => !v)}>
+                    {eventsShowAll ? "Показать только последние 5" : `Показать все (${sortedEvents.length})`}
+                  </button>
+                </div>
+              ) : null}
+            </>
           )}
         </div>
       </div>
@@ -786,7 +830,7 @@ export function TrialProtectionSection() {
               disabled={resettingDevice === openedDevice.device_token}
               onClick={() => resetDevice(openedDevice.device_token)}
             >
-              {resettingDevice === openedDevice.device_token ? "Сброс…" : "Reset device"}
+              {resettingDevice === openedDevice.device_token ? "Очистка…" : "Clear history"}
             </button>
           </div>
         </ModalShell>
