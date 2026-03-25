@@ -618,8 +618,8 @@ export function Profile() {
 
           <div className="actions actions--1">
             {isAdmin ? (
-              <button className="btn btn--accent" onClick={() => nav("/admin/broadcasts")} type="button">
-                🛠 Broadcasts
+              <button className="btn btn--accent" onClick={() => nav("/admin")} type="button">
+                🛠 Админка
               </button>
             ) : null}
 
