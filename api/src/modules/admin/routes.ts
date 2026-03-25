@@ -37,6 +37,13 @@ function toPositiveInt(v: unknown, fallback: number, max = 200) {
   return Math.min(Math.floor(n), max);
 }
 
+function toOptionalPositiveInt(v: unknown, max = 100000) {
+  if (v === undefined || v === null || v === "") return null;
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.min(Math.floor(n), max);
+}
+
 function isTrialDeviceMode(v: unknown): v is "off" | "observe" | "enforce" {
   return v === "off" || v === "observe" || v === "enforce";
 }
@@ -439,77 +446,66 @@ export async function adminRoutes(app: FastifyInstance) {
     ensureDeviceTables();
 
     const q = (req.query ?? {}) as any;
-    const limit = toPositiveInt(q?.limit, 50, 200);
+    const limit = toOptionalPositiveInt(q?.limit);
     const showAll = String(q?.all ?? "").trim() === "1";
 
-    const items = showAll
-      ? linkDb
-          .prepare(`
-            SELECT
-              d.id,
-              d.device_token,
-              d.first_seen_at,
-              d.last_seen_at,
-              d.first_ip,
-              d.last_ip,
-              d.user_agent,
-              d.trial_used_at,
-              d.trial_user_id,
-              d.is_blocked,
-              COUNT(u.id) AS active_trial_count,
-              MAX(u.used_at) AS last_trial_used_at
-            FROM trial_devices d
-            LEFT JOIN trial_device_usage u
-              ON u.device_token = d.device_token
-            GROUP BY
-              d.id,
-              d.device_token,
-              d.first_seen_at,
-              d.last_seen_at,
-              d.first_ip,
-              d.last_ip,
-              d.user_agent,
-              d.trial_used_at,
-              d.trial_user_id,
-              d.is_blocked
-            ORDER BY d.last_seen_at DESC, d.id DESC
-            LIMIT ?
-          `)
-          .all(limit)
-      : linkDb
-          .prepare(`
-            SELECT
-              d.id,
-              d.device_token,
-              d.first_seen_at,
-              d.last_seen_at,
-              d.first_ip,
-              d.last_ip,
-              d.user_agent,
-              d.trial_used_at,
-              d.trial_user_id,
-              d.is_blocked,
-              COUNT(u.id) AS active_trial_count,
-              MAX(u.used_at) AS last_trial_used_at
-            FROM trial_devices d
-            JOIN trial_device_usage u
-              ON u.device_token = d.device_token
-            GROUP BY
-              d.id,
-              d.device_token,
-              d.first_seen_at,
-              d.last_seen_at,
-              d.first_ip,
-              d.last_ip,
-              d.user_agent,
-              d.trial_used_at,
-              d.trial_user_id,
-              d.is_blocked
-            HAVING COUNT(u.id) > 0 OR d.is_blocked = 1
-            ORDER BY d.last_seen_at DESC, d.id DESC
-            LIMIT ?
-          `)
-          .all(limit);
+    const baseSelect = `
+      SELECT
+        d.id,
+        d.device_token,
+        d.first_seen_at,
+        d.last_seen_at,
+        d.first_ip,
+        d.last_ip,
+        d.user_agent,
+        d.trial_used_at,
+        d.trial_user_id,
+        d.is_blocked,
+        COUNT(u.id) AS active_trial_count,
+        MAX(u.used_at) AS last_trial_used_at
+      FROM trial_devices d
+    `;
+
+    const allQuery = `
+      ${baseSelect}
+      LEFT JOIN trial_device_usage u
+        ON u.device_token = d.device_token
+      GROUP BY
+        d.id,
+        d.device_token,
+        d.first_seen_at,
+        d.last_seen_at,
+        d.first_ip,
+        d.last_ip,
+        d.user_agent,
+        d.trial_used_at,
+        d.trial_user_id,
+        d.is_blocked
+      ORDER BY d.last_seen_at DESC, d.id DESC
+    `;
+
+    const activeOnlyQuery = `
+      ${baseSelect}
+      JOIN trial_device_usage u
+        ON u.device_token = d.device_token
+      GROUP BY
+        d.id,
+        d.device_token,
+        d.first_seen_at,
+        d.last_seen_at,
+        d.first_ip,
+        d.last_ip,
+        d.user_agent,
+        d.trial_used_at,
+        d.trial_user_id,
+        d.is_blocked
+      HAVING COUNT(u.id) > 0 OR d.is_blocked = 1
+      ORDER BY d.last_seen_at DESC, d.id DESC
+    `;
+
+    const sql = `${showAll ? allQuery : activeOnlyQuery}${limit ? "\nLIMIT ?" : ""}`;
+    const stmt = linkDb.prepare(sql);
+    const items = limit ? stmt.all(limit) : stmt.all();
 
     return reply.send({ ok: true, items });
   });

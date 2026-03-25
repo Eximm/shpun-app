@@ -66,7 +66,7 @@ export function TrialProtectionSection() {
       const [statusResp, eventsResp, devicesResp] = await Promise.all([
         apiFetch<TrialProtectionStatusResp>("/admin/trial-protection/status", { method: "GET" }),
         apiFetch<TrialProtectionEventsResp>("/admin/trial-protection/events?limit=20", { method: "GET" }),
-        apiFetch<TrialDevicesResp>("/admin/trial-protection/devices?limit=200&all=1", { method: "GET" }),
+        apiFetch<TrialDevicesResp>("/admin/trial-protection/devices?all=1", { method: "GET" }),
       ]);
 
       setStatus(statusResp);
