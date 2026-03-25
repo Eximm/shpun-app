@@ -16,6 +16,9 @@ import type {
   TrialProtectionStatusResp,
 } from "./types";
 
+const DEVICES_PER_PAGE = 10;
+const EVENTS_PREVIEW_COUNT = 5;
+
 export function TrialProtectionSection() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -40,7 +43,8 @@ export function TrialProtectionSection() {
   const [eventsShowAll, setEventsShowAll] = useState(false);
 
   const [devicesExpanded, setDevicesExpanded] = useState(true);
-  const [devicesShowAll, setDevicesShowAll] = useState(false);
+  const [devicesPage, setDevicesPage] = useState(1);
+  const [deviceQuery, setDeviceQuery] = useState("");
 
   const [modeDraft, setModeDraft] = useState<TrialDeviceMode>("observe");
   const [ttlDraft, setTtlDraft] = useState<string>("72");
@@ -62,7 +66,7 @@ export function TrialProtectionSection() {
       const [statusResp, eventsResp, devicesResp] = await Promise.all([
         apiFetch<TrialProtectionStatusResp>("/admin/trial-protection/status", { method: "GET" }),
         apiFetch<TrialProtectionEventsResp>("/admin/trial-protection/events?limit=20", { method: "GET" }),
-        apiFetch<TrialDevicesResp>("/admin/trial-protection/devices?limit=50", { method: "GET" }),
+        apiFetch<TrialDevicesResp>("/admin/trial-protection/devices?limit=200&all=1", { method: "GET" }),
       ]);
 
       setStatus(statusResp);
@@ -269,17 +273,48 @@ export function TrialProtectionSection() {
     [devices],
   );
 
+  const filteredDevices = useMemo(() => {
+    const q = deviceQuery.trim().toLowerCase();
+    if (!q) return sortedDevices;
+
+    return sortedDevices.filter((item) => {
+      const token = String(item.device_token ?? "").toLowerCase();
+      const ip = String(item.last_ip ?? item.first_ip ?? "").toLowerCase();
+      const userAgent = String(item.user_agent ?? "").toLowerCase();
+      const trialUserId = String(item.trial_user_id ?? "").toLowerCase();
+
+      return (
+        token.includes(q) ||
+        ip.includes(q) ||
+        userAgent.includes(q) ||
+        trialUserId.includes(q)
+      );
+    });
+  }, [sortedDevices, deviceQuery]);
+
+  const totalDevicesPages = Math.max(1, Math.ceil(filteredDevices.length / DEVICES_PER_PAGE));
+
+  useEffect(() => {
+    setDevicesPage(1);
+  }, [deviceQuery]);
+
+  useEffect(() => {
+    if (devicesPage > totalDevicesPages) {
+      setDevicesPage(totalDevicesPages);
+    }
+  }, [devicesPage, totalDevicesPages]);
+
   const visibleEvents = useMemo(() => {
     if (!eventsExpanded) return [];
     if (eventsShowAll) return sortedEvents;
-    return sortedEvents.slice(0, 5);
+    return sortedEvents.slice(0, EVENTS_PREVIEW_COUNT);
   }, [eventsExpanded, eventsShowAll, sortedEvents]);
 
   const visibleDevices = useMemo(() => {
     if (!devicesExpanded) return [];
-    if (devicesShowAll) return sortedDevices;
-    return sortedDevices.slice(0, 5);
-  }, [devicesExpanded, devicesShowAll, sortedDevices]);
+    const start = (devicesPage - 1) * DEVICES_PER_PAGE;
+    return filteredDevices.slice(start, start + DEVICES_PER_PAGE);
+  }, [devicesExpanded, devicesPage, filteredDevices]);
 
   function renderDecisionChip(decision: TrialProtectionEventItem["decision"]) {
     if (decision === "block") return <span className="chip chip--bad">BLOCK</span>;
@@ -529,7 +564,7 @@ export function TrialProtectionSection() {
             <div>
               <div className="kicker">Devices</div>
               <h2 className="h2">Устройства под контролем</h2>
-              <p className="p">Список свернут и укорочен, чтобы не превращаться в простыню.</p>
+              <p className="p">Поиск, компактная выдача и постраничный просмотр без простыни.</p>
             </div>
 
             <div className="admin-rowActions">
@@ -538,7 +573,10 @@ export function TrialProtectionSection() {
                 type="button"
                 onClick={() => {
                   setDevicesExpanded((v) => !v);
-                  if (devicesExpanded) setDevicesShowAll(false);
+                  if (devicesExpanded) {
+                    setDevicesPage(1);
+                    setDeviceQuery("");
+                  }
                 }}
               >
                 {devicesExpanded ? "Скрыть" : "Показать"}
@@ -548,7 +586,7 @@ export function TrialProtectionSection() {
 
           {!devicesExpanded ? (
             <div className="pre admin-gap-top-md">
-              Устройства скрыты. Записей под контролем: {sortedDevices.length}.
+              Устройства скрыты. Всего записей: {sortedDevices.length}.
             </div>
           ) : loading ? (
             <div className="list admin-gap-top-md">
@@ -558,86 +596,139 @@ export function TrialProtectionSection() {
             </div>
           ) : error ? (
             <div className="pre admin-gap-top-md">{error}</div>
-          ) : visibleDevices.length === 0 ? (
-            <div className="pre admin-gap-top-md">Устройств под контролем сейчас нет.</div>
           ) : (
             <>
-              <div className="list admin-gap-top-md">
-                {visibleDevices.map((item) => (
-                  <div key={item.id} className="list__item admin-rowCard admin-rowCard--compact">
-                    <div className="list__main admin-clickable" onClick={() => setOpenedDevice(item)}>
-                      <div className="kicker">{formatDateTime(item.last_seen_at)}</div>
-                      <div className="list__title admin-gap-top-xs">{shortDeviceToken(item.device_token)}</div>
-                      <div className="list__sub admin-listSubCompact">
-                        <span>groups: {Number(item.active_trial_count ?? 0)}</span>
-                        <span className="paymentsHist__dot" />
-                        <span>ip: {item.last_ip || "—"}</span>
-                        <span className="paymentsHist__dot" />
-                        <span>block: {Number(item.is_blocked ?? 0) === 1 ? "yes" : "no"}</span>
-                      </div>
-                    </div>
-
-                    <div className="admin-rowActions admin-rowActions--compact">
-                      <button
-                        className="btn btn--soft"
-                        type="button"
-                        onClick={() => {
-                          copyText(item.device_token);
-                          window.alert(`Скопирован token: ${shortDeviceToken(item.device_token)}`);
-                        }}
-                      >
-                        Copy
-                      </button>
-
-                      {Number(item.is_blocked ?? 0) === 1 ? (
-                        <button
-                          className="btn btn--soft"
-                          type="button"
-                          disabled={unblockingDevice === item.device_token}
-                          onClick={() => unblockDevice(item.device_token)}
-                        >
-                          {unblockingDevice === item.device_token ? "Снятие…" : "Unblock"}
-                        </button>
-                      ) : (
-                        <button
-                          className="btn btn--soft"
-                          type="button"
-                          disabled={blockingDevice === item.device_token}
-                          onClick={() => blockDevice(item.device_token)}
-                        >
-                          {blockingDevice === item.device_token ? "Блок…" : "Block"}
-                        </button>
-                      )}
-
-                      <button
-                        className="btn btn--soft"
-                        type="button"
-                        disabled={resettingPrefix === String(item.last_ip || "") || !item.last_ip}
-                        onClick={() => resetPrefix(String(item.last_ip || ""))}
-                      >
-                        {resettingPrefix === String(item.last_ip || "") ? "Сброс сети…" : "Reset prefix"}
-                      </button>
-
-                      <button
-                        className="btn btn--danger"
-                        type="button"
-                        disabled={resettingDevice === item.device_token}
-                        onClick={() => resetDevice(item.device_token)}
-                      >
-                        {resettingDevice === item.device_token ? "Очистка…" : "History"}
-                      </button>
-                    </div>
-                  </div>
-                ))}
+              <div className="admin-gap-top-md">
+                <input
+                  className="input"
+                  type="text"
+                  value={deviceQuery}
+                  onChange={(e) => setDeviceQuery(e.target.value)}
+                  placeholder="Поиск по token / IP / user id / user-agent"
+                />
               </div>
 
-              {sortedDevices.length > 5 ? (
-                <div className="actions actions--1 admin-gap-top-md">
-                  <button className="btn btn--soft" type="button" onClick={() => setDevicesShowAll((v) => !v)}>
-                    {devicesShowAll ? "Показать только первые 5" : `Показать все (${sortedDevices.length})`}
-                  </button>
+              {visibleDevices.length === 0 ? (
+                <div className="pre admin-gap-top-md">
+                  {deviceQuery.trim() ? "Ничего не найдено по текущему фильтру." : "Устройств под контролем сейчас нет."}
                 </div>
-              ) : null}
+              ) : (
+                <>
+                  <div className="list admin-gap-top-md">
+                    {visibleDevices.map((item) => (
+                      <div key={item.id} className="list__item admin-rowCard admin-rowCard--compact">
+                        <div
+                          className="list__main admin-clickable"
+                          onClick={() => setOpenedDevice(item)}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") setOpenedDevice(item);
+                          }}
+                        >
+                          <div className="kicker">{formatDateTime(item.last_seen_at)}</div>
+                          <div className="list__title admin-gap-top-xs">{shortDeviceToken(item.device_token)}</div>
+                          <div className="list__sub admin-listSubCompact">
+                            <span>uid: {item.trial_user_id ?? "—"}</span>
+                            <span className="paymentsHist__dot" />
+                            <span>groups: {Number(item.active_trial_count ?? 0)}</span>
+                            <span className="paymentsHist__dot" />
+                            <span>ip: {item.last_ip || "—"}</span>
+                            <span className="paymentsHist__dot" />
+                            <span>block: {Number(item.is_blocked ?? 0) === 1 ? "yes" : "no"}</span>
+                          </div>
+                        </div>
+
+                        <div className="admin-rowActions admin-rowActions--compact">
+                          <button
+                            className="btn btn--soft"
+                            type="button"
+                            onClick={() => {
+                              copyText(item.device_token);
+                              window.alert(`Скопирован token: ${shortDeviceToken(item.device_token)}`);
+                            }}
+                          >
+                            Copy
+                          </button>
+
+                          {Number(item.is_blocked ?? 0) === 1 ? (
+                            <button
+                              className="btn btn--soft"
+                              type="button"
+                              disabled={unblockingDevice === item.device_token}
+                              onClick={() => unblockDevice(item.device_token)}
+                            >
+                              {unblockingDevice === item.device_token ? "Снятие…" : "Unblock"}
+                            </button>
+                          ) : (
+                            <button
+                              className="btn btn--soft"
+                              type="button"
+                              disabled={blockingDevice === item.device_token}
+                              onClick={() => blockDevice(item.device_token)}
+                            >
+                              {blockingDevice === item.device_token ? "Блок…" : "Block"}
+                            </button>
+                          )}
+
+                          <button
+                            className="btn btn--soft"
+                            type="button"
+                            disabled={resettingPrefix === String(item.last_ip || "") || !item.last_ip}
+                            onClick={() => resetPrefix(String(item.last_ip || ""))}
+                          >
+                            {resettingPrefix === String(item.last_ip || "") ? "Сброс сети…" : "Reset prefix"}
+                          </button>
+
+                          <button
+                            className="btn btn--danger"
+                            type="button"
+                            disabled={resettingDevice === item.device_token}
+                            onClick={() => resetDevice(item.device_token)}
+                          >
+                            {resettingDevice === item.device_token ? "Очистка…" : "History"}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {filteredDevices.length > DEVICES_PER_PAGE ? (
+                    <div className="actions actions--4 admin-gap-top-md">
+                      <button
+                        className="btn btn--soft"
+                        type="button"
+                        onClick={() => setDevicesPage(1)}
+                        disabled={devicesPage === 1}
+                      >
+                        « Первая
+                      </button>
+
+                      <button
+                        className="btn btn--soft"
+                        type="button"
+                        onClick={() => setDevicesPage((p) => Math.max(1, p - 1))}
+                        disabled={devicesPage === 1}
+                      >
+                        ‹ Назад
+                      </button>
+
+                      <div className="pre">
+                        Страница {devicesPage} / {totalDevicesPages} · Всего: {filteredDevices.length}
+                      </div>
+
+                      <button
+                        className="btn btn--soft"
+                        type="button"
+                        onClick={() => setDevicesPage((p) => Math.min(totalDevicesPages, p + 1))}
+                        disabled={devicesPage === totalDevicesPages}
+                      >
+                        Вперёд ›
+                      </button>
+                    </div>
+                  ) : null}
+                </>
+              )}
             </>
           )}
         </div>
@@ -710,7 +801,7 @@ export function TrialProtectionSection() {
                 ))}
               </div>
 
-              {sortedEvents.length > 5 ? (
+              {sortedEvents.length > EVENTS_PREVIEW_COUNT ? (
                 <div className="actions actions--1 admin-gap-top-md">
                   <button className="btn btn--soft" type="button" onClick={() => setEventsShowAll((v) => !v)}>
                     {eventsShowAll ? "Показать только последние 5" : `Показать все (${sortedEvents.length})`}
@@ -832,6 +923,13 @@ export function TrialProtectionSection() {
 
             <div className="list__item admin-tightItem">
               <div className="list__main">
+                <div className="list__title">User ID</div>
+                <div className="list__sub">{openedDevice.trial_user_id ?? "—"}</div>
+              </div>
+            </div>
+
+            <div className="list__item admin-tightItem">
+              <div className="list__main">
                 <div className="list__title">IP / groups</div>
                 <div className="list__sub">
                   {openedDevice.last_ip || "—"}
@@ -878,13 +976,6 @@ export function TrialProtectionSection() {
                   <div className="list__main">
                     <div className="list__title">First IP</div>
                     <div className="list__sub">{openedDevice.first_ip || "—"}</div>
-                  </div>
-                </div>
-
-                <div className="list__item admin-tightItem">
-                  <div className="list__main">
-                    <div className="list__title">Trial user ID</div>
-                    <div className="list__sub">{openedDevice.trial_user_id ?? "—"}</div>
                   </div>
                 </div>
 
