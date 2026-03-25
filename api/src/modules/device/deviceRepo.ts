@@ -885,51 +885,116 @@ export function listObservedIpPrefixes(input?: {
   const sinceTs = Number(input?.sinceTs ?? 0);
   const limit = Math.max(1, Math.min(Number(input?.limit ?? 20), 200));
 
-  const rows = linkDb
+  const deviceRows = linkDb
     .prepare(`
       SELECT
-        CASE
-          WHEN instr(COALESCE(d.last_ip, d.first_ip, ''), '.') > 0 THEN
-            substr(
-              COALESCE(d.last_ip, d.first_ip, ''),
-              1,
-              length(COALESCE(d.last_ip, d.first_ip, '')) - instr(reverse(COALESCE(d.last_ip, d.first_ip, '')), '.')
-            )
-          ELSE COALESCE(d.last_ip, d.first_ip, '')
-        END AS ipPrefix,
-        COUNT(DISTINCT d.device_token) AS devicesCount,
-        SUM(CASE WHEN d.is_blocked = 1 THEN 1 ELSE 0 END) AS blockedDevices,
-        COUNT(DISTINCT u.user_id) AS distinctUsers,
-        (
-          SELECT COUNT(*)
-          FROM trial_protection_events e
-          WHERE e.event_type = 'trial_group_check'
-            AND e.created_at >= ?
-            AND e.ip LIKE (
-              CASE
-                WHEN instr(COALESCE(d.last_ip, d.first_ip, ''), '.') > 0 THEN
-                  substr(
-                    COALESCE(d.last_ip, d.first_ip, ''),
-                    1,
-                    length(COALESCE(d.last_ip, d.first_ip, '')) - instr(reverse(COALESCE(d.last_ip, d.first_ip, '')), '.')
-                  )
-                ELSE COALESCE(d.last_ip, d.first_ip, '')
-              END
-            ) || '%'
-        ) AS attempts24h,
-        MAX(d.last_seen_at) AS lastSeenAt
+        d.device_token,
+        COALESCE(d.last_ip, d.first_ip, '') as ip,
+        d.is_blocked,
+        d.last_seen_at,
+        d.trial_user_id
       FROM trial_devices d
-      LEFT JOIN trial_device_usage u
-        ON u.device_token = d.device_token
       WHERE COALESCE(d.last_ip, d.first_ip, '') != ''
         AND d.last_seen_at >= ?
-      GROUP BY ipPrefix
-      HAVING ipPrefix IS NOT NULL
-         AND ipPrefix != ''
-      ORDER BY attempts24h DESC, devicesCount DESC, lastSeenAt DESC
-      LIMIT ?
+      ORDER BY d.last_seen_at DESC
     `)
-    .all(sinceTs, sinceTs, limit) as TrialPrefixStatsRow[];
+    .all(sinceTs) as Array<{
+      device_token?: string;
+      ip?: string;
+      is_blocked?: number;
+      last_seen_at?: number | null;
+      trial_user_id?: number | null;
+    }>;
 
-  return rows.filter((row) => String(row?.ipPrefix ?? "").trim());
+  const grouped = new Map<string, TrialPrefixStatsRow>();
+
+  for (const row of deviceRows) {
+    const ip = String(row?.ip ?? "").trim();
+    const ipPrefix = getIpPrefix(ip);
+    if (!ipPrefix) continue;
+
+    const existing = grouped.get(ipPrefix) ?? {
+      ipPrefix,
+      devicesCount: 0,
+      blockedDevices: 0,
+      distinctUsers: 0,
+      attempts24h: 0,
+      lastSeenAt: null,
+    };
+
+    existing.devicesCount += 1;
+
+    if (Number(row?.is_blocked ?? 0) === 1) {
+      existing.blockedDevices += 1;
+    }
+
+    const lastSeenAt = Number(row?.last_seen_at ?? 0) || null;
+    if (lastSeenAt && (!existing.lastSeenAt || lastSeenAt > existing.lastSeenAt)) {
+      existing.lastSeenAt = lastSeenAt;
+    }
+
+    grouped.set(ipPrefix, existing);
+  }
+
+  const usageRows = linkDb
+    .prepare(`
+      SELECT DISTINCT
+        COALESCE(d.last_ip, d.first_ip, '') as ip,
+        u.user_id
+      FROM trial_device_usage u
+      INNER JOIN trial_devices d
+        ON d.device_token = u.device_token
+      WHERE u.used_at >= ?
+        AND u.user_id IS NOT NULL
+        AND COALESCE(d.last_ip, d.first_ip, '') != ''
+    `)
+    .all(sinceTs) as Array<{ ip?: string; user_id?: number | null }>;
+
+  const usersByPrefix = new Map<string, Set<number>>();
+
+  for (const row of usageRows) {
+    const ipPrefix = getIpPrefix(String(row?.ip ?? "").trim());
+    const userId = Number(row?.user_id ?? 0);
+    if (!ipPrefix || !userId) continue;
+
+    if (!usersByPrefix.has(ipPrefix)) {
+      usersByPrefix.set(ipPrefix, new Set<number>());
+    }
+    usersByPrefix.get(ipPrefix)!.add(userId);
+  }
+
+  const attemptsRows = linkDb
+    .prepare(`
+      SELECT ip, COUNT(*) as cnt
+      FROM trial_protection_events
+      WHERE event_type = 'trial_group_check'
+        AND created_at >= ?
+        AND ip IS NOT NULL
+        AND ip != ''
+      GROUP BY ip
+    `)
+    .all(sinceTs) as Array<{ ip?: string; cnt?: number }>;
+
+  const attemptsByPrefix = new Map<string, number>();
+
+  for (const row of attemptsRows) {
+    const ipPrefix = getIpPrefix(String(row?.ip ?? "").trim());
+    if (!ipPrefix) continue;
+    attemptsByPrefix.set(ipPrefix, (attemptsByPrefix.get(ipPrefix) ?? 0) + Number(row?.cnt ?? 0));
+  }
+
+  const items = Array.from(grouped.values())
+    .map((item) => ({
+      ...item,
+      distinctUsers: usersByPrefix.get(item.ipPrefix)?.size ?? 0,
+      attempts24h: attemptsByPrefix.get(item.ipPrefix) ?? 0,
+    }))
+    .sort((a, b) => {
+      if (b.attempts24h !== a.attempts24h) return b.attempts24h - a.attempts24h;
+      if (b.devicesCount !== a.devicesCount) return b.devicesCount - a.devicesCount;
+      return (b.lastSeenAt ?? 0) - (a.lastSeenAt ?? 0);
+    })
+    .slice(0, limit);
+
+  return items;
 }
