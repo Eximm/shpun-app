@@ -22,6 +22,15 @@ export type TrialDeviceUsageRow = {
   service_id: number | null;
 };
 
+export type TrialPrefixStatsRow = {
+  ipPrefix: string;
+  devicesCount: number;
+  blockedDevices: number;
+  distinctUsers: number;
+  attempts24h: number;
+  lastSeenAt: number | null;
+};
+
 let inited = false;
 
 export function ensureDeviceTables() {
@@ -148,7 +157,7 @@ export function createDevice(input: {
       input.now,
       input.ip ?? null,
       input.ip ?? null,
-      input.userAgent ?? null
+      input.userAgent ?? null,
     );
 }
 
@@ -172,7 +181,7 @@ export function touchDevice(input: {
       input.now,
       input.ip ?? null,
       input.userAgent ?? null,
-      input.deviceToken
+      input.deviceToken,
     );
 }
 
@@ -222,7 +231,7 @@ export function resetExpiredDeviceTrialUsage(cutoffTs: number) {
 
 export function getTrialUsageByDeviceAndGroup(
   deviceToken: string,
-  trialGroup: string
+  trialGroup: string,
 ): TrialDeviceUsageRow | null {
   ensureDeviceTables();
 
@@ -263,13 +272,13 @@ export function upsertTrialUsage(input: {
       input.trialGroup,
       input.usedAt,
       input.userId ?? null,
-      input.serviceId ?? null
+      input.serviceId ?? null,
     );
 }
 
 export function deleteTrialUsageByDeviceAndGroup(
   deviceToken: string,
-  trialGroup: string
+  trialGroup: string,
 ) {
   ensureDeviceTables();
 
@@ -345,7 +354,7 @@ export function insertTrialProtectionEvent(input: {
       input.eventType,
       input.decision,
       input.reason ?? null,
-      input.metaJson ?? null
+      input.metaJson ?? null,
     );
 }
 
@@ -541,7 +550,7 @@ export function getRecentTrialUsageByIpAndGroup(input: {
       input.ip,
       input.ip,
       input.excludeDeviceToken ?? null,
-      input.excludeDeviceToken ?? null
+      input.excludeDeviceToken ?? null,
     ) as TrialDeviceUsageRow | undefined;
 
   return row ?? null;
@@ -577,7 +586,7 @@ export function countRecentTrialUsageByIpPrefix(input: {
       `${input.ipPrefix}%`,
       `${input.ipPrefix}%`,
       input.excludeDeviceToken ?? null,
-      input.excludeDeviceToken ?? null
+      input.excludeDeviceToken ?? null,
     ) as { cnt?: number } | undefined;
 
   return Number(row?.cnt ?? 0);
@@ -676,7 +685,7 @@ export function countRecentTrialAttemptsByIpPrefixAndUserAgent(input: {
         input.sinceTs,
         `${input.ipPrefix}%`,
         input.userAgent,
-        trialGroup
+        trialGroup,
       ) as { cnt?: number } | undefined;
 
     return Number(row?.cnt ?? 0);
@@ -694,10 +703,10 @@ export function countRecentTrialAttemptsByIpPrefixAndUserAgent(input: {
     .get(
       input.sinceTs,
       `${input.ipPrefix}%`,
-      input.userAgent
+      input.userAgent,
     ) as { cnt?: number } | undefined;
 
-    return Number(row?.cnt ?? 0);
+  return Number(row?.cnt ?? 0);
 }
 
 export function countDistinctUsersByIpPrefix(input: {
@@ -730,7 +739,7 @@ export function countDistinctUsersByIpPrefix(input: {
         input.sinceTs,
         trialGroup,
         `${input.ipPrefix}%`,
-        `${input.ipPrefix}%`
+        `${input.ipPrefix}%`,
       ) as { cnt?: number } | undefined;
 
     return Number(row?.cnt ?? 0);
@@ -752,7 +761,7 @@ export function countDistinctUsersByIpPrefix(input: {
     .get(
       input.sinceTs,
       `${input.ipPrefix}%`,
-      `${input.ipPrefix}%`
+      `${input.ipPrefix}%`,
     ) as { cnt?: number } | undefined;
 
   return Number(row?.cnt ?? 0);
@@ -865,4 +874,62 @@ export function deleteTrialProtectionEventsByIpPrefix(input: {
     .run(`${prefix}%`);
 
   return Number(result?.changes ?? 0);
+}
+
+export function listObservedIpPrefixes(input?: {
+  sinceTs?: number | null;
+  limit?: number | null;
+}): TrialPrefixStatsRow[] {
+  ensureDeviceTables();
+
+  const sinceTs = Number(input?.sinceTs ?? 0);
+  const limit = Math.max(1, Math.min(Number(input?.limit ?? 20), 200));
+
+  const rows = linkDb
+    .prepare(`
+      SELECT
+        CASE
+          WHEN instr(COALESCE(d.last_ip, d.first_ip, ''), '.') > 0 THEN
+            substr(
+              COALESCE(d.last_ip, d.first_ip, ''),
+              1,
+              length(COALESCE(d.last_ip, d.first_ip, '')) - instr(reverse(COALESCE(d.last_ip, d.first_ip, '')), '.')
+            )
+          ELSE COALESCE(d.last_ip, d.first_ip, '')
+        END AS ipPrefix,
+        COUNT(DISTINCT d.device_token) AS devicesCount,
+        SUM(CASE WHEN d.is_blocked = 1 THEN 1 ELSE 0 END) AS blockedDevices,
+        COUNT(DISTINCT u.user_id) AS distinctUsers,
+        (
+          SELECT COUNT(*)
+          FROM trial_protection_events e
+          WHERE e.event_type = 'trial_group_check'
+            AND e.created_at >= ?
+            AND e.ip LIKE (
+              CASE
+                WHEN instr(COALESCE(d.last_ip, d.first_ip, ''), '.') > 0 THEN
+                  substr(
+                    COALESCE(d.last_ip, d.first_ip, ''),
+                    1,
+                    length(COALESCE(d.last_ip, d.first_ip, '')) - instr(reverse(COALESCE(d.last_ip, d.first_ip, '')), '.')
+                  )
+                ELSE COALESCE(d.last_ip, d.first_ip, '')
+              END
+            ) || '%'
+        ) AS attempts24h,
+        MAX(d.last_seen_at) AS lastSeenAt
+      FROM trial_devices d
+      LEFT JOIN trial_device_usage u
+        ON u.device_token = d.device_token
+      WHERE COALESCE(d.last_ip, d.first_ip, '') != ''
+        AND d.last_seen_at >= ?
+      GROUP BY ipPrefix
+      HAVING ipPrefix IS NOT NULL
+         AND ipPrefix != ''
+      ORDER BY attempts24h DESC, devicesCount DESC, lastSeenAt DESC
+      LIMIT ?
+    `)
+    .all(sinceTs, sinceTs, limit) as TrialPrefixStatsRow[];
+
+  return rows.filter((row) => String(row?.ipPrefix ?? "").trim());
 }

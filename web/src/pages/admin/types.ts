@@ -104,6 +104,20 @@ export type TrialDevicesResp = {
   items: TrialDeviceItem[];
 };
 
+export type TrialPrefixItem = {
+  ipPrefix: string;
+  devicesCount: number;
+  blockedDevices: number;
+  distinctUsers: number;
+  attempts24h: number;
+  lastSeenAt?: number | null;
+};
+
+export type TrialPrefixesResp = {
+  ok: true;
+  items: TrialPrefixItem[];
+};
+
 export type ResetDeviceResp = {
   ok: true;
   deviceToken: string;

@@ -25,6 +25,7 @@ import {
   deleteTrialProtectionEventsByIpPrefix,
   getIpPrefix,
   deleteDeviceCompletely,
+  listObservedIpPrefixes,
 } from "../device/deviceRepo.js";
 
 async function ensureAdmin(shmSessionId: string) {
@@ -507,6 +508,25 @@ export async function adminRoutes(app: FastifyInstance) {
     const sql = `${showAll ? allQuery : activeOnlyQuery}${limit ? "\nLIMIT ?" : ""}`;
     const stmt = linkDb.prepare(sql);
     const items = limit ? stmt.all(limit) : stmt.all();
+
+    return reply.send({ ok: true, items });
+  });
+
+  app.get("/admin/trial-protection/prefixes", async (req, reply) => {
+    const s = getSessionFromRequest(req);
+    if (!s?.shmSessionId) return reply.code(401).send({ ok: false });
+
+    if (!(await ensureAdmin(s.shmSessionId))) {
+      return reply.code(403).send({ ok: false, error: "not_admin" });
+    }
+
+    ensureDeviceTables();
+
+    const q = (req.query ?? {}) as any;
+    const limit = toPositiveInt(q?.limit, 20, 100);
+    const sinceTs = Math.floor(Date.now() / 1000) - 24 * 60 * 60;
+
+    const items = listObservedIpPrefixes({ sinceTs, limit });
 
     return reply.send({ ok: true, items });
   });
