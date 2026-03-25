@@ -685,54 +685,51 @@ export function countDistinctUsersByIpPrefix(input: {
 export function listDeviceTokensByIpPrefix(ipPrefix: string): string[] {
   ensureDeviceTables();
 
-  if (!ipPrefix) return [];
+  const prefix = String(ipPrefix ?? "").trim();
+  if (!prefix) return [];
 
   const rows = linkDb
     .prepare(`
       SELECT DISTINCT device_token
       FROM trial_devices
-      WHERE
-        (last_ip LIKE ? OR first_ip LIKE ?)
+      WHERE (
+        last_ip LIKE ?
+        OR first_ip LIKE ?
+      )
         AND device_token IS NOT NULL
         AND device_token != ''
     `)
-    .all(`${ipPrefix}%`, `${ipPrefix}%`) as Array<{ device_token?: string }>;
+    .all(`${prefix}%`, `${prefix}%`) as Array<{ device_token?: string }>;
 
   return rows
-    .map((r) => String(r?.device_token ?? "").trim())
+    .map((row) => String(row?.device_token ?? "").trim())
     .filter(Boolean);
 }
 
-export function deleteAllTrialUsageByDeviceTokens(deviceTokens: string[]) {
+export function deleteAllTrialUsageByDeviceTokens(deviceTokens: string[]): number {
   ensureDeviceTables();
 
-  const cleaned = Array.from(
-    new Set(deviceTokens.map((x) => String(x ?? "").trim()).filter(Boolean))
-  );
+  const tokens = Array.from(new Set(deviceTokens.map((x) => String(x ?? "").trim()).filter(Boolean)));
+  if (tokens.length === 0) return 0;
 
-  if (cleaned.length === 0) return 0;
-
-  const placeholders = cleaned.map(() => "?").join(", ");
+  const placeholders = tokens.map(() => "?").join(", ");
   const result = linkDb
     .prepare(`
       DELETE FROM trial_device_usage
       WHERE device_token IN (${placeholders})
     `)
-    .run(...cleaned);
+    .run(...tokens);
 
   return Number(result?.changes ?? 0);
 }
 
-export function resetTrialUsageByDeviceTokens(deviceTokens: string[]) {
+export function resetTrialUsageByDeviceTokens(deviceTokens: string[]): number {
   ensureDeviceTables();
 
-  const cleaned = Array.from(
-    new Set(deviceTokens.map((x) => String(x ?? "").trim()).filter(Boolean))
-  );
+  const tokens = Array.from(new Set(deviceTokens.map((x) => String(x ?? "").trim()).filter(Boolean)));
+  if (tokens.length === 0) return 0;
 
-  if (cleaned.length === 0) return 0;
-
-  const placeholders = cleaned.map(() => "?").join(", ");
+  const placeholders = tokens.map(() => "?").join(", ");
   const result = linkDb
     .prepare(`
       UPDATE trial_devices
@@ -740,28 +737,25 @@ export function resetTrialUsageByDeviceTokens(deviceTokens: string[]) {
           trial_user_id = NULL
       WHERE device_token IN (${placeholders})
     `)
-    .run(...cleaned);
+    .run(...tokens);
 
   return Number(result?.changes ?? 0);
 }
 
-export function setDevicesBlockedByTokens(deviceTokens: string[], isBlocked: boolean) {
+export function setDevicesBlockedByTokens(deviceTokens: string[], isBlocked: boolean): number {
   ensureDeviceTables();
 
-  const cleaned = Array.from(
-    new Set(deviceTokens.map((x) => String(x ?? "").trim()).filter(Boolean))
-  );
+  const tokens = Array.from(new Set(deviceTokens.map((x) => String(x ?? "").trim()).filter(Boolean)));
+  if (tokens.length === 0) return 0;
 
-  if (cleaned.length === 0) return 0;
-
-  const placeholders = cleaned.map(() => "?").join(", ");
+  const placeholders = tokens.map(() => "?").join(", ");
   const result = linkDb
     .prepare(`
       UPDATE trial_devices
       SET is_blocked = ?
       WHERE device_token IN (${placeholders})
     `)
-    .run(isBlocked ? 1 : 0, ...cleaned);
+    .run(isBlocked ? 1 : 0, ...tokens);
 
   return Number(result?.changes ?? 0);
 }
@@ -769,11 +763,11 @@ export function setDevicesBlockedByTokens(deviceTokens: string[], isBlocked: boo
 export function deleteTrialProtectionEventsByIpPrefix(input: {
   ipPrefix: string;
   sinceTs?: number | null;
-}) {
+}): number {
   ensureDeviceTables();
 
-  const ipPrefix = String(input.ipPrefix ?? "").trim();
-  if (!ipPrefix) return 0;
+  const prefix = String(input.ipPrefix ?? "").trim();
+  if (!prefix) return 0;
 
   if (input.sinceTs != null) {
     const result = linkDb
@@ -782,7 +776,7 @@ export function deleteTrialProtectionEventsByIpPrefix(input: {
         WHERE ip LIKE ?
           AND created_at >= ?
       `)
-      .run(`${ipPrefix}%`, input.sinceTs);
+      .run(`${prefix}%`, input.sinceTs);
 
     return Number(result?.changes ?? 0);
   }
@@ -792,7 +786,7 @@ export function deleteTrialProtectionEventsByIpPrefix(input: {
       DELETE FROM trial_protection_events
       WHERE ip LIKE ?
     `)
-    .run(`${ipPrefix}%`);
+    .run(`${prefix}%`);
 
   return Number(result?.changes ?? 0);
 }

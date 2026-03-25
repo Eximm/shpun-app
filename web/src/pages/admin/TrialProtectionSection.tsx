@@ -6,6 +6,7 @@ import type {
   BlockDeviceResp,
   ClearEventsResp,
   ResetDeviceResp,
+  ResetPrefixResp,
   TrialDeviceItem,
   TrialDeviceMode,
   TrialDevicesResp,
@@ -20,6 +21,7 @@ export function TrialProtectionSection() {
   const [refreshing, setRefreshing] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const [resettingDevice, setResettingDevice] = useState<string | null>(null);
+  const [resettingPrefix, setResettingPrefix] = useState<string | null>(null);
   const [blockingDevice, setBlockingDevice] = useState<string | null>(null);
   const [unblockingDevice, setUnblockingDevice] = useState<string | null>(null);
   const [clearingEvents, setClearingEvents] = useState(false);
@@ -168,6 +170,44 @@ export function TrialProtectionSection() {
       setError(e?.message || "Не удалось очистить историю устройства.");
     } finally {
       setResettingDevice(null);
+    }
+  }
+
+  async function resetPrefix(ipOrPrefix: string) {
+    const raw = String(ipOrPrefix ?? "").trim();
+    if (!raw || raw === "—") {
+      setError("У устройства нет IP/prefix для сброса.");
+      return;
+    }
+
+    const ok = window.confirm(
+      `Снять сетевой trial-lock для IP/prefix?\n\n${raw}\n\nБудут очищены usage и события по этой сети в пределах TTL.`,
+    );
+    if (!ok) return;
+
+    setResettingPrefix(raw);
+    setError(null);
+    setOkText(null);
+
+    try {
+      const r = await apiFetch<ResetPrefixResp>("/admin/trial-protection/reset-prefix", {
+        method: "POST",
+        body: { ip: raw, clearEvents: 1, unblockDevices: 1 },
+      });
+
+      setOkText(
+        `Сетевой reset выполнен: prefix=${r.ipPrefix}, devices=${r.matchedDevices}, usage=${r.deletedUsage}, events=${r.deletedEvents}`,
+      );
+
+      if (openedDevice?.last_ip === raw || openedDevice?.first_ip === raw) {
+        setOpenedDevice(null);
+      }
+
+      await load({ silent: true });
+    } catch (e: any) {
+      setError(e?.message || "Не удалось снять сетевой trial-lock.");
+    } finally {
+      setResettingPrefix(null);
     }
   }
 
@@ -570,6 +610,15 @@ export function TrialProtectionSection() {
                       )}
 
                       <button
+                        className="btn btn--soft"
+                        type="button"
+                        disabled={resettingPrefix === String(item.last_ip || "") || !item.last_ip}
+                        onClick={() => resetPrefix(String(item.last_ip || ""))}
+                      >
+                        {resettingPrefix === String(item.last_ip || "") ? "Сброс сети…" : "Reset prefix"}
+                      </button>
+
+                      <button
                         className="btn btn--danger"
                         type="button"
                         disabled={resettingDevice === item.device_token}
@@ -849,7 +898,7 @@ export function TrialProtectionSection() {
             </details>
           </div>
 
-          <div className="actions actions--3 admin-gap-top-lg">
+          <div className="actions actions--4 admin-gap-top-lg">
             <button className="btn btn--soft" type="button" onClick={() => copyText(openedDevice.device_token)}>
               Copy token
             </button>
@@ -873,6 +922,15 @@ export function TrialProtectionSection() {
                 {blockingDevice === openedDevice.device_token ? "Блок…" : "Block"}
               </button>
             )}
+
+            <button
+              className="btn btn--soft"
+              type="button"
+              disabled={resettingPrefix === String(openedDevice.last_ip || "") || !openedDevice.last_ip}
+              onClick={() => resetPrefix(String(openedDevice.last_ip || ""))}
+            >
+              {resettingPrefix === String(openedDevice.last_ip || "") ? "Сброс сети…" : "Reset prefix"}
+            </button>
 
             <button
               className="btn btn--danger"

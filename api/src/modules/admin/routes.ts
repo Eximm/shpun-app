@@ -28,8 +28,7 @@ import {
 
 async function ensureAdmin(shmSessionId: string) {
   const r = await shmShpunAppAdminStatus(shmSessionId);
-  const isAdmin = r.ok && (r.json?.is_admin === 1 || r.json?.is_admin === true);
-  return isAdmin;
+  return r.ok && (r.json?.is_admin === 1 || r.json?.is_admin === true);
 }
 
 function toPositiveInt(v: unknown, fallback: number, max = 200) {
@@ -101,7 +100,6 @@ export async function adminRoutes(app: FastifyInstance) {
     }
 
     const r = await shmShpunAppAdminSettingsGet(s.shmSessionId);
-
     if (!r.ok) {
       return reply.code(502).send({ ok: false, error: "shm_error" });
     }
@@ -550,7 +548,7 @@ export async function adminRoutes(app: FastifyInstance) {
     return reply.send({ ok: true, deviceToken, reset: true });
   });
 
-   app.post("/admin/trial-protection/reset-prefix", async (req, reply) => {
+  app.post("/admin/trial-protection/reset-prefix", async (req, reply) => {
     const s = getSessionFromRequest(req);
     if (!s?.shmSessionId) return reply.code(401).send({ ok: false });
 

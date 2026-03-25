@@ -110,6 +110,16 @@ export type ResetDeviceResp = {
   reset: true;
 };
 
+export type ResetPrefixResp = {
+  ok: true;
+  ipPrefix: string;
+  matchedDevices: number;
+  resetDevices: number;
+  deletedUsage: number;
+  unblockedDevices: number;
+  deletedEvents: number;
+};
+
 export type BlockDeviceResp = {
   ok: true;
   deviceToken: string;
