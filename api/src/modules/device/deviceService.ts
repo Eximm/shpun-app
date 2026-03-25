@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import {
   createDevice,
   getDeviceByToken,
@@ -15,12 +16,14 @@ import {
   countRecentTrialAttemptsByIpPrefixAndUserAgent,
   countRecentTrialUsageByIpPrefix,
   countRecentDistinctDevicesByIpPrefix,
+  countDistinctUsersByIpPrefix,
 } from "./deviceRepo.js";
 
 export type TrialDeviceMode = "off" | "observe" | "enforce";
 
 let cachedMode: TrialDeviceMode | null = null;
 let cachedTtlHours: number | null = null;
+let lastCleanupTs = 0;
 
 function nowTs(): number {
   return Math.floor(Date.now() / 1000);
@@ -60,8 +63,19 @@ export function normalizeDeviceToken(v: unknown): string {
   return String(v ?? "").trim().slice(0, 200);
 }
 
+function buildFallbackDeviceToken(ip?: string | null, userAgent?: string | null): string {
+  const raw = `${ip || ""}|${userAgent || ""}`;
+  return "fp_" + crypto.createHash("sha256").update(raw).digest("hex").slice(0, 32);
+}
+
 export function getRequestDeviceToken(req: any): string {
-  return normalizeDeviceToken(req?.headers?.["x-device-token"]);
+  const raw = normalizeDeviceToken(req?.headers?.["x-device-token"]);
+  if (raw) return raw;
+
+  const ip = getRequestIp(req);
+  const userAgent = getRequestUserAgent(req);
+
+  return buildFallbackDeviceToken(ip, userAgent);
 }
 
 export function getRequestIp(req: any): string {
@@ -75,8 +89,12 @@ export function getRequestUserAgent(req: any): string {
 }
 
 function cleanupExpiredTrialUsage() {
+  const now = nowTs();
+  if (now - lastCleanupTs < 60) return;
+  lastCleanupTs = now;
+
   const ttlSeconds = getTrialDeviceTtlSeconds();
-  const cutoffTs = nowTs() - ttlSeconds;
+  const cutoffTs = now - ttlSeconds;
 
   resetExpiredDeviceTrialUsage(cutoffTs);
   deleteExpiredTrialUsage(cutoffTs);
@@ -164,6 +182,7 @@ export function getTrialRiskProfile(input: {
   ipPrefixAttemptThreshold?: number;
   ipPrefixDistinctDevicesThreshold?: number;
   ipPrefixUserAgentAttemptThreshold?: number;
+  ipPrefixDistinctUsersThreshold?: number;
 }) {
   const ip = String(input.ip ?? "").trim();
   const userAgent = String(input.userAgent ?? "").trim();
@@ -178,11 +197,10 @@ export function getTrialRiskProfile(input: {
   const attemptThreshold = Math.max(3, Number(input.ipPrefixAttemptThreshold ?? 3) || 3);
   const distinctDevicesThreshold = Math.max(3, Number(input.ipPrefixDistinctDevicesThreshold ?? 3) || 3);
   const uaAttemptThreshold = Math.max(2, Number(input.ipPrefixUserAgentAttemptThreshold ?? 2) || 2);
+  const distinctUsersThreshold = Math.max(3, Number(input.ipPrefixDistinctUsersThreshold ?? 3) || 3);
 
   const exactIpReuseRow =
-    ip && trialGroup
-      ? hasIpUsedTrialInGroup({ ip, deviceToken, trialGroup })
-      : null;
+    ip && trialGroup ? hasIpUsedTrialInGroup({ ip, deviceToken, trialGroup }) : null;
 
   const ipPrefixUsageCount =
     ipPrefix && trialGroup
@@ -219,20 +237,31 @@ export function getTrialRiskProfile(input: {
         })
       : 0;
 
+  const ipPrefixDistinctUsers = ipPrefix
+    ? countDistinctUsersByIpPrefix({
+        ipPrefix,
+        sinceTs,
+        trialGroup: trialGroup || null,
+      })
+    : 0;
+
   const ipPrefixUsageMatched = ipPrefixUsageCount >= usageThreshold;
   const ipPrefixAttemptMatched = ipPrefixAttemptCount >= attemptThreshold;
   const ipPrefixDistinctDevicesMatched = ipPrefixDistinctDevices >= distinctDevicesThreshold;
   const ipPrefixUserAgentMatched = ipPrefixUserAgentAttemptCount >= uaAttemptThreshold;
+  const ipPrefixDistinctUsersMatched = ipPrefixDistinctUsers >= distinctUsersThreshold;
 
   const mediumSignals = [
     ipPrefixUsageMatched,
     ipPrefixAttemptMatched,
     ipPrefixDistinctDevicesMatched,
     ipPrefixUserAgentMatched,
+    ipPrefixDistinctUsersMatched,
   ].filter(Boolean).length;
 
   const highRisk =
     !!exactIpReuseRow ||
+    ipPrefixDistinctUsersMatched ||
     mediumSignals >= 2 ||
     (ipPrefixUsageMatched && ipPrefixUserAgentMatched);
 
@@ -253,6 +282,9 @@ export function getTrialRiskProfile(input: {
     ipPrefixUserAgentAttemptCount,
     ipPrefixUserAgentAttemptThreshold: uaAttemptThreshold,
     ipPrefixUserAgentMatched,
+    ipPrefixDistinctUsers,
+    ipPrefixDistinctUsersThreshold: distinctUsersThreshold,
+    ipPrefixDistinctUsersMatched,
   };
 }
 
