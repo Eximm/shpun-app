@@ -53,9 +53,17 @@ function go(url: string) {
 function detectKind(category?: string): ServiceKind {
   if (!category) return "unknown";
   if (category.startsWith("vpn-")) return "amneziawg";
-  if (category === "marzban") return "marzban";
-  if (category === "marzban-r") return "marzban_router";
+
+  if (category === "marzban" || category.startsWith("marzban-")) {
+    if (category === "marzban-r") return "marzban_router";
+    return "marzban";
+  }
+
   return "unknown";
+}
+
+function isWhiteListCategory(category?: string) {
+  return category === "marzban-wl";
 }
 
 function kindTitle(k: ServiceKind, t: (k: string, fb?: string) => string) {
@@ -340,6 +348,7 @@ function ServiceCard({
   const until = s.expireAt ? fmtDate(s.expireAt) : "";
   const kind = detectKind(s.category);
   const hint = hintText(s, t);
+  const isWL = isWhiteListCategory(s.category);
 
   const payUrl = `/payments?reason=service&usi=${encodeURIComponent(String(s.userServiceId))}`;
   const supportUrl = `/support?topic=service&usi=${encodeURIComponent(String(s.userServiceId))}`;
@@ -385,8 +394,9 @@ function ServiceCard({
             </div>
             <div className="svc__sub svc__sub--compact">{compactMeta}</div>
           </div>
-
           <div className="svc__right">
+            {isWL ? <span className="badge badge--wl">{t("services.wl.badge", "WL")}</span> : null}
+
             <span className="badge">
               {fmtMoney(s.price, s.currency)} / {s.periodMonths || 1}
               {t("services.month_short", "mo")}
@@ -401,6 +411,23 @@ function ServiceCard({
 
       {expanded ? (
         <div className="svc__details">
+          {isWL && s.status === "active" ? (
+            <div
+              className="pre"
+              style={{
+                borderColor: "rgba(96,165,250,.30)",
+                background: "rgba(96,165,250,.08)",
+              }}
+            >
+              <div>
+                <b>{t("services.wl.badge", "WL")}</b> — {t("services.wl.hint", "White List mode")}
+              </div>
+              <div>{t("services.wl.warning", "Traffic in this mode may be limited.")}</div>
+            </div>
+          ) : null}
+
+          {s.descr ? <div className="p">{s.descr}</div> : null}
+
           {s.status === "active" ? (
             <div className="actions actions--1">
               <button
@@ -887,13 +914,9 @@ export function Services() {
           <div className="card">
             <div className="card__body">
               <div className="services-empty">
-                <div className="services-empty__title">
-                  {t("services.empty.title", "You have no active services yet")}
-                </div>
+                <div className="services-empty__title">{t("services.empty.title", "You have no active services yet")}</div>
 
-                <div className="services-empty__text">
-                  Выберите тариф и подключите доступ.
-                </div>
+                <div className="services-empty__text">Выберите тариф и подключите доступ.</div>
 
                 <div className="services-empty__actions">
                   <button className="btn btn--danger services-head__cta" onClick={() => go("/services/order")}>

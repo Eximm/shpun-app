@@ -340,6 +340,9 @@ export const RU: Dict = {
   "setpwd.err.generic": "Не удалось сохранить пароль.",
 
   // services
+  "services.wl.badge": "WL",
+  "services.wl.hint":"White List режим — используйте только в сетях с белыми списками или если обычное подключение не работает.",
+  "services.wl.warning":  "Трафик в этом режиме может быть ограничен.",
   "services.title": "Услуги",
   "services.sub": "Ваши услуги и их текущий статус.",
   "services.loading": "Загрузка...",
@@ -1174,6 +1177,9 @@ export const EN: Dict = {
   "setpwd.err.generic": "Could not save password.",
 
   // services
+  "services.wl.badge": "WL",
+  "services.wl.hint": "White List mode — use only in networks with white lists or when the regular connection does not work.",
+  "services.wl.warning": "Traffic in this mode may be limited.",
   "services.title": "Services",
   "services.sub": "Your services and their current status.",
   "services.loading": "Loading...",
