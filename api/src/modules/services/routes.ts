@@ -11,6 +11,7 @@ import {
   shmShpunAppRouterBind,
   shmShpunAppRouterList,
   shmShpunAppRouterUnbind,
+  shmShpunAppTemplate,
   shmStopUserService,
   shmStorageManageGetText,
   shmShpunAppAdminSettingsGet,
@@ -669,6 +670,160 @@ export async function servicesRoutes(app: FastifyInstance) {
 
     return reply.send({ ok: true, unbound: j?.unbound ?? 0, clean_code: j?.clean_code ?? "" });
   });
+
+// =====================
+// ROUTER CONFIG
+// =====================
+
+app.get("/services/:usi/router/config", async (req, reply) => {
+  const shmSessionId = ensureAuthed(req, reply);
+  if (!shmSessionId) return;
+
+  const debug = isDebug(req);
+
+  const usi = Number((req.params as any)?.usi ?? 0);
+  if (!usi || !Number.isFinite(usi)) {
+    return reply.code(400).send({ ok: false, error: "bad_request", details: "usi_required" });
+  }
+
+  const svc = await loadUserServiceByUsi(shmSessionId, usi);
+  if (!svc.ok) {
+    return sendShmError(reply, {
+      status: svc.status,
+      details: svc.json ?? svc.text,
+      debug,
+      message: "Не удалось получить данные услуги. Попробуйте ещё раз.",
+    });
+  }
+  if (!svc.item) {
+    return reply.code(404).send({ ok: false, error: "service_not_found" });
+  }
+
+  const statusRaw = String(svc.item?.status ?? "");
+  const category = String(svc.item?.service?.category ?? svc.item?.category ?? "");
+
+  if (category !== "marzban-r") {
+    return reply.code(400).send({
+      ok: false,
+      error: "not_router_service",
+      message: "Эта услуга не поддерживает настройки роутера.",
+    });
+  }
+
+  if (String(statusRaw).toUpperCase() !== "ACTIVE") {
+    return reply.code(409).send({
+      ok: false,
+      error: "service_not_ready",
+      status: statusRaw,
+      message: "Услуга ещё не готова.",
+    });
+  }
+
+  const r = await shmShpunAppTemplate(shmSessionId, "router.config.get", {
+    usi,
+  });
+
+  const j: any = r.json ?? {};
+
+  if (!r.ok) {
+    return sendTemplateError(reply, {
+      message: "Не удалось получить конфигурацию",
+      details: r.json ?? r.text,
+      debug,
+      status: r.status,
+    });
+  }
+
+  if ((j?.ok ?? 0) !== 1) {
+    return reply.code(400).send({
+      ok: false,
+      error: j?.error || "config_get_failed",
+      details: debug ? j : undefined,
+    });
+  }
+
+  return reply.send({
+    ok: true,
+    links: Array.isArray(j?.links) ? j.links : [],
+  });
+});
+
+app.post("/services/:usi/router/config", async (req, reply) => {
+  const shmSessionId = ensureAuthed(req, reply);
+  if (!shmSessionId) return;
+
+  const debug = isDebug(req);
+
+  const usi = Number((req.params as any)?.usi ?? 0);
+  const { link } = (req.body ?? {}) as any;
+
+  if (!usi || !Number.isFinite(usi)) {
+    return reply.code(400).send({ ok: false, error: "bad_request", details: "usi_required" });
+  }
+
+  if (!link || !String(link).trim()) {
+    return reply.code(400).send({ ok: false, error: "bad_request", details: "link_required" });
+  }
+
+  const svc = await loadUserServiceByUsi(shmSessionId, usi);
+  if (!svc.ok) {
+    return sendShmError(reply, {
+      status: svc.status,
+      details: svc.json ?? svc.text,
+      debug,
+      message: "Не удалось получить данные услуги. Попробуйте ещё раз.",
+    });
+  }
+  if (!svc.item) {
+    return reply.code(404).send({ ok: false, error: "service_not_found" });
+  }
+
+  const statusRaw = String(svc.item?.status ?? "");
+  const category = String(svc.item?.service?.category ?? svc.item?.category ?? "");
+
+  if (category !== "marzban-r") {
+    return reply.code(400).send({
+      ok: false,
+      error: "not_router_service",
+      message: "Эта услуга не поддерживает настройки роутера.",
+    });
+  }
+
+  if (String(statusRaw).toUpperCase() !== "ACTIVE") {
+    return reply.code(409).send({
+      ok: false,
+      error: "service_not_ready",
+      status: statusRaw,
+      message: "Услуга ещё не готова.",
+    });
+  }
+
+  const r = await shmShpunAppTemplate(shmSessionId, "router.config.set", {
+    usi,
+    link: String(link).trim(),
+  });
+
+  const j: any = r.json ?? {};
+
+  if (!r.ok) {
+    return sendTemplateError(reply, {
+      message: "Не удалось сохранить настройки",
+      details: r.json ?? r.text,
+      debug,
+      status: r.status,
+    });
+  }
+
+  if ((j?.ok ?? 0) !== 1) {
+    return reply.code(400).send({
+      ok: false,
+      error: j?.error || "config_set_failed",
+      details: debug ? j : undefined,
+    });
+  }
+
+  return reply.send({ ok: true });
+});
 
   app.get("/services/order", async (req, reply) => {
     const shmSessionId = ensureAuthed(req, reply);

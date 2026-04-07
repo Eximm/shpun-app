@@ -792,6 +792,18 @@ export const RU: Dict = {
   "connect.show_qr_desc": "Отсканируйте QR для ручного добавления в приложение.",
 
   // ROUTER
+
+  "router.config.title": "Настройки подключения",
+  "router.config.protocol": "Протокол",
+  "router.config.location": "Локация",
+  "router.config.save": "Сохранить",
+  "router.config.saving": "Сохраняем…",
+
+  "router.protocol.ss": "Shadowsocks",
+  "router.protocol.vless": "VLESS",
+
+  "router.config.saved": "Настройки сохранены",
+  "router.config.save_error": "Не удалось сохранить настройки",
   "router.hint": "Введите код с экрана роутера, чтобы привязать устройство к этой услуге.",
   "router.loading": "Загрузка состояния…",
 
@@ -1630,6 +1642,18 @@ export const EN: Dict = {
   "connect.show_qr_desc": "Scan the QR code for manual import into the app.",
   
   // Router
+  
+  "router.config.title": "Connection settings",
+  "router.config.protocol": "Protocol",
+  "router.config.location": "Location",
+  "router.config.save": "Save",
+  "router.config.saving": "Saving…",
+
+  "router.protocol.ss": "Shadowsocks",
+  "router.protocol.vless": "VLESS",
+
+  "router.config.saved": "Settings saved",
+  "router.config.save_error": "Failed to save settings",
   "router.hint": "Enter the code from your router screen to link it to this service.",
   "router.loading": "Loading router status…",
 
