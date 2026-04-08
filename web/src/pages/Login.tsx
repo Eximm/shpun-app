@@ -37,6 +37,7 @@ function getTelegramBotUsername(): string {
 
 type Mode = "telegram" | "web";
 type AuthModal = "none" | "login" | "register";
+type TgWidgetState = "idle" | "loading" | "ready" | "failed";
 
 type RegisterEmailClientCode =
   | "email_required"
@@ -315,10 +316,12 @@ export function Login() {
   });
 
   const [emailTouched, setEmailTouched] = useState(false);
+  const [tgWidgetState, setTgWidgetState] = useState<TgWidgetState>("idle");
 
   const autoLoginStarted = useRef(false);
   const widgetWrapRef = useRef<HTMLDivElement | null>(null);
   const referralHandledRef = useRef(false);
+  const tgWidgetMountAttemptedRef = useRef(false);
 
   const lastToastRef = useRef<{ msg: string; at: number }>({ msg: "", at: 0 });
 
@@ -547,8 +550,76 @@ export function Login() {
     }
   }
 
+  async function mountTelegramWidget(force = false) {
+    if (mode !== "web") return;
+    if (!botUsername) {
+      setTgWidgetState("failed");
+      return;
+    }
+
+    if (!force && (tgWidgetState === "loading" || tgWidgetState === "ready")) return;
+
+    const container = document.getElementById("tg-widget-container");
+    if (!container) return;
+
+    container.innerHTML = "";
+    setTgWidgetState("loading");
+
+    const w = window as any;
+    w.__shpunTelegramWidgetAuth = (user: Record<string, any>) => {
+      void telegramLoginWidget(user);
+    };
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const script = document.createElement("script");
+        script.async = true;
+        script.src = "https://telegram.org/js/telegram-widget.js?22";
+        script.setAttribute("data-telegram-login", botUsername);
+        script.setAttribute("data-size", "large");
+        script.setAttribute("data-userpic", "true");
+        script.setAttribute("data-request-access", "write");
+        script.setAttribute("data-onauth", "__shpunTelegramWidgetAuth(user)");
+
+        const timeoutId = window.setTimeout(() => {
+          reject(new Error("tg_widget_timeout"));
+        }, 1800);
+
+        script.onload = () => {
+          window.clearTimeout(timeoutId);
+          resolve();
+        };
+
+        script.onerror = () => {
+          window.clearTimeout(timeoutId);
+          reject(new Error("tg_widget_failed"));
+        };
+
+        container.appendChild(script);
+      });
+
+      setTgWidgetState("ready");
+    } catch {
+      container.innerHTML = "";
+      setTgWidgetState("failed");
+    }
+  }
+
   function focusWidget() {
     widgetWrapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function openTelegramPanel() {
+    if (mode === "telegram") {
+      void telegramLoginMiniApp();
+      return;
+    }
+
+    if (tgWidgetState === "idle" || tgWidgetState === "failed") {
+      void mountTelegramWidget(true);
+    }
+
+    focusWidget();
   }
 
   useEffect(() => {
@@ -645,39 +716,58 @@ export function Login() {
 
   useEffect(() => {
     if (mode !== "web") return;
-
-    const containerId = "tg-widget-container";
-    const container = document.getElementById(containerId);
-    if (!container) return;
-
-    container.innerHTML = "";
     if (!botUsername) return;
+    if (tgWidgetMountAttemptedRef.current) return;
 
-    const w = window as any;
-    w.__shpunTelegramWidgetAuth = (user: Record<string, any>) => {
-      void telegramLoginWidget(user);
+    tgWidgetMountAttemptedRef.current = true;
+
+    let cancelled = false;
+    let timerId: number | undefined;
+    let idleId: number | undefined;
+
+    const start = () => {
+      if (cancelled) return;
+      void mountTelegramWidget(false);
     };
 
-    const script = document.createElement("script");
-    script.async = true;
-    script.src = "https://telegram.org/js/telegram-widget.js?22";
-    script.setAttribute("data-telegram-login", botUsername);
-    script.setAttribute("data-size", "large");
-    script.setAttribute("data-userpic", "true");
-    script.setAttribute("data-request-access", "write");
-    script.setAttribute("data-onauth", "__shpunTelegramWidgetAuth(user)");
-
-    container.appendChild(script);
+    if (typeof (window as any).requestIdleCallback === "function") {
+      idleId = (window as any).requestIdleCallback(() => {
+        timerId = window.setTimeout(start, 350);
+      }) as number;
+    } else {
+      timerId = window.setTimeout(start, 900);
+    }
 
     return () => {
-      container.innerHTML = "";
+      cancelled = true;
+
+      if (
+        typeof idleId === "number" &&
+        typeof (window as any).cancelIdleCallback === "function"
+      ) {
+        (window as any).cancelIdleCallback(idleId);
+      }
+
+      if (typeof timerId === "number") {
+        window.clearTimeout(timerId);
+      }
+    };
+  }, [mode, botUsername]);
+
+  useEffect(() => {
+    return () => {
+      const container = document.getElementById("tg-widget-container");
+      if (container) {
+        container.innerHTML = "";
+      }
+
       try {
         delete (window as any).__shpunTelegramWidgetAuth;
       } catch {
         // ignore
       }
     };
-  }, [mode, botUsername, partnerId]);
+  }, []);
 
   const passwordModal = authModal !== "none" ? (
     <div className="modal" role="dialog" aria-modal="true">
@@ -959,13 +1049,39 @@ export function Login() {
           ) : (
             <div ref={widgetWrapRef} className="login__dividerMt14">
               <div className="pre login__preMb10">
-                {t("login.widget.tip", "Быстрый вход в аккаунт через Telegram.")}
+                {tgWidgetState === "failed"
+                  ? t(
+                      "login.widget.failed",
+                      "Telegram сейчас отвечает медленно. Вы можете войти по e-mail и паролю или попробовать загрузить вход ещё раз."
+                    )
+                  : tgWidgetState === "loading"
+                    ? t("login.widget.loading", "Пробуем загрузить Telegram-вход...")
+                    : t("login.widget.tip", "Быстрый вход в аккаунт через Telegram.")}
               </div>
 
               {!botUsername ? (
                 <div className="pre">{t("login.widget.unavailable", "Вход через Telegram сейчас недоступен.")}</div>
               ) : (
-                <div id="tg-widget-container" className="login__widgetBox" />
+                <>
+                  <div id="tg-widget-container" className="login__widgetBox" />
+
+                  {(tgWidgetState === "idle" || tgWidgetState === "failed") && (
+                    <div className="auth__actions">
+                      <button
+                        type="button"
+                        className="btn login__btnFull"
+                        onClick={() => {
+                          void mountTelegramWidget(true);
+                        }}
+                        disabled={loading}
+                      >
+                        {tgWidgetState === "failed"
+                          ? t("login.widget.retry", "Попробовать Telegram ещё раз")
+                          : t("login.widget.open", "Загрузить вход через Telegram")}
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -1003,7 +1119,7 @@ export function Login() {
           <div className="auth__providers">
             <button
               className="btn auth__provider login__providerBtn"
-              onClick={mode === "telegram" ? () => void telegramLoginMiniApp() : focusWidget}
+              onClick={openTelegramPanel}
               disabled={loading}
               type="button"
             >
@@ -1013,7 +1129,9 @@ export function Login() {
                 <span className="auth__providerHint">
                   {mode === "telegram"
                     ? t("login.providers.telegram.hint.tg", "быстрый вход")
-                    : t("login.providers.telegram.hint.web", "открыть вход")}
+                    : tgWidgetState === "loading"
+                      ? t("login.providers.telegram.hint.loading", "загрузка...")
+                      : t("login.providers.telegram.hint.web", "открыть вход")}
                 </span>
               </span>
               <span className="auth__providerRight">→</span>
