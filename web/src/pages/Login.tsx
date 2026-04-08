@@ -550,60 +550,60 @@ export function Login() {
     }
   }
 
-async function mountTelegramWidget(force = false) {
-  if (mode !== "web") return;
-  if (!botUsername) {
-    setTgWidgetState("failed");
-    return;
-  }
+  async function mountTelegramWidget(force = false) {
+    if (mode !== "web") return;
+    if (!botUsername) {
+      setTgWidgetState("failed");
+      return;
+    }
 
-  if (!force && (tgWidgetState === "loading" || tgWidgetState === "ready")) return;
+    if (!force && (tgWidgetState === "loading" || tgWidgetState === "ready")) return;
 
-  const container = document.getElementById("tg-widget-container");
-  if (!container) return;
+    const container = document.getElementById("tg-widget-container");
+    if (!container) return;
 
-  container.innerHTML = "";
-  setTgWidgetState("loading");
-
-  const w = window as any;
-  w.__shpunTelegramWidgetAuth = (user: Record<string, any>) => {
-    void telegramLoginWidget(user);
-  };
-
-  try {
-    await new Promise<void>((resolve, reject) => {
-      const script = document.createElement("script");
-      script.async = true;
-      script.src = "/vendor/telegram-widget.js";
-      script.setAttribute("data-telegram-login", botUsername);
-      script.setAttribute("data-size", "large");
-      script.setAttribute("data-userpic", "true");
-      script.setAttribute("data-request-access", "write");
-      script.setAttribute("data-onauth", "__shpunTelegramWidgetAuth(user)");
-
-      const timeoutId = window.setTimeout(() => {
-        reject(new Error("tg_widget_timeout"));
-      }, 1800);
-
-      script.onload = () => {
-        window.clearTimeout(timeoutId);
-        resolve();
-      };
-
-      script.onerror = () => {
-        window.clearTimeout(timeoutId);
-        reject(new Error("tg_widget_failed"));
-      };
-
-      container.appendChild(script);
-    });
-
-    setTgWidgetState("ready");
-  } catch {
     container.innerHTML = "";
-    setTgWidgetState("failed");
+    setTgWidgetState("loading");
+
+    const w = window as any;
+    w.__shpunTelegramWidgetAuth = (user: Record<string, any>) => {
+      void telegramLoginWidget(user);
+    };
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const script = document.createElement("script");
+        script.async = true;
+        script.src = "/vendor/telegram-widget.js";
+        script.setAttribute("data-telegram-login", botUsername);
+        script.setAttribute("data-size", "large");
+        script.setAttribute("data-userpic", "true");
+        script.setAttribute("data-request-access", "write");
+        script.setAttribute("data-onauth", "__shpunTelegramWidgetAuth(user)");
+
+        const timeoutId = window.setTimeout(() => {
+          reject(new Error("tg_widget_timeout"));
+        }, 1800);
+
+        script.onload = () => {
+          window.clearTimeout(timeoutId);
+          resolve();
+        };
+
+        script.onerror = () => {
+          window.clearTimeout(timeoutId);
+          reject(new Error("tg_widget_failed"));
+        };
+
+        container.appendChild(script);
+      });
+
+      setTgWidgetState("ready");
+    } catch {
+      container.innerHTML = "";
+      setTgWidgetState("failed");
+    }
   }
-}
 
   function focusWidget() {
     widgetWrapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
