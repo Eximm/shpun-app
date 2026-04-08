@@ -353,7 +353,6 @@ export function Login() {
   const autoLoginStarted = useRef(false);
   const widgetWrapRef = useRef<HTMLDivElement | null>(null);
   const referralHandledRef = useRef(false);
-  const tgWidgetMountAttemptedRef = useRef(false);
   const authOkHandledRef = useRef(false);
   const redirectErrorHandledRef = useRef<string>("");
 
@@ -369,7 +368,6 @@ export function Login() {
 
   const canPasswordLogin = login.trim().length > 0 && password.length > 0;
   const passwordsMatch = password2.length === 0 ? true : password === password2;
-  const currentPartnerId = normalizePartnerId(partnerIdInput);
 
   const registerEmailCode =
     authModal === "register" ? validateRegisterEmailClient(login) : null;
@@ -798,30 +796,6 @@ export function Login() {
   }, [mode]);
 
   useEffect(() => {
-    if (mode !== "web") return;
-    if (!botUsername) return;
-    if (tgWidgetMountAttemptedRef.current) return;
-
-    tgWidgetMountAttemptedRef.current = true;
-
-    let cancelled = false;
-    let timerId: number | undefined;
-
-    timerId = window.setTimeout(() => {
-      if (!cancelled) {
-        void mountTelegramWidget(false);
-      }
-    }, 250);
-
-    return () => {
-      cancelled = true;
-      if (typeof timerId === "number") {
-        window.clearTimeout(timerId);
-      }
-    };
-  }, [mode, botUsername]);
-
-  useEffect(() => {
     return () => {
       const container = document.getElementById("tg-widget-container");
       if (container) {
@@ -866,7 +840,7 @@ export function Login() {
           </div>
 
           <div className="modal__content">
-            {authModal === "register" && currentPartnerId > 0 && (
+            {authModal === "register" && normalizePartnerId(partnerIdInput) > 0 && (
               <div className="pre">
                 {t(
                   "login.partner.notice",
@@ -887,7 +861,11 @@ export function Login() {
               }}
             >
               <div className="field">
-                <label className="field__label">{t("login.password.login", "E-mail")}</label>
+                <label className="field__label">
+                  {authModal === "register"
+                    ? t("login.password.login", "E-mail")
+                    : t("login.password.login_or_email", "Логин или e-mail")}
+                </label>
                 <input
                   className={`input ${authModal === "register" && emailTouched && registerEmailCode ? "input--invalid" : ""}`}
                   placeholder={
@@ -902,7 +880,7 @@ export function Login() {
                   }}
                   autoComplete="username"
                   disabled={loading}
-                  inputMode="email"
+                  inputMode={authModal === "register" ? "email" : "text"}
                 />
                 {authModal === "register" && emailTouched && registerEmailMessage && (
                   <div className="login__fieldError">{registerEmailMessage}</div>
@@ -1062,9 +1040,9 @@ export function Login() {
                   {partnerId > 0
                     ? t(
                         "login.desc.web.partner",
-                        "Вы открыли приглашение. Зарегистрируйтесь или войдите через Telegram."
+                        "Ваш личный кабинет для сервисов Shpun. Войдите или создайте аккаунт по приглашению."
                       )
-                    : t("login.desc.web", "Войдите через Telegram или по e-mail и паролю.")}
+                    : t("login.desc.web.short", "Ваш личный кабинет для сервисов Shpun.")}
                 </p>
               )}
             </div>
@@ -1080,10 +1058,9 @@ export function Login() {
             <div className="login__whatTitle">{t("login.what.title", "Что такое Shpun App")}</div>
 
             <div className="login__whatList">
-              <div>✅ {t("login.what.1", "Shpun App — это ваш личный кабинет для управления сервисами Shpun.")}</div>
-              <div>💳 {t("login.what.2", "Здесь собраны баланс, услуги, оплаты, бонусы и важные уведомления.")}</div>
-              <div>⚙️ {t("login.what.3", "Вы можете быстро открыть нужный раздел и управлять аккаунтом в одном месте.")}</div>
-              <div>✈️ {t("login.what.4", "Через Telegram вход занимает всего пару секунд.")}</div>
+              <div>✅ {t("login.what.1.short", "Личный кабинет для сервисов Shpun.")}</div>
+              <div>💳 {t("login.what.2.short", "Баланс, оплаты и бонусы.")}</div>
+              <div>⚙️ {t("login.what.3.short", "Услуги, настройки и уведомления.")}</div>
             </div>
           </div>
 
@@ -1097,7 +1074,33 @@ export function Login() {
           )}
 
           <div className="auth__divider login__dividerMt14">
-            <span>{t("login.divider.telegram", "Вход через Telegram")}</span>
+            <span>{t("login.divider.password", "E-mail и пароль")}</span>
+          </div>
+
+          <div className="auth__actions">
+            <button
+              type="button"
+              className="btn login__btnFull"
+              onClick={() => openModal("login")}
+              disabled={loading}
+            >
+              {t("login.password.open_login", "Войти по логину или e-mail")}
+            </button>
+
+            <button
+              type="button"
+              className="btn btn--primary login__btnFull"
+              onClick={() => openModal("register")}
+              disabled={loading}
+            >
+              {partnerId > 0
+                ? t("login.password.open_register_partner", "Зарегистрироваться по приглашению")
+                : t("login.password.open_register", "Создать аккаунт")}
+            </button>
+          </div>
+
+          <div className="auth__divider login__dividerMt14">
+            <span>{t("login.divider.telegram", "Telegram")}</span>
           </div>
 
           {mode === "telegram" ? (
@@ -1118,16 +1121,21 @@ export function Login() {
               <div className="pre login__preMb10">
                 {tgWidgetState === "failed"
                   ? t(
-                      "login.widget.failed",
-                      "Не удалось загрузить вход через Telegram. Попробуйте ещё раз или войдите по e-mail и паролю."
+                      "login.widget.failed.soft",
+                      "Вход через Telegram сейчас может работать нестабильно. Попробуйте ещё раз или войдите по e-mail и паролю."
                     )
                   : tgWidgetState === "loading"
                     ? t("login.widget.loading", "Пробуем загрузить вход через Telegram...")
-                    : t("login.widget.tip", "Быстрый вход в аккаунт через Telegram.")}
+                    : t(
+                        "login.widget.tip.secondary",
+                        "Быстрый вход через Telegram как дополнительный способ авторизации."
+                      )}
               </div>
 
               {!botUsername ? (
-                <div className="pre">{t("login.widget.unavailable", "Вход через Telegram сейчас недоступен.")}</div>
+                <div className="pre">
+                  {t("login.widget.unavailable", "Вход через Telegram сейчас недоступен.")}
+                </div>
               ) : (
                 <>
                   <div id="tg-widget-container" className="login__widgetBox" />
@@ -1144,7 +1152,7 @@ export function Login() {
                       >
                         {tgWidgetState === "failed"
                           ? t("login.widget.retry", "Попробовать Telegram ещё раз")
-                          : t("login.widget.open", "Загрузить вход через Telegram")}
+                          : t("login.widget.open", "Открыть вход через Telegram")}
                       </button>
                     </div>
                   )}
@@ -1152,32 +1160,6 @@ export function Login() {
               )}
             </div>
           )}
-
-          <div className="auth__divider login__dividerMt14">
-            <span>{t("login.divider.password", "E-mail и пароль")}</span>
-          </div>
-
-          <div className="auth__actions">
-            <button
-              type="button"
-              className="btn login__btnFull"
-              onClick={() => openModal("login")}
-              disabled={loading}
-            >
-              {t("login.password.open_login", "Войти по e-mail")}
-            </button>
-
-            <button
-              type="button"
-              className="btn btn--primary login__btnFull"
-              onClick={() => openModal("register")}
-              disabled={loading}
-            >
-              {partnerId > 0
-                ? t("login.password.open_register_partner", "Зарегистрироваться по приглашению")
-                : t("login.password.open_register", "Создать аккаунт")}
-            </button>
-          </div>
 
           <div className="auth__divider login__dividerMt14">
             <span>{t("login.divider.providers", "Другие способы")}</span>
