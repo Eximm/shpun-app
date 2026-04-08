@@ -643,41 +643,81 @@ export function Login() {
     }
   }, [mode]);
 
-  useEffect(() => {
-    if (mode !== "web") return;
+useEffect(() => {
+  if (mode !== "web") return;
 
-    const containerId = "tg-widget-container";
-    const container = document.getElementById(containerId);
-    if (!container) return;
+  const containerId = "tg-widget-container";
+  const container = document.getElementById(containerId);
+  if (!container) return;
 
-    container.innerHTML = "";
-    if (!botUsername) return;
+  const safeContainer = container as HTMLDivElement;
 
-    const w = window as any;
-    w.__shpunTelegramWidgetAuth = (user: Record<string, any>) => {
-      void telegramLoginWidget(user);
-    };
+  safeContainer.innerHTML = "";
+  if (!botUsername) return;
 
-    const script = document.createElement("script");
-    script.async = true;
-    script.src = "https://telegram.org/js/telegram-widget.js?22";
-    script.setAttribute("data-telegram-login", botUsername);
-    script.setAttribute("data-size", "large");
-    script.setAttribute("data-userpic", "true");
-    script.setAttribute("data-request-access", "write");
-    script.setAttribute("data-onauth", "__shpunTelegramWidgetAuth(user)");
+  const w = window as any;
+  w.__shpunTelegramWidgetAuth = (user: Record<string, any>) => {
+    void telegramLoginWidget(user);
+  };
 
-    container.appendChild(script);
+  let finished = false;
 
-    return () => {
-      container.innerHTML = "";
-      try {
-        delete (window as any).__shpunTelegramWidgetAuth;
-      } catch {
-        // ignore
+  function showFallback() {
+    if (finished) return;
+    finished = true;
+
+    safeContainer.innerHTML =
+      '<div class="pre">' +
+      '⚠️ Вход через Telegram сейчас не загрузился.<br/><br/>' +
+      'Попробуйте включить VPN или войти по e-mail и паролю.' +
+      '</div>';
+  }
+
+  const script = document.createElement("script");
+  script.async = true;
+  script.src = "/vendor/telegram-widget.js";
+  script.setAttribute("data-telegram-login", botUsername);
+  script.setAttribute("data-size", "large");
+  script.setAttribute("data-userpic", "true");
+  script.setAttribute("data-request-access", "write");
+  script.setAttribute("data-onauth", "__shpunTelegramWidgetAuth(user)");
+
+  script.onload = () => {
+    window.setTimeout(() => {
+      if (finished) return;
+
+      const iframe = safeContainer.querySelector("iframe");
+      const tgEl = safeContainer.firstElementChild;
+
+      if (iframe || tgEl) {
+        finished = true;
+        return;
       }
-    };
-  }, [mode, botUsername, partnerId]);
+
+      showFallback();
+    }, 1200);
+  };
+
+  script.onerror = () => {
+    showFallback();
+  };
+
+  safeContainer.appendChild(script);
+
+  const timeoutId = window.setTimeout(() => {
+    showFallback();
+  }, 5000);
+
+  return () => {
+    window.clearTimeout(timeoutId);
+    safeContainer.innerHTML = "";
+    try {
+      delete (window as any).__shpunTelegramWidgetAuth;
+    } catch {
+      // ignore
+    }
+  };
+}, [mode, botUsername, partnerId]);
 
   const passwordModal = authModal !== "none" ? (
     <div className="modal" role="dialog" aria-modal="true">
