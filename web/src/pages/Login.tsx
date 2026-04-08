@@ -47,6 +47,7 @@ type RegisterEmailClientCode =
 const PARTNER_LS_KEY = "partner_id_pending";
 const AUTH_PENDING_KEY = "auth:pending";
 const AUTH_PENDING_AT_KEY = "auth:pending_at";
+const AUTH_EVER_KEY = "auth:ever_succeeded";
 
 function setAuthPending(provider: string) {
   try {
@@ -66,6 +67,22 @@ function clearAuthPending() {
   }
 }
 
+function markAuthEverSucceeded() {
+  try {
+    localStorage.setItem(AUTH_EVER_KEY, "1");
+  } catch {
+    // ignore
+  }
+}
+
+function hasEverSucceededAuth(): boolean {
+  try {
+    return localStorage.getItem(AUTH_EVER_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 function sleep(ms: number) {
   return new Promise<void>((resolve) => {
     window.setTimeout(resolve, ms);
@@ -80,6 +97,18 @@ async function ensureAuthorizedAfterAuth(attempts = 4, delayMs = 180) {
       await sleep(delayMs);
     }
   }
+  return null;
+}
+
+async function waitTelegramInitData(timeoutMs = 2200): Promise<string | null> {
+  const started = Date.now();
+
+  while (Date.now() - started < timeoutMs) {
+    const initData = getTelegramInitData();
+    if (initData) return initData;
+    await sleep(120);
+  }
+
   return null;
 }
 
@@ -174,6 +203,9 @@ function mapRedirectError(e: string, t: (k: string, fb?: string) => string): str
       return t("login.err.no_shm_session", "Не удалось открыть сессию. Попробуйте ещё раз.");
     case "user_lookup_failed":
       return t("login.err.user_lookup_failed", "Не удалось загрузить данные аккаунта. Попробуйте ещё раз.");
+    case "not_authenticated":
+    case "session_expired":
+      return t("login.err.not_authenticated", "Нужно войти заново.");
     default:
       return t("login.err.unknown", "Не удалось выполнить вход. Попробуйте ещё раз.");
   }
@@ -322,6 +354,8 @@ export function Login() {
   const widgetWrapRef = useRef<HTMLDivElement | null>(null);
   const referralHandledRef = useRef(false);
   const tgWidgetMountAttemptedRef = useRef(false);
+  const authOkHandledRef = useRef(false);
+  const redirectErrorHandledRef = useRef<string>("");
 
   const lastToastRef = useRef<{ msg: string; at: number }>({ msg: "", at: 0 });
 
@@ -396,6 +430,8 @@ export function Login() {
       toastError(msg || "login_failed");
       return;
     }
+
+    markAuthEverSucceeded();
 
     const nextRaw = String((r as any).next ?? "home").trim();
     const next = nextRaw || "home";
@@ -506,10 +542,22 @@ export function Login() {
     }
   }
 
-  async function telegramLoginMiniApp() {
-    const initData = tgInitData || getTelegramInitData();
+  async function telegramLoginMiniApp(opts?: { silent?: boolean }) {
+    const silent = !!opts?.silent;
+
+    let initData = tgInitData || getTelegramInitData();
+
     if (!initData) {
-      toastError(t("error.open_in_tg", "Откройте приложение в Telegram для быстрого входа."));
+      initData = await waitTelegramInitData(2200);
+      if (initData) {
+        setTgInitData(initData);
+      }
+    }
+
+    if (!initData) {
+      if (!silent) {
+        toastError(t("error.open_in_tg", "Откройте приложение в Telegram для быстрого входа."));
+      }
       return;
     }
 
@@ -525,7 +573,10 @@ export function Login() {
       await goAfterAuth(r, "telegram");
     } catch (e: unknown) {
       clearAuthPending();
-      toastError(errorToAuthRaw(e, t("error.telegram_login_failed", "Не удалось войти через Telegram.")));
+
+      if (!silent) {
+        toastError(errorToAuthRaw(e, t("error.telegram_login_failed", "Не удалось войти через Telegram.")));
+      }
     } finally {
       setLoading(false);
     }
@@ -574,7 +625,7 @@ export function Login() {
       await new Promise<void>((resolve, reject) => {
         const script = document.createElement("script");
         script.async = true;
-        script.src = "/vendor/telegram-widget.js";
+        script.src = "https://telegram.org/js/telegram-widget.js?22";
         script.setAttribute("data-telegram-login", botUsername);
         script.setAttribute("data-size", "large");
         script.setAttribute("data-userpic", "true");
@@ -583,7 +634,7 @@ export function Login() {
 
         const timeoutId = window.setTimeout(() => {
           reject(new Error("tg_widget_timeout"));
-        }, 1800);
+        }, 1500);
 
         script.onload = () => {
           window.clearTimeout(timeoutId);
@@ -627,41 +678,60 @@ export function Login() {
     const a = String(sp.get("a") ?? "").trim().toLowerCase();
     const p = String(sp.get("p") ?? "").trim().toLowerCase();
 
-    if (a === "auth_ok") {
-      const provider = p || "auth";
+    if (a !== "auth_ok") return;
+    if (authOkHandledRef.current) return;
 
-      setAuthPending(provider);
+    authOkHandledRef.current = true;
 
-      sp.delete("a");
-      sp.delete("p");
+    const provider = p || "auth";
+    setAuthPending(provider);
 
-      const nextSearch = sp.toString();
-      const nextUrl = window.location.pathname + (nextSearch ? `?${nextSearch}` : "") + window.location.hash;
+    sp.delete("a");
+    sp.delete("p");
 
-      window.history.replaceState(null, "", nextUrl);
+    const nextSearch = sp.toString();
+    const nextUrl = window.location.pathname + (nextSearch ? `?${nextSearch}` : "") + window.location.hash;
 
-      void (async () => {
-        const me = await ensureAuthorizedAfterAuth();
-        if (me) {
-          nav("/", { replace: true });
-          return;
-        }
+    window.history.replaceState(null, "", nextUrl);
 
-        clearAuthPending();
-        toast.error(t("login.toast.error_title", "Ошибка"), {
-          description: t(
-            "login.auth.finish_failed",
-            "Не удалось завершить вход. Попробуйте ещё раз."
-          ),
-        });
-      })();
-    }
+    void (async () => {
+      const me = await ensureAuthorizedAfterAuth();
+      if (me) {
+        markAuthEverSucceeded();
+        nav("/", { replace: true });
+        return;
+      }
+
+      clearAuthPending();
+      toast.error(t("login.toast.error_title", "Ошибка"), {
+        description: t(
+          "login.auth.finish_failed",
+          "Не удалось завершить вход. Попробуйте ещё раз."
+        ),
+      });
+    })();
   }, [loc?.search, nav, t]);
 
   useEffect(() => {
     const sp = new URLSearchParams(String(loc?.search ?? ""));
-    const e = sp.get("e") ?? "";
+    const e = String(sp.get("e") ?? "").trim();
     if (!e) return;
+
+    if (redirectErrorHandledRef.current === e) return;
+    redirectErrorHandledRef.current = e;
+
+    const hadPreviousAuth =
+      hasEverSucceededAuth() ||
+      !!sessionStorage.getItem(AUTH_PENDING_KEY);
+
+    const sessionRelated =
+      e === "not_authenticated" ||
+      e === "session_expired" ||
+      e === "no_shm_session";
+
+    if (sessionRelated && !hadPreviousAuth) {
+      return;
+    }
 
     const msg = mapRedirectError(e, t);
     if (msg) toastError(msg);
@@ -691,27 +761,40 @@ export function Login() {
     tg?.ready?.();
     tg?.expand?.();
 
-    if (mode === "telegram") {
-      const pull = () => setTgInitData(getTelegramInitData());
+    if (mode !== "telegram") return;
 
-      pull();
-      const t1 = window.setTimeout(pull, 50);
-      const t2 = window.setTimeout(pull, 200);
-      const t3 = window.setTimeout(pull, 600);
+    let cancelled = false;
 
-      if (!autoLoginStarted.current) {
-        autoLoginStarted.current = true;
-        window.setTimeout(() => {
-          void telegramLoginMiniApp();
-        }, 180);
+    const pull = () => {
+      const next = getTelegramInitData();
+      if (next && !cancelled) {
+        setTgInitData(next);
       }
+    };
 
-      return () => {
-        window.clearTimeout(t1);
-        window.clearTimeout(t2);
-        window.clearTimeout(t3);
-      };
+    pull();
+
+    const t1 = window.setTimeout(pull, 80);
+    const t2 = window.setTimeout(pull, 250);
+    const t3 = window.setTimeout(pull, 700);
+
+    if (!autoLoginStarted.current) {
+      autoLoginStarted.current = true;
+
+      void (async () => {
+        await sleep(250);
+        if (!cancelled) {
+          await telegramLoginMiniApp({ silent: true });
+        }
+      })();
     }
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+      window.clearTimeout(t3);
+    };
   }, [mode]);
 
   useEffect(() => {
@@ -723,31 +806,15 @@ export function Login() {
 
     let cancelled = false;
     let timerId: number | undefined;
-    let idleId: number | undefined;
 
-    const start = () => {
-      if (cancelled) return;
-      void mountTelegramWidget(false);
-    };
-
-    if (typeof (window as any).requestIdleCallback === "function") {
-      idleId = (window as any).requestIdleCallback(() => {
-        timerId = window.setTimeout(start, 350);
-      }) as number;
-    } else {
-      timerId = window.setTimeout(start, 900);
-    }
+    timerId = window.setTimeout(() => {
+      if (!cancelled) {
+        void mountTelegramWidget(false);
+      }
+    }, 250);
 
     return () => {
       cancelled = true;
-
-      if (
-        typeof idleId === "number" &&
-        typeof (window as any).cancelIdleCallback === "function"
-      ) {
-        (window as any).cancelIdleCallback(idleId);
-      }
-
       if (typeof timerId === "number") {
         window.clearTimeout(timerId);
       }
@@ -1052,10 +1119,10 @@ export function Login() {
                 {tgWidgetState === "failed"
                   ? t(
                       "login.widget.failed",
-                      "Telegram сейчас отвечает медленно. Вы можете войти по e-mail и паролю или попробовать загрузить вход ещё раз."
+                      "Не удалось загрузить вход через Telegram. Попробуйте ещё раз или войдите по e-mail и паролю."
                     )
                   : tgWidgetState === "loading"
-                    ? t("login.widget.loading", "Пробуем загрузить Telegram-вход...")
+                    ? t("login.widget.loading", "Пробуем загрузить вход через Telegram...")
                     : t("login.widget.tip", "Быстрый вход в аккаунт через Telegram.")}
               </div>
 

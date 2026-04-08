@@ -1,4 +1,4 @@
-﻿import { Navigate, useLocation, useNavigate } from "react-router-dom";
+﻿import { Navigate, useLocation } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMe } from "./useMe";
 import {
@@ -19,6 +19,17 @@ const AUTH_PENDING_AT_KEY = "auth:pending_at";
 // persistent auth-session keys
 const AUTH_SESSION_ID_PREFIX = "auth.session.id:u:";
 const PUSH_ONBOARDING_SEEN_PREFIX = "push.onboarding.seen:";
+
+// marker реальной прошлой успешной авторизации
+const AUTH_EVER_KEY = "auth:ever_succeeded";
+
+function hasEverSucceededAuth(): boolean {
+  try {
+    return localStorage.getItem(AUTH_EVER_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
 
 function isTelegramMiniApp(): boolean {
   try {
@@ -57,8 +68,6 @@ function ensureAuthSessionId(uid: number): string {
   const existing = readAuthSessionId(uid);
   if (existing) return existing;
 
-  // fallback для уже авторизованных пользователей после деплоя,
-  // без нового логина. Должен быть стабильным между reload / reopen.
   const fallback = `${uid}:persisted`;
   writeAuthSessionId(uid, fallback);
   return fallback;
@@ -121,6 +130,7 @@ function shouldNotifyExpiredSession(pathname: string, search: string): boolean {
   if (p === "/login" || p === "/register" || p === "/set-password") return false;
   if (hasFreshAuthPending()) return false;
   if (hasReferralContext(search)) return false;
+  if (!hasEverSucceededAuth()) return false;
 
   return true;
 }
@@ -273,7 +283,6 @@ function rememberPartnerIdFromUrl() {
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const { me, loading, authRequired } = useMe();
   const loc = useLocation();
-  const nav = useNavigate();
 
   const notifiedRef = useRef(false);
   const successShownRef = useRef(false);
@@ -303,8 +312,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     rememberPartnerIdFromUrl();
   }, []);
 
-  // Новая успешная авторизация -> новый authSessionId.
-  // Только это событие должно "разрешать спросить заново".
   useEffect(() => {
     if (!me || loading || !uid) return;
     if (telegramMiniApp) return;
@@ -358,20 +365,13 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
     notifiedRef.current = true;
 
-    const notify = shouldNotifyExpiredSession(loc.pathname, loc.search);
-
-    if (notify) {
+    if (shouldNotifyExpiredSession(loc.pathname, loc.search)) {
       toast.error("Сессия истекла", {
         description: "Пожалуйста, авторизуйтесь снова.",
         durationMs: 3500,
       });
     }
-
-    nav("/login", {
-      replace: true,
-      state: { from: loc.pathname + (loc.search || "") },
-    });
-  }, [authRequired, nav, loc.pathname, loc.search]);
+  }, [authRequired, loc.pathname, loc.search]);
 
   useEffect(() => {
     if (loading) {
@@ -407,7 +407,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
     if (!uid) return;
 
-    // На переходах внутри приложения второй раз не заходим.
     if (onboardingCheckedForUidRef.current === uid) return;
     onboardingCheckedForUidRef.current = uid;
 
@@ -504,10 +503,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   const loginState = { from: loc.pathname + (loc.search || "") };
 
-  if (authRequired) {
-    return <Navigate to="/login" replace state={loginState} />;
-  }
-
   if (loading) {
     return (
       <>
@@ -541,7 +536,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!me) {
+  if (authRequired || !me) {
     return <Navigate to="/login" replace state={loginState} />;
   }
 
