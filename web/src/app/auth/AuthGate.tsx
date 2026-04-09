@@ -33,8 +33,7 @@ function hasEverSucceededAuth(): boolean {
 
 function isTelegramMiniApp(): boolean {
   try {
-    const tg = (window as any)?.Telegram?.WebApp;
-    return typeof tg?.initData === "string" && tg.initData.length > 0;
+    return !!(window as any)?.Telegram?.WebApp;
   } catch {
     return false;
   }

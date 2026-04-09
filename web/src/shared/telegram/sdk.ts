@@ -35,7 +35,7 @@ function hasTelegramLaunchHints(): boolean {
 
 export function isTelegramMiniAppEnv(): boolean {
   const tg = getTelegramWebApp();
-  if (tg?.initData && tg.initData.length > 0) return true;
+  if (tg) return true;
   return hasTelegramLaunchHints();
 }
 
