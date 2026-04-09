@@ -678,6 +678,92 @@ button, a { -webkit-tap-highlight-color: transparent; }
   line-height: 1.45;
 }
 
+.home-newsCard {
+  display: block;
+}
+
+.home-newsCard__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.home-newsCard__title {
+  min-width: 0;
+  flex: 1 1 auto;
+  font-weight: 900;
+  letter-spacing: 0.1px;
+  line-height: 1.28;
+  overflow-wrap: anywhere;
+}
+
+.home-newsCard__date {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.home-newsCard__preview {
+  margin-top: 10px;
+  padding-right: 0;
+}
+
+@media (max-width: 420px) {
+  .home-newsCard__head {
+    gap: 8px;
+  }
+
+  .home-newsCard__date {
+    font-size: 11px;
+    padding: 5px 8px;
+  }
+}
+
+.home-install__cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  text-align: left;
+  min-height: 64px;
+}
+
+.home-install__ctaIcon {
+  flex: 0 0 auto;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.home-install__ctaText {
+  min-width: 0;
+  flex: 1 1 auto;
+
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.home-install__ctaTitle {
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1.15;
+}
+
+.home-install__ctaSub {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: rgba(6, 8, 20, 0.72);
+}
+
+.home-install__ctaArrow {
+  flex: 0 0 auto;
+  font-size: 18px;
+  font-weight: 900;
+  opacity: 0.9;
+}
+
 .feed-modalCard__head {
   display: block;
 }

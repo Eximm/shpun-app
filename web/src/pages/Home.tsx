@@ -586,79 +586,99 @@ export function Home() {
                 <div className="home-install__sub">{t("home.install.card.sub", "В браузере доступны все функции приложения.")}</div>
               </div>
 
-              <div className="home-install__btnwrap">
-                <button className="btn btn--primary home-install__btn" onClick={openExternalAuthPage}>
-                  {t("home.install.card.open", "Открыть в браузере")}
-                </button>
-              </div>
+            <div className="home-install__btnwrap">
+              <button
+                className="btn btn--primary home-install__btn home-install__cta"
+                onClick={openExternalAuthPage}
+              >
+                <span className="home-install__ctaIcon" aria-hidden>🌐</span>
+
+                <span className="home-install__ctaText">
+                  <span className="home-install__ctaTitle">
+                    {t("home.install.card.open", "Открыть в браузере")}
+                  </span>
+                  <span className="home-install__ctaSub">
+                    {t("home.install.card.sub", "В браузере доступны все функции приложения.")}
+                  </span>
+                </span>
+
+                <span className="home-install__ctaArrow" aria-hidden>↗</span>
+              </button>
+            </div>
             </div>
           </div>
         </div>
       ) : null}
 
-      <div className="section">
-        <div className="card">
-          <div className="card__body">
-            <div className="home-block-head">
-              <div>
-                <div className="h1">{t("home.news.title", "Новости")}</div>
-                <div className="p">{t("home.news.subtitle", "Короткие обновления и важные сообщения.")}</div>
+        <div className="section">
+          <div className="card">
+            <div className="card__body">
+              <div className="home-block-head">
+                <div>
+                  <div className="h1">{t("home.news.title", "Новости")}</div>
+                  <div className="p">{t("home.news.subtitle", "Короткие обновления и важные сообщения.")}</div>
+                </div>
               </div>
-            </div>
 
-            <div className="list home-newsList">
-              {newsLoading ? (
-                <>
-                  <div className="skeleton h1" />
-                  <div className="skeleton p" />
-                </>
-              ) : newsItems.length ? (
-                newsItems.map((n) => {
-                  const preview = buildHomeNewsPreview(n);
+              <div className="list home-newsList">
+                {newsLoading ? (
+                  <>
+                    <div className="skeleton h1" />
+                    <div className="skeleton p" />
+                  </>
+                ) : newsItems.length ? (
+                  newsItems.map((n) => {
+                    const preview = buildHomeNewsPreview(n);
 
-                  return (
-                    <Link key={n.event_id} to="/feed" className="home-link">
-                      <div className="list__item">
-                        <div className="list__main">
-                          <div className="list__title" style={{ paddingRight: 0 }}>
-                            {n.title || t("home.news.item.fallback", "Сообщение")}
+                    return (
+                      <Link key={n.event_id} to="/feed" className="home-link">
+                        <div className="list__item home-newsCard">
+                          <div className="home-newsCard__head">
+                            <div className="home-newsCard__title">
+                              {n.title || t("home.news.item.fallback", "Сообщение")}
+                            </div>
+
+                            <span className="chip chip--soft home-newsCard__date">
+                              {fmtFeedDate(n.ts, t("home.news.today", "Сегодня"))}
+                            </span>
                           </div>
+
                           {preview ? (
-                          <div className="list__sub home-news__preview" style={{ paddingRight: 0 }}>
-                            {preview}
-                          </div>
-                        ) : null}
+                            <div className="list__sub home-news__preview home-newsCard__preview">
+                              {preview}
+                            </div>
+                          ) : null}
                         </div>
-                        <div className="list__side">
-                          <span className="chip chip--soft">{fmtFeedDate(n.ts, t("home.news.today", "Сегодня"))}</span>
+                      </Link>
+                    );
+                  })
+                ) : (
+                  <Link to="/feed" className="home-link">
+                    <div className="list__item home-newsCard">
+                      <div className="home-newsCard__head">
+                        <div className="home-newsCard__title">
+                          {t("home.news.empty.title", "Пока новостей нет")}
                         </div>
-                      </div>
-                    </Link>
-                  );
-                })
-              ) : (
-                <Link to="/feed" className="home-link">
-                  <div className="list__item">
-                    <div className="list__main">
-                      <div className="list__title">{t("home.news.empty.title", "Пока новостей нет")}</div>
-                      <div className="list__sub">{t("home.news.empty.sub", "Когда появятся обновления, они будут здесь.")}</div>
-                    </div>
-                    <div className="list__side">
-                      <span className="chip chip--soft">—</span>
-                    </div>
-                  </div>
-                </Link>
-              )}
-            </div>
 
-            <div className="home-cta">
-              <Link className="btn btn--accent home-cta__btn" to="/feed">
-                {t("home.news.open", "Открыть")}
-              </Link>
+                        <span className="chip chip--soft home-newsCard__date">—</span>
+                      </div>
+
+                      <div className="list__sub home-news__preview home-newsCard__preview">
+                        {t("home.news.empty.sub", "Когда появятся обновления, они будут здесь.")}
+                      </div>
+                    </div>
+                  </Link>
+                )}
+              </div>
+
+              <div className="home-cta">
+                <Link className="btn btn--accent home-cta__btn" to="/feed">
+                  {t("home.news.open", "Открыть")}
+                </Link>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
       <div className="section">
         <div className="card home-refcard">
