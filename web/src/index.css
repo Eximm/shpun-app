@@ -1931,6 +1931,28 @@ button, a { -webkit-tap-highlight-color: transparent; }
   font-size: 12px;
   line-height: 1.35;
 }
+
+.helperMedia {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: rgba(0,0,0,0.35);
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  width: 100%;
+  overflow: hidden;
+}
+
+.helperMedia__img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
 /* ============================================================
    Services: Modal (no inline styles)
    ============================================================ */

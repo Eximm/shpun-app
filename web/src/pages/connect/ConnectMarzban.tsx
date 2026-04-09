@@ -852,9 +852,10 @@ export default function ConnectMarzban({ usi }: Props) {
 
               <p className="p so__mt8">{t('connect.qr_text')}</p>
 
-              <div className="pre so__mt12">
+              <div className="helperMedia so__mt12">
                 {qrDataUrl ? (
                   <img
+                    className="helperMedia__img"
                     src={qrDataUrl}
                     alt={t('connectAmneziaWG.qr.alt')}
                     loading="lazy"

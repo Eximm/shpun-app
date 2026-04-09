@@ -518,9 +518,10 @@ export default function ConnectAmneziaWG({ usi }: Props) {
 
               <p className="p so__mt8">{t('connectAmneziaWG.qr.sub')}</p>
 
-              <div className="pre so__mt12">
+              <div className="helperMedia so__mt12">
                 {qrDataUrl ? (
                   <img
+                    className="helperMedia__img"
                     src={qrDataUrl}
                     alt={t('connectAmneziaWG.qr.alt')}
                     loading="lazy"
@@ -529,7 +530,6 @@ export default function ConnectAmneziaWG({ usi }: Props) {
                   />
                 ) : null}
               </div>
-
               <div className="actions actions--1 so__mt12">
                 <button className="btn btn--primary so__btnFull" onClick={() => setQrOpen(false)} type="button">
                   {t('connectAmneziaWG.close')}
