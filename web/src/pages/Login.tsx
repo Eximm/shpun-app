@@ -6,6 +6,11 @@ import type { AuthResponse } from "../shared/api/types";
 import { useI18n } from "../shared/i18n";
 import { toast } from "../shared/ui/toast";
 import { normalizeError } from "../shared/api/errorText";
+import {
+  ensureTelegramWebAppSdk,
+  getTelegramWebApp,
+  isTelegramMiniAppEnv,
+} from "../shared/telegram/sdk";
 
 type TgWebApp = {
   initData?: string;
@@ -13,13 +18,8 @@ type TgWebApp = {
   expand?: () => void;
 };
 
-function getTelegramWebApp(): TgWebApp | null {
-  const tg = (window as any)?.Telegram?.WebApp as TgWebApp | undefined;
-  return tg ?? null;
-}
-
 function getTelegramInitData(): string | null {
-  const tg = getTelegramWebApp();
+  const tg = getTelegramWebApp() as TgWebApp | null;
   const initData = tg?.initData;
   return initData && initData.length > 0 ? initData : null;
 }
@@ -101,6 +101,8 @@ async function ensureAuthorizedAfterAuth(attempts = 4, delayMs = 180) {
 }
 
 async function waitTelegramInitData(timeoutMs = 2200): Promise<string | null> {
+  await ensureTelegramWebAppSdk(Math.min(timeoutMs, 1600)).catch(() => null);
+
   const started = Date.now();
 
   while (Date.now() - started < timeoutMs) {
@@ -326,10 +328,12 @@ export function Login() {
   const nav = useNavigate();
   const loc: any = useLocation();
 
-  const initDataNow = getTelegramInitData();
-  const mode: Mode = initDataNow ? "telegram" : "web";
+  const [mode] = useState<Mode>(() => {
+    const initData = getTelegramInitData();
+    return initData ? "telegram" : isTelegramMiniAppEnv() ? "telegram" : "web";
+  });
 
-  const [tgInitData, setTgInitData] = useState<string | null>(initDataNow);
+  const [tgInitData, setTgInitData] = useState<string | null>(() => getTelegramInitData());
   const [loading, setLoading] = useState(false);
 
   const [authModal, setAuthModal] = useState<AuthModal>("none");
@@ -755,37 +759,44 @@ export function Login() {
   }, [mode]);
 
   useEffect(() => {
-    const tg = getTelegramWebApp();
-    tg?.ready?.();
-    tg?.expand?.();
-
     if (mode !== "telegram") return;
 
     let cancelled = false;
+    let t1 = 0;
+    let t2 = 0;
+    let t3 = 0;
 
-    const pull = () => {
-      const next = getTelegramInitData();
-      if (next && !cancelled) {
-        setTgInitData(next);
-      }
-    };
+    void (async () => {
+      const sdk = await ensureTelegramWebAppSdk(1600);
+      if (cancelled) return;
 
-    pull();
+      sdk?.ready?.();
+      sdk?.expand?.();
 
-    const t1 = window.setTimeout(pull, 80);
-    const t2 = window.setTimeout(pull, 250);
-    const t3 = window.setTimeout(pull, 700);
-
-    if (!autoLoginStarted.current) {
-      autoLoginStarted.current = true;
-
-      void (async () => {
-        await sleep(250);
-        if (!cancelled) {
-          await telegramLoginMiniApp({ silent: true });
+      const pull = () => {
+        const next = getTelegramInitData();
+        if (next && !cancelled) {
+          setTgInitData(next);
         }
-      })();
-    }
+      };
+
+      pull();
+
+      t1 = window.setTimeout(pull, 80);
+      t2 = window.setTimeout(pull, 250);
+      t3 = window.setTimeout(pull, 700);
+
+      if (!autoLoginStarted.current) {
+        autoLoginStarted.current = true;
+
+        void (async () => {
+          await sleep(250);
+          if (!cancelled) {
+            await telegramLoginMiniApp({ silent: true });
+          }
+        })();
+      }
+    })();
 
     return () => {
       cancelled = true;
@@ -818,7 +829,7 @@ export function Login() {
             <div>
               <div className="modal__title">
                 {authModal === "login"
-                  ? t("login.password.form_title_login", "Вход по e-mail и паролю")
+                  ? t("login.password.form_title_login", "Вход по логину или e-mail и паролю")
                   : t("login.password.form_title_register", "Создать аккаунт")}
               </div>
               <p className="p">
@@ -1100,7 +1111,7 @@ export function Login() {
           </div>
 
           <div className="auth__divider login__dividerMt14">
-            <span>{t("login.divider.telegram", "Telegram")}</span>
+            <span>{t("login.divider.telegram", "Вход через Telegram")}</span>
           </div>
 
           {mode === "telegram" ? (
@@ -1122,19 +1133,22 @@ export function Login() {
                 {tgWidgetState === "failed"
                   ? t(
                       "login.widget.failed.soft",
-                      "Вход через Telegram сейчас может работать нестабильно. Попробуйте ещё раз или войдите по e-mail и паролю."
+                      "Вход через Telegram сейчас может работать нестабильно. Попробуйте ещё раз или используйте другой способ входа ниже."
                     )
                   : tgWidgetState === "loading"
                     ? t("login.widget.loading", "Пробуем загрузить вход через Telegram...")
                     : t(
                         "login.widget.tip.secondary",
-                        "Быстрый вход через Telegram как дополнительный способ авторизации."
+                        "Вы можете войти через Telegram или выбрать другой способ входа ниже."
                       )}
               </div>
 
               {!botUsername ? (
                 <div className="pre">
-                  {t("login.widget.unavailable", "Вход через Telegram сейчас недоступен.")}
+                  {t(
+                    "login.widget.unavailable.alt",
+                    "Вход через Telegram сейчас недоступен. Используйте другой способ входа ниже."
+                  )}
                 </div>
               ) : (
                 <>
@@ -1151,8 +1165,8 @@ export function Login() {
                         disabled={loading}
                       >
                         {tgWidgetState === "failed"
-                          ? t("login.widget.retry", "Попробовать Telegram ещё раз")
-                          : t("login.widget.open", "Открыть вход через Telegram")}
+                          ? t("login.widget.retry.alt", "Попробовать через Telegram ещё раз")
+                          : t("login.widget.open.alt", "Продолжить через Telegram")}
                       </button>
                     </div>
                   )}

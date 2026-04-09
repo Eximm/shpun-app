@@ -12,6 +12,7 @@ export const RU: Dict = {
   "error.telegram_login_failed": "Не удалось войти через Telegram.",
 
   // login
+
   "login.title": "Вход в Shpun App",
   "login.badge.tg": "Telegram",
   "login.badge.web": "Браузер",
@@ -19,37 +20,49 @@ export const RU: Dict = {
 
   "login.desc.tg": "Продолжите вход через Telegram.",
   "login.desc.web": "Войдите через Telegram или по e-mail и паролю.",
-  "login.desc.web.partner": "Вы открыли приглашение. Зарегистрируйтесь или войдите через Telegram.",
+  "login.desc.web.short": "Ваш личный кабинет для сервисов Shpun.",
+  "login.desc.web.partner": "Ваш личный кабинет для сервисов Shpun. Войдите или создайте аккаунт по приглашению.",
 
   "login.toast.error_title": "Ошибка",
 
   "login.what.title": "Что такое Shpun App",
-  "login.what.1": "Shpun App — это ваш личный кабинет для управления сервисами Shpun.",
-  "login.what.2": "Здесь собраны баланс, услуги, оплаты, бонусы и важные уведомления.",
-  "login.what.3": "Вы можете быстро открыть нужный раздел и управлять аккаунтом в одном месте.",
-  "login.what.4": "Через Telegram вход занимает всего пару секунд.",
+  "login.what.1": "Личный кабинет для сервисов Shpun.",
+  "login.what.2": "Баланс, оплаты и бонусы.",
+  "login.what.3": "Услуги, настройки и уведомления.",
+  "login.what.1.short": "Личный кабинет для сервисов Shpun.",
+  "login.what.2.short": "Баланс, оплаты и бонусы.",
+  "login.what.3.short": "Услуги, настройки и уведомления.",
 
   "login.divider.telegram": "Вход через Telegram",
   "login.divider.password": "E-mail и пароль",
   "login.divider.providers": "Другие способы",
 
   "login.widget.tip": "Быстрый вход в аккаунт через Telegram.",
+  "login.widget.tip.secondary": "Вы можете войти через Telegram или выбрать другой способ входа ниже.",
+  "login.widget.loading": "Пробуем загрузить вход через Telegram...",
+  "login.widget.failed.soft": "Вход через Telegram сейчас может работать нестабильно. Попробуйте ещё раз или используйте другой способ входа ниже.",
   "login.widget.unavailable": "Вход через Telegram сейчас недоступен.",
+  "login.widget.unavailable.alt": "Вход через Telegram сейчас недоступен. Используйте другой способ входа ниже.",
+  "login.widget.open.alt": "Продолжить через Telegram",
+  "login.widget.retry.alt": "Попробовать через Telegram ещё раз",
 
   "login.tg.cta": "Продолжить",
   "login.tg.cta_loading": "Входим…",
 
   "login.providers.telegram.hint.tg": "быстрый вход",
   "login.providers.telegram.hint.web": "открыть вход",
+  "login.providers.telegram.hint.loading": "загрузка...",
   "login.providers.google.hint": "скоро",
   "login.providers.yandex.hint": "скоро",
   "login.providers.soon": "Скоро",
 
   "login.password.summary": "Войти по логину или e-mail и паролю",
-  "login.password.form_title_login": "Вход по логину e-mail и паролю",
+  "login.password.form_title_login": "Вход по логину или e-mail и паролю",
   "login.password.form_title_register": "Создать аккаунт",
   "login.password.login": "E-mail",
+  "login.password.login_or_email": "Логин или e-mail",
   "login.password.login_ph": "Введите логин или e-mail",
+  "login.password.login_ph_register": "Введите ваш e-mail",
   "login.password.client": "Имя клиента (необязательно)",
   "login.password.client_ph": "Как к вам обращаться",
   "login.password.password": "Пароль",
@@ -96,10 +109,10 @@ export const RU: Dict = {
   "login.err.init_data_required": "Откройте приложение в Telegram для быстрого входа.",
   "login.err.tg_failed": "Не удалось войти через Telegram. Попробуйте ещё раз.",
   "login.err.generic": "Не удалось выполнить вход. Попробуйте ещё раз.",
-  "login.password.login_ph_register": "Введите ваш e-mail",
 
   "login.err.register_failed": "Не удалось создать аккаунт. Попробуйте ещё раз.",
   "login.err.email_required": "Введите e-mail.",
+  "login.err.email_non_ascii": "Используйте e-mail только латиницей. Кириллица в адресе не поддерживается.",
   "login.err.email_invalid_format": "Это не похоже на настоящий e-mail. Введите действительный адрес.",
   "login.err.email_invalid_generic": "Проверьте e-mail и введите действительный адрес.",
   "login.err.email_domain_invalid": "Домен в e-mail выглядит некорректно. Проверьте адрес.",
@@ -861,6 +874,7 @@ export const EN: Dict = {
   "error.telegram_login_failed": "Could not sign in with Telegram.",
 
   // login
+
   "login.title": "Sign in to Shpun App",
   "login.badge.tg": "Telegram",
   "login.badge.web": "Browser",
@@ -868,28 +882,38 @@ export const EN: Dict = {
 
   "login.desc.tg": "Continue with Telegram.",
   "login.desc.web": "Sign in with Telegram or with e-mail and password.",
-  "login.desc.web.partner": "You opened an invitation. Create an account or sign in with Telegram.",
+  "login.desc.web.short": "Your dashboard for Shpun services.",
+  "login.desc.web.partner": "Your dashboard for Shpun services. Sign in or create an account from the invitation.",
 
   "login.toast.error_title": "Error",
 
   "login.what.title": "What is Shpun App",
-  "login.what.1": "Shpun App is your personal dashboard for managing Shpun services.",
-  "login.what.2": "It brings together balance, services, payments, bonuses, and important updates.",
-  "login.what.3": "You can quickly open the section you need and manage everything in one place.",
-  "login.what.4": "Signing in with Telegram takes just a few seconds.",
+  "login.what.1": "Dashboard for Shpun services.",
+  "login.what.2": "Balance, payments, and bonuses.",
+  "login.what.3": "Services, settings, and notifications.",
+  "login.what.1.short": "Dashboard for Shpun services.",
+  "login.what.2.short": "Balance, payments, and bonuses.",
+  "login.what.3.short": "Services, settings, and notifications.",
 
   "login.divider.telegram": "Sign in with Telegram",
   "login.divider.password": "E-mail and password",
   "login.divider.providers": "Other options",
 
   "login.widget.tip": "Quick account sign-in with Telegram.",
+  "login.widget.tip.secondary": "You can continue with Telegram or choose another sign-in method below.",
+  "login.widget.loading": "Trying to load Telegram sign-in...",
+  "login.widget.failed.soft": "Telegram sign-in may be unstable right now. Try again or use another sign-in method below.",
   "login.widget.unavailable": "Telegram sign-in is currently unavailable.",
+  "login.widget.unavailable.alt": "Telegram sign-in is currently unavailable. Use another sign-in method below.",
+  "login.widget.open.alt": "Continue with Telegram",
+  "login.widget.retry.alt": "Try Telegram again",
 
   "login.tg.cta": "Continue",
   "login.tg.cta_loading": "Signing in…",
 
   "login.providers.telegram.hint.tg": "quick sign-in",
   "login.providers.telegram.hint.web": "open sign-in",
+  "login.providers.telegram.hint.loading": "loading...",
   "login.providers.google.hint": "soon",
   "login.providers.yandex.hint": "soon",
   "login.providers.soon": "Soon",
@@ -898,7 +922,9 @@ export const EN: Dict = {
   "login.password.form_title_login": "Sign in with login or e-mail and password",
   "login.password.form_title_register": "Create account",
   "login.password.login": "E-mail",
-  "login.password.login_ph": "Enter e-mail",
+  "login.password.login_or_email": "Login or e-mail",
+  "login.password.login_ph": "Enter login or e-mail",
+  "login.password.login_ph_register": "Enter your e-mail",
   "login.password.client": "Client name (optional)",
   "login.password.client_ph": "How should we address you",
   "login.password.password": "Password",
@@ -935,8 +961,8 @@ export const EN: Dict = {
   "login.err.no_shm_session": "Could not open a session. Please try again.",
   "login.err.user_lookup_failed": "Could not load account data. Please try again.",
   "login.err.unknown": "Could not sign in. Please try again.",
-  "login.err.login_and_password_required": "Enter e-mail and password.",
-  "login.err.login_required": "Enter e-mail.",
+  "login.err.login_and_password_required": "Enter login or e-mail and password.",
+  "login.err.login_required": "Enter login or e-mail.",
   "login.err.password_required": "Enter password.",
   "login.err.invalid_credentials": "Invalid e-mail or password.",
   "login.err.password_too_short": "Password is too short. Minimum 8 characters.",
@@ -945,17 +971,17 @@ export const EN: Dict = {
   "login.err.init_data_required": "Open the app in Telegram for a quick sign-in.",
   "login.err.tg_failed": "Could not sign in with Telegram. Please try again.",
   "login.err.generic": "Could not sign in. Please try again.",
-  "login.password.login_ph_register": "Enter your e-mail",
 
   "login.err.register_failed": "Could not create the account. Please try again.",
   "login.err.email_required": "Enter your e-mail.",
+  "login.err.email_non_ascii": "Use Latin characters only in the e-mail address. Cyrillic is not supported.",
   "login.err.email_invalid_format": "This does not look like a real e-mail. Enter a valid address.",
   "login.err.email_invalid_generic": "Check the e-mail and enter a valid address.",
   "login.err.email_domain_invalid": "The e-mail domain looks invalid. Please check the address.",
   "login.err.email_disposable": "Temporary e-mail addresses are not allowed. Enter a permanent address.",
   "login.err.email_domain_unresolvable": "Could not verify the e-mail domain. Please check the address.",
   "login.err.email_check_failed": "Could not verify the e-mail. Please try a different address.",
-
+  
   // home
   "home.loading.title": "Shpun",
   "home.loading.text": "Loading…",
