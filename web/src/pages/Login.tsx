@@ -355,6 +355,7 @@ export function Login() {
 
   const [emailTouched, setEmailTouched] = useState(false);
   const [tgWidgetState, setTgWidgetState] = useState<TgWidgetState>("idle");
+  const [telegramAutoTried, setTelegramAutoTried] = useState(false);
 
   const autoLoginStarted = useRef(false);
   const widgetWrapRef = useRef<HTMLDivElement | null>(null);
@@ -477,6 +478,13 @@ export function Login() {
   }
 
   async function passwordLogin() {
+    if (mode === "telegram") {
+      toast.error(t("login.toast.error_title", "Ошибка"), {
+        description: t("login.tg.only.password_disabled", "В mini app используйте вход через Telegram."),
+      });
+      return;
+    }
+
     if (!canPasswordLogin) {
       toastError("login_and_password_required");
       return;
@@ -502,6 +510,13 @@ export function Login() {
   }
 
   async function passwordRegister() {
+    if (mode === "telegram") {
+      toast.error(t("login.toast.error_title", "Ошибка"), {
+        description: t("login.tg.only.password_disabled", "В mini app используйте вход через Telegram."),
+      });
+      return;
+    }
+
     setEmailTouched(true);
 
     if (registerEmailCode) {
@@ -798,7 +813,13 @@ export function Login() {
         void (async () => {
           await sleep(250);
           if (!cancelled) {
-            await telegramLoginMiniApp({ silent: true });
+            try {
+              await telegramLoginMiniApp({ silent: true });
+            } finally {
+              if (!cancelled) {
+                setTelegramAutoTried(true);
+              }
+            }
           }
         })();
       }
@@ -1043,6 +1064,81 @@ export function Login() {
     </div>
   ) : null;
 
+  if (mode === "telegram") {
+    return (
+      <div className="section">
+        <div className="card">
+          <div className="card__body">
+            <div className="auth__head">
+              <div>
+                <h1 className="h1">{t("login.title", "Вход в Shpun App")}</h1>
+                <p className="p">
+                  {loading
+                    ? t("login.desc.tg.loading", "Выполняем вход через Telegram…")
+                    : t(
+                        "login.desc.tg.only",
+                        "В mini app вход выполняется через Telegram. Если вход не прошёл автоматически, повторите попытку ниже."
+                      )}
+                </p>
+              </div>
+
+              <LangSwitch
+                lang={(lang as "ru" | "en") === "en" ? "en" : "ru"}
+                setLang={setLang as (v: "ru" | "en") => void}
+                ariaLabel={t("login.lang.aria", "Язык")}
+              />
+            </div>
+
+            <div className="pre login__headerCard">
+              <div className="login__whatTitle">
+                {t("login.tg.only.title", "Авторизация через Telegram")}
+              </div>
+
+              <div className="login__whatList">
+                <div>✅ {t("login.tg.only.1", "Shpun App в Telegram использует ваш Telegram-аккаунт для входа.")}</div>
+                <div>🔐 {t("login.tg.only.2", "Логин, e-mail и пароль здесь не требуются.")}</div>
+                <div>↻ {t("login.tg.only.3", "Если вход не завершился автоматически, просто повторите попытку кнопкой ниже.")}</div>
+              </div>
+            </div>
+
+            {partnerId > 0 && (
+              <div className="pre login__preMt12">
+                {t(
+                  "login.partner.saved_tg",
+                  "Приглашение сохранено и будет учтено после успешного входа через Telegram."
+                )}
+              </div>
+            )}
+
+            {telegramAutoTried && !loading && (
+              <div className="pre login__preMt12">
+                {t(
+                  "login.tg.only.retry_hint",
+                  "Автоматический вход не завершился. Нажмите кнопку ниже, чтобы повторить вход через Telegram."
+                )}
+              </div>
+            )}
+
+            <div className="auth__actions login__dividerMt14">
+              <button
+                type="button"
+                className="btn btn--primary login__btnFull"
+                onClick={() => {
+                  void telegramLoginMiniApp();
+                }}
+                disabled={loading}
+              >
+                {loading
+                  ? t("login.tg.cta_loading", "Входим…")
+                  : t("login.tg.retry", "Повторить вход через Telegram")}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="section">
       <div className="card">
@@ -1050,18 +1146,14 @@ export function Login() {
           <div className="auth__head">
             <div>
               <h1 className="h1">{t("login.title", "Вход в Shpun App")}</h1>
-              {mode === "telegram" ? (
-                <p className="p">{t("login.desc.tg", "Продолжите вход через Telegram.")}</p>
-              ) : (
-                <p className="p">
-                  {partnerId > 0
-                    ? t(
-                        "login.desc.web.partner",
-                        "Ваш личный кабинет для сервисов Shpun. Войдите или создайте аккаунт по приглашению."
-                      )
-                    : t("login.desc.web.short", "Ваш личный кабинет для сервисов Shpun.")}
-                </p>
-              )}
+              <p className="p">
+                {partnerId > 0
+                  ? t(
+                      "login.desc.web.partner",
+                      "Ваш личный кабинет для сервисов Shpun. Войдите или создайте аккаунт по приглашению."
+                    )
+                  : t("login.desc.web.short", "Ваш личный кабинет для сервисов Shpun.")}
+              </p>
             </div>
 
             <LangSwitch
@@ -1081,7 +1173,7 @@ export function Login() {
             </div>
           </div>
 
-          {partnerId > 0 && mode === "web" && (
+          {partnerId > 0 && (
             <div className="pre login__preMt12">
               {t(
                 "login.partner.banner",
@@ -1120,66 +1212,51 @@ export function Login() {
             <span>{t("login.divider.telegram", "Вход через Telegram")}</span>
           </div>
 
-          {mode === "telegram" ? (
-            <div className="auth__actions login__dividerMt14">
-              <button
-                type="button"
-                className="btn btn--primary login__btnFull"
-                onClick={() => {
-                  void telegramLoginMiniApp();
-                }}
-                disabled={loading}
-              >
-                {loading ? t("login.tg.cta_loading", "Входим…") : t("login.tg.cta", "Продолжить")}
-              </button>
+          <div ref={widgetWrapRef} className="login__dividerMt14">
+            <div className="pre login__preMb10">
+              {tgWidgetState === "failed"
+                ? t(
+                    "login.widget.failed.soft",
+                    "Вход через Telegram сейчас может работать нестабильно. Попробуйте ещё раз или используйте другой способ входа ниже."
+                  )
+                : tgWidgetState === "loading"
+                  ? t("login.widget.loading", "Пробуем загрузить вход через Telegram...")
+                  : t(
+                      "login.widget.tip.secondary",
+                      "Вы можете войти через Telegram или выбрать другой способ входа ниже."
+                    )}
             </div>
-          ) : (
-            <div ref={widgetWrapRef} className="login__dividerMt14">
-              <div className="pre login__preMb10">
-                {tgWidgetState === "failed"
-                  ? t(
-                      "login.widget.failed.soft",
-                      "Вход через Telegram сейчас может работать нестабильно. Попробуйте ещё раз или используйте другой способ входа ниже."
-                    )
-                  : tgWidgetState === "loading"
-                    ? t("login.widget.loading", "Пробуем загрузить вход через Telegram...")
-                    : t(
-                        "login.widget.tip.secondary",
-                        "Вы можете войти через Telegram или выбрать другой способ входа ниже."
-                      )}
+
+            {!botUsername ? (
+              <div className="pre">
+                {t(
+                  "login.widget.unavailable.alt",
+                  "Вход через Telegram сейчас недоступен. Используйте другой способ входа ниже."
+                )}
               </div>
+            ) : (
+              <>
+                <div id="tg-widget-container" className="login__widgetBox" />
 
-              {!botUsername ? (
-                <div className="pre">
-                  {t(
-                    "login.widget.unavailable.alt",
-                    "Вход через Telegram сейчас недоступен. Используйте другой способ входа ниже."
-                  )}
-                </div>
-              ) : (
-                <>
-                  <div id="tg-widget-container" className="login__widgetBox" />
-
-                  {(tgWidgetState === "idle" || tgWidgetState === "failed") && (
-                    <div className="auth__actions">
-                      <button
-                        type="button"
-                        className="btn login__btnFull"
-                        onClick={() => {
-                          void mountTelegramWidget(true);
-                        }}
-                        disabled={loading}
-                      >
-                        {tgWidgetState === "failed"
-                          ? t("login.widget.retry.alt", "Попробовать через Telegram ещё раз")
-                          : t("login.widget.open.alt", "Продолжить через Telegram")}
-                      </button>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          )}
+                {(tgWidgetState === "idle" || tgWidgetState === "failed") && (
+                  <div className="auth__actions">
+                    <button
+                      type="button"
+                      className="btn login__btnFull"
+                      onClick={() => {
+                        void mountTelegramWidget(true);
+                      }}
+                      disabled={loading}
+                    >
+                      {tgWidgetState === "failed"
+                        ? t("login.widget.retry.alt", "Попробовать через Telegram ещё раз")
+                        : t("login.widget.open.alt", "Продолжить через Telegram")}
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
 
           <div className="auth__divider login__dividerMt14">
             <span>{t("login.divider.providers", "Другие способы")}</span>
@@ -1196,11 +1273,9 @@ export function Login() {
               <span className="auth__providerText">
                 Telegram
                 <span className="auth__providerHint">
-                  {mode === "telegram"
-                    ? t("login.providers.telegram.hint.tg", "быстрый вход")
-                    : tgWidgetState === "loading"
-                      ? t("login.providers.telegram.hint.loading", "загрузка...")
-                      : t("login.providers.telegram.hint.web", "открыть вход")}
+                  {tgWidgetState === "loading"
+                    ? t("login.providers.telegram.hint.loading", "загрузка...")
+                    : t("login.providers.telegram.hint.web", "открыть вход")}
                 </span>
               </span>
               <span className="auth__providerRight">→</span>
