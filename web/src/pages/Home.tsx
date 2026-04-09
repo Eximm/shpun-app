@@ -574,7 +574,6 @@ export function Home() {
             <div className="card__body">
               <div className="home-install__copy">
                 <div className="home-install__title">{t("home.install.card.title", "Открыть ShpunApp в браузере")}</div>
-                <div className="home-install__sub">{t("home.install.card.sub", "В браузере доступны все функции приложения.")}</div>
               </div>
 
             <div className="home-install__btnwrap">
