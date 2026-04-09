@@ -163,7 +163,7 @@ export const RU: Dict = {
 
   "home.services.error": "Не удалось обновить статусы услуг.",
 
-  "home.install.card.title": "Открыть Shpun в браузере",
+  "home.install.card.title": "Открыть Shpun App в браузере",
   "home.install.card.sub": "В браузере доступны все функции приложения.",
   "home.install.card.open": "Открыть в браузере",
 
@@ -1025,7 +1025,7 @@ export const EN: Dict = {
 
   "home.services.error": "Could not refresh service statuses.",
 
-  "home.install.card.title": "Open Shpun in browser",
+  "home.install.card.title": "Open Shpun App in browser",
   "home.install.card.sub": "The browser version gives access to all app features.",
   "home.install.card.open": "Open in browser",
 
