@@ -89,14 +89,16 @@ function sleep(ms: number) {
   });
 }
 
-async function ensureAuthorizedAfterAuth(attempts = 4, delayMs = 180) {
+async function ensureAuthorizedAfterAuth(attempts = 12, delayMs = 250) {
   for (let i = 0; i < attempts; i++) {
     const me = await refetchMe().catch(() => null);
     if (me) return me;
+
     if (i < attempts - 1) {
       await sleep(delayMs);
     }
   }
+
   return null;
 }
 
@@ -451,6 +453,10 @@ export function Login() {
         state: { login: loginFromApi },
       });
       return;
+    }
+
+    if (provider === "telegram") {
+      await sleep(350);
     }
 
     const me = await ensureAuthorizedAfterAuth();
