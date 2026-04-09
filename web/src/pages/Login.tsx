@@ -9,7 +9,6 @@ import { normalizeError } from "../shared/api/errorText";
 import {
   ensureTelegramWebAppSdk,
   getTelegramWebApp,
-  isTelegramMiniAppEnv,
 } from "../shared/telegram/sdk";
 
 type TgWebApp = {
@@ -102,15 +101,17 @@ async function ensureAuthorizedAfterAuth(attempts = 12, delayMs = 250) {
   return null;
 }
 
-async function waitTelegramInitData(timeoutMs = 2200): Promise<string | null> {
-  await ensureTelegramWebAppSdk(Math.min(timeoutMs, 1600)).catch(() => null);
+async function waitTelegramInitData(timeoutMs = 3200): Promise<string | null> {
+  const sdk = await ensureTelegramWebAppSdk(Math.min(timeoutMs, 2000)).catch(() => null);
+  sdk?.ready?.();
+  sdk?.expand?.();
 
   const started = Date.now();
 
   while (Date.now() - started < timeoutMs) {
     const initData = getTelegramInitData();
-    if (initData) return initData;
-    await sleep(120);
+    if (initData && initData.length > 50) return initData;
+    await sleep(100);
   }
 
   return null;
@@ -330,9 +331,8 @@ export function Login() {
   const nav = useNavigate();
   const loc: any = useLocation();
 
-  const [mode] = useState<Mode>(() => {
-    const initData = getTelegramInitData();
-    return initData ? "telegram" : isTelegramMiniAppEnv() ? "telegram" : "web";
+  const [mode, setMode] = useState<Mode>(() => {
+    return getTelegramInitData() ? "telegram" : "web";
   });
 
   const [tgInitData, setTgInitData] = useState<string | null>(() => getTelegramInitData());
@@ -358,6 +358,7 @@ export function Login() {
   const [telegramAutoTried, setTelegramAutoTried] = useState(false);
 
   const autoLoginStarted = useRef(false);
+  const authInProgressRef = useRef(false);
   const widgetWrapRef = useRef<HTMLDivElement | null>(null);
   const referralHandledRef = useRef(false);
   const authOkHandledRef = useRef(false);
@@ -457,7 +458,7 @@ export function Login() {
     }
 
     if (provider === "telegram") {
-      await sleep(350);
+      await sleep(250);
     }
 
     const me = await ensureAuthorizedAfterAuth();
@@ -568,44 +569,55 @@ export function Login() {
   async function telegramLoginMiniApp(opts?: { silent?: boolean }) {
     const silent = !!opts?.silent;
 
-    let initData = tgInitData || getTelegramInitData();
+    if (authInProgressRef.current) return;
+    authInProgressRef.current = true;
 
-    if (!initData) {
-      initData = await waitTelegramInitData(2200);
-      if (initData) {
-        setTgInitData(initData);
-      }
-    }
-
-    if (!initData) {
-      if (!silent) {
-        toastError(t("error.open_in_tg", "Откройте приложение в Telegram для быстрого входа."));
-      }
-      return;
-    }
-
-    setLoading(true);
     try {
-      const r = await apiFetch<AuthResponse>("/auth/telegram", {
-        method: "POST",
-        body: {
-          initData,
-          ...(partnerId > 0 ? { partner_id: partnerId } : {}),
-        },
-      });
-      await goAfterAuth(r, "telegram");
-    } catch (e: unknown) {
-      clearAuthPending();
+      let initData = tgInitData || getTelegramInitData();
 
-      if (!silent) {
-        toastError(errorToAuthRaw(e, t("error.telegram_login_failed", "Не удалось войти через Telegram.")));
+      if (!initData) {
+        initData = await waitTelegramInitData(3200);
+        if (initData) {
+          setTgInitData(initData);
+        }
+      }
+
+      if (!initData) {
+        if (!silent) {
+          toastError(t("error.open_in_tg", "Откройте приложение в Telegram для быстрого входа."));
+        }
+        return;
+      }
+
+      setLoading(true);
+
+      try {
+        const r = await apiFetch<AuthResponse>("/auth/telegram", {
+          method: "POST",
+          body: {
+            initData,
+            ...(partnerId > 0 ? { partner_id: partnerId } : {}),
+          },
+        });
+        await goAfterAuth(r, "telegram");
+      } catch (e: unknown) {
+        clearAuthPending();
+
+        if (!silent) {
+          toastError(errorToAuthRaw(e, t("error.telegram_login_failed", "Не удалось войти через Telegram.")));
+        }
+      } finally {
+        setLoading(false);
       }
     } finally {
-      setLoading(false);
+      authInProgressRef.current = false;
     }
   }
 
   async function telegramLoginWidget(widgetUser: Record<string, any>) {
+    if (authInProgressRef.current) return;
+    authInProgressRef.current = true;
+
     setLoading(true);
     try {
       const r = await apiFetch<AuthResponse>("/auth/telegram_widget", {
@@ -621,6 +633,7 @@ export function Login() {
       toastError(errorToAuthRaw(e, t("error.telegram_login_failed", "Не удалось войти через Telegram.")));
     } finally {
       setLoading(false);
+      authInProgressRef.current = false;
     }
   }
 
@@ -695,6 +708,35 @@ export function Login() {
 
     focusWidget();
   }
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      const existing = getTelegramInitData();
+      if (existing) {
+        if (!cancelled) {
+          setTgInitData(existing);
+          setMode("telegram");
+        }
+        return;
+      }
+
+      const initData = await waitTelegramInitData(1200);
+      if (cancelled) return;
+
+      if (initData) {
+        setTgInitData(initData);
+        setMode("telegram");
+      } else {
+        setMode("web");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const sp = new URLSearchParams(String(loc?.search ?? ""));
@@ -781,57 +823,30 @@ export function Login() {
 
   useEffect(() => {
     if (mode !== "telegram") return;
+    if (autoLoginStarted.current) return;
 
     let cancelled = false;
-    let t1 = 0;
-    let t2 = 0;
-    let t3 = 0;
+    autoLoginStarted.current = true;
 
     void (async () => {
-      const sdk = await ensureTelegramWebAppSdk(1600);
+      const initData = tgInitData || await waitTelegramInitData(3200);
+
       if (cancelled) return;
 
-      sdk?.ready?.();
-      sdk?.expand?.();
+      if (initData) {
+        setTgInitData(initData);
+        await telegramLoginMiniApp({ silent: true });
+      }
 
-      const pull = () => {
-        const next = getTelegramInitData();
-        if (next && !cancelled) {
-          setTgInitData(next);
-        }
-      };
-
-      pull();
-
-      t1 = window.setTimeout(pull, 80);
-      t2 = window.setTimeout(pull, 250);
-      t3 = window.setTimeout(pull, 700);
-
-      if (!autoLoginStarted.current) {
-        autoLoginStarted.current = true;
-
-        void (async () => {
-          await sleep(250);
-          if (!cancelled) {
-            try {
-              await telegramLoginMiniApp({ silent: true });
-            } finally {
-              if (!cancelled) {
-                setTelegramAutoTried(true);
-              }
-            }
-          }
-        })();
+      if (!cancelled) {
+        setTelegramAutoTried(true);
       }
     })();
 
     return () => {
       cancelled = true;
-      window.clearTimeout(t1);
-      window.clearTimeout(t2);
-      window.clearTimeout(t3);
     };
-  }, [mode]);
+  }, [mode, tgInitData]);
 
   useEffect(() => {
     return () => {

@@ -14,32 +14,16 @@ declare global {
 
 let telegramSdkPromise: Promise<TgWebApp | null> | null = null;
 
-function getTelegramWebApp(): TgWebApp | null {
+export function getTelegramWebApp(): TgWebApp | null {
   return window.Telegram?.WebApp ?? null;
 }
 
-function hasTelegramLaunchHints(): boolean {
-  try {
-    const sp = new URLSearchParams(window.location.search || "");
-
-    if (sp.get("tgWebAppData")) return true;
-    if (sp.get("tgWebAppPlatform")) return true;
-    if (sp.get("tgWebAppVersion")) return true;
-    if (sp.get("tgWebAppThemeParams")) return true;
-  } catch {
-    // ignore
-  }
-
-  return false;
-}
-
+// ❗ УПРОЩЕНО: только реальный WebApp
 export function isTelegramMiniAppEnv(): boolean {
-  const tg = getTelegramWebApp();
-  if (tg) return true;
-  return hasTelegramLaunchHints();
+  return !!getTelegramWebApp();
 }
 
-export async function ensureTelegramWebAppSdk(timeoutMs = 1600): Promise<TgWebApp | null> {
+export async function ensureTelegramWebAppSdk(timeoutMs = 3000): Promise<TgWebApp | null> {
   const existing = getTelegramWebApp();
   if (existing) return existing;
 
@@ -47,23 +31,31 @@ export async function ensureTelegramWebAppSdk(timeoutMs = 1600): Promise<TgWebAp
 
   telegramSdkPromise = new Promise<TgWebApp | null>((resolve) => {
     const prev = document.querySelector<HTMLScriptElement>('script[data-shpun-tg-webapp="1"]');
-    if (prev) {
+
+    const waitForWebApp = () => {
       const started = Date.now();
 
       const poll = () => {
         const tg = getTelegramWebApp();
+
         if (tg) {
           resolve(tg);
           return;
         }
+
         if (Date.now() - started >= timeoutMs) {
           resolve(null);
           return;
         }
-        window.setTimeout(poll, 80);
+
+        setTimeout(poll, 50);
       };
 
       poll();
+    };
+
+    if (prev) {
+      waitForWebApp();
       return;
     }
 
@@ -73,19 +65,8 @@ export async function ensureTelegramWebAppSdk(timeoutMs = 1600): Promise<TgWebAp
     script.defer = true;
     script.setAttribute("data-shpun-tg-webapp", "1");
 
-    const timeoutId = window.setTimeout(() => {
-      resolve(null);
-    }, timeoutMs);
-
-    script.onload = () => {
-      window.clearTimeout(timeoutId);
-      resolve(getTelegramWebApp());
-    };
-
-    script.onerror = () => {
-      window.clearTimeout(timeoutId);
-      resolve(null);
-    };
+    script.onload = waitForWebApp;
+    script.onerror = () => resolve(null);
 
     document.head.appendChild(script);
   }).finally(() => {
@@ -94,5 +75,3 @@ export async function ensureTelegramWebAppSdk(timeoutMs = 1600): Promise<TgWebAp
 
   return telegramSdkPromise;
 }
-
-export { getTelegramWebApp };

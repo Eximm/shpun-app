@@ -39,6 +39,18 @@ function isTelegramMiniApp(): boolean {
   }
 }
 
+function hasFreshAuthPending(): boolean {
+  try {
+    const provider = String(sessionStorage.getItem(AUTH_PENDING_KEY) || "").trim();
+    const ts = Number(sessionStorage.getItem(AUTH_PENDING_AT_KEY) || "0");
+    if (!provider) return false;
+    if (!ts) return true;
+    return Date.now() - ts <= 15_000;
+  } catch {
+    return false;
+  }
+}
+
 function authSessionIdKey(uid: number) {
   return `${AUTH_SESSION_ID_PREFIX}${uid}`;
 }
@@ -89,18 +101,6 @@ function writeSeen(key: string) {
     localStorage.setItem(key, "1");
   } catch {
     // ignore
-  }
-}
-
-function hasFreshAuthPending(): boolean {
-  try {
-    const provider = String(sessionStorage.getItem(AUTH_PENDING_KEY) || "").trim();
-    const ts = Number(sessionStorage.getItem(AUTH_PENDING_AT_KEY) || "0");
-    if (!provider) return false;
-    if (!ts) return true;
-    return Date.now() - ts <= 15_000;
-  } catch {
-    return false;
   }
 }
 
@@ -320,7 +320,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       const ts = Number(sessionStorage.getItem(AUTH_PENDING_AT_KEY) || "0");
 
       if (!provider) return;
-      if (ts && Date.now() - ts > 10000) return;
+      if (ts && Date.now() - ts > 10_000) return;
 
       const newSessionId = `${uid}:${ts || Date.now()}`;
       writeAuthSessionId(uid, newSessionId);
@@ -339,7 +339,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
       if (!provider) return;
 
-      if (ts && Date.now() - ts > 10000) {
+      if (ts && Date.now() - ts > 10_000) {
         sessionStorage.removeItem(AUTH_PENDING_KEY);
         sessionStorage.removeItem(AUTH_PENDING_AT_KEY);
         return;
@@ -501,8 +501,9 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }
 
   const loginState = { from: loc.pathname + (loc.search || "") };
+  const authInProgress = hasFreshAuthPending();
 
-  if (loading) {
+  if (loading || authInProgress) {
     return (
       <>
         <PushOnboardingModal
@@ -528,7 +529,9 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
               <div className="app-loader__mark" />
               <div className="app-loader__title">Shpun App</div>
             </div>
-            <div className="app-loader__text">Проверяем авторизацию…</div>
+            <div className="app-loader__text">
+              {authInProgress ? "Завершаем вход…" : "Проверяем авторизацию…"}
+            </div>
           </div>
         </div>
       </>

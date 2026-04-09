@@ -1,5 +1,4 @@
-﻿// FILE: web/src/app/auth/useMe.ts
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { apiFetch, isNotAuthenticated } from "../../shared/api/client";
 
 export type MeResponse = {
@@ -63,6 +62,18 @@ function setState(patch: Partial<State>) {
   emit();
 }
 
+function hasFreshAuthPending(): boolean {
+  try {
+    const provider = String(sessionStorage.getItem("auth:pending") || "").trim();
+    const ts = Number(sessionStorage.getItem("auth:pending_at") || "0");
+    if (!provider) return false;
+    if (!ts) return true;
+    return Date.now() - ts <= 15_000;
+  } catch {
+    return false;
+  }
+}
+
 let inFlight: Promise<MeResponse | null> | null = null;
 
 async function doFetchMe(): Promise<MeResponse | null> {
@@ -114,7 +125,9 @@ export function useMe() {
     const onChange = (s: State) => setSnap(s);
     listeners.add(onChange);
 
-    if (state.loading && state.lastFetchedAt === 0) {
+    // блокируем только авто-fetch при первом маунте,
+    // чтобы не мешать активному auth flow
+    if (state.loading && state.lastFetchedAt === 0 && !hasFreshAuthPending()) {
       doFetchMe().catch(() => {});
     }
 
