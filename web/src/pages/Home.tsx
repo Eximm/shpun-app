@@ -36,13 +36,7 @@ function hasTelegramInitData(): boolean {
  * Open browser auth page from Telegram Mini App.
  */
 function openExternalAuthPage() {
-  const targetPath = "/login";
-
-  const url = new URL(window.location.href);
-  url.pathname = targetPath;
-  url.search = "";
-  url.hash = "";
-  url.searchParams.set("from", "tg");
+  const url = new URL(window.location.origin); // 👈 только домен
 
   const tg = getTelegramWebApp();
 
@@ -51,13 +45,10 @@ function openExternalAuthPage() {
       tg.openLink(url.toString(), { try_instant_view: false });
       return;
     }
-  } catch {
-    // fallback below
-  }
+  } catch {}
 
   window.open(url.toString(), "_blank", "noopener,noreferrer");
 }
-
 /* ========================================================================
    TYPES: Promo & API payloads
    ======================================================================== */
