@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useMe } from "../app/auth/useMe";
 import { apiFetch } from "../shared/api/client";
+import type { PasswordSetResponse, UserEmailResponse } from "../shared/api/types";
 import { useI18n } from "../shared/i18n";
 import {
   disablePush,
@@ -12,6 +13,8 @@ import {
   isPushDisabledByUser,
 } from "../app/notifications/push";
 import { PageStatusCard } from "../shared/ui/PageStatusCard";
+import { toastApiError } from "../shared/ui/toast/toastApiError";
+import { normalizeError } from "../shared/api/errorText";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -48,7 +51,24 @@ function isIOS(): boolean {
   return /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
 }
 
-function permissionLabel(p: string, t: (k: string, fb?: string) => string) {
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function pwdScore(p: string) {
+  let s = 0;
+  if (p.length >= 8) s++;
+  if (/[A-Z]/.test(p)) s++;
+  if (/[a-z]/.test(p)) s++;
+  if (/\d/.test(p)) s++;
+  if (/[^A-Za-z0-9]/.test(p)) s++;
+  return Math.min(s, 5);
+}
+
+function permissionLabel(
+  p: string,
+  t: (key: string, fallback?: string, vars?: Record<string, string | number>) => string
+) {
   if (p === "granted") return t("profile.push.permission.granted", "Разрешены");
   if (p === "denied") return t("profile.push.permission.denied", "Запрещены");
   if (p === "default") return t("profile.push.permission.default", "Не выбрано");
@@ -80,12 +100,12 @@ function Badge({
   tone = "neutral",
 }: {
   text: string;
-  tone?: "ok" | "soon" | "neutral";
+  tone?: "ok" | "warn" | "neutral";
 }) {
   const className =
     tone === "ok"
       ? "chip chip--ok"
-      : tone === "soon"
+      : tone === "warn"
         ? "chip chip--warn"
         : "chip";
   return <span className={className}>{text}</span>;
@@ -115,7 +135,6 @@ function RowLine({
       </div>
 
       {right ? <div className="profile-row__right">{right}</div> : null}
-
       {hint ? <div className="profile-row__hint">{hint}</div> : null}
     </div>
   );
@@ -142,7 +161,12 @@ function Modal({
         <div className="card__body">
           <div className="modal__head">
             <div className="modal__title">{title}</div>
-            <button className="btn modal__close" onClick={onClose} aria-label={closeLabel} type="button">
+            <button
+              className="btn modal__close"
+              onClick={onClose}
+              aria-label={closeLabel}
+              type="button"
+            >
               ✕
             </button>
           </div>
@@ -212,7 +236,7 @@ export function Profile() {
   const [toast, setToast] = useState<string | null>(null);
   function showToast(msg: string) {
     setToast(msg);
-    window.setTimeout(() => setToast(null), 1800);
+    window.setTimeout(() => setToast(null), 2200);
   }
 
   const [editPersonal, setEditPersonal] = useState(false);
@@ -252,7 +276,9 @@ export function Profile() {
       setEditPersonal(false);
       showToast(t("profile.toast.saved", "Данные сохранены"));
     } catch (e: any) {
-      setPersonalError(e?.message || t("profile.personal.error", "Не удалось сохранить изменения."));
+      setPersonalError(
+        e?.message || t("profile.personal.error", "Не удалось сохранить изменения.")
+      );
     } finally {
       setSavingPersonal(false);
     }
@@ -294,6 +320,7 @@ export function Profile() {
   async function saveTelegramLogin() {
     setTgError(null);
     const clean = String(tgLoginDraft || "").trim().replace(/^@/, "");
+
     if (!clean) {
       setTgError(t("profile.telegram.error.empty", "Введите Telegram логин."));
       return;
@@ -325,9 +352,205 @@ export function Profile() {
       setTgModal(false);
       showToast(t("profile.telegram.toast.saved", "Telegram обновлён"));
     } catch (e: any) {
-      setTgError(e?.message || t("profile.telegram.error.save", "Не удалось сохранить Telegram логин."));
+      setTgError(
+        e?.message || t("profile.telegram.error.save", "Не удалось сохранить Telegram логин.")
+      );
     } finally {
       setSavingTg(false);
+    }
+  }
+
+  const [email, setEmail] = useState<string>("");
+  const [emailVerified, setEmailVerified] = useState<boolean | null>(null);
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [emailBusy, setEmailBusy] = useState(false);
+  const [emailModal, setEmailModal] = useState(false);
+  const [emailDraft, setEmailDraft] = useState("");
+  const [emailError, setEmailError] = useState<string | null>(null);
+
+  async function loadEmail() {
+    setEmailLoading(true);
+    try {
+      const resp = await apiFetch<UserEmailResponse>("/user/email", { method: "GET" });
+      if ((resp as any)?.ok) {
+        setEmail(String((resp as any).email ?? "").trim());
+        setEmailVerified(
+          typeof (resp as any).emailVerified === "boolean" ? (resp as any).emailVerified : null
+        );
+      }
+    } catch {
+      // ignore
+    } finally {
+      setEmailLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadEmail();
+  }, []);
+
+  useEffect(() => {
+    if (!emailModal) {
+      setEmailDraft(email || "");
+      setEmailError(null);
+    }
+  }, [emailModal, email]);
+
+  function getEmailSaveErrorText(err: unknown): string {
+    const raw = String((err as any)?.message || "").toLowerCase();
+
+    if (raw.includes("email_already_used") || raw.includes("already in use")) {
+      return t(
+        "profile.email.error.already_used",
+        "Этот email уже привязан к другому аккаунту."
+      );
+    }
+
+    if (raw.includes("invalid_email")) {
+      return t("profile.email.error.invalid", "Укажите корректный email.");
+    }
+
+    if (raw.includes("empty_email")) {
+      return t("profile.email.error.empty", "Введите email.");
+    }
+
+    if (raw.includes("email_not_saved")) {
+      return t(
+        "profile.email.error.not_saved",
+        "Не удалось сохранить email. Проверьте адрес и попробуйте снова."
+      );
+    }
+
+    if (raw.includes("email_save_check_failed")) {
+      return t(
+        "profile.email.error.save_check_failed",
+        "Не удалось проверить сохранение email. Попробуйте ещё раз."
+      );
+    }
+
+    return t("profile.email.error.save", "Не удалось сохранить email. Попробуйте ещё раз.");
+  }
+
+  async function saveEmail() {
+    setEmailError(null);
+    const clean = String(emailDraft || "").trim().toLowerCase();
+
+    if (!clean) {
+      setEmailError(t("profile.email.error.empty", "Введите email."));
+      return;
+    }
+    if (!isValidEmail(clean)) {
+      setEmailError(t("profile.email.error.invalid", "Укажите корректный email."));
+      return;
+    }
+
+    setEmailBusy(true);
+    try {
+      const resp = await apiFetch<UserEmailResponse>("/user/email", {
+        method: "PUT",
+        body: { email: clean },
+      });
+
+      if ((resp as any)?.ok) {
+        setEmail(String((resp as any).email ?? clean));
+        setEmailVerified(
+          typeof (resp as any).emailVerified === "boolean" ? (resp as any).emailVerified : false
+        );
+        setEmailModal(false);
+        showToast(t("profile.email.toast.saved", "Email сохранён"));
+        return;
+      }
+
+      setEmailError(t("profile.email.error.save", "Не удалось сохранить email. Попробуйте ещё раз."));
+    } catch (e: unknown) {
+      setEmailError(getEmailSaveErrorText(e));
+    } finally {
+      setEmailBusy(false);
+    }
+  }
+
+  async function requestVerifyEmail() {
+    if (!email) {
+      setEmailError(t("profile.email.error.need_email", "Сначала добавьте email."));
+      return;
+    }
+
+    setEmailBusy(true);
+    try {
+      await apiFetch("/user/email/verify", {
+        method: "POST",
+        body: {},
+      });
+      showToast(
+        t("profile.email.toast.verify_sent", "Письмо для подтверждения отправлено")
+      );
+    } catch {
+      showToast(
+        t("profile.email.toast.verify_failed", "Не удалось отправить письмо для подтверждения")
+      );
+    } finally {
+      setEmailBusy(false);
+    }
+  }
+
+  const [pwdModal, setPwdModal] = useState(false);
+  const [pwd1, setPwd1] = useState("");
+  const [pwd2, setPwd2] = useState("");
+  const [showPwd1, setShowPwd1] = useState(false);
+  const [showPwd2, setShowPwd2] = useState(false);
+  const [pwdBusy, setPwdBusy] = useState(false);
+  const [pwdError, setPwdError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!pwdModal) {
+      setPwd1("");
+      setPwd2("");
+      setShowPwd1(false);
+      setShowPwd2(false);
+      setPwdError(null);
+      setPwdBusy(false);
+    }
+  }, [pwdModal]);
+
+  const pwdStrength = useMemo(() => pwdScore(pwd1), [pwd1]);
+  const canSavePassword =
+    pwd1.trim().length >= 8 && pwd2.length > 0 && pwd1 === pwd2 && !pwdBusy;
+
+  async function savePasswordFromProfile() {
+    if (!canSavePassword) return;
+
+    setPwdBusy(true);
+    setPwdError(null);
+
+    try {
+      const res = await apiFetch<PasswordSetResponse>("/auth/password/set", {
+        method: "POST",
+        body: { password: pwd1.trim() },
+      });
+
+      if (!(res as any)?.ok) {
+        throw new Error(String((res as any)?.error || "password_set_failed"));
+      }
+
+      showToast(t("profile.password.toast.changed", "Пароль изменён"));
+
+      try {
+        await apiFetch("/logout", { method: "POST" });
+      } catch {
+        // ignore
+      }
+
+      nav("/login?reason=pwd_changed", { replace: true, state: { from: "/profile" } });
+    } catch (e: unknown) {
+      const n = normalizeError(e);
+      const msg =
+        n.description || t("profile.password.error.save", "Не удалось изменить пароль.");
+      setPwdError(msg);
+      toastApiError(e, {
+        title: t("profile.password.error.save", "Не удалось изменить пароль."),
+      });
+    } finally {
+      setPwdBusy(false);
     }
   }
 
@@ -364,10 +587,6 @@ export function Profile() {
       setLoggingOut(false);
       nav("/login", { replace: true });
     }
-  }
-
-  function goChangePassword() {
-    nav("/set-password?intent=change&redirect=/profile");
   }
 
   const [standalone, setStandalone] = useState(false);
@@ -456,7 +675,7 @@ export function Profile() {
   }
 
   useEffect(() => {
-    refreshPush();
+    void refreshPush();
   }, []);
 
   async function togglePush() {
@@ -473,7 +692,9 @@ export function Profile() {
         showToast(t("profile.push.toast.disabled", "Уведомления выключены"));
       } else {
         if (isIOS() && !standalone) {
-          showToast(t("profile.push.toast.install_ios", "Для push на iPhone сначала установите приложение."));
+          showToast(
+            t("profile.push.toast.install_ios", "Для push на iPhone сначала установите приложение.")
+          );
           setIosInstallModal(true);
           return;
         }
@@ -483,7 +704,9 @@ export function Profile() {
           showToast(t("profile.push.toast.enabled", "Уведомления включены"));
         } else {
           if (pushState.permission === "denied") {
-            showToast(t("profile.push.toast.denied", "Уведомления запрещены в браузере."));
+            showToast(
+              t("profile.push.toast.denied", "Уведомления запрещены в браузере.")
+            );
           } else {
             showToast(t("profile.push.toast.failed", "Не удалось включить уведомления."));
           }
@@ -539,10 +762,6 @@ export function Profile() {
     <Badge text={t("profile.telegram.badge.unlinked", "Не подключен")} />
   );
 
-  const soonBadge = <Badge text={t("profile.soon", "Скоро")} tone="soon" />;
-
-  const langHint = t("profile.language.hint", "Сохраняется автоматически.");
-
   const pwaText = standalone
     ? t("profile.pwa.installed", "Установлено")
     : t("profile.pwa.not_installed", "Не установлено");
@@ -594,8 +813,35 @@ export function Profile() {
           : pushState.permission === "default"
             ? t("profile.push.hint.ask", "Нажмите «Включить», чтобы разрешить уведомления.")
             : pushState.permission === "granted" && pushState.disabledByUser
-              ? t("profile.push.hint.disabled_by_user", "Выключено вручную. Можно включить снова.")
-              : t("profile.push.hint.subscription", "Разрешение уже есть, осталось включить подписку.");
+              ? t(
+                  "profile.push.hint.disabled_by_user",
+                  "Выключено вручную. Можно включить снова."
+                )
+              : t(
+                  "profile.push.hint.subscription",
+                  "Разрешение уже есть, осталось включить подписку."
+                );
+
+  const emailBadge = email
+    ? emailVerified === true
+      ? <Badge text={t("profile.email.badge.verified", "Подтверждён")} tone="ok" />
+      : <Badge text={t("profile.email.badge.unverified", "Не подтверждён")} />
+    : <Badge text={t("profile.email.badge.empty", "Не указан")} />;
+
+  const emailHint = email
+    ? emailVerified === true
+      ? t(
+          "profile.email.hint.verified",
+          "Используется для входа и восстановления доступа."
+        )
+      : t(
+          "profile.email.hint.unverified",
+          "Добавлен как дополнительный логин. Рекомендуем подтвердить."
+        )
+    : t(
+        "profile.email.hint.empty",
+        "Добавьте email для входа и восстановления доступа."
+      );
 
   return (
     <div className="section">
@@ -604,7 +850,7 @@ export function Profile() {
           <CardTitle
             icon="👤"
             right={
-              <button className="btn" onClick={() => refetch?.()} title={t("profile.refresh", "Обновить")} type="button">
+              <button className="btn" onClick={() => refetch?.()} type="button">
                 {t("profile.refresh", "Обновить")}
               </button>
             }
@@ -619,11 +865,11 @@ export function Profile() {
           <div className="actions actions--1">
             {isAdmin ? (
               <button className="btn btn--accent" onClick={() => nav("/admin")} type="button">
-                🛠 Админка
+                🛠 {t("profile.admin", "Админка")}
               </button>
             ) : null}
 
-            <button className="btn" onClick={goChangePassword} type="button">
+            <button className="btn" onClick={() => setPwdModal(true)} type="button">
               🔐 {t("profile.change_password", "Сменить пароль")}
             </button>
 
@@ -646,7 +892,12 @@ export function Profile() {
                   </button>
                 ) : (
                   <div className="row">
-                    <button className="btn btn--primary" onClick={savePersonal} disabled={savingPersonal} type="button">
+                    <button
+                      className="btn btn--primary"
+                      onClick={savePersonal}
+                      disabled={savingPersonal}
+                      type="button"
+                    >
                       {savingPersonal ? "…" : t("profile.personal.save", "Сохранить")}
                     </button>
                     <button className="btn" onClick={cancelPersonal} disabled={savingPersonal} type="button">
@@ -738,9 +989,42 @@ export function Profile() {
       <div className="section">
         <div className="card">
           <div className="card__body">
-            <CardTitle icon="🔑">{t("profile.auth.title", "Вход и привязки")}</CardTitle>
+            <CardTitle icon="🔑">
+              {t("profile.auth.title", "Вход и привязки")}
+            </CardTitle>
 
             <div className="profile-list">
+              <RowLine
+                icon="✉️"
+                label={t("profile.email.title", "Email")}
+                value={
+                  emailLoading
+                    ? t("profile.email.loading", "Загрузка…")
+                    : email || t("profile.email.empty", "Не указан")
+                }
+                right={
+                  <>
+                    {emailBadge}
+                    <button className="btn" onClick={() => setEmailModal(true)} type="button">
+                      {email
+                        ? t("profile.email.change", "Изменить")
+                        : t("profile.email.add", "Добавить")}
+                    </button>
+                    {email && emailVerified !== true ? (
+                      <button
+                        className="btn btn--primary"
+                        onClick={requestVerifyEmail}
+                        disabled={emailBusy}
+                        type="button"
+                      >
+                        {emailBusy ? "…" : t("profile.email.verify", "Подтвердить")}
+                      </button>
+                    ) : null}
+                  </>
+                }
+                hint={emailHint}
+              />
+
               <RowLine
                 icon="✈️"
                 label="Telegram"
@@ -757,9 +1041,6 @@ export function Profile() {
                 }
                 hint={t("profile.telegram.hint", "Используется для входа и уведомлений.")}
               />
-
-              <RowLine icon="🟦" label="Google" value="OAuth" right={soonBadge} />
-              <RowLine icon="🟥" label="Yandex" value="OAuth" right={soonBadge} />
             </div>
           </div>
         </div>
@@ -768,7 +1049,9 @@ export function Profile() {
       <div className="section">
         <div className="card">
           <div className="card__body">
-            <CardTitle icon="⚙️">{t("profile.settings.title", "Настройки")}</CardTitle>
+            <CardTitle icon="⚙️">
+              {t("profile.settings.title", "Настройки")}
+            </CardTitle>
 
             <div className="profile-list">
               <div className="profile-row">
@@ -778,9 +1061,13 @@ export function Profile() {
                     <span>{t("profile.language.title", "Язык интерфейса")}</span>
                   </div>
                   <div className="profile-row__value">
-                    {lang === "ru" ? t("profile.language.ru", "Русский") : t("profile.language.en", "English")}
+                    {lang === "ru"
+                      ? t("profile.language.ru", "Русский")
+                      : t("profile.language.en", "English")}
                   </div>
-                  <div className="profile-row__hint">{langHint}</div>
+                  <div className="profile-row__hint">
+                    {t("profile.language.hint", "Сохраняется автоматически.")}
+                  </div>
                 </div>
 
                 <div className="profile-row__right">
@@ -822,8 +1109,7 @@ export function Profile() {
                   <div className="profile-row__value">
                     {pushEnabled
                       ? t("profile.push.enabled", "Включены")
-                      : t("profile.push.disabled", "Выключены")}{" "}
-                    • {pushPermText}
+                      : t("profile.push.disabled", "Выключены")} • {pushPermText}
                   </div>
 
                   <div className="profile-row__hint">{pushHint}</div>
@@ -841,7 +1127,12 @@ export function Profile() {
                       {t("profile.push.button.settings", "В настройках")}
                     </button>
                   ) : isIOS() && !standalone ? (
-                    <button className="btn btn--primary" type="button" onClick={doInstallPwa} disabled={pushLoading}>
+                    <button
+                      className="btn btn--primary"
+                      type="button"
+                      onClick={doInstallPwa}
+                      disabled={pushLoading}
+                    >
                       {t("profile.pwa.button.install", "Установить")}
                     </button>
                   ) : (
@@ -871,7 +1162,12 @@ export function Profile() {
         onClose={() => setIosInstallModal(false)}
         closeLabel={t("profile.modal.close", "Закрыть")}
       >
-        <p className="p">{t("profile.pwa.ios_modal.text", "На iPhone приложение устанавливается через меню «Поделиться».")}</p>
+        <p className="p">
+          {t(
+            "profile.pwa.ios_modal.text",
+            "На iPhone приложение устанавливается через меню «Поделиться»."
+          )}
+        </p>
 
         <div className="pre">
           {t(
@@ -914,6 +1210,150 @@ export function Profile() {
           </button>
           <button className="btn btn--primary" onClick={saveTelegramLogin} disabled={savingTg} type="button">
             {savingTg ? "…" : t("profile.personal.save", "Сохранить")}
+          </button>
+        </div>
+      </Modal>
+
+      <Modal
+        open={emailModal}
+        title={
+          email
+            ? t("profile.email.modal.change_title", "Изменить email")
+            : t("profile.email.modal.add_title", "Добавить email")
+        }
+        onClose={() => setEmailModal(false)}
+        closeLabel={t("profile.modal.close", "Закрыть")}
+      >
+        <p className="p">
+          {t(
+            "profile.email.modal.text",
+            "Укажите email, который будет использоваться для входа и восстановления доступа."
+          )}
+        </p>
+
+        <input
+          className="input"
+          value={emailDraft}
+          onChange={(e) => setEmailDraft(e.target.value)}
+          placeholder={t("profile.email.modal.placeholder", "name@example.com")}
+          autoComplete="email"
+          inputMode="email"
+        />
+
+        {emailError ? <div className="pre">{emailError}</div> : null}
+
+        <div className="actions actions--2">
+          <button className="btn" onClick={() => setEmailModal(false)} disabled={emailBusy} type="button">
+            {t("profile.personal.cancel", "Отмена")}
+          </button>
+          <button className="btn btn--primary" onClick={saveEmail} disabled={emailBusy} type="button">
+            {emailBusy ? "…" : t("profile.email.save", "Сохранить")}
+          </button>
+        </div>
+      </Modal>
+
+      <Modal
+        open={pwdModal}
+        title={t("profile.password.modal.title", "Сменить пароль")}
+        onClose={() => setPwdModal(false)}
+        closeLabel={t("profile.modal.close", "Закрыть")}
+      >
+        <p className="p">
+          {t(
+            "profile.password.modal.text",
+            "Введите новый пароль. После сохранения нужно будет войти снова."
+          )}
+        </p>
+
+        <label className="field">
+          <span className="field__label">{t("profile.password.field.p1", "Новый пароль")}</span>
+          <div className="pwdfield">
+            <input
+              className="input"
+              placeholder={t("profile.password.field.p1_ph", "Минимум 8 символов")}
+              value={pwd1}
+              onChange={(e) => setPwd1(e.target.value)}
+              type={showPwd1 ? "text" : "password"}
+              autoComplete="new-password"
+              disabled={pwdBusy}
+            />
+            <button
+              type="button"
+              className="btn btn--soft pwdfield__btn"
+              onClick={() => setShowPwd1((v) => !v)}
+              disabled={pwdBusy}
+              aria-label={
+                showPwd1
+                  ? t("profile.password.hide_password", "Скрыть пароль")
+                  : t("profile.password.show_password", "Показать пароль")
+              }
+              title={
+                showPwd1
+                  ? t("profile.password.hide", "Скрыть")
+                  : t("profile.password.show", "Показать")
+              }
+            >
+              {showPwd1 ? "🙈" : "👁"}
+            </button>
+          </div>
+        </label>
+
+        <label className="field">
+          <span className="field__label">{t("profile.password.field.p2", "Повторите пароль")}</span>
+          <div className="pwdfield">
+            <input
+              className="input"
+              placeholder={t("profile.password.field.p2_ph", "Повторите пароль")}
+              value={pwd2}
+              onChange={(e) => setPwd2(e.target.value)}
+              type={showPwd2 ? "text" : "password"}
+              autoComplete="new-password"
+              disabled={pwdBusy}
+            />
+            <button
+              type="button"
+              className="btn btn--soft pwdfield__btn"
+              onClick={() => setShowPwd2((v) => !v)}
+              disabled={pwdBusy}
+              aria-label={
+                showPwd2
+                  ? t("profile.password.hide_password", "Скрыть пароль")
+                  : t("profile.password.show_password", "Показать пароль")
+              }
+              title={
+                showPwd2
+                  ? t("profile.password.hide", "Скрыть")
+                  : t("profile.password.show", "Показать")
+              }
+            >
+              {showPwd2 ? "🙈" : "👁"}
+            </button>
+          </div>
+        </label>
+
+        <div className="pre pwdmeter">
+          <div className="pwdmeter__row">
+            <span className="pwdmeter__title">{t("profile.password.strength", "Надёжность")}</span>
+            <span className="pwdmeter__score">{pwdStrength}/5</span>
+          </div>
+          <div className="pwdmeter__tip">
+            {t("profile.password.tip", "Используйте 8+ символов, цифры и спецсимволы.")}
+          </div>
+        </div>
+
+        {pwdError ? <div className="pre">{pwdError}</div> : null}
+
+        <div className="actions actions--2">
+          <button className="btn" onClick={() => setPwdModal(false)} disabled={pwdBusy} type="button">
+            {t("profile.personal.cancel", "Отмена")}
+          </button>
+          <button
+            className="btn btn--primary"
+            onClick={savePasswordFromProfile}
+            disabled={!canSavePassword}
+            type="button"
+          >
+            {pwdBusy ? "…" : t("profile.password.save", "Сменить пароль")}
           </button>
         </div>
       </Modal>

@@ -86,7 +86,6 @@ export async function shmFetch<T = unknown>(
   path: string,
   opts?: ShmFetchOpts
 ): Promise<ShmResult<T>> {
-
   const cleanPath = path.startsWith('/') ? path.slice(1) : path
   const url = new URL(cleanPath, SHM_BASE)
 
@@ -150,9 +149,7 @@ export async function shmFetch<T = unknown>(
     })
 
     return { ok: res.ok, status: res.status, json, text }
-
   } catch (e: any) {
-
     const ms = Date.now() - startedAt
     const msg = String(e?.message ?? e ?? 'unknown_fetch_error')
 
@@ -192,7 +189,6 @@ function ipHeaders(clientIp?: string) {
 // =====================
 
 export async function shmAuthWithPassword(login: string, password: string, clientIp?: string) {
-
   const body = toFormUrlEncoded({ login, password })
 
   return await shmFetch<{
@@ -204,14 +200,13 @@ export async function shmAuthWithPassword(login: string, password: string, clien
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
-      ...(ipHeaders(clientIp) ?? {})
+      ...(ipHeaders(clientIp) ?? {}),
     },
     body,
   })
 }
 
 export async function shmTelegramWebAppAuth(initData: string, clientIp?: string) {
-
   const clean = String(initData ?? '').trim()
 
   return await shmFetch<{ session_id?: string }>(null, 'v1/telegram/webapp/auth', {
@@ -222,7 +217,6 @@ export async function shmTelegramWebAppAuth(initData: string, clientIp?: string)
 }
 
 export async function shmTelegramWebAuth(widgetPayload: Record<string, any>, clientIp?: string) {
-
   return await shmFetch<{ session_id?: string }>(null, 'v1/telegram/web/auth', {
     method: 'POST',
     headers: ipHeaders(clientIp),
@@ -241,7 +235,37 @@ export async function shmGetMe(sessionId: string) {
   })
 }
 
-export async function shmGetUserServices(sessionId: string, opts?: { limit?: number; offset?: number; filter?: unknown }) {
+export async function shmGetUserEmail(sessionId: string) {
+  return await shmFetch<any>(sessionId, 'v1/user/email', {
+    method: 'GET',
+    query: { limit: 1, offset: 0 },
+  })
+}
+
+export async function shmSetUserEmail(sessionId: string, email: string) {
+  return await shmFetch<any>(sessionId, 'v1/user/email', {
+    method: 'PUT',
+    body: { email },
+  })
+}
+
+export async function shmDeleteUserEmail(sessionId: string) {
+  return await shmFetch<any>(sessionId, 'v1/user/email', {
+    method: 'DELETE',
+  })
+}
+
+export async function shmRequestUserEmailVerify(sessionId: string, payload?: Record<string, any>) {
+  return await shmFetch<any>(sessionId, 'v1/user/email/verify', {
+    method: 'POST',
+    body: payload ?? {},
+  })
+}
+
+export async function shmGetUserServices(
+  sessionId: string,
+  opts?: { limit?: number; offset?: number; filter?: unknown }
+) {
   const limit = opts?.limit ?? 25
   const offset = opts?.offset ?? 0
   const filterObj = (opts?.filter ?? {}) as any
@@ -391,13 +415,13 @@ export async function shmShpunAppTemplate<T = any>(
     session_id: shmSessionId,
     action,
     ...(extraParams ?? {}),
-  };
+  }
 
-  return await shmFetch<T>(null, "v1/template/shpun_app", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+  return await shmFetch<T>(null, 'v1/template/shpun_app', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: toFormUrlEncoded(flat),
-  });
+  })
 }
 
 // =====================
@@ -405,11 +429,11 @@ export async function shmShpunAppTemplate<T = any>(
 // =====================
 
 export async function shmShpunAppStatus(shmSessionId: string) {
-  return await shmShpunAppTemplate<any>(shmSessionId, "status");
+  return await shmShpunAppTemplate<any>(shmSessionId, 'status')
 }
 
 export async function shmShpunAppAdminStatus(shmSessionId: string) {
-  return await shmShpunAppTemplate<any>(shmSessionId, "admin.status");
+  return await shmShpunAppTemplate<any>(shmSessionId, 'admin.status')
 }
 
 // =====================
@@ -417,23 +441,23 @@ export async function shmShpunAppAdminStatus(shmSessionId: string) {
 // =====================
 
 export async function shmShpunAppAdminSettingsGet(shmSessionId: string) {
-  return await shmShpunAppTemplate<any>(shmSessionId, "admin.settings.get");
+  return await shmShpunAppTemplate<any>(shmSessionId, 'admin.settings.get')
 }
 
 export async function shmShpunAppAdminSettingsSet(
   shmSessionId: string,
   payload: {
-    orderBlockMode?: "off" | "same_type" | "any";
-    trialDeviceMode?: "off" | "observe" | "enforce";
-    trialDeviceTtlHours?: number;
-    trialIpPrefixUsageThreshold?: number;
-    trialIpPrefixAttemptThreshold?: number;
-    trialIpPrefixDistinctDevicesThreshold?: number;
-    trialIpPrefixUserAgentAttemptThreshold?: number;
-    trialIpPrefixDistinctUsersThreshold?: number;
+    orderBlockMode?: 'off' | 'same_type' | 'any'
+    trialDeviceMode?: 'off' | 'observe' | 'enforce'
+    trialDeviceTtlHours?: number
+    trialIpPrefixUsageThreshold?: number
+    trialIpPrefixAttemptThreshold?: number
+    trialIpPrefixDistinctDevicesThreshold?: number
+    trialIpPrefixUserAgentAttemptThreshold?: number
+    trialIpPrefixDistinctUsersThreshold?: number
   }
 ) {
-  return await shmShpunAppTemplate<any>(shmSessionId, "admin.settings.set", payload);
+  return await shmShpunAppTemplate<any>(shmSessionId, 'admin.settings.set', payload)
 }
 
 // =====================
@@ -441,7 +465,7 @@ export async function shmShpunAppAdminSettingsSet(
 // =====================
 
 export async function shmShpunAppOrderRulesGet(shmSessionId: string) {
-  return await shmShpunAppTemplate<any>(shmSessionId, "order.rules.get");
+  return await shmShpunAppTemplate<any>(shmSessionId, 'order.rules.get')
 }
 
 // =====================
@@ -449,30 +473,25 @@ export async function shmShpunAppOrderRulesGet(shmSessionId: string) {
 // =====================
 
 export async function shmShpunAppReferralsStatus(shmSessionId: string) {
-  return await shmShpunAppTemplate<any>(shmSessionId, "referrals.status");
+  return await shmShpunAppTemplate<any>(shmSessionId, 'referrals.status')
 }
 
 export async function shmShpunAppReferralsList(
   shmSessionId: string,
   opts?: { limit?: number; offset?: number }
 ) {
-  return await shmShpunAppTemplate<any>(shmSessionId, "referrals.list", {
+  return await shmShpunAppTemplate<any>(shmSessionId, 'referrals.list', {
     limit: opts?.limit ?? 7,
     offset: opts?.offset ?? 0,
-  });
+  })
 }
 
 export async function shmShpunAppReferralsLink(shmSessionId: string) {
-  return await shmShpunAppTemplate<any>(shmSessionId, "referrals.link");
+  return await shmShpunAppTemplate<any>(shmSessionId, 'referrals.link')
 }
+
 /**
- * ✅ NEW: Payments requisites via shpun_app template (private, authed)
- *
- * В TT2 шапке shpun_app нужно реализовать action: "payments.requisites"
- * который вернёт JSON с ok=1 и данными реквизитов.
- *
- * Пример ожидаемого ответа:
- * { ok:1, requisites:{ bank, holder, card, comment, title, updated_at } }
+ * ✅ Payments requisites via shpun_app template (private, authed)
  */
 export async function shmShpunAppPaymentsRequisites(shmSessionId: string) {
   return await shmShpunAppTemplate<any>(shmSessionId, 'payments.requisites')
@@ -527,7 +546,12 @@ export async function shmShpunAppRouterList(shmSessionId: string, usi: number) {
   })
 }
 
-export async function shmShpunAppRouterBind(shmSessionId: string, usi: number, code: string, tg_id?: string | number) {
+export async function shmShpunAppRouterBind(
+  shmSessionId: string,
+  usi: number,
+  code: string,
+  tg_id?: string | number
+) {
   return await shmShpunAppTemplate<ShpunAppRouterBindResp>(shmSessionId, 'router.bind', {
     usi,
     user_service_id: usi,
@@ -537,7 +561,12 @@ export async function shmShpunAppRouterBind(shmSessionId: string, usi: number, c
   })
 }
 
-export async function shmShpunAppRouterUnbind(shmSessionId: string, usi: number, code: string, tg_id?: string | number) {
+export async function shmShpunAppRouterUnbind(
+  shmSessionId: string,
+  usi: number,
+  code: string,
+  tg_id?: string | number
+) {
   return await shmShpunAppTemplate<ShpunAppRouterUnbindResp>(shmSessionId, 'router.unbind', {
     usi,
     user_service_id: usi,

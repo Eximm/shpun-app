@@ -537,16 +537,17 @@ export async function authRoutes(app: FastifyInstance) {
     const modeRaw = String(body?.mode ?? "login").trim().toLowerCase();
     const mode = modeRaw === "register" ? "register" : "login";
 
-  const clientIp =
-    String(req.headers["x-forwarded-for"] ?? "").split(",")[0].trim() ||
-    String(req.headers["x-real-ip"] ?? "").trim() ||
-    req.ip;
+    const clientIp =
+      String(req.headers["x-forwarded-for"] ?? "").split(",")[0].trim() ||
+      String(req.headers["x-real-ip"] ?? "").trim() ||
+      req.ip;
 
-  const result = await handleAuth("password", {
-    ...body,
-    mode,
-    client_ip: clientIp,
-  });
+    const result = await handleAuth("password", {
+      ...body,
+      mode,
+      client_ip: clientIp,
+    });
+
     if (!result.ok) {
       return reply.code(result.status || 400).send(result);
     }
@@ -651,6 +652,31 @@ export async function authRoutes(app: FastifyInstance) {
     } catch {}
 
     return reply.send({ ok: true, password_set: 1 });
+  });
+
+  app.post("/auth/onboarding/mark", async (req, reply) => {
+    const s = getSessionFromRequest(req) as any;
+    if (!s?.shmSessionId) {
+      return reply.code(401).send({ ok: false, error: "not_authenticated" });
+    }
+
+    const body = readJsonBody(req);
+    const step = String(body?.step ?? "").trim().toLowerCase();
+
+    if (!step) {
+      return reply.code(400).send({ ok: false, error: "step_required" });
+    }
+
+    try {
+      await callShmTemplate(s.shmSessionId, "onboarding.mark", { step });
+      return reply.send({ ok: true, step });
+    } catch (e: any) {
+      return reply.code(502).send({
+        ok: false,
+        error: "onboarding_mark_failed",
+        detail: String(e?.message ?? e ?? ""),
+      });
+    }
   });
 
   app.get("/auth/status", async (req, reply) => {

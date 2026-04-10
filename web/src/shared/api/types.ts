@@ -7,14 +7,13 @@ export type ApiResult<T> = (ApiOk & T) | ApiErr;
 // /api/me
 export type MeProfile = {
   login?: string | null;
-  passwordSet?: boolean; // важно для gate в SetPassword
+  passwordSet?: boolean;
   user_id?: number | null;
 };
 
 export type MeResponse = ApiResult<{ profile?: MeProfile }>;
 
-// Ответы логина (Telegram / Password / Widget):
-// next = 'set_password' | 'home'
+// Ответы логина
 export type AuthResponse = ApiResult<{
   login?: string;
   next: "set_password" | "home";
@@ -24,4 +23,9 @@ export type AuthResponse = ApiResult<{
 // Ответ установки/смены пароля
 export type PasswordSetResponse = ApiResult<{
   password_set: 1;
+}>;
+
+export type UserEmailResponse = ApiResult<{
+  email?: string | null;
+  emailVerified?: boolean | null;
 }>;

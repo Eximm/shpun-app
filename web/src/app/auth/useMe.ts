@@ -7,6 +7,9 @@ export type MeResponse = {
     id: number;
     displayName: string;
     login: string | null;
+    login2?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
     fullName: string | null;
     phone?: string | null;
     passwordSet: boolean;
@@ -29,6 +32,7 @@ export type MeResponse = {
   balance: { amount: number; currency: string };
   bonus: number;
   discount: number;
+  referralsCount?: number;
 
   shm?: { status?: number };
   meRaw?: any;
@@ -125,8 +129,6 @@ export function useMe() {
     const onChange = (s: State) => setSnap(s);
     listeners.add(onChange);
 
-    // блокируем только авто-fetch при первом маунте,
-    // чтобы не мешать активному auth flow
     if (state.loading && state.lastFetchedAt === 0 && !hasFreshAuthPending()) {
       doFetchMe().catch(() => {});
     }

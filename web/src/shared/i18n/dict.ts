@@ -104,7 +104,7 @@ export const RU: Dict = {
   "login.err.password_required": "Введите пароль.",
   "login.err.invalid_credentials": "Неверный e-mail или пароль.",
   "login.err.password_too_short": "Пароль слишком короткий. Минимум 8 символов.",
-  "login.err.login_taken": "Этот e-mail уже занят.",
+  "login.err.login_taken": "Этот email уже привязан к другому аккаунту.",
   "login.err.not_authenticated": "Нужно войти заново.",
   "login.err.init_data_required": "Откройте приложение в Telegram для быстрого входа.",
   "login.err.tg_failed": "Не удалось войти через Telegram. Попробуйте ещё раз.",
@@ -198,7 +198,7 @@ export const RU: Dict = {
   "promo.err.empty": "Введите код.",
   "promo.done.stub": "Бонус-коды скоро появятся в приложении.",
 
-  // profile
+  // PROFILE — RU
   "profile.title": "Профиль",
   "profile.refresh": "Обновить",
   "profile.head.sub": "Аккаунт, вход и настройки.",
@@ -211,6 +211,7 @@ export const RU: Dict = {
 
   "profile.logout": "Выйти",
   "profile.change_password": "Сменить пароль",
+  "profile.admin": "Админка",
 
   "profile.toast.saved": "Данные сохранены",
   "profile.toast.copied": "Скопировано",
@@ -230,6 +231,39 @@ export const RU: Dict = {
   "profile.personal.last_login": "Последний вход",
 
   "profile.auth.title": "Вход и привязки",
+
+  "profile.email.title": "Email",
+  "profile.email.loading": "Загрузка…",
+  "profile.email.empty": "Не указан",
+  "profile.email.add": "Добавить",
+  "profile.email.change": "Изменить",
+  "profile.email.save": "Сохранить",
+  "profile.email.verify": "Подтвердить",
+
+  "profile.email.badge.verified": "Подтверждён",
+  "profile.email.badge.unverified": "Не подтверждён",
+  "profile.email.badge.empty": "Не указан",
+
+  "profile.email.hint.verified": "Используется для входа и восстановления доступа.",
+  "profile.email.hint.unverified": "Добавлен как дополнительный логин. Рекомендуем подтвердить.",
+  "profile.email.hint.empty": "Добавьте email для входа и восстановления доступа.",
+
+  "profile.email.toast.saved": "Email сохранён",
+  "profile.email.toast.verify_sent": "Письмо для подтверждения отправлено",
+  "profile.email.toast.verify_failed": "Не удалось отправить письмо для подтверждения",
+
+  "profile.email.error.empty": "Введите email.",
+  "profile.email.error.invalid": "Укажите корректный email.",
+  "profile.email.error.already_used": "Этот email уже занят.",
+  "profile.email.error.not_saved": "Не удалось сохранить email. Проверьте адрес и попробуйте снова.",
+  "profile.email.error.save_check_failed": "Не удалось проверить сохранение email. Попробуйте ещё раз.",
+  "profile.email.error.save": "Не удалось сохранить email. Попробуйте ещё раз.",
+  "profile.email.error.need_email": "Сначала добавьте email.",
+
+  "profile.email.modal.add_title": "Добавить email",
+  "profile.email.modal.change_title": "Изменить email",
+  "profile.email.modal.text": "Укажите email, который будет использоваться для входа и восстановления доступа.",
+  "profile.email.modal.placeholder": "name@example.com",
 
   "profile.telegram.unlinked": "Не подключен",
   "profile.telegram.link": "Подключить",
@@ -272,8 +306,7 @@ export const RU: Dict = {
   "profile.pwa.toast.failed": "Не удалось запустить установку",
   "profile.pwa.ios_modal.title": "Установка на iPhone",
   "profile.pwa.ios_modal.text": "На iPhone приложение устанавливается через меню «Поделиться».",
-  "profile.pwa.ios_modal.steps":
-    "1) Откройте меню «Поделиться»\n2) Выберите «На экран Домой»\n3) Подтвердите добавление",
+  "profile.pwa.ios_modal.steps": "1) Откройте меню «Поделиться»\n2) Выберите «На экран Домой»\n3) Подтвердите добавление",
 
   "profile.push.title": "Уведомления",
   "profile.push.enabled": "Включены",
@@ -299,7 +332,6 @@ export const RU: Dict = {
   "profile.push.button.enable": "Включить",
   "profile.push.button.disable": "Выключить",
 
-  "profile.soon": "Скоро",
   "profile.modal.close": "Закрыть",
   "profile.ok": "Понятно",
 
@@ -1060,7 +1092,7 @@ export const EN: Dict = {
   "promo.err.empty": "Enter a code.",
   "promo.done.stub": "Bonus codes will appear in the app soon.",
 
-  // profile
+  // PROFILE — EN
   "profile.title": "Profile",
   "profile.refresh": "Refresh",
   "profile.head.sub": "Account, sign-in, and settings.",
@@ -1068,11 +1100,12 @@ export const EN: Dict = {
   "profile.loading.title": "Profile",
   "profile.loading.text": "Loading...",
 
-  "profile.error.text": "Could not load data.",
+  "profile.error.text": "Could not load your data.",
   "profile.error.retry": "Retry",
 
   "profile.logout": "Log out",
   "profile.change_password": "Change password",
+  "profile.admin": "Admin",
 
   "profile.toast.saved": "Changes saved",
   "profile.toast.copied": "Copied",
@@ -1091,7 +1124,40 @@ export const EN: Dict = {
   "profile.personal.created": "Created",
   "profile.personal.last_login": "Last sign-in",
 
-  "profile.auth.title": "Sign-in and linked accounts",
+  "profile.auth.title": "Sign-in and links",
+
+  "profile.email.title": "Email",
+  "profile.email.loading": "Loading…",
+  "profile.email.empty": "Not set",
+  "profile.email.add": "Add",
+  "profile.email.change": "Change",
+  "profile.email.save": "Save",
+  "profile.email.verify": "Verify",
+
+  "profile.email.badge.verified": "Verified",
+  "profile.email.badge.unverified": "Not verified",
+  "profile.email.badge.empty": "Not set",
+
+  "profile.email.hint.verified": "Used for sign-in and account recovery.",
+  "profile.email.hint.unverified": "Added as an additional login. We recommend verifying it.",
+  "profile.email.hint.empty": "Add an email for sign-in and account recovery.",
+
+  "profile.email.toast.saved": "Email saved",
+  "profile.email.toast.verify_sent": "Verification email sent",
+  "profile.email.toast.verify_failed": "Could not send verification email",
+
+  "profile.email.error.empty": "Enter an email.",
+  "profile.email.error.invalid": "Enter a valid email.",
+  "profile.email.error.already_used": "This email is already linked to another account.",
+  "profile.email.error.not_saved": "Could not save the email. Check the address and try again.",
+  "profile.email.error.save_check_failed": "Could not verify that the email was saved. Please try again.",
+  "profile.email.error.save": "Could not save the email. Please try again.",
+  "profile.email.error.need_email": "Add an email first.",
+
+  "profile.email.modal.add_title": "Add email",
+  "profile.email.modal.change_title": "Change email",
+  "profile.email.modal.text": "Enter the email that will be used for sign-in and account recovery.",
+  "profile.email.modal.placeholder": "name@example.com",
 
   "profile.telegram.unlinked": "Not connected",
   "profile.telegram.link": "Connect",
@@ -1099,20 +1165,20 @@ export const EN: Dict = {
   "profile.telegram.hint": "Used for sign-in and notifications.",
   "profile.telegram.badge.linked": "Connected",
   "profile.telegram.badge.unlinked": "Not connected",
-  "profile.telegram.error.empty": "Enter Telegram login.",
-  "profile.telegram.error.invalid": "Invalid Telegram login.",
-  "profile.telegram.error.save": "Could not save Telegram login.",
+  "profile.telegram.error.empty": "Enter a Telegram username.",
+  "profile.telegram.error.invalid": "Invalid Telegram username.",
+  "profile.telegram.error.save": "Could not save Telegram username.",
   "profile.telegram.toast.saved": "Telegram updated",
   "profile.telegram.modal.change_title": "Change Telegram",
   "profile.telegram.modal.link_title": "Connect Telegram",
-  "profile.telegram.modal.label": "Telegram login without @",
+  "profile.telegram.modal.label": "Telegram username without @",
   "profile.telegram.modal.placeholder": "for example: shpunbest",
 
   "profile.settings.title": "Settings",
 
   "profile.language.title": "Interface language",
   "profile.language.hint": "Saved automatically.",
-  "profile.language.ru": "Русский",
+  "profile.language.ru": "Russian",
   "profile.language.en": "English",
   "profile.language.aria": "Language",
 
@@ -1122,20 +1188,19 @@ export const EN: Dict = {
   "profile.pwa.button.how": "How to install",
   "profile.pwa.button.install": "Install",
   "profile.pwa.button.menu": "Via menu",
-  "profile.pwa.hint.installed": "The app is already on your home screen.",
+  "profile.pwa.hint.installed": "The app is already on the home screen.",
   "profile.pwa.hint.ios": "iPhone: Share → Add to Home Screen.",
   "profile.pwa.hint.available": "You can install it in one tap.",
   "profile.pwa.hint.menu": "Open the browser menu and choose install.",
   "profile.pwa.toast.installed": "App installed",
   "profile.pwa.toast.already_installed": "Already installed",
-  "profile.pwa.toast.menu": "Install the app from the browser menu.",
+  "profile.pwa.toast.menu": "Install the app via the browser menu.",
   "profile.pwa.toast.started": "Installation started",
   "profile.pwa.toast.cancelled": "Installation cancelled",
   "profile.pwa.toast.failed": "Could not start installation",
   "profile.pwa.ios_modal.title": "Install on iPhone",
   "profile.pwa.ios_modal.text": "On iPhone, the app is installed through the Share menu.",
-  "profile.pwa.ios_modal.steps":
-    "1) Open the Share menu\n2) Choose Add to Home Screen\n3) Confirm adding the app",
+  "profile.pwa.ios_modal.steps": "1) Open the Share menu\n2) Select Add to Home Screen\n3) Confirm",
 
   "profile.push.title": "Notifications",
   "profile.push.enabled": "Enabled",
@@ -1146,22 +1211,21 @@ export const EN: Dict = {
   "profile.push.permission.unsupported": "Unavailable",
   "profile.push.hint.unsupported": "Notifications are not available in this browser.",
   "profile.push.hint.denied": "Allow notifications in your browser settings.",
-  "profile.push.hint.ios_install": "Install the app first to use push on iPhone.",
-  "profile.push.hint.enabled": "We can send important notifications.",
-  "profile.push.hint.ask": "Press Enable to allow notifications.",
-  "profile.push.hint.disabled_by_user": "Disabled manually. You can turn it on again.",
-  "profile.push.hint.subscription": "Permission is already granted, enable the subscription next.",
+  "profile.push.hint.ios_install": "To use push on iPhone, install the app first.",
+  "profile.push.hint.enabled": "We will send important notifications.",
+  "profile.push.hint.ask": "Tap Enable to allow notifications.",
+  "profile.push.hint.disabled_by_user": "Disabled manually. You can enable it again.",
+  "profile.push.hint.subscription": "Permission is already granted, now enable the subscription.",
   "profile.push.toast.enabled": "Notifications enabled",
   "profile.push.toast.disabled": "Notifications disabled",
   "profile.push.toast.denied": "Notifications are blocked in the browser.",
   "profile.push.toast.failed": "Could not enable notifications.",
-  "profile.push.toast.install_ios": "Install the app first to use push on iPhone.",
+  "profile.push.toast.install_ios": "To use push on iPhone, install the app first.",
   "profile.push.button.unavailable": "Unavailable",
   "profile.push.button.settings": "In settings",
   "profile.push.button.enable": "Enable",
   "profile.push.button.disable": "Disable",
 
-  "profile.soon": "Soon",
   "profile.modal.close": "Close",
   "profile.ok": "Got it",
 
