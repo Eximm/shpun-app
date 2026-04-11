@@ -88,25 +88,22 @@ async function ensureAuthorizedAfterAuth(attempts = 12, delayMs = 250) {
  * Внутри Mini App window.Telegram.WebApp инициализирован Telegram ДО загрузки
  * нашего JS — initData доступен синхронно. Не грузим SDK динамически.
  */
-async function waitTelegramInitData(timeoutMs = 1500): Promise<string | null> {
-  // Синхронная проверка — в 99% случаев initData уже есть
-  const immediate = getTelegramInitData();
-  if (immediate && immediate.length > 50) {
-    try { (getTelegramWebApp() as TgWebApp | null)?.ready?.(); (getTelegramWebApp() as TgWebApp | null)?.expand?.(); } catch { /* ignore */ }
-    return immediate;
-  }
-
-  // Короткий polling как страховка (SDK может инициализироваться чуть позже)
+async function waitTelegramInitData(timeoutMs = 5000): Promise<string | null> {
+  // Telegram инжектит window.Telegram.WebApp асинхронно после загрузки страницы.
+  // Polling до timeoutMs — ждём появления объекта и initData.
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
-    await sleep(100);
     const initData = getTelegramInitData();
     if (initData && initData.length > 50) {
-      try { (getTelegramWebApp() as TgWebApp | null)?.ready?.(); (getTelegramWebApp() as TgWebApp | null)?.expand?.(); } catch { /* ignore */ }
+      try {
+        const tg = getTelegramWebApp() as TgWebApp | null;
+        tg?.ready?.();
+        tg?.expand?.();
+      } catch { /* ignore */ }
       return initData;
     }
+    await sleep(150);
   }
-
   return null;
 }
 
@@ -324,26 +321,20 @@ export function Login() {
     let cancelled = false;
 
     const run = async () => {
-      // Сначала проверяем есть ли уже initData (синхронно)
-      let initData = getTelegramInitData();
-
-      if (!initData) {
-        // Ждём инициализации SDK — Telegram иногда передаёт initData с задержкой
-        initData = await waitTelegramInitData(1500);
-      }
+      // waitTelegramInitData сам делает polling пока Telegram не инжектит WebApp.
+      // Таймаут 5000ms — Telegram обычно инициализирует SDK за 100-500ms.
+      const initData = await waitTelegramInitData(5000);
 
       if (cancelled) return;
 
       if (!initData) {
-        // Не Mini App — переходим в web режим
+        // За 5 секунд initData не появился — это обычный браузер, не Mini App
         setMode("web");
         return;
       }
 
-      // Это Mini App — устанавливаем режим и сразу логинимся
+      // Это Mini App — устанавливаем режим и логинимся
       setMode("telegram");
-
-      if (authInProgressRef.current) return;
       authInProgressRef.current = true;
       setLoading(true);
 
@@ -354,16 +345,13 @@ export function Login() {
         });
 
         if (!cancelled) await goAfterAuth(r, "telegram");
-      } catch (e: unknown) {
-        if (!cancelled) {
-          clearAuthPending();
-          // Не показываем ошибку при silent автологине — просто показываем кнопку повтора
-        }
+      } catch {
+        if (!cancelled) clearAuthPending();
+        // Ошибку при автологине не показываем — пользователь увидит кнопку повтора
       } finally {
+        // ВАЖНО: всегда сбрасываем флаг чтобы ручной логин не был заблокирован
         authInProgressRef.current = false;
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     };
 
@@ -380,7 +368,7 @@ export function Login() {
 
     try {
       let initData = getTelegramInitData();
-      if (!initData) initData = await waitTelegramInitData(1500);
+      if (!initData) initData = await waitTelegramInitData(5000);
 
       if (!initData) {
         toastError(t("error.open_in_tg", "Откройте приложение в Telegram для быстрого входа."));
