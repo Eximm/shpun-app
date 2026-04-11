@@ -847,17 +847,9 @@ export function Profile() {
     <div className="section">
       <div className="card">
         <div className="card__body">
-          <CardTitle
-            icon="👤"
-            right={
-              <button className="btn" onClick={() => refetch?.()} type="button">
-                {t("profile.refresh", "Обновить")}
-              </button>
-            }
-          >
+          <CardTitle icon="👤">
             {t("profile.title", "Профиль")}
           </CardTitle>
-
           <p className="p">{t("profile.head.sub", "Аккаунт, вход и настройки.")}</p>
 
           {toast ? <Toast text={toast} /> : null}
