@@ -32,15 +32,6 @@ function maskValue(v: unknown, max = 6): string {
   return `${s.slice(0, max)}…(${s.length})`;
 }
 
-function safeKeys(obj: any): string[] {
-  if (!obj || typeof obj !== "object") return [];
-  try {
-    return Object.keys(obj).sort();
-  } catch {
-    return [];
-  }
-}
-
 function dbg(req: any, label: string, extra?: Record<string, any>) {
   if (!isAuthDebug()) return;
   const host = String(req?.headers?.host ?? req?.hostname ?? "").trim();
@@ -163,6 +154,7 @@ function parseTelegramInitDataUser(
 ): { tgId?: string; tgLogin?: string } {
   const raw = String(initData ?? "").trim();
   if (!raw) return {};
+
   function tryParseUserJson(userRaw: string): any | null {
     let s = String(userRaw ?? "");
     for (let i = 0; i < 3; i++) {
@@ -181,6 +173,7 @@ function parseTelegramInitDataUser(
     }
     return null;
   }
+
   try {
     const qs = new URLSearchParams(raw);
     const userRaw = qs.get("user");
@@ -263,11 +256,6 @@ async function getPasswordSetFlag(shmSessionId: string): Promise<0 | 1> {
   }
 }
 
-/**
- * Помечаем step_password через шаблон.
- * Пробует sessionId который передан. Возвращает true если успешно.
- * best-effort — не бросает исключения.
- */
 async function markPasswordStep(
   sessionId: string,
   label: string,
@@ -308,6 +296,11 @@ function getClientIp(req: any): string {
     String(req.headers["x-real-ip"] ?? "").trim() ||
     String(req.ip ?? "")
   );
+}
+
+function generateTelegramTempPassword(tgId: string): string {
+  const rand = Math.random().toString(36).slice(2, 12);
+  return `tg_${tgId}_${rand}_${Date.now()}`;
 }
 
 async function updateAuthMeta(
@@ -371,6 +364,92 @@ async function singleFlightTelegramWidgetAuth(
 }
 
 /* ============================================================
+   Telegram auto-register
+============================================================ */
+
+async function ensureTelegramUserForMiniApp(
+  req: any,
+  body: any,
+  initData: string
+): Promise<{ ok: true } | { ok: false; status: number; error: string; detail?: unknown }> {
+  const { tgId, tgLogin } = parseTelegramInitDataUser(initData);
+  if (!tgId) {
+    return { ok: false, status: 400, error: "telegram_id_missing" };
+  }
+
+  const login = `@${tgId}`;
+  const password = generateTelegramTempPassword(tgId);
+
+  const reg = await handleAuth("password", {
+    mode: "telegram_register",
+    login,
+    password,
+    client: tgLogin || login,
+    client_ip: getClientIp(req),
+    partner_id: body?.partner_id,
+  });
+
+  if (!reg.ok) {
+    return {
+      ok: false,
+      status: reg.status || 502,
+      error: reg.error || "telegram_register_failed",
+      detail: reg.detail,
+    };
+  }
+
+  dbg(req, "telegram_autoregister_ok", {
+    tgId,
+    login,
+  });
+
+  return { ok: true };
+}
+
+async function ensureTelegramUserForWidget(
+  req: any,
+  bodyOrQuery: any
+): Promise<{ ok: true } | { ok: false; status: number; error: string; detail?: unknown }> {
+  const tgId = bodyOrQuery?.id != null ? String(bodyOrQuery.id).trim() : "";
+  const tgLogin =
+    bodyOrQuery?.username != null
+      ? String(bodyOrQuery.username).trim()
+      : "";
+
+  if (!tgId) {
+    return { ok: false, status: 400, error: "telegram_id_missing" };
+  }
+
+  const login = `@${tgId}`;
+  const password = generateTelegramTempPassword(tgId);
+
+  const reg = await handleAuth("password", {
+    mode: "telegram_register",
+    login,
+    password,
+    client: tgLogin || login,
+    client_ip: getClientIp(req),
+    partner_id: bodyOrQuery?.partner_id,
+  });
+
+  if (!reg.ok) {
+    return {
+      ok: false,
+      status: reg.status || 502,
+      error: reg.error || "telegram_register_failed",
+      detail: reg.detail,
+    };
+  }
+
+  dbg(req, "telegram_widget_autoregister_ok", {
+    tgId,
+    login,
+  });
+
+  return { ok: true };
+}
+
+/* ============================================================
    Routes
 ============================================================ */
 
@@ -383,7 +462,21 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(400).send({ ok: false, error: "init_data_required" });
     }
 
-    const rr = await singleFlightTelegramWebAppAuth(initData, getClientIp(req));
+    let rr = await singleFlightTelegramWebAppAuth(initData, getClientIp(req));
+
+    if (!rr.ok) {
+      const reg = await ensureTelegramUserForMiniApp(req, body, initData);
+      if (!reg.ok) {
+        return reply.code(reg.status).send({
+          ok: false,
+          error: reg.error,
+          detail: reg.detail,
+        });
+      }
+
+      rr = await singleFlightTelegramWebAppAuth(initData, getClientIp(req));
+    }
+
     if (!rr.ok) {
       return reply
         .code(mapShmAuthErrorStatus(rr.status || 502))
@@ -448,7 +541,21 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(400).send({ ok: false, error: "missing_telegram_payload" });
     }
 
-    const rr = await singleFlightTelegramWidgetAuth(body, getClientIp(req));
+    let rr = await singleFlightTelegramWidgetAuth(body, getClientIp(req));
+
+    if (!rr.ok) {
+      const reg = await ensureTelegramUserForWidget(req, body);
+      if (!reg.ok) {
+        return reply.code(reg.status).send({
+          ok: false,
+          error: reg.error,
+          detail: reg.detail,
+        });
+      }
+
+      rr = await singleFlightTelegramWidgetAuth(body, getClientIp(req));
+    }
+
     if (!rr.ok) {
       return reply
         .code(mapShmAuthErrorStatus(rr.status || 502))
@@ -510,7 +617,17 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.redirect("/login?e=missing_telegram_payload");
     }
 
-    const rr = await singleFlightTelegramWidgetAuth(payload, getClientIp(req));
+    let rr = await singleFlightTelegramWidgetAuth(payload, getClientIp(req));
+
+    if (!rr.ok) {
+      const reg = await ensureTelegramUserForWidget(req, payload);
+      if (!reg.ok) {
+        return reply.redirect("/login?e=tg_widget_register_failed");
+      }
+
+      rr = await singleFlightTelegramWidgetAuth(payload, getClientIp(req));
+    }
+
     if (!rr.ok) {
       return reply.redirect("/login?e=tg_widget_failed");
     }
@@ -531,7 +648,7 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     try {
-      await tryAttachPartner(shmSessionId, (payload as any)?.partner_id);
+      await tryAttachPartner(shmSessionId, payload?.partner_id);
     } catch {}
 
     const localSid = reuseOrCreateSid(req);

@@ -4,7 +4,7 @@ import type { AuthResult } from "../authService.js";
 import { shmFetch, toFormUrlEncoded } from "../../../shared/shm/shmClient.js";
 import { validateRegistrationEmail } from "../../../shared/utils/email.js";
 
-type Mode = "login" | "register";
+type Mode = "login" | "register" | "telegram_register";
 
 // ─── нормализация входных данных ─────────────────────────────────────────────
 
@@ -14,13 +14,26 @@ function normalizeClient(v: unknown, fallback: string): string {
   const s = String(v ?? "").trim(); return s || fallback;
 }
 function normalizeMode(v: unknown): Mode {
-  return String(v ?? "").trim().toLowerCase() === "register" ? "register" : "login";
+  const s = String(v ?? "").trim().toLowerCase();
+  if (s === "register") return "register";
+  if (s === "telegram_register") return "telegram_register";
+  return "login";
 }
 function normalizePartnerId(v: unknown): number {
   const n = Number(v ?? 0);
   return Number.isFinite(n) && n > 0 ? Math.trunc(n) : 0;
 }
 function normalizeClientIp(v: unknown): string { return String(v ?? "").trim(); }
+
+function isTelegramStyleLogin(v: string): boolean {
+  const s = String(v ?? "").trim();
+  return /^@\S+$/.test(s);
+}
+
+function isTelegramRegisterLogin(v: string): boolean {
+  const s = String(v ?? "").trim();
+  return /^@\d+$/.test(s);
+}
 
 function buildIpHeaders(ip?: string): Record<string, string> | undefined {
   const s = String(ip ?? "").trim();
@@ -43,7 +56,6 @@ async function withTimeout<T>(ms: number, fn: (signal: AbortSignal) => Promise<T
 
 /**
  * PUT /v1/user — регистрация нового пользователя.
- * login1 = email. Пользователь может входить по нему сразу.
  */
 async function shmRegister(
   login: string, password: string, partnerId: number,
@@ -78,7 +90,6 @@ async function shmLogin(
     return { ok: false, status: 502, error: "shm_auth_invalid_response", detail: r.json ?? r.text };
   }
 
-  // Получаем user_id сразу — routes.ts не будет делать лишний запрос к SHM
   let shmUserId = 0;
   try {
     const meR = await shmFetch<any>(sessionId, "v1/user", {
@@ -90,7 +101,7 @@ async function shmLogin(
         : (meR.json as any)?.data ?? {};
       shmUserId = Number(row?.user_id ?? row?.id ?? 0) || 0;
     }
-  } catch { /* не критично — routes.ts подхватит через fallback */ }
+  } catch {}
 
   return { ok: true, shmSessionId: sessionId, shmUserId: shmUserId || undefined, login };
 }
@@ -111,8 +122,7 @@ async function shmSetLogin2(sessionId: string, email: string, signal: AbortSigna
 }
 
 /**
- * PUT /v1/user/email { email } — биллинг фиксирует email в settings пользователя
- * (поля settings.email и settings.email_verified).
+ * PUT /v1/user/email { email } — биллинг фиксирует email в settings пользователя.
  */
 async function shmSetEmail(sessionId: string, email: string, signal: AbortSignal) {
   await shmFetch(sessionId, "v1/user/email", { method: "PUT", body: { email }, signal });
@@ -120,9 +130,6 @@ async function shmSetEmail(sessionId: string, email: string, signal: AbortSignal
 
 /**
  * Фиксируем флаги онбординга в ShpynApp через shpun_app template.
- * ВАЖНО: шаблон v9_6 переехал — теперь пароль = onboarding.step_password (не auth.password_set).
- * password.mark_set по-прежнему работает (совместимость), но дополнительно помечаем step_password.
- * best-effort: не прокидываем ошибки наружу.
  */
 async function markShpunAppFlags(
   sessionId: string,
@@ -132,15 +139,11 @@ async function markShpunAppFlags(
   const actions: Array<{ action: string; params?: Record<string, any> }> = [];
 
   if (flags.passwordSet) {
-    // Помечаем оба поля для совместимости с миграцией в шаблоне:
-    // password.mark_set → auth.password_set = 1 (старое поле, мигрирует в step_password)
-    // onboarding.mark step=password → onboarding.step_password = 1 (новое поле)
     actions.push({ action: "password.mark_set" });
     actions.push({ action: "onboarding.mark", params: { step: "password" } });
   }
 
   if (flags.emailStepDone) {
-    // onboarding.mark step=email → onboarding.step_email = 1
     actions.push({ action: "onboarding.mark", params: { step: "email" } });
   }
 
@@ -152,7 +155,7 @@ async function markShpunAppFlags(
         body: toFormUrlEncoded({ session_id: sessionId, action, ...(params ?? {}) }),
         signal,
       });
-    } catch { /* best-effort */ }
+    } catch {}
   }
 }
 
@@ -173,13 +176,26 @@ export async function passwordAuth(body: any): Promise<AuthResult> {
     return { ok: false, status: 400, error: "password_too_short" };
   }
 
-  // При регистрации login = email — валидируем
   if (mode === "register") {
+    if (isTelegramStyleLogin(login)) {
+      return {
+        ok: false,
+        status: 400,
+        error: "telegram_login_not_allowed_in_regular_register",
+      };
+    }
+
     const emailCheck = await validateRegistrationEmail(login);
     if (!emailCheck.ok) {
       return { ok: false, status: 400, error: emailCheck.code || "email_invalid" };
     }
     login = emailCheck.normalized;
+  }
+
+  if (mode === "telegram_register") {
+    if (!isTelegramRegisterLogin(login)) {
+      return { ok: false, status: 400, error: "telegram_login_invalid" };
+    }
   }
 
   try {
@@ -199,8 +215,6 @@ export async function passwordAuth(body: any): Promise<AuthResult> {
         const sessionId = auth.shmSessionId;
 
         // ── 3. Параллельно: имя + login2 + email в биллинге ───────────────────
-        // login2 = email → второй логин для входа
-        // PUT /v1/user/email → биллинг пишет settings.email + settings.email_verified
         await Promise.allSettled([
           client ? shmSetClientName(sessionId, client, signal) : Promise.resolve(),
           shmSetLogin2(sessionId, login, signal),
@@ -208,11 +222,30 @@ export async function passwordAuth(body: any): Promise<AuthResult> {
         ]);
 
         // ── 4. Фиксируем оба флага в ShpynApp ────────────────────────────────
-        // Пароль: password.mark_set + onboarding.mark step=password
-        // Email:  onboarding.mark step=email
-        // Оба = 1 сразу → FirstLoginOnboardingModal не покажется
         await markShpunAppFlags(sessionId, { passwordSet: true, emailStepDone: true }, signal);
 
+        return auth;
+      }
+
+      if (mode === "telegram_register") {
+        // ── 1. Создаём Telegram-origin пользователя с login = @<telegram_id> ──
+        const reg = await shmRegister(login, password, partnerId, clientIp, signal);
+        if (!reg.ok) {
+          return { ok: false, status: reg.status, error: "shm_register_failed", detail: reg.detail };
+        }
+
+        // ── 2. Логинимся новым tech-паролем ───────────────────────────────────
+        const auth = await shmLogin(login, password, clientIp, signal);
+        if (!auth.ok || !auth.shmSessionId) return auth;
+
+        const sessionId = auth.shmSessionId;
+
+        // ── 3. При желании пишем display name, но НЕ трогаем email/login2 ─────
+        await Promise.allSettled([
+          client ? shmSetClientName(sessionId, client, signal) : Promise.resolve(),
+        ]);
+
+        // ── 4. НЕ отмечаем password/email completed — пользователь должен пройти онбординг
         return auth;
       }
 
@@ -223,7 +256,10 @@ export async function passwordAuth(body: any): Promise<AuthResult> {
     return {
       ok: false,
       status: 502,
-      error: mode === "register" ? "shm_register_exception" : "shm_auth_exception",
+      error:
+        mode === "register" || mode === "telegram_register"
+          ? "shm_register_exception"
+          : "shm_auth_exception",
       detail: toErrorDetail(e),
     };
   }

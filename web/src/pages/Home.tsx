@@ -410,18 +410,22 @@ export function Home() {
     }));
   }
 
-  if (loading) {
-    return (
-      <div className="section">
-        <div className="card">
-          <div className="card__body">
-            <h1 className="h1">{t("home.loading.title", "Shpun")}</h1>
-            <p className="p">{t("home.loading.text", "Загрузка…")}</p>
-          </div>
+if (loading) {
+  return (
+    <div className="app-loader" style={{ opacity: 1, transition: "opacity 180ms ease", pointerEvents: "auto" }}>
+      <div className="app-loader__card">
+        <div className="app-loader__shine" />
+        <div className="app-loader__brandRow">
+          <div className="app-loader__mark" />
+          <div className="app-loader__title">Shpun App</div>
+        </div>
+        <div className="app-loader__text">
+          {t("home.loading.text", "Загружаем данные…")}
         </div>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
   if (error || !me?.ok) {
     return (
