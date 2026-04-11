@@ -317,7 +317,7 @@ async function updateAuthMeta(
 ): Promise<void> {
   try {
     await callShmTemplate(shmSessionId, "auth.meta.update", {
-      last_login_at: Date.now(),
+      last_login_at: Math.floor(Date.now() / 1000),
       last_login_ip: getClientIp(req),
       last_login_source: source,
     });
