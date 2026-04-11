@@ -209,10 +209,15 @@ export async function shmAuthWithPassword(login: string, password: string, clien
 export async function shmTelegramWebAppAuth(initData: string, clientIp?: string) {
   const clean = String(initData ?? '').trim()
 
+  // POST с form-encoded body вместо GET query — initData содержит спецсимволы
+  // (=, &, +) которые ломаются при URL-кодировании в query параметре.
   return await shmFetch<{ session_id?: string }>(null, 'v1/telegram/webapp/auth', {
-    method: 'GET',
-    headers: ipHeaders(clientIp),
-    query: { initData: clean },
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      ...(ipHeaders(clientIp) ?? {}),
+    },
+    body: toFormUrlEncoded({ initData: clean }),
   })
 }
 
