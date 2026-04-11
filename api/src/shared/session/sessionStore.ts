@@ -1,5 +1,4 @@
 // api/src/shared/session/sessionStore.ts
-
 import { randomUUID } from "node:crypto";
 import type { FastifyRequest } from "fastify";
 import {
@@ -25,10 +24,12 @@ export type AppSession = {
   telegramWidgetPayload?: Record<string, any>;
 };
 
+// Максимально долго: по умолчанию 365 дней “скользящей” сессии.
 const SESSION_TTL_MS = Number(
   process.env.SESSION_TTL_MS || 365 * 24 * 60 * 60 * 1000
 );
 
+// Чтобы не писать в SQLite на каждый запрос — троттлим touch.
 const TOUCH_MIN_INTERVAL_MS = Number(process.env.SESSION_TOUCH_MS || 30_000);
 
 function now() {
@@ -94,6 +95,7 @@ export function putSession(
     sid: localSid,
     shmUserId: Number(merged.shmUserId || 0),
     shmSessionId: String(merged.shmSessionId || ""),
+    login: merged.login ? String(merged.login) : undefined,
     telegramInitData: merged.telegramInitData,
     telegramWidgetPayload: widgetJson,
     createdAt: Number(merged.createdAt || t),
@@ -113,6 +115,7 @@ export function getSessionBySid(localSid: string | undefined) {
     shmSessionId: s0.shmSessionId,
     shmUserId: s0.shmUserId,
     userId: s0.shmUserId,
+    ...(s0.login ? { login: String(s0.login) } : {}),
     createdAt: s0.createdAt,
     lastSeenAt: s0.lastSeenAt,
     ...(s0.telegramInitData ? { telegramInitData: s0.telegramInitData } : {}),
