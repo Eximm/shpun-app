@@ -1,6 +1,7 @@
 ﻿// api/src/modules/auth/routes.ts
 
 import type { FastifyInstance } from "fastify";
+import { createHash } from "node:crypto";
 import { setPassword } from "./password.js";
 import { handleAuth } from "./authService.js";
 import {
@@ -104,7 +105,8 @@ function isHttps(req: any): boolean {
 }
 
 function cookieOptions(req: any) {
-  const prod = String(process.env.NODE_ENV ?? "").trim().toLowerCase() === "production";
+  const prod =
+    String(process.env.NODE_ENV ?? "").trim().toLowerCase() === "production";
   return {
     httpOnly: true,
     sameSite: prod ? ("none" as const) : ("lax" as const),
@@ -298,11 +300,6 @@ function getClientIp(req: any): string {
   );
 }
 
-function generateTelegramTempPassword(tgId: string): string {
-  const rand = Math.random().toString(36).slice(2, 12);
-  return `tg_${tgId}_${rand}_${Date.now()}`;
-}
-
 function hasShmSession(rr: any): boolean {
   return !!String(rr?.json?.session_id ?? "").trim();
 }
@@ -325,6 +322,358 @@ async function updateAuthMeta(
       sessionId: maskValue(shmSessionId),
     });
   }
+}
+
+/* ============================================================
+   Deterministic Telegram tech credentials
+============================================================ */
+
+function getTelegramTechPasswordSalt(): string {
+  return String(
+    process.env.TELEGRAM_AUTH_SALT ||
+      process.env.APP_SECRET ||
+      process.env.SESSION_SECRET ||
+      "shpun_telegram_auth_fallback"
+  );
+}
+
+function buildTelegramLogin(tgId: string): string {
+  return `@${String(tgId).trim()}`;
+}
+
+function generateTelegramTechPassword(tgId: string): string {
+  const cleanId = String(tgId ?? "").trim();
+  const salt = getTelegramTechPasswordSalt();
+  const hex = createHash("sha256")
+    .update(`tg-auth:${cleanId}:${salt}`)
+    .digest("hex");
+  return `tg_${cleanId}_${hex.slice(0, 24)}`;
+}
+
+function isProbablyRegisterConflict(status: number, detail?: unknown): boolean {
+  const s = String(detail ?? "").toLowerCase();
+  return (
+    status === 409 ||
+    s.includes("exists") ||
+    s.includes("already") ||
+    s.includes("duplicate") ||
+    s.includes("used") ||
+    s.includes("login") ||
+    s.includes("логин") ||
+    s.includes("занят") ||
+    s.includes("существ")
+  );
+}
+
+type TgCredentialBundle = {
+  tgId: string;
+  tgLogin?: string;
+  login: string;
+  password: string;
+};
+
+function buildMiniAppTelegramCredentials(initData: string): TgCredentialBundle | null {
+  const { tgId, tgLogin } = parseTelegramInitDataUser(initData);
+  if (!tgId) return null;
+  return {
+    tgId,
+    tgLogin,
+    login: buildTelegramLogin(tgId),
+    password: generateTelegramTechPassword(tgId),
+  };
+}
+
+function buildWidgetTelegramCredentials(bodyOrQuery: any): TgCredentialBundle | null {
+  const tgId = bodyOrQuery?.id != null ? String(bodyOrQuery.id).trim() : "";
+  const tgLogin =
+    bodyOrQuery?.username != null ? String(bodyOrQuery.username).trim() : "";
+  if (!tgId) return null;
+  return {
+    tgId,
+    tgLogin,
+    login: buildTelegramLogin(tgId),
+    password: generateTelegramTechPassword(tgId),
+  };
+}
+
+async function tryPasswordLoginByTelegram(
+  req: any,
+  creds: TgCredentialBundle
+): Promise<
+  | { ok: true; shmSessionId: string; shmUserId?: number; login?: string }
+  | { ok: false; status: number; error: string; detail?: unknown }
+> {
+  const res = await handleAuth("password", {
+    mode: "login",
+    login: creds.login,
+    password: creds.password,
+    client_ip: getClientIp(req),
+  });
+
+  if (!res.ok || !String(res.shmSessionId ?? "").trim()) {
+    return {
+      ok: false,
+      status: res.status || 401,
+      error: res.error || "telegram_password_login_failed",
+      detail: res.detail,
+    };
+  }
+
+  return {
+    ok: true,
+    shmSessionId: String(res.shmSessionId).trim(),
+    shmUserId: Number(res.shmUserId ?? 0) || undefined,
+    login: String(res.login ?? "").trim() || creds.login,
+  };
+}
+
+async function ensureTelegramUserByPasswordRegister(
+  req: any,
+  partnerId: any,
+  creds: TgCredentialBundle
+): Promise<{ ok: true } | { ok: false; status: number; error: string; detail?: unknown }> {
+  const reg = await handleAuth("password", {
+    mode: "telegram_register",
+    login: creds.login,
+    password: creds.password,
+    client: creds.tgLogin || creds.login,
+    client_ip: getClientIp(req),
+    partner_id: partnerId,
+  });
+
+  if (reg.ok) {
+    dbg(req, "telegram_password_register_ok", {
+      tgId: creds.tgId,
+      login: creds.login,
+    });
+    return { ok: true };
+  }
+
+  if (isProbablyRegisterConflict(reg.status || 0, reg.detail)) {
+    dbg(req, "telegram_password_register_conflict_treated_as_existing", {
+      tgId: creds.tgId,
+      login: creds.login,
+      status: reg.status,
+    });
+    return { ok: true };
+  }
+
+  return {
+    ok: false,
+    status: reg.status || 502,
+    error: reg.error || "telegram_register_failed",
+    detail: reg.detail,
+  };
+}
+
+async function bindTelegramToSession(
+  req: any,
+  shmSessionId: string,
+  tgId: string,
+  tgLogin?: string
+): Promise<boolean> {
+  try {
+    await callShmTemplate(shmSessionId, "auth.telegram", {
+      telegram_id: tgId,
+      telegram_login: tgLogin ?? "",
+    });
+    dbg(req, "telegram_bind_ok", {
+      tgId,
+      sessionId: maskValue(shmSessionId),
+    });
+    return true;
+  } catch (e: any) {
+    dbg(req, "telegram_bind_failed", {
+      tgId,
+      error: String(e?.message ?? e),
+      sessionId: maskValue(shmSessionId),
+    });
+    return false;
+  }
+}
+
+async function resolveTelegramMiniAppSession(
+  req: any,
+  body: any,
+  initData: string
+): Promise<
+  | {
+      ok: true;
+      shmSessionId: string;
+      source: "telegram" | "telegram_password_existing" | "telegram_password_new";
+    }
+  | {
+      ok: false;
+      status: number;
+      error: string;
+      detail?: unknown;
+    }
+> {
+  const clientIp = getClientIp(req);
+
+  // 1) canonical Telegram auth
+  let rr = await singleFlightTelegramWebAppAuth(initData, clientIp);
+  if (rr.ok && hasShmSession(rr)) {
+    return {
+      ok: true,
+      shmSessionId: String(rr.json?.session_id ?? "").trim(),
+      source: "telegram",
+    };
+  }
+
+  const creds = buildMiniAppTelegramCredentials(initData);
+  if (!creds) {
+    return { ok: false, status: 400, error: "telegram_id_missing" };
+  }
+
+  // 2) existing user via deterministic tech credentials
+  const existing = await tryPasswordLoginByTelegram(req, creds);
+  if (existing.ok) {
+    await bindTelegramToSession(req, existing.shmSessionId, creds.tgId, creds.tgLogin);
+
+    // try to switch back to canonical Telegram session
+    rr = await singleFlightTelegramWebAppAuth(initData, clientIp);
+    if (rr.ok && hasShmSession(rr)) {
+      return {
+        ok: true,
+        shmSessionId: String(rr.json?.session_id ?? "").trim(),
+        source: "telegram",
+      };
+    }
+
+    return {
+      ok: true,
+      shmSessionId: existing.shmSessionId,
+      source: "telegram_password_existing",
+    };
+  }
+
+  // 3) new user registration
+  const reg = await ensureTelegramUserByPasswordRegister(req, body?.partner_id, creds);
+  if (!reg.ok) {
+    return reg;
+  }
+
+  // 4) login newly created user
+  const created = await tryPasswordLoginByTelegram(req, creds);
+  if (!created.ok) {
+    return {
+      ok: false,
+      status: created.status,
+      error: created.error,
+      detail: created.detail,
+    };
+  }
+
+  // 5) bind Telegram
+  await bindTelegramToSession(req, created.shmSessionId, creds.tgId, creds.tgLogin);
+
+  // 6) re-try canonical Telegram auth
+  rr = await singleFlightTelegramWebAppAuth(initData, clientIp);
+  if (rr.ok && hasShmSession(rr)) {
+    return {
+      ok: true,
+      shmSessionId: String(rr.json?.session_id ?? "").trim(),
+      source: "telegram",
+    };
+  }
+
+  return {
+    ok: true,
+    shmSessionId: created.shmSessionId,
+    source: "telegram_password_new",
+  };
+}
+
+async function resolveTelegramWidgetSession(
+  req: any,
+  payload: any
+): Promise<
+  | {
+      ok: true;
+      shmSessionId: string;
+      source: "widget" | "widget_password_existing" | "widget_password_new";
+    }
+  | {
+      ok: false;
+      status: number;
+      error: string;
+      detail?: unknown;
+    }
+> {
+  const clientIp = getClientIp(req);
+
+  // 1) canonical widget auth
+  let rr = await singleFlightTelegramWidgetAuth(payload, clientIp);
+  if (rr.ok && hasShmSession(rr)) {
+    return {
+      ok: true,
+      shmSessionId: String(rr.json?.session_id ?? "").trim(),
+      source: "widget",
+    };
+  }
+
+  const creds = buildWidgetTelegramCredentials(payload);
+  if (!creds) {
+    return { ok: false, status: 400, error: "telegram_id_missing" };
+  }
+
+  // 2) existing user via deterministic tech credentials
+  const existing = await tryPasswordLoginByTelegram(req, creds);
+  if (existing.ok) {
+    await bindTelegramToSession(req, existing.shmSessionId, creds.tgId, creds.tgLogin);
+
+    rr = await singleFlightTelegramWidgetAuth(payload, clientIp);
+    if (rr.ok && hasShmSession(rr)) {
+      return {
+        ok: true,
+        shmSessionId: String(rr.json?.session_id ?? "").trim(),
+        source: "widget",
+      };
+    }
+
+    return {
+      ok: true,
+      shmSessionId: existing.shmSessionId,
+      source: "widget_password_existing",
+    };
+  }
+
+  // 3) new user registration
+  const reg = await ensureTelegramUserByPasswordRegister(req, payload?.partner_id, creds);
+  if (!reg.ok) {
+    return reg;
+  }
+
+  // 4) login newly created user
+  const created = await tryPasswordLoginByTelegram(req, creds);
+  if (!created.ok) {
+    return {
+      ok: false,
+      status: created.status,
+      error: created.error,
+      detail: created.detail,
+    };
+  }
+
+  // 5) bind Telegram
+  await bindTelegramToSession(req, created.shmSessionId, creds.tgId, creds.tgLogin);
+
+  // 6) re-try canonical widget auth
+  rr = await singleFlightTelegramWidgetAuth(payload, clientIp);
+  if (rr.ok && hasShmSession(rr)) {
+    return {
+      ok: true,
+      shmSessionId: String(rr.json?.session_id ?? "").trim(),
+      source: "widget",
+    };
+  }
+
+  return {
+    ok: true,
+    shmSessionId: created.shmSessionId,
+    source: "widget_password_new",
+  };
 }
 
 /* ============================================================
@@ -368,92 +717,6 @@ async function singleFlightTelegramWidgetAuth(
 }
 
 /* ============================================================
-   Telegram auto-register
-============================================================ */
-
-async function ensureTelegramUserForMiniApp(
-  req: any,
-  body: any,
-  initData: string
-): Promise<{ ok: true } | { ok: false; status: number; error: string; detail?: unknown }> {
-  const { tgId, tgLogin } = parseTelegramInitDataUser(initData);
-  if (!tgId) {
-    return { ok: false, status: 400, error: "telegram_id_missing" };
-  }
-
-  const login = `@${tgId}`;
-  const password = generateTelegramTempPassword(tgId);
-
-  const reg = await handleAuth("password", {
-    mode: "telegram_register",
-    login,
-    password,
-    client: tgLogin || login,
-    client_ip: getClientIp(req),
-    partner_id: body?.partner_id,
-  });
-
-  if (!reg.ok) {
-    return {
-      ok: false,
-      status: reg.status || 502,
-      error: reg.error || "telegram_register_failed",
-      detail: reg.detail,
-    };
-  }
-
-  dbg(req, "telegram_autoregister_ok", {
-    tgId,
-    login,
-  });
-
-  return { ok: true };
-}
-
-async function ensureTelegramUserForWidget(
-  req: any,
-  bodyOrQuery: any
-): Promise<{ ok: true } | { ok: false; status: number; error: string; detail?: unknown }> {
-  const tgId = bodyOrQuery?.id != null ? String(bodyOrQuery.id).trim() : "";
-  const tgLogin =
-    bodyOrQuery?.username != null
-      ? String(bodyOrQuery.username).trim()
-      : "";
-
-  if (!tgId) {
-    return { ok: false, status: 400, error: "telegram_id_missing" };
-  }
-
-  const login = `@${tgId}`;
-  const password = generateTelegramTempPassword(tgId);
-
-  const reg = await handleAuth("password", {
-    mode: "telegram_register",
-    login,
-    password,
-    client: tgLogin || login,
-    client_ip: getClientIp(req),
-    partner_id: bodyOrQuery?.partner_id,
-  });
-
-  if (!reg.ok) {
-    return {
-      ok: false,
-      status: reg.status || 502,
-      error: reg.error || "telegram_register_failed",
-      detail: reg.detail,
-    };
-  }
-
-  dbg(req, "telegram_widget_autoregister_ok", {
-    tgId,
-    login,
-  });
-
-  return { ok: true };
-}
-
-/* ============================================================
    Routes
 ============================================================ */
 
@@ -465,28 +728,16 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(400).send({ ok: false, error: "init_data_required" });
     }
 
-    let rr = await singleFlightTelegramWebAppAuth(initData, getClientIp(req));
-
-    if (!rr.ok || !hasShmSession(rr)) {
-      const reg = await ensureTelegramUserForMiniApp(req, body, initData);
-      if (!reg.ok) {
-        return reply.code(reg.status).send({
-          ok: false,
-          error: reg.error,
-          detail: reg.detail,
-        });
-      }
-
-      rr = await singleFlightTelegramWebAppAuth(initData, getClientIp(req));
+    const resolved = await resolveTelegramMiniAppSession(req, body, initData);
+    if (!resolved.ok) {
+      return reply.code(resolved.status).send({
+        ok: false,
+        error: resolved.error,
+        detail: resolved.detail,
+      });
     }
 
-    if (!rr.ok || !hasShmSession(rr)) {
-      return reply
-        .code(mapShmAuthErrorStatus(rr.status || 502))
-        .send({ ok: false, error: "shm_telegram_auth_failed" });
-    }
-
-    const shmSessionId = String(rr.json?.session_id ?? "").trim();
+    const shmSessionId = String(resolved.shmSessionId ?? "").trim();
 
     let shmUserId = 0;
     let login = "";
@@ -511,19 +762,22 @@ export async function authRoutes(app: FastifyInstance) {
       telegramInitData: initData,
     });
 
-    try {
-      const { tgId, tgLogin } = parseTelegramInitDataUser(initData);
-      if (tgId) {
-        await callShmTemplate(shmSessionId, "auth.telegram", {
-          telegram_id: tgId,
-          telegram_login: tgLogin ?? "",
-        });
-      }
-    } catch {}
+    const parsed = parseTelegramInitDataUser(initData);
+    if (parsed.tgId) {
+      await bindTelegramToSession(req, shmSessionId, parsed.tgId, parsed.tgLogin);
+    }
 
     await updateAuthMeta(shmSessionId, req, "telegram");
 
     const ps = await getPasswordSetFlag(shmSessionId);
+    dbg(req, "telegram_auth_resolved", {
+      source: resolved.source,
+      shmSessionId: maskValue(shmSessionId),
+      shmUserId,
+      login,
+      next: ps === 1 ? "home" : "set_password",
+    });
+
     return reply
       .setCookie("sid", localSid, cookieOptions(req))
       .send({
@@ -540,28 +794,16 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(400).send({ ok: false, error: "missing_telegram_payload" });
     }
 
-    let rr = await singleFlightTelegramWidgetAuth(body, getClientIp(req));
-
-    if (!rr.ok || !hasShmSession(rr)) {
-      const reg = await ensureTelegramUserForWidget(req, body);
-      if (!reg.ok) {
-        return reply.code(reg.status).send({
-          ok: false,
-          error: reg.error,
-          detail: reg.detail,
-        });
-      }
-
-      rr = await singleFlightTelegramWidgetAuth(body, getClientIp(req));
+    const resolved = await resolveTelegramWidgetSession(req, body);
+    if (!resolved.ok) {
+      return reply.code(resolved.status).send({
+        ok: false,
+        error: resolved.error,
+        detail: resolved.detail,
+      });
     }
 
-    if (!rr.ok || !hasShmSession(rr)) {
-      return reply
-        .code(mapShmAuthErrorStatus(rr.status || 502))
-        .send({ ok: false, error: "shm_telegram_widget_auth_failed" });
-    }
-
-    const shmSessionId = String(rr.json?.session_id ?? "").trim();
+    const shmSessionId = String(resolved.shmSessionId ?? "").trim();
 
     let shmUserId = 0;
     let login = "";
@@ -586,16 +828,24 @@ export async function authRoutes(app: FastifyInstance) {
       telegramWidgetPayload: pickTelegramWidgetPayload(body),
     });
 
-    try {
-      await callShmTemplate(shmSessionId, "auth.telegram", {
-        telegram_id: body?.id != null ? String(body.id) : "",
-        telegram_login: body?.username != null ? String(body.username) : "",
-      });
-    } catch {}
+    const tgId = body?.id != null ? String(body.id).trim() : "";
+    const tgLogin =
+      body?.username != null ? String(body.username).trim() : "";
+    if (tgId) {
+      await bindTelegramToSession(req, shmSessionId, tgId, tgLogin);
+    }
 
     await updateAuthMeta(shmSessionId, req, "widget");
 
     const ps = await getPasswordSetFlag(shmSessionId);
+    dbg(req, "telegram_widget_auth_resolved", {
+      source: resolved.source,
+      shmSessionId: maskValue(shmSessionId),
+      shmUserId,
+      login,
+      next: ps === 1 ? "home" : "set_password",
+    });
+
     return reply
       .setCookie("sid", localSid, cookieOptions(req))
       .send({
@@ -612,22 +862,12 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.redirect("/login?e=missing_telegram_payload");
     }
 
-    let rr = await singleFlightTelegramWidgetAuth(payload, getClientIp(req));
-
-    if (!rr.ok || !hasShmSession(rr)) {
-      const reg = await ensureTelegramUserForWidget(req, payload);
-      if (!reg.ok) {
-        return reply.redirect("/login?e=tg_widget_register_failed");
-      }
-
-      rr = await singleFlightTelegramWidgetAuth(payload, getClientIp(req));
+    const resolved = await resolveTelegramWidgetSession(req, payload);
+    if (!resolved.ok) {
+      return reply.redirect(`/login?e=${encodeURIComponent(resolved.error || "tg_widget_failed")}`);
     }
 
-    if (!rr.ok || !hasShmSession(rr)) {
-      return reply.redirect("/login?e=tg_widget_failed");
-    }
-
-    const shmSessionId = String(rr.json?.session_id ?? "").trim();
+    const shmSessionId = String(resolved.shmSessionId ?? "").trim();
 
     let shmUserId = 0;
     let login = "";
@@ -652,18 +892,26 @@ export async function authRoutes(app: FastifyInstance) {
       telegramWidgetPayload: pickTelegramWidgetPayload(payload),
     });
 
-    try {
-      await callShmTemplate(shmSessionId, "auth.telegram", {
-        telegram_id: payload?.id != null ? String(payload.id) : "",
-        telegram_login:
-          payload?.username != null ? String(payload.username) : "",
-      });
-    } catch {}
+    const tgId = payload?.id != null ? String(payload.id).trim() : "";
+    const tgLogin =
+      payload?.username != null ? String(payload.username).trim() : "";
+    if (tgId) {
+      await bindTelegramToSession(req, shmSessionId, tgId, tgLogin);
+    }
 
     await updateAuthMeta(shmSessionId, req, "widget");
 
     reply.setCookie("sid", localSid, cookieOptions(req));
     const ps = await getPasswordSetFlag(shmSessionId);
+
+    dbg(req, "telegram_widget_redirect_resolved", {
+      source: resolved.source,
+      shmSessionId: maskValue(shmSessionId),
+      shmUserId,
+      login,
+      next: ps === 1 ? "home" : "set_password",
+    });
+
     return ps === 1
       ? reply.redirect(withAuthOk("/login"))
       : reply.redirect(withAuthOk("/set-password"));
@@ -810,6 +1058,35 @@ export async function authRoutes(app: FastifyInstance) {
                 newSessionId: maskValue(newSid),
               });
             }
+          } else {
+            const creds = buildMiniAppTelegramCredentials(
+              String(session.telegramInitData).trim()
+            );
+            if (creds) {
+              const fb = await tryPasswordLoginByTelegram(req, creds);
+              if (fb.ok) {
+                if (sid) {
+                  let fbUid = 0;
+                  let fbLogin = currentLogin;
+                  try {
+                    const ident = await shmGetUserIdentity(fb.shmSessionId);
+                    fbUid = ident.userId;
+                    fbLogin = ident.login || fbLogin;
+                  } catch {}
+                  putSession(sid, {
+                    ...session,
+                    shmSessionId: fb.shmSessionId,
+                    shmUserId: fbUid || session?.shmUserId,
+                    login: fbLogin,
+                    createdAt: session?.createdAt || Date.now(),
+                  });
+                }
+                newSessionId = fb.shmSessionId;
+                dbg(req, "password_set:reauth_tg_webapp_fallback_ok", {
+                  newSessionId: maskValue(fb.shmSessionId),
+                });
+              }
+            }
           }
         } else if (hasTgWidget) {
           const rr = await singleFlightTelegramWidgetAuth(
@@ -835,6 +1112,33 @@ export async function authRoutes(app: FastifyInstance) {
               dbg(req, "password_set:reauth_tg_widget_ok", {
                 newSessionId: maskValue(newSid),
               });
+            }
+          } else {
+            const creds = buildWidgetTelegramCredentials(session.telegramWidgetPayload);
+            if (creds) {
+              const fb = await tryPasswordLoginByTelegram(req, creds);
+              if (fb.ok) {
+                if (sid) {
+                  let fbUid = 0;
+                  let fbLogin = currentLogin;
+                  try {
+                    const ident = await shmGetUserIdentity(fb.shmSessionId);
+                    fbUid = ident.userId;
+                    fbLogin = ident.login || fbLogin;
+                  } catch {}
+                  putSession(sid, {
+                    ...session,
+                    shmSessionId: fb.shmSessionId,
+                    shmUserId: fbUid || session?.shmUserId,
+                    login: fbLogin,
+                    createdAt: session?.createdAt || Date.now(),
+                  });
+                }
+                newSessionId = fb.shmSessionId;
+                dbg(req, "password_set:reauth_tg_widget_fallback_ok", {
+                  newSessionId: maskValue(fb.shmSessionId),
+                });
+              }
             }
           }
         }
@@ -891,23 +1195,47 @@ export async function authRoutes(app: FastifyInstance) {
           String(s.telegramInitData).trim(),
           getClientIp(req)
         );
-        if (!rr.ok || !hasShmSession(rr)) {
-          return reply
-            .code(mapShmAuthErrorStatus(rr.status || 502))
-            .send({ ok: false, error: "onboarding_reauth_failed" });
+        if (rr.ok && hasShmSession(rr)) {
+          shmSessionId = String(rr.json?.session_id ?? "").trim();
+        } else {
+          const creds = buildMiniAppTelegramCredentials(String(s.telegramInitData).trim());
+          if (creds) {
+            const fb = await tryPasswordLoginByTelegram(req, creds);
+            if (!fb.ok) {
+              return reply
+                .code(mapShmAuthErrorStatus(rr.status || 502))
+                .send({ ok: false, error: "onboarding_reauth_failed" });
+            }
+            shmSessionId = fb.shmSessionId;
+          } else {
+            return reply
+              .code(mapShmAuthErrorStatus(rr.status || 502))
+              .send({ ok: false, error: "onboarding_reauth_failed" });
+          }
         }
-        shmSessionId = String(rr.json?.session_id ?? "").trim();
       } else if (s.telegramWidgetPayload) {
         const rr = await singleFlightTelegramWidgetAuth(
           s.telegramWidgetPayload,
           getClientIp(req)
         );
-        if (!rr.ok || !hasShmSession(rr)) {
-          return reply
-            .code(mapShmAuthErrorStatus(rr.status || 502))
-            .send({ ok: false, error: "onboarding_reauth_failed" });
+        if (rr.ok && hasShmSession(rr)) {
+          shmSessionId = String(rr.json?.session_id ?? "").trim();
+        } else {
+          const creds = buildWidgetTelegramCredentials(s.telegramWidgetPayload);
+          if (creds) {
+            const fb = await tryPasswordLoginByTelegram(req, creds);
+            if (!fb.ok) {
+              return reply
+                .code(mapShmAuthErrorStatus(rr.status || 502))
+                .send({ ok: false, error: "onboarding_reauth_failed" });
+            }
+            shmSessionId = fb.shmSessionId;
+          } else {
+            return reply
+              .code(mapShmAuthErrorStatus(rr.status || 502))
+              .send({ ok: false, error: "onboarding_reauth_failed" });
+          }
         }
-        shmSessionId = String(rr.json?.session_id ?? "").trim();
       }
 
       if (!shmSessionId) {
