@@ -651,7 +651,12 @@ export function Login() {
       );
     }
 
-    // Автологин не удался — показываем карточку с кнопкой повтора
+    // Автологин не удался — показываем карточку с кнопкой повтора + debug info
+    const tgObj = (window as any)?.Telegram?.WebApp;
+    const initDataLen = String(tgObj?.initData ?? "").length;
+    const platform = String(tgObj?.platform ?? "none");
+    const version = String(tgObj?.version ?? "none");
+
     return (
       <div className="section">
         <div className="card">
@@ -665,6 +670,16 @@ export function Login() {
               {t("login.desc.tg.only", "Вход выполняется через Telegram. Нажмите кнопку ниже если не произошло автоматически.")}
             </p>
 
+            {/* ВРЕМЕННЫЙ DEBUG — удалить после диагностики */}
+            <div className="pre" style={{ fontSize: 11, opacity: 0.7, marginTop: 8 }}>
+              <div>WebApp: {tgObj ? "✅" : "❌"}</div>
+              <div>initData: {initDataLen > 0 ? `✅ (${initDataLen} chars)` : "❌ empty"}</div>
+              <div>platform: {platform}</div>
+              <div>version: {version}</div>
+              <div>mode: {mode}</div>
+              <div>loading: {String(loading)}</div>
+            </div>
+
             <div className="auth__actions" style={{ marginTop: 16 }}>
               <button
                 type="button"
@@ -672,7 +687,7 @@ export function Login() {
                 onClick={() => void telegramLoginMiniApp()}
                 disabled={loading}
               >
-                {t("login.tg.retry", "Войти через Telegram")}
+                {loading ? t("login.tg.cta_loading", "Входим…") : t("login.tg.retry", "Войти через Telegram")}
               </button>
             </div>
           </div>
