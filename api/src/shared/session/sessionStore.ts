@@ -1,4 +1,5 @@
 // api/src/shared/session/sessionStore.ts
+
 import { randomUUID } from "node:crypto";
 import type { FastifyRequest } from "fastify";
 import {
@@ -24,12 +25,10 @@ export type AppSession = {
   telegramWidgetPayload?: Record<string, any>;
 };
 
-// Максимально долго: по умолчанию 365 дней “скользящей” сессии.
 const SESSION_TTL_MS = Number(
   process.env.SESSION_TTL_MS || 365 * 24 * 60 * 60 * 1000
 );
 
-// Чтобы не писать в SQLite на каждый запрос — троттлим touch.
 const TOUCH_MIN_INTERVAL_MS = Number(process.env.SESSION_TOUCH_MS || 30_000);
 
 function now() {
