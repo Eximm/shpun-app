@@ -2,7 +2,7 @@
 
 import { Navigate, useLocation } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useMe } from "./useMe";
+import { useMe, refetchMe } from "./useMe";
 import { FirstLoginOnboardingModal } from "./FirstLoginOnboardingModal";
 import {
   enablePushByUserGesture,
@@ -19,9 +19,7 @@ const AUTH_PENDING_AT_KEY         = "auth:pending_at";
 const AUTH_SESSION_ID_PREFIX      = "auth.session.id:u:";
 const AUTH_EVER_KEY               = "auth:ever_succeeded";
 const ONBOARDING_DISMISSED_PREFIX = "onboarding.dismissed:";
-
-// Ключ в sessionStorage — сбрасывается при закрытии вкладки/перезаходе
-const PUSH_PROMPT_SHOWN_KEY = "push.prompt.shown_this_session";
+const PUSH_PROMPT_SHOWN_KEY       = "push.prompt.shown_this_session";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -31,9 +29,6 @@ function hasEverSucceededAuth(): boolean {
 
 function isTelegramMiniApp(): boolean {
   try {
-    // Реальный initData от Telegram Mini App всегда длинный (300+ символов).
-    // window.Telegram.WebApp может присутствовать в браузере после перехода из TG,
-    // но initData там пустой — не считаем это Mini App.
     const tg = (window as any)?.Telegram?.WebApp;
     const initData = String(tg?.initData ?? "").trim();
     return initData.length > 50;
@@ -48,6 +43,13 @@ function hasFreshAuthPending(): boolean {
     if (!ts) return true;
     return Date.now() - ts <= 15_000;
   } catch { return false; }
+}
+
+function clearAuthPending() {
+  try {
+    sessionStorage.removeItem(AUTH_PENDING_KEY);
+    sessionStorage.removeItem(AUTH_PENDING_AT_KEY);
+  } catch { /* ignore */ }
 }
 
 function authSessionIdKey(uid: number) { return `${AUTH_SESSION_ID_PREFIX}${uid}`; }
@@ -91,8 +93,6 @@ function writeDismissed(uid: number, authSessionId: string, value: boolean) {
   } catch { /* ignore */ }
 }
 
-// Push-промпт: показываем один раз за сессию.
-// sessionStorage очищается при закрытии вкладки / новом входе.
 function isPushPromptShownThisSession(): boolean {
   try { return sessionStorage.getItem(PUSH_PROMPT_SHOWN_KEY) === "1"; } catch { return false; }
 }
@@ -167,7 +167,7 @@ function PushOnboardingModal({
     : isDenied
       ? "Уведомления отключены в настройках браузера. Их можно разрешить позже в настройках профиля."
       : "Получайте важные события о балансе, оплате и услугах даже когда приложение закрыто.";
-  const primaryText   = isInstallOnly || isDenied ? "Понятно" : "Включить";
+  const primaryText = isInstallOnly || isDenied ? "Понятно" : "Включить";
 
   return (
     <div
@@ -245,6 +245,50 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   const needsFirstLoginOnboarding = needsFirstLoginOnboardingRaw && !onboardingDismissed;
 
+  // ── КЛЮЧЕВОЙ FIX: polling пока authInProgress ─────────────────────────────
+  // Проблема: Login.tsx записывает auth:pending в sessionStorage и редиректит.
+  // AuthGate видит hasFreshAuthPending()=true и рендерит "Завершаем вход…",
+  // но refetchMe никто не вызывает — лоадер висит до протухания (15 сек).
+  // Решение: пока authInProgress=true — активно опрашиваем /me каждые 300ms.
+  // Как только me загрузится — лоадер уйдёт сам.
+  const authInProgress = hasFreshAuthPending();
+
+  useEffect(() => {
+    if (!authInProgress) return;
+
+    let attempts = 0;
+    const MAX_ATTEMPTS = 20; // 20 * 300ms = 6 секунд максимум
+    let cancelled = false;
+
+    const poll = async () => {
+      if (cancelled) return;
+      attempts++;
+
+      try {
+        const result = await refetchMe();
+        if (result) {
+          // Успешно загрузили — лоадер уйдёт через useMe
+          return;
+        }
+      } catch { /* ignore */ }
+
+      if (attempts < MAX_ATTEMPTS && !cancelled) {
+        window.setTimeout(poll, 300);
+      } else if (!cancelled) {
+        // Исчерпали попытки — очищаем pending чтобы не висеть вечно
+        clearAuthPending();
+      }
+    };
+
+    // Небольшая задержка чтобы дать серверу время создать сессию
+    const t = window.setTimeout(poll, 200);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [authInProgress]);
+
   // ── Effects ───────────────────────────────────────────────────────────────
 
   useEffect(() => { rememberPartnerIdFromUrl(); }, []);
@@ -279,14 +323,12 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       const ts = Number(sessionStorage.getItem(AUTH_PENDING_AT_KEY) || "0");
       if (!provider) return;
       if (ts && Date.now() - ts > 10_000) {
-        sessionStorage.removeItem(AUTH_PENDING_KEY);
-        sessionStorage.removeItem(AUTH_PENDING_AT_KEY);
+        clearAuthPending();
         return;
       }
       successShownRef.current = true;
       toast.success("Вы успешно вошли", { description: "Добро пожаловать в Shpun App." });
-      sessionStorage.removeItem(AUTH_PENDING_KEY);
-      sessionStorage.removeItem(AUTH_PENDING_AT_KEY);
+      clearAuthPending();
     } catch { /* ignore */ }
   }, [me]);
 
@@ -314,13 +356,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }, [me, uid]);
 
   // ── Push-онбординг ────────────────────────────────────────────────────────
-  // Правила показа:
-  //   1. Не в Telegram Mini App
-  //   2. FirstLoginOnboarding не активен
-  //   3. Push не включён
-  //   4. Ещё не показывали в эту сессию (sessionStorage)
-  //      → если показали и пользователь нажал "Не сейчас" — до перезахода не беспокоим
-  //      → если push включили — помечаем навсегда и больше не показываем
   useEffect(() => {
     if (!me || loading) return;
     if (needsFirstLoginOnboarding) { setPushPromptOpen(false); return; }
@@ -336,13 +371,9 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         if (cancelled) return;
         setPushState(s);
 
-        // Push уже включён — всё хорошо, ничего не показываем
         if (isPushActive(s)) return;
-
-        // Уже показывали в эту сессию — не спамим
         if (isPushPromptShownThisSession()) return;
 
-        // Показываем промпт
         setPushPromptOpen(true);
         markPushPromptShownThisSession();
       } catch { /* ignore */ }
@@ -357,7 +388,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     setPushPromptBusy(true);
     try {
       if (!isStandalonePwa()) {
-        // Не PWA — предлагаем установить приложение, объяснять больше нечего
         toast.info("Установите приложение", {
           description: "Откройте меню браузера и выберите «Установить приложение».",
           durationMs: 4000,
@@ -365,21 +395,13 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         setPushPromptOpen(false);
         return;
       }
-
-      // PWA — пробуем включить уведомления
       const ok = await enablePushByUserGesture();
       const s = await getPushState().catch(() => null);
       if (s) setPushState(s);
-
       if (ok) {
-        toast.success("Уведомления включены ✅", {
-          description: "Теперь вы будете получать важные события.",
-        });
+        toast.success("Уведомления включены ✅", { description: "Теперь вы будете получать важные события." });
       } else {
-        toast.info("Уведомления не включены", {
-          description: "Их можно включить позже в профиле.",
-          durationMs: 2500,
-        });
+        toast.info("Уведомления не включены", { description: "Их можно включить позже в профиле.", durationMs: 2500 });
       }
       setPushPromptOpen(false);
     } finally {
@@ -387,20 +409,11 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     }
   }
 
-  function onPushPromptDismiss() {
-    // Пользователь нажал "Не сейчас" — закрываем.
-    // PUSH_PROMPT_SHOWN_KEY уже записан — в этой сессии больше не покажем.
-    // При следующем входе (новая сессия) предложим снова если push всё ещё не включён.
-    setPushPromptOpen(false);
-  }
-
   function onSkipOnboarding() {
     if (!uid || !currentAuthSessionId) return;
     writeDismissed(uid, currentAuthSessionId, true);
     setOnboardingDismissed(true);
   }
-
-  const authInProgress = hasFreshAuthPending();
 
   // ── Лоадер ────────────────────────────────────────────────────────────────
 
@@ -445,7 +458,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         standalone={pushState.standalone}
         permission={String(pushState.permission)}
         onAccept={onPushPromptAccept}
-        onDismiss={onPushPromptDismiss}
+        onDismiss={() => setPushPromptOpen(false)}
       />
 
       {showLoader && (
