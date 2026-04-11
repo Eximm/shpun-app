@@ -17,9 +17,11 @@ const PARTNER_LS_KEY              = "partner_id_pending";
 const AUTH_PENDING_KEY            = "auth:pending";
 const AUTH_PENDING_AT_KEY         = "auth:pending_at";
 const AUTH_SESSION_ID_PREFIX      = "auth.session.id:u:";
-const PUSH_ONBOARDING_SEEN_PREFIX = "push.onboarding.seen:";
 const AUTH_EVER_KEY               = "auth:ever_succeeded";
 const ONBOARDING_DISMISSED_PREFIX = "onboarding.dismissed:";
+
+// Ключ в sessionStorage — сбрасывается при закрытии вкладки/перезаходе
+const PUSH_PROMPT_SHOWN_KEY = "push.prompt.shown_this_session";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -29,9 +31,9 @@ function hasEverSucceededAuth(): boolean {
 
 function isTelegramMiniApp(): boolean {
   try {
-    // Считаем Mini App только если есть реальный initData (всегда длинная строка).
-    // window.Telegram.WebApp может быть доступен и в браузере после перехода из TG,
-    // но initData там пустой или отсутствует.
+    // Реальный initData от Telegram Mini App всегда длинный (300+ символов).
+    // window.Telegram.WebApp может присутствовать в браузере после перехода из TG,
+    // но initData там пустой — не считаем это Mini App.
     const tg = (window as any)?.Telegram?.WebApp;
     const initData = String(tg?.initData ?? "").trim();
     return initData.length > 50;
@@ -69,27 +71,6 @@ function ensureAuthSessionId(uid: number): string {
   return fallback;
 }
 
-function onboardingSeenKey(uid: number, mode: "browser" | "pwa", authSessionId: string) {
-  return `${PUSH_ONBOARDING_SEEN_PREFIX}${mode}:u:${uid}:a:${authSessionId}`;
-}
-
-function readSeen(key: string): boolean {
-  try { return localStorage.getItem(key) === "1"; } catch { return false; }
-}
-
-function writeSeen(key: string) {
-  try { localStorage.setItem(key, "1"); } catch { /* ignore */ }
-}
-
-/**
- * Сбрасываем seen-флаг для push-онбординга.
- * Вызывается когда обнаруживаем что push не активен —
- * чтобы при следующем визите снова предложить включить.
- */
-function clearSeen(key: string) {
-  try { localStorage.removeItem(key); } catch { /* ignore */ }
-}
-
 function dismissedKey(uid: number, authSessionId: string) {
   if (!uid) return "";
   return `${ONBOARDING_DISMISSED_PREFIX}u:${uid}:a:${authSessionId || "none"}`;
@@ -108,6 +89,20 @@ function writeDismissed(uid: number, authSessionId: string, value: boolean) {
     if (value) sessionStorage.setItem(key, "1");
     else sessionStorage.removeItem(key);
   } catch { /* ignore */ }
+}
+
+// Push-промпт: показываем один раз за сессию.
+// sessionStorage очищается при закрытии вкладки / новом входе.
+function isPushPromptShownThisSession(): boolean {
+  try { return sessionStorage.getItem(PUSH_PROMPT_SHOWN_KEY) === "1"; } catch { return false; }
+}
+
+function markPushPromptShownThisSession() {
+  try { sessionStorage.setItem(PUSH_PROMPT_SHOWN_KEY, "1"); } catch { /* ignore */ }
+}
+
+function isPushActive(s: PushState): boolean {
+  return isPushSupported() && !s.disabledByUser && s.permission === "granted" && s.hasSubscription;
 }
 
 function hasReferralContext(search: string): boolean {
@@ -319,14 +314,13 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }, [me, uid]);
 
   // ── Push-онбординг ────────────────────────────────────────────────────────
-  // Показываем только если:
-  //   - Пользователь авторизован и не в Telegram Mini App
-  //   - FirstLoginOnboarding не активен
-  //   - Push не включён
-  //
-  // ВАЖНО: seenKey записываем ТОЛЬКО если push уже включён (значит промпт не нужен).
-  // Если push не включён — НЕ пишем seen, чтобы при следующем визите снова предложить.
-  // Это позволяет корректно обработать случай когда пользователь отозвал разрешения.
+  // Правила показа:
+  //   1. Не в Telegram Mini App
+  //   2. FirstLoginOnboarding не активен
+  //   3. Push не включён
+  //   4. Ещё не показывали в эту сессию (sessionStorage)
+  //      → если показали и пользователь нажал "Не сейчас" — до перезахода не беспокоим
+  //      → если push включили — помечаем навсегда и больше не показываем
   useEffect(() => {
     if (!me || loading) return;
     if (needsFirstLoginOnboarding) { setPushPromptOpen(false); return; }
@@ -342,39 +336,15 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         if (cancelled) return;
         setPushState(s);
 
-        const mode: "browser" | "pwa" = s.standalone ? "pwa" : "browser";
-        const seenKey = onboardingSeenKey(uid, mode, ensureAuthSessionId(uid));
+        // Push уже включён — всё хорошо, ничего не показываем
+        if (isPushActive(s)) return;
 
-        // Определяем активен ли push прямо сейчас
-        const pushActive = isPushSupported() &&
-          !s.disabledByUser &&
-          s.permission === "granted" &&
-          s.hasSubscription;
-
-        if (pushActive) {
-          // Push включён — помечаем seen и не показываем промпт
-          writeSeen(seenKey);
-          return;
-        }
-
-        // Push не включён — сбрасываем seen чтобы при следующем визите снова предложить
-        clearSeen(seenKey);
-
-        if (readSeen(seenKey)) {
-          // Если seen всё ещё есть (не сбросился) — не показываем повторно в этой сессии
-          return;
-        }
+        // Уже показывали в эту сессию — не спамим
+        if (isPushPromptShownThisSession()) return;
 
         // Показываем промпт
-        // Для не-PWA браузера — предлагаем установить приложение
-        if (!s.standalone) {
-          setPushPromptOpen(true);
-          return;
-        }
-
-        // Для PWA — предлагаем включить уведомления
-        if (!isPushSupported()) return;
         setPushPromptOpen(true);
+        markPushPromptShownThisSession();
       } catch { /* ignore */ }
     };
 
@@ -387,18 +357,16 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     setPushPromptBusy(true);
     try {
       if (!isStandalonePwa()) {
+        // Не PWA — предлагаем установить приложение, объяснять больше нечего
         toast.info("Установите приложение", {
           description: "Откройте меню браузера и выберите «Установить приложение».",
           durationMs: 4000,
         });
         setPushPromptOpen(false);
-        // Для не-PWA: помечаем seen чтобы не спамить при каждом визите.
-        // При следующей сессии предложим снова если приложение не установлено.
-        const mode: "browser" | "pwa" = "browser";
-        writeSeen(onboardingSeenKey(uid, mode, ensureAuthSessionId(uid)));
         return;
       }
 
+      // PWA — пробуем включить уведомления
       const ok = await enablePushByUserGesture();
       const s = await getPushState().catch(() => null);
       if (s) setPushState(s);
@@ -407,19 +375,23 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         toast.success("Уведомления включены ✅", {
           description: "Теперь вы будете получать важные события.",
         });
-        // Push включён — помечаем seen навсегда
-        writeSeen(onboardingSeenKey(uid, "pwa", ensureAuthSessionId(uid)));
       } else {
         toast.info("Уведомления не включены", {
           description: "Их можно включить позже в профиле.",
           durationMs: 2500,
         });
-        // Не включил — не пишем seen, предложим в следующий раз
       }
       setPushPromptOpen(false);
     } finally {
       setPushPromptBusy(false);
     }
+  }
+
+  function onPushPromptDismiss() {
+    // Пользователь нажал "Не сейчас" — закрываем.
+    // PUSH_PROMPT_SHOWN_KEY уже записан — в этой сессии больше не покажем.
+    // При следующем входе (новая сессия) предложим снова если push всё ещё не включён.
+    setPushPromptOpen(false);
   }
 
   function onSkipOnboarding() {
@@ -473,11 +445,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         standalone={pushState.standalone}
         permission={String(pushState.permission)}
         onAccept={onPushPromptAccept}
-        onDismiss={() => {
-          setPushPromptOpen(false);
-          // При dismiss не пишем seen — предложим снова в следующей сессии
-          // (onboardingCheckedForUidRef сбросится при перезагрузке страницы)
-        }}
+        onDismiss={onPushPromptDismiss}
       />
 
       {showLoader && (
