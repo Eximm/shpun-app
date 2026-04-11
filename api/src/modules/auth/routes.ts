@@ -303,6 +303,10 @@ function generateTelegramTempPassword(tgId: string): string {
   return `tg_${tgId}_${rand}_${Date.now()}`;
 }
 
+function hasShmSession(rr: any): boolean {
+  return !!String(rr?.json?.session_id ?? "").trim();
+}
+
 async function updateAuthMeta(
   shmSessionId: string,
   req: any,
@@ -454,7 +458,6 @@ async function ensureTelegramUserForWidget(
 ============================================================ */
 
 export async function authRoutes(app: FastifyInstance) {
-  // ── POST /auth/telegram ───────────────────────────────────────────────────
   app.post("/auth/telegram", async (req, reply) => {
     const body = readJsonBody(req);
     const initData = String(body.initData ?? "").trim();
@@ -464,7 +467,7 @@ export async function authRoutes(app: FastifyInstance) {
 
     let rr = await singleFlightTelegramWebAppAuth(initData, getClientIp(req));
 
-    if (!rr.ok) {
+    if (!rr.ok || !hasShmSession(rr)) {
       const reg = await ensureTelegramUserForMiniApp(req, body, initData);
       if (!reg.ok) {
         return reply.code(reg.status).send({
@@ -477,16 +480,13 @@ export async function authRoutes(app: FastifyInstance) {
       rr = await singleFlightTelegramWebAppAuth(initData, getClientIp(req));
     }
 
-    if (!rr.ok) {
+    if (!rr.ok || !hasShmSession(rr)) {
       return reply
         .code(mapShmAuthErrorStatus(rr.status || 502))
         .send({ ok: false, error: "shm_telegram_auth_failed" });
     }
 
     const shmSessionId = String(rr.json?.session_id ?? "").trim();
-    if (!shmSessionId) {
-      return reply.code(502).send({ ok: false, error: "no_shm_session" });
-    }
 
     let shmUserId = 0;
     let login = "";
@@ -534,7 +534,6 @@ export async function authRoutes(app: FastifyInstance) {
       });
   });
 
-  // ── POST /auth/telegram_widget ────────────────────────────────────────────
   app.post("/auth/telegram_widget", async (req, reply) => {
     const body = (req.body ?? {}) as any;
     if (isProbablyEmptyTelegramWidgetPayload(body)) {
@@ -543,7 +542,7 @@ export async function authRoutes(app: FastifyInstance) {
 
     let rr = await singleFlightTelegramWidgetAuth(body, getClientIp(req));
 
-    if (!rr.ok) {
+    if (!rr.ok || !hasShmSession(rr)) {
       const reg = await ensureTelegramUserForWidget(req, body);
       if (!reg.ok) {
         return reply.code(reg.status).send({
@@ -556,16 +555,13 @@ export async function authRoutes(app: FastifyInstance) {
       rr = await singleFlightTelegramWidgetAuth(body, getClientIp(req));
     }
 
-    if (!rr.ok) {
+    if (!rr.ok || !hasShmSession(rr)) {
       return reply
         .code(mapShmAuthErrorStatus(rr.status || 502))
         .send({ ok: false, error: "shm_telegram_widget_auth_failed" });
     }
 
     const shmSessionId = String(rr.json?.session_id ?? "").trim();
-    if (!shmSessionId) {
-      return reply.code(502).send({ ok: false, error: "no_shm_session" });
-    }
 
     let shmUserId = 0;
     let login = "";
@@ -610,7 +606,6 @@ export async function authRoutes(app: FastifyInstance) {
       });
   });
 
-  // ── GET /auth/telegram_widget_redirect ───────────────────────────────────
   app.get("/auth/telegram_widget_redirect", async (req, reply) => {
     const payload = (req.query ?? {}) as any;
     if (isProbablyEmptyTelegramWidgetPayload(payload)) {
@@ -619,7 +614,7 @@ export async function authRoutes(app: FastifyInstance) {
 
     let rr = await singleFlightTelegramWidgetAuth(payload, getClientIp(req));
 
-    if (!rr.ok) {
+    if (!rr.ok || !hasShmSession(rr)) {
       const reg = await ensureTelegramUserForWidget(req, payload);
       if (!reg.ok) {
         return reply.redirect("/login?e=tg_widget_register_failed");
@@ -628,14 +623,11 @@ export async function authRoutes(app: FastifyInstance) {
       rr = await singleFlightTelegramWidgetAuth(payload, getClientIp(req));
     }
 
-    if (!rr.ok) {
+    if (!rr.ok || !hasShmSession(rr)) {
       return reply.redirect("/login?e=tg_widget_failed");
     }
 
     const shmSessionId = String(rr.json?.session_id ?? "").trim();
-    if (!shmSessionId) {
-      return reply.redirect("/login?e=no_shm_session");
-    }
 
     let shmUserId = 0;
     let login = "";
@@ -677,7 +669,6 @@ export async function authRoutes(app: FastifyInstance) {
       : reply.redirect(withAuthOk("/set-password"));
   });
 
-  // ── POST /auth/password ───────────────────────────────────────────────────
   app.post("/auth/password", async (req, reply) => {
     const body = readJsonBody(req);
     const modeRaw = String(body?.mode ?? "login").trim().toLowerCase();
@@ -728,7 +719,6 @@ export async function authRoutes(app: FastifyInstance) {
       .send({ ok: true, user_id: shmUserId, login, next: "home" });
   });
 
-  // ── POST /auth/password/set ───────────────────────────────────────────────
   app.post("/auth/password/set", async (req, reply) => {
     const body = readJsonBody(req);
     const password = String(body?.password ?? "");
@@ -800,7 +790,7 @@ export async function authRoutes(app: FastifyInstance) {
             String(session.telegramInitData).trim(),
             getClientIp(req)
           );
-          if (rr.ok) {
+          if (rr.ok && hasShmSession(rr)) {
             const newSid = String(rr.json?.session_id ?? "").trim();
             if (newSid) {
               try {
@@ -826,7 +816,7 @@ export async function authRoutes(app: FastifyInstance) {
             session.telegramWidgetPayload,
             getClientIp(req)
           );
-          if (rr.ok) {
+          if (rr.ok && hasShmSession(rr)) {
             const newSid = String(rr.json?.session_id ?? "").trim();
             if (newSid) {
               try {
@@ -871,7 +861,6 @@ export async function authRoutes(app: FastifyInstance) {
     });
   });
 
-  // ── POST /auth/onboarding/mark ────────────────────────────────────────────
   app.post("/auth/onboarding/mark", async (req, reply) => {
     const s = getSessionFromRequest(req) as any;
     if (!s) {
@@ -902,7 +891,7 @@ export async function authRoutes(app: FastifyInstance) {
           String(s.telegramInitData).trim(),
           getClientIp(req)
         );
-        if (!rr.ok) {
+        if (!rr.ok || !hasShmSession(rr)) {
           return reply
             .code(mapShmAuthErrorStatus(rr.status || 502))
             .send({ ok: false, error: "onboarding_reauth_failed" });
@@ -913,7 +902,7 @@ export async function authRoutes(app: FastifyInstance) {
           s.telegramWidgetPayload,
           getClientIp(req)
         );
-        if (!rr.ok) {
+        if (!rr.ok || !hasShmSession(rr)) {
           return reply
             .code(mapShmAuthErrorStatus(rr.status || 502))
             .send({ ok: false, error: "onboarding_reauth_failed" });
@@ -954,7 +943,6 @@ export async function authRoutes(app: FastifyInstance) {
     }
   });
 
-  // ── GET /auth/status ──────────────────────────────────────────────────────
   app.get("/auth/status", async (req, reply) => {
     const s = getSessionFromRequest(req) as any;
     return reply.send({
@@ -964,7 +952,6 @@ export async function authRoutes(app: FastifyInstance) {
     });
   });
 
-  // ── POST /logout ──────────────────────────────────────────────────────────
   app.post("/logout", async (req, reply) => {
     const sid = (req.cookies as any)?.sid as string | undefined;
     deleteSession(sid);

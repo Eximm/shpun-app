@@ -88,11 +88,25 @@ async function ensureAuthorizedAfterAuth(attempts = 12, delayMs = 250) {
  * Внутри Mini App window.Telegram.WebApp инициализирован Telegram ДО загрузки
  * нашего JS — initData доступен синхронно. Не грузим SDK динамически.
  */
-async function waitTelegramInitData(timeoutMs = 5000): Promise<string | null> {
-  // Telegram инжектит window.Telegram.WebApp асинхронно после загрузки страницы.
-  // Polling до timeoutMs — ждём появления объекта и initData.
+async function waitTelegramInitData(timeoutMs = 3000): Promise<string | null> {
+  // Быстрая синхронная проверка — если initData уже есть, возвращаем сразу
+  const immediate = getTelegramInitData();
+  if (immediate && immediate.length > 50) {
+    try {
+      const tg = getTelegramWebApp() as TgWebApp | null;
+      tg?.ready?.();
+      tg?.expand?.();
+    } catch { /* ignore */ }
+    return immediate;
+  }
+
+  // Если window.Telegram вообще не существует — это точно не Mini App, не ждём
+  if (!(window as any)?.Telegram) return null;
+
+  // window.Telegram есть, но initData ещё не готов — ждём (SDK инициализируется)
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
+    await sleep(100);
     const initData = getTelegramInitData();
     if (initData && initData.length > 50) {
       try {
@@ -102,7 +116,6 @@ async function waitTelegramInitData(timeoutMs = 5000): Promise<string | null> {
       } catch { /* ignore */ }
       return initData;
     }
-    await sleep(150);
   }
   return null;
 }
@@ -368,7 +381,7 @@ export function Login() {
 
     try {
       let initData = getTelegramInitData();
-      if (!initData) initData = await waitTelegramInitData(5000);
+      if (!initData) initData = await waitTelegramInitData(3000);
 
       if (!initData) {
         toastError(t("error.open_in_tg", "Откройте приложение в Telegram для быстрого входа."));
@@ -624,7 +637,7 @@ export function Login() {
             <div className="app-loader__title">Shpun App</div>
           </div>
           <div className="app-loader__text">
-            {t("login.desc.tg.detecting", "Выполняем вход…")}
+            {t("login.desc.tg.detecting", "Загрузка…")}
           </div>
         </div>
       </div>
@@ -651,12 +664,7 @@ export function Login() {
       );
     }
 
-    // Автологин не удался — показываем карточку с кнопкой повтора + debug info
-    const tgObj = (window as any)?.Telegram?.WebApp;
-    const initDataLen = String(tgObj?.initData ?? "").length;
-    const platform = String(tgObj?.platform ?? "none");
-    const version = String(tgObj?.version ?? "none");
-
+    // Автологин не удался — показываем карточку с кнопкой повтора
     return (
       <div className="section">
         <div className="card">
@@ -669,16 +677,6 @@ export function Login() {
             <p className="p">
               {t("login.desc.tg.only", "Вход выполняется через Telegram. Нажмите кнопку ниже если не произошло автоматически.")}
             </p>
-
-            {/* ВРЕМЕННЫЙ DEBUG — удалить после диагностики */}
-            <div className="pre" style={{ fontSize: 11, opacity: 0.7, marginTop: 8 }}>
-              <div>WebApp: {tgObj ? "✅" : "❌"}</div>
-              <div>initData: {initDataLen > 0 ? `✅ (${initDataLen} chars)` : "❌ empty"}</div>
-              <div>platform: {platform}</div>
-              <div>version: {version}</div>
-              <div>mode: {mode}</div>
-              <div>loading: {String(loading)}</div>
-            </div>
 
             <div className="auth__actions" style={{ marginTop: 16 }}>
               <button
