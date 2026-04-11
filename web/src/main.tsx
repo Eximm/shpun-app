@@ -14,7 +14,6 @@ import "./index.css";
 import { Login } from "./pages/Login";
 import { Home } from "./pages/Home";
 import { Feed } from "./pages/Feed";
-import { Dashboard } from "./pages/Dashboard";
 import { Services } from "./pages/Services";
 import { ServicesOrder } from "./pages/ServicesOrder";
 import { Payments } from "./pages/Payments";
@@ -226,7 +225,6 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                   <Route path="/home" element={<Home />} />
                   <Route path="/referrals" element={<Referrals />} />
                   <Route path="/feed" element={<Feed />} />
-                  <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/services" element={<Services />} />
                   <Route path="/services/order" element={<ServicesOrder />} />
                   <Route path="/help/router" element={<ServicesRouter />} />
