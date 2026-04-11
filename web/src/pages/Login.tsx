@@ -9,7 +9,6 @@ import { useI18n } from "../shared/i18n";
 import { toast } from "../shared/ui/toast";
 import { normalizeError } from "../shared/api/errorText";
 import {
-  ensureTelegramWebAppSdk,
   getTelegramWebApp,
 } from "../shared/telegram/sdk";
 
@@ -85,22 +84,29 @@ async function ensureAuthorizedAfterAuth(attempts = 12, delayMs = 250) {
 }
 
 /**
- * Ждём initData от Telegram WebApp SDK.
- * Сначала инициализируем SDK (до 2000ms), потом polling до timeoutMs.
+ * Получаем initData от Telegram WebApp.
+ * Внутри Mini App window.Telegram.WebApp инициализирован Telegram ДО загрузки
+ * нашего JS — initData доступен синхронно. Не грузим SDK динамически.
  */
-async function waitTelegramInitData(timeoutMs = 4000): Promise<string | null> {
-  // Инициализируем SDK и сигнализируем готовность
-  const sdk = await ensureTelegramWebAppSdk(Math.min(timeoutMs, 2000)).catch(() => null);
-  if (sdk) {
-    try { sdk.ready?.(); sdk.expand?.(); } catch { /* ignore */ }
+async function waitTelegramInitData(timeoutMs = 1500): Promise<string | null> {
+  // Синхронная проверка — в 99% случаев initData уже есть
+  const immediate = getTelegramInitData();
+  if (immediate && immediate.length > 50) {
+    try { (getTelegramWebApp() as TgWebApp | null)?.ready?.(); (getTelegramWebApp() as TgWebApp | null)?.expand?.(); } catch { /* ignore */ }
+    return immediate;
   }
 
+  // Короткий polling как страховка (SDK может инициализироваться чуть позже)
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
+    await sleep(100);
     const initData = getTelegramInitData();
-    if (initData && initData.length > 50) return initData;
-    await sleep(80);
+    if (initData && initData.length > 50) {
+      try { (getTelegramWebApp() as TgWebApp | null)?.ready?.(); (getTelegramWebApp() as TgWebApp | null)?.expand?.(); } catch { /* ignore */ }
+      return initData;
+    }
   }
+
   return null;
 }
 
@@ -323,7 +329,7 @@ export function Login() {
 
       if (!initData) {
         // Ждём инициализации SDK — Telegram иногда передаёт initData с задержкой
-        initData = await waitTelegramInitData(4000);
+        initData = await waitTelegramInitData(1500);
       }
 
       if (cancelled) return;
@@ -374,7 +380,7 @@ export function Login() {
 
     try {
       let initData = getTelegramInitData();
-      if (!initData) initData = await waitTelegramInitData(3000);
+      if (!initData) initData = await waitTelegramInitData(1500);
 
       if (!initData) {
         toastError(t("error.open_in_tg", "Откройте приложение в Telegram для быстрого входа."));
