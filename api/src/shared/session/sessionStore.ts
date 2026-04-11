@@ -13,6 +13,7 @@ export type AppSession = {
   shmSessionId: string;
   shmUserId?: number;
   userId?: number; // backcompat alias
+  login?: string;
   createdAt: number;
   lastSeenAt: number;
 
@@ -78,6 +79,7 @@ export function putSession(
     ...session,
     shmUserId: session.shmUserId ?? session.userId,
     userId: session.userId ?? session.shmUserId,
+    ...(session.login ? { login: String(session.login).trim() } : {}),
     lastSeenAt: t,
     ...(session.telegramInitData
       ? { telegramInitData: String(session.telegramInitData).trim() }

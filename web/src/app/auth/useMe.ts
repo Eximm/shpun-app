@@ -1,4 +1,6 @@
-﻿import { useEffect, useState } from "react";
+﻿// web/src/app/auth/useMe.ts
+
+import { useEffect, useState } from "react";
 import { apiFetch, isNotAuthenticated } from "../../shared/api/client";
 
 export type MeResponse = {
@@ -12,7 +14,13 @@ export type MeResponse = {
     emailVerified?: boolean | null;
     fullName: string | null;
     phone?: string | null;
-    passwordSet: boolean;
+
+    // Флаги онбординга из ShpynApp (шаблон v9_6+).
+    // passwordStepDone = onboarding.step_password (новое поле после миграции шаблона)
+    // emailStepDone    = onboarding.step_email
+    passwordStepDone?: boolean;
+    emailStepDone?: boolean;
+
     created?: string | null;
     lastLogin?: string | null;
     role?: string | null;
@@ -28,12 +36,10 @@ export type MeResponse = {
     chatId?: number | string | null;
     status?: string | null;
   } | null;
-
   balance: { amount: number; currency: string };
   bonus: number;
   discount: number;
   referralsCount?: number;
-
   shm?: { status?: number };
   meRaw?: any;
 };
@@ -98,18 +104,18 @@ async function doFetchMe(): Promise<MeResponse | null> {
       return data;
     } catch (e: any) {
       const authRequired = isNotAuthenticated(e);
-      const err: Error =
-        e instanceof Error ? e : new Error(String(e?.message || "me_failed"));
+      const err: Error = e instanceof Error ? e : new Error(String(e?.message || "me_failed"));
+      const hasLoadedMeBefore = !!state.me;
 
       setState({
-        me: null,
+        me: hasLoadedMeBefore ? state.me : null,
         loading: false,
         error: err,
-        authRequired,
+        authRequired: hasLoadedMeBefore ? false : authRequired,
         lastFetchedAt: Date.now(),
       });
 
-      return null;
+      return hasLoadedMeBefore ? state.me : null;
     } finally {
       inFlight = null;
     }
@@ -133,9 +139,7 @@ export function useMe() {
       doFetchMe().catch(() => {});
     }
 
-    return () => {
-      listeners.delete(onChange);
-    };
+    return () => { listeners.delete(onChange); };
   }, []);
 
   return {

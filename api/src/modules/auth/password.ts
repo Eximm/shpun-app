@@ -2,31 +2,11 @@
 
 import type { FastifyRequest } from "fastify";
 import { getSession } from "../../shared/session/sessionStore.js";
+import { shmFetch } from "../../shared/shm/shmClient.js";
 
 type SetPasswordResult =
   | { ok: true }
   | { ok: false; status: number; error: string; detail?: unknown };
-
-function shmRoot(): string {
-  // ожидаем ".../shm/" или ".../shm"
-  const b0 = String(process.env.SHM_BASE ?? "").trim();
-  const b = (b0 || "https://bill.shpyn.online/shm/").replace(/\/+$/, "");
-  if (b.endsWith("/shm/v1")) return b.slice(0, -3);
-  return b;
-}
-function shmV1(): string {
-  return `${shmRoot()}/v1`;
-}
-
-async function safeReadJson(res: Response): Promise<unknown | null> {
-  const ct = res.headers.get("content-type") || "";
-  if (!ct.includes("application/json")) return null;
-  try {
-    return await res.json();
-  } catch {
-    return null;
-  }
-}
 
 export async function setPassword(
   req: FastifyRequest,
@@ -43,32 +23,23 @@ export async function setPassword(
     return { ok: false, status: 401, error: "not_authenticated" };
   }
 
-  // SHM: POST /v1/user/passwd  { password }
-  const res = await fetch(`${shmV1()}/user/passwd`, {
+  // POST /v1/user/passwd { password }
+  // Используем shmFetch — единственный транспорт к SHM (таймаут, логирование, нормализация).
+  const r = await shmFetch<any>(s.shmSessionId, "v1/user/passwd", {
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-      accept: "application/json",
-      "session-id": String(s.shmSessionId),
-    },
-    body: JSON.stringify({ password: pwd }),
+    body: { password: pwd },
   });
 
-  const json = await safeReadJson(res);
-  const text = json ? "" : await res.text().catch(() => "");
-
-  if (!res.ok) {
+  if (!r.ok) {
     return {
       ok: false,
-      status: res.status,
+      status: r.status || 502,
       error: "shm_passwd_failed",
-      detail: json ?? text,
+      detail: r.json ?? r.text,
     };
   }
 
-  // ВАЖНО:
-  // фиксацию password_set делаем НЕ здесь.
-  // После смены пароля SHM может ротировать session_id,
-  // поэтому mark_set выполняем в auth/routes.ts ПОСЛЕ re-auth.
+  // Фиксацию onboarding.mark step=password делаем в auth/routes.ts ПОСЛЕ re-auth,
+  // т.к. после смены пароля SHM может ротировать session_id.
   return { ok: true };
 }
