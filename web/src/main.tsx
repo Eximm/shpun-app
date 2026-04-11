@@ -84,7 +84,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
               <div className="brand__subtitle">SDN System</div>
             </div>
           </div>
-          <span className="badge">{t("app.beta", "beta")}</span>
+          <span className="badge">{t("app.beta", "Бета")}</span>
         </div>
       </header>
 
@@ -112,34 +112,27 @@ function AuthedLayout() {
 
 function LandingRoute() {
   const loc = useLocation();
-  const [state, setState] = React.useState<"loading" | "home" | "services">("loading");
+
+  // Если уже проверяли в этой сессии — сразу рендерим Home без запроса и без лоадера
+  const alreadyChecked = sessionStorage.getItem("landing_checked") === "1";
+  const [state, setState] = React.useState<"loading" | "home" | "services">(
+    alreadyChecked ? "home" : "loading"
+  );
 
   React.useEffect(() => {
+    // Уже определились — ничего не делаем
+    if (alreadyChecked) return;
+
     let cancelled = false;
 
     async function decide() {
       try {
-        const alreadyRedirected = sessionStorage.getItem("landing_checked") === "1";
-
         const resp = await apiFetch<ServicesSummaryResp>("/services", { method: "GET" });
         const active = Number(resp?.summary?.active ?? 0);
-
         if (cancelled) return;
 
-        // если уже проверяли — не мешаем пользователю
-        if (alreadyRedirected) {
-          setState("home");
-          return;
-        }
-
-        // первый заход
         sessionStorage.setItem("landing_checked", "1");
-
-        if (active > 0) {
-          setState("home");
-        } else {
-          setState("services");
-        }
+        setState(active > 0 ? "home" : "services");
       } catch {
         if (cancelled) return;
         setState("home");
@@ -147,20 +140,20 @@ function LandingRoute() {
     }
 
     void decide();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loc.search]);
 
   if (state === "loading") {
     return (
-      <div className="section">
-        <div className="card">
-          <div className="card__body">
-            <h1 className="h1">Shpun App</h1>
-            <p className="p">Загрузка…</p>
+      <div className="app-loader" style={{ opacity: 1, transition: "opacity 180ms ease", pointerEvents: "auto" }}>
+        <div className="app-loader__card">
+          <div className="app-loader__shine" />
+          <div className="app-loader__brandRow">
+            <div className="app-loader__mark" />
+            <div className="app-loader__title">Shpun App</div>
           </div>
+          <div className="app-loader__text">Загружаем данные…</div>
         </div>
       </div>
     );

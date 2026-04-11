@@ -90,7 +90,10 @@ async function doFetchMe(): Promise<MeResponse | null> {
   if (inFlight) return inFlight;
 
   inFlight = (async () => {
-    setState({ loading: true, error: null });
+    // Если me уже загружен — не показываем лоадер (фоновое обновление).
+    // Лоадер только при первой загрузке когда me === null.
+    const isFirstLoad = !state.me;
+    if (isFirstLoad) setState({ loading: true, error: null });
 
     try {
       const data = await apiFetch<MeResponse>("/me", { method: "GET" });
