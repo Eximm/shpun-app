@@ -310,6 +310,26 @@ function getClientIp(req: any): string {
   );
 }
 
+async function updateAuthMeta(
+  shmSessionId: string,
+  req: any,
+  source: "telegram" | "widget" | "password"
+): Promise<void> {
+  try {
+    await callShmTemplate(shmSessionId, "auth.meta.update", {
+      last_login_at: Date.now(),
+      last_login_ip: getClientIp(req),
+      last_login_source: source,
+    });
+  } catch (e: any) {
+    dbg(req, "auth_meta_update_failed", {
+      source,
+      error: String(e?.message ?? e),
+      sessionId: maskValue(shmSessionId),
+    });
+  }
+}
+
 /* ============================================================
    Single-flight Telegram auth
 ============================================================ */
@@ -408,6 +428,8 @@ export async function authRoutes(app: FastifyInstance) {
       }
     } catch {}
 
+    await updateAuthMeta(shmSessionId, req, "telegram");
+
     const ps = await getPasswordSetFlag(shmSessionId);
     return reply
       .setCookie("sid", localSid, cookieOptions(req))
@@ -468,6 +490,8 @@ export async function authRoutes(app: FastifyInstance) {
       });
     } catch {}
 
+    await updateAuthMeta(shmSessionId, req, "widget");
+
     const ps = await getPasswordSetFlag(shmSessionId);
     return reply
       .setCookie("sid", localSid, cookieOptions(req))
@@ -527,6 +551,8 @@ export async function authRoutes(app: FastifyInstance) {
       });
     } catch {}
 
+    await updateAuthMeta(shmSessionId, req, "widget");
+
     reply.setCookie("sid", localSid, cookieOptions(req));
     const ps = await getPasswordSetFlag(shmSessionId);
     return ps === 1
@@ -571,6 +597,8 @@ export async function authRoutes(app: FastifyInstance) {
 
     const localSid = reuseOrCreateSid(req);
     putSession(localSid, { shmSessionId, shmUserId, login, createdAt: Date.now() });
+
+    await updateAuthMeta(shmSessionId, req, "password");
 
     dbg(req, "password_auth:done", {
       userId: shmUserId,
