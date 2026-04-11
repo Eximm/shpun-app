@@ -18,7 +18,6 @@ import { Services } from "./pages/Services";
 import { ServicesOrder } from "./pages/ServicesOrder";
 import { Payments } from "./pages/Payments";
 import { Profile } from "./pages/Profile";
-import { SetPassword } from "./pages/SetPassword";
 import { Transfer } from "./pages/Transfer";
 import { Referrals } from "./pages/Referrals";
 import { PaymentsHistory } from "./pages/PaymentsHistory";
@@ -225,7 +224,6 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                   <Route path="/payments/history" element={<PaymentsHistory />} />
                   <Route path="/payments/receipts" element={<PaymentsReceipts />} />
                   <Route path="/profile" element={<Profile />} />
-                  <Route path="/set-password" element={<SetPassword />} />
                   <Route path="/admin" element={<AdminPage />} />
                 </Route>
 
