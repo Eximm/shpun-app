@@ -14,21 +14,14 @@ export const RU: Dict = {
   // login
 
   "login.title": "Вход в Shpun App",
-  "login.badge.tg": "Telegram",
-  "login.badge.web": "Браузер",
   "login.lang.aria": "Язык",
 
-  "login.desc.tg": "Продолжите вход через Telegram.",
-  "login.desc.web": "Войдите через Telegram или по e-mail и паролю.",
   "login.desc.web.short": "Ваш личный кабинет для сервисов Shpun.",
   "login.desc.web.partner": "Ваш личный кабинет для сервисов Shpun. Войдите или создайте аккаунт по приглашению.",
 
   "login.toast.error_title": "Ошибка",
 
   "login.what.title": "Что такое Shpun App",
-  "login.what.1": "Личный кабинет для сервисов Shpun.",
-  "login.what.2": "Баланс, оплаты и бонусы.",
-  "login.what.3": "Услуги, настройки и уведомления.",
   "login.what.1.short": "Личный кабинет для сервисов Shpun.",
   "login.what.2.short": "Баланс, оплаты и бонусы.",
   "login.what.3.short": "Услуги, настройки и уведомления.",
@@ -37,26 +30,21 @@ export const RU: Dict = {
   "login.divider.password": "E-mail и пароль",
   "login.divider.providers": "Другие способы",
 
-  "login.widget.tip": "Быстрый вход в аккаунт через Telegram.",
   "login.widget.tip.secondary": "Вы можете войти через Telegram или выбрать другой способ входа ниже.",
   "login.widget.loading": "Пробуем загрузить вход через Telegram...",
   "login.widget.failed.soft": "Вход через Telegram сейчас может работать нестабильно. Попробуйте ещё раз или используйте другой способ входа ниже.",
-  "login.widget.unavailable": "Вход через Telegram сейчас недоступен.",
   "login.widget.unavailable.alt": "Вход через Telegram сейчас недоступен. Используйте другой способ входа ниже.",
   "login.widget.open.alt": "Продолжить через Telegram",
   "login.widget.retry.alt": "Попробовать через Telegram ещё раз",
 
-  "login.tg.cta": "Продолжить",
   "login.tg.cta_loading": "Входим…",
 
-  "login.providers.telegram.hint.tg": "быстрый вход",
   "login.providers.telegram.hint.web": "открыть вход",
   "login.providers.telegram.hint.loading": "загрузка...",
   "login.providers.google.hint": "скоро",
   "login.providers.yandex.hint": "скоро",
   "login.providers.soon": "Скоро",
 
-  "login.password.summary": "Войти по логину или e-mail и паролю",
   "login.password.form_title_login": "Вход по логину или e-mail и паролю",
   "login.password.form_title_register": "Создать аккаунт",
   "login.password.login": "E-mail",
@@ -83,8 +71,6 @@ export const RU: Dict = {
   "login.password.open_register_partner": "Зарегистрироваться по приглашению",
   "login.password.show": "Показать пароль",
   "login.password.hide": "Скрыть пароль",
-  "login.password.show_repeat": "Показать повтор пароля",
-  "login.password.hide_repeat": "Скрыть повтор пароля",
 
   "login.partner.notice": "Вы пришли по приглашению. Партнёрская ссылка будет учтена при регистрации.",
   "login.partner.banner": "Приглашение сохранено. Для нового пользователя сразу открыта регистрация, и партнёрка будет учтена.",
@@ -114,17 +100,12 @@ export const RU: Dict = {
   "login.err.email_required": "Введите e-mail.",
   "login.err.email_non_ascii": "Используйте e-mail только латиницей. Кириллица в адресе не поддерживается.",
   "login.err.email_invalid_format": "Это не похоже на настоящий e-mail. Введите действительный адрес.",
-  "login.err.email_invalid_generic": "Проверьте e-mail и введите действительный адрес.",
-  "login.err.email_domain_invalid": "Домен в e-mail выглядит некорректно. Проверьте адрес.",
   "login.err.email_disposable": "Временные e-mail не подходят. Введите постоянный адрес.",
   "login.err.email_domain_unresolvable": "Не удалось подтвердить домен e-mail. Проверьте адрес.",
-  "login.err.email_check_failed": "Не удалось проверить e-mail. Попробуйте другой адрес.",
 
   // home
-  "home.loading.title": "Shpun",
   "home.loading.text": "Загрузка…",
 
-  "home.error.title": "Shpun",
   "home.error.text": "Не удалось загрузить профиль.",
   "home.error.retry": "Повторить",
 
@@ -200,17 +181,13 @@ export const RU: Dict = {
 
   // PROFILE — RU
   "profile.title": "Профиль",
-  "profile.refresh": "Обновить",
   "profile.head.sub": "Аккаунт, вход и настройки.",
 
-  "profile.loading.title": "Профиль",
-  "profile.loading.text": "Загрузка...",
 
   "profile.error.text": "Не удалось загрузить данные.",
   "profile.error.retry": "Повторить",
 
   "profile.logout": "Выйти",
-  "profile.change_password": "Сменить пароль",
   "profile.admin": "Админка",
 
   "profile.toast.saved": "Данные сохранены",
@@ -336,53 +313,16 @@ export const RU: Dict = {
   "profile.ok": "Понятно",
 
   // set password
-  "setpwd.checking.title": "Проверяем доступ…",
-  "setpwd.checking.text": "Подготавливаем страницу.",
 
-  "setpwd.need_login.title": "Нужен вход",
-  "setpwd.need_login.text": "Нужно войти в аккаунт.",
-  "setpwd.need_login.cta": "Перейти ко входу",
 
-  "setpwd.redirecting": "Возвращаем в приложение…",
 
-  "setpwd.title": "Создать пароль",
-  "setpwd.desc": "Пароль пригодится для входа в браузере и в приложении.",
-  "setpwd.badge": "Готово за минуту",
 
-  "setpwd.change.title": "Сменить пароль",
-  "setpwd.change.desc": "Вы можете обновить пароль в любой момент.",
-  "setpwd.change.save": "Сменить пароль",
 
-  "setpwd.kv.login": "Логин",
-  "setpwd.kv.why": "Для чего",
-  "setpwd.kv.why_value": "Вход по паролю",
-  "setpwd.kv.next": "Дальше",
-  "setpwd.kv.next_value": "Главная",
-  "setpwd.kv.next_value_profile": "Профиль",
 
-  "setpwd.field.p1": "Новый пароль",
-  "setpwd.field.p1_ph": "Минимум 8 символов",
-  "setpwd.field.p2": "Повторите пароль",
-  "setpwd.field.p2_ph": "Повторите пароль",
-  "setpwd.field.show_password": "Показать пароль",
-  "setpwd.field.hide_password": "Скрыть пароль",
-  "setpwd.field.show": "Показать",
-  "setpwd.field.hide": "Скрыть",
 
-  "setpwd.strength": "Надёжность",
-  "setpwd.tip": "Используйте 8+ символов, цифры и спецсимволы.",
 
-  "setpwd.save": "Сохранить пароль",
-  "setpwd.saving": "Сохраняем…",
-  "setpwd.back": "Назад",
-  "setpwd.to_home": "На главную",
 
-  "setpwd.toast.saved.title": "Пароль сохранён",
-  "setpwd.toast.changed.title": "Пароль изменён",
-  "setpwd.toast.saved.desc": "Теперь войдите снова с новым паролем.",
 
-  "setpwd.err.title": "Ошибка",
-  "setpwd.err.generic": "Не удалось сохранить пароль.",
 
   // services
   "services.wl.badge": "WL",
@@ -425,27 +365,23 @@ export const RU: Dict = {
   "services.meta.until": "До",
   "services.meta.active": "Активные",
   "services.meta.attention": "Внимание",
-  "services.meta.monthly": "В месяц",
   "services.meta.discount": "Скидка",
 
   "services.month_short": "м",
   "services.item": "Услуга",
 
   "services.actions.title": "Действия",
-  "services.order": "Заказать",
   "services.refresh": "Обновить",
   "services.refresh_status": "Обновить статус",
   "services.pay": "Оплатить / пополнить",
   "services.topup": "Пополнить / оплатить",
   "services.support": "В поддержку",
-  "services.order_vpn": "Выбрать тариф",
   "services.empty.title": "У вас пока нет активных услуг",
   "services.empty.text": "Выберите тариф и получите доступ к сервису всего за пару минут.",
-  "services.empty.hint": "Быстрое подключение, понятная цена и простой запуск после покупки.",
 
   "services.connect.title": "Подключение",
-  "services.connect.button": "Подключение",
-  "services.connect.hide": "Скрыть подключение",
+  "services.connect.button": "Как подключиться",
+  "services.connect.hide": "Скрыть инструкцию",
   "services.connect.open": "Открыть подключение",
   "services.connect.only_active": "Подключение доступно только для активной услуги.",
   "services.connect.unavailable": "Для этого типа услуги пока нет помощника подключения.",
@@ -503,9 +439,6 @@ export const RU: Dict = {
   "feed.filter.money": "Деньги",
   "feed.filter.services": "Услуги",
   "feed.filter.news": "Новости",
-  "feed.count.one": "сообщение",
-  "feed.count.few": "сообщения",
-  "feed.count.many": "сообщений",
   "feed.empty.title": "Пока здесь тихо",
   "feed.empty.text": "Как только появятся пополнения, продления или новости — они будут в Инфоцентре.",
   "feed.item.fallback": "Сообщение",
@@ -527,11 +460,9 @@ export const RU: Dict = {
   "payments.error.home": "На главную",
 
   "payments.toast.load_failed": "Не удалось открыть оплату",
-  "payments.toast.requisites_unavailable": "Реквизиты сейчас недоступны",
   "payments.toast.payment_opened": "Страница оплаты открыта",
   "payments.toast.payment_opened.desc": "После оплаты нажмите «Проверить оплату».",
   "payments.toast.method_unavailable": "Этот способ оплаты сейчас недоступен",
-  "payments.toast.method_unavailable.desc": "Для него не настроена ссылка на оплату.",
   "payments.toast.enter_amount": "Введите сумму",
   "payments.toast.enter_amount.desc": "Сумма должна быть больше 0.",
   "payments.toast.done": "Готово",
@@ -544,74 +475,52 @@ export const RU: Dict = {
   "payments.overlay.close": "Закрыть",
 
   "payments.amount.title": "Сумма",
-  "payments.amount.sub": "Если сумма не подставилась автоматически, укажите её вручную.",
   "payments.amount.placeholder": "Сумма (₽)",
 
-  "payments.validation.amount_invalid": "Введите корректную сумму.",
-  "payments.validation.enter_amount": "Введите сумму.",
 
   "payments.methods.title": "Способы оплаты",
-  "payments.methods.sub": "Внешняя оплата откроется в новой вкладке.",
   "payments.methods.card_transfer": "Перевод по карте 💳",
   "payments.methods.empty": "Способы оплаты пока недоступны.",
-  "payments.methods.type.autopay": "Автоплатёж",
   "payments.methods.type.stars": "Оплата через Telegram Stars",
   "payments.methods.type.external": "Внешняя оплата",
-  "payments.methods.badge.recurring": "recurring",
-  "payments.methods.badge.one_time": "one-time",
   "payments.methods.name_fallback": "Способ оплаты",
   "payments.methods.pay": "Оплатить",
   "payments.methods.note": "Даже если Telegram недоступен, оплата и отправка квитанции продолжат работать через приложение.",
 
   "payments.autopay.confirm_remove": "Отвязать сохранённый способ оплаты?",
   "payments.autopay.removed": "Автоплатёж отключён.",
-  "payments.autopay.remove": "Отключить автоплатёж",
   "payments.autopay.remove_short": "Отключить",
   "payments.autopay.remove_failed": "Не удалось отключить автоплатёж",
-  "payments.autopay.remove_failed_desc": "Не удалось отключить автоплатёж.",
 
   "payments.card_transfer.need_amount": "Для перевода по реквизитам нужно указать сумму.",
 
   "payments.card_page.title": "Перевод по карте",
-  "payments.card_page.sub": "Сделайте перевод и отправьте квитанцию. Мы проверим её вручную.",
   "payments.card_page.amount_label": "Сумма перевода",
-  "payments.card_page.important": "Важно",
-  "payments.card_page.important_text": "После перевода обязательно отправьте квитанцию. Без неё мы не сможем проверить и зачислить платёж.",
-  "payments.card_page.back": "⇦ Назад к способам оплаты",
 
-  "payments.requisites.title": "Реквизиты",
   "payments.requisites.loading": "Загружаем реквизиты…",
   "payments.requisites.error": "Реквизиты пока недоступны. Попробуйте немного позже.",
   "payments.requisites.empty": "Реквизиты пока не добавлены.",
   "payments.requisites.holder": "Получатель",
   "payments.requisites.card": "Номер карты",
-  "payments.requisites.card_badge": "МИР",
   "payments.requisites.copy_card": "Скопировать номер карты",
   "payments.requisites.copied": "Скопировано",
   "payments.requisites.copied.desc": "Номер карты скопирован в буфер обмена.",
 
-  "payments.receipt.amount_first": "Сначала укажите сумму в рублях.",
   "payments.receipt.amount_first.desc": "Перед отправкой квитанции нужно указать сумму.",
-  "payments.receipt.file_too_large": "Файл слишком большой. Максимум — 2 MB.",
   "payments.receipt.file_too_large.title": "Файл слишком большой",
   "payments.receipt.file_too_large.desc": "Загрузите файл размером до 2 MB.",
-  "payments.receipt.uploading": "Отправляем квитанцию",
-  "payments.receipt.uploading.desc": "Это займёт пару секунд.",
   "payments.receipt.uploading_short": "⏳ Отправляем…",
   "payments.receipt.upload_btn": "🧾 Отправить квитанцию",
   "payments.receipt.sent": "Квитанция отправлена",
   "payments.receipt.sent.desc": "Мы получили её и проверим вручную.",
   "payments.receipt.sent_msg": "✅ Квитанция отправлена на проверку.",
   "payments.receipt.send_failed": "Не удалось отправить квитанцию",
-  "payments.receipt.send_failed_desc": "Не удалось отправить квитанцию.",
   "payments.receipt.supported": "Поддерживаются JPG, PNG и PDF до 2 MB.",
 
   "payments.history.title": "История",
-  "payments.history.sub": "Здесь можно посмотреть прошлые операции и отправленные квитанции.",
   "payments.history.operations": "История операций",
   "payments.history.receipts": "Квитанции",
 
-  "payments.dev.forecast": "Forecast (dev only):",
 
   // PAYMENTS HISTORY
   "paymentsHistory.title": "🧾 История операций",
@@ -619,12 +528,9 @@ export const RU: Dict = {
   "paymentsHistory.refresh": "⟳ Обновить",
   "paymentsHistory.receipts": "Отправленные квитанции",
 
-  "paymentsHistory.error.prefix": "Ошибка",
   "paymentsHistory.error.load_failed": "Не удалось загрузить историю операций.",
 
   "paymentsHistory.loading": "Загрузка…",
-  "paymentsHistory.loading_items": "Загружаем…",
-  "paymentsHistory.loading_wait": "Подождите немного",
   "paymentsHistory.empty.short": "Пока пусто",
   "paymentsHistory.page_info": "Страница: {page} · Показано: {shown}/{total}",
 
@@ -655,12 +561,9 @@ export const RU: Dict = {
   "paymentsReceipts.refresh": "⟳ Обновить",
   "paymentsReceipts.history": "История операций",
 
-  "paymentsReceipts.error.prefix": "Ошибка",
   "paymentsReceipts.error.load_failed": "Не удалось загрузить квитанции.",
 
   "paymentsReceipts.loading": "Загрузка…",
-  "paymentsReceipts.loading_items": "Загружаем…",
-  "paymentsReceipts.loading_wait": "Подождите немного",
   "paymentsReceipts.total": "Всего: {count}",
 
   "paymentsReceipts.empty.short": "Пока квитанций нет",
@@ -677,14 +580,10 @@ export const RU: Dict = {
   "paymentsReceipts.status.accepted": "Принято",
   "paymentsReceipts.status.error": "Есть проблема",
 
-  "paymentsReceipts.dev.raw": "Raw (dev only):",
 
   // SERVICES ROUTER
   "servicesRouter.page.title": "Shpun Router",
   "servicesRouter.page.sub": "Подключает OpenWrt-роутер к Shpun SDN System и поднимает единый VPN для всей домашней сети.",
-  "servicesRouter.page.badge_1": "OpenWrt 24.10+",
-  "servicesRouter.page.badge_2": "Без ручной настройки",
-  "servicesRouter.page.badge_3": "OTA-обновления",
   "servicesRouter.page.back": "⇦ Назад",
   "servicesRouter.page.order": "Перейти к заказу Router VPN",
   "servicesRouter.page.download": "Скачать пакет Shpun Router",
@@ -891,9 +790,56 @@ export const RU: Dict = {
   "router.unbind": "Отвязать роутер",
 
   "router.one_device": "Один роутер может быть привязан к услуге одновременно.",
-  "router.code_format": "Формат кода: XXXX-XXXX (латинские буквы и цифры)."
+  "router.code_format": "Формат кода: XXXX-XXXX (латинские буквы и цифры).",
+
+  /* === New keys added during refactor === */
+
+  "common.close": "Закрыть",
+
+  "login.desc.tg.detecting": "Загрузка…",
+  "login.desc.tg.loading": "Выполняем вход через Telegram…",
+  "login.desc.tg.only": "Вход выполняется через Telegram. Нажмите кнопку ниже если не произошло автоматически.",
+  "login.tg.retry": "Войти через Telegram",
+  "login.tg.only.password_disabled": "В mini app используйте вход через Telegram.",
+
+
+  "services.cta.add_more": "Подключить ещё",
+  "services.cta.choose_plan": "Выбрать тариф",
+
+  "payments.forecast.hint": "Следующая оплата",
+  "payments.autopay.title": "Автоплатёж",
+  "payments.autopay.name_fallback": "Сохранённый способ",
+  "payments.autopay.pay_now": "Пополнить сейчас",
+  "payments.methods.badge.fast": "Быстро",
+  "payments.methods.badge.manual": "Вручную",
+  "payments.methods.type.card": "Банковский перевод",
+  "payments.methods.card_open": "Показать реквизиты",
+  "payments.card_page.receipt_required": "Без квитанции платёж не зачислится",
+  "payments.card_page.receipt_required_text": "После перевода обязательно отправьте квитанцию — иначе мы не сможем зачислить платёж.",
+  "payments.card_page.step_1": "Скопируйте номер карты и сделайте перевод на указанную сумму.",
+  "payments.card_page.step_2": "Сразу после перевода нажмите «Отправить квитанцию».",
+  "payments.card_page.step_3": "Дождитесь проверки — баланс пополнится в течение часа.",
+
+  "servicesRouter.footer.text": "Есть вопросы? Напишите в Telegram-бот — поможем разобраться.",
+
+  "profile.password.modal.title": "Сменить пароль",
+  "profile.password.modal.text": "Введите новый пароль. После сохранения нужно будет войти снова.",
+  "profile.password.field.p1": "Новый пароль",
+  "profile.password.field.p1_ph": "Минимум 8 символов",
+  "profile.password.field.p2": "Повторите пароль",
+  "profile.password.field.p2_ph": "Повторите пароль",
+  "profile.password.show_password": "Показать пароль",
+  "profile.password.hide_password": "Скрыть пароль",
+  "profile.password.show": "Показать",
+  "profile.password.hide": "Скрыть",
+  "profile.password.strength": "Надёжность",
+  "profile.password.tip": "Используйте 8+ символов, цифры и спецсимволы.",
+  "profile.password.save": "Сменить пароль",
+  "profile.password.toast.changed": "Пароль изменён",
+  "profile.password.error.save": "Не удалось изменить пароль.",
 
 };
+
 
 export const EN: Dict = {
   // app
@@ -908,21 +854,14 @@ export const EN: Dict = {
   // login
 
   "login.title": "Sign in to Shpun App",
-  "login.badge.tg": "Telegram",
-  "login.badge.web": "Browser",
   "login.lang.aria": "Language",
 
-  "login.desc.tg": "Continue with Telegram.",
-  "login.desc.web": "Sign in with Telegram or with e-mail and password.",
   "login.desc.web.short": "Your dashboard for Shpun services.",
   "login.desc.web.partner": "Your dashboard for Shpun services. Sign in or create an account from the invitation.",
 
   "login.toast.error_title": "Error",
 
   "login.what.title": "What is Shpun App",
-  "login.what.1": "Dashboard for Shpun services.",
-  "login.what.2": "Balance, payments, and bonuses.",
-  "login.what.3": "Services, settings, and notifications.",
   "login.what.1.short": "Dashboard for Shpun services.",
   "login.what.2.short": "Balance, payments, and bonuses.",
   "login.what.3.short": "Services, settings, and notifications.",
@@ -931,26 +870,21 @@ export const EN: Dict = {
   "login.divider.password": "E-mail and password",
   "login.divider.providers": "Other options",
 
-  "login.widget.tip": "Quick account sign-in with Telegram.",
   "login.widget.tip.secondary": "You can continue with Telegram or choose another sign-in method below.",
   "login.widget.loading": "Trying to load Telegram sign-in...",
   "login.widget.failed.soft": "Telegram sign-in may be unstable right now. Try again or use another sign-in method below.",
-  "login.widget.unavailable": "Telegram sign-in is currently unavailable.",
   "login.widget.unavailable.alt": "Telegram sign-in is currently unavailable. Use another sign-in method below.",
   "login.widget.open.alt": "Continue with Telegram",
   "login.widget.retry.alt": "Try Telegram again",
 
-  "login.tg.cta": "Continue",
   "login.tg.cta_loading": "Signing in…",
 
-  "login.providers.telegram.hint.tg": "quick sign-in",
   "login.providers.telegram.hint.web": "open sign-in",
   "login.providers.telegram.hint.loading": "loading...",
   "login.providers.google.hint": "soon",
   "login.providers.yandex.hint": "soon",
   "login.providers.soon": "Soon",
 
-  "login.password.summary": "Sign in with login or e-mail and password",
   "login.password.form_title_login": "Sign in with login or e-mail and password",
   "login.password.form_title_register": "Create account",
   "login.password.login": "E-mail",
@@ -977,8 +911,6 @@ export const EN: Dict = {
   "login.password.open_register_partner": "Create account from invitation",
   "login.password.show": "Show password",
   "login.password.hide": "Hide password",
-  "login.password.show_repeat": "Show repeated password",
-  "login.password.hide_repeat": "Hide repeated password",
 
   "login.partner.notice": "You came by invitation. The partner link will be applied during registration.",
   "login.partner.banner": "Invitation saved. Registration is opened for a new user and the referral will be applied.",
@@ -1008,17 +940,12 @@ export const EN: Dict = {
   "login.err.email_required": "Enter your e-mail.",
   "login.err.email_non_ascii": "Use Latin characters only in the e-mail address. Cyrillic is not supported.",
   "login.err.email_invalid_format": "This does not look like a real e-mail. Enter a valid address.",
-  "login.err.email_invalid_generic": "Check the e-mail and enter a valid address.",
-  "login.err.email_domain_invalid": "The e-mail domain looks invalid. Please check the address.",
   "login.err.email_disposable": "Temporary e-mail addresses are not allowed. Enter a permanent address.",
   "login.err.email_domain_unresolvable": "Could not verify the e-mail domain. Please check the address.",
-  "login.err.email_check_failed": "Could not verify the e-mail. Please try a different address.",
   
   // home
-  "home.loading.title": "Shpun",
   "home.loading.text": "Loading…",
 
-  "home.error.title": "Shpun",
   "home.error.text": "Could not load profile.",
   "home.error.retry": "Retry",
 
@@ -1094,17 +1021,13 @@ export const EN: Dict = {
 
   // PROFILE — EN
   "profile.title": "Profile",
-  "profile.refresh": "Refresh",
   "profile.head.sub": "Account, sign-in, and settings.",
 
-  "profile.loading.title": "Profile",
-  "profile.loading.text": "Loading...",
 
   "profile.error.text": "Could not load your data.",
   "profile.error.retry": "Retry",
 
   "profile.logout": "Log out",
-  "profile.change_password": "Change password",
   "profile.admin": "Admin",
 
   "profile.toast.saved": "Changes saved",
@@ -1230,53 +1153,16 @@ export const EN: Dict = {
   "profile.ok": "Got it",
 
   // set password
-  "setpwd.checking.title": "Checking access…",
-  "setpwd.checking.text": "Preparing the page.",
 
-  "setpwd.need_login.title": "Sign-in required",
-  "setpwd.need_login.text": "You need to sign in to your account.",
-  "setpwd.need_login.cta": "Go to sign-in",
 
-  "setpwd.redirecting": "Returning to the app…",
 
-  "setpwd.title": "Create password",
-  "setpwd.desc": "A password helps you sign in from the browser and the app.",
-  "setpwd.badge": "Takes a minute",
 
-  "setpwd.change.title": "Change password",
-  "setpwd.change.desc": "You can update your password at any time.",
-  "setpwd.change.save": "Change password",
 
-  "setpwd.kv.login": "Login",
-  "setpwd.kv.why": "Purpose",
-  "setpwd.kv.why_value": "Password sign-in",
-  "setpwd.kv.next": "Next",
-  "setpwd.kv.next_value": "Home",
-  "setpwd.kv.next_value_profile": "Profile",
 
-  "setpwd.field.p1": "New password",
-  "setpwd.field.p1_ph": "Minimum 8 characters",
-  "setpwd.field.p2": "Repeat password",
-  "setpwd.field.p2_ph": "Repeat password",
-  "setpwd.field.show_password": "Show password",
-  "setpwd.field.hide_password": "Hide password",
-  "setpwd.field.show": "Show",
-  "setpwd.field.hide": "Hide",
 
-  "setpwd.strength": "Strength",
-  "setpwd.tip": "Use 8+ characters, numbers, and special symbols.",
 
-  "setpwd.save": "Save password",
-  "setpwd.saving": "Saving…",
-  "setpwd.back": "Back",
-  "setpwd.to_home": "Go home",
 
-  "setpwd.toast.saved.title": "Password saved",
-  "setpwd.toast.changed.title": "Password changed",
-  "setpwd.toast.saved.desc": "Now sign in again with your new password.",
 
-  "setpwd.err.title": "Error",
-  "setpwd.err.generic": "Could not save password.",
 
   // services
   "services.wl.badge": "WL",
@@ -1319,27 +1205,23 @@ export const EN: Dict = {
   "services.meta.until": "Until",
   "services.meta.active": "Active",
   "services.meta.attention": "Attention",
-  "services.meta.monthly": "Per month",
   "services.meta.discount": "Discount",
 
   "services.month_short": "mo",
   "services.item": "Service",
 
   "services.actions.title": "Actions",
-  "services.order": "Order",
   "services.refresh": "Refresh",
   "services.refresh_status": "Refresh status",
   "services.pay": "Pay / top up",
   "services.topup": "Top up / pay",
   "services.support": "Support",
-  "services.order_vpn": "Choose plan",
   "services.empty.title": "You have no active services yet",
   "services.empty.text": "Choose a plan and get full access in just a couple of minutes.",
-  "services.empty.hint": "Quick setup, transparent pricing, and easy connection after purchase.",
 
   "services.connect.title": "Connection",
-  "services.connect.button": "Connection",
-  "services.connect.hide": "Hide connection",
+  "services.connect.button": "How to connect",
+  "services.connect.hide": "Hide instructions",
   "services.connect.open": "Open connection",
   "services.connect.only_active": "Connection is available only for active services.",
   "services.connect.unavailable": "No connection helper for this service type yet.",
@@ -1397,9 +1279,6 @@ export const EN: Dict = {
   "feed.filter.money": "Money",
   "feed.filter.services": "Services",
   "feed.filter.news": "News",
-  "feed.count.one": "message",
-  "feed.count.few": "messages",
-  "feed.count.many": "messages",
   "feed.empty.title": "Nothing here yet",
   "feed.empty.text": "As soon as top-ups, renewals, or news appear, they will show up in the Info Center.",
   "feed.item.fallback": "Message",
@@ -1421,11 +1300,9 @@ export const EN: Dict = {
   "payments.error.home": "Home",
 
   "payments.toast.load_failed": "Couldn't open payments",
-  "payments.toast.requisites_unavailable": "Bank details are unavailable right now",
   "payments.toast.payment_opened": "Payment page opened",
   "payments.toast.payment_opened.desc": "After payment, tap “Check payment”.",
   "payments.toast.method_unavailable": "This payment method is unavailable right now",
-  "payments.toast.method_unavailable.desc": "No payment link is configured for it.",
   "payments.toast.enter_amount": "Enter an amount",
   "payments.toast.enter_amount.desc": "The amount must be greater than 0.",
   "payments.toast.done": "Done",
@@ -1438,74 +1315,52 @@ export const EN: Dict = {
   "payments.overlay.close": "Close",
 
   "payments.amount.title": "Amount",
-  "payments.amount.sub": "If the amount was not filled in automatically, enter it manually.",
   "payments.amount.placeholder": "Amount (₽)",
 
-  "payments.validation.amount_invalid": "Enter a valid amount.",
-  "payments.validation.enter_amount": "Enter an amount.",
 
   "payments.methods.title": "Payment methods",
-  "payments.methods.sub": "External payment will open in a new tab.",
   "payments.methods.card_transfer": "Card transfer 💳",
   "payments.methods.empty": "No payment methods are available right now.",
-  "payments.methods.type.autopay": "Auto payment",
   "payments.methods.type.stars": "Pay via Telegram Stars",
   "payments.methods.type.external": "External payment",
-  "payments.methods.badge.recurring": "recurring",
-  "payments.methods.badge.one_time": "one-time",
   "payments.methods.name_fallback": "Payment method",
   "payments.methods.pay": "Pay",
   "payments.methods.note": "Even if Telegram is unavailable, payment and receipt upload will still work through the app.",
 
   "payments.autopay.confirm_remove": "Unlink the saved payment method?",
   "payments.autopay.removed": "Auto payment disabled.",
-  "payments.autopay.remove": "Disable auto payment",
   "payments.autopay.remove_short": "Disable",
   "payments.autopay.remove_failed": "Couldn't disable auto payment",
-  "payments.autopay.remove_failed_desc": "Couldn't disable auto payment.",
 
   "payments.card_transfer.need_amount": "Enter an amount before using bank transfer.",
 
   "payments.card_page.title": "Card transfer",
-  "payments.card_page.sub": "Make the transfer and send the receipt. We will verify it manually.",
   "payments.card_page.amount_label": "Transfer amount",
-  "payments.card_page.important": "Important",
-  "payments.card_page.important_text": "After the transfer, be sure to send the receipt. Without it, we won't be able to verify and credit the payment.",
-  "payments.card_page.back": "⇦ Back to payment methods",
 
-  "payments.requisites.title": "Bank details",
   "payments.requisites.loading": "Loading bank details…",
   "payments.requisites.error": "Bank details are unavailable right now. Please try again a bit later.",
   "payments.requisites.empty": "Bank details have not been added yet.",
   "payments.requisites.holder": "Recipient",
   "payments.requisites.card": "Card number",
-  "payments.requisites.card_badge": "MIR",
   "payments.requisites.copy_card": "Copy card number",
   "payments.requisites.copied": "Copied",
   "payments.requisites.copied.desc": "Card number copied to clipboard.",
 
-  "payments.receipt.amount_first": "Enter the amount in rubles first.",
   "payments.receipt.amount_first.desc": "You need to specify the amount before sending a receipt.",
-  "payments.receipt.file_too_large": "File is too large. Maximum size is 2 MB.",
   "payments.receipt.file_too_large.title": "File is too large",
   "payments.receipt.file_too_large.desc": "Upload a file up to 2 MB.",
-  "payments.receipt.uploading": "Sending receipt",
-  "payments.receipt.uploading.desc": "This will take a couple of seconds.",
   "payments.receipt.uploading_short": "⏳ Sending…",
   "payments.receipt.upload_btn": "🧾 Send receipt",
   "payments.receipt.sent": "Receipt sent",
   "payments.receipt.sent.desc": "We received it and will review it manually.",
   "payments.receipt.sent_msg": "✅ Receipt sent for review.",
   "payments.receipt.send_failed": "Couldn't send the receipt",
-  "payments.receipt.send_failed_desc": "Couldn't send the receipt.",
   "payments.receipt.supported": "JPG, PNG, and PDF up to 2 MB are supported.",
 
   "payments.history.title": "History",
-  "payments.history.sub": "Here you can view past transactions and submitted receipts.",
   "payments.history.operations": "Transaction history",
   "payments.history.receipts": "Receipts",
 
-  "payments.dev.forecast": "Forecast (dev only):",
 
     // PAYMENTS HISTORY
   "paymentsHistory.title": "🧾 Transaction history",
@@ -1513,12 +1368,9 @@ export const EN: Dict = {
   "paymentsHistory.refresh": "⟳ Refresh",
   "paymentsHistory.receipts": "Submitted receipts",
 
-  "paymentsHistory.error.prefix": "Error",
   "paymentsHistory.error.load_failed": "Couldn't load transaction history.",
 
   "paymentsHistory.loading": "Loading…",
-  "paymentsHistory.loading_items": "Loading…",
-  "paymentsHistory.loading_wait": "Please wait a moment",
   "paymentsHistory.empty.short": "Nothing here yet",
   "paymentsHistory.page_info": "Page: {page} · Showing: {shown}/{total}",
 
@@ -1550,12 +1402,9 @@ export const EN: Dict = {
   "paymentsReceipts.refresh": "⟳ Refresh",
   "paymentsReceipts.history": "Transaction history",
 
-  "paymentsReceipts.error.prefix": "Error",
   "paymentsReceipts.error.load_failed": "Couldn't load receipts.",
 
   "paymentsReceipts.loading": "Loading…",
-  "paymentsReceipts.loading_items": "Loading…",
-  "paymentsReceipts.loading_wait": "Please wait a moment",
   "paymentsReceipts.total": "Total: {count}",
 
   "paymentsReceipts.empty.short": "No receipts yet",
@@ -1572,14 +1421,10 @@ export const EN: Dict = {
   "paymentsReceipts.status.accepted": "Accepted",
   "paymentsReceipts.status.error": "There is a problem",
 
-  "paymentsReceipts.dev.raw": "Raw (dev only):",
 
   // SERVICES ROUTER
   "servicesRouter.page.title": "Shpun Router",
   "servicesRouter.page.sub": "Connects your OpenWrt router to Shpun SDN System and enables one VPN for your entire home network.",
-  "servicesRouter.page.badge_1": "OpenWrt 24.10+",
-  "servicesRouter.page.badge_2": "No manual setup",
-  "servicesRouter.page.badge_3": "OTA updates",
   "servicesRouter.page.back": "⇦ Back",
   "servicesRouter.page.order": "Go to Router VPN order",
   "servicesRouter.page.download": "Download Shpun Router package",
@@ -1786,6 +1631,52 @@ export const EN: Dict = {
   "router.status_short": "status",
 
   "router.one_device": "Only one router can be linked to this service at a time.",
-  "router.code_format": "Code format: XXXX-XXXX (letters and numbers)."
+  "router.code_format": "Code format: XXXX-XXXX (letters and numbers).",
+
+  /* === New keys added during refactor === */
+
+  "common.close": "Close",
+
+  "login.desc.tg.detecting": "Loading…",
+  "login.desc.tg.loading": "Signing in via Telegram…",
+  "login.desc.tg.only": "Sign-in is done via Telegram. Tap the button below if it did not happen automatically.",
+  "login.tg.retry": "Sign in with Telegram",
+  "login.tg.only.password_disabled": "In the mini app, use Telegram sign-in.",
+
+
+  "services.cta.add_more": "Add more",
+  "services.cta.choose_plan": "Choose plan",
+
+  "payments.forecast.hint": "Next payment",
+  "payments.autopay.title": "Auto payment",
+  "payments.autopay.name_fallback": "Saved method",
+  "payments.autopay.pay_now": "Top up now",
+  "payments.methods.badge.fast": "Fast",
+  "payments.methods.badge.manual": "Manual",
+  "payments.methods.type.card": "Bank transfer",
+  "payments.methods.card_open": "Show details",
+  "payments.card_page.receipt_required": "Payment will not be credited without a receipt",
+  "payments.card_page.receipt_required_text": "After the transfer, be sure to send the receipt — otherwise we cannot identify and credit the payment.",
+  "payments.card_page.step_1": "Copy the card number and make the transfer.",
+  "payments.card_page.step_2": "Right after the transfer, tap Send receipt.",
+  "payments.card_page.step_3": "Wait for review — balance will be credited within an hour.",
+
+  "servicesRouter.footer.text": "Have questions? Message the Telegram bot — we will help.",
+
+  "profile.password.modal.title": "Change password",
+  "profile.password.modal.text": "Enter a new password. After saving you will need to sign in again.",
+  "profile.password.field.p1": "New password",
+  "profile.password.field.p1_ph": "Minimum 8 characters",
+  "profile.password.field.p2": "Repeat password",
+  "profile.password.field.p2_ph": "Repeat password",
+  "profile.password.show_password": "Show password",
+  "profile.password.hide_password": "Hide password",
+  "profile.password.show": "Show",
+  "profile.password.hide": "Hide",
+  "profile.password.strength": "Strength",
+  "profile.password.tip": "Use 8+ characters, numbers, and special symbols.",
+  "profile.password.save": "Change password",
+  "profile.password.toast.changed": "Password changed",
+  "profile.password.error.save": "Could not change password.",
 
 };
