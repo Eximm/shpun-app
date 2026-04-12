@@ -304,6 +304,13 @@ function hasShmSession(rr: any): boolean {
   return !!String(rr?.json?.session_id ?? "").trim();
 }
 
+function formatDateDDMMYYYY(date = new Date()): string {
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = String(date.getFullYear());
+  return `${day}.${month}.${year}`;
+}
+
 async function updateAuthMeta(
   shmSessionId: string,
   req: any,
@@ -311,7 +318,7 @@ async function updateAuthMeta(
 ): Promise<void> {
   try {
     await callShmTemplate(shmSessionId, "auth.meta.update", {
-      last_login_at: Math.floor(Date.now() / 1000),
+      last_login_at: formatDateDDMMYYYY(),
       last_login_ip: getClientIp(req),
       last_login_source: source,
     });
@@ -323,7 +330,6 @@ async function updateAuthMeta(
     });
   }
 }
-
 /* ============================================================
    Deterministic Telegram tech credentials
 ============================================================ */
