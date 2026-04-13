@@ -53,16 +53,18 @@ function getTelegramInitData(): string | null {
   return d && d.length > 0 ? d : null;
 }
 
-async function waitTelegramInitData(timeoutMs = 3000): Promise<string | null> {
+async function waitTelegramInitData(timeoutMs = 1500): Promise<string | null> {
   const immediate = getTelegramInitData();
   if (immediate && immediate.length > 50) {
     try { const tg = getTelegramWebApp() as TgWebApp | null; tg?.ready?.(); tg?.expand?.(); } catch { /* ignore */ }
     return immediate;
   }
+  // Нет window.Telegram вообще — это точно не Mini App
   if (!(window as any)?.Telegram) return null;
+  // window.Telegram есть но initData ещё не готов — ждём но не долго
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
-    await sleep(100);
+    await sleep(50);
     const d = getTelegramInitData();
     if (d && d.length > 50) {
       try { const tg = getTelegramWebApp() as TgWebApp | null; tg?.ready?.(); tg?.expand?.(); } catch { /* ignore */ }
@@ -270,7 +272,7 @@ export function Login() {
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
-      const initData = await waitTelegramInitData(5000);
+      const initData = await waitTelegramInitData(1500);
       if (cancelled) return;
       if (!initData) { setMode("web"); return; }
       setMode("telegram");
