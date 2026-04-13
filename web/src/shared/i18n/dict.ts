@@ -886,6 +886,33 @@ export const RU: Dict = {
   "servicesOrder.amnezia.warn.title": "Важно про AmneziaWG",
   "servicesOrder.amnezia.warn.text": "Стабильность AmneziaWG не гарантирована и зависит от провайдера. Для надёжной работы рекомендуем Marzban.",
 
+  /* transfer */
+  "transfer.title": "Перенос входа",
+  "transfer.continue": "Продолжить",
+  "transfer.opening": "Открываем… Если ничего не произошло — нажмите «Продолжить» ещё раз.",
+  "transfer.go_home": "Открыть приложение",
+  "transfer.go_login": "Перейти на вход",
+  "transfer.ready.sub_tg": "Мы откроем внешний браузер и перенесём авторизацию, чтобы вы могли установить приложение.",
+  "transfer.ready.sub": "Откроем страницу входа и перенесём авторизацию.",
+  "transfer.done.title": "Готово",
+  "transfer.done.sub": "Если вы уже в браузере — можно установить приложение через меню браузера.",
+  "transfer.error.title": "Не получилось открыть браузер",
+  "transfer.error.sub": "Попробуйте ещё раз.",
+  "transfer.missing_code.title": "Ссылка неполная",
+  "transfer.missing_code.sub": "В ссылке нет кода входа. Откройте её заново из Telegram.",
+
+  /* admin */
+  "admin.title": "Мини-админка",
+  "admin.subtitle": "Компактная служебная панель для управления ключевыми функциями приложения.",
+  "admin.tab.overview": "Обзор",
+  "admin.tab.overview.sub": "Структура",
+  "admin.tab.broadcasts": "Broadcasts",
+  "admin.tab.broadcasts.sub": "Новости",
+  "admin.tab.orders": "Заказы",
+  "admin.tab.orders.sub": "Order rules",
+  "admin.tab.trial": "Trial Protection",
+  "admin.tab.trial.sub": "Anti-abuse",
+
 };
 
 
@@ -1774,5 +1801,32 @@ export const EN: Dict = {
   "servicesOrder.toast.not_confirmed": "Not confirmed yet",
   "servicesOrder.amnezia.warn.title": "Important about AmneziaWG",
   "servicesOrder.amnezia.warn.text": "AmneziaWG stability is not guaranteed and depends on your provider. For reliable use, we recommend Marzban.",
+
+  /* transfer */
+  "transfer.title": "Sign-in transfer",
+  "transfer.continue": "Continue",
+  "transfer.opening": "Opening… If nothing happened — tap Continue again.",
+  "transfer.go_home": "Open app",
+  "transfer.go_login": "Go to sign-in",
+  "transfer.ready.sub_tg": "We will open an external browser and transfer your session so you can install the app.",
+  "transfer.ready.sub": "We will open the sign-in page and transfer your session.",
+  "transfer.done.title": "Done",
+  "transfer.done.sub": "If you are already in a browser — you can install the app via the browser menu.",
+  "transfer.error.title": "Could not open browser",
+  "transfer.error.sub": "Please try again.",
+  "transfer.missing_code.title": "Incomplete link",
+  "transfer.missing_code.sub": "The link has no sign-in code. Please open it again from Telegram.",
+
+  /* admin */
+  "admin.title": "Mini admin",
+  "admin.subtitle": "Compact service panel for managing key app functions.",
+  "admin.tab.overview": "Overview",
+  "admin.tab.overview.sub": "Structure",
+  "admin.tab.broadcasts": "Broadcasts",
+  "admin.tab.broadcasts.sub": "News",
+  "admin.tab.orders": "Orders",
+  "admin.tab.orders.sub": "Order rules",
+  "admin.tab.trial": "Trial Protection",
+  "admin.tab.trial.sub": "Anti-abuse",
 
 };

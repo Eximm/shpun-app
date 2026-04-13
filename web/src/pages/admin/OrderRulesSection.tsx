@@ -1,56 +1,41 @@
+// web/src/pages/admin/OrderRulesSection.tsx
+
 import { useEffect, useState } from "react";
 import { apiFetch } from "../../shared/api/client";
 import type { AdminSettingsResp, AdminSettingsSaveResp, OrderBlockMode } from "./types";
 
 export function OrderRulesSection() {
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [mode, setMode] = useState<OrderBlockMode>("off");
+  const [loading,   setLoading]   = useState(true);
+  const [saving,    setSaving]    = useState(false);
+  const [mode,      setMode]      = useState<OrderBlockMode>("off");
   const [savedMode, setSavedMode] = useState<OrderBlockMode>("off");
-  const [error, setError] = useState<string | null>(null);
-  const [okText, setOkText] = useState<string | null>(null);
+  const [error,     setError]     = useState<string | null>(null);
+  const [okText,    setOkText]    = useState<string | null>(null);
 
   async function load() {
-    setLoading(true);
-    setError(null);
-    setOkText(null);
-
+    setLoading(true); setError(null); setOkText(null);
     try {
       const r = await apiFetch<AdminSettingsResp>("/admin/settings", { method: "GET" });
-      const nextMode: OrderBlockMode = r?.settings?.orderBlockMode || "off";
-      setMode(nextMode);
-      setSavedMode(nextMode);
-    } catch (e: any) {
-      setError(e?.message || "Не удалось загрузить настройки.");
-    } finally {
-      setLoading(false);
-    }
+      const next: OrderBlockMode = r?.settings?.orderBlockMode || "off";
+      setMode(next); setSavedMode(next);
+    } catch (e: any) { setError(e?.message || "Не удалось загрузить настройки."); }
+    finally { setLoading(false); }
   }
 
-  useEffect(() => {
-    void load();
-  }, []);
+  useEffect(() => { void load(); }, []);
 
   async function save() {
-    setSaving(true);
-    setError(null);
-    setOkText(null);
-
+    setSaving(true); setError(null); setOkText(null);
     try {
       const r = await apiFetch<AdminSettingsSaveResp>("/admin/settings/order-rules", {
         method: "PUT",
         body: { orderBlockMode: mode },
       });
-
-      const nextMode: OrderBlockMode = r?.orderBlockMode || mode;
-      setMode(nextMode);
-      setSavedMode(nextMode);
+      const next: OrderBlockMode = r?.orderBlockMode || mode;
+      setMode(next); setSavedMode(next);
       setOkText("Настройка сохранена.");
-    } catch (e: any) {
-      setError(e?.message || "Не удалось сохранить настройку.");
-    } finally {
-      setSaving(false);
-    }
+    } catch (e: any) { setError(e?.message || "Не удалось сохранить настройку."); }
+    finally { setSaving(false); }
   }
 
   const changed = mode !== savedMode;
@@ -75,38 +60,17 @@ export function OrderRulesSection() {
                 <div className="list__main">
                   <div className="list__title">Режим блокировки</div>
                   <div className="list__sub admin-gap-top-sm">
-                    <label className="admin-radio">
-                      <input
-                        type="radio"
-                        name="orderBlockMode"
-                        value="off"
-                        checked={mode === "off"}
-                        onChange={() => setMode("off")}
-                      />{" "}
-                      <strong>off</strong> — не ограничивать новые заказы
-                    </label>
-
-                    <label className="admin-radio">
-                      <input
-                        type="radio"
-                        name="orderBlockMode"
-                        value="same_type"
-                        checked={mode === "same_type"}
-                        onChange={() => setMode("same_type")}
-                      />{" "}
-                      <strong>same_type</strong> — блок только того же типа
-                    </label>
-
-                    <label className="admin-radio admin-radio--last">
-                      <input
-                        type="radio"
-                        name="orderBlockMode"
-                        value="any"
-                        checked={mode === "any"}
-                        onChange={() => setMode("any")}
-                      />{" "}
-                      <strong>any</strong> — блок любых новых заказов
-                    </label>
+                    {([
+                      { value: "off",       label: "не ограничивать новые заказы" },
+                      { value: "same_type", label: "блок только того же типа" },
+                      { value: "any",       label: "блок любых новых заказов" },
+                    ] as { value: OrderBlockMode; label: string }[]).map(({ value, label }, idx, arr) => (
+                      <label key={value} className={`admin-radio${idx === arr.length - 1 ? " admin-radio--last" : ""}`}>
+                        <input type="radio" name="orderBlockMode" value={value}
+                          checked={mode === value} onChange={() => setMode(value)} />
+                        {" "}<strong>{value}</strong> — {label}
+                      </label>
+                    ))}
                   </div>
                 </div>
                 <div className="list__side">
@@ -122,14 +86,14 @@ export function OrderRulesSection() {
               </div>
             </div>
 
-            {error ? <div className="pre admin-gap-top-md">{error}</div> : null}
-            {okText ? <div className="pre admin-gap-top-md">{okText}</div> : null}
+            {error  && <div className="pre admin-gap-top-md">{error}</div>}
+            {okText && <div className="pre admin-gap-top-md">{okText}</div>}
 
             <div className="actions actions--2 admin-gap-top-md">
-              <button className="btn btn--soft" type="button" onClick={load} disabled={loading || saving}>
+              <button className="btn btn--soft" type="button" onClick={() => void load()} disabled={loading || saving}>
                 Обновить
               </button>
-              <button className="btn btn--accent" type="button" onClick={save} disabled={saving || !changed}>
+              <button className="btn btn--accent" type="button" onClick={() => void save()} disabled={saving || !changed}>
                 {saving ? "Сохраняю…" : "Сохранить"}
               </button>
             </div>
