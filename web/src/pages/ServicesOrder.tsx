@@ -416,13 +416,10 @@ export function ServicesOrder() {
               <div className="kv" style={{ marginTop: 12 }}>
                 {(['marzban', 'marzban_router', 'amneziawg'] as Kind[]).map((k) => (
                   <button key={k} type="button" className={`kv__item so__kindCard ${KIND_META[k].recommended ? 'so__kindCard--recommended' : ''}`} onClick={() => setKind(k)}>
-                    <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div>
-                        {KIND_META[k].recommended && <div className="so__badgeRecommended">{t('servicesOrder.recommended')}</div>}
-                        <div className="list__title">{KIND_META[k].title}</div>
-                        <p className="p" style={{ marginTop: 4 }}>{KIND_META[k].shortDescr}</p>
-                      </div>
-                      <span className="chip chip--soft">{grouped[k].length}</span>
+                    <div>
+                      {KIND_META[k].recommended && <div className="so__badgeRecommended">{t('servicesOrder.recommended')}</div>}
+                      <div className="list__title">{KIND_META[k].title}</div>
+                      <p className="p" style={{ marginTop: 4 }}>{KIND_META[k].shortDescr}</p>
                     </div>
                     <div className="actions actions--1" style={{ marginTop: 12 }}>
                       <span className="btn btn--primary" style={{ width: '100%' }}>{t('servicesOrder.step.kind.select')}</span>
