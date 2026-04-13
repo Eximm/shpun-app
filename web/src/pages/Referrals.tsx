@@ -1,8 +1,22 @@
 // web/src/pages/Referrals.tsx
+
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMe } from "../app/auth/useMe";
+import { apiFetch } from "../shared/api/client";
+import { useI18n } from "../shared/i18n";
 import { toast } from "../shared/ui/toast";
+
+/* ─── Types ─────────────────────────────────────────────────────────────── */
+
+type RefItem = {
+  id?: number;
+  full_name?: string;
+  username?: string;
+  created_at?: string;
+};
+
+/* ─── Utils ─────────────────────────────────────────────────────────────── */
 
 function getTelegramWebApp(): any | null {
   return (window as any)?.Telegram?.WebApp ?? null;
@@ -12,243 +26,154 @@ function isTelegramMiniApp(): boolean {
   try {
     const tg = getTelegramWebApp();
     return typeof tg?.initData === "string" && tg.initData.trim().length > 0;
-  } catch {
-    return false;
-  }
+  } catch { return false; }
 }
+
+function toNum(v: any, def = 0) { const n = Number(v); return Number.isFinite(n) ? n : def; }
+function toStr(v: any, def = "") { return String(v ?? "").trim() || def; }
 
 function fmtDate(iso: string) {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return String(iso);
-  return d.toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-  });
+  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "2-digit" });
 }
 
-type RefStatusResp = {
-  ok: number | boolean;
-  data?: {
-    referrals?: {
-      enabled?: number;
-      kind?: string;
-      income_percent?: number;
-      referrals_count?: number;
-      bonus?: number;
-    };
-  };
-};
-
-type RefListResp = {
-  ok: number | boolean;
-  data?: {
-    referrals?: {
-      enabled?: number;
-      kind?: string;
-      total?: number;
-      limit?: number;
-      offset?: number;
-      items?: Array<{
-        id?: number;
-        full_name?: string;
-        username?: string;
-        created_at?: string;
-      }>;
-    };
-  };
-};
-
-type RefLinkResp = {
-  ok: number | boolean;
-  data?: {
-    referrals?: {
-      enabled?: number;
-      kind?: string;
-      partner_id?: number;
-      income_percent?: number;
-      telegram_link?: string;
-      web_link?: string;
-    };
-  };
-};
-
-function toNum(v: any, def = 0) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : def;
-}
-
-function toStr(v: any, def = "") {
-  const s = String(v ?? "").trim();
-  return s || def;
-}
+/* ─── Component ──────────────────────────────────────────────────────────── */
 
 export function Referrals() {
+  const { t } = useI18n();
   const { me, loading, error } = useMe();
 
   const [telegramLink, setTelegramLink] = useState("");
-  const [webLink, setWebLink] = useState("");
+  const [webLink,      setWebLink]      = useState("");
+  const [linkLoading,  setLinkLoading]  = useState(false);
+  const [linkError,    setLinkError]    = useState<string | null>(null);
 
-  const [statusLoading, setStatusLoading] = useState(false);
-  const [statusError, setStatusError] = useState<string | null>(null);
   const [incomePercent, setIncomePercent] = useState(0);
-  const [refCount, setRefCount] = useState(0);
+  const [refCount,      setRefCount]      = useState(0);
+  const [statusLoading, setStatusLoading] = useState(false);
+  const [statusError,   setStatusError]   = useState<string | null>(null);
 
+  const [items,       setItems]       = useState<RefItem[]>([]);
+  const [total,       setTotal]       = useState(0);
   const [listLoading, setListLoading] = useState(false);
-  const [listError, setListError] = useState<string | null>(null);
-  const [items, setItems] = useState<Array<any>>([]);
-  const [total, setTotal] = useState(0);
+  const [listError,   setListError]   = useState<string | null>(null);
 
-  const [linkLoading, setLinkLoading] = useState(false);
-  const [linkError, setLinkError] = useState<string | null>(null);
-
-  const debugMiniApp = isTelegramMiniApp();
+  const inMiniApp = isTelegramMiniApp();
 
   const referralUrl = useMemo(() => {
-    const tg = telegramLink.trim();
+    const tg  = telegramLink.trim();
     const web = webLink.trim();
-
-    if (debugMiniApp) return tg || web;
-    return web || tg;
-  }, [telegramLink, webLink, debugMiniApp]);
+    return inMiniApp ? (tg || web) : (web || tg);
+  }, [telegramLink, webLink, inMiniApp]);
 
   const shareUrl = useMemo(() => {
-    if (!referralUrl) return "";
-    return `https://t.me/share/url?url=${encodeURIComponent(referralUrl)}`;
+    return referralUrl ? `https://t.me/share/url?url=${encodeURIComponent(referralUrl)}` : "";
   }, [referralUrl]);
 
+  // ── Load ──────────────────────────────────────────────────────────────────
   async function loadStatus() {
-    setStatusLoading(true);
-    setStatusError(null);
+    setStatusLoading(true); setStatusError(null);
     try {
-      const r = (await (await fetch(`/api/referrals/status`, { method: "GET" })).json()) as RefStatusResp;
-      const refs = (r as any)?.data?.referrals ?? {};
-      setIncomePercent(toNum(refs.income_percent, 0));
-      setRefCount(toNum(refs.referrals_count, 0));
+      const r = await apiFetch("/referrals/status", { method: "GET" }) as any;
+      const refs = r?.data?.referrals ?? {};
+      setIncomePercent(toNum(refs.income_percent));
+      setRefCount(toNum(refs.referrals_count));
     } catch (e: any) {
-      setStatusError(e?.message || "Failed to load status");
-      setIncomePercent(0);
-      setRefCount(0);
-    } finally {
-      setStatusLoading(false);
-    }
+      setStatusError(e?.message || "error");
+      setIncomePercent(0); setRefCount(0);
+    } finally { setStatusLoading(false); }
   }
 
   async function loadList() {
-    setListLoading(true);
-    setListError(null);
+    setListLoading(true); setListError(null);
     try {
-      const r = (await (await fetch(`/api/referrals/list?limit=10&offset=0`, { method: "GET" })).json()) as RefListResp;
-      const refs = (r as any)?.data?.referrals ?? {};
+      const r = await apiFetch("/referrals/list?limit=10&offset=0", { method: "GET" }) as any;
+      const refs = r?.data?.referrals ?? {};
       setItems(Array.isArray(refs.items) ? refs.items : []);
-      setTotal(toNum(refs.total, 0));
+      setTotal(toNum(refs.total));
     } catch (e: any) {
-      setListError(e?.message || "Failed to load list");
-      setItems([]);
-      setTotal(0);
-    } finally {
-      setListLoading(false);
-    }
+      setListError(e?.message || "error");
+      setItems([]); setTotal(0);
+    } finally { setListLoading(false); }
   }
 
   async function loadLink() {
-    setLinkLoading(true);
-    setLinkError(null);
+    setLinkLoading(true); setLinkError(null);
     try {
-      const r = (await (await fetch(`/api/referrals/link`, { method: "GET" })).json()) as RefLinkResp;
-      const refs = (r as any)?.data?.referrals ?? {};
-      setTelegramLink(toStr(refs.telegram_link, ""));
-      setWebLink(toStr(refs.web_link, ""));
+      const r = await apiFetch("/referrals/link", { method: "GET" }) as any;
+      const refs = r?.data?.referrals ?? {};
+      setTelegramLink(toStr(refs.telegram_link));
+      setWebLink(toStr(refs.web_link));
     } catch (e: any) {
-      setLinkError(e?.message || "Failed to load link");
-      setTelegramLink("");
-      setWebLink("");
-    } finally {
-      setLinkLoading(false);
-    }
+      setLinkError(e?.message || "error");
+      setTelegramLink(""); setWebLink("");
+    } finally { setLinkLoading(false); }
   }
 
   useEffect(() => {
     if ((me as any)?.ok) {
-      loadStatus();
-      loadList();
-      loadLink();
+      void loadStatus();
+      void loadList();
+      void loadLink();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [(me as any)?.ok]);
+  }, [(me as any)?.ok]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Actions ───────────────────────────────────────────────────────────────
   function copyLink() {
     if (!referralUrl) return;
-
-    navigator.clipboard
-      ?.writeText(referralUrl)
+    navigator.clipboard?.writeText(referralUrl)
       .then(() => {
-        toast.success("Ссылка скопирована", {
-          description: "Отправьте её другу.",
-        });
-
-        const tg = getTelegramWebApp();
+        toast.success(t("home.ref.link.k"), { description: referralUrl });
         try {
-          tg?.showPopup?.({
-            title: "Готово",
-            message: "Ссылка скопирована. Отправьте её другу.",
+          getTelegramWebApp()?.showPopup?.({
+            title: t("home.ref.link.k"),
+            message: referralUrl,
             buttons: [{ type: "ok" }],
           });
-        } catch {
-          // ignore
-        }
+        } catch { /* ignore */ }
       })
-      .catch(() => {
-        toast.error("Не удалось скопировать ссылку", {
-          description: "Попробуйте ещё раз.",
-        });
-      });
+      .catch(() => toast.error(t("home.services.error")));
   }
 
   function shareLink() {
     if (!shareUrl) return;
     const tg = getTelegramWebApp();
     try {
-      if (tg?.openTelegramLink) return tg.openTelegramLink(shareUrl);
-      if (tg?.openLink) return tg.openLink(shareUrl, { try_instant_view: false });
-    } catch {
-      // ignore
-    }
+      if (tg?.openTelegramLink) { tg.openTelegramLink(shareUrl); return; }
+      if (tg?.openLink)         { tg.openLink(shareUrl, { try_instant_view: false }); return; }
+    } catch { /* ignore */ }
     window.open(shareUrl, "_blank", "noopener,noreferrer");
   }
 
+  // ── Loading ───────────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="section">
-        <div className="card">
-          <div className="card__body">
-            <div className="h1">Рефералы</div>
-            <div className="p" style={{ marginTop: 6 }}>
-              Загрузка…
-            </div>
+      <div className="app-loader" style={{ opacity: 1, transition: "opacity 180ms ease", pointerEvents: "auto" }}>
+        <div className="app-loader__card">
+          <div className="app-loader__shine" />
+          <div className="app-loader__brandRow">
+            <div className="app-loader__mark" />
+            <div className="app-loader__title">Shpun App</div>
           </div>
+          <div className="app-loader__text">{t("home.loading.text")}</div>
         </div>
       </div>
     );
   }
 
+  // ── Error ─────────────────────────────────────────────────────────────────
   if (error || !(me as any)?.ok) {
     return (
       <div className="section">
         <div className="card">
           <div className="card__body">
-            <div className="h1">Рефералы</div>
-            <div className="p" style={{ marginTop: 6 }}>
-              Нужно войти в аккаунт.
-            </div>
+            <h1 className="h1">{t("home.ref.title")}</h1>
+            <p className="p">{t("home.error.text")}</p>
             <div className="actions actions--2" style={{ marginTop: 12 }}>
-              <Link className="btn btn--primary" to="/login">
-                Войти
-              </Link>
-              <Link className="btn" to="/app">
-                На главную
-              </Link>
+              <Link className="btn btn--primary" to="/login">{t("home.actions.login")}</Link>
+              <Link className="btn" to="/">{t("bottomNav.home")}</Link>
             </div>
           </div>
         </div>
@@ -256,110 +181,85 @@ export function Referrals() {
     );
   }
 
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="section">
+
+      {/* Заголовок + ссылка */}
       <div className="card">
         <div className="card__body">
-          <div className="home-block-head">
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
-              <div className="h1">🤝 Партнёрская программа</div>
-              <div className="p" style={{ marginTop: 6 }}>
-                Приглашай друзей и получай процент с их пополнений
-              </div>
+              <h1 className="h1">🤝 {t("home.ref.title")}</h1>
+              <p className="p">{t("home.ref.sub")}</p>
             </div>
-
-            <Link className="btn" to="/app">
-              Главная
-            </Link>
+            <Link className="btn" to="/">{t("bottomNav.home")}</Link>
           </div>
 
-          <div style={{ marginTop: 12 }}>
-            <div style={{ fontSize: 12, opacity: 0.72, marginBottom: 6 }}>
-              Твоя реферальная ссылка
+          {/* Метрики */}
+          <div className="row" style={{ marginTop: 14, gap: 8, flexWrap: "wrap" }}>
+            <div className="chip chip--soft">
+              👥 {t("home.ref.list.k")}: <b style={{ marginLeft: 4 }}>{statusLoading ? "…" : refCount}</b>
             </div>
-
-            <div className="pre" style={{ marginTop: 0, userSelect: "text" }}>
-              {referralUrl || "Ссылка недоступна (не удалось получить из биллинга)"}
+            <div className="chip chip--soft">
+              💸 {t("home.ref.percent.k")}: <b style={{ marginLeft: 4 }}>{statusLoading ? "…" : `${incomePercent}%`}</b>
             </div>
+          </div>
+          {statusError && <p className="p" style={{ marginTop: 6, opacity: 0.6 }}>{statusError}</p>}
 
-            <div className="actions actions--2" style={{ marginTop: 10 }}>
-              <button className="btn btn--primary" onClick={shareLink} disabled={!shareUrl}>
-                Поделиться
-              </button>
-              <button className="btn" onClick={copyLink} disabled={!referralUrl}>
-                Скопировать
-              </button>
+          {/* Реферальная ссылка */}
+          <div style={{ marginTop: 16 }}>
+            <div className="pre" style={{ userSelect: "text", wordBreak: "break-all" }}>
+              {linkLoading ? "…" : referralUrl || "—"}
             </div>
-            {linkLoading ? (
-              <div style={{ marginTop: 10, fontSize: 12, opacity: 0.72 }}>Генерируем ссылку…</div>
-            ) : linkError ? (
-              <div style={{ marginTop: 10, fontSize: 12, opacity: 0.72 }}>
-                Не удалось получить ссылку: {linkError}
-              </div>
-            ) : null}
-
-            {statusError ? (
-              <div style={{ marginTop: 10, fontSize: 12, opacity: 0.72 }}>
-                Не удалось загрузить статус: {statusError}
-              </div>
-            ) : null}
+            {linkError && <p className="p" style={{ marginTop: 6, opacity: 0.6 }}>{linkError}</p>}
           </div>
 
-          <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
-            <div className="chip chip--soft">
-              👥 Приглашено: <b style={{ marginLeft: 6 }}>{statusLoading ? "…" : refCount}</b>
-            </div>
-            <div className="chip chip--soft">
-              💸 Процент: <b style={{ marginLeft: 6 }}>{statusLoading ? "…" : `${incomePercent || 0}%`}</b>
-            </div>
+          <div className="actions actions--2" style={{ marginTop: 10 }}>
+            <button className="btn btn--primary" onClick={shareLink} disabled={!shareUrl} type="button">
+              {t("home.ref.link.v")}
+            </button>
+            <button className="btn" onClick={copyLink} disabled={!referralUrl} type="button">
+              {t("connect.copy_link")}
+            </button>
           </div>
         </div>
       </div>
 
+      {/* Список приглашённых */}
       <div className="section">
         <div className="card">
           <div className="card__body">
-            <div className="home-block-head">
-              <div>
-                <div className="h1">📃 Список приглашённых</div>
-                <div className="p" style={{ marginTop: 6 }}>
-                  {listLoading ? "Загрузка…" : total ? `Всего: ${total}` : "Пока никого нет — поделись ссылкой 🙂"}
-                </div>
-              </div>
-            </div>
+            <h1 className="h1">📃 {t("home.ref.list.k")}</h1>
+            <p className="p">
+              {listLoading
+                ? t("home.loading.text")
+                : total
+                  ? `${t("home.ref.list.v")} · ${total}`
+                  : t("home.ref.link.v")}
+            </p>
 
-            {listError ? (
-              <div className="pre" style={{ marginTop: 12 }}>
-                Ошибка загрузки списка: {String(listError)}
-              </div>
-            ) : null}
+            {listError && <div className="pre" style={{ marginTop: 12 }}>{listError}</div>}
 
             <div className="list" style={{ marginTop: 10 }}>
               {listLoading ? (
-                <div className="list__item">
-                  <div className="list__main">
-                    <div className="list__title">Загружаем…</div>
-                    <div className="list__sub">Подождите</div>
-                  </div>
-                </div>
+                <>
+                  <div className="skeleton h1" />
+                  <div className="skeleton p" />
+                </>
               ) : items.length ? (
                 items.map((r, idx) => {
-                  const name = toStr(r?.full_name, "Без имени");
-                  const uname = toStr(r?.username, "");
-                  const created = toStr(r?.created_at, "");
+                  const name    = toStr(r?.full_name, "—");
+                  const uname   = toStr(r?.username);
+                  const created = toStr(r?.created_at);
                   return (
                     <div className="list__item" key={`${r?.id ?? "x"}-${idx}`}>
                       <div className="list__main">
                         <div className="list__title">
                           {name}
-                          {uname ? (
-                            <span style={{ opacity: 0.75, fontWeight: 600 }}>
-                              {" "}
-                              @{uname}
-                            </span>
-                          ) : null}
+                          {uname && <span style={{ opacity: 0.65, marginLeft: 6 }}>@{uname}</span>}
                         </div>
-                        <div className="list__sub">{created ? `Присоединился: ${fmtDate(created)}` : "—"}</div>
+                        <div className="list__sub">{created ? fmtDate(created) : "—"}</div>
                       </div>
                     </div>
                   );
@@ -367,8 +267,8 @@ export function Referrals() {
               ) : (
                 <div className="list__item">
                   <div className="list__main">
-                    <div className="list__title">Пока приглашённых нет</div>
-                    <div className="list__sub">Нажми “Поделиться” — и отправь ссылку друзьям</div>
+                    <div className="list__title">{t("home.news.empty.title")}</div>
+                    <div className="list__sub">{t("home.ref.link.v")}</div>
                   </div>
                 </div>
               )}
@@ -376,6 +276,7 @@ export function Referrals() {
           </div>
         </div>
       </div>
+
     </div>
   );
 }

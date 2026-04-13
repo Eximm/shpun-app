@@ -11,34 +11,35 @@ import {
 } from "react-router-dom";
 import "./index.css";
 
-import { Login } from "./pages/Login";
-import { Home } from "./pages/Home";
-import { Feed } from "./pages/Feed";
-import { Services } from "./pages/Services";
-import { ServicesOrder } from "./pages/ServicesOrder";
-import { Payments } from "./pages/Payments";
-import { Profile } from "./pages/Profile";
-import { Transfer } from "./pages/Transfer";
-import { Referrals } from "./pages/Referrals";
-import { PaymentsHistory } from "./pages/PaymentsHistory";
+import { Login }            from "./pages/Login";
+import { Home }             from "./pages/Home";
+import { Feed }             from "./pages/Feed";
+import { Services }         from "./pages/Services";
+import { ServicesOrder }    from "./pages/ServicesOrder";
+import { Payments }         from "./pages/Payments";
+import { Profile }          from "./pages/Profile";
+import { Transfer }         from "./pages/Transfer";
+import { Referrals }        from "./pages/Referrals";
+import { PaymentsHistory }  from "./pages/PaymentsHistory";
 import { PaymentsReceipts } from "./pages/PaymentsReceipts";
-import { ServicesRouter } from "./pages/help/ServicesRouter";
-import { AdminPage } from "./pages/AdminPage";
+import { ServicesRouter }   from "./pages/help/ServicesRouter";
+import { AdminPage }        from "./pages/AdminPage";
 
-import { AuthGate } from "./app/auth/AuthGate";
-import { BottomNav } from "./app/layout/BottomNav";
-import { I18nProvider, useI18n } from "./shared/i18n";
-import { ToastProvider } from "./shared/ui/toast/ToastProvider";
-import { useBillingNotifications } from "./app/notifications/useBillingNotifications";
-import { apiFetch } from "./shared/api/client";
+import { AuthGate }                   from "./app/auth/AuthGate";
+import { BottomNav }                  from "./app/layout/BottomNav";
+import { I18nProvider, useI18n }      from "./shared/i18n";
+import { ToastProvider }              from "./shared/ui/toast/ToastProvider";
+import { useBillingNotifications }    from "./app/notifications/useBillingNotifications";
+import { apiFetch }                   from "./shared/api/client";
+
+/* ─── PWA service worker ─────────────────────────────────────────────────── */
 
 if (import.meta.env.PROD) {
   import("virtual:pwa-register")
     .then(({ registerSW }) => {
-      const RELOAD_KEY = "pwa:sw-reloaded";
-      const alreadyReloaded = sessionStorage.getItem(RELOAD_KEY) === "1";
-
-      const updateSW = registerSW({
+      const RELOAD_KEY       = "pwa:sw-reloaded";
+      const alreadyReloaded  = sessionStorage.getItem(RELOAD_KEY) === "1";
+      const updateSW         = registerSW({
         immediate: true,
         onNeedRefresh() {
           if (!alreadyReloaded) {
@@ -49,27 +50,20 @@ if (import.meta.env.PROD) {
         },
         onOfflineReady() {},
       });
-
-      try {
-        updateSW(false);
-      } catch {
-        // ignore
-      }
+      try { updateSW(false); } catch { /* ignore */ }
     })
     .catch(() => {});
 }
 
-type ServicesSummaryResp = {
-  ok: true;
-  summary?: {
-    active?: number;
-  };
-};
+/* ─── Types ─────────────────────────────────────────────────────────────── */
+
+type ServicesSummaryResp = { ok: true; summary?: { active?: number } };
+
+/* ─── AppShell ───────────────────────────────────────────────────────────── */
 
 function AppShell({ children }: { children: React.ReactNode }) {
   const { t } = useI18n();
-  const loc = useLocation();
-
+  const loc   = useLocation();
   const hideNav = loc.pathname === "/login" || loc.pathname.startsWith("/transfer");
 
   return (
@@ -83,7 +77,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
               <div className="brand__subtitle">SDN System</div>
             </div>
           </div>
-          <span className="badge">{t("app.beta", "Бета")}</span>
+          <span className="badge">{t("app.beta")}</span>
         </div>
       </header>
 
@@ -91,57 +85,48 @@ function AppShell({ children }: { children: React.ReactNode }) {
         <div className="container safe">{children}</div>
       </main>
 
-      {!hideNav ? <BottomNav /> : null}
+      {!hideNav && <BottomNav />}
     </div>
   );
 }
 
-function AuthedLayout() {
-  const loc = useLocation();
+/* ─── AuthedLayout ───────────────────────────────────────────────────────── */
 
+function AuthedLayout() {
+  const loc  = useLocation();
   const hide = loc.pathname === "/login" || loc.pathname.startsWith("/transfer");
   useBillingNotifications(!hide);
-
-  return (
-    <AuthGate>
-      <Outlet />
-    </AuthGate>
-  );
+  return <AuthGate><Outlet /></AuthGate>;
 }
 
-function LandingRoute() {
-  const loc = useLocation();
+/* ─── LandingRoute ───────────────────────────────────────────────────────── */
 
-  // Если уже проверяли в этой сессии — сразу рендерим Home без запроса и без лоадера
+function LandingRoute() {
+  const { t }  = useI18n();
+  const loc    = useLocation();
   const alreadyChecked = sessionStorage.getItem("landing_checked") === "1";
   const [state, setState] = React.useState<"loading" | "home" | "services">(
     alreadyChecked ? "home" : "loading"
   );
 
   React.useEffect(() => {
-    // Уже определились — ничего не делаем
     if (alreadyChecked) return;
-
     let cancelled = false;
 
-    async function decide() {
+    void (async () => {
       try {
-        const resp = await apiFetch<ServicesSummaryResp>("/services", { method: "GET" });
+        const resp   = await apiFetch<ServicesSummaryResp>("/services", { method: "GET" });
         const active = Number(resp?.summary?.active ?? 0);
         if (cancelled) return;
-
         sessionStorage.setItem("landing_checked", "1");
         setState(active > 0 ? "home" : "services");
       } catch {
-        if (cancelled) return;
-        setState("home");
+        if (!cancelled) setState("home");
       }
-    }
+    })();
 
-    void decide();
     return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loc.search]);
+  }, [loc.search]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (state === "loading") {
     return (
@@ -152,7 +137,7 @@ function LandingRoute() {
             <div className="app-loader__mark" />
             <div className="app-loader__title">Shpun App</div>
           </div>
-          <div className="app-loader__text">Загружаем данные…</div>
+          <div className="app-loader__text">{t("home.loading.text")}</div>
         </div>
       </div>
     );
@@ -160,6 +145,8 @@ function LandingRoute() {
 
   return state === "home" ? <Home /> : <Services />;
 }
+
+/* ─── Helpers ────────────────────────────────────────────────────────────── */
 
 function AppPathRedirect() {
   const loc = useLocation();
@@ -172,32 +159,20 @@ function PageContainer({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => {
     setShowProgress(true);
-    const t = window.setTimeout(() => setShowProgress(false), 700);
-    return () => clearTimeout(t);
+    const id = window.setTimeout(() => setShowProgress(false), 700);
+    return () => clearTimeout(id);
   }, [loc.pathname]);
 
   return (
     <>
-      {showProgress && (
-        <div className="top-progress">
-          <div className="top-progress__bar" />
-        </div>
-      )}
-
-      <div
-        className="page-frost"
-        style={{
-          opacity: showProgress ? 1 : 0,
-          pointerEvents: "none",
-        }}
-      />
-
-      <div key={loc.pathname} className="page">
-        {children}
-      </div>
+      {showProgress && <div className="top-progress"><div className="top-progress__bar" /></div>}
+      <div className="page-frost" style={{ opacity: showProgress ? 1 : 0, pointerEvents: "none" }} />
+      <div key={loc.pathname} className="page">{children}</div>
     </>
   );
 }
+
+/* ─── Root ───────────────────────────────────────────────────────────────── */
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
@@ -207,24 +182,23 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <AppShell>
             <PageContainer>
               <Routes>
-                <Route path="/login" element={<Login />} />
+                <Route path="/login"    element={<Login />} />
                 <Route path="/transfer" element={<Transfer />} />
-
-                <Route path="/app" element={<AppPathRedirect />} />
+                <Route path="/app"      element={<AppPathRedirect />} />
 
                 <Route element={<AuthedLayout />}>
-                  <Route path="/" element={<LandingRoute />} />
-                  <Route path="/home" element={<Home />} />
-                  <Route path="/referrals" element={<Referrals />} />
-                  <Route path="/feed" element={<Feed />} />
-                  <Route path="/services" element={<Services />} />
-                  <Route path="/services/order" element={<ServicesOrder />} />
-                  <Route path="/help/router" element={<ServicesRouter />} />
-                  <Route path="/payments" element={<Payments />} />
-                  <Route path="/payments/history" element={<PaymentsHistory />} />
-                  <Route path="/payments/receipts" element={<PaymentsReceipts />} />
-                  <Route path="/profile" element={<Profile />} />
-                  <Route path="/admin" element={<AdminPage />} />
+                  <Route path="/"                    element={<LandingRoute />} />
+                  <Route path="/home"                element={<Home />} />
+                  <Route path="/referrals"           element={<Referrals />} />
+                  <Route path="/feed"                element={<Feed />} />
+                  <Route path="/services"            element={<Services />} />
+                  <Route path="/services/order"      element={<ServicesOrder />} />
+                  <Route path="/help/router"         element={<ServicesRouter />} />
+                  <Route path="/payments"            element={<Payments />} />
+                  <Route path="/payments/history"    element={<PaymentsHistory />} />
+                  <Route path="/payments/receipts"   element={<PaymentsReceipts />} />
+                  <Route path="/profile"             element={<Profile />} />
+                  <Route path="/admin"               element={<AdminPage />} />
                 </Route>
 
                 <Route path="*" element={<Navigate to="/" replace />} />
@@ -234,5 +208,5 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         </BrowserRouter>
       </ToastProvider>
     </I18nProvider>
-  </React.StrictMode>,
+  </React.StrictMode>
 );

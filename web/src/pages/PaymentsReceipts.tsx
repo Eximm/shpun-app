@@ -1,177 +1,134 @@
+// web/src/pages/PaymentsReceipts.tsx
+
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { apiFetch } from '../shared/api/client'
 import { useI18n } from '../shared/i18n'
 
-type ReceiptsResp = any
+/* ─── Utils ─────────────────────────────────────────────────────────────── */
 
 function fmtDate(iso?: string) {
   if (!iso) return ''
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return String(iso)
-  return d.toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: '2-digit',
-  })
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: '2-digit' })
 }
 
 function fmtMoney(n: number, cur = 'RUB') {
-  const v = Number(n || 0)
   try {
-    return new Intl.NumberFormat(undefined, {
-      style: 'currency',
-      currency: cur,
-      maximumFractionDigits: 0,
-    }).format(v)
-  } catch {
-    return `${v} ${cur}`
-  }
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency: cur, maximumFractionDigits: 0 }).format(Number(n || 0))
+  } catch { return `${Number(n || 0)} ${cur}`; }
 }
 
-function pickArray(obj: any, keys: string[]) {
-  for (const k of keys) {
-    const v = obj?.[k]
-    if (Array.isArray(v)) return v
-  }
+function pickArray(obj: any, keys: string[]): any[] {
+  for (const k of keys) { const v = obj?.[k]; if (Array.isArray(v)) return v; }
   return []
 }
 
 function pickStr(obj: any, keys: string[], def = '') {
-  for (const k of keys) {
-    const v = obj?.[k]
-    if (typeof v === 'string' && v.trim()) return v
-  }
+  for (const k of keys) { const v = obj?.[k]; if (typeof v === 'string' && v.trim()) return v; }
   return def
 }
 
 function pickNum(obj: any, keys: string[], def = 0) {
-  for (const k of keys) {
-    const v = obj?.[k]
-    const n = Number(v)
-    if (Number.isFinite(n)) return n
-  }
+  for (const k of keys) { const v = obj?.[k]; const n = Number(v); if (Number.isFinite(n)) return n; }
   return def
 }
 
-function normalizeReceiptStatus(rawStatus: string, t: (key: string, fallback?: string) => string) {
-  const s = String(rawStatus || '').trim().toLowerCase()
-
+function normalizeStatus(raw: string, t: (k: string) => string) {
+  const s = String(raw || '').trim().toLowerCase()
   if (!s) return ''
-  if (s === 'pending' || s === 'processing' || s === 'review') {
-    return t('paymentsReceipts.status.review', 'На проверке')
-  }
-  if (s === 'sent' || s === 'uploaded' || s === 'submitted') {
-    return t('paymentsReceipts.status.sent', 'Отправлено')
-  }
-  if (s === 'ok' || s === 'done' || s === 'approved' || s === 'accepted' || s === 'success') {
-    return t('paymentsReceipts.status.accepted', 'Принято')
-  }
-  if (s === 'error' || s === 'failed' || s === 'rejected' || s === 'declined') {
-    return t('paymentsReceipts.status.error', 'Есть проблема')
-  }
-
-  return rawStatus
+  if (['pending', 'processing', 'review'].includes(s))             return t('paymentsReceipts.status.review')
+  if (['sent', 'uploaded', 'submitted'].includes(s))               return t('paymentsReceipts.status.sent')
+  if (['ok', 'done', 'approved', 'accepted', 'success'].includes(s)) return t('paymentsReceipts.status.accepted')
+  if (['error', 'failed', 'rejected', 'declined'].includes(s))    return t('paymentsReceipts.status.error')
+  return raw
 }
+
+/* ─── Component ──────────────────────────────────────────────────────────── */
 
 export function PaymentsReceipts() {
   const { t } = useI18n()
 
   const [loading, setLoading] = useState(true)
-  const [err, setErr] = useState<string | null>(null)
-  const [raw, setRaw] = useState<ReceiptsResp | null>(null)
+  const [err,     setErr]     = useState<string | null>(null)
+  const [raw,     setRaw]     = useState<any>(null)
 
   async function load() {
-    setLoading(true)
-    setErr(null)
+    setLoading(true); setErr(null)
     try {
-      const r = await apiFetch<ReceiptsResp>('/payments/receipts', { method: 'GET' })
+      const r = await apiFetch<any>('/payments/receipts', { method: 'GET' })
       setRaw(r ?? null)
     } catch (e: any) {
       setRaw(null)
-      setErr(e?.message || t('paymentsReceipts.error.load_failed', 'Не удалось загрузить квитанции.'))
-    } finally {
-      setLoading(false)
-    }
+      setErr(e?.message || t('paymentsReceipts.error.load_failed'))
+    } finally { setLoading(false) }
   }
 
-  useEffect(() => {
-    load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  useEffect(() => { void load(); }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const items =
-    pickArray(raw, ['items', 'receipts']).concat(pickArray(raw?.data ?? {}, ['items', 'receipts'])) ?? []
+  const items = [
+    ...pickArray(raw, ['items', 'receipts']),
+    ...pickArray(raw?.data ?? {}, ['items', 'receipts']),
+  ]
 
+  /* ── Render ────────────────────────────────────────────────────────────── */
   return (
     <div className="section">
+
+      {/* Шапка */}
       <div className="card">
         <div className="card__body">
-          <div className="home-block-head">
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <div className="h1">{t('paymentsReceipts.title', '🧾 Отправленные квитанции')}</div>
-              <div className="p paymentsReceipts__mt6">
-                {t('paymentsReceipts.subtitle', 'Здесь сохраняются квитанции, которые вы отправили на проверку.')}
-              </div>
+              <h1 className="h1">{t('paymentsReceipts.title')}</h1>
+              <p className="p" style={{ marginTop: 4 }}>{t('paymentsReceipts.subtitle')}</p>
             </div>
-            <Link className="btn" to="/payments">
-              {t('paymentsReceipts.back', 'Назад')}
-            </Link>
+            <Link className="btn" to="/payments">{t('paymentsReceipts.back')}</Link>
           </div>
 
-          <div className="actions actions--2 paymentsReceipts__mt12">
-            <button className="btn" onClick={load} disabled={loading}>
-              {t('paymentsReceipts.refresh', '⟳ Обновить')}
+          <div className="actions actions--2" style={{ marginTop: 12 }}>
+            <button className="btn" onClick={() => void load()} disabled={loading} type="button">
+              {t('paymentsReceipts.refresh')}
             </button>
-            <Link className="btn" to="/payments/history">
-              {t('paymentsReceipts.history', 'История операций')}
-            </Link>
+            <Link className="btn" to="/payments/history">{t('paymentsReceipts.history')}</Link>
           </div>
 
-          {err ? (
-            <div className="pre paymentsReceipts__mt12">
-              {t('paymentsReceipts.error.prefix', 'Ошибка')}: {String(err)}
-            </div>
-          ) : null}
+          {err && <div className="pre" style={{ marginTop: 12 }}>{err}</div>}
         </div>
       </div>
 
+      {/* Список */}
       <div className="section">
         <div className="card">
           <div className="card__body">
-            <div className="p paymentsReceipts__mt0">
+            <p className="p">
               {loading
-                ? t('paymentsReceipts.loading', 'Загрузка…')
-                : items?.length
-                  ? t('paymentsReceipts.total', 'Всего: {count}').replace('{count}', String(items.length))
-                  : t('paymentsReceipts.empty.short', 'Пока квитанций нет')}
-            </div>
+                ? t('paymentsReceipts.loading')
+                : items.length
+                  ? t('paymentsReceipts.total').replace('{count}', String(items.length))
+                  : t('paymentsReceipts.empty.short')}
+            </p>
 
-            <div className="list paymentsReceipts__mt10">
+            <div className="list" style={{ marginTop: 10 }}>
               {loading ? (
-                <div className="list__item">
-                  <div className="list__main">
-                    <div className="list__title">{t('paymentsReceipts.loading_items', 'Загружаем…')}</div>
-                    <div className="list__sub">{t('paymentsReceipts.loading_wait', 'Подождите немного')}</div>
-                  </div>
-                </div>
+                <><div className="skeleton h1" /><div className="skeleton p" /></>
               ) : items.length ? (
                 items.map((x: any, idx: number) => {
-                  const amount = pickNum(x, ['amount', 'sum', 'value'], 0)
-                  const created = pickStr(x, ['createdAt', 'created_at', 'date', 'ts'], '')
-                  const fileName = pickStr(x, ['fileName', 'filename', 'name', 'file'], '')
-                  const statusRaw = pickStr(x, ['tgStatus', 'status', 'state'], '')
-                  const status = normalizeReceiptStatus(statusRaw, t)
-                  const error = pickStr(x, ['tgError', 'error'], '')
+                  const amount    = pickNum(x, ['amount', 'sum', 'value'])
+                  const created   = pickStr(x, ['createdAt', 'created_at', 'date', 'ts'])
+                  const fileName  = pickStr(x, ['fileName', 'filename', 'name', 'file'])
+                  const statusRaw = pickStr(x, ['tgStatus', 'status', 'state'])
+                  const status    = normalizeStatus(statusRaw, t)
+                  const error     = pickStr(x, ['tgError', 'error'])
 
-                  const title =
-                    (amount ? fmtMoney(amount, 'RUB') : t('paymentsReceipts.item.fallback', 'Квитанция')) +
-                    (fileName ? ` · ${fileName}` : '')
+                  const title = (amount ? fmtMoney(amount, 'RUB') : t('paymentsReceipts.item.fallback'))
+                    + (fileName ? ` · ${fileName}` : '')
 
                   const subParts = [
-                    created ? `${t('paymentsReceipts.item.date', 'Дата')}: ${fmtDate(created)}` : null,
-                    status ? `${t('paymentsReceipts.item.status', 'Статус')}: ${status}` : null,
-                    error ? `${t('paymentsReceipts.item.error', 'Комментарий')}: ${error}` : null,
+                    created ? `${t('paymentsReceipts.item.date')}: ${fmtDate(created)}` : null,
+                    status  ? `${t('paymentsReceipts.item.status')}: ${status}` : null,
+                    error   ? `${t('paymentsReceipts.item.error')}: ${error}` : null,
                   ].filter(Boolean)
 
                   return (
@@ -186,30 +143,16 @@ export function PaymentsReceipts() {
               ) : (
                 <div className="list__item">
                   <div className="list__main">
-                    <div className="list__title">
-                      {t('paymentsReceipts.empty.title', 'Вы ещё не отправляли квитанции')}
-                    </div>
-                    <div className="list__sub">
-                      {t(
-                        'paymentsReceipts.empty.sub',
-                        'Когда вы отправите квитанцию после перевода, она появится здесь.',
-                      )}
-                    </div>
+                    <div className="list__title">{t('paymentsReceipts.empty.title')}</div>
+                    <div className="list__sub">{t('paymentsReceipts.empty.sub')}</div>
                   </div>
                 </div>
               )}
             </div>
-
-            {(import.meta as any)?.env?.DEV && raw ? (
-              <div className="pre paymentsReceipts__mt12">
-                <b>{t('paymentsReceipts.dev.raw', 'Raw (dev only):')}</b>
-                <div className="paymentsReceipts__sp8" />
-                {JSON.stringify(raw, null, 2)}
-              </div>
-            ) : null}
           </div>
         </div>
       </div>
+
     </div>
   )
 }
