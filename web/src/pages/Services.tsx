@@ -715,24 +715,20 @@ export function Services() {
       {/* Empty state */}
       {!hasServices && (
         <div className="section">
-          <div className="card">
+          <div className="card" style={{ background: "linear-gradient(135deg, rgba(124,92,255,0.15), rgba(77,215,255,0.08))", borderColor: "rgba(124,92,255,0.35)" }}>
             <div className="card__body">
-              <div className="services-empty">
-                <div className="services-empty__title">
-                  {t("services.empty.title", "Услуг пока нет")}
-                </div>
-                <div className="services-empty__text">
-                  {t("services.empty.text", "Выберите тариф и подключите доступ.")}
-                </div>
-                <div className="services-empty__actions">
-                  <button
-                    className="btn btn--primary services-head__cta"
-                    onClick={() => go("/services/order")}
-                    type="button"
-                  >
-                    {t("services.cta.choose_plan", "Выбрать тариф")}
-                  </button>
-                </div>
+              <div style={{ fontSize: 36, marginBottom: 8 }}>🔌</div>
+              <div className="h1">{t("services.empty.title")}</div>
+              <p className="p" style={{ marginTop: 6, marginBottom: 16 }}>{t("services.empty.text")}</p>
+              <div className="actions actions--1">
+                <button
+                  className="btn btn--primary"
+                  style={{ width: "100%", fontSize: 16, padding: "14px 0" }}
+                  onClick={() => go("/services/order")}
+                  type="button"
+                >
+                  {t("services.cta.choose_plan")}
+                </button>
               </div>
             </div>
           </div>
