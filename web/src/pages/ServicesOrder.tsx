@@ -435,13 +435,11 @@ export function ServicesOrder() {
         <div className="section">
           <div className="card">
             <div className="card__body">
-              <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <div className="h1">{t('servicesOrder.step.kind.title')}</div>
-                  <p className="p" style={{ marginTop: 6 }}>{t('servicesOrder.step.kind.hint')}</p>
-                </div>
-                <button className="btn" onClick={() => navigate(-1)} type="button">← {t('common.close')}</button>
+              <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                <div className="h1">{t('servicesOrder.step.kind.title')}</div>
+                <button className="btn" onClick={() => navigate(-1)} type="button" style={{ flexShrink: 0 }}>← {t('common.close')}</button>
               </div>
+              <p className="p" style={{ marginTop: 4 }}>{t('servicesOrder.step.kind.hint')}</p>
 
               <div className="kv" style={{ marginTop: 12 }}>
                 {(['marzban', 'marzban_router', 'amneziawg'] as Kind[]).map((k) => (
@@ -467,13 +465,11 @@ export function ServicesOrder() {
         <div className="section">
           <div className="card">
             <div className="card__body">
-              <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <div className="h1">{KIND_META[kind].title}</div>
-                  <p className="p" style={{ marginTop: 6 }}>{KIND_META[kind].recommended ? t('servicesOrder.step.tariff.recommended_hint') : ''}</p>
-                </div>
-                <button className="btn" onClick={() => setKind(null)} type="button">← {t('common.close')}</button>
+              <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                <div className="h1">{KIND_META[kind].title}</div>
+                <button className="btn" onClick={() => setKind(null)} type="button" style={{ flexShrink: 0 }}>← {t('common.close')}</button>
               </div>
+              {KIND_META[kind].recommended && <p className="p" style={{ marginTop: 4 }}>{t('servicesOrder.step.tariff.recommended_hint')}</p>}
 
               <div className="pre" style={{ marginTop: 12 }}>{KIND_META[kind].descr}</div>
 
@@ -510,13 +506,11 @@ export function ServicesOrder() {
         <div className="section">
           <div className="card">
             <div className="card__body">
-              <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <div className="h1">{selected.title}</div>
-                  <p className="p" style={{ marginTop: 4 }}>{selected.descr || '—'}</p>
-                </div>
-                <button className="btn" onClick={resetSelection} type="button">← {t('common.close')}</button>
+              <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                <div className="h1">{selected.title}</div>
+                <button className="btn" onClick={resetSelection} type="button" style={{ flexShrink: 0 }}>← {t('common.close')}</button>
               </div>
+              {selected.descr && <p className="p" style={{ marginTop: 4 }}>{selected.descr}</p>}
 
               {!detailsCollapsed && (
                 <div className="kv" style={{ marginTop: 12 }}>
