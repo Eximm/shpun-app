@@ -46,6 +46,7 @@ type Kind = 'amneziawg' | 'marzban' | 'marzban_router'
 /* ─── Constants ──────────────────────────────────────────────────────────── */
 
 const AMNEZIA_WARN_KEY  = 'order.amnezia.warn.dismissed.v1'
+const ROUTER_HINT_KEY   = 'order.router.hint.dismissed.v1'
 const HIDDEN_PAYSYSTEMS = new Set(['Telegram Stars Rescue', 'Telegram Stars Karlson'])
 
 const KIND_META: Record<Kind, { title: string; descr: string; shortDescr: string; recommended?: boolean }> = {
@@ -107,6 +108,8 @@ async function copyToClipboard(text: string): Promise<boolean> {
 
 function readAmneziaWarnDismissed() { try { return localStorage.getItem(AMNEZIA_WARN_KEY) === '1'; } catch { return false; } }
 function saveAmneziaWarnDismissed() { try { localStorage.setItem(AMNEZIA_WARN_KEY, '1'); } catch { /* ignore */ } }
+function readRouterHintDismissed() { try { return localStorage.getItem(ROUTER_HINT_KEY) === '1'; } catch { return false; } }
+function saveRouterHintDismissed() { try { localStorage.setItem(ROUTER_HINT_KEY, '1'); } catch { /* ignore */ } }
 
 function getOrderError(e: any): { title: string; description: string } {
   const code = String(e?.error || e?.code || '').trim()
@@ -146,6 +149,7 @@ export function ServicesOrder() {
   const [payOpenError,      setPayOpenError]      = useState<string | null>(null)
   const [copied,            setCopied]            = useState(false)
   const [amneziaWarnOpen,   setAmneziaWarnOpen]   = useState(false)
+  const [routerHintOpen,    setRouterHintOpen]    = useState(false)
 
   const grouped = useMemo(() => {
     const map: Record<Kind, Tariff[]> = { amneziawg: [], marzban: [], marzban_router: [] }
@@ -211,7 +215,8 @@ export function ServicesOrder() {
   }, [])
 
   useEffect(() => {
-    if (kind === 'amneziawg' && !readAmneziaWarnDismissed()) setAmneziaWarnOpen(true)
+    if (kind === 'amneziawg'    && !readAmneziaWarnDismissed()) setAmneziaWarnOpen(true)
+    if (kind === 'marzban_router' && !readRouterHintDismissed())  setRouterHintOpen(true)
   }, [kind])
 
   /* ── Actions ─────────────────────────────────────────────────────────────── */
@@ -382,6 +387,31 @@ export function ServicesOrder() {
         document.body
       )}
 
+      {/* Подсказка Router VPN */}
+      {routerHintOpen && createPortal(
+        <div className="modal" role="dialog" aria-modal="true" onMouseDown={() => { saveRouterHintDismissed(); setRouterHintOpen(false); }}>
+          <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="card__body">
+              <div className="modal__head">
+                <div className="modal__title">📘 {t('servicesOrder.router.hint.title')}</div>
+              </div>
+              <div className="modal__content">
+                <p className="p">{t('servicesOrder.router.hint.text')}</p>
+              </div>
+              <div className="actions actions--2" style={{ marginTop: 12 }}>
+                <button className="btn" onClick={() => { saveRouterHintDismissed(); setRouterHintOpen(false); }} type="button">
+                  {t('servicesOrder.router.hint.skip')}
+                </button>
+                <button className="btn btn--primary" onClick={() => { saveRouterHintDismissed(); setRouterHintOpen(false); navigate('/help/router'); }} type="button">
+                  {t('servicesOrder.router.hint.open')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {/* Шапка */}
       <div className="card">
         <div className="card__body">
@@ -449,7 +479,10 @@ export function ServicesOrder() {
 
               {kind === 'marzban_router' && (
                 <div className="actions actions--1" style={{ marginTop: 12 }}>
-                  <button className="btn" onClick={() => navigate('/help/router')} type="button">📘 {t('servicesRouter.footer.text')}</button>
+                  <button className="btn btn--soft" onClick={() => navigate('/help/router')} type="button"
+                    style={{ borderColor: "rgba(96,165,250,0.4)", color: "rgba(147,197,253,1)" }}>
+                    📘 {t('servicesRouter.footer.text')}
+                  </button>
                 </div>
               )}
 
@@ -529,10 +562,7 @@ export function ServicesOrder() {
                     <div className="kv" style={{ marginTop: 12 }}>
                       {paySystems.map((ps, idx) => (
                         <div className="kv__item" key={ps.shm_url || idx}>
-                          <div className="row" style={{ justifyContent: 'space-between' }}>
-                            <div className="kv__k">{ps.name || t('servicesOrder.pay.method')}</div>
-                            <span className="chip chip--soft">{ps.recurring ? t('payments.methods.badge.fast') : t('payments.methods.badge.manual')}</span>
-                          </div>
+                          <div className="kv__k">{ps.name || t('servicesOrder.pay.method')}</div>
                           <div className="actions actions--1" style={{ marginTop: 8 }}>
                             <button className="btn btn--primary" onClick={() => void startPay(ps)} disabled={!ps.shm_url || openingPay} type="button" style={{ width: '100%' }}>
                               {openingPay ? t('connect.wait') : `${t('servicesOrder.pay.pay')} ${fmtMoney(toPay, currency)}`}

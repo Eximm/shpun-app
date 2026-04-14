@@ -715,19 +715,18 @@ export function Services() {
       {/* Empty state */}
       {!hasServices && (
         <div className="section">
-          <div className="card" style={{ background: "linear-gradient(135deg, rgba(124,92,255,0.15), rgba(77,215,255,0.08))", borderColor: "rgba(124,92,255,0.35)" }}>
+          <div className="card" style={{ background: "linear-gradient(135deg, rgba(124,92,255,0.18), rgba(77,215,255,0.10))", borderColor: "rgba(124,92,255,0.35)" }}>
             <div className="card__body">
-              <div style={{ fontSize: 36, marginBottom: 8 }}>🔌</div>
               <div className="h1">{t("services.empty.title")}</div>
-              <p className="p" style={{ marginTop: 6, marginBottom: 16 }}>{t("services.empty.text")}</p>
-              <div className="actions actions--1">
+              <p className="p" style={{ marginTop: 4, opacity: 0.7 }}>{t("services.empty.text")}</p>
+              <div className="actions actions--1" style={{ marginTop: 16 }}>
                 <button
                   className="btn btn--primary"
-                  style={{ width: "100%", fontSize: 16, padding: "14px 0" }}
+                  style={{ width: "100%", fontSize: 17, padding: "16px 0", boxShadow: "0 0 24px rgba(124,92,255,0.5)" }}
                   onClick={() => go("/services/order")}
                   type="button"
                 >
-                  {t("services.cta.choose_plan")}
+                  {t("services.cta.choose_plan")} →
                 </button>
               </div>
             </div>

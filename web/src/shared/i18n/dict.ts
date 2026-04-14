@@ -330,6 +330,7 @@ export const RU: Dict = {
   "services.wl.hint":"White List режим — используйте только в сетях с белыми списками или если обычное подключение не работает.",
   "services.wl.warning":  "Трафик в этом режиме может быть ограничен.",
   "services.title": "Услуги",
+  "services.page.title": "Услуги",
   "services.sub": "Ваши услуги и их текущий статус.",
   "services.loading": "Загрузка...",
   "services.loading_short": "Загрузка…",
@@ -377,6 +378,9 @@ export const RU: Dict = {
   "services.pay": "Оплатить / пополнить",
   "services.topup": "Пополнить / оплатить",
   "services.support": "В поддержку",
+  "services.empty.feat1": "Быстрое подключение за пару минут",
+  "services.empty.feat2": "Все устройства — телефон, ПК, планшет, роутер",
+  "services.empty.feat3": "Стабильный доступ без ограничений",
   "services.empty.title": "У вас пока нет активных услуг",
   "services.empty.text": "Выберите тариф и получите доступ к сервису всего за пару минут.",
 
@@ -811,6 +815,7 @@ export const RU: Dict = {
   "payments.autopay.title": "Автоплатёж",
   "payments.autopay.name_fallback": "Сохранённый способ",
   "payments.autopay.pay_now": "Пополнить сейчас",
+  "payments.methods.badge.stars": "⭐ Stars",
   "payments.methods.badge.fast": "Быстро",
   "payments.methods.badge.manual": "Вручную",
   "payments.methods.type.card": "Банковский перевод",
@@ -821,7 +826,7 @@ export const RU: Dict = {
   "payments.card_page.step_2": "Сразу после перевода нажмите «Отправить квитанцию».",
   "payments.card_page.step_3": "Дождитесь проверки — баланс пополнится в течение часа.",
 
-  "servicesRouter.footer.text": "Есть вопросы? Напишите в Telegram-бот — поможем разобраться.",
+  "servicesRouter.footer.text": "Инструкция Shpun Router",
 
   "profile.password.modal.title": "Сменить пароль",
   "profile.password.modal.text": "Введите новый пароль. После сохранения нужно будет войти снова.",
@@ -883,6 +888,10 @@ export const RU: Dict = {
   "servicesOrder.toast.checking": "Проверяем платёж",
   "servicesOrder.toast.pay_opened": "Окно оплаты открыто",
   "servicesOrder.toast.not_confirmed": "Пока не подтверждено",
+  "servicesOrder.router.hint.title": "Router VPN — важно перед заказом",
+  "servicesOrder.router.hint.text": "Router VPN работает только на роутерах с OpenWrt 24.10.x и установленным пакетом ShpunRouter. Перед заказом рекомендуем ознакомиться с инструкцией — это займёт пару минут.",
+  "servicesOrder.router.hint.skip": "Всё понятно",
+  "servicesOrder.router.hint.open": "Открыть инструкцию",
   "servicesOrder.amnezia.warn.title": "Важно про AmneziaWG",
   "servicesOrder.amnezia.warn.text": "Стабильность AmneziaWG не гарантирована и зависит от провайдера. Для надёжной работы рекомендуем Marzban.",
 
@@ -1245,6 +1254,7 @@ export const EN: Dict = {
   "services.wl.hint": "White List mode — use only in networks with white lists or when the regular connection does not work.",
   "services.wl.warning": "Traffic in this mode may be limited.",
   "services.title": "Services",
+  "services.page.title": "Services",
   "services.sub": "Your services and their current status.",
   "services.loading": "Loading...",
   "services.loading_short": "Loading…",
@@ -1292,6 +1302,9 @@ export const EN: Dict = {
   "services.pay": "Pay / top up",
   "services.topup": "Top up / pay",
   "services.support": "Support",
+  "services.empty.feat1": "Quick setup in just a couple of minutes",
+  "services.empty.feat2": "All devices — phone, PC, tablet, router",
+  "services.empty.feat3": "Stable access without restrictions",
   "services.empty.title": "You have no active services yet",
   "services.empty.text": "Choose a plan and get full access in just a couple of minutes.",
 
@@ -1727,6 +1740,7 @@ export const EN: Dict = {
   "payments.autopay.title": "Auto payment",
   "payments.autopay.name_fallback": "Saved method",
   "payments.autopay.pay_now": "Top up now",
+  "payments.methods.badge.stars": "⭐ Stars",
   "payments.methods.badge.fast": "Fast",
   "payments.methods.badge.manual": "Manual",
   "payments.methods.type.card": "Bank transfer",
@@ -1737,7 +1751,7 @@ export const EN: Dict = {
   "payments.card_page.step_2": "Right after the transfer, tap Send receipt.",
   "payments.card_page.step_3": "Wait for review — balance will be credited within an hour.",
 
-  "servicesRouter.footer.text": "Have questions? Message the Telegram bot — we will help.",
+  "servicesRouter.footer.text": "Shpun Router guide",
 
   "profile.password.modal.title": "Change password",
   "profile.password.modal.text": "Enter a new password. After saving you will need to sign in again.",
@@ -1799,6 +1813,10 @@ export const EN: Dict = {
   "servicesOrder.toast.checking": "Checking payment",
   "servicesOrder.toast.pay_opened": "Payment window opened",
   "servicesOrder.toast.not_confirmed": "Not confirmed yet",
+  "servicesOrder.router.hint.title": "Router VPN — read before ordering",
+  "servicesOrder.router.hint.text": "Router VPN only works on routers running OpenWrt 24.10.x with the ShpunRouter package installed. We recommend reading the guide before ordering — it takes just a couple of minutes.",
+  "servicesOrder.router.hint.skip": "Got it",
+  "servicesOrder.router.hint.open": "Open guide",
   "servicesOrder.amnezia.warn.title": "Important about AmneziaWG",
   "servicesOrder.amnezia.warn.text": "AmneziaWG stability is not guaranteed and depends on your provider. For reliable use, we recommend Marzban.",
 
