@@ -327,7 +327,7 @@ export const RU: Dict = {
 
   // services
   "services.wl.badge": "WL",
-  "services.wl.hint":"White List режим — используйте только в сетях с белыми списками или если обычное подключение не работает.",
+  "services.wl.hint":"White List режим — используйте только если обычное подключение не работает.",
   "services.wl.warning":  "Трафик в этом режиме может быть ограничен.",
   "services.title": "Услуги",
   "services.page.title": "Услуги",

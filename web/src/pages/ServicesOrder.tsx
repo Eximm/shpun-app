@@ -53,7 +53,7 @@ const KIND_META: Record<Kind, { title: string; descr: string; shortDescr: string
   marzban: {
     title: 'Marzban',
     descr: 'Высокая стабильность и скорость. Подходит для телефонов, ПК и планшетов. Доступ ко всем серверам.',
-    shortDescr: 'Стабильно и быстро. Для телефона, ПК и планшета. Специальные маршруты для белых списков.',
+    shortDescr: 'Стабильно и быстро. Для телефона, ПК и планшета.',
     recommended: true,
   },
   marzban_router: {
