@@ -1,4 +1,3 @@
-// FILE: api/src/modules/admin/routes.ts
 import type { FastifyInstance } from "fastify";
 import { getSessionFromRequest } from "../../shared/session/sessionStore.js";
 import {
@@ -28,12 +27,6 @@ import {
   deleteDeviceCompletely,
   listObservedIpPrefixes,
 } from "../device/deviceRepo.js";
-import {
-  listBroadcasts,
-  deleteBroadcastByOriginId,
-  hideBroadcastByOriginId,
-  updateBroadcastByOriginId,
-} from "../../shared/linkdb/notificationsRepo.js";
 
 async function ensureAdmin(shmSessionId: string) {
   const r = await shmShpunAppAdminStatus(shmSessionId);
@@ -789,72 +782,5 @@ export async function adminRoutes(app: FastifyInstance) {
     }
 
     return reply.send({ ok: true, deleted, keepLatest });
-  });
-
-  // ── Broadcasts ─────────────────────────────────────────────────────────────
-
-  app.get("/admin/broadcasts", async (req, reply) => {
-    const s = getSessionFromRequest(req);
-    if (!s?.shmSessionId) return reply.code(401).send({ ok: false });
-    if (!(await ensureAdmin(s.shmSessionId))) return reply.code(403).send({ ok: false, error: "not_admin" });
-
-    const q = (req.query ?? {}) as any;
-    const limit = toPositiveInt(q?.limit, 200, 2000);
-    const { items } = listBroadcasts({ limit });
-
-    return reply.send({ ok: true, items });
-  });
-
-  app.delete("/admin/broadcast/:originId", async (req, reply) => {
-    const s = getSessionFromRequest(req);
-    if (!s?.shmSessionId) return reply.code(401).send({ ok: false });
-    if (!(await ensureAdmin(s.shmSessionId))) return reply.code(403).send({ ok: false, error: "not_admin" });
-
-    const originId = String((req.params as any)?.originId ?? "").trim();
-    if (!originId) return reply.code(400).send({ ok: false, error: "missing_origin_id" });
-
-    const result = deleteBroadcastByOriginId(originId);
-    if (!result.ok) return reply.code(500).send({ ok: false, error: result.error });
-
-    return reply.send({ ok: true, originId, deleted: result.deleted });
-  });
-
-  app.patch("/admin/broadcast/:originId/hide", async (req, reply) => {
-    const s = getSessionFromRequest(req);
-    if (!s?.shmSessionId) return reply.code(401).send({ ok: false });
-    if (!(await ensureAdmin(s.shmSessionId))) return reply.code(403).send({ ok: false, error: "not_admin" });
-
-    const originId = String((req.params as any)?.originId ?? "").trim();
-    if (!originId) return reply.code(400).send({ ok: false, error: "missing_origin_id" });
-
-    const body = (req.body ?? {}) as any;
-    const hidden = Boolean(body?.hidden ?? true);
-
-    const result = hideBroadcastByOriginId(originId, hidden);
-    if (!result.ok) return reply.code(500).send({ ok: false, error: result.error });
-
-    return reply.send({ ok: true, originId, hidden, updated: result.updated });
-  });
-
-  app.put("/admin/broadcast/:originId", async (req, reply) => {
-    const s = getSessionFromRequest(req);
-    if (!s?.shmSessionId) return reply.code(401).send({ ok: false });
-    if (!(await ensureAdmin(s.shmSessionId))) return reply.code(403).send({ ok: false, error: "not_admin" });
-
-    const originId = String((req.params as any)?.originId ?? "").trim();
-    if (!originId) return reply.code(400).send({ ok: false, error: "missing_origin_id" });
-
-    const body = (req.body ?? {}) as any;
-    const title   = body?.title   != null ? String(body.title).trim()   : undefined;
-    const message = body?.message != null ? String(body.message).trim() : undefined;
-
-    if (title === undefined && message === undefined) {
-      return reply.code(400).send({ ok: false, error: "nothing_to_update" });
-    }
-
-    const result = updateBroadcastByOriginId(originId, { title, message });
-    if (!result.ok) return reply.code(500).send({ ok: false, error: result.error });
-
-    return reply.send({ ok: true, originId, updated: result.updated });
   });
 }
