@@ -16,6 +16,8 @@ import { linkDb } from "../../shared/linkdb/db.js";
 import {
   deleteBroadcastByOriginId,
   listBroadcasts,
+  hideBroadcastByOriginId,
+  updateBroadcastByOriginId,
 } from "../../shared/linkdb/notificationsRepo.js";
 import { shmShpunAppAdminStatus } from "../../shared/shm/shmClient.js";
 
@@ -317,11 +319,44 @@ export async function pushRoutes(app: FastifyInstance) {
       return reply.code(500).send({ ok: false, error: del.error });
     }
 
-    return reply.send({
-      ok: true,
-      originId,
-      deleted: del.deleted,
-    });
+    return reply.send({ ok: true, originId, deleted: del.deleted });
+  });
+
+  app.patch("/admin/broadcast/:originId/hide", async (req, reply) => {
+    const s = await ensureAdmin(req, reply);
+    if (!s) return;
+
+    const originId = String((req.params as any)?.originId ?? "").trim();
+    if (!originId) return reply.code(400).send({ ok: false, error: "missing_origin_id" });
+
+    const body = (req.body ?? {}) as any;
+    const hidden = Boolean(body?.hidden ?? true);
+
+    const result = hideBroadcastByOriginId(originId, hidden);
+    if (!result.ok) return reply.code(500).send({ ok: false, error: result.error });
+
+    return reply.send({ ok: true, originId, hidden, updated: result.updated });
+  });
+
+  app.put("/admin/broadcast/:originId", async (req, reply) => {
+    const s = await ensureAdmin(req, reply);
+    if (!s) return;
+
+    const originId = String((req.params as any)?.originId ?? "").trim();
+    if (!originId) return reply.code(400).send({ ok: false, error: "missing_origin_id" });
+
+    const body = (req.body ?? {}) as any;
+    const title   = body?.title   != null ? String(body.title).trim()   : undefined;
+    const message = body?.message != null ? String(body.message).trim() : undefined;
+
+    if (title === undefined && message === undefined) {
+      return reply.code(400).send({ ok: false, error: "nothing_to_update" });
+    }
+
+    const result = updateBroadcastByOriginId(originId, { title, message });
+    if (!result.ok) return reply.code(500).send({ ok: false, error: result.error });
+
+    return reply.send({ ok: true, originId, updated: result.updated });
   });
 
   app.post("/notifications/activity", async (req, reply) => {
