@@ -810,17 +810,23 @@ export async function adminRoutes(app: FastifyInstance) {
 
     const body = (req.body ?? {}) as any;
     const result = createServiceCategory({
-      category_key: String(body?.category_key ?? "").trim(),
-      title:        String(body?.title ?? "").trim(),
-      descr:        String(body?.descr ?? "").trim(),
-      short_descr:  String(body?.short_descr ?? "").trim(),
-      connect_kind: String(body?.connect_kind ?? "marzban").trim(),
-      sort_order:   Number(body?.sort_order ?? 100),
-      badge:        body?.badge ? String(body.badge).trim() : null,
-      badge_tone:   String(body?.badge_tone ?? "soft").trim(),
-      recommended:  Boolean(body?.recommended),
-      hidden:       Boolean(body?.hidden),
-      service_ids:  Array.isArray(body?.service_ids) ? body.service_ids.map(Number) : [],
+      category_key:          String(body?.category_key ?? "").trim(),
+      title:                 String(body?.title ?? "").trim(),
+      descr:                 String(body?.descr ?? "").trim(),
+      short_descr:           String(body?.short_descr ?? "").trim(),
+      connect_kind:          String(body?.connect_kind ?? "marzban").trim(),
+      sort_order:            Number(body?.sort_order ?? 100),
+      badge:                 body?.badge ? String(body.badge).trim() : null,
+      badge_tone:            String(body?.badge_tone ?? "soft").trim(),
+      recommended:           Boolean(body?.recommended),
+      hidden:                Boolean(body?.hidden),
+      emoji:                 body?.emoji ? String(body.emoji).trim() : null,
+      accent_from:           body?.accent_from ? String(body.accent_from).trim() : null,
+      accent_to:             body?.accent_to   ? String(body.accent_to).trim()   : null,
+      card_bg:               body?.card_bg     ? String(body.card_bg).trim()     : null,
+      button_label:          body?.button_label ? String(body.button_label).trim() : null,
+      billing_category_keys: Array.isArray(body?.billing_category_keys) ? body.billing_category_keys.map(String) : [],
+      service_ids:           Array.isArray(body?.service_ids) ? body.service_ids.map(Number) : [],
     });
 
     if (!result.ok) return reply.code(400).send({ ok: false, error: result.error });
@@ -847,7 +853,13 @@ export async function adminRoutes(app: FastifyInstance) {
     if ("badge_tone"   in body) data.badge_tone   = String(body.badge_tone).trim();
     if ("recommended"  in body) data.recommended  = Boolean(body.recommended);
     if ("hidden"       in body) data.hidden       = Boolean(body.hidden);
-    if ("service_ids"  in body) data.service_ids  = Array.isArray(body.service_ids) ? body.service_ids.map(Number) : [];
+    if ("service_ids"           in body) data.service_ids           = Array.isArray(body.service_ids) ? body.service_ids.map(Number) : [];
+    if ("emoji"                 in body) data.emoji                 = body.emoji         ? String(body.emoji).trim()         : null;
+    if ("accent_from"           in body) data.accent_from           = body.accent_from   ? String(body.accent_from).trim()   : null;
+    if ("accent_to"             in body) data.accent_to             = body.accent_to     ? String(body.accent_to).trim()     : null;
+    if ("card_bg"               in body) data.card_bg               = body.card_bg       ? String(body.card_bg).trim()       : null;
+    if ("button_label"          in body) data.button_label          = body.button_label  ? String(body.button_label).trim()  : null;
+    if ("billing_category_keys" in body) data.billing_category_keys = Array.isArray(body.billing_category_keys) ? body.billing_category_keys.map(String) : [];
 
     const result = updateServiceCategory(key, data);
     if (!result.ok) return reply.code(result.error === "not_found" ? 404 : 400).send({ ok: false, error: result.error });

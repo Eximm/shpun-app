@@ -845,6 +845,7 @@ export const RU: Dict = {
   "profile.password.error.save": "Не удалось изменить пароль.",
 
   /* servicesOrder */
+  "servicesOrder.no_categories": "Нет доступных категорий. Обратитесь к администратору.",
   "servicesOrder.title": "Подключение услуги",
   "servicesOrder.discount": "Скидка клиента",
   "servicesOrder.recommended": "Рекомендуем",
@@ -1772,6 +1773,7 @@ export const EN: Dict = {
   "profile.password.error.save": "Could not change password.",
 
   /* servicesOrder */
+  "servicesOrder.no_categories": "No categories available. Please contact the administrator.",
   "servicesOrder.title": "Connect service",
   "servicesOrder.discount": "Client discount",
   "servicesOrder.recommended": "Recommended",

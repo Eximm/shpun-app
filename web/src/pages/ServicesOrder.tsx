@@ -12,61 +12,60 @@ import { getMood } from '../shared/payments-mood'
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 
 type Tariff = {
-  serviceId: number
-  category: string
-  title: string
-  descr: string
-  price: number
-  currency: string
-  periodRaw?: string
+  serviceId:   number
+  category:    string
+  title:       string
+  descr:       string
+  price:       number
+  currency:    string
+  periodRaw?:  string
   periodHuman: string
-  flags?: { orderOnlyOnce?: boolean }
+  flags?:      { orderOnlyOnce?: boolean }
+}
+
+type ServiceCategory = {
+  category_key:          string
+  title:                 string
+  descr:                 string
+  short_descr:           string
+  connect_kind:          string
+  sort_order:            number
+  badge:                 string | null
+  badge_tone:            string
+  recommended:           boolean
+  hidden:                boolean
+  emoji:                 string | null
+  accent_from:           string | null
+  accent_to:             string | null
+  card_bg:               string | null
+  button_label:          string | null
+  billing_category_keys: string[]
+  service_ids:           number[]
 }
 
 type PaySystem = {
-  name?: string
-  shm_url?: string
+  name?:      string
+  shm_url?:   string
   recurring?: string | number
-  amount?: number
+  amount?:    number
 }
 
 type CreateResp = {
-  ok: true
+  ok:   true
   item: { userServiceId: number; serviceId: number; status: string; statusRaw: string }
 }
 
 type ApiServiceItem = {
   userServiceId: number
-  status: 'active' | 'blocked' | 'pending' | 'not_paid' | 'removed' | 'error' | 'init'
-  statusRaw: string
+  status:        'active' | 'blocked' | 'pending' | 'not_paid' | 'removed' | 'error' | 'init'
+  statusRaw:     string
 }
-
-type Kind = 'amneziawg' | 'marzban' | 'marzban_router'
 
 /* ─── Constants ──────────────────────────────────────────────────────────── */
 
-const AMNEZIA_WARN_KEY  = 'order.amnezia.warn.dismissed.v1'
-const ROUTER_HINT_KEY   = 'order.router.hint.dismissed.v1'
-const HIDDEN_PAYSYSTEMS = new Set(['Telegram Stars Rescue', 'Telegram Stars Karlson'])
-
-const KIND_META: Record<Kind, { title: string; descr: string; shortDescr: string; recommended?: boolean }> = {
-  marzban: {
-    title: 'Marzban',
-    descr: 'Высокая стабильность и скорость. Подходит для телефонов, ПК и планшетов. Доступ ко всем серверам.',
-    shortDescr: 'Стабильно и быстро. Для телефона, ПК и планшета. Специальные маршруты для белых списков.',
-    recommended: true,
-  },
-  marzban_router: {
-    title: 'Router VPN',
-    descr: 'Создано специально для прошивки Shpun Router. Протокол Reality — максимально незаметность. Работает на всех устройствах через ваш роутер.',
-    shortDescr: 'VPN на всю домашнюю сеть через роутер. Протокол Reality.',
-  },
-  amneziawg: {
-    title: 'AmneziaWG',
-    descr: 'Подключение на один выбранный сервер. Простая настройка и минимум параметров. Может работать нестабильно в ряде регионов.',
-    shortDescr: 'Простой VPN на один сервер. В некоторых регионах бывает нестабильным.',
-  },
-}
+const AMNEZIA_WARN_KEY   = 'order.amnezia.warn.dismissed.v1'
+const ROUTER_HINT_KEY    = 'order.router.hint.dismissed.v1'
+const HIDDEN_PAYSYSTEMS  = new Set(['Telegram Stars Rescue', 'Telegram Stars Karlson'])
 
 /* ─── Utils ─────────────────────────────────────────────────────────────── */
 
@@ -78,13 +77,26 @@ function nnum(v: any, def = 0) {
 function fmtMoney(n: number, cur: string) {
   try {
     return new Intl.NumberFormat(undefined, { style: 'currency', currency: cur || 'RUB', maximumFractionDigits: 0 }).format(nnum(n))
-  } catch { return `${nnum(n)} ${cur || 'RUB'}`; }
+  } catch { return `${nnum(n)} ${cur || 'RUB'}` }
 }
 
-function kindFromCategory(cat: string): Kind {
-  if (cat.startsWith('vpn-')) return 'amneziawg'
-  if (cat === 'marzban') return 'marzban'
-  return 'marzban_router'
+function matchesPattern(pattern: string, billingCategory: string): boolean {
+  if (pattern.endsWith('*')) return billingCategory.startsWith(pattern.slice(0, -1))
+  return pattern === billingCategory
+}
+
+function resolveCategoryKey(billingCategory: string, categories: ServiceCategory[], serviceId: number): string | null {
+  // Сначала проверяем ручную привязку по service_id
+  for (const cat of categories) {
+    if (cat.service_ids.includes(serviceId)) return cat.category_key
+  }
+  // Потом по паттернам billing_category_keys
+  for (const cat of categories) {
+    for (const pat of cat.billing_category_keys) {
+      if (matchesPattern(pat, billingCategory)) return cat.category_key
+    }
+  }
+  return null
 }
 
 function buildPayUrl(base: string, amount: number) {
@@ -92,31 +104,66 @@ function buildPayUrl(base: string, amount: number) {
   return base.includes('{amount}') ? base.replace('{amount}', String(a)) : `${base}${a}`
 }
 
-function getTelegramWebApp(): any | null { return (window as any)?.Telegram?.WebApp || null; }
+function getTelegramWebApp(): any | null { return (window as any)?.Telegram?.WebApp || null }
 
 async function copyToClipboard(text: string): Promise<boolean> {
-  try { await navigator.clipboard.writeText(text); return true; }
+  try { await navigator.clipboard.writeText(text); return true }
   catch {
     try {
       const ta = document.createElement('textarea')
       ta.value = text; ta.style.position = 'fixed'; ta.style.top = '-1000px'
       document.body.appendChild(ta); ta.focus(); ta.select()
       const ok = document.execCommand('copy'); document.body.removeChild(ta); return ok
-    } catch { return false; }
+    } catch { return false }
   }
 }
 
-function readAmneziaWarnDismissed() { try { return localStorage.getItem(AMNEZIA_WARN_KEY) === '1'; } catch { return false; } }
-function saveAmneziaWarnDismissed() { try { localStorage.setItem(AMNEZIA_WARN_KEY, '1'); } catch { /* ignore */ } }
-function readRouterHintDismissed() { try { return localStorage.getItem(ROUTER_HINT_KEY) === '1'; } catch { return false; } }
-function saveRouterHintDismissed() { try { localStorage.setItem(ROUTER_HINT_KEY, '1'); } catch { /* ignore */ } }
+function readAmneziaWarnDismissed()  { try { return localStorage.getItem(AMNEZIA_WARN_KEY) === '1' } catch { return false } }
+function saveAmneziaWarnDismissed()  { try { localStorage.setItem(AMNEZIA_WARN_KEY, '1') } catch { /* ignore */ } }
+function readRouterHintDismissed()   { try { return localStorage.getItem(ROUTER_HINT_KEY) === '1' } catch { return false } }
+function saveRouterHintDismissed()   { try { localStorage.setItem(ROUTER_HINT_KEY, '1') } catch { /* ignore */ } }
 
 function getOrderError(e: any): { title: string; description: string } {
   const code = String(e?.error || e?.code || '').trim()
   const msg  = String(e?.message || '').trim()
-  if (code === 'unpaid_order_exists')       return { title: 'Есть активный или неоплаченный заказ',      description: 'Сначала оплатите или удалите существующую услугу.' }
+  if (code === 'unpaid_order_exists')        return { title: 'Есть активный или неоплаченный заказ',    description: 'Сначала оплатите или удалите существующую услугу.' }
   if (code === 'unpaid_same_service_exists') return { title: 'Есть заказ этого типа', description: 'Сначала оплатите или удалите существующую услугу этого типа.' }
   return { title: 'Не удалось создать услугу', description: msg || 'Не удалось создать заказ. Попробуйте ещё раз.' }
+}
+
+/* ─── Category Card ─────────────────────────────────────────────────────── */
+
+function CategoryCard({
+  cat, onClick,
+}: {
+  cat: ServiceCategory
+  onClick: () => void
+}) {
+  const accentFrom = cat.accent_from || '#7c5cff'
+  const accentTo   = cat.accent_to   || '#4dd7ff'
+  const gradient   = `linear-gradient(135deg, ${accentFrom}, ${accentTo})`
+  const cardBg     = cat.card_bg     || 'rgba(255,255,255,0.04)'
+  const btnLabel   = cat.button_label || 'Выбрать'
+
+  return (
+    <button type="button" className="so__kindCard" onClick={onClick}
+      style={{ border: `1.5px solid ${accentFrom}`, background: cardBg, borderRadius: 16, padding: 16, width: '100%', textAlign: 'left', cursor: 'pointer' }}>
+      {(cat.recommended || cat.badge) && (
+        <div style={{ marginBottom: 8 }}>
+          <span style={{ background: gradient, borderRadius: 20, padding: '2px 10px', fontSize: 12, fontWeight: 600, color: '#fff' }}>
+            {cat.badge || 'Рекомендуем'}
+          </span>
+        </div>
+      )}
+      <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>
+        {cat.emoji ? `${cat.emoji} ` : ''}{cat.title}
+      </div>
+      <p className="p" style={{ marginTop: 0, marginBottom: 12 }}>{cat.short_descr}</p>
+      <div style={{ background: gradient, borderRadius: 12, padding: '12px 0', textAlign: 'center', fontWeight: 600, color: '#fff', fontSize: 15, boxShadow: `0 0 16px ${accentFrom}55` }}>
+        {btnLabel}
+      </div>
+    </button>
+  )
 }
 
 /* ─── Component ──────────────────────────────────────────────────────────── */
@@ -126,50 +173,67 @@ export function ServicesOrder() {
   const { t }    = useI18n()
   const { me, loading: meLoading, error: meError, refetch } = useMe()
 
-  const balanceAmount  = nnum(me?.balance?.amount)
-  const currency       = String(me?.balance?.currency || 'RUB')
-  const bonus          = nnum((me as any)?.bonus)
+  const balanceAmount   = nnum(me?.balance?.amount)
+  const currency        = String(me?.balance?.currency || 'RUB')
+  const bonus           = nnum((me as any)?.bonus)
   const discountPercent = Math.max(0, nnum((me as any)?.discount))
-  const hasDiscount    = discountPercent > 0
+  const hasDiscount     = discountPercent > 0
 
-  const [loading,  setLoading]  = useState(true)
-  const [err,      setErr]      = useState<string | null>(null)
-  const [tariffs,  setTariffs]  = useState<Tariff[]>([])
-  const [kind,     setKind]     = useState<Kind | null>(null)
-  const [selected, setSelected] = useState<Tariff | null>(null)
+  const [loading,         setLoading]         = useState(true)
+  const [err,             setErr]             = useState<string | null>(null)
+  const [tariffs,         setTariffs]         = useState<Tariff[]>([])
+  const [categories,      setCategories]      = useState<ServiceCategory[]>([])
+  const [selectedCat,     setSelectedCat]     = useState<ServiceCategory | null>(null)
+  const [selected,        setSelected]        = useState<Tariff | null>(null)
 
-  const [creating,          setCreating]          = useState(false)
-  const [created,           setCreated]           = useState<CreateResp['item'] | null>(null)
-  const [paySystems,        setPaySystems]        = useState<PaySystem[]>([])
-  const [overlayOpen,       setOverlayOpen]       = useState(false)
-  const [detailsCollapsed,  setDetailsCollapsed]  = useState(false)
-  const [waitMsg,           setWaitMsg]           = useState<string | null>(null)
-  const [lastPayUrl,        setLastPayUrl]        = useState<string | null>(null)
-  const [openingPay,        setOpeningPay]        = useState(false)
-  const [payOpenError,      setPayOpenError]      = useState<string | null>(null)
-  const [copied,            setCopied]            = useState(false)
-  const [amneziaWarnOpen,   setAmneziaWarnOpen]   = useState(false)
-  const [routerHintOpen,    setRouterHintOpen]    = useState(false)
+  const [creating,        setCreating]        = useState(false)
+  const [created,         setCreated]         = useState<CreateResp['item'] | null>(null)
+  const [paySystems,      setPaySystems]      = useState<PaySystem[]>([])
+  const [overlayOpen,     setOverlayOpen]     = useState(false)
+  const [detailsCollapsed,setDetailsCollapsed]= useState(false)
+  const [waitMsg,         setWaitMsg]         = useState<string | null>(null)
+  const [lastPayUrl,      setLastPayUrl]      = useState<string | null>(null)
+  const [openingPay,      setOpeningPay]      = useState(false)
+  const [payOpenError,    setPayOpenError]    = useState<string | null>(null)
+  const [copied,          setCopied]          = useState(false)
+  const [amneziaWarnOpen, setAmneziaWarnOpen] = useState(false)
+  const [routerHintOpen,  setRouterHintOpen]  = useState(false)
 
-  const grouped = useMemo(() => {
-    const map: Record<Kind, Tariff[]> = { amneziawg: [], marzban: [], marzban_router: [] }
-    for (const t of tariffs) map[kindFromCategory(String(t.category || ''))].push({ ...t, price: nnum(t.price) })
-    for (const k of Object.keys(map) as Kind[]) map[k].sort((a, b) => nnum(a.price) - nnum(b.price))
+  /* Тарифы сгруппированные по категории */
+  const groupedByCat = useMemo(() => {
+    const map = new Map<string, Tariff[]>()
+    for (const t of tariffs) {
+      const key = resolveCategoryKey(t.category, categories, t.serviceId) ?? '__other__'
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push({ ...t, price: nnum(t.price) })
+    }
+    // Сортируем внутри каждой группы по цене
+    for (const [, arr] of map) arr.sort((a, b) => nnum(a.price) - nnum(b.price))
     return map
-  }, [tariffs])
+  }, [tariffs, categories])
+
+  /* Категории с тарифами — в порядке sort_order */
+  const visibleCategories = useMemo(() => {
+    return categories.filter((c) => !c.hidden && (groupedByCat.get(c.category_key)?.length ?? 0) > 0)
+  }, [categories, groupedByCat])
+
+  const tariffsInCat = useMemo(() => {
+    if (!selectedCat) return []
+    return groupedByCat.get(selectedCat.category_key) ?? []
+  }, [selectedCat, groupedByCat])
 
   const priceCalc = useMemo(() => {
     if (!selected) return { base: 0, discounted: 0, bonusUsed: 0, balanceUsed: 0, needTopup: 0 }
-    const base        = nnum(selected.price)
-    const discounted  = Math.round(base * (1 - discountPercent / 100))
-    const bonusUsed   = Math.min(bonus, Math.floor(discounted * 0.5))
-    const afterBonus  = Math.max(0, discounted - bonusUsed)
+    const base       = nnum(selected.price)
+    const discounted = Math.round(base * (1 - discountPercent / 100))
+    const bonusUsed  = Math.min(bonus, Math.floor(discounted * 0.5))
+    const afterBonus = Math.max(0, discounted - bonusUsed)
     const balanceUsed = Math.min(balanceAmount, afterBonus)
     return { base, discounted, bonusUsed, balanceUsed, needTopup: Math.max(0, afterBonus - balanceUsed) }
   }, [selected, discountPercent, bonus, balanceAmount])
 
-  const needTopup = priceCalc.needTopup
-  const toPay     = Math.max(1, needTopup)
+  const needTopup   = priceCalc.needTopup
+  const toPay       = Math.max(1, needTopup)
 
   const shouldShowPay = useMemo(() => {
     if (!created) return false
@@ -188,15 +252,19 @@ export function ServicesOrder() {
     return items
   }, [selected, priceCalc, hasDiscount, currency, t])
 
-  const moodChecking = (seed: string)              => getMood('payment_checking', { seed }) ?? t('connect.wait')
-  const moodSuccess  = (seed: string, amt?: number) => getMood('payment_success',  { seed, amount: amt }) ?? t('home.toast.balance_added.title')
+  const moodChecking = (seed: string)               => getMood('payment_checking', { seed }) ?? t('connect.wait')
+  const moodSuccess  = (seed: string, amt?: number)  => getMood('payment_success',  { seed, amount: amt }) ?? t('home.toast.balance_added.title')
 
-  /* ── Load ────────────────────────────────────────────────────────────────── */
-  async function loadTariffs() {
+  /* ── Load ──────────────────────────────────────────────────────────────── */
+  async function loadAll() {
     setLoading(true); setErr(null)
     try {
-      const r = await apiFetch<{ ok: true; items: Tariff[] }>('/services/order')
-      setTariffs(r.items || [])
+      const [tariffResp, catResp] = await Promise.all([
+        apiFetch<{ ok: true; items: Tariff[] }>('/services/order'),
+        apiFetch<{ ok: true; items: ServiceCategory[] }>('/services/categories').catch(() => ({ ok: true as const, items: [] })),
+      ])
+      setTariffs(tariffResp.items || [])
+      setCategories(catResp.items || [])
     } catch (e: any) { setErr(e?.message || 'error') }
     finally { setLoading(false) }
   }
@@ -207,19 +275,30 @@ export function ServicesOrder() {
   }
 
   useEffect(() => {
-    void loadTariffs()
+    void loadAll()
     try {
       const k = new URLSearchParams(window.location.search).get('kind')
-      if (k === 'marzban_router' || k === 'marzban' || k === 'amneziawg') setKind(k)
+      if (k) {
+        // После загрузки категорий попробуем найти по connect_kind
+        const timer = setTimeout(() => {
+          setCategories((cats) => {
+            const found = cats.find((c) => c.connect_kind === k)
+            if (found) setSelectedCat(found)
+            return cats
+          })
+        }, 500)
+        return () => clearTimeout(timer)
+      }
     } catch { /* ignore */ }
   }, [])
 
   useEffect(() => {
-    if (kind === 'amneziawg'    && !readAmneziaWarnDismissed()) setAmneziaWarnOpen(true)
-    if (kind === 'marzban_router' && !readRouterHintDismissed())  setRouterHintOpen(true)
-  }, [kind])
+    if (!selectedCat) return
+    if (selectedCat.connect_kind === 'amneziawg'      && !readAmneziaWarnDismissed()) setAmneziaWarnOpen(true)
+    if (selectedCat.connect_kind === 'marzban_router'  && !readRouterHintDismissed())  setRouterHintOpen(true)
+  }, [selectedCat])
 
-  /* ── Actions ─────────────────────────────────────────────────────────────── */
+  /* ── Actions ───────────────────────────────────────────────────────────── */
   async function createOrder() {
     if (!selected) return
     setCreating(true); setErr(null)
@@ -246,8 +325,8 @@ export function ServicesOrder() {
 
   async function tryOpenPayment(url: string): Promise<boolean> {
     const tg = getTelegramWebApp()
-    if (tg?.openLink) { try { tg.openLink(url); return true; } catch { return false; } }
-    try { return !!window.open(url, '_blank', 'noopener,noreferrer'); } catch { return false; }
+    if (tg?.openLink) { try { tg.openLink(url); return true } catch { return false } }
+    try { return !!window.open(url, '_blank', 'noopener,noreferrer') } catch { return false }
   }
 
   async function startPay(ps: PaySystem) {
@@ -260,8 +339,7 @@ export function ServicesOrder() {
     }
     const url  = buildPayUrl(ps.shm_url, toPay)
     const seed = String(created?.userServiceId || selected?.serviceId || '')
-    setLastPayUrl(url)
-    setOpeningPay(true)
+    setLastPayUrl(url); setOpeningPay(true)
     const opened = await tryOpenPayment(url)
     setOpeningPay(false); setOverlayOpen(true)
     if (opened) {
@@ -279,7 +357,7 @@ export function ServicesOrder() {
     setCopied(false); setPayOpenError(null); setOpeningPay(true)
     const opened = await tryOpenPayment(lastPayUrl)
     setOpeningPay(false)
-    if (!opened) { setPayOpenError(t('servicesOrder.pay.blocked')); toast.error(t('servicesOrder.pay.blocked'), { description: t('servicesOrder.pay.open_manually') }); return; }
+    if (!opened) { setPayOpenError(t('servicesOrder.pay.blocked')); toast.error(t('servicesOrder.pay.blocked'), { description: t('servicesOrder.pay.open_manually') }); return }
     toast.info(t('servicesOrder.toast.pay_opened'), { description: t('servicesOrder.status.pay_opened') })
   }
 
@@ -294,8 +372,8 @@ export function ServicesOrder() {
       if (item && (item.status === 'active' || item.status === 'pending')) {
         setCreated((cur) => cur ? { ...cur, status: item.status, statusRaw: item.statusRaw || cur.statusRaw } : cur)
         setWaitMsg(t('servicesOrder.status.activated'))
-        toast.success(t('servicesOrder.toast.done'),    { description: moodSuccess(seed, toPay) })
-        toast.success(t('servicesOrder.toast.paid'),    { description: moodSuccess(seed, toPay) })
+        toast.success(t('servicesOrder.toast.done'),  { description: moodSuccess(seed, toPay) })
+        toast.success(t('servicesOrder.toast.paid'),  { description: moodSuccess(seed, toPay) })
         return
       }
     } catch { /* ignore */ }
@@ -307,17 +385,17 @@ export function ServicesOrder() {
     if (!lastPayUrl) return
     const ok = await copyToClipboard(lastPayUrl)
     setCopied(ok)
-    if (!ok) { setPayOpenError(t('servicesOrder.pay.copy_failed')); toast.error(t('servicesOrder.pay.copy_failed')); return; }
+    if (!ok) { setPayOpenError(t('servicesOrder.pay.copy_failed')); toast.error(t('servicesOrder.pay.copy_failed')); return }
     toast.success(t('connect.copy_link'), { description: t('servicesOrder.pay.copy_ok') })
   }
 
   function resetSelection() {
-    setSelected(null); setCreated(null); setPaySystems([]); setWaitMsg(null); setErr(null)
-    setOverlayOpen(false); setDetailsCollapsed(false); setLastPayUrl(null)
-    setPayOpenError(null); setOpeningPay(false); setCopied(false)
+    setSelected(null); setSelectedCat(null); setCreated(null); setPaySystems([])
+    setWaitMsg(null); setErr(null); setOverlayOpen(false); setDetailsCollapsed(false)
+    setLastPayUrl(null); setPayOpenError(null); setOpeningPay(false); setCopied(false)
   }
 
-  /* ── Loading ─────────────────────────────────────────────────────────────── */
+  /* ── Loading ───────────────────────────────────────────────────────────── */
   if (loading || meLoading) {
     return (
       <div className="app-loader" style={{ opacity: 1, transition: "opacity 180ms ease", pointerEvents: "auto" }}>
@@ -332,7 +410,7 @@ export function ServicesOrder() {
 
   const topError = err || (meError ? String((meError as any)?.message || meError) : null)
 
-  /* ── Render ──────────────────────────────────────────────────────────────── */
+  /* ── Render ────────────────────────────────────────────────────────────── */
   return (
     <div className="section">
 
@@ -346,9 +424,7 @@ export function ServicesOrder() {
                 <button className="btn modal__close" type="button" onClick={() => setOverlayOpen(false)} aria-label={t('common.close')}>✕</button>
               </div>
               <div className="modal__content">
-                <p className="p">
-                  {payOpenError ? t('servicesOrder.pay.open_manually') : t('servicesOrder.pay.complete_then_check')}
-                </p>
+                <p className="p">{payOpenError ? t('servicesOrder.pay.open_manually') : t('servicesOrder.pay.complete_then_check')}</p>
                 {payOpenError && <div className="pre" style={{ marginTop: 12 }}>{payOpenError}</div>}
                 {lastPayUrl   && <div className="pre" style={{ marginTop: 12, wordBreak: 'break-all', userSelect: 'text' }}>{lastPayUrl}</div>}
                 {copied       && <div className="pre" style={{ marginTop: 8 }}>✅ {t('connect.copy_link')}</div>}
@@ -372,14 +448,10 @@ export function ServicesOrder() {
         <div className="modal" role="dialog" aria-modal="true" onMouseDown={saveAmneziaWarnDismissed}>
           <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()}>
             <div className="card__body">
-              <div className="modal__head">
-                <div className="modal__title">⚠️ {t('servicesOrder.amnezia.warn.title')}</div>
-              </div>
-              <div className="modal__content">
-                <p className="p">{t('servicesOrder.amnezia.warn.text')}</p>
-              </div>
+              <div className="modal__head"><div className="modal__title">⚠️ {t('servicesOrder.amnezia.warn.title')}</div></div>
+              <div className="modal__content"><p className="p">{t('servicesOrder.amnezia.warn.text')}</p></div>
               <div className="actions actions--1" style={{ marginTop: 12 }}>
-                <button className="btn btn--primary" onClick={() => { saveAmneziaWarnDismissed(); setAmneziaWarnOpen(false); }} type="button">OK</button>
+                <button className="btn btn--primary" onClick={() => { saveAmneziaWarnDismissed(); setAmneziaWarnOpen(false) }} type="button">OK</button>
               </div>
             </div>
           </div>
@@ -389,20 +461,16 @@ export function ServicesOrder() {
 
       {/* Подсказка Router VPN */}
       {routerHintOpen && createPortal(
-        <div className="modal" role="dialog" aria-modal="true" onMouseDown={() => { saveRouterHintDismissed(); setRouterHintOpen(false); }}>
+        <div className="modal" role="dialog" aria-modal="true" onMouseDown={() => { saveRouterHintDismissed(); setRouterHintOpen(false) }}>
           <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()}>
             <div className="card__body">
-              <div className="modal__head">
-                <div className="modal__title">📘 {t('servicesOrder.router.hint.title')}</div>
-              </div>
-              <div className="modal__content">
-                <p className="p">{t('servicesOrder.router.hint.text')}</p>
-              </div>
+              <div className="modal__head"><div className="modal__title">📘 {t('servicesOrder.router.hint.title')}</div></div>
+              <div className="modal__content"><p className="p">{t('servicesOrder.router.hint.text')}</p></div>
               <div className="actions actions--2" style={{ marginTop: 12 }}>
-                <button className="btn" onClick={() => { saveRouterHintDismissed(); setRouterHintOpen(false); }} type="button">
+                <button className="btn" onClick={() => { saveRouterHintDismissed(); setRouterHintOpen(false) }} type="button">
                   {t('servicesOrder.router.hint.skip')}
                 </button>
-                <button className="btn btn--primary" onClick={() => { saveRouterHintDismissed(); setRouterHintOpen(false); navigate('/help/router'); }} type="button">
+                <button className="btn btn--primary" onClick={() => { saveRouterHintDismissed(); setRouterHintOpen(false); navigate('/help/router') }} type="button">
                   {t('servicesOrder.router.hint.open')}
                 </button>
               </div>
@@ -415,23 +483,19 @@ export function ServicesOrder() {
       {/* Шапка */}
       <div className="card">
         <div className="card__body">
-          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div>
-              <h1 className="h1">{t('servicesOrder.title')}</h1>
-              <div className="row" style={{ gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
-                <span className="chip chip--soft">{t('home.tiles.balance')}: {fmtMoney(balanceAmount, currency)}</span>
-                <span className="chip chip--soft">{t('home.tiles.bonus')}: {bonus}</span>
-                {hasDiscount && <span className="chip chip--soft">{t('servicesOrder.discount')}: -{Math.round(discountPercent)}%</span>}
-              </div>
-            </div>
+          <h1 className="h1">{t('servicesOrder.title')}</h1>
+          <div className="row" style={{ gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+            <span className="chip chip--soft">{t('home.tiles.balance')}: {fmtMoney(balanceAmount, currency)}</span>
+            <span className="chip chip--soft">{t('home.tiles.bonus')}: {bonus}</span>
+            {hasDiscount && <span className="chip chip--soft">{t('servicesOrder.discount')}: -{Math.round(discountPercent)}%</span>}
           </div>
           {waitMsg  && <div className="pre" style={{ marginTop: 12 }}>{waitMsg}</div>}
           {topError && <div className="pre" style={{ marginTop: 12 }}>{topError}</div>}
         </div>
       </div>
 
-      {/* Шаг 1 — выбор типа */}
-      {!kind && (
+      {/* Шаг 1 — выбор категории */}
+      {!selectedCat && (
         <div className="section">
           <div className="card">
             <div className="card__body">
@@ -442,17 +506,10 @@ export function ServicesOrder() {
               <p className="p" style={{ marginTop: 4 }}>{t('servicesOrder.step.kind.hint')}</p>
 
               <div className="kv" style={{ marginTop: 12 }}>
-                {(['marzban', 'marzban_router', 'amneziawg'] as Kind[]).map((k) => (
-                  <button key={k} type="button" className={`kv__item so__kindCard ${KIND_META[k].recommended ? 'so__kindCard--recommended' : ''}`} onClick={() => setKind(k)}>
-                    <div>
-                      {KIND_META[k].recommended && <div className="so__badgeRecommended">{t('servicesOrder.recommended')}</div>}
-                      <div className="list__title">{KIND_META[k].title}</div>
-                      <p className="p" style={{ marginTop: 4 }}>{KIND_META[k].shortDescr}</p>
-                    </div>
-                    <div className="actions actions--1" style={{ marginTop: 12 }}>
-                      <span className="btn btn--primary" style={{ width: '100%' }}>{t('servicesOrder.step.kind.select')}</span>
-                    </div>
-                  </button>
+                {visibleCategories.length === 0 ? (
+                  <div className="pre">{t('servicesOrder.no_categories')}</div>
+                ) : visibleCategories.map((cat) => (
+                  <CategoryCard key={cat.category_key} cat={cat} onClick={() => setSelectedCat(cat)} />
                 ))}
               </div>
             </div>
@@ -461,19 +518,17 @@ export function ServicesOrder() {
       )}
 
       {/* Шаг 2 — выбор тарифа */}
-      {kind && !selected && (
+      {selectedCat && !selected && (
         <div className="section">
           <div className="card">
             <div className="card__body">
               <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                <div className="h1">{KIND_META[kind].title}</div>
-                <button className="btn" onClick={() => setKind(null)} type="button" style={{ flexShrink: 0 }}>← {t('common.close')}</button>
+                <div className="h1">{selectedCat.emoji ? `${selectedCat.emoji} ` : ''}{selectedCat.title}</div>
+                <button className="btn" onClick={() => setSelectedCat(null)} type="button" style={{ flexShrink: 0 }}>← {t('common.close')}</button>
               </div>
-              {KIND_META[kind].recommended && <p className="p" style={{ marginTop: 4 }}>{t('servicesOrder.step.tariff.recommended_hint')}</p>}
+              {selectedCat.descr && <div className="pre" style={{ marginTop: 8 }}>{selectedCat.descr}</div>}
 
-              <div className="pre" style={{ marginTop: 12 }}>{KIND_META[kind].descr}</div>
-
-              {kind === 'marzban_router' && (
+              {selectedCat.connect_kind === 'marzban_router' && (
                 <div className="actions actions--1" style={{ marginTop: 12 }}>
                   <button className="btn btn--soft" onClick={() => navigate('/help/router')} type="button"
                     style={{ borderColor: "rgba(96,165,250,0.4)", color: "rgba(147,197,253,1)" }}>
@@ -483,8 +538,10 @@ export function ServicesOrder() {
               )}
 
               <div className="kv" style={{ marginTop: 12 }}>
-                {grouped[kind].map((tariff, idx) => (
-                  <button key={tariff.serviceId} type="button" className={`kv__item so__tariffBtn ${kind === 'marzban' && idx === 0 ? 'so__tariffCard--focus' : ''}`} onClick={() => setSelected(tariff)}>
+                {tariffsInCat.map((tariff, idx) => (
+                  <button key={tariff.serviceId} type="button"
+                    className={`kv__item so__tariffBtn ${selectedCat.recommended && idx === 0 ? 'so__tariffCard--focus' : ''}`}
+                    onClick={() => setSelected(tariff)}>
                     <div className="row" style={{ justifyContent: 'space-between' }}>
                       <div className="list__title">{tariff.title}</div>
                       <span className="chip chip--soft">{fmtMoney(tariff.price, tariff.currency)} / {tariff.periodHuman}</span>
