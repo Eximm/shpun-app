@@ -53,7 +53,7 @@ const KIND_META: Record<Kind, { title: string; descr: string; shortDescr: string
   marzban: {
     title: 'Marzban',
     descr: 'Высокая стабильность и скорость. Подходит для телефонов, ПК и планшетов. Доступ ко всем серверам.',
-    shortDescr: 'Стабильно и быстро. Для телефона, ПК и планшета.',
+    shortDescr: 'Стабильно и быстро. Для телефона, ПК и планшета. Специальные маршруты для белых списков.',
     recommended: true,
   },
   marzban_router: {
@@ -114,8 +114,8 @@ function saveRouterHintDismissed() { try { localStorage.setItem(ROUTER_HINT_KEY,
 function getOrderError(e: any): { title: string; description: string } {
   const code = String(e?.error || e?.code || '').trim()
   const msg  = String(e?.message || '').trim()
-  if (code === 'unpaid_order_exists')       return { title: 'Есть неоплаченная услуга',             description: 'Сначала оплатите или удалите уже созданную неоплаченную услугу.' }
-  if (code === 'unpaid_same_service_exists') return { title: 'Есть неоплаченный заказ этого типа', description: 'Сначала оплатите или удалите неоплаченную услугу этого типа.' }
+  if (code === 'unpaid_order_exists')       return { title: 'Есть активный или неоплаченный заказ',      description: 'Сначала оплатите или удалите существующую услугу.' }
+  if (code === 'unpaid_same_service_exists') return { title: 'Есть заказ этого типа', description: 'Сначала оплатите или удалите существующую услугу этого типа.' }
   return { title: 'Не удалось создать услугу', description: msg || 'Не удалось создать заказ. Попробуйте ещё раз.' }
 }
 

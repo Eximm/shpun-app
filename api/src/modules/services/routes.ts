@@ -1012,7 +1012,7 @@ export async function servicesRoutes(app: FastifyInstance) {
 
       const unpaidServices = userServices.filter((x: any) => {
         const status = String(x?.status ?? "").trim().toUpperCase();
-        return status === "NOT PAID";
+        return status === "NOT PAID" || status === "BLOCK";
       });
 
       if (unpaidServices.length > 0) {
