@@ -160,4 +160,4 @@ export type ClearEventsResp = {
   keepLatest: number;
 };
 
-export type AdminTab = "overview" | "broadcasts" | "orderRules" | "trialProtection";
+export type AdminTab = "overview" | "broadcasts" | "orderRules" | "trialProtection" | "serviceCategories";

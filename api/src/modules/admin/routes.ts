@@ -29,6 +29,14 @@ import {
   listObservedIpPrefixes,
 } from "../device/deviceRepo.js";
 
+import {
+  listServiceCategories,
+  getServiceCategory,
+  createServiceCategory,
+  updateServiceCategory,
+  deleteServiceCategory,
+} from "../../shared/linkdb/serviceCategoriesRepo.js";
+
 async function ensureAdmin(shmSessionId: string) {
   const r = await shmShpunAppAdminStatus(shmSessionId);
   return r.ok && (r.json?.is_admin === 1 || r.json?.is_admin === true);
@@ -784,5 +792,78 @@ export async function adminRoutes(app: FastifyInstance) {
 
     return reply.send({ ok: true, deleted, keepLatest });
   });
+  // ── Service Categories ─────────────────────────────────────────────────────
 
+  app.get("/admin/service-categories", async (req, reply) => {
+    const s = getSessionFromRequest(req);
+    if (!s?.shmSessionId) return reply.code(401).send({ ok: false });
+    if (!(await ensureAdmin(s.shmSessionId))) return reply.code(403).send({ ok: false, error: "not_admin" });
+
+    const items = listServiceCategories({ includeHidden: true });
+    return reply.send({ ok: true, items });
+  });
+
+  app.post("/admin/service-categories", async (req, reply) => {
+    const s = getSessionFromRequest(req);
+    if (!s?.shmSessionId) return reply.code(401).send({ ok: false });
+    if (!(await ensureAdmin(s.shmSessionId))) return reply.code(403).send({ ok: false, error: "not_admin" });
+
+    const body = (req.body ?? {}) as any;
+    const result = createServiceCategory({
+      category_key: String(body?.category_key ?? "").trim(),
+      title:        String(body?.title ?? "").trim(),
+      descr:        String(body?.descr ?? "").trim(),
+      short_descr:  String(body?.short_descr ?? "").trim(),
+      connect_kind: String(body?.connect_kind ?? "marzban").trim(),
+      sort_order:   Number(body?.sort_order ?? 100),
+      badge:        body?.badge ? String(body.badge).trim() : null,
+      badge_tone:   String(body?.badge_tone ?? "soft").trim(),
+      recommended:  Boolean(body?.recommended),
+      hidden:       Boolean(body?.hidden),
+      service_ids:  Array.isArray(body?.service_ids) ? body.service_ids.map(Number) : [],
+    });
+
+    if (!result.ok) return reply.code(400).send({ ok: false, error: result.error });
+    return reply.send({ ok: true, category: result.category });
+  });
+
+  app.put("/admin/service-categories/:key", async (req, reply) => {
+    const s = getSessionFromRequest(req);
+    if (!s?.shmSessionId) return reply.code(401).send({ ok: false });
+    if (!(await ensureAdmin(s.shmSessionId))) return reply.code(403).send({ ok: false, error: "not_admin" });
+
+    const key = String((req.params as any)?.key ?? "").trim();
+    if (!key) return reply.code(400).send({ ok: false, error: "key_required" });
+
+    const body = (req.body ?? {}) as any;
+    const data: any = {};
+
+    if ("title"        in body) data.title        = String(body.title).trim();
+    if ("descr"        in body) data.descr        = String(body.descr).trim();
+    if ("short_descr"  in body) data.short_descr  = String(body.short_descr).trim();
+    if ("connect_kind" in body) data.connect_kind = String(body.connect_kind).trim();
+    if ("sort_order"   in body) data.sort_order   = Number(body.sort_order);
+    if ("badge"        in body) data.badge        = body.badge ? String(body.badge).trim() : null;
+    if ("badge_tone"   in body) data.badge_tone   = String(body.badge_tone).trim();
+    if ("recommended"  in body) data.recommended  = Boolean(body.recommended);
+    if ("hidden"       in body) data.hidden       = Boolean(body.hidden);
+    if ("service_ids"  in body) data.service_ids  = Array.isArray(body.service_ids) ? body.service_ids.map(Number) : [];
+
+    const result = updateServiceCategory(key, data);
+    if (!result.ok) return reply.code(result.error === "not_found" ? 404 : 400).send({ ok: false, error: result.error });
+    return reply.send({ ok: true, category: result.category });
+  });
+
+  app.delete("/admin/service-categories/:key", async (req, reply) => {
+    const s = getSessionFromRequest(req);
+    if (!s?.shmSessionId) return reply.code(401).send({ ok: false });
+    if (!(await ensureAdmin(s.shmSessionId))) return reply.code(403).send({ ok: false, error: "not_admin" });
+
+    const key = String((req.params as any)?.key ?? "").trim();
+    if (!key) return reply.code(400).send({ ok: false, error: "key_required" });
+
+    const result = deleteServiceCategory(key);
+    if (!result.ok) return reply.code(500).send({ ok: false, error: result.error });
+    return reply.send({ ok: true, deleted: result.deleted });
+  });
 }

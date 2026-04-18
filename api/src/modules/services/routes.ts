@@ -1,3 +1,4 @@
+// FILE: api/src/modules/services/routes.ts
 import type { FastifyInstance } from "fastify";
 import { getSessionFromRequest } from "../../shared/session/sessionStore.js";
 import { parseShmPeriod } from "../../shared/shm/period.js";
@@ -29,6 +30,8 @@ import {
   registerDeviceSeen,
   isDeviceManuallyBlocked,
 } from "../device/deviceService.js";
+
+import { listServiceCategories } from "../../shared/linkdb/serviceCategoriesRepo.js";
 
 function mapStatus(raw?: string) {
   const s = String(raw || "").toUpperCase();
@@ -671,159 +674,152 @@ export async function servicesRoutes(app: FastifyInstance) {
     return reply.send({ ok: true, unbound: j?.unbound ?? 0, clean_code: j?.clean_code ?? "" });
   });
 
-// =====================
-// ROUTER CONFIG
-// =====================
+  app.get("/services/:usi/router/config", async (req, reply) => {
+    const shmSessionId = ensureAuthed(req, reply);
+    if (!shmSessionId) return;
 
-app.get("/services/:usi/router/config", async (req, reply) => {
-  const shmSessionId = ensureAuthed(req, reply);
-  if (!shmSessionId) return;
+    const debug = isDebug(req);
 
-  const debug = isDebug(req);
+    const usi = Number((req.params as any)?.usi ?? 0);
+    if (!usi || !Number.isFinite(usi)) {
+      return reply.code(400).send({ ok: false, error: "bad_request", details: "usi_required" });
+    }
 
-  const usi = Number((req.params as any)?.usi ?? 0);
-  if (!usi || !Number.isFinite(usi)) {
-    return reply.code(400).send({ ok: false, error: "bad_request", details: "usi_required" });
-  }
+    const svc = await loadUserServiceByUsi(shmSessionId, usi);
+    if (!svc.ok) {
+      return sendShmError(reply, {
+        status: svc.status,
+        details: svc.json ?? svc.text,
+        debug,
+        message: "Не удалось получить данные услуги. Попробуйте ещё раз.",
+      });
+    }
+    if (!svc.item) {
+      return reply.code(404).send({ ok: false, error: "service_not_found" });
+    }
 
-  const svc = await loadUserServiceByUsi(shmSessionId, usi);
-  if (!svc.ok) {
-    return sendShmError(reply, {
-      status: svc.status,
-      details: svc.json ?? svc.text,
-      debug,
-      message: "Не удалось получить данные услуги. Попробуйте ещё раз.",
+    const statusRaw = String(svc.item?.status ?? "");
+    const category = String(svc.item?.service?.category ?? svc.item?.category ?? "");
+
+    if (category !== "marzban-r") {
+      return reply.code(400).send({
+        ok: false,
+        error: "not_router_service",
+        message: "Эта услуга не поддерживает настройки роутера.",
+      });
+    }
+
+    if (String(statusRaw).toUpperCase() !== "ACTIVE") {
+      return reply.code(409).send({
+        ok: false,
+        error: "service_not_ready",
+        status: statusRaw,
+        message: "Услуга ещё не готова.",
+      });
+    }
+
+    const r = await shmShpunAppTemplate(shmSessionId, "router.config.get", { usi });
+    const j: any = r.json ?? {};
+
+    if (!r.ok) {
+      return sendTemplateError(reply, {
+        message: "Не удалось получить конфигурацию",
+        details: r.json ?? r.text,
+        debug,
+        status: r.status,
+      });
+    }
+
+    if ((j?.ok ?? 0) !== 1) {
+      return reply.code(400).send({
+        ok: false,
+        error: j?.error || "config_get_failed",
+        details: debug ? j : undefined,
+      });
+    }
+
+    return reply.send({
+      ok: true,
+      links: Array.isArray(j?.links) ? j.links : [],
     });
-  }
-  if (!svc.item) {
-    return reply.code(404).send({ ok: false, error: "service_not_found" });
-  }
-
-  const statusRaw = String(svc.item?.status ?? "");
-  const category = String(svc.item?.service?.category ?? svc.item?.category ?? "");
-
-  if (category !== "marzban-r") {
-    return reply.code(400).send({
-      ok: false,
-      error: "not_router_service",
-      message: "Эта услуга не поддерживает настройки роутера.",
-    });
-  }
-
-  if (String(statusRaw).toUpperCase() !== "ACTIVE") {
-    return reply.code(409).send({
-      ok: false,
-      error: "service_not_ready",
-      status: statusRaw,
-      message: "Услуга ещё не готова.",
-    });
-  }
-
-  const r = await shmShpunAppTemplate(shmSessionId, "router.config.get", {
-    usi,
   });
 
-  const j: any = r.json ?? {};
+  app.post("/services/:usi/router/config", async (req, reply) => {
+    const shmSessionId = ensureAuthed(req, reply);
+    if (!shmSessionId) return;
 
-  if (!r.ok) {
-    return sendTemplateError(reply, {
-      message: "Не удалось получить конфигурацию",
-      details: r.json ?? r.text,
-      debug,
-      status: r.status,
+    const debug = isDebug(req);
+
+    const usi = Number((req.params as any)?.usi ?? 0);
+    const { link } = (req.body ?? {}) as any;
+
+    if (!usi || !Number.isFinite(usi)) {
+      return reply.code(400).send({ ok: false, error: "bad_request", details: "usi_required" });
+    }
+
+    if (!link || !String(link).trim()) {
+      return reply.code(400).send({ ok: false, error: "bad_request", details: "link_required" });
+    }
+
+    const svc = await loadUserServiceByUsi(shmSessionId, usi);
+    if (!svc.ok) {
+      return sendShmError(reply, {
+        status: svc.status,
+        details: svc.json ?? svc.text,
+        debug,
+        message: "Не удалось получить данные услуги. Попробуйте ещё раз.",
+      });
+    }
+    if (!svc.item) {
+      return reply.code(404).send({ ok: false, error: "service_not_found" });
+    }
+
+    const statusRaw = String(svc.item?.status ?? "");
+    const category = String(svc.item?.service?.category ?? svc.item?.category ?? "");
+
+    if (category !== "marzban-r") {
+      return reply.code(400).send({
+        ok: false,
+        error: "not_router_service",
+        message: "Эта услуга не поддерживает настройки роутера.",
+      });
+    }
+
+    if (String(statusRaw).toUpperCase() !== "ACTIVE") {
+      return reply.code(409).send({
+        ok: false,
+        error: "service_not_ready",
+        status: statusRaw,
+        message: "Услуга ещё не готова.",
+      });
+    }
+
+    const r = await shmShpunAppTemplate(shmSessionId, "router.config.set", {
+      usi,
+      link: String(link).trim(),
     });
-  }
 
-  if ((j?.ok ?? 0) !== 1) {
-    return reply.code(400).send({
-      ok: false,
-      error: j?.error || "config_get_failed",
-      details: debug ? j : undefined,
-    });
-  }
+    const j: any = r.json ?? {};
 
-  return reply.send({
-    ok: true,
-    links: Array.isArray(j?.links) ? j.links : [],
+    if (!r.ok) {
+      return sendTemplateError(reply, {
+        message: "Не удалось сохранить настройки",
+        details: r.json ?? r.text,
+        debug,
+        status: r.status,
+      });
+    }
+
+    if ((j?.ok ?? 0) !== 1) {
+      return reply.code(400).send({
+        ok: false,
+        error: j?.error || "config_set_failed",
+        details: debug ? j : undefined,
+      });
+    }
+
+    return reply.send({ ok: true });
   });
-});
-
-app.post("/services/:usi/router/config", async (req, reply) => {
-  const shmSessionId = ensureAuthed(req, reply);
-  if (!shmSessionId) return;
-
-  const debug = isDebug(req);
-
-  const usi = Number((req.params as any)?.usi ?? 0);
-  const { link } = (req.body ?? {}) as any;
-
-  if (!usi || !Number.isFinite(usi)) {
-    return reply.code(400).send({ ok: false, error: "bad_request", details: "usi_required" });
-  }
-
-  if (!link || !String(link).trim()) {
-    return reply.code(400).send({ ok: false, error: "bad_request", details: "link_required" });
-  }
-
-  const svc = await loadUserServiceByUsi(shmSessionId, usi);
-  if (!svc.ok) {
-    return sendShmError(reply, {
-      status: svc.status,
-      details: svc.json ?? svc.text,
-      debug,
-      message: "Не удалось получить данные услуги. Попробуйте ещё раз.",
-    });
-  }
-  if (!svc.item) {
-    return reply.code(404).send({ ok: false, error: "service_not_found" });
-  }
-
-  const statusRaw = String(svc.item?.status ?? "");
-  const category = String(svc.item?.service?.category ?? svc.item?.category ?? "");
-
-  if (category !== "marzban-r") {
-    return reply.code(400).send({
-      ok: false,
-      error: "not_router_service",
-      message: "Эта услуга не поддерживает настройки роутера.",
-    });
-  }
-
-  if (String(statusRaw).toUpperCase() !== "ACTIVE") {
-    return reply.code(409).send({
-      ok: false,
-      error: "service_not_ready",
-      status: statusRaw,
-      message: "Услуга ещё не готова.",
-    });
-  }
-
-  const r = await shmShpunAppTemplate(shmSessionId, "router.config.set", {
-    usi,
-    link: String(link).trim(),
-  });
-
-  const j: any = r.json ?? {};
-
-  if (!r.ok) {
-    return sendTemplateError(reply, {
-      message: "Не удалось сохранить настройки",
-      details: r.json ?? r.text,
-      debug,
-      status: r.status,
-    });
-  }
-
-  if ((j?.ok ?? 0) !== 1) {
-    return reply.code(400).send({
-      ok: false,
-      error: j?.error || "config_set_failed",
-      details: debug ? j : undefined,
-    });
-  }
-
-  return reply.send({ ok: true });
-});
 
   app.get("/services/order", async (req, reply) => {
     const shmSessionId = ensureAuthed(req, reply);
@@ -988,12 +984,7 @@ app.post("/services/:usi/router/config", async (req, reply) => {
         eventType: "trial_group_block",
         decision: "block",
         reason: "device_manually_blocked",
-        meta: {
-          serviceId,
-          isTrialService,
-          trialGroup,
-          ...trialMeta,
-        },
+        meta: { serviceId, isTrialService, trialGroup, ...trialMeta },
       });
 
       return reply.code(409).send({
@@ -1004,11 +995,7 @@ app.post("/services/:usi/router/config", async (req, reply) => {
     }
 
     if (orderBlockMode !== "off") {
-      const servicesRes = await shmGetUserServices(shmSessionId, {
-        limit: 50,
-        offset: 0,
-        filter: {},
-      });
+      const servicesRes = await shmGetUserServices(shmSessionId, { limit: 50, offset: 0, filter: {} });
 
       if (!servicesRes.ok) {
         if (servicesRes.status === 401 || servicesRes.status === 403) return sendNotAuthenticated(reply);
@@ -1052,10 +1039,7 @@ app.post("/services/:usi/router/config", async (req, reply) => {
 
           const orderItems = (orderListRes.json as any)?.data ?? [];
           const availableServices = Array.isArray(orderItems) ? orderItems : [];
-
-          const requestedService =
-            availableServices.find((x: any) => Number(x?.service_id ?? 0) === serviceId) ?? null;
-
+          const requestedService = availableServices.find((x: any) => Number(x?.service_id ?? 0) === serviceId) ?? null;
           const requestedCategory = String(requestedService?.category ?? "").trim();
 
           if (requestedCategory) {
@@ -1100,9 +1084,7 @@ app.post("/services/:usi/router/config", async (req, reply) => {
         ip,
         userAgent,
         eventType: "trial_group_check",
-        decision: shouldFlag
-          ? (trialDeviceMode === "enforce" ? "block" : "observe")
-          : "allow",
+        decision: shouldFlag ? (trialDeviceMode === "enforce" ? "block" : "observe") : "allow",
         reason: alreadyUsed
           ? "trial_group_already_used_on_device"
           : ipReuseRow
@@ -1116,12 +1098,7 @@ app.post("/services/:usi/router/config", async (req, reply) => {
           isTrialService,
           ipReuse: !!ipReuseRow,
           ipReuseUsage: ipReuseRow
-            ? {
-                usedAt: ipReuseRow.used_at,
-                userId: ipReuseRow.user_id,
-                serviceId: ipReuseRow.service_id,
-                deviceToken: ipReuseRow.device_token,
-              }
+            ? { usedAt: ipReuseRow.used_at, userId: ipReuseRow.user_id, serviceId: ipReuseRow.service_id, deviceToken: ipReuseRow.device_token }
             : null,
           thresholds: {
             ipPrefixUsageThreshold: trialIpPrefixUsageThreshold,
@@ -1137,21 +1114,12 @@ app.post("/services/:usi/router/config", async (req, reply) => {
 
       if (alreadyUsed && trialDeviceMode === "enforce") {
         logTrialEvent({
-          deviceToken,
-          userId,
-          ip,
-          userAgent,
+          deviceToken, userId, ip, userAgent,
           eventType: "trial_group_block",
           decision: "block",
           reason: "trial_already_used_in_group_on_device",
-          meta: {
-            serviceId,
-            trialGroup,
-            isTrialService,
-            ...trialMeta,
-          },
+          meta: { serviceId, trialGroup, isTrialService, ...trialMeta },
         });
-
         return reply.code(409).send({
           ok: false,
           error: "trial_already_used",
@@ -1161,17 +1129,12 @@ app.post("/services/:usi/router/config", async (req, reply) => {
 
       if (ipReuseRow && trialDeviceMode === "enforce") {
         logTrialEvent({
-          deviceToken,
-          userId,
-          ip,
-          userAgent,
+          deviceToken, userId, ip, userAgent,
           eventType: "trial_group_block",
           decision: "block",
           reason: "trial_already_used_in_group_on_ip",
           meta: {
-            serviceId,
-            trialGroup,
-            isTrialService,
+            serviceId, trialGroup, isTrialService,
             reusedFromDeviceToken: ipReuseRow.device_token,
             reusedFromUserId: ipReuseRow.user_id,
             reusedFromServiceId: ipReuseRow.service_id,
@@ -1179,7 +1142,6 @@ app.post("/services/:usi/router/config", async (req, reply) => {
             ...trialMeta,
           },
         });
-
         return reply.code(409).send({
           ok: false,
           error: "trial_already_used",
@@ -1189,17 +1151,12 @@ app.post("/services/:usi/router/config", async (req, reply) => {
 
       if (risk.highRisk && trialDeviceMode === "enforce") {
         logTrialEvent({
-          deviceToken,
-          userId,
-          ip,
-          userAgent,
+          deviceToken, userId, ip, userAgent,
           eventType: "trial_group_block",
           decision: "block",
           reason: "trial_abuse_detected_on_ip_prefix",
           meta: {
-            serviceId,
-            trialGroup,
-            isTrialService,
+            serviceId, trialGroup, isTrialService,
             thresholds: {
               ipPrefixUsageThreshold: trialIpPrefixUsageThreshold,
               ipPrefixAttemptThreshold: trialIpPrefixAttemptThreshold,
@@ -1211,7 +1168,6 @@ app.post("/services/:usi/router/config", async (req, reply) => {
             ...trialMeta,
           },
         });
-
         return reply.code(409).send({
           ok: false,
           error: "trial_already_used",
@@ -1244,10 +1200,7 @@ app.post("/services/:usi/router/config", async (req, reply) => {
 
     if (deviceToken) {
       logTrialEvent({
-        deviceToken,
-        userId,
-        ip,
-        userAgent,
+        deviceToken, userId, ip, userAgent,
         eventType: "service_order_created",
         decision: "allow",
         reason: "order_created",
@@ -1265,27 +1218,14 @@ app.post("/services/:usi/router/config", async (req, reply) => {
     }
 
     if (deviceToken && isTrialService && trialGroup) {
-      rememberTrialUsedInGroup({
-        deviceToken,
-        trialGroup,
-        userId,
-        serviceId,
-      });
+      rememberTrialUsedInGroup({ deviceToken, trialGroup, userId, serviceId });
 
       logTrialEvent({
-        deviceToken,
-        userId,
-        ip,
-        userAgent,
+        deviceToken, userId, ip, userAgent,
         eventType: "trial_group_allowed",
         decision: "allow",
         reason: "trial_registered_on_device_for_group",
-        meta: {
-          serviceId,
-          trialGroup,
-          isTrialService,
-          ...trialMeta,
-        },
+        meta: { serviceId, trialGroup, isTrialService, ...trialMeta },
       });
     }
 
@@ -1298,5 +1238,15 @@ app.post("/services/:usi/router/config", async (req, reply) => {
     };
 
     return reply.send({ ok: true, item, raw: us });
+  });
+
+  // ── Service Categories ──────────────────────────────────────────────────────
+
+  app.get("/services/categories", async (req, reply) => {
+    const shmSessionId = ensureAuthed(req, reply);
+    if (!shmSessionId) return;
+
+    const categories = listServiceCategories({ includeHidden: false });
+    return reply.send({ ok: true, items: categories });
   });
 }

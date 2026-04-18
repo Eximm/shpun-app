@@ -327,7 +327,7 @@ export const RU: Dict = {
 
   // services
   "services.wl.badge": "WL",
-  "services.wl.hint":"White List режим — используйте только если обычное подключение не работает.",
+  "services.wl.hint":"White List режим — используйте только в сетях с белыми списками или если обычное подключение не работает.",
   "services.wl.warning":  "Трафик в этом режиме может быть ограничен.",
   "services.title": "Услуги",
   "services.page.title": "Услуги",
@@ -920,6 +920,8 @@ export const RU: Dict = {
   "admin.tab.orders": "Заказы",
   "admin.tab.orders.sub": "Order rules",
   "admin.tab.trial": "Trial Protection",
+  "admin.tab.categories": "Категории",
+  "admin.tab.categories.sub": "Услуги",
   "admin.tab.trial.sub": "Anti-abuse",
 
 };
@@ -1845,6 +1847,8 @@ export const EN: Dict = {
   "admin.tab.orders": "Orders",
   "admin.tab.orders.sub": "Order rules",
   "admin.tab.trial": "Trial Protection",
+  "admin.tab.categories": "Категории",
+  "admin.tab.categories.sub": "Услуги",
   "admin.tab.trial.sub": "Anti-abuse",
 
 };
