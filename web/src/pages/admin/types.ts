@@ -1,3 +1,5 @@
+// web/src/pages/admin/types.ts
+
 export type BroadcastItem = {
   origin_id: string;
   ts: number;
@@ -6,10 +8,13 @@ export type BroadcastItem = {
   title?: string;
   message?: string;
   copies: number;
+  hidden: boolean;
 };
 
-export type ListResp = { ok: true; items: BroadcastItem[] };
+export type ListResp   = { ok: true; items: BroadcastItem[] };
 export type DeleteResp = { ok: true; originId: string; deleted: number };
+export type HideResp   = { ok: true; originId: string; hidden: boolean; updated: number };
+export type UpdateResp = { ok: true; originId: string; updated: number };
 
 export type OrderBlockMode = "off" | "same_type" | "any";
 export type TrialDeviceMode = "off" | "observe" | "enforce";
