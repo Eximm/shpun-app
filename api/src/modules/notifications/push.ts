@@ -1,5 +1,6 @@
 ﻿// FILE: api/src/modules/notifications/push.ts
 import type { FastifyInstance } from "fastify";
+import { randomUUID } from "crypto";
 import { getSessionFromRequest } from "../../shared/session/sessionStore.js";
 import {
   listEvents,
@@ -18,6 +19,7 @@ import {
   listBroadcasts,
   hideBroadcastByOriginId,
   updateBroadcastByOriginId,
+  putNotifEvent,
 } from "../../shared/linkdb/notificationsRepo.js";
 import { shmShpunAppAdminStatus } from "../../shared/shm/shmClient.js";
 
@@ -302,6 +304,39 @@ export async function pushRoutes(app: FastifyInstance) {
     const { items } = listBroadcasts({ limit });
 
     return reply.send({ ok: true, items });
+  });
+
+
+  app.post("/admin/broadcast", async (req, reply) => {
+    const s = await ensureAdmin(req, reply);
+    if (!s) return;
+
+    const body = (req.body ?? {}) as any;
+    const title   = String(body?.title   ?? "").trim();
+    const message = String(body?.message ?? "").trim();
+
+    if (!title && !message) {
+      return reply.code(400).send({ ok: false, error: "title_or_message_required" });
+    }
+
+    const originId  = randomUUID();
+    const event_id  = `sys:broadcast:${originId}`;
+    const ts        = Math.floor(Date.now() / 1000);
+
+    const r = putNotifEvent({
+      event_id,
+      ts,
+      type:    "broadcast.news",
+      level:   "info",
+      title:   title   || undefined,
+      message: message || undefined,
+      target:  "all",
+      toast:   false,
+    });
+
+    if (!r.ok) return reply.code(500).send({ ok: false, error: r.error });
+
+    return reply.send({ ok: true, originId, event_id, ts, dedup: r.dedup });
   });
 
   app.delete("/admin/broadcast/:originId", async (req, reply) => {

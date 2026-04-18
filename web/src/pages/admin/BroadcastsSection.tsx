@@ -8,6 +8,8 @@ import type { BroadcastItem, DeleteResp, HideResp, UpdateResp, ListResp } from "
 
 const PREVIEW_LIMIT = 160;
 
+type CreateResp = { ok: true; originId: string; event_id: string; ts: number; dedup: boolean };
+
 export function BroadcastsSection() {
   const [loading,     setLoading]     = useState(false);
   const [items,       setItems]       = useState<BroadcastItem[]>([]);
@@ -16,12 +18,19 @@ export function BroadcastsSection() {
   const [hidingId,    setHidingId]    = useState<string | null>(null);
   const [opened,      setOpened]      = useState<BroadcastItem | null>(null);
 
-  // Режим редактирования
+  // Редактирование
   const [editMode,    setEditMode]    = useState(false);
   const [editTitle,   setEditTitle]   = useState("");
   const [editMessage, setEditMessage] = useState("");
   const [saving,      setSaving]      = useState(false);
   const [saveError,   setSaveError]   = useState<string | null>(null);
+
+  // Создание
+  const [createMode,    setCreateMode]    = useState(false);
+  const [newTitle,      setNewTitle]      = useState("");
+  const [newMessage,    setNewMessage]    = useState("");
+  const [creating,      setCreating]      = useState(false);
+  const [createError,   setCreateError]   = useState<string | null>(null);
 
   async function load() {
     setLoading(true); setError(null);
@@ -90,6 +99,24 @@ export function BroadcastsSection() {
     } finally { setSaving(false); }
   }
 
+  async function createBroadcast() {
+    if (!newTitle.trim() && !newMessage.trim()) {
+      setCreateError("Заполните заголовок или текст.");
+      return;
+    }
+    setCreating(true); setCreateError(null);
+    try {
+      await apiFetch<CreateResp>("/admin/broadcast", {
+        method: "POST",
+        body: { title: newTitle.trim(), message: newMessage.trim() },
+      });
+      setNewTitle(""); setNewMessage(""); setCreateMode(false);
+      await load();
+    } catch (e: any) {
+      setCreateError(e?.message || "Не удалось создать новость.");
+    } finally { setCreating(false); }
+  }
+
   const sorted = useMemo(() => items.slice().sort((a, b) => (b.ts || 0) - (a.ts || 0)), [items]);
 
   return (
@@ -100,12 +127,52 @@ export function BroadcastsSection() {
             <div>
               <div className="kicker">Broadcasts</div>
               <h2 className="h2">Управление broadcast-новостями</h2>
-              <p className="p">Просмотр, скрытие от пользователей и редактирование.</p>
+              <p className="p">Просмотр, создание, редактирование и скрытие.</p>
             </div>
-            <button className="btn btn--accent" type="button" onClick={() => void load()} disabled={loading}>
-              {loading ? "Обновляю…" : "Обновить"}
-            </button>
+            <div className="admin-rowActions">
+              <button className="btn btn--accent" type="button"
+                onClick={() => { setCreateMode((v) => !v); setCreateError(null); }}>
+                {createMode ? "Отмена" : "+ Создать"}
+              </button>
+              <button className="btn btn--soft" type="button" onClick={() => void load()} disabled={loading}>
+                {loading ? "Обновляю…" : "Обновить"}
+              </button>
+            </div>
           </div>
+
+          {/* Форма создания */}
+          {createMode && (
+            <div className="list admin-gap-top-md">
+              <div className="list__item admin-tightItem">
+                <div className="list__main">
+                  <div className="list__title">Новая новость</div>
+                  <div className="list__sub admin-gap-top-sm">
+                    <input
+                      className="input"
+                      value={newTitle}
+                      onChange={(e) => setNewTitle(e.target.value)}
+                      placeholder="Заголовок"
+                      style={{ marginBottom: 8 }}
+                    />
+                    <textarea
+                      className="input"
+                      style={{ minHeight: 100, resize: "vertical" }}
+                      value={newMessage}
+                      onChange={(e) => setNewMessage(e.target.value)}
+                      placeholder="Текст новости"
+                    />
+                  </div>
+                  {createError && <div className="pre" style={{ marginTop: 8 }}>{createError}</div>}
+                  <div className="actions actions--1" style={{ marginTop: 10 }}>
+                    <button className="btn btn--accent" type="button"
+                      onClick={() => void createBroadcast()} disabled={creating}>
+                      {creating ? "Создаю…" : "📢 Опубликовать"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {error && <div className="pre admin-gap-top-md">{error}</div>}
 
@@ -115,7 +182,8 @@ export function BroadcastsSection() {
             ) : sorted.length === 0 ? (
               <div className="pre">Broadcast-новостей пока нет.</div>
             ) : sorted.map((item) => (
-              <div key={item.origin_id} className="list__item admin-rowCard" style={{ opacity: item.hidden ? 0.5 : 1 }}>
+              <div key={item.origin_id} className="list__item admin-rowCard"
+                style={{ opacity: item.hidden ? 0.5 : 1 }}>
                 <div className="list__main">
                   <div className="kicker">
                     {formatDateTime(item.ts)}
@@ -131,7 +199,8 @@ export function BroadcastsSection() {
                   </div>
                 </div>
                 <div className="admin-rowActions">
-                  <button className="btn btn--soft" type="button" onClick={() => { setOpened(item); setEditMode(false); }}>
+                  <button className="btn btn--soft" type="button"
+                    onClick={() => { setOpened(item); setEditMode(false); }}>
                     Открыть
                   </button>
                   <button className="btn btn--soft" type="button"
@@ -151,6 +220,7 @@ export function BroadcastsSection() {
         </div>
       </div>
 
+      {/* Модалка просмотра / редактирования */}
       {opened && (
         <ModalShell
           title={opened.title || "—"}
@@ -158,45 +228,38 @@ export function BroadcastsSection() {
           onClose={() => { setOpened(null); setEditMode(false); }}
         >
           {editMode ? (
-            /* ── Режим редактирования ── */
             <>
               <div className="list">
                 <div className="list__item admin-tightItem">
                   <div className="list__main">
                     <div className="list__title">Заголовок</div>
-                    <input
-                      className="input"
-                      value={editTitle}
+                    <input className="input" value={editTitle}
                       onChange={(e) => setEditTitle(e.target.value)}
-                      placeholder="Заголовок новости"
-                    />
+                      placeholder="Заголовок новости" />
                   </div>
                 </div>
                 <div className="list__item admin-tightItem">
                   <div className="list__main">
                     <div className="list__title">Текст</div>
-                    <textarea
-                      className="input"
-                      style={{ minHeight: 120, resize: "vertical" }}
-                      value={editMessage}
-                      onChange={(e) => setEditMessage(e.target.value)}
-                      placeholder="Текст новости"
-                    />
+                    <textarea className="input" style={{ minHeight: 120, resize: "vertical" }}
+                      value={editMessage} onChange={(e) => setEditMessage(e.target.value)}
+                      placeholder="Текст новости" />
                   </div>
                 </div>
               </div>
               {saveError && <div className="pre" style={{ marginTop: 8 }}>{saveError}</div>}
               <div className="actions actions--2 admin-gap-top-lg">
-                <button className="btn btn--soft" type="button" onClick={() => setEditMode(false)} disabled={saving}>
+                <button className="btn btn--soft" type="button"
+                  onClick={() => setEditMode(false)} disabled={saving}>
                   Отмена
                 </button>
-                <button className="btn btn--accent" type="button" onClick={() => void saveEdit()} disabled={saving}>
+                <button className="btn btn--accent" type="button"
+                  onClick={() => void saveEdit()} disabled={saving}>
                   {saving ? "Сохраняю…" : "Сохранить"}
                 </button>
               </div>
             </>
           ) : (
-            /* ── Просмотр ── */
             <>
               <div className="list">
                 {opened.hidden && (
