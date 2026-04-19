@@ -327,8 +327,8 @@ export const RU: Dict = {
 
   // services
   "services.wl.badge": "WL",
-  "services.wl.hint":"White List режим — используйте только в сетях с белыми списками или если обычное подключение не работает.",
-  "services.wl.warning":  "Трафик в этом режиме может быть ограничен.",
+  "services.wl.hint": "Дополнительный ключ WL — работает только в клиенте V2rayTun. Используйте если основной ключ не работает в вашей сети.",
+  "services.wl.warning": "Работает только в V2rayTun. Трафик в этом режиме может быть ограничен.",
   "services.title": "Услуги",
   "services.page.title": "Услуги",
   "services.sub": "Ваши услуги и их текущий статус.",
@@ -921,8 +921,8 @@ export const RU: Dict = {
   "admin.tab.orders": "Заказы",
   "admin.tab.orders.sub": "Order rules",
   "admin.tab.trial": "Trial Protection",
-  "admin.tab.categories": "Категории",
-  "admin.tab.categories.sub": "Услуги",
+  "admin.tab.categories": "Categories",
+  "admin.tab.categories.sub": "Services",
   "admin.tab.trial.sub": "Anti-abuse",
 
 };
@@ -1254,8 +1254,8 @@ export const EN: Dict = {
 
   // services
   "services.wl.badge": "WL",
-  "services.wl.hint": "White List mode — use only in networks with white lists or when the regular connection does not work.",
-  "services.wl.warning": "Traffic in this mode may be limited.",
+  "services.wl.hint": "WL key — works only in the V2rayTun client. Use it if the main key does not work on your network.",
+  "services.wl.warning": "Works only in V2rayTun. Traffic in this mode may be limited.",
   "services.title": "Services",
   "services.page.title": "Services",
   "services.sub": "Your services and their current status.",
@@ -1849,8 +1849,8 @@ export const EN: Dict = {
   "admin.tab.orders": "Orders",
   "admin.tab.orders.sub": "Order rules",
   "admin.tab.trial": "Trial Protection",
-  "admin.tab.categories": "Категории",
-  "admin.tab.categories.sub": "Услуги",
+  "admin.tab.categories": "Categories",
+  "admin.tab.categories.sub": "Services",
   "admin.tab.trial.sub": "Anti-abuse",
 
 };

@@ -242,7 +242,7 @@ export default function ConnectMarzban({ usi }: Props) {
 
   useEffect(() => { void load(); }, [usi]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const primaryKind: ClientKind = platform === "ios" ? "v2ray" : "hiddify";
+  const primaryKind: ClientKind = "v2ray"; // v2ray — основной клиент для всех платформ
 
   useEffect(() => {
     if (userTouchedAccordionsRef.current) return;
@@ -259,7 +259,7 @@ export default function ConnectMarzban({ usi }: Props) {
   const ready         = !loading && !error && !!subscriptionUrl;
   const hiddifyClient = HIDDIFY_LINKS[platform];
   const v2rayClient   = V2RAYTUN_LINKS[platform];
-  const primaryClient = primaryKind === "hiddify" ? hiddifyClient : v2rayClient;
+  const primaryClient = v2rayClient; // v2ray — основной клиент
 
   const hiddifyAutoImportHref = ready ? buildHiddifyImportLink(subscriptionUrl, platform) : "";
   const v2rayAutoImportHref   = ready ? buildV2RayTunImportLink(subscriptionUrl, platform) : "";
@@ -492,7 +492,7 @@ export default function ConnectMarzban({ usi }: Props) {
       {/* Advanced accordion */}
       {advancedOpen && ready && (
         <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 12 }}>
-          {renderClientAccordion(primaryKind === "hiddify" ? "v2ray" : "hiddify")}
+          {renderClientAccordion("hiddify")} {/* hiddify — резервный клиент */}
 
           <Accordion
             title={t("connect.more_methods")}

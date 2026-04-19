@@ -107,11 +107,8 @@ const EMPTY_FORM = (): Partial<ServiceCategory> & {
 
 function CategoryPreview({ form }: { form: ReturnType<typeof EMPTY_FORM> }) {
   const accentFrom = form.accent_from || PRESETS[0].from;
-  const accentTo   = form.accent_to   || PRESETS[0].to;
-  const gradient   = `linear-gradient(135deg, ${accentFrom}, ${accentTo})`;
   const cardBg     = form.card_bg || "rgba(255,255,255,0.04)";
   const btnLabel   = form.button_label || "Выбрать";
-  const badgeColor = BADGE_TONES[form.badge_tone ?? "soft"] ?? BADGE_TONES.soft;
 
   return (
     <div style={{ border: `1.5px solid ${accentFrom}`, borderRadius: 16, background: cardBg, padding: 16, marginTop: 8 }}>
@@ -120,7 +117,7 @@ function CategoryPreview({ form }: { form: ReturnType<typeof EMPTY_FORM> }) {
           {form.emoji ? `${form.emoji} ` : ""}{form.title || "Название категории"}
         </div>
         {form.badge && (
-          <span style={{ background: badgeColor, borderRadius: 20, padding: "2px 10px", fontSize: 12, fontWeight: 600, color: "#fff", marginLeft: 8, whiteSpace: "nowrap" }}>
+          <span className="chip chip--soft" style={{ marginLeft: 8, whiteSpace: "nowrap" }}>
             {form.badge}
           </span>
         )}
@@ -128,8 +125,8 @@ function CategoryPreview({ form }: { form: ReturnType<typeof EMPTY_FORM> }) {
       <div style={{ fontSize: 13, opacity: 0.7, marginBottom: 12 }}>
         {form.short_descr || "Краткое описание"}
       </div>
-      <div style={{ background: gradient, borderRadius: 12, padding: "12px 0", textAlign: "center", fontWeight: 600, color: "#111", fontSize: 15, boxShadow: `0 0 16px ${accentFrom}55` }}>
-        {btnLabel}
+      <div className="actions actions--1">
+        <span className="btn btn--primary" style={{ width: "100%" }}>{btnLabel}</span>
       </div>
     </div>
   );
@@ -265,7 +262,6 @@ export function ServiceCategoriesSection() {
               <div className="pre">Категорий пока нет. Создайте первую.</div>
             ) : items.map((cat) => {
               const accent = cat.accent_from || PRESETS[0].from;
-              const badgeColor = BADGE_TONES[cat.badge_tone ?? "soft"] ?? BADGE_TONES.soft;
               return (
                 <div key={cat.category_key} className="list__item admin-rowCard"
                   style={{ opacity: cat.hidden ? 0.5 : 1, borderLeft: `3px solid ${accent}` }}>
@@ -274,7 +270,7 @@ export function ServiceCategoriesSection() {
                     <div className="list__title admin-gap-top-xs" style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       {cat.emoji ? `${cat.emoji} ` : ""}{cat.title || "—"}
                       {cat.badge && (
-                        <span style={{ background: badgeColor, borderRadius: 20, padding: "1px 8px", fontSize: 11, fontWeight: 600, color: "#fff" }}>
+                        <span className="chip chip--soft">
                           {cat.badge}
                         </span>
                       )}

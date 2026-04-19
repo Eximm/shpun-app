@@ -146,27 +146,25 @@ function CategoryCard({
   onClick: () => void
 }) {
   const accentFrom = cat.accent_from || '#7c5cff'
-  const accentTo   = cat.accent_to   || '#4dd7ff'
-  const gradient   = `linear-gradient(135deg, ${accentFrom}, ${accentTo})`
   const cardBg     = cat.card_bg     || 'rgba(255,255,255,0.04)'
   const btnLabel   = cat.button_label || 'Выбрать'
 
   return (
-    <button type="button" className="so__kindCard" onClick={onClick}
+    <button type="button" className={`kv__item so__kindCard ${cat.recommended ? 'so__kindCard--recommended' : ''}`} onClick={onClick}
       style={{ border: `1.5px solid ${accentFrom}`, background: cardBg, borderRadius: 16, padding: 16, width: '100%', textAlign: 'left', cursor: 'pointer' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-        <div style={{ fontWeight: 700, fontSize: 16 }}>
+        <div className="list__title">
           {cat.emoji ? `${cat.emoji} ` : ''}{cat.title}
         </div>
         {cat.badge && (
-          <span style={{ background: gradient, borderRadius: 20, padding: '2px 10px', fontSize: 12, fontWeight: 600, color: '#fff', marginLeft: 8, whiteSpace: 'nowrap' }}>
+          <span className="chip chip--soft" style={{ marginLeft: 8, whiteSpace: 'nowrap' }}>
             {cat.badge}
           </span>
         )}
       </div>
       <p className="p" style={{ marginTop: 0, marginBottom: 12 }}>{cat.short_descr}</p>
-      <div style={{ background: gradient, borderRadius: 12, padding: '12px 0', textAlign: 'center', fontWeight: 600, color: '#fff', fontSize: 15, boxShadow: `0 0 16px ${accentFrom}55` }}>
-        {btnLabel}
+      <div className="actions actions--1">
+        <span className="btn btn--primary" style={{ width: '100%' }}>{btnLabel}</span>
       </div>
     </button>
   )
