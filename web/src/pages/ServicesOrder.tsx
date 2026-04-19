@@ -41,6 +41,11 @@ type ServiceCategory = {
   button_label:          string | null
   billing_category_keys: string[]
   service_ids:           number[]
+  hint_enabled:          boolean
+  hint_title:            string | null
+  hint_text:             string | null
+  hint_button_label:     string | null
+  hint_button_url:       string | null
 }
 
 type PaySystem = {
@@ -66,6 +71,7 @@ type ApiServiceItem = {
 const AMNEZIA_WARN_KEY   = 'order.amnezia.warn.dismissed.v1'
 const ROUTER_HINT_KEY    = 'order.router.hint.dismissed.v1'
 const HIDDEN_PAYSYSTEMS  = new Set(['Telegram Stars Rescue', 'Telegram Stars Karlson'])
+const HINT_SESSION_PREFIX = 'cat.hint.shown.'
 
 /* ─── Utils ─────────────────────────────────────────────────────────────── */
 
@@ -148,15 +154,15 @@ function CategoryCard({
   return (
     <button type="button" className="so__kindCard" onClick={onClick}
       style={{ border: `1.5px solid ${accentFrom}`, background: cardBg, borderRadius: 16, padding: 16, width: '100%', textAlign: 'left', cursor: 'pointer' }}>
-      {(cat.recommended || cat.badge) && (
-        <div style={{ marginBottom: 8 }}>
-          <span style={{ background: gradient, borderRadius: 20, padding: '2px 10px', fontSize: 12, fontWeight: 600, color: '#fff' }}>
-            {cat.badge || 'Рекомендуем'}
-          </span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+        <div style={{ fontWeight: 700, fontSize: 16 }}>
+          {cat.emoji ? `${cat.emoji} ` : ''}{cat.title}
         </div>
-      )}
-      <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>
-        {cat.emoji ? `${cat.emoji} ` : ''}{cat.title}
+        {cat.badge && (
+          <span style={{ background: gradient, borderRadius: 20, padding: '2px 10px', fontSize: 12, fontWeight: 600, color: '#fff', marginLeft: 8, whiteSpace: 'nowrap' }}>
+            {cat.badge}
+          </span>
+        )}
       </div>
       <p className="p" style={{ marginTop: 0, marginBottom: 12 }}>{cat.short_descr}</p>
       <div style={{ background: gradient, borderRadius: 12, padding: '12px 0', textAlign: 'center', fontWeight: 600, color: '#fff', fontSize: 15, boxShadow: `0 0 16px ${accentFrom}55` }}>
@@ -198,6 +204,8 @@ export function ServicesOrder() {
   const [copied,          setCopied]          = useState(false)
   const [amneziaWarnOpen, setAmneziaWarnOpen] = useState(false)
   const [routerHintOpen,  setRouterHintOpen]  = useState(false)
+  const [catHintOpen,     setCatHintOpen]     = useState(false)
+  const [catHintData,     setCatHintData]     = useState<ServiceCategory | null>(null)
 
   /* Тарифы сгруппированные по категории */
   const groupedByCat = useMemo(() => {
@@ -296,6 +304,14 @@ export function ServicesOrder() {
     if (!selectedCat) return
     if (selectedCat.connect_kind === 'amneziawg'      && !readAmneziaWarnDismissed()) setAmneziaWarnOpen(true)
     if (selectedCat.connect_kind === 'marzban_router'  && !readRouterHintDismissed())  setRouterHintOpen(true)
+    // Category hint — показываем один раз за сессию
+    if (selectedCat.hint_enabled && selectedCat.hint_text) {
+      const key = HINT_SESSION_PREFIX + selectedCat.category_key
+      if (!sessionStorage.getItem(key)) {
+        setCatHintData(selectedCat)
+        setCatHintOpen(true)
+      }
+    }
   }, [selectedCat])
 
   /* ── Actions ───────────────────────────────────────────────────────────── */
@@ -472,6 +488,43 @@ export function ServicesOrder() {
                 </button>
                 <button className="btn btn--primary" onClick={() => { saveRouterHintDismissed(); setRouterHintOpen(false); navigate('/help/router') }} type="button">
                   {t('servicesOrder.router.hint.open')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Подсказка категории */}
+      {catHintOpen && catHintData && createPortal(
+        <div className="modal" role="dialog" aria-modal="true"
+          onMouseDown={() => { sessionStorage.setItem(HINT_SESSION_PREFIX + catHintData.category_key, '1'); setCatHintOpen(false); }}>
+          <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="card__body">
+              {catHintData.hint_title && (
+                <div className="modal__head">
+                  <div className="modal__title">{catHintData.hint_title}</div>
+                </div>
+              )}
+              <div className="modal__content">
+                <p className="p">{catHintData.hint_text}</p>
+              </div>
+              <div className={`actions actions--${catHintData.hint_button_label ? '2' : '1'}`} style={{ marginTop: 12 }}>
+                {catHintData.hint_button_label && catHintData.hint_button_url && (
+                  <button className="btn btn--soft" type="button" onClick={() => {
+                    sessionStorage.setItem(HINT_SESSION_PREFIX + catHintData.category_key, '1')
+                    setCatHintOpen(false)
+                    navigate(catHintData.hint_button_url!)
+                  }}>
+                    {catHintData.hint_button_label}
+                  </button>
+                )}
+                <button className="btn btn--primary" type="button" onClick={() => {
+                  sessionStorage.setItem(HINT_SESSION_PREFIX + catHintData.category_key, '1')
+                  setCatHintOpen(false)
+                }}>
+                  OK
                 </button>
               </div>
             </div>

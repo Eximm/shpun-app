@@ -25,6 +25,11 @@ type ServiceCategory = {
   button_label: string | null;
   billing_category_keys: string[];
   service_ids: number[];
+  hint_enabled: boolean;
+  hint_title: string | null;
+  hint_text: string | null;
+  hint_button_label: string | null;
+  hint_button_url: string | null;
 };
 
 type BillingTariff = {
@@ -36,17 +41,36 @@ type BillingTariff = {
   periodHuman: string;
 };
 
+/* ─── Presets ────────────────────────────────────────────────────────────── */
+
+const PRESETS = [
+  { label: "🟣 Фиолетовый", from: "#7c5cff", to: "#a855f7" },
+  { label: "🔵 Голубой",    from: "#3b82f6", to: "#4dd7ff" },
+  { label: "🟢 Зелёный",    from: "#22c55e", to: "#10b981" },
+  { label: "🟠 Оранжевый",  from: "#f97316", to: "#ef4444" },
+  { label: "🩷 Розовый",    from: "#ec4899", to: "#8b5cf6" },
+];
+
 const CONNECT_KINDS = [
   { value: "marzban",        label: "Marzban" },
   { value: "marzban_router", label: "Router VPN" },
   { value: "amneziawg",      label: "AmneziaWG" },
 ];
 
-const BADGE_TONES = [
-  { value: "soft", label: "Серый" },
-  { value: "ok",   label: "Зелёный" },
-  { value: "warn", label: "Жёлтый" },
+const BADGE_TONES: Record<string, string> = {
+  soft:   "rgba(255,255,255,0.15)",
+  ok:     "#22c55e",
+  warn:   "#f59e0b",
+  accent: "#7c5cff",
+  danger: "#ef4444",
+};
+
+const BADGE_TONE_OPTIONS = [
+  { value: "soft",   label: "Серый" },
+  { value: "ok",     label: "Зелёный" },
+  { value: "warn",   label: "Жёлтый" },
   { value: "accent", label: "Фиолетовый" },
+  { value: "danger", label: "Красный" },
 ];
 
 const EMPTY_FORM = (): Partial<ServiceCategory> & {
@@ -65,76 +89,46 @@ const EMPTY_FORM = (): Partial<ServiceCategory> & {
   recommended:           false,
   hidden:                false,
   emoji:                 null,
-  accent_from:           null,
-  accent_to:             null,
+  accent_from:           PRESETS[0].from,
+  accent_to:             PRESETS[0].to,
   card_bg:               null,
   button_label:          null,
   billing_category_keys: [],
   service_ids:           [],
   billing_pattern_input: "",
+  hint_enabled:          false,
+  hint_title:            null,
+  hint_text:             null,
+  hint_button_label:     null,
+  hint_button_url:       null,
 });
 
-/* ─── Preview Card ───────────────────────────────────────────────────────── */
+/* ─── Preview ────────────────────────────────────────────────────────────── */
 
 function CategoryPreview({ form }: { form: ReturnType<typeof EMPTY_FORM> }) {
-  const accentFrom = form.accent_from || "#7c5cff";
-  const accentTo   = form.accent_to   || "#4dd7ff";
-  const cardBg     = form.card_bg     || "rgba(255,255,255,0.04)";
+  const accentFrom = form.accent_from || PRESETS[0].from;
+  const accentTo   = form.accent_to   || PRESETS[0].to;
   const gradient   = `linear-gradient(135deg, ${accentFrom}, ${accentTo})`;
+  const cardBg     = form.card_bg || "rgba(255,255,255,0.04)";
   const btnLabel   = form.button_label || "Выбрать";
+  const badgeColor = BADGE_TONES[form.badge_tone ?? "soft"] ?? BADGE_TONES.soft;
 
   return (
-    <div style={{
-      border: `1.5px solid ${accentFrom}`,
-      borderRadius: 16,
-      background: cardBg,
-      padding: 16,
-      marginTop: 8,
-    }}>
-      {form.recommended && (
-        <div style={{
-          display: "inline-block",
-          background: gradient,
-          borderRadius: 20,
-          padding: "2px 10px",
-          fontSize: 12,
-          fontWeight: 600,
-          color: "#fff",
-          marginBottom: 8,
-        }}>
-          {form.badge || "Рекомендуем"}
+    <div style={{ border: `1.5px solid ${accentFrom}`, borderRadius: 16, background: cardBg, padding: 16, marginTop: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <div style={{ fontWeight: 700, fontSize: 16 }}>
+          {form.emoji ? `${form.emoji} ` : ""}{form.title || "Название категории"}
         </div>
-      )}
-      {!form.recommended && form.badge && (
-        <div style={{
-          display: "inline-block",
-          background: gradient,
-          borderRadius: 20,
-          padding: "2px 10px",
-          fontSize: 12,
-          fontWeight: 600,
-          color: "#fff",
-          marginBottom: 8,
-        }}>
-          {form.badge}
-        </div>
-      )}
-      <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>
-        {form.emoji ? `${form.emoji} ` : ""}{form.title || "Название категории"}
+        {form.badge && (
+          <span style={{ background: badgeColor, borderRadius: 20, padding: "2px 10px", fontSize: 12, fontWeight: 600, color: "#fff", marginLeft: 8, whiteSpace: "nowrap" }}>
+            {form.badge}
+          </span>
+        )}
       </div>
       <div style={{ fontSize: 13, opacity: 0.7, marginBottom: 12 }}>
         {form.short_descr || "Краткое описание"}
       </div>
-      <div style={{
-        background: gradient,
-        borderRadius: 12,
-        padding: "12px 0",
-        textAlign: "center",
-        fontWeight: 600,
-        color: "#fff",
-        fontSize: 15,
-        boxShadow: `0 0 16px ${accentFrom}55`,
-      }}>
+      <div style={{ background: gradient, borderRadius: 12, padding: "12px 0", textAlign: "center", fontWeight: 600, color: "#111", fontSize: 15, boxShadow: `0 0 16px ${accentFrom}55` }}>
         {btnLabel}
       </div>
     </div>
@@ -172,37 +166,16 @@ export function ServiceCategoriesSection() {
   useEffect(() => { void load(); }, []);
 
   function openNew() {
-    setForm(EMPTY_FORM());
-    setIsNew(true);
-    setOpened(null);
-    setSaveError(null);
+    setForm(EMPTY_FORM()); setIsNew(true); setOpened(null); setSaveError(null);
   }
 
   function openEdit(cat: ServiceCategory) {
     setForm({
       ...EMPTY_FORM(),
-      category_key:          cat.category_key,
-      title:                 cat.title,
-      descr:                 cat.descr,
-      short_descr:           cat.short_descr,
-      connect_kind:          cat.connect_kind,
-      sort_order:            cat.sort_order,
-      badge:                 cat.badge,
-      badge_tone:            cat.badge_tone,
-      recommended:           cat.recommended,
-      hidden:                cat.hidden,
-      emoji:                 cat.emoji,
-      accent_from:           cat.accent_from,
-      accent_to:             cat.accent_to,
-      card_bg:               cat.card_bg,
-      button_label:          cat.button_label,
-      billing_category_keys: cat.billing_category_keys.slice(),
-      service_ids:           cat.service_ids.slice(),
+      ...cat,
       billing_pattern_input: "",
     });
-    setIsNew(false);
-    setOpened(cat);
-    setSaveError(null);
+    setIsNew(false); setOpened(cat); setSaveError(null);
   }
 
   function closeModal() { setOpened(null); setIsNew(false); setSaveError(null); }
@@ -219,18 +192,17 @@ export function ServiceCategoriesSection() {
     if (!pat) return;
     setForm((prev) => ({
       ...prev,
-      billing_category_keys: prev.billing_category_keys.includes(pat)
-        ? prev.billing_category_keys
-        : [...prev.billing_category_keys, pat],
+      billing_category_keys: prev.billing_category_keys.includes(pat) ? prev.billing_category_keys : [...prev.billing_category_keys, pat],
       billing_pattern_input: "",
     }));
   }
 
   function removeBillingPattern(pat: string) {
-    setForm((prev) => ({
-      ...prev,
-      billing_category_keys: prev.billing_category_keys.filter((x) => x !== pat),
-    }));
+    setForm((prev) => ({ ...prev, billing_category_keys: prev.billing_category_keys.filter((x) => x !== pat) }));
+  }
+
+  function applyPreset(preset: typeof PRESETS[0]) {
+    setForm((prev) => ({ ...prev, accent_from: preset.from, accent_to: preset.to }));
   }
 
   async function save() {
@@ -242,8 +214,7 @@ export function ServiceCategoriesSection() {
       } else if (opened) {
         await apiFetch(`/admin/service-categories/${encodeURIComponent(opened.category_key)}`, { method: "PUT", body });
       }
-      closeModal();
-      void load();
+      closeModal(); void load();
     } catch (e: any) {
       setSaveError(e?.message || "Не удалось сохранить.");
     } finally { setSaving(false); }
@@ -259,6 +230,12 @@ export function ServiceCategoriesSection() {
       window.alert(e?.message || "Не удалось удалить.");
     } finally { setDeleting(null); }
   }
+
+  const matchedTariffs = tariffs.filter((t) =>
+    (form.billing_category_keys ?? []).some((pat) =>
+      pat.endsWith("*") ? t.category.startsWith(pat.slice(0, -1)) : t.category === pat
+    )
+  );
 
   /* ── Render ─────────────────────────────────────────────────────────────── */
   return (
@@ -287,25 +264,28 @@ export function ServiceCategoriesSection() {
             ) : items.length === 0 ? (
               <div className="pre">Категорий пока нет. Создайте первую.</div>
             ) : items.map((cat) => {
-              const accentFrom = cat.accent_from || "#7c5cff";
+              const accent = cat.accent_from || PRESETS[0].from;
+              const badgeColor = BADGE_TONES[cat.badge_tone ?? "soft"] ?? BADGE_TONES.soft;
               return (
                 <div key={cat.category_key} className="list__item admin-rowCard"
-                  style={{ opacity: cat.hidden ? 0.5 : 1, borderLeft: `3px solid ${accentFrom}` }}>
+                  style={{ opacity: cat.hidden ? 0.5 : 1, borderLeft: `3px solid ${accent}` }}>
                   <div className="list__main">
-                    <div className="kicker">
-                      {cat.category_key}
-                      {cat.hidden      && <span className="chip chip--warn"   style={{ marginLeft: 8 }}>скрыто</span>}
-                      {cat.recommended && <span className="chip chip--ok"     style={{ marginLeft: 8 }}>рекомендуем</span>}
-                      {cat.badge       && <span className="chip chip--soft"   style={{ marginLeft: 8 }}>{cat.badge}</span>}
-                    </div>
-                    <div className="list__title admin-gap-top-xs">
+                    <div className="kicker">{cat.category_key}</div>
+                    <div className="list__title admin-gap-top-xs" style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       {cat.emoji ? `${cat.emoji} ` : ""}{cat.title || "—"}
+                      {cat.badge && (
+                        <span style={{ background: badgeColor, borderRadius: 20, padding: "1px 8px", fontSize: 11, fontWeight: 600, color: "#fff" }}>
+                          {cat.badge}
+                        </span>
+                      )}
+                      {cat.hidden && <span className="chip chip--warn">скрыто</span>}
                     </div>
                     {cat.short_descr && <div className="list__sub">{cat.short_descr}</div>}
                     <div className="admin-inlineMeta admin-gap-top-sm">
                       <span><strong>billing:</strong> {cat.billing_category_keys.join(", ") || "—"}</span>
                       <span><strong>тарифов:</strong> {cat.service_ids.length}</span>
                       <span><strong>порядок:</strong> {cat.sort_order}</span>
+                      {cat.hint_enabled && <span><strong>📢 подсказка</strong></span>}
                     </div>
                   </div>
                   <div className="admin-rowActions">
@@ -338,12 +318,12 @@ export function ServiceCategoriesSection() {
           </div>
 
           <div className="list">
-            {/* Ключ — только для новых */}
+
             {isNew && (
               <div className="list__item admin-tightItem">
                 <div className="list__main">
                   <div className="list__title">Ключ категории *</div>
-                  <div className="list__sub" style={{ marginBottom: 6 }}>Латиница, уникальный (например: marzban, router-vpn, amnezia)</div>
+                  <div className="list__sub" style={{ marginBottom: 6 }}>Латиница, уникальный (например: marzban, router-vpn)</div>
                   <input className="input" value={form.category_key ?? ""}
                     onChange={(e) => setForm((p) => ({ ...p, category_key: e.target.value }))}
                     placeholder="marzban" />
@@ -351,21 +331,30 @@ export function ServiceCategoriesSection() {
               </div>
             )}
 
-            {/* Основные поля */}
+            {/* Эмодзи + название */}
             <div className="list__item admin-tightItem">
               <div className="list__main">
-                <div className="list__title">Эмодзи / иконка</div>
-                <input className="input" value={form.emoji ?? ""}
-                  onChange={(e) => setForm((p) => ({ ...p, emoji: e.target.value || null }))}
-                  placeholder="🔒" style={{ maxWidth: 80 }} />
+                <div style={{ display: "flex", gap: 8 }}>
+                  <div style={{ flex: "0 0 72px" }}>
+                    <div className="list__title">Эмодзи</div>
+                    <input className="input" value={form.emoji ?? ""}
+                      onChange={(e) => setForm((p) => ({ ...p, emoji: e.target.value || null }))}
+                      placeholder="🔒" />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div className="list__title">Название *</div>
+                    <input className="input" value={form.title ?? ""}
+                      onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
+                      placeholder="Marzban" />
+                  </div>
+                </div>
               </div>
             </div>
 
             {[
-              { key: "title",       label: "Название",          ph: "Marzban" },
-              { key: "short_descr", label: "Краткое описание",   ph: "Стабильно и быстро. Для телефона, ПК и планшета." },
-              { key: "descr",       label: "Полное описание",    ph: "Подробное описание категории" },
-              { key: "button_label",label: "Текст кнопки",       ph: "Выбрать" },
+              { key: "short_descr",  label: "Краткое описание",  ph: "Стабильно и быстро. Для телефона, ПК и планшета." },
+              { key: "descr",        label: "Полное описание",   ph: "Подробное описание, видно при раскрытии категории" },
+              { key: "button_label", label: "Текст кнопки",      ph: "Выбрать" },
             ].map(({ key, label, ph }) => (
               <div key={key} className="list__item admin-tightItem">
                 <div className="list__main">
@@ -377,49 +366,37 @@ export function ServiceCategoriesSection() {
               </div>
             ))}
 
-            {/* Цвета */}
+            {/* Пресеты цвета */}
             <div className="list__item admin-tightItem">
               <div className="list__main">
-                <div className="list__title">Цвет акцента (градиент рамки и кнопки)</div>
-                <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 6 }}>
-                  <div>
-                    <div style={{ fontSize: 11, opacity: 0.6, marginBottom: 4 }}>От</div>
-                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                      <input type="color" value={form.accent_from || "#7c5cff"}
-                        onChange={(e) => setForm((p) => ({ ...p, accent_from: e.target.value }))}
-                        style={{ width: 40, height: 32, padding: 2, cursor: "pointer", borderRadius: 6 }} />
-                      <input className="input" value={form.accent_from ?? ""}
-                        onChange={(e) => setForm((p) => ({ ...p, accent_from: e.target.value || null }))}
-                        placeholder="#7c5cff" style={{ width: 100 }} />
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 11, opacity: 0.6, marginBottom: 4 }}>До</div>
-                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                      <input type="color" value={form.accent_to || "#4dd7ff"}
-                        onChange={(e) => setForm((p) => ({ ...p, accent_to: e.target.value }))}
-                        style={{ width: 40, height: 32, padding: 2, cursor: "pointer", borderRadius: 6 }} />
-                      <input className="input" value={form.accent_to ?? ""}
-                        onChange={(e) => setForm((p) => ({ ...p, accent_to: e.target.value || null }))}
-                        placeholder="#4dd7ff" style={{ width: 100 }} />
-                    </div>
-                  </div>
+                <div className="list__title">Цветовой пресет</div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+                  {PRESETS.map((p) => {
+                    const active = form.accent_from === p.from && form.accent_to === p.to;
+                    return (
+                      <button key={p.from} type="button" onClick={() => applyPreset(p)}
+                        style={{
+                          background: `linear-gradient(135deg, ${p.from}, ${p.to})`,
+                          border: active ? "2px solid #fff" : "2px solid transparent",
+                          borderRadius: 20, padding: "4px 14px", fontSize: 13, color: "#111",
+                          fontWeight: 600, cursor: "pointer",
+                        }}>
+                        {p.label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
 
+            {/* Фон карточки */}
             <div className="list__item admin-tightItem">
               <div className="list__main">
                 <div className="list__title">Фон карточки</div>
-                <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 6 }}>
-                  <input type="color" value={form.card_bg?.startsWith("#") ? form.card_bg : "#1a1a2e"}
-                    onChange={(e) => setForm((p) => ({ ...p, card_bg: e.target.value }))}
-                    style={{ width: 40, height: 32, padding: 2, cursor: "pointer", borderRadius: 6 }} />
-                  <input className="input" value={form.card_bg ?? ""}
-                    onChange={(e) => setForm((p) => ({ ...p, card_bg: e.target.value || null }))}
-                    placeholder="rgba(255,255,255,0.04) или #1a1a2e или linear-gradient(...)" />
-                </div>
-                <div className="list__sub" style={{ marginTop: 4 }}>Можно указать hex, rgba или linear-gradient</div>
+                <input className="input" value={form.card_bg ?? ""}
+                  onChange={(e) => setForm((p) => ({ ...p, card_bg: e.target.value || null }))}
+                  placeholder="rgba(255,255,255,0.04) или #1a1a2e или linear-gradient(...)" />
+                <div className="list__sub" style={{ marginTop: 4 }}>Оставь пустым для стандартного фона</div>
               </div>
             </div>
 
@@ -429,16 +406,24 @@ export function ServiceCategoriesSection() {
                 <div className="list__title">Значок (необязательно)</div>
                 <input className="input" value={form.badge ?? ""}
                   onChange={(e) => setForm((p) => ({ ...p, badge: e.target.value || null }))}
-                  placeholder="Рекомендуем / Акция / Новинка" />
-                <div style={{ display: "flex", gap: 12, marginTop: 8, flexWrap: "wrap" }}>
-                  {BADGE_TONES.map(({ value, label }) => (
-                    <label key={value} className="admin-radio">
-                      <input type="radio" name="badge_tone" value={value}
-                        checked={form.badge_tone === value}
-                        onChange={() => setForm((p) => ({ ...p, badge_tone: value }))} />
-                      {" "}{label}
-                    </label>
-                  ))}
+                  placeholder="Рекомендуем / Акция / Новинка"
+                  style={{ marginBottom: 8 }} />
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {BADGE_TONE_OPTIONS.map(({ value, label }) => {
+                    const active = form.badge_tone === value;
+                    return (
+                      <button key={value} type="button"
+                        onClick={() => setForm((p) => ({ ...p, badge_tone: value }))}
+                        style={{
+                          background: active ? BADGE_TONES[value] : "transparent",
+                          border: `1.5px solid ${BADGE_TONES[value]}`,
+                          borderRadius: 20, padding: "3px 12px", fontSize: 12,
+                          color: active ? "#fff" : "inherit", cursor: "pointer",
+                        }}>
+                        {label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -463,38 +448,73 @@ export function ServiceCategoriesSection() {
             {/* sort_order + флаги */}
             <div className="list__item admin-tightItem">
               <div className="list__main">
-                <div className="list__title">Порядок сортировки</div>
-                <input className="input" type="number" min="0" max="9999"
-                  value={form.sort_order ?? 100}
-                  onChange={(e) => setForm((p) => ({ ...p, sort_order: Number(e.target.value) }))}
-                  style={{ maxWidth: 100 }} />
-              </div>
-            </div>
-
-            <div className="list__item admin-tightItem">
-              <div className="list__main">
-                <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-                  <label className="admin-radio">
+                <div style={{ display: "flex", gap: 24, alignItems: "center", flexWrap: "wrap" }}>
+                  <div>
+                    <div className="list__title">Порядок</div>
+                    <input className="input" type="number" min="0" max="9999"
+                      value={form.sort_order ?? 100}
+                      onChange={(e) => setForm((p) => ({ ...p, sort_order: Number(e.target.value) }))}
+                      style={{ maxWidth: 80 }} />
+                  </div>
+                  <label className="admin-radio" style={{ marginTop: 20 }}>
                     <input type="checkbox" checked={!!form.recommended}
                       onChange={(e) => setForm((p) => ({ ...p, recommended: e.target.checked }))} />
                     {" "}Рекомендуем
                   </label>
-                  <label className="admin-radio">
+                  <label className="admin-radio" style={{ marginTop: 20 }}>
                     <input type="checkbox" checked={!!form.hidden}
                       onChange={(e) => setForm((p) => ({ ...p, hidden: e.target.checked }))} />
-                    {" "}Скрыть категорию
+                    {" "}Скрыть
                   </label>
                 </div>
               </div>
             </div>
 
-            {/* Billing category patterns */}
+            {/* Подсказка при входе */}
+            <div className="list__item admin-tightItem">
+              <div className="list__main">
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                  <div className="list__title" style={{ margin: 0 }}>💬 Подсказка при входе в категорию</div>
+                  <label className="admin-radio">
+                    <input type="checkbox" checked={!!form.hint_enabled}
+                      onChange={(e) => setForm((p) => ({ ...p, hint_enabled: e.target.checked }))} />
+                    {" "}Включить
+                  </label>
+                </div>
+                {form.hint_enabled && (
+                  <>
+                    <div className="list__sub" style={{ marginBottom: 8 }}>
+                      Показывается один раз за сессию при входе в категорию
+                    </div>
+                    <input className="input" value={form.hint_title ?? ""}
+                      onChange={(e) => setForm((p) => ({ ...p, hint_title: e.target.value || null }))}
+                      placeholder="Заголовок подсказки"
+                      style={{ marginBottom: 8 }} />
+                    <textarea className="input" value={form.hint_text ?? ""}
+                      onChange={(e) => setForm((p) => ({ ...p, hint_text: e.target.value || null }))}
+                      placeholder="Текст подсказки — важная информация для пользователя"
+                      style={{ minHeight: 80, resize: "vertical", marginBottom: 8 }} />
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <input className="input" value={form.hint_button_label ?? ""}
+                        onChange={(e) => setForm((p) => ({ ...p, hint_button_label: e.target.value || null }))}
+                        placeholder="Текст кнопки-ссылки (необязательно)"
+                        style={{ flex: 1 }} />
+                      <input className="input" value={form.hint_button_url ?? ""}
+                        onChange={(e) => setForm((p) => ({ ...p, hint_button_url: e.target.value || null }))}
+                        placeholder="/help/router"
+                        style={{ flex: 1 }} />
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Billing patterns */}
             <div className="list__item admin-tightItem">
               <div className="list__main">
                 <div className="list__title">Паттерны биллинговых категорий</div>
                 <div className="list__sub" style={{ marginBottom: 8 }}>
-                  Все тарифы с совпадающей категорией из биллинга автоматически попадут сюда.
-                  Используй * для wildcard: <strong>vpn-*</strong> подхватит vpn-msk, vpn-de и т.д.
+                  Тарифы с совпадающей категорией попадут сюда автоматически. <strong>vpn-*</strong> — wildcard.
                 </div>
                 <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
                   <input className="input" value={form.billing_pattern_input ?? ""}
@@ -503,7 +523,7 @@ export function ServiceCategoriesSection() {
                     placeholder="marzban или vpn-*" />
                   <button className="btn btn--soft" type="button" onClick={addBillingPattern}>+</button>
                 </div>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
                   {(form.billing_category_keys ?? []).map((pat) => (
                     <span key={pat} className="chip chip--soft" style={{ cursor: "pointer" }}
                       onClick={() => removeBillingPattern(pat)}>
@@ -511,32 +531,23 @@ export function ServiceCategoriesSection() {
                     </span>
                   ))}
                 </div>
-                {/* Подсказка — какие тарифы биллинга подходят под текущие паттерны */}
-                {tariffs.length > 0 && (form.billing_category_keys ?? []).length > 0 && (
-                  <div style={{ marginTop: 8, fontSize: 12, opacity: 0.6 }}>
-                    Совпадают тарифы: {tariffs
-                      .filter((t) => (form.billing_category_keys ?? []).some((pat) => {
-                        if (pat.endsWith("*")) return t.category.startsWith(pat.slice(0, -1));
-                        return t.category === pat;
-                      }))
-                      .map((t) => t.title)
-                      .join(", ") || "—"}
+                {matchedTariffs.length > 0 && (
+                  <div style={{ fontSize: 12, opacity: 0.55 }}>
+                    Совпадают: {matchedTariffs.map((t) => t.title).join(", ")}
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Ручная привязка тарифов */}
+            {/* Ручная привязка */}
             <div className="list__item admin-tightItem">
               <div className="list__main">
                 <div className="list__title">Ручная привязка тарифов</div>
-                <div className="list__sub" style={{ marginBottom: 8 }}>
-                  Дополнительно к паттернам — конкретные тарифы по ID
-                </div>
+                <div className="list__sub" style={{ marginBottom: 8 }}>Дополнительно к паттернам — конкретные тарифы по ID</div>
                 {tariffs.length === 0 ? (
                   <div className="pre">Тарифы не загружены</div>
                 ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 220, overflowY: "auto" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 200, overflowY: "auto" }}>
                     {tariffs.map((t) => (
                       <label key={t.serviceId} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
                         <input type="checkbox"

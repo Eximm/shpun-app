@@ -826,7 +826,12 @@ export async function adminRoutes(app: FastifyInstance) {
       card_bg:               body?.card_bg     ? String(body.card_bg).trim()     : null,
       button_label:          body?.button_label ? String(body.button_label).trim() : null,
       billing_category_keys: Array.isArray(body?.billing_category_keys) ? body.billing_category_keys.map(String) : [],
-      service_ids:           Array.isArray(body?.service_ids) ? body.service_ids.map(Number) : [],
+      hint_enabled:      Boolean(body?.hint_enabled),
+      hint_title:        body?.hint_title        ? String(body.hint_title).trim()        : null,
+      hint_text:         body?.hint_text         ? String(body.hint_text).trim()         : null,
+      hint_button_label: body?.hint_button_label ? String(body.hint_button_label).trim() : null,
+      hint_button_url:   body?.hint_button_url   ? String(body.hint_button_url).trim()   : null,
+      service_ids:       Array.isArray(body?.service_ids) ? body.service_ids.map(Number) : [],
     });
 
     if (!result.ok) return reply.code(400).send({ ok: false, error: result.error });
@@ -860,6 +865,11 @@ export async function adminRoutes(app: FastifyInstance) {
     if ("card_bg"               in body) data.card_bg               = body.card_bg       ? String(body.card_bg).trim()       : null;
     if ("button_label"          in body) data.button_label          = body.button_label  ? String(body.button_label).trim()  : null;
     if ("billing_category_keys" in body) data.billing_category_keys = Array.isArray(body.billing_category_keys) ? body.billing_category_keys.map(String) : [];
+    if ("hint_enabled"          in body) data.hint_enabled      = Boolean(body.hint_enabled);
+    if ("hint_title"            in body) data.hint_title        = body.hint_title        ? String(body.hint_title).trim()        : null;
+    if ("hint_text"             in body) data.hint_text         = body.hint_text         ? String(body.hint_text).trim()         : null;
+    if ("hint_button_label"     in body) data.hint_button_label = body.hint_button_label ? String(body.hint_button_label).trim() : null;
+    if ("hint_button_url"       in body) data.hint_button_url   = body.hint_button_url   ? String(body.hint_button_url).trim()   : null;
 
     const result = updateServiceCategory(key, data);
     if (!result.ok) return reply.code(result.error === "not_found" ? 404 : 400).send({ ok: false, error: result.error });

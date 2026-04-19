@@ -22,6 +22,11 @@ CREATE TABLE IF NOT EXISTS service_categories (
   card_bg              TEXT,
   button_label         TEXT,
   billing_category_keys TEXT NOT NULL DEFAULT '[]',
+  hint_enabled          INTEGER NOT NULL DEFAULT 0,
+  hint_title            TEXT,
+  hint_text             TEXT,
+  hint_button_label     TEXT,
+  hint_button_url       TEXT,
   created_at           INTEGER NOT NULL DEFAULT (unixepoch()),
   updated_at           INTEGER NOT NULL DEFAULT (unixepoch())
 );
@@ -44,6 +49,11 @@ const migrations = [
   `ALTER TABLE service_categories ADD COLUMN card_bg TEXT`,
   `ALTER TABLE service_categories ADD COLUMN button_label TEXT`,
   `ALTER TABLE service_categories ADD COLUMN billing_category_keys TEXT NOT NULL DEFAULT '[]'`,
+  `ALTER TABLE service_categories ADD COLUMN hint_enabled INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE service_categories ADD COLUMN hint_title TEXT`,
+  `ALTER TABLE service_categories ADD COLUMN hint_text TEXT`,
+  `ALTER TABLE service_categories ADD COLUMN hint_button_label TEXT`,
+  `ALTER TABLE service_categories ADD COLUMN hint_button_url TEXT`,
 ];
 for (const sql of migrations) {
   try { linkDb.exec(sql); } catch { /* already exists */ }
@@ -69,6 +79,11 @@ export type ServiceCategory = {
   card_bg: string | null;
   button_label: string | null;
   billing_category_keys: string[];  // паттерны: ["marzban"], ["vpn-*"]
+  hint_enabled: boolean;
+  hint_title: string | null;
+  hint_text: string | null;
+  hint_button_label: string | null;
+  hint_button_url: string | null;
   service_ids: number[];            // ручная привязка по service_id
   created_at: number;
   updated_at: number;
@@ -99,6 +114,11 @@ function rowToCategory(row: any): Omit<ServiceCategory, "service_ids"> {
     card_bg:               row.card_bg ?? null,
     button_label:          row.button_label ?? null,
     billing_category_keys: parseJson<string[]>(row.billing_category_keys, []),
+    hint_enabled:          Number(row.hint_enabled ?? 0) === 1,
+    hint_title:            row.hint_title         ?? null,
+    hint_text:             row.hint_text          ?? null,
+    hint_button_label:     row.hint_button_label  ?? null,
+    hint_button_url:       row.hint_button_url    ?? null,
     created_at:            Number(row.created_at ?? 0),
     updated_at:            Number(row.updated_at ?? 0),
   };
@@ -175,6 +195,11 @@ export function createServiceCategory(data: {
   card_bg?: string | null;
   button_label?: string | null;
   billing_category_keys?: string[];
+  hint_enabled?: boolean;
+  hint_title?: string | null;
+  hint_text?: string | null;
+  hint_button_label?: string | null;
+  hint_button_url?: string | null;
   service_ids?: number[];
 }): { ok: true; category: ServiceCategory } | { ok: false; error: string } {
   const key = String(data.category_key ?? "").trim();
@@ -187,12 +212,12 @@ export function createServiceCategory(data: {
         (category_key, title, descr, short_descr, connect_kind, sort_order,
          badge, badge_tone, recommended, hidden,
          emoji, accent_from, accent_to, card_bg, button_label,
-         billing_category_keys, created_at, updated_at)
+         billing_category_keys, hint_enabled, hint_title, hint_text, hint_button_label, hint_button_url, created_at, updated_at)
       VALUES
         (@category_key, @title, @descr, @short_descr, @connect_kind, @sort_order,
          @badge, @badge_tone, @recommended, @hidden,
          @emoji, @accent_from, @accent_to, @card_bg, @button_label,
-         @billing_category_keys, @now, @now)
+         @billing_category_keys, @hint_enabled, @hint_title, @hint_text, @hint_button_label, @hint_button_url, @now, @now)
     `).run({
       category_key:          key,
       title:                 String(data.title ?? ""),
@@ -210,6 +235,11 @@ export function createServiceCategory(data: {
       card_bg:               data.card_bg ?? null,
       button_label:          data.button_label ?? null,
       billing_category_keys: JSON.stringify(data.billing_category_keys ?? []),
+      hint_enabled:      data.hint_enabled      ? 1 : 0,
+      hint_title:        data.hint_title         ?? null,
+      hint_text:         data.hint_text          ?? null,
+      hint_button_label: data.hint_button_label  ?? null,
+      hint_button_url:   data.hint_button_url    ?? null,
       now,
     });
 
@@ -264,6 +294,11 @@ export function updateServiceCategory(
         card_bg               = @card_bg,
         button_label          = @button_label,
         billing_category_keys = @billing_category_keys,
+        hint_enabled          = @hint_enabled,
+        hint_title            = @hint_title,
+        hint_text             = @hint_text,
+        hint_button_label     = @hint_button_label,
+        hint_button_url       = @hint_button_url,
         updated_at            = @now
       WHERE category_key = @category_key
     `).run({
@@ -285,6 +320,11 @@ export function updateServiceCategory(
       billing_category_keys: JSON.stringify(
         "billing_category_keys" in data ? (data.billing_category_keys ?? []) : existing.billing_category_keys
       ),
+      hint_enabled:      ("hint_enabled"      in data ? data.hint_enabled      : existing.hint_enabled)      ? 1 : 0,
+      hint_title:        "hint_title"         in data ? (data.hint_title        ?? null) : existing.hint_title,
+      hint_text:         "hint_text"          in data ? (data.hint_text         ?? null) : existing.hint_text,
+      hint_button_label: "hint_button_label"  in data ? (data.hint_button_label ?? null) : existing.hint_button_label,
+      hint_button_url:   "hint_button_url"    in data ? (data.hint_button_url   ?? null) : existing.hint_button_url,
       now,
     });
 
