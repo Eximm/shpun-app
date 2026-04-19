@@ -319,17 +319,21 @@ export default function ConnectMarzban({ usi }: Props) {
             </button>
           </div>
 
-          {/* Маршрутизация v2RayTun — компактно */}
-          <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 12, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", flex: "1 1 auto" }}>
-              🗺️ <b style={{ color: "rgba(255,255,255,0.9)" }}>Маршруты</b> — трафик кроме РФ в туннель
+          {/* Маршрутизация v2RayTun */}
+          <div style={{ marginTop: 12, padding: "12px 14px", borderRadius: 14, border: "1px solid rgba(77,215,255,0.45)", background: "linear-gradient(135deg, rgba(77,215,255,0.10), rgba(124,92,255,0.08))", boxShadow: "0 0 20px rgba(77,215,255,0.12)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+              <span style={{ fontSize: 18 }}>🗺️</span>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 14, color: "rgba(255,255,255,0.95)" }}>Раздельная маршрутизация</div>
+                <div style={{ fontSize: 12, color: "rgba(77,215,255,0.9)", marginTop: 2 }}>Только РФ-трафик напрямую, остальное в туннель</div>
+              </div>
             </div>
-            <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-              <button className="btn btn--soft" onClick={openTrafficRules} type="button" style={{ padding: "6px 12px", minHeight: 36, fontSize: 13 }}>
-                ⚡ Применить
+            <div className="actions actions--2">
+              <button className="btn btn--primary" onClick={openTrafficRules} type="button">
+                ⚡ Применить маршруты
               </button>
-              <button className="btn" onClick={() => void openRulesQr()} type="button" style={{ padding: "6px 10px", minHeight: 36, fontSize: 13 }}>
-                📱
+              <button className="btn" onClick={() => void openRulesQr()} type="button">
+                📱 QR-код
               </button>
             </div>
           </div>
