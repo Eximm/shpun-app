@@ -454,6 +454,13 @@ export async function servicesRoutes(app: FastifyInstance) {
         });
       }
 
+      // Зеркало: берём токен после /sub/ и строим ссылку на mirepo.space
+      const MIRROR_BASE = "https://mirepo.space/";
+      const subIdx = subscriptionUrl.indexOf("/sub/");
+      const subscriptionUrlMirror = subIdx !== -1
+        ? MIRROR_BASE + subscriptionUrl.slice(subIdx + 5)
+        : null;
+
       if (debug) {
         return reply.send({
           ok: true,
@@ -461,11 +468,12 @@ export async function servicesRoutes(app: FastifyInstance) {
           usi,
           category,
           subscriptionUrl,
+          subscriptionUrlMirror,
           debug: { template_response: j },
         });
       }
 
-      return reply.send({ ok: true, kind, subscriptionUrl });
+      return reply.send({ ok: true, kind, subscriptionUrl, subscriptionUrlMirror });
     }
 
     if (kind === "amneziawg") {
