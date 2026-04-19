@@ -459,6 +459,17 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .chip--warn { border-color: rgba(255,184,107,0.36); background: rgba(255,184,107,0.08); }
 .chip--soft { opacity: 0.92; }
 
+.chip__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  box-shadow: 0 0 10px rgba(124,92,255,0.42);
+  flex: 0 0 auto;
+}
+.chip--accent { border-color: rgba(124,92,255,0.45); background: rgba(124,92,255,0.12); }
+.chip--danger { border-color: rgba(255,77,109,0.38);  background: rgba(255,77,109,0.08); }
+
 
 /* ── 10. Key-value blocks ──────────────────────────────────── */
 .kv {
