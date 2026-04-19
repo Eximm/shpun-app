@@ -120,6 +120,8 @@ function buildV2RayTunImportLink(url: string, platform: Platform) {
     : `v2raytun://import/${url}`;
 }
 
+const V2RAY_TRAFFIC_RULES_URL = "v2raytun://open-traffic-rules?id=d1eda856-3617-447c-b0e9-56da2afe755f";
+
 /* ─── Component ──────────────────────────────────────────────────────────── */
 
 export default function ConnectMarzban({ usi }: Props) {
@@ -143,6 +145,8 @@ export default function ConnectMarzban({ usi }: Props) {
   const [copiedMirror,          setCopiedMirror]          = useState(false);
   const [qrOpen,                setQrOpen]                = useState(false);
   const [qrDataUrl,             setQrDataUrl]             = useState("");
+  const [rulesQrOpen,           setRulesQrOpen]           = useState(false);
+  const [rulesQrDataUrl,        setRulesQrDataUrl]        = useState("");
 
   // ── Load ──────────────────────────────────────────────────────────────────
   async function load() {
@@ -208,6 +212,22 @@ export default function ConnectMarzban({ usi }: Props) {
     }
     if (ok) toast.success(t("connect.copied"), { description: t("connect.import_text") });
     else toast.error(t("connect.copy_link"), { description: t("connect.sub_prepare_error_desc") });
+  }
+
+  async function openRulesQr() {
+    try {
+      const dataUrl = await QRCode.toDataURL(V2RAY_TRAFFIC_RULES_URL, { margin: 2, width: 360 });
+      setRulesQrDataUrl(dataUrl);
+      setRulesQrOpen(true);
+    } catch {
+      toast.error(t("connect.qr_title"), { description: t("connect.sub_prepare_error_desc") });
+    }
+  }
+
+  function openTrafficRules() {
+    tryOpenScheme(V2RAY_TRAFFIC_RULES_URL, runtime, () => {
+      toast.info("Откройте v2RayTun вручную", { description: "Скопируйте ссылку на маршруты" });
+    });
   }
 
   function openClientStore(client: ClientKind) {
@@ -299,6 +319,21 @@ export default function ConnectMarzban({ usi }: Props) {
             </button>
           </div>
 
+          {/* Маршрутизация v2RayTun — компактно */}
+          <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 12, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", flex: "1 1 auto" }}>
+              🗺️ <b style={{ color: "rgba(255,255,255,0.9)" }}>Маршруты</b> — трафик кроме РФ в туннель
+            </div>
+            <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+              <button className="btn btn--soft" onClick={openTrafficRules} type="button" style={{ padding: "6px 12px", minHeight: 36, fontSize: 13 }}>
+                ⚡ Применить
+              </button>
+              <button className="btn" onClick={() => void openRulesQr()} type="button" style={{ padding: "6px 10px", minHeight: 36, fontSize: 13 }}>
+                📱
+              </button>
+            </div>
+          </div>
+
           {/* Зеркало */}
           {subscriptionUrlMirror && ready && (
             <div className="actions actions--1" style={{ marginTop: 8 }}>
@@ -381,6 +416,30 @@ export default function ConnectMarzban({ usi }: Props) {
 
         </div>
       </div>
+
+      {/* QR маршрутов v2RayTun */}
+      {rulesQrOpen && createPortal(
+        <div className="modal" role="dialog" aria-modal="true" onMouseDown={() => setRulesQrOpen(false)}>
+          <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="card__body">
+              <div className="modal__head">
+                <div className="modal__title">🗺️ Маршруты v2RayTun</div>
+                <button className="btn modal__close" type="button" onClick={() => setRulesQrOpen(false)} aria-label={t("common.close")}>✕</button>
+              </div>
+              <div className="modal__content">
+                <p className="p">Отсканируйте QR в v2RayTun для автоматической настройки маршрутизации. Весь трафик кроме РФ пойдёт через туннель.</p>
+                <div className="helperMedia" style={{ marginTop: 12 }}>
+                  {rulesQrDataUrl && <img className="helperMedia__img" src={rulesQrDataUrl} alt="QR маршрутов" loading="lazy" width={360} />}
+                </div>
+                <div className="actions actions--1" style={{ marginTop: 12 }}>
+                  <button className="btn btn--primary" onClick={() => setRulesQrOpen(false)} type="button">{t("common.close")}</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* Пикер платформы */}
       {platformPickerOpen && createPortal(

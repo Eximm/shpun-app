@@ -613,3 +613,44 @@ export function shmShpunAppMarzbanGet(shmSessionId: string, usi: number) {
 export function shmShpunAppAmneziaWGGet(shmSessionId: string, usi: number) {
   return shmShpunAppConnectGet(shmSessionId, usi, 'amneziawg')
 }
+
+// ДОБАВИТЬ В КОНЕЦ: api/src/shared/shm/shmClient.ts
+
+// =====================
+// PROMO (промокоды)
+// =====================
+
+/**
+ * Применить промокод.
+ * Вызывает шаблон promo_apply?session_id=...&code=CODE
+ */
+export async function shmPromoApply(sessionId: string, code: string) {
+  const clean = String(code ?? '').trim().toUpperCase()
+  return await shmFetch<any>(null, 'v1/template/promo_apply', {
+    method: 'GET',
+    query: { session_id: sessionId, format: 'json', code: clean },
+  })
+}
+
+/**
+ * Профиль пользователя для промо (баланс, бонусы после применения).
+ * Вызывает шаблон promo_profile?session_id=...
+ */
+export async function shmPromoProfile(sessionId: string) {
+  return await shmFetch<any>(null, 'v1/template/promo_profile', {
+    method: 'GET',
+    query: { session_id: sessionId, format: 'json' },
+  })
+}
+
+/**
+ * Описание промокода по его коду.
+ * Вызывает шаблон {CODE}?session_id=... — биллинг возвращает item с type/title/text/chips.
+ */
+export async function shmPromoDescribe(sessionId: string, code: string) {
+  const clean = String(code ?? '').trim().toUpperCase()
+  return await shmFetch<any>(null, `v1/template/${encodeURIComponent(clean)}`, {
+    method: 'GET',
+    query: { session_id: sessionId, format: 'json' },
+  })
+}
