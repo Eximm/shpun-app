@@ -327,8 +327,8 @@ export const RU: Dict = {
 
   // services
   "services.wl.badge": "WL",
-  "services.wl.hint": "Дополнительный ключ WL — работает только в клиенте V2rayTun. Используйте если основной ключ не работает в вашей сети.",
-  "services.wl.warning": "Работает только в V2rayTun. Трафик в этом режиме может быть ограничен.",
+  "services.wl.hint": "Дополнительный ключ WL — используйте если основной не работает в вашей сети.",
+  "services.wl.warning": "Работает только в V2rayTun, трафик может быть ограничен.",
   "services.title": "Услуги",
   "services.page.title": "Услуги",
   "services.sub": "Ваши услуги и их текущий статус.",
@@ -1254,8 +1254,8 @@ export const EN: Dict = {
 
   // services
   "services.wl.badge": "WL",
-  "services.wl.hint": "WL key — works only in the V2rayTun client. Use it if the main key does not work on your network.",
-  "services.wl.warning": "Works only in V2rayTun. Traffic in this mode may be limited.",
+  "services.wl.hint": "WL key — use it if the main key does not work on your network.",
+  "services.wl.warning": "Works only in V2rayTun, traffic may be limited.",
   "services.title": "Services",
   "services.page.title": "Services",
   "services.sub": "Your services and their current status.",
