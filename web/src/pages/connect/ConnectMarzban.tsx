@@ -339,24 +339,6 @@ export default function ConnectMarzban({ usi }: Props) {
             </button>
           </div>
 
-          {/* Маршрутизация v2RayTun */}
-          <div style={{ marginTop: 12, padding: "12px 14px", borderRadius: 14, border: "1px solid rgba(77,215,255,0.45)", background: "linear-gradient(135deg, rgba(77,215,255,0.10), rgba(124,92,255,0.08))", boxShadow: "0 0 20px rgba(77,215,255,0.12)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-              <span style={{ fontSize: 18 }}>🗺️</span>
-              <div>
-                <div style={{ fontWeight: 800, fontSize: 14, color: "rgba(255,255,255,0.95)" }}>Раздельная маршрутизация</div>
-                <div style={{ fontSize: 12, color: "rgba(77,215,255,0.9)", marginTop: 2 }}>Только РФ-трафик напрямую, остальное в туннель</div>
-              </div>
-            </div>
-            <div className="actions actions--2">
-              <button className="btn btn--primary" onClick={openTrafficRules} type="button">
-                ⚡ Применить маршруты
-              </button>
-              <button className="btn" onClick={() => void openRulesQr()} type="button">
-                📱 QR-код
-              </button>
-            </div>
-          </div>
 
           {/* Раскрытый блок — всё в одной карточке как в AmneziaWG */}
           {advancedOpen && ready && (
@@ -418,6 +400,25 @@ export default function ConnectMarzban({ usi }: Props) {
             </div>
           )}
 
+        </div>
+      </div>
+
+      {/* Маршрутизация v2RayTun */}
+      <div style={{ marginTop: 12, padding: "12px 14px", borderRadius: 14, border: "1px solid rgba(77,215,255,0.45)", background: "linear-gradient(135deg, rgba(77,215,255,0.10), rgba(124,92,255,0.08))", boxShadow: "0 0 20px rgba(77,215,255,0.12)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+          <span style={{ fontSize: 18 }}>🗺️</span>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 14, color: "rgba(255,255,255,0.95)" }}>Раздельная маршрутизация</div>
+            <div style={{ fontSize: 12, color: "rgba(77,215,255,0.9)", marginTop: 2 }}>Только РФ-трафик напрямую, остальное в туннель</div>
+          </div>
+        </div>
+        <div className="actions actions--2">
+          <button className="btn btn--primary" onClick={openTrafficRules} type="button">
+            ⚡ Применить маршруты
+          </button>
+          <button className="btn" onClick={() => void openRulesQr()} type="button">
+            📱 QR-код
+          </button>
         </div>
       </div>
 
