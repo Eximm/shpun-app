@@ -157,7 +157,7 @@ function CategoryCard({
           {cat.emoji ? `${cat.emoji} ` : ''}{cat.title}
         </div>
         {cat.badge && (
-          <span className="chip chip--soft" style={{ marginLeft: 8, whiteSpace: 'nowrap' }}>
+          <span className={`chip chip--${cat.badge_tone || 'soft'}`} style={{ marginLeft: 8, whiteSpace: 'nowrap' }}>
             {cat.badge}
           </span>
         )}
@@ -536,9 +536,9 @@ export function ServicesOrder() {
         <div className="card__body">
           <h1 className="h1">{t('servicesOrder.title')}</h1>
           <div className="row" style={{ gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
-            <span className="chip chip--soft">{t('home.tiles.balance')}: {fmtMoney(balanceAmount, currency)}</span>
-            <span className="chip chip--soft">{t('home.tiles.bonus')}: {bonus}</span>
-            {hasDiscount && <span className="chip chip--soft">{t('servicesOrder.discount')}: -{Math.round(discountPercent)}%</span>}
+            <span className="chip chip--soft"><span className="chip__dot" />  {t('home.tiles.balance')}: {fmtMoney(balanceAmount, currency)}</span>
+            <span className="chip chip--soft"><span className="chip__dot" />  {t('home.tiles.bonus')}: {bonus}</span>
+            {hasDiscount && <span className="chip chip--soft"><span className="chip__dot" />  {t('servicesOrder.discount')}: -{Math.round(discountPercent)}%</span>}
           </div>
           {waitMsg  && <div className="pre" style={{ marginTop: 12 }}>{waitMsg}</div>}
           {topError && <div className="pre" style={{ marginTop: 12 }}>{topError}</div>}

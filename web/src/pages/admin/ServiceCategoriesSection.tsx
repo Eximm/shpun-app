@@ -117,7 +117,7 @@ function CategoryPreview({ form }: { form: ReturnType<typeof EMPTY_FORM> }) {
           {form.emoji ? `${form.emoji} ` : ""}{form.title || "Название категории"}
         </div>
         {form.badge && (
-          <span className="chip chip--soft" style={{ marginLeft: 8, whiteSpace: "nowrap" }}>
+          <span className={`chip chip--${form.badge_tone || 'soft'}`} style={{ marginLeft: 8, whiteSpace: "nowrap" }}>
             {form.badge}
           </span>
         )}
@@ -270,7 +270,7 @@ export function ServiceCategoriesSection() {
                     <div className="list__title admin-gap-top-xs" style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       {cat.emoji ? `${cat.emoji} ` : ""}{cat.title || "—"}
                       {cat.badge && (
-                        <span className="chip chip--soft">
+                        <span className={`chip chip--${cat.badge_tone || 'soft'}`}>
                           {cat.badge}
                         </span>
                       )}
