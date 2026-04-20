@@ -42,20 +42,39 @@ function shortBody(ev: any) {
   return String(ev?.meta?.short?.message || ev?.body || ev?.message || "").slice(0, 160);
 }
 
-// короткий payload
-function buildPushPayload(ev: any) {
+// Определяем ссылку и urgency по типу события
+function resolveEventMeta(ev: any): { link: string; urgency: webpush.Urgency; ttl: number } {
+  const type = String(ev?.type || "").trim();
+
+  // Платёжные и балансовые события — высокий приоритет, короткий TTL
+  // urgency "high" = доставить немедленно, игнорируя Doze-mode на Android
+  if (
+    type.startsWith("balance.") ||
+    type.startsWith("payment.") ||
+    type.startsWith("invoice.")
+  ) {
+    return { link: "/payments", urgency: "high", ttl: 3600 }; // 1 час
+  }
+
+  // Сервисные события — нормальный приоритет
+  if (type.startsWith("service.") || type.startsWith("services.")) {
+    return { link: "/services", urgency: "normal", ttl: 43200 }; // 12 часов
+  }
+
+  // Широковещательные — низкий приоритет, можно подождать
+  if (type.startsWith("broadcast.")) {
+    return { link: "/feed", urgency: "low", ttl: 86400 }; // 24 часа
+  }
+
+  // Всё остальное
+  return { link: "/feed", urgency: "normal", ttl: 43200 };
+}
+
+// Короткий payload для пуша
+function buildPushPayload(ev: any, link: string) {
   const title = shortTitle(ev);
   const body = shortBody(ev);
   const type = String(ev?.type || "").trim();
-
-  let link = "/feed";
-  if (type.startsWith("balance.") || type.startsWith("payment.") || type.startsWith("invoice.")) {
-    link = "/payments";
-  } else if (type.startsWith("service.") || type.startsWith("services.")) {
-    link = "/services";
-  } else if (type.startsWith("broadcast.")) {
-    link = "/feed";
-  }
 
   return JSON.stringify({
     title,
@@ -82,13 +101,17 @@ function endpointTail(endpoint: string, n = 28) {
   return s.length > n ? "…" + s.slice(-n) : s;
 }
 
-async function sendToSub(sub: PushSub, payload: string) {
+async function sendToSub(sub: PushSub, payload: string, urgency: webpush.Urgency, ttl: number) {
   return webpush.sendNotification(
     {
       endpoint: sub.endpoint,
       keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth },
     } as any,
-    payload
+    payload,
+    {
+      urgency,
+      TTL: ttl,
+    }
   );
 }
 
@@ -100,7 +123,8 @@ export async function sendWebPushToUser(userId: number, formattedEvent: any) {
     return { ok: true, sent: 0, failed: 0, removed: 0 };
   }
 
-  const payload = buildPushPayload(formattedEvent);
+  const { link, urgency, ttl } = resolveEventMeta(formattedEvent);
+  const payload = buildPushPayload(formattedEvent, link);
 
   let sent = 0;
   let failed = 0;
@@ -111,7 +135,7 @@ export async function sendWebPushToUser(userId: number, formattedEvent: any) {
     const tail = endpointTail(sub.endpoint);
 
     try {
-      await sendToSub(sub, payload);
+      await sendToSub(sub, payload, urgency, ttl);
       sent += 1;
     } catch (e: any) {
       const code = Number(e?.statusCode || e?.status || 0);

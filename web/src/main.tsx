@@ -32,6 +32,35 @@ import { ToastProvider }              from "./shared/ui/toast/ToastProvider";
 import { useBillingNotifications }    from "./app/notifications/useBillingNotifications";
 import { apiFetch }                   from "./shared/api/client";
 
+/* ─── PWA install prompt ─────────────────────────────────────────────────── */
+// Перехватываем beforeinstallprompt как можно раньше — до React-рендера.
+// Браузер выдаёт событие один раз; если пропустить — придётся ждать следующего визита.
+// Сохраняем в window.__pwaInstallPrompt, AuthGate вызывает .prompt() по кнопке.
+
+declare global {
+  interface Window {
+    __pwaInstallPrompt: BeforeInstallPromptEvent | null;
+  }
+}
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+}
+
+window.__pwaInstallPrompt = null;
+
+window.addEventListener("beforeinstallprompt", (e) => {
+  // Предотвращаем автоматический показ — будем управлять моментом сами
+  e.preventDefault();
+  window.__pwaInstallPrompt = e as BeforeInstallPromptEvent;
+});
+
+// Очищаем после успешной установки
+window.addEventListener("appinstalled", () => {
+  window.__pwaInstallPrompt = null;
+});
+
 /* ─── PWA service worker ─────────────────────────────────────────────────── */
 
 if (import.meta.env.PROD) {
@@ -50,7 +79,6 @@ if (import.meta.env.PROD) {
         },
         onOfflineReady() {},
       });
-      try { updateSW(false); } catch { /* ignore */ }
     })
     .catch(() => {});
 }

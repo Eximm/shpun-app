@@ -205,6 +205,37 @@ function rememberPartnerIdFromUrl() {
   }
 }
 
+// ─── PWA install prompt helper ────────────────────────────────────────────────
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+}
+
+function getPwaInstallPrompt(): BeforeInstallPromptEvent | null {
+  return (window as any).__pwaInstallPrompt ?? null;
+}
+
+// Возвращает true если установочный промпт доступен (Android Chrome / Edge)
+function isPwaInstallAvailable(): boolean {
+  return getPwaInstallPrompt() !== null;
+}
+
+// Вызывает системный install prompt и возвращает результат выбора пользователя
+async function triggerPwaInstall(): Promise<"accepted" | "dismissed" | "unavailable"> {
+  const prompt = getPwaInstallPrompt();
+  if (!prompt) return "unavailable";
+  try {
+    await prompt.prompt();
+    const { outcome } = await prompt.userChoice;
+    // После вызова prompt становится одноразовым — очищаем
+    (window as any).__pwaInstallPrompt = null;
+    return outcome;
+  } catch {
+    return "unavailable";
+  }
+}
+
 // ─── PushOnboardingModal ──────────────────────────────────────────────────────
 
 function PushOnboardingModal({
@@ -212,6 +243,7 @@ function PushOnboardingModal({
   busy,
   standalone,
   permission,
+  pwaInstallAvailable,
   onAccept,
   onDismiss,
 }: {
@@ -219,20 +251,37 @@ function PushOnboardingModal({
   busy: boolean;
   standalone: boolean;
   permission: string;
+  pwaInstallAvailable: boolean;
   onAccept: () => void;
   onDismiss: () => void;
 }) {
   if (!open) return null;
 
+  // Три состояния:
+  // 1. PWA не установлена, но браузер поддерживает install prompt → предлагаем установить программно
+  // 2. PWA не установлена, install prompt недоступен → инструкция через меню браузера
+  // 3. PWA установлена, пуши не включены → предлагаем включить уведомления
   const isInstallOnly = !standalone;
+  const canInstallProgrammatically = isInstallOnly && pwaInstallAvailable;
   const isDenied = standalone && permission === "denied";
-  const title = isInstallOnly ? "📲 Установите приложение" : "🔔 Включите уведомления";
-  const hint = isInstallOnly
-    ? "Установите Shpun App на устройство. С установленным приложением можно включить уведомления о балансе, оплате и услугах."
-    : isDenied
-      ? "Уведомления отключены в настройках браузера. Их можно разрешить позже в настройках профиля."
-      : "Получайте важные события о балансе, оплате и услугах даже когда приложение закрыто.";
-  const primaryText = isInstallOnly || isDenied ? "Понятно" : "Включить";
+
+  const title = isInstallOnly
+    ? "📲 Установите приложение"
+    : "🔔 Включите уведомления";
+
+  const hint = canInstallProgrammatically
+    ? "Установите Shpun App на устройство — это займёт секунду. После установки можно включить уведомления о балансе, оплате и услугах."
+    : isInstallOnly
+      ? "Установите Shpun App на устройство. Откройте меню браузера (⋮) и выберите «Установить приложение» или «Добавить на главный экран»."
+      : isDenied
+        ? "Уведомления отключены в настройках браузера. Их можно разрешить позже в настройках профиля."
+        : "Получайте важные события о балансе, оплате и услугах даже когда приложение закрыто.";
+
+  const primaryText = canInstallProgrammatically
+    ? "Установить"
+    : isInstallOnly || isDenied
+      ? "Понятно"
+      : "Включить";
 
   return (
     <div
@@ -268,14 +317,15 @@ function PushOnboardingModal({
             className="row"
             style={{ marginTop: 16, justifyContent: "flex-end", gap: 10 }}
           >
-            {isInstallOnly ? (
+            {isInstallOnly && !canInstallProgrammatically ? (
+              // Только инструкция — одна кнопка «Понятно»
               <button
                 className="btn btn--primary"
                 type="button"
                 onClick={onDismiss}
                 disabled={busy}
               >
-                {busy ? "..." : primaryText}
+                Понятно
               </button>
             ) : (
               <>
@@ -320,6 +370,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     standalone: false,
     disabledByUser: false,
   });
+  // Отслеживаем наличие install prompt реактивно
+  const [pwaInstallAvailable, setPwaInstallAvailable] = useState<boolean>(isPwaInstallAvailable());
 
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const telegramMiniApp = useMemo(() => isTelegramMiniApp(), []);
@@ -347,6 +399,21 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     needsFirstLoginOnboardingRaw && !onboardingDismissed;
 
   const authInProgress = hasFreshAuthPending();
+
+  // Синхронизируем pwaInstallAvailable: слушаем появление/исчезновение события
+  // (appinstalled очищает window.__pwaInstallPrompt в main.tsx)
+  useEffect(() => {
+    const onInstallAvailable = () => setPwaInstallAvailable(true);
+    const onInstalled = () => setPwaInstallAvailable(false);
+
+    window.addEventListener("beforeinstallprompt", onInstallAvailable);
+    window.addEventListener("appinstalled", onInstalled);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", onInstallAvailable);
+      window.removeEventListener("appinstalled", onInstalled);
+    };
+  }, []);
 
   useEffect(() => {
     if (!authInProgress) return;
@@ -477,7 +544,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     }
   }, [me, uid]);
 
-  // ── Push-онбординг ────────────────────────────────────────────────────────
+  // ── Push/install онбординг ────────────────────────────────────────────────
   useEffect(() => {
     if (!me || loading) return;
     if (needsFirstLoginOnboarding) {
@@ -499,9 +566,15 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         if (cancelled) return;
         setPushState(s);
 
+        // Если пуши уже активны — ничего не показываем
         if (isPushActive(s)) return;
+
+        // Если промпт уже показывали в этой сессии — не спамим
         if (isPushPromptShownThisSession()) return;
 
+        // Показываем модалку:
+        // - если PWA не установлена (предложим установить)
+        // - или PWA установлена но пуши не включены
         setPushPromptOpen(true);
         markPushPromptShownThisSession();
       } catch {
@@ -519,18 +592,39 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   async function onPushPromptAccept() {
     if (!uid || pushPromptBusy) return;
     setPushPromptBusy(true);
+
     try {
+      // Если PWA не установлена — пробуем системный install prompt
       if (!isStandalonePwa()) {
-        toast.info("Установите приложение", {
-          description: "Откройте меню браузера и выберите «Установить приложение».",
-          durationMs: 4000,
-        });
+        const outcome = await triggerPwaInstall();
+
+        if (outcome === "accepted") {
+          toast.success("Приложение устанавливается", {
+            description: "После установки откройте приложение и включите уведомления.",
+            durationMs: 4000,
+          });
+        } else if (outcome === "dismissed") {
+          toast.info("Установка отменена", {
+            description: "Вы можете установить приложение позже через меню браузера.",
+            durationMs: 3000,
+          });
+        } else {
+          // install prompt недоступен — показываем инструкцию
+          toast.info("Как установить", {
+            description: "Откройте меню браузера (⋮) и выберите «Установить приложение».",
+            durationMs: 4000,
+          });
+        }
+
         setPushPromptOpen(false);
         return;
       }
+
+      // PWA установлена — включаем пуши
       const ok = await enablePushByUserGesture();
       const s = await getPushState().catch(() => null);
       if (s) setPushState(s);
+
       if (ok) {
         toast.success("Уведомления включены ✅", {
           description: "Теперь вы будете получать важные события.",
@@ -604,6 +698,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         busy={pushPromptBusy}
         standalone={pushState.standalone}
         permission={String(pushState.permission)}
+        pwaInstallAvailable={pwaInstallAvailable}
         onAccept={onPushPromptAccept}
         onDismiss={() => setPushPromptOpen(false)}
       />

@@ -18,9 +18,10 @@ export default defineConfig({
       srcDir: "src",
       filename: "sw.ts",
 
-      // регистрация SW — только из кода (main.tsx)
+      // injectRegister: null — SW регистрируется вручную в main.tsx
+      // через virtual:pwa-register. registerType убран: он применяется
+      // только при автоматической регистрации (injectRegister: 'auto'|'script').
       injectRegister: null,
-      registerType: "autoUpdate",
 
       includeAssets: [
         "icons/icon-192.png",
@@ -58,9 +59,8 @@ export default defineConfig({
 
       workbox: { cleanupOutdatedCaches: true },
 
-   
       devOptions: {
-        enabled: true,
+        enabled: process.env.NODE_ENV !== "production",
         type: "module",
       },
     }),

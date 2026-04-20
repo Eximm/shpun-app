@@ -66,14 +66,52 @@ self.addEventListener("notificationclick", (event) => {
   const link = event.notification.data?.link || "/";
 
   event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-      for (const client of clients) {
-        if ("focus" in client) {
-          client.navigate(link);
-          return client.focus();
+    self.clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then(async (clients) => {
+        for (const client of clients) {
+          if ("focus" in client) {
+            // Ждём navigate перед focus — иначе focus может отработать
+            // до завершения навигации и страница не откроется корректно
+            await client.navigate(link);
+            return client.focus();
+          }
         }
-      }
-      return self.clients.openWindow(link);
-    })
+        return self.clients.openWindow(link);
+      })
   );
+});
+
+/* ===============================
+   Push subscription change
+================================ */
+
+// Браузер (Firefox, Safari 16.4+) может принудительно обновить подписку.
+// Без этого обработчика новая подписка не попадает на сервер
+// и пуши молча перестают приходить до следующего ручного включения.
+self.addEventListener("pushsubscriptionchange", (event: any) => {
+  const resubscribe = async () => {
+    const subscription = await self.registration.pushManager.subscribe(
+      event.oldSubscription?.options ?? {
+        userVisibleOnly: true,
+        // applicationServerKey берётся из старой подписки — ключ не меняется
+        applicationServerKey: event.oldSubscription?.options?.applicationServerKey,
+      }
+    );
+
+    // Отправляем новую подписку на сервер
+    await fetch("/api/notifications/push/subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      // credentials нужны чтобы передать сессионную куку
+      credentials: "include",
+      body: JSON.stringify(
+        typeof subscription.toJSON === "function"
+          ? subscription.toJSON()
+          : subscription
+      ),
+    });
+  };
+
+  event.waitUntil(resubscribe());
 });
