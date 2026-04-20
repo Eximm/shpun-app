@@ -1,6 +1,8 @@
 // web/src/pages/Services.tsx
 
 import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { apiFetch } from "../shared/api/client";
 import { toast } from "../shared/ui/toast";
 import { toastApiError } from "../shared/ui/toast/toastApiError";
@@ -181,6 +183,56 @@ const ConnectAmneziaWG = React.lazy(() => import("./connect/ConnectAmneziaWG"));
 const ConnectMarzban   = React.lazy(() => import("./connect/ConnectMarzban.tsx"));
 const ConnectRouter    = React.lazy(() => import("./connect/ConnectRouter"));
 
+/* ─── PaymentSuccessModal ────────────────────────────────────────────────── */
+
+function PaymentSuccessModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  // Автозакрытие через 5 секунд
+  useEffect(() => {
+    if (!open) return;
+    const t = window.setTimeout(onClose, 5000);
+    return () => window.clearTimeout(t);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="modal"
+      onMouseDown={onClose}
+    >
+      <div
+        className="card modal__card"
+        onMouseDown={(e) => e.stopPropagation()}
+        style={{ textAlign: "center" }}
+      >
+        <div className="card__body">
+          <div style={{ fontSize: 52, marginBottom: 8 }}>✅</div>
+          <div className="h1" style={{ fontSize: 20, marginBottom: 8 }}>
+            Оплата прошла успешно
+          </div>
+          <p className="p" style={{ opacity: 0.75 }}>
+            Баланс пополнен. Услуги обновятся автоматически — это может занять несколько секунд.
+          </p>
+          <button
+            className="btn btn--primary"
+            type="button"
+            onClick={onClose}
+            style={{ marginTop: 20, width: "100%" }}
+          >
+            Отлично
+          </button>
+          <p className="p" style={{ marginTop: 10, opacity: 0.4, fontSize: 12 }}>
+            Закроется автоматически через несколько секунд
+          </p>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 /* ─── Modal ─────────────────────────────────────────────────────────────── */
 
 function Modal({
@@ -320,7 +372,6 @@ function ServiceCard({ s, expanded, connectOpen, onToggle, onToggleConnect, onRe
         boxShadow: `inset 3px 0 0 ${tint.stripe}`,
       }}
     >
-      {/* Header — toggle */}
       <button type="button" className="svc__btn" onClick={onToggle} aria-expanded={expanded}>
         <div className="svc__row">
           <div className="svc__left">
@@ -340,10 +391,8 @@ function ServiceCard({ s, expanded, connectOpen, onToggle, onToggleConnect, onRe
         </div>
       </button>
 
-      {/* Expanded details */}
       {expanded ? (
         <div className="svc__details">
-          {/* WL warning */}
           {isWL && s.status === "active" ? (
             <div className="pre" style={{ borderColor: "rgba(96,165,250,.30)", background: "rgba(96,165,250,.08)" }}>
               <b>{t("services.wl.badge", "WL")}</b> — {t("services.wl.hint", "Режим белого списка")}
@@ -353,7 +402,6 @@ function ServiceCard({ s, expanded, connectOpen, onToggle, onToggleConnect, onRe
 
           {s.descr ? <p className="p">{s.descr}</p> : null}
 
-          {/* Status-specific actions */}
           {s.status === "active" && (
             <div className="actions actions--1">
               <button
@@ -409,12 +457,10 @@ function ServiceCard({ s, expanded, connectOpen, onToggle, onToggleConnect, onRe
             </div>
           )}
 
-          {/* Connect inline */}
           {connectOpen && canConnect ? (
             <ConnectInline kind={kind} service={s} onDone={onRefresh} t={t} />
           ) : null}
 
-          {/* Destructive actions */}
           {allowStop && (
             <div className="actions actions--1">
               <button className="btn" onClick={() => onAskStop(s)}>
@@ -462,6 +508,8 @@ function saveGroupsState(v: Record<ServiceKind, boolean>) {
 
 export function Services() {
   const { t } = useI18n();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState<unknown>(null);
@@ -483,6 +531,23 @@ export function Services() {
     () => readGroupsState() ?? { amneziawg: false, marzban: true, marzban_router: false, unknown: false }
   );
 
+  // Модалка успешной оплаты — читаем ?payment=success из URL
+  const [paySuccessOpen, setPaySuccessOpen] = useState<boolean>(() => {
+    try {
+      return new URLSearchParams(window.location.search).get("payment") === "success";
+    } catch { return false; }
+  });
+
+  // Чистим параметр из URL сразу при монтировании чтобы не показывать при обновлении страницы
+  useEffect(() => {
+    const sp = new URLSearchParams(location.search);
+    if (sp.get("payment") === "success") {
+      sp.delete("payment");
+      const next = sp.toString();
+      navigate(location.pathname + (next ? `?${next}` : ""), { replace: true });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const { me } = useMe();
   const discountPercent = Math.max(0, nnum((me as any)?.discount, 0));
 
@@ -491,7 +556,6 @@ export function Services() {
   const prevStatusesRef = useRef<Map<number, UiStatus> | null>(null);
   const statusInitRef   = useRef(false);
 
-  // ── Load ──────────────────────────────────────────────────────────────────
   async function load(opts?: { silent?: boolean; toastOnSuccess?: boolean }) {
     const silent        = !!opts?.silent;
     const toastOnSuccess = !!opts?.toastOnSuccess;
@@ -517,7 +581,6 @@ export function Services() {
     }
   }
 
-  // ── Stop / Delete ─────────────────────────────────────────────────────────
   async function onConfirmStop() {
     if (!stopTarget || stopBusy) return;
     setStopBusy(true);
@@ -560,10 +623,8 @@ export function Services() {
     }
   }
 
-  // ── Effects ───────────────────────────────────────────────────────────────
   useEffect(() => { void load({ silent: false }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Toast on status change
   useEffect(() => {
     const cur = new Map<number, UiStatus>();
     for (const it of items) cur.set(it.userServiceId, normStatus(it.status));
@@ -595,7 +656,6 @@ export function Services() {
     prevStatusesRef.current = cur;
   }, [items, t]);
 
-  // ── Groups ────────────────────────────────────────────────────────────────
   const groups = useMemo(() => {
     const byKind: Record<ServiceKind, ApiServiceItem[]> = {
       amneziawg: [], marzban: [], marzban_router: [], unknown: [],
@@ -613,7 +673,6 @@ export function Services() {
   const toggleGroup = (kind: ServiceKind) =>
     setOpenGroups((cur) => ({ ...cur, [kind]: !cur[kind] }));
 
-  // ── Loading ───────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="app-loader" style={{ opacity: 1, transition: "opacity 180ms ease", pointerEvents: "auto" }}>
@@ -629,7 +688,6 @@ export function Services() {
     );
   }
 
-  // ── Error ─────────────────────────────────────────────────────────────────
   if (error) {
     return (
       <div className="section">
@@ -650,7 +708,6 @@ export function Services() {
     );
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────
   const s               = summary;
   const hasServices     = items.length > 0;
   const fallbackActive  = items.filter((x) => x.status === "active").length;
@@ -661,6 +718,12 @@ export function Services() {
 
   return (
     <div className="section">
+
+      {/* Модалка успешной оплаты */}
+      <PaymentSuccessModal
+        open={paySuccessOpen}
+        onClose={() => setPaySuccessOpen(false)}
+      />
 
       {/* Header */}
       <div className="card">

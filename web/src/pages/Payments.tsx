@@ -2,7 +2,7 @@
 
 import { createPortal } from "react-dom";
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { apiFetch } from "../shared/api/client";
 import { useI18n } from "../shared/i18n";
 import { toast } from "../shared/ui/toast";
@@ -85,6 +85,58 @@ function fmtForecastDate(iso: string) {
   } catch { return iso; }
 }
 
+/* ─── PaymentErrorModal ──────────────────────────────────────────────────── */
+
+function PaymentErrorModal({ open, onClose, onRetry }: {
+  open: boolean;
+  onClose: () => void;
+  onRetry: () => void;
+}) {
+  if (!open) return null;
+
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="modal"
+      onMouseDown={onClose}
+    >
+      <div
+        className="card modal__card"
+        onMouseDown={(e) => e.stopPropagation()}
+        style={{ textAlign: "center" }}
+      >
+        <div className="card__body">
+          <div style={{ fontSize: 52, marginBottom: 8 }}>❌</div>
+          <div className="h1" style={{ fontSize: 20, marginBottom: 8 }}>
+            Оплата не прошла
+          </div>
+          <p className="p" style={{ opacity: 0.75 }}>
+            Платёж был отменён или произошла ошибка. Попробуйте ещё раз или выберите другой способ оплаты.
+          </p>
+          <div className="actions actions--2" style={{ marginTop: 20 }}>
+            <button
+              className="btn"
+              type="button"
+              onClick={onClose}
+            >
+              Закрыть
+            </button>
+            <button
+              className="btn btn--primary"
+              type="button"
+              onClick={onRetry}
+            >
+              Попробовать снова
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 /* ─── RequisitesModal ────────────────────────────────────────────────────── */
 
 function RequisitesModal({ open, onClose, amountNumber }: {
@@ -153,7 +205,6 @@ function RequisitesModal({ open, onClose, amountNumber }: {
           </div>
 
           <div className="modal__content">
-            {/* Предупреждение */}
             <div style={{ background: "rgba(255,80,80,0.12)", border: "1px solid rgba(255,80,80,0.35)", borderRadius: 10, padding: "12px 14px", marginBottom: 16 }}>
               <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>
                 ⚠️ {t("payments.card_page.receipt_required")}
@@ -163,7 +214,6 @@ function RequisitesModal({ open, onClose, amountNumber }: {
               </div>
             </div>
 
-            {/* Реквизиты */}
             {reqLoading ? (
               <p className="p">{t("payments.requisites.loading")}</p>
             ) : reqError ? (
@@ -195,14 +245,12 @@ function RequisitesModal({ open, onClose, amountNumber }: {
               </div>
             )}
 
-            {/* Шаги */}
             <div className="pre" style={{ marginTop: 12 }}>
               <div>1. {t("payments.card_page.step_1")}</div>
               <div>2. {t("payments.card_page.step_2")}</div>
               <div>3. {t("payments.card_page.step_3")}</div>
             </div>
 
-            {/* Действия */}
             <div className="actions actions--1" style={{ marginTop: 16 }}>
               <label className="btn btn--primary" style={{ cursor: "pointer", textAlign: "center" }}>
                 <span>{uploading ? t("payments.receipt.uploading") : t("payments.receipt.upload_btn")}</span>
@@ -243,6 +291,8 @@ function RequisitesModal({ open, onClose, amountNumber }: {
 
 export function Payments() {
   const { t } = useI18n();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const [loading,     setLoading]     = useState(true);
   const [err,         setErr]         = useState<unknown>(null);
@@ -252,6 +302,23 @@ export function Payments() {
   const [reqModal,    setReqModal]    = useState(false);
   const [checkingPay, setCheckingPay] = useState(false);
   const [showOverlay, setShowOverlay] = useState(false);
+
+  // Модалка ошибки оплаты — читаем ?payment=error из URL
+  const [payErrorOpen, setPayErrorOpen] = useState<boolean>(() => {
+    try {
+      return new URLSearchParams(window.location.search).get("payment") === "error";
+    } catch { return false; }
+  });
+
+  // Чистим параметр из URL сразу при монтировании
+  useEffect(() => {
+    const sp = new URLSearchParams(location.search);
+    if (sp.get("payment") === "error") {
+      sp.delete("payment");
+      const next = sp.toString();
+      navigate(location.pathname + (next ? `?${next}` : ""), { replace: true });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const amountNumber = useMemo(() => {
     const v = Math.round(parseFloat(String(amount || "").replace(",", ".")));
@@ -355,7 +422,20 @@ export function Payments() {
   return (
     <div className="section">
 
-      {/* Overlay после открытия внешней оплаты — через portal */}
+      {/* Модалка ошибки оплаты */}
+      <PaymentErrorModal
+        open={payErrorOpen}
+        onClose={() => setPayErrorOpen(false)}
+        onRetry={() => {
+          setPayErrorOpen(false);
+          // Скроллим к способам оплаты
+          window.setTimeout(() => {
+            document.querySelector(".kv")?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }, 100);
+        }}
+      />
+
+      {/* Overlay после открытия внешней оплаты */}
       {showOverlay && createPortal(
         <div className="modal" role="dialog" aria-modal="true" onMouseDown={() => setShowOverlay(false)}>
           <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()}>
