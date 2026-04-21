@@ -1,4 +1,4 @@
-// web/src/pages/Home.tsx
+// FILE: web/src/pages/Home.tsx
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -7,14 +7,9 @@ import { useI18n } from "../shared/i18n";
 import { apiFetch } from "../shared/api/client";
 import { toast } from "../shared/ui/toast";
 import { buildHomeNewsPreview } from "../shared/ui/newsPreview";
+import { PromoModal } from "./PromoModal";
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
-
-type PromoState =
-  | { status: "idle" }
-  | { status: "applying" }
-  | { status: "done"; message: string }
-  | { status: "error"; message: string };
 
 type ApiSummary = {
   total: number;
@@ -169,9 +164,8 @@ export function Home() {
   const { t } = useI18n();
   const { me, loading, error, refetch } = useMe();
 
-  const [promo, setPromo] = useState<{ code: string; state: PromoState }>({
-    code: "", state: { status: "idle" },
-  });
+  // Промокод — только флаг открытия модалки
+  const [promoOpen, setPromoOpen] = useState(false);
 
   const [svcLoading, setSvcLoading] = useState(false);
   const [svcError,   setSvcError]   = useState<string | null>(null);
@@ -266,14 +260,6 @@ export function Home() {
     if (me?.ok) { void loadServicesSummary(); void loadPaymentsForecast(); void loadHomeNews(); }
   }, [me?.ok]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function applyPromoStub() {
-    const code = promo.code.trim();
-    if (!code) { setPromo((p) => ({ ...p, state: { status: "error", message: t("promo.err.empty") } })); return; }
-    setPromo((p) => ({ ...p, state: { status: "applying" } }));
-    await new Promise((r) => setTimeout(r, 450));
-    setPromo((p) => ({ ...p, state: { status: "done", message: t("promo.done.stub") } }));
-  }
-
   // ── Loading ───────────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -359,7 +345,6 @@ export function Home() {
               value={svcLoading ? "…" : s ? `${s.active}/${s.total}` : "—"}
               sub={t("home.tiles.services.sub")} tone="ok" />
 
-            {/* Внимание — без баджа, только иконка и цвет */}
             <Tile to="/services"
               icon={attentionCount > 0 ? "⚠️" : "✅"}
               title={attentionCount > 0 ? t("home.tiles.attention") : t("home.tiles.state")}
@@ -493,7 +478,7 @@ export function Home() {
         </div>
       </div>
 
-      {/* Бонус-код */}
+      {/* Промокод */}
       <div className="section">
         <div className="card home-promocard">
           <div className="card__body">
@@ -503,30 +488,25 @@ export function Home() {
                 <div className="p">{t("home.promo.sub")}</div>
               </div>
             </div>
-
-            <div className="home-promoRow">
-              <input
-                className="input"
-                value={promo.code}
-                onChange={(e) => setPromo((p) => ({ ...p, code: e.target.value, state: { status: "idle" } }))}
-                placeholder={t("promo.input_ph")}
-                autoCapitalize="characters"
-                spellCheck={false}
-              />
-              <button
-                className="btn btn--accent home-cta__btn"
-                onClick={() => void applyPromoStub()}
-                disabled={promo.state.status === "applying"}
-              >
-                {promo.state.status === "applying" ? t("promo.applying") : t("promo.apply")}
-              </button>
-            </div>
-
-            {promo.state.status === "done"  && <div className="home-alert home-alert--ok">{promo.state.message}</div>}
-            {promo.state.status === "error" && <div className="home-alert home-alert--danger">{promo.state.message}</div>}
+            <button
+              className="btn btn--accent home-promoBtn"
+              onClick={() => setPromoOpen(true)}
+            >
+              🎁 {t("promo.apply")}
+            </button>
           </div>
         </div>
       </div>
+
+      {/* Модальное окно промокода */}
+      <PromoModal
+        open={promoOpen}
+        onClose={() => setPromoOpen(false)}
+        onSuccess={() => {
+          // Обновляем данные пользователя после успешного применения
+          void refetch?.()
+        }}
+      />
 
     </div>
   );

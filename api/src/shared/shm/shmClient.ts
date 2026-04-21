@@ -104,9 +104,9 @@ export async function shmFetch<T = unknown>(
   }
 
   if (sessionId) {
-  headers["Cookie"] = [headers["Cookie"], `session_id=${encodeURIComponent(sessionId)}`]
-    .filter(Boolean)
-    .join("; ");
+    headers["Cookie"] = [headers["Cookie"], `session_id=${encodeURIComponent(sessionId)}`]
+      .filter(Boolean)
+      .join("; ")
   }
 
   let body: any = opts?.body ?? undefined
@@ -393,11 +393,6 @@ export async function shmDeleteAutopayment(sessionId: string) {
 // STORAGE (text/plain)
 // =====================
 
-/**
- * Read storage item as plain text via:
- * GET /shm/v1/storage/manage/{name}
- * (Swagger: returns text/plain)
- */
 export async function shmStorageManageGetText(sessionId: string, name: string) {
   const n = String(name ?? '').trim()
   return await shmFetch<any>(sessionId, `v1/storage/manage/${encodeURIComponent(n)}`, {
@@ -441,7 +436,7 @@ export async function shmShpunAppAdminStatus(shmSessionId: string) {
 }
 
 // =====================
-// ADMIN SETTINGS (только для админа)
+// ADMIN SETTINGS
 // =====================
 
 export async function shmShpunAppAdminSettingsGet(shmSessionId: string) {
@@ -465,7 +460,7 @@ export async function shmShpunAppAdminSettingsSet(
 }
 
 // =====================
-// PUBLIC ORDER RULES (используется при заказе)
+// PUBLIC ORDER RULES
 // =====================
 
 export async function shmShpunAppOrderRulesGet(shmSessionId: string) {
@@ -494,9 +489,6 @@ export async function shmShpunAppReferralsLink(shmSessionId: string) {
   return await shmShpunAppTemplate<any>(shmSessionId, 'referrals.link')
 }
 
-/**
- * ✅ Payments requisites via shpun_app template (private, authed)
- */
 export async function shmShpunAppPaymentsRequisites(shmSessionId: string) {
   return await shmShpunAppTemplate<any>(shmSessionId, 'payments.requisites')
 }
@@ -581,7 +573,7 @@ export async function shmShpunAppRouterUnbind(
 }
 
 // =====================
-// CONNECT via ShpunApp template (универсально)
+// CONNECT via ShpunApp template
 // =====================
 
 export type ShpunAppConnectGetResp = {
@@ -614,43 +606,52 @@ export function shmShpunAppAmneziaWGGet(shmSessionId: string, usi: number) {
   return shmShpunAppConnectGet(shmSessionId, usi, 'amneziawg')
 }
 
-// ДОБАВИТЬ В КОНЕЦ: api/src/shared/shm/shmClient.ts
+// =====================
+// PROMO — через shpun_app template
+// =====================
 
-// =====================
-// PROMO (промокоды)
-// =====================
+export type ShmPromoApplyResp = {
+  ok?: number | boolean
+  ver?: string
+  action?: string
+  code?: string
+  bonus_added?: number
+  bonus_after?: number
+  balance_after?: number
+  error?: string
+  message?: string
+  [k: string]: any
+}
+
+export type ShmPromoProfileResp = {
+  ok?: number | boolean
+  ver?: string
+  action?: string
+  balance?: number
+  bonus?: number
+  error?: string
+  [k: string]: any
+}
 
 /**
- * Применить промокод.
- * Вызывает шаблон promo_apply?session_id=...&code=CODE
+ * Применить промокод через shpun_app template (action = promo.apply).
+ * Биллинг сам считает delta бонусов до/после и возвращает bonus_added.
  */
-export async function shmPromoApply(sessionId: string, code: string) {
+export async function shmShpunAppPromoApply(
+  shmSessionId: string,
+  code: string
+): Promise<ShmResult<ShmPromoApplyResp>> {
   const clean = String(code ?? '').trim().toUpperCase()
-  return await shmFetch<any>(null, 'v1/template/promo_apply', {
-    method: 'GET',
-    query: { session_id: sessionId, format: 'json', code: clean },
+  return await shmShpunAppTemplate<ShmPromoApplyResp>(shmSessionId, 'promo.apply', {
+    code: clean,
   })
 }
 
 /**
- * Профиль пользователя для промо (баланс, бонусы после применения).
- * Вызывает шаблон promo_profile?session_id=...
+ * Получить баланс и бонусы через shpun_app template (action = promo.profile).
  */
-export async function shmPromoProfile(sessionId: string) {
-  return await shmFetch<any>(null, 'v1/template/promo_profile', {
-    method: 'GET',
-    query: { session_id: sessionId, format: 'json' },
-  })
-}
-
-/**
- * Описание промокода по его коду.
- * Вызывает шаблон {CODE}?session_id=... — биллинг возвращает item с type/title/text/chips.
- */
-export async function shmPromoDescribe(sessionId: string, code: string) {
-  const clean = String(code ?? '').trim().toUpperCase()
-  return await shmFetch<any>(null, `v1/template/${encodeURIComponent(clean)}`, {
-    method: 'GET',
-    query: { session_id: sessionId, format: 'json' },
-  })
+export async function shmShpunAppPromoProfile(
+  shmSessionId: string
+): Promise<ShmResult<ShmPromoProfileResp>> {
+  return await shmShpunAppTemplate<ShmPromoProfileResp>(shmSessionId, 'promo.profile')
 }
