@@ -1,4 +1,4 @@
-// web/src/pages/Services.tsx
+// FILE: web/src/pages/Services.tsx
 
 import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -68,10 +68,10 @@ function isWhiteListCategory(category?: string) { return category === "marzban-w
 
 function kindTitle(k: ServiceKind, t: T) {
   switch (k) {
-    case "amneziawg":    return t("services.kind.amneziawg",    "AmneziaWG");
-    case "marzban":      return t("services.kind.marzban",      "Marzban");
-    case "marzban_router": return t("services.kind.marzban_router", "Router VPN");
-    default:             return t("services.kind.unknown",      "Другое");
+    case "amneziawg":      return t("services.kind.amneziawg",      "AmneziaWG");
+    case "marzban":        return t("services.kind.marzban",         "Marzban");
+    case "marzban_router": return t("services.kind.marzban_router",  "Router VPN");
+    default:               return t("services.kind.unknown",         "Другое");
   }
 }
 
@@ -79,41 +79,63 @@ function kindDescr(k: ServiceKind, t: T) {
   switch (k) {
     case "marzban":        return t("services.kind_descr.marzban",        "Подписка для телефонов, ПК и планшетов.");
     case "marzban_router": return t("services.kind_descr.marzban_router", "Отдельные подписки для роутеров (Shpun Router / OpenWrt).");
-    case "amneziawg":     return t("services.kind_descr.amneziawg",      "Простой ключ для одного сервера.");
-    default:              return t("services.kind_descr.unknown",         "Другие услуги.");
+    case "amneziawg":      return t("services.kind_descr.amneziawg",      "Простой ключ для одного сервера.");
+    default:               return t("services.kind_descr.unknown",        "Другие услуги.");
+  }
+}
+
+function kindIcon(k: ServiceKind): string {
+  switch (k) {
+    case "marzban":        return "🛰️";
+    case "marzban_router": return "📡";
+    case "amneziawg":      return "🔑";
+    default:               return "📦";
   }
 }
 
 function statusLabel(s: UiStatus, t: T) {
   switch (s) {
-    case "active":  return t("services.status.active",  "Активна");
-    case "pending": return t("services.status.pending", "Подключается");
+    case "active":   return t("services.status.active",   "Активна");
+    case "pending":  return t("services.status.pending",  "Подключается");
     case "not_paid": return t("services.status.not_paid", "Не оплачена");
-    case "blocked": return t("services.status.blocked", "Заблокирована");
-    case "removed": return t("services.status.removed", "Завершена");
-    case "error":   return t("services.status.error",   "Ошибка");
-    case "init":    return t("services.status.init",    "Инициализация");
-    default:        return t("services.status.default", "Статус");
+    case "blocked":  return t("services.status.blocked",  "Заблокирована");
+    case "removed":  return t("services.status.removed",  "Завершена");
+    case "error":    return t("services.status.error",    "Ошибка");
+    case "init":     return t("services.status.init",     "Инициализация");
+    default:         return t("services.status.default",  "Статус");
+  }
+}
+
+function statusChipClass(s: UiStatus): string {
+  switch (s) {
+    case "active":  return "chip chip--ok";
+    case "pending":
+    case "init":    return "chip chip--info";
+    case "not_paid":
+    case "blocked": return "chip chip--warn";
+    case "error":   return "chip chip--bad";
+    case "removed": return "chip";
+    default:        return "chip";
   }
 }
 
 function statusTint(s: UiStatus) {
   switch (s) {
     case "active":
-      return { bg: "rgba(34,197,94,.08)",   border: "rgba(34,197,94,.28)",   stripe: "rgba(34,197,94,.45)" };
+      return { bg: "rgba(34,197,94,.07)",   border: "rgba(34,197,94,.22)",   stripe: "rgba(34,197,94,.40)" };
     case "pending":
     case "init":
-      return { bg: "rgba(59,130,246,.08)",  border: "rgba(59,130,246,.28)",  stripe: "rgba(59,130,246,.45)" };
+      return { bg: "rgba(59,130,246,.07)",  border: "rgba(59,130,246,.22)",  stripe: "rgba(59,130,246,.40)" };
     case "not_paid":
-      return { bg: "rgba(245,158,11,.08)",  border: "rgba(245,158,11,.28)",  stripe: "rgba(245,158,11,.45)" };
+      return { bg: "rgba(245,158,11,.08)",  border: "rgba(245,158,11,.26)",  stripe: "rgba(245,158,11,.45)" };
     case "blocked":
-      return { bg: "rgba(245,158,11,.10)",  border: "rgba(245,158,11,.32)",  stripe: "rgba(245,158,11,.55)" };
+      return { bg: "rgba(245,158,11,.10)",  border: "rgba(245,158,11,.30)",  stripe: "rgba(245,158,11,.52)" };
     case "error":
-      return { bg: "rgba(239,68,68,.08)",   border: "rgba(239,68,68,.28)",   stripe: "rgba(239,68,68,.50)" };
+      return { bg: "rgba(239,68,68,.08)",   border: "rgba(239,68,68,.26)",   stripe: "rgba(239,68,68,.48)" };
     case "removed":
-      return { bg: "rgba(148,163,184,.06)", border: "rgba(148,163,184,.22)", stripe: "rgba(148,163,184,.28)" };
+      return { bg: "rgba(148,163,184,.05)", border: "rgba(148,163,184,.18)", stripe: "rgba(148,163,184,.24)" };
     default:
-      return { bg: "rgba(255,255,255,.02)", border: "rgba(148,163,184,.22)", stripe: "rgba(148,163,184,.22)" };
+      return { bg: "rgba(255,255,255,.02)", border: "rgba(148,163,184,.18)", stripe: "rgba(148,163,184,.18)" };
   }
 }
 
@@ -142,7 +164,7 @@ function hintText(s: ApiServiceItem, t: T) {
   if (s.status === "blocked")  return t("services.hint.blocked",  "Требуется действие");
   if (s.status === "pending")  return t("services.hint.pending",  "Подождите немного");
   if (s.status === "init")     return t("services.hint.init",     "Инициализируется");
-  if (s.status === "error")    return t("services.hint.error",    "Проверьте статус или обратитесь в поддержку");
+  if (s.status === "error")    return t("services.hint.error",    "Проверьте статус");
   return "";
 }
 
@@ -186,7 +208,6 @@ const ConnectRouter    = React.lazy(() => import("./connect/ConnectRouter"));
 /* ─── PaymentSuccessModal ────────────────────────────────────────────────── */
 
 function PaymentSuccessModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  // Автозакрытие через 5 секунд
   useEffect(() => {
     if (!open) return;
     const t = window.setTimeout(onClose, 5000);
@@ -196,31 +217,15 @@ function PaymentSuccessModal({ open, onClose }: { open: boolean; onClose: () => 
   if (!open) return null;
 
   return createPortal(
-    <div
-      role="dialog"
-      aria-modal="true"
-      className="modal"
-      onMouseDown={onClose}
-    >
-      <div
-        className="card modal__card"
-        onMouseDown={(e) => e.stopPropagation()}
-        style={{ textAlign: "center" }}
-      >
+    <div role="dialog" aria-modal="true" className="modal" onMouseDown={onClose}>
+      <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()} style={{ textAlign: "center" }}>
         <div className="card__body">
           <div style={{ fontSize: 52, marginBottom: 8 }}>✅</div>
-          <div className="h1" style={{ fontSize: 20, marginBottom: 8 }}>
-            Оплата прошла успешно
-          </div>
+          <div className="h1" style={{ fontSize: 20, marginBottom: 8 }}>Оплата прошла успешно</div>
           <p className="p" style={{ opacity: 0.75 }}>
             Баланс пополнен. Услуги обновятся автоматически — это может занять несколько секунд.
           </p>
-          <button
-            className="btn btn--primary"
-            type="button"
-            onClick={onClose}
-            style={{ marginTop: 20, width: "100%" }}
-          >
+          <button className="btn btn--primary" type="button" onClick={onClose} style={{ marginTop: 20, width: "100%" }}>
             Отлично
           </button>
           <p className="p" style={{ marginTop: 10, opacity: 0.4, fontSize: 12 }}>
@@ -240,18 +245,11 @@ function Modal({
   loading, error, confirmClassName = "btn btn--primary",
   onClose, onConfirm, footerHint, closeLabel,
 }: {
-  title: string;
-  open: boolean;
-  children: React.ReactNode;
-  confirmText?: string;
-  cancelText?: string;
-  loading?: boolean;
-  error?: string | null;
-  confirmClassName?: string;
-  onClose: () => void;
-  onConfirm: () => void;
-  footerHint: string;
-  closeLabel: string;
+  title: string; open: boolean; children: React.ReactNode;
+  confirmText?: string; cancelText?: string; loading?: boolean;
+  error?: string | null; confirmClassName?: string;
+  onClose: () => void; onConfirm: () => void;
+  footerHint: string; closeLabel: string;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -263,32 +261,23 @@ function Modal({
   if (!open) return null;
 
   return (
-    <div
-      className="modal"
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
+    <div className="modal" role="dialog" aria-modal="true" aria-label={title}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="card modal__card">
         <div className="card__body">
           <div className="modal__head">
             <div className="modal__title">{title}</div>
             <button className="btn modal__close" onClick={onClose} aria-label={closeLabel} disabled={!!loading}>✕</button>
           </div>
-
           <div className="modal__content">{children}</div>
-
-          {error ? <div className="pre" style={{ marginTop: 12 }}>{error}</div> : null}
-
-          <div className="actions actions--2">
+          {error ? <div className="pre" style={{ marginTop: 12, borderColor: "rgba(255,77,109,0.30)" }}>{error}</div> : null}
+          <div className="actions actions--2" style={{ marginTop: 14 }}>
             <button className="btn" onClick={onClose} disabled={!!loading}>{cancelText}</button>
             <button className={confirmClassName} onClick={onConfirm} disabled={!!loading}>
               {loading ? "…" : confirmText}
             </button>
           </div>
-
-          <p className="p" style={{ opacity: 0.65, fontSize: 12 }}>{footerHint}</p>
+          <p className="p" style={{ opacity: 0.55, fontSize: 12, marginTop: 8 }}>{footerHint}</p>
         </div>
       </div>
     </div>
@@ -298,10 +287,7 @@ function Modal({
 /* ─── ConnectInline ──────────────────────────────────────────────────────── */
 
 function ConnectInline({ kind, service, onDone, t }: {
-  kind: ServiceKind;
-  service: ApiServiceItem;
-  onDone?: () => void;
-  t: T;
+  kind: ServiceKind; service: ApiServiceItem; onDone?: () => void; t: T;
 }) {
   return (
     <div className="svc__connect">
@@ -312,9 +298,9 @@ function ConnectInline({ kind, service, onDone, t }: {
       </div>
       <div className="svc__connectBody">
         <Suspense fallback={<p className="p">{t("services.loading_short", "Загружаем…")}</p>}>
-          {kind === "amneziawg"    ? <ConnectAmneziaWG usi={service.userServiceId} service={service} onDone={onDone} /> : null}
-          {kind === "marzban"      ? <ConnectMarzban   usi={service.userServiceId} service={service} onDone={onDone} /> : null}
-          {kind === "marzban_router" ? <ConnectRouter  usi={service.userServiceId} service={service} onDone={onDone} /> : null}
+          {kind === "amneziawg"      ? <ConnectAmneziaWG usi={service.userServiceId} service={service} onDone={onDone} /> : null}
+          {kind === "marzban"        ? <ConnectMarzban   usi={service.userServiceId} service={service} onDone={onDone} /> : null}
+          {kind === "marzban_router" ? <ConnectRouter    usi={service.userServiceId} service={service} onDone={onDone} /> : null}
           {kind === "unknown" ? (
             <div className="pre">{t("services.connect.unavailable", "Для этого типа услуги подключение пока недоступно.")}</div>
           ) : null}
@@ -327,28 +313,21 @@ function ConnectInline({ kind, service, onDone, t }: {
 /* ─── ServiceCard ────────────────────────────────────────────────────────── */
 
 function ServiceCard({ s, expanded, connectOpen, onToggle, onToggleConnect, onRefresh, onAskDelete, onAskStop, t }: {
-  s: ApiServiceItem;
-  expanded: boolean;
-  connectOpen: boolean;
-  onToggle: () => void;
-  onToggleConnect: () => void;
-  onRefresh: () => void;
-  onAskDelete: (s: ApiServiceItem) => void;
-  onAskStop: (s: ApiServiceItem) => void;
-  t: T;
+  s: ApiServiceItem; expanded: boolean; connectOpen: boolean;
+  onToggle: () => void; onToggleConnect: () => void; onRefresh: () => void;
+  onAskDelete: (s: ApiServiceItem) => void; onAskStop: (s: ApiServiceItem) => void; t: T;
 }) {
-  const until        = s.expireAt ? fmtDate(s.expireAt) : "";
-  const kind         = detectKind(s.category);
-  const hint         = hintText(s, t);
-  const isWL         = isWhiteListCategory(s.category);
-  const allowDelete  = canDeleteStatus(s.status);
-  const allowStop    = canStopStatus(s.status);
-  const canConnect   = kind !== "unknown" && s.status === "active";
+  const until       = s.expireAt ? fmtDate(s.expireAt) : "";
+  const kind        = detectKind(s.category);
+  const hint        = hintText(s, t);
+  const isWL        = isWhiteListCategory(s.category);
+  const allowDelete = canDeleteStatus(s.status);
+  const allowStop   = canStopStatus(s.status);
+  const canConnect  = kind !== "unknown" && s.status === "active";
 
   const payUrl     = `/payments?reason=service&usi=${encodeURIComponent(String(s.userServiceId))}`;
   const supportUrl = `/support?topic=service&usi=${encodeURIComponent(String(s.userServiceId))}`;
-
-  const tint = statusTint(s.status);
+  const tint       = statusTint(s.status);
 
   const meta = (() => {
     const parts: React.ReactNode[] = [];
@@ -375,40 +354,39 @@ function ServiceCard({ s, expanded, connectOpen, onToggle, onToggleConnect, onRe
       <button type="button" className="svc__btn" onClick={onToggle} aria-expanded={expanded}>
         <div className="svc__row">
           <div className="svc__left">
-            <div className="svc__status">{statusLabel(s.status, t)}</div>
+            <span className={statusChipClass(s.status)} style={{ fontSize: 11, padding: "2px 8px" }}>
+              {statusLabel(s.status, t)}
+            </span>
             <div className="svc__title">#{s.userServiceId} — {s.title}</div>
             <div className="svc__sub svc__sub--compact">{meta}</div>
           </div>
           <div className="svc__right">
             {isWL ? <span className="badge badge--wl">{t("services.wl.badge", "WL")}</span> : null}
             <span className="badge">
-              {fmtMoney(s.price, s.currency)} / {s.periodMonths || 1}{t("services.month_short", "мес")}
+              {fmtMoney(s.price, s.currency)} / {s.periodMonths || 1}{t("services.month_short", "м")}
             </span>
           </div>
         </div>
         <div className="svc__toggle">
-          <b>{expanded ? "▲" : "▼"}</b> {t("services.actions.title", "Действия")}
+          <span style={{ opacity: 0.5 }}>{expanded ? "▲" : "▼"}</span>
+          {" "}<span style={{ opacity: 0.65, fontSize: 12 }}>{t("services.actions.title", "Действия")}</span>
         </div>
       </button>
 
-      {expanded ? (
+      {expanded && (
         <div className="svc__details">
-          {isWL && s.status === "active" ? (
-            <div className="pre" style={{ borderColor: "rgba(96,165,250,.30)", background: "rgba(96,165,250,.08)" }}>
+          {isWL && s.status === "active" && (
+            <div className="pre" style={{ borderColor: "rgba(96,165,250,.28)", background: "rgba(96,165,250,.07)" }}>
               <b>{t("services.wl.badge", "WL")}</b> — {t("services.wl.hint", "Режим белого списка")}
               <br />{t("services.wl.warning", "Трафик в этом режиме может быть ограничен.")}
             </div>
-          ) : null}
+          )}
 
-          {s.descr ? <p className="p">{s.descr}</p> : null}
+          {s.descr ? <p className="p" style={{ marginTop: 8 }}>{s.descr}</p> : null}
 
           {s.status === "active" && (
             <div className="actions actions--1">
-              <button
-                className="btn btn--primary"
-                onClick={onToggleConnect}
-                disabled={!canConnect}
-              >
+              <button className="btn btn--primary" onClick={onToggleConnect} disabled={!canConnect} type="button">
                 {connectOpen
                   ? t("services.connect.hide",   "Скрыть подключение")
                   : t("services.connect.button", "Подключение")}
@@ -418,10 +396,10 @@ function ServiceCard({ s, expanded, connectOpen, onToggle, onToggleConnect, onRe
 
           {s.status === "not_paid" && (
             <div className="actions actions--2">
-              <button className="btn btn--primary" onClick={() => go(payUrl)}>
+              <button className="btn btn--primary" onClick={() => go(payUrl)} type="button">
                 {t("services.pay", "Оплатить")}
               </button>
-              <button className="btn" onClick={onRefresh}>
+              <button className="btn" onClick={onRefresh} type="button">
                 {t("services.refresh", "Обновить")}
               </button>
             </div>
@@ -429,7 +407,7 @@ function ServiceCard({ s, expanded, connectOpen, onToggle, onToggleConnect, onRe
 
           {(s.status === "pending" || s.status === "init") && (
             <div className="actions actions--1">
-              <button className="btn btn--primary" onClick={onRefresh}>
+              <button className="btn btn--primary" onClick={onRefresh} type="button">
                 {t("services.refresh_status", "Обновить статус")}
               </button>
             </div>
@@ -437,10 +415,10 @@ function ServiceCard({ s, expanded, connectOpen, onToggle, onToggleConnect, onRe
 
           {s.status === "blocked" && (
             <div className="actions actions--2">
-              <button className="btn btn--primary" onClick={() => go(payUrl)}>
+              <button className="btn btn--primary" onClick={() => go(payUrl)} type="button">
                 {t("services.topup", "Пополнить / оплатить")}
               </button>
-              <button className="btn" onClick={() => go(supportUrl)}>
+              <button className="btn" onClick={() => go(supportUrl)} type="button">
                 {t("services.support", "Поддержка")}
               </button>
             </div>
@@ -448,22 +426,22 @@ function ServiceCard({ s, expanded, connectOpen, onToggle, onToggleConnect, onRe
 
           {s.status === "error" && (
             <div className="actions actions--2">
-              <button className="btn btn--primary" onClick={onRefresh}>
+              <button className="btn btn--primary" onClick={onRefresh} type="button">
                 {t("services.refresh", "Обновить")}
               </button>
-              <button className="btn" onClick={() => go(supportUrl)}>
+              <button className="btn" onClick={() => go(supportUrl)} type="button">
                 {t("services.support", "Поддержка")}
               </button>
             </div>
           )}
 
-          {connectOpen && canConnect ? (
+          {connectOpen && canConnect && (
             <ConnectInline kind={kind} service={s} onDone={onRefresh} t={t} />
-          ) : null}
+          )}
 
           {allowStop && (
-            <div className="actions actions--1">
-              <button className="btn" onClick={() => onAskStop(s)}>
+            <div className="actions actions--1" style={{ marginTop: 8 }}>
+              <button className="btn" onClick={() => onAskStop(s)} type="button">
                 🛑 {t("services.stop.button", "Заблокировать")}
               </button>
             </div>
@@ -471,13 +449,13 @@ function ServiceCard({ s, expanded, connectOpen, onToggle, onToggleConnect, onRe
 
           {allowDelete && (
             <div className="actions actions--1">
-              <button className="btn" onClick={() => onAskDelete(s)}>
+              <button className="btn btn--danger" onClick={() => onAskDelete(s)} type="button">
                 🗑️ {t("services.delete.button", "Удалить услугу")}
               </button>
             </div>
           )}
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
@@ -492,10 +470,10 @@ function readGroupsState(): Record<ServiceKind, boolean> | null {
     if (!obj || typeof obj !== "object") return null;
     const pick = (k: ServiceKind, def: boolean) => typeof obj[k] === "boolean" ? obj[k] : def;
     return {
-      amneziawg:    pick("amneziawg",    false),
-      marzban:      pick("marzban",      true),
-      marzban_router: pick("marzban_router", false),
-      unknown:      pick("unknown",      false),
+      amneziawg:      pick("amneziawg",      false),
+      marzban:        pick("marzban",         true),
+      marzban_router: pick("marzban_router",  false),
+      unknown:        pick("unknown",         false),
     };
   } catch { return null; }
 }
@@ -531,14 +509,11 @@ export function Services() {
     () => readGroupsState() ?? { amneziawg: false, marzban: true, marzban_router: false, unknown: false }
   );
 
-  // Модалка успешной оплаты — читаем ?payment=success из URL
   const [paySuccessOpen, setPaySuccessOpen] = useState<boolean>(() => {
-    try {
-      return new URLSearchParams(window.location.search).get("payment") === "success";
-    } catch { return false; }
+    try { return new URLSearchParams(window.location.search).get("payment") === "success"; }
+    catch { return false; }
   });
 
-  // Чистим параметр из URL сразу при монтировании чтобы не показывать при обновлении страницы
   useEffect(() => {
     const sp = new URLSearchParams(location.search);
     if (sp.get("payment") === "success") {
@@ -557,17 +532,14 @@ export function Services() {
   const statusInitRef   = useRef(false);
 
   async function load(opts?: { silent?: boolean; toastOnSuccess?: boolean }) {
-    const silent        = !!opts?.silent;
+    const silent         = !!opts?.silent;
     const toastOnSuccess = !!opts?.toastOnSuccess;
-
     if (!silent) setLoading(true);
     setError(null);
-
     try {
       const r = await apiFetch("/services", { method: "GET" }) as ApiServicesResponse;
       setItems(r.items || []);
       setSummary(r.summary || null);
-
       if (toastOnSuccess) {
         toast.info(t("services.toast.updated", "Обновлено"), {
           description: t("services.toast.updated_desc", "Статусы услуг обновлены."),
@@ -583,8 +555,7 @@ export function Services() {
 
   async function onConfirmStop() {
     if (!stopTarget || stopBusy) return;
-    setStopBusy(true);
-    setStopError(null);
+    setStopBusy(true); setStopError(null);
     try {
       await apiFetch(`/services/${encodeURIComponent(String(stopTarget.userServiceId))}/stop`, { method: "POST" });
       setStopTarget(null);
@@ -596,15 +567,12 @@ export function Services() {
     } catch (e) {
       setStopError(e);
       toastApiError(e, { title: t("services.toast.block_failed", "Не удалось заблокировать") });
-    } finally {
-      setStopBusy(false);
-    }
+    } finally { setStopBusy(false); }
   }
 
   async function onConfirmDelete() {
     if (!deleteTarget || deleteBusy) return;
-    setDeleteBusy(true);
-    setDeleteError(null);
+    setDeleteBusy(true); setDeleteError(null);
     const usi = deleteTarget.userServiceId;
     try {
       await apiFetch(`/services/${encodeURIComponent(String(usi))}`, { method: "DELETE" });
@@ -618,9 +586,7 @@ export function Services() {
     } catch (e) {
       setDeleteError(e);
       toastApiError(e, { title: t("services.toast.delete_failed", "Не удалось удалить") });
-    } finally {
-      setDeleteBusy(false);
-    }
+    } finally { setDeleteBusy(false); }
   }
 
   useEffect(() => { void load({ silent: false }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -628,31 +594,24 @@ export function Services() {
   useEffect(() => {
     const cur = new Map<number, UiStatus>();
     for (const it of items) cur.set(it.userServiceId, normStatus(it.status));
-
     if (!statusInitRef.current) {
-      prevStatusesRef.current = cur;
-      statusInitRef.current = true;
-      return;
+      prevStatusesRef.current = cur; statusInitRef.current = true; return;
     }
-
     const prev = prevStatusesRef.current || new Map<number, UiStatus>();
     for (const it of items) {
       const before = prev.get(it.userServiceId);
       const after  = cur.get(it.userServiceId);
       if (!before || !after || before === after) continue;
-
       const title = it.title || `${t("services.item", "Услуга")} #${it.userServiceId}`;
-
       if (after === "blocked")
-        toast.error(title, { description: t("services.toast.service_blocked", "Услуга заблокирована. Требуется действие.") });
+        toast.error(title, { description: t("services.toast.service_blocked", "Услуга заблокирована.") });
       else if (after === "not_paid")
-        toast.info(title, { description: t("services.toast.service_not_paid", "Требуется оплата.") });
+        toast.info(title,  { description: t("services.toast.service_not_paid", "Требуется оплата.") });
       else if (after === "active" && ["pending","not_paid","blocked","init"].includes(before))
         toast.success(title, { description: t("services.toast.service_active", "Услуга активирована.") });
       else if (after === "removed")
         toast.success(title, { description: t("services.toast.service_removed", "Услуга завершена.") });
     }
-
     prevStatusesRef.current = cur;
   }, [items, t]);
 
@@ -661,7 +620,6 @@ export function Services() {
       amneziawg: [], marzban: [], marzban_router: [], unknown: [],
     };
     for (const it of items) byKind[detectKind(it.category)].push(it);
-
     const sortFn = (a: ApiServiceItem, b: ApiServiceItem) => {
       const diff = statusSortWeight(a.status) - statusSortWeight(b.status);
       return diff !== 0 ? diff : (a.daysLeft ?? 9999) - (b.daysLeft ?? 9999);
@@ -673,6 +631,7 @@ export function Services() {
   const toggleGroup = (kind: ServiceKind) =>
     setOpenGroups((cur) => ({ ...cur, [kind]: !cur[kind] }));
 
+  // ── Loading ───────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="app-loader" style={{ opacity: 1, transition: "opacity 180ms ease", pointerEvents: "auto" }}>
@@ -688,44 +647,39 @@ export function Services() {
     );
   }
 
+  // ── Error ─────────────────────────────────────────────────────────────────
   if (error) {
     return (
       <div className="section">
-        <div className="card">
-          <div className="card__body">
-            <h1 className="h1">{t("services.title", "Услуги")}</h1>
-            <p className="p">
-              {normalizeError(error).description ?? t("services.error.text", "Не удалось загрузить список услуг.")}
-            </p>
-            <div className="actions actions--1">
-              <button className="btn btn--primary" onClick={() => void load({ silent: false })} type="button">
-                {t("services.retry", "Повторить")}
-              </button>
-            </div>
+        <div className="card"><div className="card__body">
+          <h1 className="h1">{t("services.title", "Услуги")}</h1>
+          <p className="p">{normalizeError(error).description ?? t("services.error.text", "Не удалось загрузить список услуг.")}</p>
+          <div className="actions actions--1" style={{ marginTop: 12 }}>
+            <button className="btn btn--primary" onClick={() => void load({ silent: false })} type="button">
+              {t("services.retry", "Повторить")}
+            </button>
           </div>
-        </div>
+        </div></div>
       </div>
     );
   }
 
-  const s               = summary;
-  const hasServices     = items.length > 0;
-  const fallbackActive  = items.filter((x) => x.status === "active").length;
-  const fallbackAttn    = items.filter((x) => x.status === "blocked" || x.status === "not_paid").length;
+  const s              = summary;
+  const hasServices    = items.length > 0;
+  const fallbackActive = items.filter((x) => x.status === "active").length;
+  const fallbackAttn   = items.filter((x) => x.status === "blocked" || x.status === "not_paid").length;
+  const attnCount      = (s?.blocked ?? 0) + (s?.notPaid ?? 0) || fallbackAttn;
 
   const stopErrText   = stopError   ? normalizeError(stopError).description   : null;
   const deleteErrText = deleteError ? normalizeError(deleteError).description : null;
 
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="section">
 
-      {/* Модалка успешной оплаты */}
-      <PaymentSuccessModal
-        open={paySuccessOpen}
-        onClose={() => setPaySuccessOpen(false)}
-      />
+      <PaymentSuccessModal open={paySuccessOpen} onClose={() => setPaySuccessOpen(false)} />
 
-      {/* Header */}
+      {/* ── Шапка ── */}
       <div className="card">
         <div className="card__body">
           <div className="services-top">
@@ -735,22 +689,26 @@ export function Services() {
             </div>
           </div>
 
+          {/* Бейджи статистики */}
           {hasServices && (
-            <div className="services-head__meta services-head__meta--wide">
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
               <span className="badge">
-                {t("services.meta.active", "Активных")}: <b>{s?.active ?? fallbackActive}</b>
+                ✅ {t("services.meta.active", "Активных")}: <b>{s?.active ?? fallbackActive}</b>
               </span>
-              <span className="badge">
-                {t("services.meta.attention", "Требуют внимания")}: <b>{(s?.blocked ?? 0) + (s?.notPaid ?? 0) || fallbackAttn}</b>
-              </span>
+              {attnCount > 0 && (
+                <span className="badge" style={{ borderColor: "rgba(245,158,11,0.38)", background: "rgba(245,158,11,0.08)" }}>
+                  ⚠️ {t("services.meta.attention", "Внимание")}: <b>{attnCount}</b>
+                </span>
+              )}
               {discountPercent > 0 && (
-                <span className="badge">
-                  {t("services.meta.discount", "Скидка")}: <b>-{Math.round(discountPercent)}%</b>
+                <span className="badge" style={{ borderColor: "rgba(124,92,255,0.38)", background: "rgba(124,92,255,0.08)" }}>
+                  🎁 {t("services.meta.discount", "Скидка")}: <b>-{Math.round(discountPercent)}%</b>
                 </span>
               )}
             </div>
           )}
 
+          {/* Кнопки действий */}
           <div className="services-head__actions">
             <button
               className="btn btn--primary services-head__cta"
@@ -761,7 +719,6 @@ export function Services() {
                 ? t("services.cta.add_more", "Подключить ещё")
                 : t("services.cta.choose_plan", "Выбрать тариф")}
             </button>
-
             {hasServices && (
               <button
                 className="btn services-head__cta"
@@ -775,17 +732,20 @@ export function Services() {
         </div>
       </div>
 
-      {/* Empty state */}
+      {/* ── Empty state ── */}
       {!hasServices && (
         <div className="section">
-          <div className="card" style={{ background: "linear-gradient(135deg, rgba(124,92,255,0.18), rgba(77,215,255,0.10))", borderColor: "rgba(124,92,255,0.35)" }}>
+          <div className="card" style={{
+            background: "linear-gradient(135deg, rgba(124,92,255,0.14), rgba(77,215,255,0.08))",
+            borderColor: "rgba(124,92,255,0.30)",
+          }}>
             <div className="card__body">
               <div className="h1">{t("services.empty.title")}</div>
               <p className="p" style={{ marginTop: 4, opacity: 0.7 }}>{t("services.empty.text")}</p>
               <div className="actions actions--1" style={{ marginTop: 16 }}>
                 <button
                   className="btn btn--primary"
-                  style={{ width: "100%", fontSize: 17, padding: "16px 0", boxShadow: "0 0 24px rgba(124,92,255,0.5)" }}
+                  style={{ fontSize: 16, minHeight: 52, boxShadow: "0 0 24px rgba(124,92,255,0.40)" }}
                   onClick={() => go("/services/order")}
                   type="button"
                 >
@@ -797,11 +757,12 @@ export function Services() {
         </div>
       )}
 
-      {/* Service groups */}
+      {/* ── Группы услуг ── */}
       {hasServices && (["marzban", "marzban_router", "amneziawg", "unknown"] as ServiceKind[]).map((kind) => {
-        const arr = groups[kind];
+        const arr  = groups[kind];
         if (!arr?.length) return null;
         const open = !!openGroups[kind];
+        const icon = kindIcon(kind);
 
         return (
           <div className="section" key={kind}>
@@ -815,16 +776,17 @@ export function Services() {
                 >
                   <div className="services-cat__headLeft">
                     <div className="services-cat__titleRow">
+                      <span style={{ fontSize: 18, lineHeight: 1 }}>{icon}</span>
                       <div className="services-cat__title">{kindTitle(kind, t)}</div>
                       <span className="services-cat__chev" aria-hidden>{open ? "▲" : "▼"}</span>
                     </div>
-                    <p className="p">{kindDescr(kind, t)}</p>
+                    <p className="p" style={{ marginTop: 4 }}>{kindDescr(kind, t)}</p>
                   </div>
-                  <span className="badge">{arr.length}</span>
+                  <span className="badge" style={{ flexShrink: 0 }}>{arr.length}</span>
                 </button>
 
                 {open && (
-                  <div className="kv">
+                  <div className="kv" style={{ marginTop: 12 }}>
                     {arr.map((x) => (
                       <ServiceCard
                         key={x.userServiceId}
@@ -853,7 +815,7 @@ export function Services() {
         );
       })}
 
-      {/* Stop modal */}
+      {/* ── Stop modal ── */}
       <Modal
         title={stopTarget
           ? t("services.modal.stop.title_named", "Заблокировать «{title}»?").replace("{title}", stopTarget.title)
@@ -861,34 +823,33 @@ export function Services() {
         open={!!stopTarget}
         loading={stopBusy}
         error={stopErrText}
+        confirmClassName="btn btn--danger"
         onClose={() => { if (!stopBusy) { setStopTarget(null); setStopError(null); } }}
         onConfirm={onConfirmStop}
         confirmText={t("services.stop.button", "Заблокировать")}
         cancelText={t("services.cancel", "Отмена")}
-        footerHint={t("services.modal.footer_hint", "Если не уверены — сначала проверьте статус или обратитесь в поддержку.")}
+        footerHint={t("services.modal.footer_hint", "Если не уверены — сначала проверьте статус.")}
         closeLabel={t("services.close", "Закрыть")}
       >
         {stopTarget && (
           <>
             <p className="p"><b>{t("services.modal.stop.what_happens", "Что произойдёт:")}</b></p>
-            <p className="p">
-              {t("services.modal.stop.text", "Услуга «{title}» будет заблокирована и перестанет работать.").replace("{title}", stopTarget.title)}
-            </p>
-            <div className="pre">
+            <p className="p">{t("services.modal.stop.text", "Услуга «{title}» будет заблокирована.").replace("{title}", stopTarget.title)}</p>
+            <div className="pre" style={{ borderColor: "rgba(245,158,11,0.28)", marginTop: 10 }}>
               <div>⚠️ {t("services.modal.stop.warn1", "Самостоятельно разблокировать нельзя.")}</div>
-              <div>{t("services.modal.stop.warn2", "Для восстановления доступа обратитесь в поддержку.")}</div>
+              <div>{t("services.modal.stop.warn2", "Для восстановления обратитесь в поддержку.")}</div>
             </div>
-            <div className="pre">
+            <div className="pre" style={{ marginTop: 8 }}>
               <div>{t("services.modal.status", "Статус")}: <b>{statusLabel(stopTarget.status, t)}</b></div>
               <div>{t("services.modal.type",   "Тип")}:   <b>{kindTitle(detectKind(stopTarget.category), t)}</b></div>
-              <div>{t("services.modal.plan",   "Тариф")}: <b>{fmtMoney(stopTarget.price, stopTarget.currency)}</b> / {stopTarget.periodMonths || 1}{t("services.month_short", "мес")}</div>
-              {stopTarget.expireAt && <div>{t("services.modal.until", "Активна до")}: <b>{fmtDate(stopTarget.expireAt)}</b></div>}
+              <div>{t("services.modal.plan",   "Тариф")}: <b>{fmtMoney(stopTarget.price, stopTarget.currency)}</b> / {stopTarget.periodMonths || 1}{t("services.month_short", "м")}</div>
+              {stopTarget.expireAt && <div>{t("services.modal.until", "До")}: <b>{fmtDate(stopTarget.expireAt)}</b></div>}
             </div>
           </>
         )}
       </Modal>
 
-      {/* Delete modal */}
+      {/* ── Delete modal ── */}
       <Modal
         title={deleteTarget
           ? t("services.modal.delete.title_named", "Удалить «{title}»?").replace("{title}", deleteTarget.title)
@@ -896,26 +857,28 @@ export function Services() {
         open={!!deleteTarget}
         loading={deleteBusy}
         error={deleteErrText}
+        confirmClassName="btn btn--danger"
         onClose={() => { if (!deleteBusy) { setDeleteTarget(null); setDeleteError(null); } }}
         onConfirm={onConfirmDelete}
         confirmText={t("services.delete.confirm", "Удалить")}
         cancelText={t("services.cancel", "Отмена")}
-        footerHint={t("services.modal.footer_hint", "Если не уверены — сначала проверьте статус или обратитесь в поддержку.")}
+        footerHint={t("services.modal.footer_hint", "Если не уверены — сначала проверьте статус.")}
         closeLabel={t("services.close", "Закрыть")}
       >
         {deleteTarget && (
           <>
             <p className="p"><b>{t("services.modal.delete.confirm_title", "Подтверждение удаления")}</b></p>
             <p className="p">{deleteConfirmText(deleteTarget, t)}</p>
-            <div className="pre">
+            <div className="pre" style={{ marginTop: 8 }}>
               <div>{t("services.modal.status", "Статус")}: <b>{statusLabel(deleteTarget.status, t)}</b></div>
               <div>{t("services.modal.type",   "Тип")}:   <b>{kindTitle(detectKind(deleteTarget.category), t)}</b></div>
-              <div>{t("services.modal.plan",   "Тариф")}: <b>{fmtMoney(deleteTarget.price, deleteTarget.currency)}</b> / {deleteTarget.periodMonths || 1}{t("services.month_short", "мес")}</div>
-              {deleteTarget.expireAt && <div>{t("services.modal.until", "Активна до")}: <b>{fmtDate(deleteTarget.expireAt)}</b></div>}
+              <div>{t("services.modal.plan",   "Тариф")}: <b>{fmtMoney(deleteTarget.price, deleteTarget.currency)}</b> / {deleteTarget.periodMonths || 1}{t("services.month_short", "м")}</div>
+              {deleteTarget.expireAt && <div>{t("services.modal.until", "До")}: <b>{fmtDate(deleteTarget.expireAt)}</b></div>}
             </div>
           </>
         )}
       </Modal>
+
     </div>
   );
 }

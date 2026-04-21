@@ -1,4 +1,4 @@
-// web/src/pages/admin/ServiceCategoriesSection.tsx
+// FILE: web/src/pages/admin/ServiceCategoriesSection.tsx
 
 import { useEffect, useState } from "react";
 import { apiFetch } from "../../shared/api/client";
@@ -111,18 +111,24 @@ function CategoryPreview({ form }: { form: ReturnType<typeof EMPTY_FORM> }) {
   const btnLabel   = form.button_label || "Выбрать";
 
   return (
-    <div style={{ border: `1.5px solid ${accentFrom}`, borderRadius: 16, background: cardBg, padding: 16, marginTop: 8 }}>
+    <div style={{
+      border: `1.5px solid ${accentFrom}`,
+      borderRadius: 16,
+      background: cardBg,
+      padding: 16,
+      marginTop: 8,
+    }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
         <div style={{ fontWeight: 700, fontSize: 16 }}>
           {form.emoji ? `${form.emoji} ` : ""}{form.title || "Название категории"}
         </div>
         {form.badge && (
-          <span className={`chip chip--${form.badge_tone || 'soft'}`} style={{ marginLeft: 8, whiteSpace: "nowrap" }}>
+          <span className={`chip chip--${form.badge_tone || "soft"}`} style={{ marginLeft: 8, whiteSpace: "nowrap" }}>
             {form.badge}
           </span>
         )}
       </div>
-      <div style={{ fontSize: 13, opacity: 0.7, marginBottom: 12 }}>
+      <div style={{ fontSize: 13, opacity: 0.68, marginBottom: 12 }}>
         {form.short_descr || "Краткое описание"}
       </div>
       <div className="actions actions--1">
@@ -167,11 +173,7 @@ export function ServiceCategoriesSection() {
   }
 
   function openEdit(cat: ServiceCategory) {
-    setForm({
-      ...EMPTY_FORM(),
-      ...cat,
-      billing_pattern_input: "",
-    });
+    setForm({ ...EMPTY_FORM(), ...cat, billing_pattern_input: "" });
     setIsNew(false); setOpened(cat); setSaveError(null);
   }
 
@@ -189,7 +191,9 @@ export function ServiceCategoriesSection() {
     if (!pat) return;
     setForm((prev) => ({
       ...prev,
-      billing_category_keys: prev.billing_category_keys.includes(pat) ? prev.billing_category_keys : [...prev.billing_category_keys, pat],
+      billing_category_keys: prev.billing_category_keys.includes(pat)
+        ? prev.billing_category_keys
+        : [...prev.billing_category_keys, pat],
       billing_pattern_input: "",
     }));
   }
@@ -234,7 +238,6 @@ export function ServiceCategoriesSection() {
     )
   );
 
-  /* ── Render ─────────────────────────────────────────────────────────────── */
   return (
     <>
       <div className="card">
@@ -245,9 +248,9 @@ export function ServiceCategoriesSection() {
               <h2 className="h2">Категории услуг</h2>
               <p className="p">Управление группами тарифов, оформлением и привязкой к биллингу.</p>
             </div>
-            <div className="admin-rowActions">
-              <button className="btn btn--accent" type="button" onClick={openNew}>+ Создать</button>
-              <button className="btn btn--soft" type="button" onClick={() => void load()} disabled={loading}>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn btn--primary" type="button" onClick={openNew}>+ Создать</button>
+              <button className="btn" type="button" onClick={() => void load()} disabled={loading}>
                 {loading ? "Загружаю…" : "Обновить"}
               </button>
             </div>
@@ -263,17 +266,16 @@ export function ServiceCategoriesSection() {
             ) : items.map((cat) => {
               const accent = cat.accent_from || PRESETS[0].from;
               return (
-                <div key={cat.category_key} className="list__item admin-rowCard"
-                  style={{ opacity: cat.hidden ? 0.5 : 1, borderLeft: `3px solid ${accent}` }}>
+                <div
+                  key={cat.category_key}
+                  className="list__item admin-rowCard"
+                  style={{ opacity: cat.hidden ? 0.5 : 1, borderLeft: `3px solid ${accent}` }}
+                >
                   <div className="list__main">
                     <div className="kicker">{cat.category_key}</div>
                     <div className="list__title admin-gap-top-xs" style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       {cat.emoji ? `${cat.emoji} ` : ""}{cat.title || "—"}
-                      {cat.badge && (
-                        <span className={`chip chip--${cat.badge_tone || 'soft'}`}>
-                          {cat.badge}
-                        </span>
-                      )}
+                      {cat.badge && <span className={`chip chip--${cat.badge_tone || "soft"}`}>{cat.badge}</span>}
                       {cat.hidden && <span className="chip chip--warn">скрыто</span>}
                     </div>
                     {cat.short_descr && <div className="list__sub">{cat.short_descr}</div>}
@@ -285,10 +287,12 @@ export function ServiceCategoriesSection() {
                     </div>
                   </div>
                   <div className="admin-rowActions">
-                    <button className="btn btn--soft" type="button" onClick={() => openEdit(cat)}>Изменить</button>
-                    <button className="btn btn--danger" type="button"
+                    <button className="btn" type="button" onClick={() => openEdit(cat)}>Изменить</button>
+                    <button
+                      className="btn btn--danger" type="button"
                       disabled={deleting === cat.category_key}
-                      onClick={() => void remove(cat.category_key)}>
+                      onClick={() => void remove(cat.category_key)}
+                    >
                       {deleting === cat.category_key ? "Удаляю…" : "Удалить"}
                     </button>
                   </div>
@@ -299,6 +303,7 @@ export function ServiceCategoriesSection() {
         </div>
       </div>
 
+      {/* ── Модалка создания / редактирования ── */}
       {(isNew || opened) && (
         <ModalShell
           title={isNew ? "Новая категория" : `Редактировать: ${opened?.category_key}`}
@@ -320,9 +325,12 @@ export function ServiceCategoriesSection() {
                 <div className="list__main">
                   <div className="list__title">Ключ категории *</div>
                   <div className="list__sub" style={{ marginBottom: 6 }}>Латиница, уникальный (например: marzban, router-vpn)</div>
-                  <input className="input" value={form.category_key ?? ""}
+                  <input
+                    className="input"
+                    value={form.category_key ?? ""}
                     onChange={(e) => setForm((p) => ({ ...p, category_key: e.target.value }))}
-                    placeholder="marzban" />
+                    placeholder="marzban"
+                  />
                 </div>
               </div>
             )}
@@ -349,7 +357,7 @@ export function ServiceCategoriesSection() {
 
             {[
               { key: "short_descr",  label: "Краткое описание",  ph: "Стабильно и быстро. Для телефона, ПК и планшета." },
-              { key: "descr",        label: "Полное описание",   ph: "Подробное описание, видно при раскрытии категории" },
+              { key: "descr",        label: "Полное описание",   ph: "Подробное описание" },
               { key: "button_label", label: "Текст кнопки",      ph: "Выбрать" },
             ].map(({ key, label, ph }) => (
               <div key={key} className="list__item admin-tightItem">
@@ -370,13 +378,15 @@ export function ServiceCategoriesSection() {
                   {PRESETS.map((p) => {
                     const active = form.accent_from === p.from && form.accent_to === p.to;
                     return (
-                      <button key={p.from} type="button" onClick={() => applyPreset(p)}
+                      <button
+                        key={p.from} type="button" onClick={() => applyPreset(p)}
                         style={{
                           background: `linear-gradient(135deg, ${p.from}, ${p.to})`,
                           border: active ? "2px solid #fff" : "2px solid transparent",
-                          borderRadius: 20, padding: "4px 14px", fontSize: 13, color: "#111",
-                          fontWeight: 600, cursor: "pointer",
-                        }}>
+                          borderRadius: 20, padding: "4px 14px", fontSize: 13,
+                          color: "#111", fontWeight: 600, cursor: "pointer",
+                        }}
+                      >
                         {p.label}
                       </button>
                     );
@@ -391,7 +401,7 @@ export function ServiceCategoriesSection() {
                 <div className="list__title">Фон карточки</div>
                 <input className="input" value={form.card_bg ?? ""}
                   onChange={(e) => setForm((p) => ({ ...p, card_bg: e.target.value || null }))}
-                  placeholder="rgba(255,255,255,0.04) или #1a1a2e или linear-gradient(...)" />
+                  placeholder="rgba(255,255,255,0.04) или #1a1a2e" />
                 <div className="list__sub" style={{ marginTop: 4 }}>Оставь пустым для стандартного фона</div>
               </div>
             </div>
@@ -408,14 +418,16 @@ export function ServiceCategoriesSection() {
                   {BADGE_TONE_OPTIONS.map(({ value, label }) => {
                     const active = form.badge_tone === value;
                     return (
-                      <button key={value} type="button"
+                      <button
+                        key={value} type="button"
                         onClick={() => setForm((p) => ({ ...p, badge_tone: value }))}
                         style={{
                           background: active ? BADGE_TONES[value] : "transparent",
                           border: `1.5px solid ${BADGE_TONES[value]}`,
                           borderRadius: 20, padding: "3px 12px", fontSize: 12,
                           color: active ? "#fff" : "inherit", cursor: "pointer",
-                        }}>
+                        }}
+                      >
                         {label}
                       </button>
                     );
@@ -470,7 +482,7 @@ export function ServiceCategoriesSection() {
             <div className="list__item admin-tightItem">
               <div className="list__main">
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                  <div className="list__title" style={{ margin: 0 }}>💬 Подсказка при входе в категорию</div>
+                  <div className="list__title" style={{ margin: 0 }}>💬 Подсказка при входе</div>
                   <label className="admin-radio">
                     <input type="checkbox" checked={!!form.hint_enabled}
                       onChange={(e) => setForm((p) => ({ ...p, hint_enabled: e.target.checked }))} />
@@ -488,12 +500,12 @@ export function ServiceCategoriesSection() {
                       style={{ marginBottom: 8 }} />
                     <textarea className="input" value={form.hint_text ?? ""}
                       onChange={(e) => setForm((p) => ({ ...p, hint_text: e.target.value || null }))}
-                      placeholder="Текст подсказки — важная информация для пользователя"
+                      placeholder="Текст подсказки"
                       style={{ minHeight: 80, resize: "vertical", marginBottom: 8 }} />
                     <div style={{ display: "flex", gap: 8 }}>
                       <input className="input" value={form.hint_button_label ?? ""}
                         onChange={(e) => setForm((p) => ({ ...p, hint_button_label: e.target.value || null }))}
-                        placeholder="Текст кнопки-ссылки (необязательно)"
+                        placeholder="Текст кнопки (необязательно)"
                         style={{ flex: 1 }} />
                       <input className="input" value={form.hint_button_url ?? ""}
                         onChange={(e) => setForm((p) => ({ ...p, hint_button_url: e.target.value || null }))}
@@ -510,18 +522,18 @@ export function ServiceCategoriesSection() {
               <div className="list__main">
                 <div className="list__title">Паттерны биллинговых категорий</div>
                 <div className="list__sub" style={{ marginBottom: 8 }}>
-                  Тарифы с совпадающей категорией попадут сюда автоматически. <strong>vpn-*</strong> — wildcard.
+                  <strong>vpn-*</strong> — wildcard по префиксу
                 </div>
                 <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
                   <input className="input" value={form.billing_pattern_input ?? ""}
                     onChange={(e) => setForm((p) => ({ ...p, billing_pattern_input: e.target.value }))}
                     onKeyDown={(e) => e.key === "Enter" && addBillingPattern()}
                     placeholder="marzban или vpn-*" />
-                  <button className="btn btn--soft" type="button" onClick={addBillingPattern}>+</button>
+                  <button className="btn btn--primary" type="button" onClick={addBillingPattern}>+</button>
                 </div>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
                   {(form.billing_category_keys ?? []).map((pat) => (
-                    <span key={pat} className="chip chip--soft" style={{ cursor: "pointer" }}
+                    <span key={pat} className="chip chip--accent" style={{ cursor: "pointer" }}
                       onClick={() => removeBillingPattern(pat)}>
                       {pat} ✕
                     </span>
@@ -565,8 +577,8 @@ export function ServiceCategoriesSection() {
           {saveError && <div className="pre" style={{ marginTop: 8 }}>{saveError}</div>}
 
           <div className="actions actions--2 admin-gap-top-lg">
-            <button className="btn btn--soft" type="button" onClick={closeModal} disabled={saving}>Отмена</button>
-            <button className="btn btn--accent" type="button" onClick={() => void save()} disabled={saving}>
+            <button className="btn" type="button" onClick={closeModal} disabled={saving}>Отмена</button>
+            <button className="btn btn--primary" type="button" onClick={() => void save()} disabled={saving}>
               {saving ? "Сохраняю…" : isNew ? "Создать" : "Сохранить"}
             </button>
           </div>

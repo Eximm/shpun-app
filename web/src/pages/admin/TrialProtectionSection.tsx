@@ -1,4 +1,4 @@
-// web/src/pages/admin/TrialProtectionSection.tsx
+// FILE: web/src/pages/admin/TrialProtectionSection.tsx
 
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../../shared/api/client";
@@ -56,7 +56,9 @@ export function TrialProtectionSection() {
     if (silent) setRefreshing(true); else setLoading(true);
     setError(null);
     try {
-      const devicesUrl = showAllDevices ? "/admin/trial-protection/devices?all=1" : "/admin/trial-protection/devices";
+      const devicesUrl = showAllDevices
+        ? "/admin/trial-protection/devices?all=1"
+        : "/admin/trial-protection/devices";
       const [statusResp, eventsResp, devicesResp, prefixesResp] = await Promise.all([
         apiFetch<TrialProtectionStatusResp>("/admin/trial-protection/status", { method: "GET" }),
         apiFetch<TrialProtectionEventsResp>("/admin/trial-protection/events?limit=20", { method: "GET" }),
@@ -89,14 +91,14 @@ export function TrialProtectionSection() {
         method: "PUT",
         body: {
           mode: modeDraft, ttlHours: Number(ttlDraft),
-          ipPrefixUsageThreshold: Number(ipPrefixUsageThresholdDraft),
-          ipPrefixAttemptThreshold: Number(ipPrefixAttemptThresholdDraft),
-          ipPrefixDistinctDevicesThreshold: Number(ipPrefixDistinctDevicesThresholdDraft),
+          ipPrefixUsageThreshold:            Number(ipPrefixUsageThresholdDraft),
+          ipPrefixAttemptThreshold:          Number(ipPrefixAttemptThresholdDraft),
+          ipPrefixDistinctDevicesThreshold:  Number(ipPrefixDistinctDevicesThresholdDraft),
           ipPrefixUserAgentAttemptThreshold: Number(ipPrefixUserAgentAttemptThresholdDraft),
-          ipPrefixDistinctUsersThreshold: Number(ipPrefixDistinctUsersThresholdDraft),
+          ipPrefixDistinctUsersThreshold:    Number(ipPrefixDistinctUsersThresholdDraft),
         },
       });
-      setOkText(`Сохранено: mode=${r.mode}, ttl=${r.ttlHours}h, usage=${r.ipPrefixUsageThreshold}, attempts=${r.ipPrefixAttemptThreshold}, devices=${r.ipPrefixDistinctDevicesThreshold}, ua=${r.ipPrefixUserAgentAttemptThreshold}, users=${r.ipPrefixDistinctUsersThreshold}`);
+      setOkText(`Сохранено: mode=${r.mode}, ttl=${r.ttlHours}h`);
       await load({ silent: true });
     } catch (e: any) { setError(e?.message || "Не удалось сохранить настройки."); }
     finally { setSavingSettings(false); }
@@ -107,7 +109,7 @@ export function TrialProtectionSection() {
     setClearingEvents(true); setError(null); setOkText(null);
     try {
       const r = await apiFetch<ClearEventsResp>("/admin/trial-protection/clear-events", { method: "POST", body: { keepLatest: 0 } });
-      setOkText(`Журнал очищен. Удалено записей: ${r.deleted}`);
+      setOkText(`Журнал очищен. Удалено: ${r.deleted}`);
       if (openedEvent) setOpenedEvent(null);
       await load({ silent: true });
     } catch (e: any) { setError(e?.message || "Не удалось очистить журнал."); }
@@ -121,20 +123,20 @@ export function TrialProtectionSection() {
       const r = await apiFetch<ResetDeviceResp>("/admin/trial-protection/reset-device", { method: "POST", body: { deviceToken } });
       setOkText(`Trial сброшен: ${shortDeviceToken(r.deviceToken)}`);
       await load({ silent: true });
-    } catch (e: any) { setError(e?.message || "Не удалось сбросить trial для устройства."); }
+    } catch (e: any) { setError(e?.message || "Не удалось сбросить trial."); }
     finally { setResettingDevice(null); }
   }
 
   async function resetPrefix(rawValue: string) {
     const raw = String(rawValue ?? "").trim();
-    if (!raw) { setError("Укажи IP или prefix для очистки сети."); return; }
+    if (!raw) { setError("Укажи IP или prefix."); return; }
     if (!window.confirm(`Очистить сеть / prefix?\n\n${raw}`)) return;
     setResettingPrefix(raw); setError(null); setOkText(null);
     try {
       const r = await apiFetch<ResetPrefixResp>("/admin/trial-protection/reset-prefix", { method: "POST", body: { ip: raw, clearEvents: 1, unblockDevices: 1 } });
-      setOkText(`Сеть очищена: prefix=${r.ipPrefix}, devices=${r.matchedDevices}, usage=${r.deletedUsage}, events=${r.deletedEvents}, unblocked=${r.unblockedDevices}`);
+      setOkText(`Сеть очищена: prefix=${r.ipPrefix}, devices=${r.matchedDevices}`);
       await load({ silent: true });
-    } catch (e: any) { setError(e?.message || "Не удалось очистить сеть / prefix."); }
+    } catch (e: any) { setError(e?.message || "Не удалось очистить сеть."); }
     finally { setResettingPrefix(null); }
   }
 
@@ -143,20 +145,20 @@ export function TrialProtectionSection() {
     setBlockingDevice(deviceToken); setError(null); setOkText(null);
     try {
       const r = await apiFetch<BlockDeviceResp>("/admin/trial-protection/block-device", { method: "POST", body: { deviceToken } });
-      setOkText(`Устройство заблокировано: ${shortDeviceToken(r.deviceToken)}`);
+      setOkText(`Заблокировано: ${shortDeviceToken(r.deviceToken)}`);
       await load({ silent: true });
-    } catch (e: any) { setError(e?.message || "Не удалось заблокировать устройство."); }
+    } catch (e: any) { setError(e?.message || "Не удалось заблокировать."); }
     finally { setBlockingDevice(null); }
   }
 
   async function unblockDevice(deviceToken: string) {
-    if (!window.confirm(`Снять блокировку с устройства?\n\n${deviceToken}`)) return;
+    if (!window.confirm(`Снять блокировку?\n\n${deviceToken}`)) return;
     setUnblockingDevice(deviceToken); setError(null); setOkText(null);
     try {
       const r = await apiFetch<BlockDeviceResp>("/admin/trial-protection/unblock-device", { method: "POST", body: { deviceToken } });
-      setOkText(`Устройство разблокировано: ${shortDeviceToken(r.deviceToken)}`);
+      setOkText(`Разблокировано: ${shortDeviceToken(r.deviceToken)}`);
       await load({ silent: true });
-    } catch (e: any) { setError(e?.message || "Не удалось разблокировать устройство."); }
+    } catch (e: any) { setError(e?.message || "Не удалось разблокировать."); }
     finally { setUnblockingDevice(null); }
   }
 
@@ -165,7 +167,7 @@ export function TrialProtectionSection() {
     setDeletingDevice(deviceToken); setError(null); setOkText(null);
     try {
       const r = await apiFetch<DeleteDeviceResp>("/admin/trial-protection/delete-device", { method: "POST", body: { deviceToken } });
-      setOkText(`Устройство удалено: ${shortDeviceToken(r.deviceToken)} · device=${r.deletedDevice}, usage=${r.deletedUsage}, events=${r.deletedEvents}`);
+      setOkText(`Удалено: ${shortDeviceToken(r.deviceToken)}`);
       if (openedDevice?.device_token === deviceToken) setOpenedDevice(null);
       await load({ silent: true });
     } catch (e: any) { setError(e?.message || "Не удалось удалить устройство."); }
@@ -192,7 +194,7 @@ export function TrialProtectionSection() {
   useEffect(() => { setDevicesPage(1); }, [deviceQuery, showAllDevices]);
   useEffect(() => { if (devicesPage > totalDevicesPages) setDevicesPage(totalDevicesPages); }, [devicesPage, totalDevicesPages]);
 
-  const visibleEvents  = useMemo(() => {
+  const visibleEvents = useMemo(() => {
     if (!eventsExpanded) return [];
     return eventsShowAll ? sortedEvents : sortedEvents.slice(0, EVENTS_PREVIEW_COUNT);
   }, [eventsExpanded, eventsShowAll, sortedEvents]);
@@ -201,12 +203,6 @@ export function TrialProtectionSection() {
     const start = (devicesPage - 1) * DEVICES_PER_PAGE;
     return filteredDevices.slice(start, start + DEVICES_PER_PAGE);
   }, [devicesPage, filteredDevices]);
-
-  function renderDecisionChip(decision: TrialProtectionEventItem["decision"]) {
-    if (decision === "block")   return <span className="chip chip--bad">BLOCK</span>;
-    if (decision === "observe") return <span className="chip chip--warn">OBSERVE</span>;
-    return <span className="chip chip--ok">ALLOW</span>;
-  }
 
   const hasSettingsChanges =
     modeDraft !== (status?.mode || "observe") ||
@@ -217,27 +213,34 @@ export function TrialProtectionSection() {
     ipPrefixUserAgentAttemptThresholdDraft !== String(status?.ipPrefixUserAgentAttemptThreshold ?? 2) ||
     ipPrefixDistinctUsersThresholdDraft    !== String(status?.ipPrefixDistinctUsersThreshold ?? 3);
 
-  const dot = <span style={{ opacity: 0.3, margin: "0 4px" }}>·</span>;
+  function renderDecisionChip(decision: TrialProtectionEventItem["decision"]) {
+    if (decision === "block")   return <span className="chip chip--bad">BLOCK</span>;
+    if (decision === "observe") return <span className="chip chip--warn">OBSERVE</span>;
+    return <span className="chip chip--ok">ALLOW</span>;
+  }
+
+  const dot = <span style={{ opacity: 0.28, margin: "0 4px" }}>·</span>;
 
   return (
     <>
-      {/* ── Настройки ────────────────────────────────────────────────────── */}
+      {/* ── Настройки ── */}
       <div className="card">
         <div className="card__body">
           <div className="admin-sectionHead">
             <div>
               <div className="kicker">Trial protection</div>
               <h2 className="h2">Защита тестовых доступов</h2>
-              <p className="p">Панель контроля режима, порогов и признаков абьюза.</p>
+              <p className="p">Контроль режима, порогов и признаков абьюза.</p>
             </div>
-            <button className="btn btn--soft" type="button" onClick={() => void load({ silent: true })}
+            <button className="btn" type="button"
+              onClick={() => void load({ silent: true })}
               disabled={refreshing || savingSettings || clearingEvents || Boolean(resettingPrefix)}>
               {refreshing ? "Обновляю…" : "Обновить"}
             </button>
           </div>
 
-          {error  && <div className="pre admin-gap-top-md">{error}</div>}
-          {okText && <div className="pre admin-gap-top-md">{okText}</div>}
+          {error  && <div className="pre admin-gap-top-md" style={{ borderColor: "rgba(255,77,109,0.30)" }}>{error}</div>}
+          {okText && <div className="pre admin-gap-top-md" style={{ borderColor: "rgba(43,227,143,0.30)" }}>{okText}</div>}
 
           {loading ? (
             <div className="list admin-gap-top-md">
@@ -246,12 +249,12 @@ export function TrialProtectionSection() {
           ) : (
             <>
               <div className="admin-metricsGrid admin-gap-top-md">
-                <AdminMetric label="Mode"          value={status?.mode || "—"} tone={status?.mode === "enforce" ? "bad" : status?.mode === "observe" ? "warn" : "soft"} />
-                <AdminMetric label="TTL"           value={`${status?.ttlHours ?? "—"}h`} />
-                <AdminMetric label="Devices now"   value={status?.devicesWithTrial ?? 0} />
-                <AdminMetric label="Blocks 24h"    value={status?.blocks24h ?? 0}    tone="bad" />
-                <AdminMetric label="Attempts 24h"  value={status?.attempts24h ?? 0}  tone="warn" />
-                <AdminMetric label="Distinct IPs"  value={status?.distinctIps24h ?? 0} />
+                <AdminMetric label="Mode"         value={status?.mode || "—"} tone={status?.mode === "enforce" ? "bad" : status?.mode === "observe" ? "warn" : "soft"} />
+                <AdminMetric label="TTL"          value={`${status?.ttlHours ?? "—"}h`} />
+                <AdminMetric label="Devices now"  value={status?.devicesWithTrial ?? 0} />
+                <AdminMetric label="Blocks 24h"   value={status?.blocks24h ?? 0}   tone="bad" />
+                <AdminMetric label="Attempts 24h" value={status?.attempts24h ?? 0} tone="warn" />
+                <AdminMetric label="Distinct IPs" value={status?.distinctIps24h ?? 0} />
               </div>
 
               <div className="admin-compactGrid admin-gap-top-md">
@@ -266,7 +269,8 @@ export function TrialProtectionSection() {
                         { value: "enforce", label: "блокировать повторный trial" },
                       ] as { value: TrialDeviceMode; label: string }[]).map(({ value, label }, idx, arr) => (
                         <label key={value} className={`admin-radio${idx === arr.length - 1 ? " admin-radio--last" : ""}`}>
-                          <input type="radio" name="trialDeviceMode" value={value} checked={modeDraft === value} onChange={() => setModeDraft(value)} />
+                          <input type="radio" name="trialDeviceMode" value={value}
+                            checked={modeDraft === value} onChange={() => setModeDraft(value)} />
                           {" "}<strong>{value}</strong> — {label}
                         </label>
                       ))}
@@ -313,27 +317,29 @@ export function TrialProtectionSection() {
               </div>
 
               <div className="actions actions--1 admin-gap-top-md">
-                <button className="btn btn--accent" type="button" onClick={() => void saveSettings()} disabled={savingSettings || !hasSettingsChanges}>
+                <button className="btn btn--primary" type="button"
+                  onClick={() => void saveSettings()}
+                  disabled={savingSettings || !hasSettingsChanges}>
                   {savingSettings ? "Сохраняю настройки…" : "Сохранить настройки"}
                 </button>
               </div>
 
               <div className="admin-metricsGrid admin-gap-top-md">
-                <AdminMetric label="Allow 24h"           value={status?.allows24h ?? 0}              tone="ok" />
-                <AdminMetric label="Observe 24h"         value={status?.observes24h ?? 0}            tone="warn" />
+                <AdminMetric label="Allow 24h"            value={status?.allows24h ?? 0}              tone="ok" />
+                <AdminMetric label="Observe 24h"          value={status?.observes24h ?? 0}            tone="warn" />
                 <AdminMetric label="Distinct devices 24h" value={status?.distinctDevices24h ?? 0} />
-                <AdminMetric label="Missing token 24h"   value={status?.missingDeviceToken24h ?? 0}  tone="warn" />
-                <AdminMetric label="Manual blocks 24h"   value={status?.manualBlocks24h ?? 0}        tone="bad" />
-                <AdminMetric label="Block device 24h"    value={status?.blockDevice24h ?? 0}         tone="bad" />
-                <AdminMetric label="Block ip/prefix 24h" value={(status?.blockIp24h ?? 0) + (status?.blockIpPrefix24h ?? 0)} tone="bad" />
-                <AdminMetric label="Blocked now"         value={status?.activeBlockedDevices ?? 0}   tone="bad" />
+                <AdminMetric label="Missing token 24h"    value={status?.missingDeviceToken24h ?? 0}  tone="warn" />
+                <AdminMetric label="Manual blocks 24h"    value={status?.manualBlocks24h ?? 0}        tone="bad" />
+                <AdminMetric label="Block device 24h"     value={status?.blockDevice24h ?? 0}         tone="bad" />
+                <AdminMetric label="Block ip/prefix 24h"  value={(status?.blockIp24h ?? 0) + (status?.blockIpPrefix24h ?? 0)} tone="bad" />
+                <AdminMetric label="Blocked now"          value={status?.activeBlockedDevices ?? 0}   tone="bad" />
               </div>
             </>
           )}
         </div>
       </div>
 
-      {/* ── Устройства ───────────────────────────────────────────────────── */}
+      {/* ── Устройства ── */}
       <div className="card admin-gap-top-lg">
         <div className="card__body">
           <div className="admin-sectionHead">
@@ -343,25 +349,27 @@ export function TrialProtectionSection() {
               <p className="p">Просмотр, блокировка и сброс trial.</p>
             </div>
             <label className="admin-radio">
-              <input type="checkbox" checked={showAllDevices} onChange={(e) => setShowAllDevices(e.target.checked)} />
-              {" "}Показывать все устройства
+              <input type="checkbox" checked={showAllDevices}
+                onChange={(e) => setShowAllDevices(e.target.checked)} />
+              {" "}Все устройства
             </label>
           </div>
 
           {loading ? (
             <div className="list admin-gap-top-md">
-              <div className="skeleton h1" /><div className="skeleton p" /><div className="skeleton p" />
+              <div className="skeleton h1" /><div className="skeleton p" />
             </div>
           ) : (
             <>
               <div className="admin-gap-top-md">
-                <input className="input" type="text" value={deviceQuery} onChange={(e) => setDeviceQuery(e.target.value)}
+                <input className="input" type="text" value={deviceQuery}
+                  onChange={(e) => setDeviceQuery(e.target.value)}
                   placeholder="Поиск по token / IP / user id / user-agent" />
               </div>
 
               {visibleDevices.length === 0 ? (
                 <div className="pre admin-gap-top-md">
-                  {deviceQuery.trim() ? "Ничего не найдено по текущему фильтру." : "Подходящих устройств сейчас нет."}
+                  {deviceQuery.trim() ? "Ничего не найдено." : "Устройств нет."}
                 </div>
               ) : (
                 <>
@@ -377,21 +385,29 @@ export function TrialProtectionSection() {
                             <span>uid: {item.last_user_id ?? item.trial_user_id ?? "—"}</span>{dot}
                             <span>groups: {Number(item.active_trial_count ?? 0)}</span>{dot}
                             <span>ip: {item.last_ip || "—"}</span>{dot}
-                            <span>block: {Number(item.is_blocked ?? 0) === 1 ? "yes" : "no"}</span>
+                            <span className={Number(item.is_blocked ?? 0) === 1 ? "" : ""}>
+                              block: {Number(item.is_blocked ?? 0) === 1 ? "yes" : "no"}
+                            </span>
                           </div>
                         </div>
                         <div className="admin-rowActions admin-rowActions--compact">
-                          <button className="btn btn--soft" type="button" onClick={() => setOpenedDevice(item)}>Открыть</button>
+                          <button className="btn" type="button" onClick={() => setOpenedDevice(item)}>Открыть</button>
                           {Number(item.is_blocked ?? 0) === 1 ? (
-                            <button className="btn btn--soft" type="button" disabled={unblockingDevice === item.device_token} onClick={() => void unblockDevice(item.device_token)}>
+                            <button className="btn" type="button"
+                              disabled={unblockingDevice === item.device_token}
+                              onClick={() => void unblockDevice(item.device_token)}>
                               {unblockingDevice === item.device_token ? "Снятие…" : "Разблокировать"}
                             </button>
                           ) : (
-                            <button className="btn btn--soft" type="button" disabled={blockingDevice === item.device_token} onClick={() => void blockDevice(item.device_token)}>
+                            <button className="btn" type="button"
+                              disabled={blockingDevice === item.device_token}
+                              onClick={() => void blockDevice(item.device_token)}>
                               {blockingDevice === item.device_token ? "Блок…" : "Заблокировать"}
                             </button>
                           )}
-                          <button className="btn btn--soft" type="button" disabled={resettingDevice === item.device_token} onClick={() => void resetTrial(item.device_token)}>
+                          <button className="btn" type="button"
+                            disabled={resettingDevice === item.device_token}
+                            onClick={() => void resetTrial(item.device_token)}>
                             {resettingDevice === item.device_token ? "Сброс…" : "Сбросить trial"}
                           </button>
                         </div>
@@ -401,10 +417,14 @@ export function TrialProtectionSection() {
 
                   {filteredDevices.length > DEVICES_PER_PAGE && (
                     <div className="actions actions--4 admin-gap-top-md">
-                      <button className="btn btn--soft" type="button" onClick={() => setDevicesPage(1)} disabled={devicesPage === 1}>« Первая</button>
-                      <button className="btn btn--soft" type="button" onClick={() => setDevicesPage((p) => Math.max(1, p - 1))} disabled={devicesPage === 1}>‹ Назад</button>
-                      <div className="pre">Стр. {devicesPage} / {totalDevicesPages} · Всего: {filteredDevices.length}</div>
-                      <button className="btn btn--soft" type="button" onClick={() => setDevicesPage((p) => Math.min(totalDevicesPages, p + 1))} disabled={devicesPage === totalDevicesPages}>Вперёд ›</button>
+                      <button className="btn" type="button"
+                        onClick={() => setDevicesPage(1)} disabled={devicesPage === 1}>« Первая</button>
+                      <button className="btn" type="button"
+                        onClick={() => setDevicesPage((p) => Math.max(1, p - 1))} disabled={devicesPage === 1}>‹ Назад</button>
+                      <div className="pre" style={{ margin: 0 }}>Стр. {devicesPage} / {totalDevicesPages} · {filteredDevices.length}</div>
+                      <button className="btn" type="button"
+                        onClick={() => setDevicesPage((p) => Math.min(totalDevicesPages, p + 1))}
+                        disabled={devicesPage === totalDevicesPages}>Вперёд ›</button>
                     </div>
                   )}
                 </>
@@ -414,14 +434,14 @@ export function TrialProtectionSection() {
         </div>
       </div>
 
-      {/* ── Очистка сети ─────────────────────────────────────────────────── */}
+      {/* ── Очистка сети ── */}
       <div className="card admin-gap-top-lg">
         <div className="card__body">
           <div className="admin-sectionHead">
             <div>
               <div className="kicker">Network cleanup</div>
               <h2 className="h2">Очистка сети / prefix</h2>
-              <p className="p">Чистит usage, снимает блокировки и очищает события по сети, но не удаляет устройства.</p>
+              <p className="p">Чистит usage, снимает блокировки, очищает события по сети.</p>
             </div>
           </div>
 
@@ -439,7 +459,9 @@ export function TrialProtectionSection() {
                     </div>
                   </div>
                   <div className="admin-rowActions admin-rowActions--compact">
-                    <button className="btn btn--soft" type="button" disabled={resettingPrefix === item.ipPrefix} onClick={() => void resetPrefix(item.ipPrefix)}>
+                    <button className="btn" type="button"
+                      disabled={resettingPrefix === item.ipPrefix}
+                      onClick={() => void resetPrefix(item.ipPrefix)}>
                       {resettingPrefix === item.ipPrefix ? "Очищаю…" : "Очистить"}
                     </button>
                   </div>
@@ -449,18 +471,21 @@ export function TrialProtectionSection() {
           )}
 
           <div className="admin-gap-top-md">
-            <input className="input" type="text" value={networkInput} onChange={(e) => setNetworkInput(e.target.value)}
-              placeholder="Например: 109.247.173.185 или 109.247.173" />
+            <input className="input" type="text" value={networkInput}
+              onChange={(e) => setNetworkInput(e.target.value)}
+              placeholder="109.247.173.185 или 109.247.173" />
           </div>
           <div className="actions actions--1 admin-gap-top-md">
-            <button className="btn btn--soft" type="button" disabled={Boolean(resettingPrefix) || !networkInput.trim()} onClick={() => void resetPrefix(networkInput)}>
+            <button className="btn btn--primary" type="button"
+              disabled={Boolean(resettingPrefix) || !networkInput.trim()}
+              onClick={() => void resetPrefix(networkInput)}>
               {resettingPrefix === networkInput.trim() ? "Очищаю сеть…" : "Очистить сеть / prefix"}
             </button>
           </div>
         </div>
       </div>
 
-      {/* ── События ──────────────────────────────────────────────────────── */}
+      {/* ── События ── */}
       <div className="card admin-gap-top-lg">
         <div className="card__body">
           <div className="admin-sectionHead">
@@ -469,12 +494,14 @@ export function TrialProtectionSection() {
               <h2 className="h2">Последние события</h2>
               <p className="p">Диагностика и журнал срабатываний.</p>
             </div>
-            <div className="admin-rowActions">
-              <button className="btn btn--soft" type="button" onClick={() => { setEventsExpanded((v) => !v); if (eventsExpanded) setEventsShowAll(false); }}>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn" type="button"
+                onClick={() => { setEventsExpanded((v) => !v); if (eventsExpanded) setEventsShowAll(false); }}>
                 {eventsExpanded ? "Скрыть" : "Показать"}
               </button>
               {eventsExpanded && (
-                <button className="btn btn--danger" type="button" onClick={() => void clearEvents()} disabled={clearingEvents}>
+                <button className="btn btn--danger" type="button"
+                  onClick={() => void clearEvents()} disabled={clearingEvents}>
                   {clearingEvents ? "Очищаю…" : "Очистить журнал"}
                 </button>
               )}
@@ -482,7 +509,7 @@ export function TrialProtectionSection() {
           </div>
 
           {!eventsExpanded ? (
-            <div className="pre admin-gap-top-md">События скрыты. Последних записей: {sortedEvents.length}.</div>
+            <div className="pre admin-gap-top-md">События скрыты. Записей: {sortedEvents.length}.</div>
           ) : loading ? (
             <div className="list admin-gap-top-md"><div className="skeleton h1" /><div className="skeleton p" /></div>
           ) : visibleEvents.length === 0 ? (
@@ -491,21 +518,25 @@ export function TrialProtectionSection() {
             <>
               <div className="list admin-gap-top-md">
                 {visibleEvents.map((item) => (
-                  <div key={item.id} className="list__item is-clickable admin-rowCard admin-rowCard--compact"
-                    role="button" tabIndex={0} onClick={() => setOpenedEvent(item)}
+                  <div key={item.id}
+                    className="list__item is-clickable admin-rowCard admin-rowCard--compact"
+                    role="button" tabIndex={0}
+                    onClick={() => setOpenedEvent(item)}
                     onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setOpenedEvent(item); }}>
                     <div className="list__main">
                       <div className="kicker">{formatDateTime(item.created_at)}</div>
                       <div className="list__title admin-gap-top-xs">{item.event_type}</div>
                       <div className="list__sub admin-listSubCompact">{item.reason || "—"}</div>
                     </div>
-                    <div className="admin-rowActions admin-rowActions--single">{renderDecisionChip(item.decision)}</div>
+                    <div className="admin-rowActions admin-rowActions--single">
+                      {renderDecisionChip(item.decision)}
+                    </div>
                   </div>
                 ))}
               </div>
               {sortedEvents.length > EVENTS_PREVIEW_COUNT && (
                 <div className="actions actions--1 admin-gap-top-md">
-                  <button className="btn btn--soft" type="button" onClick={() => setEventsShowAll((v) => !v)}>
+                  <button className="btn" type="button" onClick={() => setEventsShowAll((v) => !v)}>
                     {eventsShowAll ? "Показать только последние 5" : `Показать все (${sortedEvents.length})`}
                   </button>
                 </div>
@@ -515,27 +546,31 @@ export function TrialProtectionSection() {
         </div>
       </div>
 
-      {/* ── Модалка события ──────────────────────────────────────────────── */}
+      {/* ── Модалка события ── */}
       {openedEvent && (
-        <ModalShell title={openedEvent.event_type} kicker={formatDateTime(openedEvent.created_at)} onClose={() => setOpenedEvent(null)}>
+        <ModalShell
+          title={openedEvent.event_type}
+          kicker={formatDateTime(openedEvent.created_at)}
+          onClose={() => setOpenedEvent(null)}
+        >
           {(() => {
-            const meta        = openedEvent.meta ?? parseMetaJson(openedEvent.meta_json);
-            const serviceId   = meta?.serviceId   ?? meta?.service_id   ?? null;
-            const trialGroup  = meta?.trialGroup  ?? meta?.trial_group  ?? meta?.category ?? null;
+            const meta       = openedEvent.meta ?? parseMetaJson(openedEvent.meta_json);
+            const serviceId  = meta?.serviceId  ?? meta?.service_id  ?? null;
+            const trialGroup = meta?.trialGroup  ?? meta?.trial_group ?? meta?.category ?? null;
             const periodHuman = meta?.periodHuman ?? meta?.period_human ?? null;
             return (
               <>
                 <div className="list">
                   {[
-                    { title: "Решение",   value: openedEvent.decision,      side: renderDecisionChip(openedEvent.decision) },
-                    { title: "Причина",   value: openedEvent.reason || "—" },
+                    { title: "Решение",    value: openedEvent.decision,      side: renderDecisionChip(openedEvent.decision) },
+                    { title: "Причина",    value: openedEvent.reason || "—" },
                     { title: "Устройство", value: openedEvent.device_token || "—", cls: "feed__fulltext" },
-                    { title: "IP",        value: openedEvent.ip || "—" },
-                    { title: "User ID",   value: String(openedEvent.user_id ?? "—") },
+                    { title: "IP",         value: openedEvent.ip || "—" },
+                    { title: "User ID",    value: String(openedEvent.user_id ?? "—") },
                     { title: "Service ID", value: String(serviceId ?? "—") },
                     { title: "Trial group", value: String(trialGroup ?? "—") },
-                    { title: "Период",    value: String(periodHuman ?? "—") },
-                    { title: "Meta JSON", value: openedEvent.meta_json || "—", cls: "feed__fulltext" },
+                    { title: "Период",     value: String(periodHuman ?? "—") },
+                    { title: "Meta JSON",  value: openedEvent.meta_json || "—", cls: "feed__fulltext" },
                   ].map(({ title, value, side, cls }) => (
                     <div key={title} className="list__item admin-tightItem">
                       <div className="list__main">
@@ -547,8 +582,8 @@ export function TrialProtectionSection() {
                   ))}
                 </div>
                 <div className="actions actions--2 admin-gap-top-lg">
-                  <button className="btn btn--soft" type="button" onClick={() => copyText(openedEvent.device_token || "")}>Скопировать device</button>
-                  <button className="btn btn--soft" type="button" onClick={() => copyText(openedEvent.meta_json || "")}>Скопировать meta</button>
+                  <button className="btn" type="button" onClick={() => copyText(openedEvent.device_token || "")}>Скопировать device</button>
+                  <button className="btn" type="button" onClick={() => copyText(openedEvent.meta_json || "")}>Скопировать meta</button>
                 </div>
               </>
             );
@@ -556,14 +591,18 @@ export function TrialProtectionSection() {
         </ModalShell>
       )}
 
-      {/* ── Модалка устройства ───────────────────────────────────────────── */}
+      {/* ── Модалка устройства ── */}
       {openedDevice && (
-        <ModalShell title={shortDeviceToken(openedDevice.device_token)} kicker={`Last seen: ${formatDateTime(openedDevice.last_seen_at)}`} onClose={() => setOpenedDevice(null)}>
+        <ModalShell
+          title={shortDeviceToken(openedDevice.device_token)}
+          kicker={`Last seen: ${formatDateTime(openedDevice.last_seen_at)}`}
+          onClose={() => setOpenedDevice(null)}
+        >
           <div className="list">
             {[
-              { title: "Device token", value: openedDevice.device_token, cls: "feed__fulltext" },
-              { title: "User ID",      value: String(openedDevice.last_user_id ?? openedDevice.trial_user_id ?? "—") },
-              { title: "Статус",       value: `manual block: ${Number(openedDevice.is_blocked ?? 0) === 1 ? "yes" : "no"}` },
+              { title: "Device token",          value: openedDevice.device_token, cls: "feed__fulltext" },
+              { title: "User ID",               value: String(openedDevice.last_user_id ?? openedDevice.trial_user_id ?? "—") },
+              { title: "Статус",                value: `manual block: ${Number(openedDevice.is_blocked ?? 0) === 1 ? "yes" : "no"}` },
               { title: "Последний trial usage", value: formatDateTime(openedDevice.last_trial_used_at) },
             ].map(({ title, value, cls }) => (
               <div key={title} className="list__item admin-tightItem">
@@ -601,21 +640,33 @@ export function TrialProtectionSection() {
             </details>
           </div>
 
-          <div className="actions actions--4 admin-gap-top-lg">
-            <button className="btn btn--soft" type="button" onClick={() => copyText(openedDevice.device_token)}>Скопировать token</button>
+          <div className="actions actions--2 admin-gap-top-lg">
+            <button className="btn" type="button" onClick={() => copyText(openedDevice.device_token)}>
+              Скопировать token
+            </button>
             {Number(openedDevice.is_blocked ?? 0) === 1 ? (
-              <button className="btn btn--soft" type="button" disabled={unblockingDevice === openedDevice.device_token} onClick={() => void unblockDevice(openedDevice.device_token)}>
+              <button className="btn" type="button"
+                disabled={unblockingDevice === openedDevice.device_token}
+                onClick={() => void unblockDevice(openedDevice.device_token)}>
                 {unblockingDevice === openedDevice.device_token ? "Снятие…" : "Разблокировать"}
               </button>
             ) : (
-              <button className="btn btn--soft" type="button" disabled={blockingDevice === openedDevice.device_token} onClick={() => void blockDevice(openedDevice.device_token)}>
+              <button className="btn" type="button"
+                disabled={blockingDevice === openedDevice.device_token}
+                onClick={() => void blockDevice(openedDevice.device_token)}>
                 {blockingDevice === openedDevice.device_token ? "Блок…" : "Заблокировать"}
               </button>
             )}
-            <button className="btn btn--soft" type="button" disabled={resettingDevice === openedDevice.device_token} onClick={() => void resetTrial(openedDevice.device_token)}>
+          </div>
+          <div className="actions actions--2" style={{ marginTop: 8 }}>
+            <button className="btn" type="button"
+              disabled={resettingDevice === openedDevice.device_token}
+              onClick={() => void resetTrial(openedDevice.device_token)}>
               {resettingDevice === openedDevice.device_token ? "Сброс…" : "Сбросить trial"}
             </button>
-            <button className="btn btn--danger" type="button" disabled={deletingDevice === openedDevice.device_token} onClick={() => void deleteDevice(openedDevice.device_token)}>
+            <button className="btn btn--danger" type="button"
+              disabled={deletingDevice === openedDevice.device_token}
+              onClick={() => void deleteDevice(openedDevice.device_token)}>
               {deletingDevice === openedDevice.device_token ? "Удаление…" : "Удалить устройство"}
             </button>
           </div>

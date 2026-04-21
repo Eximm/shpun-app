@@ -1,4 +1,4 @@
-// web/src/pages/Payments.tsx
+// FILE: web/src/pages/Payments.tsx
 
 import { createPortal } from "react-dom";
 import { useEffect, useMemo, useState } from "react";
@@ -73,62 +73,35 @@ function copyText(text: string) {
 
 function parseForecast(raw: any): { amount: number | null; date: string | null } {
   if (!raw || typeof raw !== "object") return { amount: null, date: null };
-  const data0 = Array.isArray(raw.data) && raw.data.length ? raw.data[0] : null;
+  const data0  = Array.isArray(raw.data) && raw.data.length ? raw.data[0] : null;
   const amount = typeof data0?.total === "number" && Number.isFinite(data0.total) ? data0.total : null;
   const date   = typeof raw.date === "string" && raw.date ? raw.date : null;
   return { amount, date };
 }
 
 function fmtForecastDate(iso: string) {
-  try {
-    return new Date(iso).toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
-  } catch { return iso; }
+  try { return new Date(iso).toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" }); }
+  catch { return iso; }
 }
 
 /* ─── PaymentErrorModal ──────────────────────────────────────────────────── */
 
 function PaymentErrorModal({ open, onClose, onRetry }: {
-  open: boolean;
-  onClose: () => void;
-  onRetry: () => void;
+  open: boolean; onClose: () => void; onRetry: () => void;
 }) {
   if (!open) return null;
-
   return createPortal(
-    <div
-      role="dialog"
-      aria-modal="true"
-      className="modal"
-      onMouseDown={onClose}
-    >
-      <div
-        className="card modal__card"
-        onMouseDown={(e) => e.stopPropagation()}
-        style={{ textAlign: "center" }}
-      >
+    <div role="dialog" aria-modal="true" className="modal" onMouseDown={onClose}>
+      <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()} style={{ textAlign: "center" }}>
         <div className="card__body">
           <div style={{ fontSize: 52, marginBottom: 8 }}>❌</div>
-          <div className="h1" style={{ fontSize: 20, marginBottom: 8 }}>
-            Оплата не прошла
-          </div>
+          <div className="h1" style={{ fontSize: 20, marginBottom: 8 }}>Оплата не прошла</div>
           <p className="p" style={{ opacity: 0.75 }}>
             Платёж был отменён или произошла ошибка. Попробуйте ещё раз или выберите другой способ оплаты.
           </p>
           <div className="actions actions--2" style={{ marginTop: 20 }}>
-            <button
-              className="btn"
-              type="button"
-              onClick={onClose}
-            >
-              Закрыть
-            </button>
-            <button
-              className="btn btn--primary"
-              type="button"
-              onClick={onRetry}
-            >
-              Попробовать снова
-            </button>
+            <button className="btn" type="button" onClick={onClose}>Закрыть</button>
+            <button className="btn btn--primary" type="button" onClick={onRetry}>Попробовать снова</button>
           </div>
         </div>
       </div>
@@ -184,9 +157,8 @@ function RequisitesModal({ open, onClose, amountNumber }: {
       setUploadMsg(t("payments.receipt.sent_msg"));
       toast.success(t("payments.receipt.sent"), { description: t("payments.receipt.sent.desc") });
       setTimeout(() => setUploadMsg(null), 5000);
-    } catch (e) {
-      toastApiError(e, { title: t("payments.receipt.send_failed") });
-    } finally { setUploading(false); }
+    } catch (e) { toastApiError(e, { title: t("payments.receipt.send_failed") }); }
+    finally { setUploading(false); }
   }
 
   if (!open) return null;
@@ -205,8 +177,15 @@ function RequisitesModal({ open, onClose, amountNumber }: {
           </div>
 
           <div className="modal__content">
-            <div style={{ background: "rgba(255,80,80,0.12)", border: "1px solid rgba(255,80,80,0.35)", borderRadius: 10, padding: "12px 14px", marginBottom: 16 }}>
-              <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>
+            {/* Предупреждение */}
+            <div style={{
+              background: "rgba(255,77,109,0.09)",
+              border: "1px solid rgba(255,77,109,0.28)",
+              borderRadius: 12,
+              padding: "12px 14px",
+              marginBottom: 16,
+            }}>
+              <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 4 }}>
                 ⚠️ {t("payments.card_page.receipt_required")}
               </div>
               <div style={{ fontSize: 13, opacity: 0.85, lineHeight: 1.5 }}>
@@ -224,20 +203,20 @@ function RequisitesModal({ open, onClose, amountNumber }: {
               <div className="kv">
                 <div className="kv__item">
                   <div className="kv__k">{t("payments.card_page.amount_label")}</div>
-                  <div className="kv__v" style={{ fontSize: 20, fontWeight: 700 }}>
+                  <div className="kv__v" style={{ fontSize: 22, fontWeight: 900 }}>
                     {amountNumber ? fmtMoney(amountNumber) : "—"}
                   </div>
                 </div>
                 {holder && (
                   <div className="kv__item">
                     <div className="kv__k">{t("payments.requisites.holder")}</div>
-                    <div className="kv__v" style={{ fontWeight: 600 }}>{holder}</div>
+                    <div className="kv__v">{holder}</div>
                   </div>
                 )}
                 {cardPretty && (
                   <div className="kv__item">
                     <div className="kv__k">{t("payments.requisites.card")}</div>
-                    <div className="kv__v" style={{ fontFamily: "monospace", fontSize: 18, letterSpacing: 2 }}>
+                    <div className="kv__v" style={{ fontFamily: "monospace", fontSize: 20, letterSpacing: 2 }}>
                       {cardPretty}
                     </div>
                   </div>
@@ -252,8 +231,8 @@ function RequisitesModal({ open, onClose, amountNumber }: {
             </div>
 
             <div className="actions actions--1" style={{ marginTop: 16 }}>
-              <label className="btn btn--primary" style={{ cursor: "pointer", textAlign: "center" }}>
-                <span>{uploading ? t("payments.receipt.uploading") : t("payments.receipt.upload_btn")}</span>
+              <label className="btn btn--primary" style={{ cursor: "pointer" }}>
+                <span>{uploading ? t("payments.receipt.uploading_short") : t("payments.receipt.upload_btn")}</span>
                 <input
                   type="file" accept=".jpg,.jpeg,.png,.pdf"
                   style={{ display: "none" }} disabled={uploading}
@@ -275,10 +254,8 @@ function RequisitesModal({ open, onClose, amountNumber }: {
               )}
             </div>
 
-            {uploadMsg && <div className="pre" style={{ marginTop: 12 }}>{uploadMsg}</div>}
-            <p className="p" style={{ marginTop: 10, opacity: 0.5, fontSize: 12 }}>
-              {t("payments.receipt.supported")}
-            </p>
+            {uploadMsg && <div className="home-alert home-alert--ok" style={{ marginTop: 12 }}>{uploadMsg}</div>}
+            <p className="p" style={{ marginTop: 10, opacity: 0.5, fontSize: 12 }}>{t("payments.receipt.supported")}</p>
           </div>
         </div>
       </div>
@@ -290,7 +267,7 @@ function RequisitesModal({ open, onClose, amountNumber }: {
 /* ─── Payments ───────────────────────────────────────────────────────────── */
 
 export function Payments() {
-  const { t } = useI18n();
+  const { t }    = useI18n();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -303,14 +280,11 @@ export function Payments() {
   const [checkingPay, setCheckingPay] = useState(false);
   const [showOverlay, setShowOverlay] = useState(false);
 
-  // Модалка ошибки оплаты — читаем ?payment=error из URL
   const [payErrorOpen, setPayErrorOpen] = useState<boolean>(() => {
-    try {
-      return new URLSearchParams(window.location.search).get("payment") === "error";
-    } catch { return false; }
+    try { return new URLSearchParams(window.location.search).get("payment") === "error"; }
+    catch { return false; }
   });
 
-  // Чистим параметр из URL сразу при монтировании
   useEffect(() => {
     const sp = new URLSearchParams(location.search);
     if (sp.get("payment") === "error") {
@@ -325,9 +299,7 @@ export function Payments() {
     return Number.isFinite(v) && v > 0 ? v : null;
   }, [amount]);
 
-  const { amount: forecastAmount, date: forecastDate } = useMemo(
-    () => parseForecast(forecast), [forecast]
-  );
+  const { amount: forecastAmount, date: forecastDate } = useMemo(() => parseForecast(forecast), [forecast]);
 
   const recurringSystem = paySystems.find((x) => x.recurring);
   const oneSystems      = paySystems.filter((x) => !x.recurring);
@@ -391,7 +363,10 @@ export function Payments() {
       <div className="app-loader" style={{ opacity: 1, transition: "opacity 180ms ease", pointerEvents: "auto" }}>
         <div className="app-loader__card">
           <div className="app-loader__shine" />
-          <div className="app-loader__brandRow"><div className="app-loader__mark" /><div className="app-loader__title">Shpun App</div></div>
+          <div className="app-loader__brandRow">
+            <div className="app-loader__mark" />
+            <div className="app-loader__title">Shpun App</div>
+          </div>
           <div className="app-loader__text">{t("payments.loading")}</div>
         </div>
       </div>
@@ -422,20 +397,18 @@ export function Payments() {
   return (
     <div className="section">
 
-      {/* Модалка ошибки оплаты */}
       <PaymentErrorModal
         open={payErrorOpen}
         onClose={() => setPayErrorOpen(false)}
         onRetry={() => {
           setPayErrorOpen(false);
-          // Скроллим к способам оплаты
           window.setTimeout(() => {
             document.querySelector(".kv")?.scrollIntoView({ behavior: "smooth", block: "start" });
           }, 100);
         }}
       />
 
-      {/* Overlay после открытия внешней оплаты */}
+      {/* Overlay после открытия оплаты */}
       {showOverlay && createPortal(
         <div className="modal" role="dialog" aria-modal="true" onMouseDown={() => setShowOverlay(false)}>
           <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()}>
@@ -481,7 +454,10 @@ export function Payments() {
       {recurringSystem && (
         <div className="card" style={{ marginTop: 12 }}>
           <div className="card__body">
-            <div className="h1" style={{ fontSize: 16 }}>{t("payments.autopay.title")}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 20 }}>🔄</span>
+              <div className="h2">{t("payments.autopay.title")}</div>
+            </div>
             <p className="p" style={{ marginTop: 4 }}>
               {recurringSystem.name || t("payments.autopay.name_fallback")}
             </p>
@@ -500,24 +476,36 @@ export function Payments() {
       {/* Сумма */}
       <div className="card" style={{ marginTop: 12 }}>
         <div className="card__body">
-          <div className="h1" style={{ fontSize: 16 }}>{t("payments.amount.title")}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 20 }}>💰</span>
+            <div className="h2">{t("payments.amount.title")}</div>
+          </div>
           {forecastAmount && (
-            <p className="p" style={{ marginTop: 4, opacity: 0.75 }}>
+            <p className="p" style={{ marginTop: 4, opacity: 0.78 }}>
               {t("payments.forecast.hint")}{": "}
               <strong>{fmtMoney(forecastAmount)}</strong>
               {forecastDate ? ` · ${fmtForecastDate(forecastDate)}` : ""}
             </p>
           )}
           <input
-            className="input" style={{ marginTop: 10 }}
-            value={amount} onChange={(e) => setAmount(e.target.value)}
+            className="input"
+            style={{ marginTop: 12, fontSize: 20, fontWeight: 800 }}
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
             placeholder={t("payments.amount.placeholder")}
-            inputMode="numeric" autoComplete="off"
+            inputMode="numeric"
+            autoComplete="off"
           />
-          <div className="row" style={{ marginTop: 10, gap: 8, flexWrap: "wrap" }}>
+          {/* Быстрые суммы */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
             {quickAmounts.map((x) => (
-              <button key={x} className={`btn ${amountNumber === x ? "btn--primary" : ""}`}
-                onClick={() => setAmount(String(x))} type="button">
+              <button
+                key={x}
+                className={`btn${amountNumber === x ? " btn--primary" : ""}`}
+                onClick={() => setAmount(String(x))}
+                type="button"
+                style={{ minWidth: 0, flex: "1 1 auto" }}
+              >
                 {fmtMoney(x)}
               </button>
             ))}
@@ -528,7 +516,10 @@ export function Payments() {
       {/* Способы оплаты */}
       <div className="card" style={{ marginTop: 12 }}>
         <div className="card__body">
-          <div className="h1" style={{ fontSize: 16 }}>{t("payments.methods.title")}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 20 }}>⚡</span>
+            <div className="h2">{t("payments.methods.title")}</div>
+          </div>
 
           {oneSystems.length === 0 ? (
             <p className="p" style={{ marginTop: 8 }}>{t("payments.methods.empty")}</p>
@@ -540,15 +531,19 @@ export function Payments() {
                 const badge       = starsMethod ? t("payments.methods.badge.stars") : t("payments.methods.badge.fast");
                 return (
                   <div className="kv__item" key={ps.shm_url || idx}>
-                    <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                      <span className="p" style={{ opacity: 0.6, fontSize: 12 }}>{typeLabel}</span>
-                      <span className="chip chip--soft">{badge}</span>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                      <span className="muted" style={{ fontSize: 12 }}>{typeLabel}</span>
+                      <span className="chip chip--accent">{badge}</span>
                     </div>
-                    <div style={{ fontWeight: 600, marginBottom: 8 }}>
+                    <div style={{ fontWeight: 800, marginBottom: 10, fontSize: 15 }}>
                       {ps.name || t("payments.methods.name_fallback")}
                     </div>
-                    <button className="btn btn--primary" style={{ width: "100%" }}
-                      onClick={() => void handlePay(ps)} type="button">
+                    <button
+                      className="btn btn--primary"
+                      style={{ width: "100%", minHeight: 48, fontSize: 15, fontWeight: 900 }}
+                      onClick={() => void handlePay(ps)}
+                      type="button"
+                    >
                       {t("payments.methods.pay")}{amountNumber ? ` · ${fmtMoney(amountNumber)}` : ""}
                     </button>
                   </div>
@@ -558,32 +553,41 @@ export function Payments() {
           )}
 
           {/* Перевод по карте */}
-          <div className="kv__item" style={{ marginTop: oneSystems.length > 0 ? 4 : 0 }}>
-            <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-              <span className="p" style={{ opacity: 0.6, fontSize: 12 }}>{t("payments.methods.type.card")}</span>
+          <div className="kv__item" style={{ marginTop: oneSystems.length > 0 ? 4 : 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <span className="muted" style={{ fontSize: 12 }}>{t("payments.methods.type.card")}</span>
               <span className="chip">{t("payments.methods.badge.manual")}</span>
             </div>
-            <div style={{ fontWeight: 600, marginBottom: 8 }}>{t("payments.methods.card_transfer")}</div>
-            <button className="btn" style={{ width: "100%" }} type="button"
+            <div style={{ fontWeight: 800, marginBottom: 10, fontSize: 15 }}>
+              {t("payments.methods.card_transfer")}
+            </div>
+            <button
+              className="btn"
+              style={{ width: "100%", minHeight: 44 }}
+              type="button"
               onClick={() => {
                 if (!amountNumber) {
                   toast.error(t("payments.toast.enter_amount"), { description: t("payments.card_transfer.need_amount") });
                   return;
                 }
                 setReqModal(true);
-              }}>
+              }}
+            >
               💳 {t("payments.methods.card_open")}
             </button>
           </div>
 
-          <p className="p" style={{ marginTop: 12, opacity: 0.5, fontSize: 12 }}>{t("payments.methods.note")}</p>
+          <p className="p" style={{ marginTop: 12, opacity: 0.48, fontSize: 12 }}>{t("payments.methods.note")}</p>
         </div>
       </div>
 
       {/* История */}
       <div className="card" style={{ marginTop: 12 }}>
         <div className="card__body">
-          <div className="h1" style={{ fontSize: 16 }}>{t("payments.history.title")}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 20 }}>🧾</span>
+            <div className="h2">{t("payments.history.title")}</div>
+          </div>
           <div className="actions actions--2" style={{ marginTop: 12 }}>
             <Link className="btn" to="/payments/history">{t("payments.history.operations")}</Link>
             <Link className="btn" to="/payments/receipts">{t("payments.history.receipts")}</Link>
@@ -591,9 +595,7 @@ export function Payments() {
         </div>
       </div>
 
-      {/* Модалка реквизитов */}
       <RequisitesModal open={reqModal} onClose={() => setReqModal(false)} amountNumber={amountNumber} />
-
     </div>
   );
 }

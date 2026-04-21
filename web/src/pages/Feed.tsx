@@ -1,4 +1,4 @@
-﻿// web/src/pages/Feed.tsx
+﻿// FILE: web/src/pages/Feed.tsx
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
@@ -19,11 +19,18 @@ type NotifEvent = {
   message?: string;
   meta?: any;
 };
-type Cursor  = { ts: number; id: string };
+type Cursor   = { ts: number; id: string };
 type FeedResp = { ok: true; items: NotifEvent[]; nextBefore: Cursor };
 type Category = "all" | "money" | "services" | "news";
 
 const PAGE_LIMIT = 50;
+
+const CATEGORIES: { key: Category; i18n: string }[] = [
+  { key: "all",      i18n: "feed.filter.all" },
+  { key: "money",    i18n: "feed.filter.money" },
+  { key: "services", i18n: "feed.filter.services" },
+  { key: "news",     i18n: "feed.filter.news" },
+];
 
 /* ─── Utils ─────────────────────────────────────────────────────────────── */
 
@@ -120,28 +127,18 @@ function buildFeedUrl(cat: Category, cursor?: Cursor | null): string {
   return url;
 }
 
-/* ─── FilterBtn ──────────────────────────────────────────────────────────── */
-
-function FilterBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button className={active ? "btn btn--accent" : "btn btn--soft"} onClick={onClick} type="button" aria-pressed={active}>
-      {children}
-    </button>
-  );
-}
-
 /* ─── Feed ───────────────────────────────────────────────────────────────── */
 
 export function Feed() {
   const { t } = useI18n();
   const nav   = useNavigate();
 
-  const [loading,      setLoading]      = useState(false);
-  const [items,        setItems]        = useState<NotifEvent[]>([]);
-  const [nextBefore,   setNextBefore]   = useState<Cursor>({ ts: 0, id: "" });
-  const [hasMore,      setHasMore]      = useState(true);
-  const [cat,          setCat]          = useState<Category>("all");
-  const [openedEvent,  setOpenedEvent]  = useState<NotifEvent | null>(null);
+  const [loading,     setLoading]     = useState(false);
+  const [items,       setItems]       = useState<NotifEvent[]>([]);
+  const [nextBefore,  setNextBefore]  = useState<Cursor>({ ts: 0, id: "" });
+  const [hasMore,     setHasMore]     = useState(true);
+  const [cat,         setCat]         = useState<Category>("all");
+  const [openedEvent, setOpenedEvent] = useState<NotifEvent | null>(null);
 
   async function loadFirst(activeCat: Category) {
     setLoading(true);
@@ -179,7 +176,6 @@ export function Feed() {
     setOpenedEvent(null);
   }, [cat]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Lock body scroll when modal open
   useEffect(() => {
     if (!openedEvent) return;
     const prev = document.body.style.overflow;
@@ -197,26 +193,36 @@ export function Feed() {
   const openedLink       = openedEvent ? eventLink(openedEvent) : null;
   const openedIsForecast = openedEvent ? isForecastEvent(openedEvent) : false;
 
-  /* ── Render ────────────────────────────────────────────────────────────── */
-
+  /* ── Render ──────────────────────────────────────────────────────────── */
   return (
     <>
       <div className="section">
         <div className="card">
           <div className="card__body">
+
+            {/* Заголовок */}
             <h1 className="h1">{t("feed.title")}</h1>
             <p className="p">{t("feed.subtitle")}</p>
 
-            {/* Фильтры */}
-            <div className="actions actions--4" style={{ marginTop: 12 }}>
-              <FilterBtn active={cat === "all"}      onClick={() => setCat("all")}>      {t("feed.filter.all")}</FilterBtn>
-              <FilterBtn active={cat === "money"}    onClick={() => setCat("money")}>     {t("feed.filter.money")}</FilterBtn>
-              <FilterBtn active={cat === "services"} onClick={() => setCat("services")}>  {t("feed.filter.services")}</FilterBtn>
-              <FilterBtn active={cat === "news"}     onClick={() => setCat("news")}>      {t("feed.filter.news")}</FilterBtn>
+            {/* Сегментированный контрол фильтров */}
+            <div className="feed-seg" role="tablist">
+              {CATEGORIES.map(({ key, i18n }) => (
+                <button
+                  key={key}
+                  type="button"
+                  role="tab"
+                  aria-selected={cat === key}
+                  className={`feed-seg__btn${cat === key ? " feed-seg__btn--active" : ""}`}
+                  onClick={() => setCat(key)}
+                >
+                  {t(i18n)}
+                </button>
+              ))}
             </div>
 
-            <p className="p" style={{ marginTop: 10, opacity: 0.7 }}>
-              {filtered.length} {cat === "all" ? t("feed.filter.all") : cat === "money" ? t("feed.filter.money") : cat === "services" ? t("feed.filter.services") : t("feed.filter.news")}
+            {/* Счётчик */}
+            <p className="muted" style={{ marginTop: 10 }}>
+              {filtered.length} {t(CATEGORIES.find(c => c.key === cat)?.i18n ?? "feed.filter.all")}
             </p>
 
             {/* Список */}
@@ -230,7 +236,7 @@ export function Feed() {
               ) : filtered.length === 0 ? (
                 <div className="pre">
                   <div style={{ fontWeight: 900, marginBottom: 6 }}>{t("feed.empty.title")}</div>
-                  <div style={{ opacity: 0.85 }}>{t("feed.empty.text")}</div>
+                  <div style={{ opacity: 0.82 }}>{t("feed.empty.text")}</div>
                 </div>
               ) : filtered.map((e) => {
                 const title      = e.title || t("feed.item.fallback");
@@ -242,7 +248,7 @@ export function Feed() {
                 const clickable  = !!link && !hasDetails;
 
                 const openDetail = () => setOpenedEvent(e);
-                const navigate   = () => { if (link) nav(link); };
+                const goLink     = () => { if (link) nav(link); };
 
                 if (news) {
                   return (
@@ -255,7 +261,7 @@ export function Feed() {
                       {preview && <div className="list__sub feed-news__preview">{preview}</div>}
                       {hasDetails && (
                         <div className="feed__more">
-                          <button type="button" className="btn btn--soft" onClick={openDetail}>
+                          <button type="button" className="btn btn--accent" onClick={openDetail}>
                             {t("feed.more")}
                           </button>
                         </div>
@@ -270,8 +276,8 @@ export function Feed() {
                     className={`list__item${clickable ? " is-clickable" : ""}`}
                     role={clickable ? "button" : undefined}
                     tabIndex={clickable ? 0 : undefined}
-                    onClick={clickable ? navigate : undefined}
-                    onKeyDown={clickable ? (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); navigate(); } } : undefined}
+                    onClick={clickable ? goLink : undefined}
+                    onKeyDown={clickable ? (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); goLink(); } } : undefined}
                   >
                     <div className="list__main">
                       <div className="kicker">{dt}</div>
@@ -279,8 +285,11 @@ export function Feed() {
                       {preview && <div className="list__sub">{preview}</div>}
                       {hasDetails && (
                         <div className="feed__more" style={{ marginTop: 8 }}>
-                          <button type="button" className="btn btn--soft"
-                            onClick={(ev) => { ev.preventDefault(); ev.stopPropagation(); openDetail(); }}>
+                          <button
+                            type="button"
+                            className="btn btn--accent"
+                            onClick={(ev) => { ev.preventDefault(); ev.stopPropagation(); openDetail(); }}
+                          >
                             {t("feed.more")}
                           </button>
                         </div>
@@ -296,20 +305,31 @@ export function Feed() {
 
             {/* Загрузить ещё */}
             {filtered.length > 0 && (
-              <div className="actions actions--1" style={{ marginTop: 12 }}>
-                <button className="btn btn--accent" onClick={() => void loadMore()} disabled={!hasMore || loading} type="button">
+              <div className="actions actions--1" style={{ marginTop: 14 }}>
+                <button
+                  className="btn btn--primary"
+                  onClick={() => void loadMore()}
+                  disabled={!hasMore || loading}
+                  type="button"
+                >
                   {loading ? t("feed.load.loading") : hasMore ? t("feed.load.more") : t("feed.load.end")}
                 </button>
               </div>
             )}
+
           </div>
         </div>
       </div>
 
-      {/* Модалка детали — через portal */}
+      {/* Модалка детали */}
       {openedEvent && createPortal(
-        <div className="modal" role="dialog" aria-modal="true" aria-labelledby="feed-modal-title"
-          onMouseDown={() => setOpenedEvent(null)}>
+        <div
+          className="modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="feed-modal-title"
+          onMouseDown={() => setOpenedEvent(null)}
+        >
           <div className="card modal__card feed-modalCard" onMouseDown={(e) => e.stopPropagation()}>
             <div className="card__body">
               <div className="modal__head">
@@ -319,7 +339,14 @@ export function Feed() {
                     {openedEvent.title || t("feed.item.fallback")}
                   </div>
                 </div>
-                <button className="btn modal__close" type="button" onClick={() => setOpenedEvent(null)} aria-label={t("common.close")}>✕</button>
+                <button
+                  className="btn modal__close"
+                  type="button"
+                  onClick={() => setOpenedEvent(null)}
+                  aria-label={t("common.close")}
+                >
+                  ✕
+                </button>
               </div>
 
               <div className="modal__content">
@@ -327,9 +354,12 @@ export function Feed() {
               </div>
 
               {openedIsForecast && openedLink?.startsWith("/payments") && (
-                <div className="actions actions--1" style={{ marginTop: 12 }}>
-                  <button type="button" className="btn btn--primary"
-                    onClick={() => { setOpenedEvent(null); nav(openedLink); }}>
+                <div className="actions actions--1" style={{ marginTop: 14 }}>
+                  <button
+                    type="button"
+                    className="btn btn--primary"
+                    onClick={() => { setOpenedEvent(null); nav(openedLink); }}
+                  >
                     {t("payments.page.title")}
                   </button>
                 </div>
