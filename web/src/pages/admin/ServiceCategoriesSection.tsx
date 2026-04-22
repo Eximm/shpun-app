@@ -107,7 +107,8 @@ const EMPTY_FORM = (): Partial<ServiceCategory> & {
 
 function CategoryPreview({ form }: { form: ReturnType<typeof EMPTY_FORM> }) {
   const accentFrom = form.accent_from || PRESETS[0].from;
-  const cardBg     = form.card_bg || "rgba(255,255,255,0.04)";
+  const accentTo   = form.accent_to   || PRESETS[0].to;
+  const cardBg     = form.card_bg     || "rgba(255,255,255,0.04)";
   const btnLabel   = form.button_label || "Выбрать";
 
   return (
@@ -131,8 +132,23 @@ function CategoryPreview({ form }: { form: ReturnType<typeof EMPTY_FORM> }) {
       <div style={{ fontSize: 13, opacity: 0.68, marginBottom: 12 }}>
         {form.short_descr || "Краткое описание"}
       </div>
-      <div className="actions actions--1">
-        <span className="btn btn--primary" style={{ width: "100%" }}>{btnLabel}</span>
+      {/* Кнопка — точно как на странице заказа, цвет из пресета */}
+      <div style={{
+        width: "100%",
+        minHeight: 44,
+        borderRadius: 12,
+        background: `linear-gradient(135deg, ${accentFrom}, ${accentTo})`,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontWeight: 900,
+        fontSize: 14,
+        color: "#fff",
+        boxShadow: `0 6px 18px ${accentFrom}40`,
+        letterSpacing: "0.02em",
+        cursor: "default",
+      }}>
+        {btnLabel}
       </div>
     </div>
   );
