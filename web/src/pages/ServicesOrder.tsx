@@ -149,7 +149,7 @@ function CategoryCard({ cat, onClick }: { cat: ServiceCategory; onClick: () => v
       className={`kv__item so__kindCard${cat.recommended ? ' so__kindCard--recommended' : ''}`}
       onClick={onClick}
       style={{
-        border: `1.5px solid ${accentFrom}55`,
+        border: `1.5px solid ${accentFrom}40`,
         background: cardBg,
         borderRadius: 16,
         padding: 16,
@@ -160,10 +160,10 @@ function CategoryCard({ cat, onClick }: { cat: ServiceCategory; onClick: () => v
         overflow: 'hidden',
       }}
     >
-      {/* Subtle glow */}
+      {/* Gradient glow top-left */}
       <div style={{
         position: 'absolute', top: -40, left: -40, width: 180, height: 180,
-        background: `radial-gradient(circle, ${accentFrom}18, transparent 65%)`,
+        background: `radial-gradient(circle, ${accentFrom}22, transparent 65%)`,
         pointerEvents: 'none',
       }} />
 
@@ -185,7 +185,6 @@ function CategoryCard({ cat, onClick }: { cat: ServiceCategory; onClick: () => v
 
       <p className="p" style={{ marginTop: 0, marginBottom: 14 }}>{cat.short_descr}</p>
 
-      {/* Кнопка — строго цвета из админки */}
       <div style={{
         width: '100%',
         minHeight: 44,
@@ -196,9 +195,8 @@ function CategoryCard({ cat, onClick }: { cat: ServiceCategory; onClick: () => v
         justifyContent: 'center',
         fontWeight: 900,
         fontSize: 14,
-        color: '#fff',
-        boxShadow: `0 6px 18px ${accentFrom}35`,
-        letterSpacing: '0.02em',
+        color: '#060814',
+        boxShadow: `0 6px 18px ${accentFrom}40`,
       }}>
         {btnLabel}
       </div>
