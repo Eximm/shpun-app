@@ -367,6 +367,26 @@ function ServiceCard({ s, expanded, connectOpen, onToggle, onToggleConnect, onRe
             </span>
           </div>
         </div>
+        {/* WL-баннер — виден всегда, без раскрытия */}
+        {isWL && (
+          <div style={{
+            marginTop: 8,
+            padding: "8px 12px",
+            borderRadius: 10,
+            background: "rgba(96,165,250,0.08)",
+            border: "1px solid rgba(96,165,250,0.28)",
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 8,
+            textAlign: "left",
+          }}>
+            <span style={{ fontSize: 16, flexShrink: 0, lineHeight: 1.3 }}>🔁</span>
+            <div style={{ fontSize: 12, lineHeight: 1.45, color: "rgba(255,255,255,0.82)" }}>
+              <b style={{ color: "rgba(147,197,253,1)" }}>Резервный ключ</b>
+              {" — используйте только если основной ключ не работает в вашей сети."}
+            </div>
+          </div>
+        )}
         <div className="svc__toggle">
           <span style={{ opacity: 0.5 }}>{expanded ? "▲" : "▼"}</span>
           {" "}<span style={{ opacity: 0.65, fontSize: 12 }}>{t("services.actions.title", "Действия")}</span>
@@ -376,9 +396,19 @@ function ServiceCard({ s, expanded, connectOpen, onToggle, onToggleConnect, onRe
       {expanded && (
         <div className="svc__details">
           {isWL && s.status === "active" && (
-            <div className="pre" style={{ borderColor: "rgba(96,165,250,.28)", background: "rgba(96,165,250,.07)" }}>
-              <b>{t("services.wl.badge", "WL")}</b> — {t("services.wl.hint", "Режим белого списка")}
-              <br />{t("services.wl.warning", "Трафик в этом режиме может быть ограничен.")}
+            <div style={{
+              padding: "12px 14px",
+              borderRadius: 12,
+              background: "rgba(96,165,250,0.07)",
+              border: "1px solid rgba(96,165,250,0.28)",
+            }}>
+              <div style={{ fontWeight: 900, fontSize: 13, color: "rgba(147,197,253,1)", marginBottom: 6 }}>
+                🔁 Резервный ключ (White List)
+              </div>
+              <div style={{ fontSize: 13, lineHeight: 1.55, color: "rgba(255,255,255,0.82)" }}>
+                Этот ключ предназначен для случаев, когда <b>основной ключ не работает</b> в вашей сети или регионе.
+                Используйте его только как запасной вариант — трафик в этом режиме может быть ограничен по скорости или содержимому.
+              </div>
             </div>
           )}
 
@@ -621,8 +651,15 @@ export function Services() {
     };
     for (const it of items) byKind[detectKind(it.category)].push(it);
     const sortFn = (a: ApiServiceItem, b: ApiServiceItem) => {
-      const diff = statusSortWeight(a.status) - statusSortWeight(b.status);
-      return diff !== 0 ? diff : (a.daysLeft ?? 9999) - (b.daysLeft ?? 9999);
+      // 1. Статус (active первым)
+      const statusDiff = statusSortWeight(a.status) - statusSortWeight(b.status);
+      if (statusDiff !== 0) return statusDiff;
+      // 2. WL — дочерняя услуга, всегда после основной
+      const aIsWL = isWhiteListCategory(a.category) ? 1 : 0;
+      const bIsWL = isWhiteListCategory(b.category) ? 1 : 0;
+      if (aIsWL !== bIsWL) return aIsWL - bIsWL;
+      // 3. userServiceId от меньшего к большему
+      return a.userServiceId - b.userServiceId;
     };
     (Object.keys(byKind) as ServiceKind[]).forEach((k) => byKind[k].sort(sortFn));
     return byKind;
