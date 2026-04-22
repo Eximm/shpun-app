@@ -149,7 +149,7 @@ function CategoryCard({ cat, onClick }: { cat: ServiceCategory; onClick: () => v
       className={`kv__item so__kindCard${cat.recommended ? ' so__kindCard--recommended' : ''}`}
       onClick={onClick}
       style={{
-        border: `1.5px solid ${accentFrom}40`,
+        border: `1.5px solid ${accentFrom}55`,
         background: cardBg,
         borderRadius: 16,
         padding: 16,
@@ -160,10 +160,10 @@ function CategoryCard({ cat, onClick }: { cat: ServiceCategory; onClick: () => v
         overflow: 'hidden',
       }}
     >
-      {/* Gradient glow top-left */}
+      {/* Subtle glow */}
       <div style={{
         position: 'absolute', top: -40, left: -40, width: 180, height: 180,
-        background: `radial-gradient(circle, ${accentFrom}22, transparent 65%)`,
+        background: `radial-gradient(circle, ${accentFrom}18, transparent 65%)`,
         pointerEvents: 'none',
       }} />
 
@@ -185,6 +185,7 @@ function CategoryCard({ cat, onClick }: { cat: ServiceCategory; onClick: () => v
 
       <p className="p" style={{ marginTop: 0, marginBottom: 14 }}>{cat.short_descr}</p>
 
+      {/* Кнопка — строго цвета из админки */}
       <div style={{
         width: '100%',
         minHeight: 44,
@@ -195,8 +196,9 @@ function CategoryCard({ cat, onClick }: { cat: ServiceCategory; onClick: () => v
         justifyContent: 'center',
         fontWeight: 900,
         fontSize: 14,
-        color: '#060814',
-        boxShadow: `0 6px 18px ${accentFrom}40`,
+        color: '#fff',
+        boxShadow: `0 6px 18px ${accentFrom}35`,
+        letterSpacing: '0.02em',
       }}>
         {btnLabel}
       </div>
@@ -352,10 +354,10 @@ export function ServicesOrder() {
       if (status === 'not_paid' || needTopup > 0) {
         await loadPaysystems()
         setWaitMsg(t('servicesOrder.status.choose_payment'))
-        toast.info(t('servicesOrder.toast.created'), { description: moodChecking(seed) })
+        toast.info(getMood('service_order_created') ?? '🛒 Заказ создан', { description: moodChecking(seed) })
       } else {
         setWaitMsg(t('servicesOrder.status.activated'))
-        toast.success(t('servicesOrder.toast.done'), { description: moodSuccess(seed, nnum(selected.price)) })
+        toast.success(getMood('service_activated') ?? '🚀 Готово', { description: moodSuccess(seed, nnum(selected.price)) })
       }
     } catch (e: any) {
       const info = getOrderError(e)
@@ -374,7 +376,7 @@ export function ServicesOrder() {
     setCopied(false); setPayOpenError(null)
     if (!ps?.shm_url) {
       setPayOpenError(t('servicesOrder.pay.no_url')); setOverlayOpen(true)
-      toast.error(t('servicesOrder.pay.unavailable'), { description: t('servicesOrder.pay.no_url') }); return
+      toast.error('😬 Метод недоступен', { description: 'Выберите другой способ оплаты.' }); return
     }
     const url  = buildPayUrl(ps.shm_url, toPay)
     const seed = String(created?.userServiceId || selected?.serviceId || '')
@@ -383,11 +385,11 @@ export function ServicesOrder() {
     setOpeningPay(false); setOverlayOpen(true)
     if (opened) {
       setWaitMsg(t('servicesOrder.status.pay_opened'))
-      toast.info(t('servicesOrder.toast.pay_opened'), { description: moodChecking(seed) })
+      toast.info('🚀 Открываем оплату', { description: moodChecking(seed) })
     } else {
       setPayOpenError(t('servicesOrder.pay.blocked'))
       setWaitMsg(t('servicesOrder.status.pay_manual'))
-      toast.error(t('servicesOrder.pay.blocked'), { description: t('servicesOrder.pay.open_manually') })
+      toast.error('🚫 Браузер заблокировал окно', { description: 'Скопируйте ссылку и откройте вручную.' })
     }
   }
 
@@ -396,13 +398,13 @@ export function ServicesOrder() {
     setCopied(false); setPayOpenError(null); setOpeningPay(true)
     const opened = await tryOpenPayment(lastPayUrl)
     setOpeningPay(false)
-    if (!opened) { setPayOpenError(t('servicesOrder.pay.blocked')); toast.error(t('servicesOrder.pay.blocked'), { description: t('servicesOrder.pay.open_manually') }); return }
-    toast.info(t('servicesOrder.toast.pay_opened'), { description: t('servicesOrder.status.pay_opened') })
+    if (!opened) { setPayOpenError(t('servicesOrder.pay.blocked')); toast.error('🚫 Браузер заблокировал окно', { description: 'Скопируйте ссылку и откройте вручную.' }); return }
+    toast.info('🚀 Открыли', { description: 'Завершите платёж и вернитесь.' })
   }
 
   async function pollOnce() {
     const seed = String(created?.userServiceId || selected?.serviceId || '')
-    toast.info(t('servicesOrder.toast.checking'), { description: moodChecking(seed) })
+    toast.info('🔍 Проверяем', { description: moodChecking(seed) })
     try { await Promise.resolve(refetch?.()) } catch { /* ignore */ }
     if (!created?.userServiceId) return
     try {
@@ -411,20 +413,20 @@ export function ServicesOrder() {
       if (item && (item.status === 'active' || item.status === 'pending')) {
         setCreated((cur) => cur ? { ...cur, status: item.status, statusRaw: item.statusRaw || cur.statusRaw } : cur)
         setWaitMsg(t('servicesOrder.status.activated'))
-        toast.success(t('servicesOrder.toast.done'), { description: moodSuccess(seed, toPay) })
+        toast.success(getMood('service_activated') ?? '🎉 Оплата подтверждена', { description: moodSuccess(seed, toPay) })
         return
       }
     } catch { /* ignore */ }
     setWaitMsg(t('servicesOrder.status.not_confirmed'))
-    toast.info(t('servicesOrder.toast.not_confirmed'), { description: t('servicesOrder.status.retry') })
+    toast.info(getMood('payment_failed') ?? '⏳ Пока не видим', { description: 'Подождите немного и проверьте снова.' })
   }
 
   async function handleCopyLink() {
     if (!lastPayUrl) return
     const ok = await copyToClipboard(lastPayUrl)
     setCopied(ok)
-    if (!ok) { setPayOpenError(t('servicesOrder.pay.copy_failed')); toast.error(t('servicesOrder.pay.copy_failed')); return }
-    toast.success(t('connect.copy_link'), { description: t('servicesOrder.pay.copy_ok') })
+    if (!ok) { setPayOpenError('Не скопировалось'); toast.error('😬 Не скопировалось', { description: 'Попробуйте вручную.' }); return }
+    toast.success(getMood('copied') ?? '📋 Ссылка скопирована', { description: 'Вставьте в браузер и оплатите.' })
   }
 
   function resetSelection() {

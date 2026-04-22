@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import QRCode from "qrcode";
 import { apiFetch } from "../../shared/api/client";
+import { getMood } from "../../shared/payments-mood";
 import { toast } from "../../shared/ui/toast";
 import { useI18n } from "../../shared/i18n";
 
@@ -159,7 +160,7 @@ export default function ConnectMarzban({ usi }: Props) {
       setSubscriptionUrl(url);
       const mirror = String(r?.subscription_url_mirror ?? r?.subscriptionUrlMirror ?? "").trim();
       setSubscriptionUrlMirror(mirror || null);
-      toast.success(t("connect.ready") || "Подписка готова", { description: url.slice(0, 48) + "…" });
+      toast.success(t("connect.ready") || "Подписка готова", { description: getMood("subscription_ready") ?? "Импортируйте в v2RayTun." });
     } catch (e: any) {
       setSubscriptionUrl(""); setSubscriptionUrlMirror(null);
       const msg = e?.message || t("connect.load_failed");

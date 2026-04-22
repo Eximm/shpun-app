@@ -9,6 +9,7 @@ import type { PasswordSetResponse, UserEmailResponse } from "../shared/api/types
 import { useI18n } from "../shared/i18n";
 import { disablePush, enablePushByUserGesture, getPushState, isPushDisabledByUser } from "../app/notifications/push";
 import { toastApiError } from "../shared/ui/toast/toastApiError";
+import { getMood } from "../shared/payments-mood";
 import { normalizeError } from "../shared/api/errorText";
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
@@ -206,7 +207,7 @@ export function Profile() {
       const payload = { full_name: fullName.trim(), phone: phone.trim() };
       await apiFetch("/user/profile", { method: "POST", body: payload });
       setSavedFullName(payload.full_name); setSavedPhone(payload.phone);
-      setEditPersonal(false); showToast(t("profile.toast.saved"));
+      setEditPersonal(false); showToast(getMood("copied") ? "✅ Сохранено" : "✅ Данные обновлены");
     } catch (e: any) { setPersonalError(e?.message || t("profile.personal.error")); }
     finally { setSavingPersonal(false); }
   }
@@ -251,7 +252,7 @@ export function Profile() {
         ? { login: tg.login ?? clean, username: tg.username ?? null, chatId: tg.chat_id ?? tg.chatId ?? null, status: tg?.ShpynSDNSystem?.status ?? tg.status ?? null }
         : { ...(telegramRaw ?? {}), login: clean }
       );
-      setTgModal(false); showToast(t("profile.telegram.toast.saved"));
+      setTgModal(false); showToast("✈️ Telegram привязан. Уведомления полетели.");
     } catch (e: any) { setTgError(e?.message || t("profile.telegram.error.save")); }
     finally { setSavingTg(false); }
   }
@@ -301,7 +302,7 @@ export function Profile() {
       if (resp?.ok) {
         setEmail(String(resp.email ?? clean));
         setEmailVerified(typeof resp.emailVerified === "boolean" ? resp.emailVerified : false);
-        setEmailModal(false); showToast(t("profile.email.toast.saved")); return;
+        setEmailModal(false); showToast("✉️ Email сохранён. Не забудьте подтвердить."); return;
       }
       setEmailError(t("profile.email.error.save"));
     } catch (e: unknown) { setEmailError(getEmailError(e)); }
@@ -311,8 +312,8 @@ export function Profile() {
   async function requestVerifyEmail() {
     if (!email) { setEmailError(t("profile.email.error.need_email")); return; }
     setEmailBusy(true);
-    try { await apiFetch("/user/email/verify", { method: "POST", body: {} }); showToast(t("profile.email.toast.verify_sent")); }
-    catch { showToast(t("profile.email.toast.verify_failed")); }
+    try { await apiFetch("/user/email/verify", { method: "POST", body: {} }); showToast("📬 Письмо отправлено. Проверьте почту."); }
+    catch { showToast("😬 Не отправилось. Попробуйте позже."); }
     finally { setEmailBusy(false); }
   }
 
@@ -338,7 +339,7 @@ export function Profile() {
     try {
       const res = await apiFetch<PasswordSetResponse>("/auth/password/set", { method: "POST", body: { password: pwd1.trim() } }) as any;
       if (!res?.ok) throw new Error(String(res?.error || "password_set_failed"));
-      showToast(t("profile.password.toast.changed"));
+      showToast("🔐 Пароль изменён. Входите с новым.");
       try { await apiFetch("/logout", { method: "POST" }); } catch { /* ignore */ }
       nav("/login?reason=pwd_changed", { replace: true, state: { from: "/profile" } });
     } catch (e: unknown) {
@@ -353,7 +354,7 @@ export function Profile() {
   async function doCopyLogin() {
     if (!loginText) return;
     await copyToClipboard(loginText);
-    setCopied(true); showToast(t("profile.toast.copied"));
+    setCopied(true); showToast(getMood("copied") ?? "📋 Скопировано");
     window.setTimeout(() => setCopied(false), 1200);
   }
 
@@ -383,7 +384,7 @@ export function Profile() {
   useEffect(() => {
     setStandalone(isStandalonePwa());
     const onBip       = (e: Event) => { e.preventDefault?.(); setDeferredPrompt(e as BeforeInstallPromptEvent); };
-    const onInstalled = () => { setStandalone(true); setDeferredPrompt(null); showToast(t("profile.pwa.toast.installed")); };
+    const onInstalled = () => { setStandalone(true); setDeferredPrompt(null); showToast("📲 Приложение установлено. Теперь как настоящее."); };
     window.addEventListener("beforeinstallprompt", onBip as any);
     window.addEventListener("appinstalled",        onInstalled as any);
     return () => {
@@ -393,14 +394,14 @@ export function Profile() {
   }, [t]);
 
   async function doInstallPwa() {
-    if (standalone)      { showToast(t("profile.pwa.toast.already_installed")); return; }
+    if (standalone)      { showToast("📲 Уже установлено. Всё хорошо."); return; }
     if (isIOS())         { setIosInstallModal(true); return; }
-    if (!deferredPrompt) { showToast(t("profile.pwa.toast.menu")); return; }
+    if (!deferredPrompt) { showToast("📲 Откройте меню браузера → «Добавить на экран»."); return; }
     try {
       await deferredPrompt.prompt();
       const choice = await deferredPrompt.userChoice;
-      showToast(choice?.outcome === "accepted" ? t("profile.pwa.toast.started") : t("profile.pwa.toast.cancelled"));
-    } catch { showToast(t("profile.pwa.toast.failed")); }
+      showToast(choice?.outcome === "accepted" ? "🚀 Установка началась!" : "😕 Отменили. Можно попробовать снова.");
+    } catch { showToast("😬 Что-то пошло не так. Попробуйте через меню браузера."); }
     finally { setDeferredPrompt(null); }
   }
 
@@ -425,13 +426,13 @@ export function Profile() {
     setPushLoading(true);
     try {
       const enabled = pushState.permission === "granted" && pushState.hasSubscription && !pushState.disabledByUser;
-      if (enabled) { await disablePush(); showToast(t("profile.push.toast.disabled")); }
+      if (enabled) { await disablePush(); showToast("🔕 Уведомления выключены. Тихий режим."); }
       else {
-        if (isIOS() && !standalone) { showToast(t("profile.push.toast.install_ios")); setIosInstallModal(true); return; }
+        if (isIOS() && !standalone) { showToast("📲 Сначала установите приложение на экран."); setIosInstallModal(true); return; }
         const ok = await enablePushByUserGesture();
         showToast(ok
-          ? t("profile.push.toast.enabled")
-          : pushState.permission === "denied" ? t("profile.push.toast.denied") : t("profile.push.toast.failed")
+          ? "🔔 Уведомления включены. Будем на связи!"
+          : pushState.permission === "denied" ? "🚫 Доступ закрыт. Разрешите в настройках браузера." : "😬 Не удалось включить. Попробуйте ещё раз."
         );
       }
     } finally { setPushLoading(false); await refreshPush(); }

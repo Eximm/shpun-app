@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import QRCode from "qrcode";
 import { apiFetch } from "../../shared/api/client";
+import { getMood } from "../../shared/payments-mood";
 import { toast } from "../../shared/ui/toast";
 import { useI18n } from "../../shared/i18n";
 
@@ -130,7 +131,7 @@ export default function ConnectAmneziaWG({ usi }: Props) {
       setConfigName(picked.name || `vpn${usi}.conf`);
       if (!didToastReadyRef.current) {
         didToastReadyRef.current = true;
-        toast.success(t("connectAmneziaWG.toast.ready.title"), { description: t("connectAmneziaWG.toast.ready.desc") });
+        toast.success("🔑 Конфиг готов!", { description: getMood("subscription_ready") ?? "Скачайте и импортируйте в AmneziaWG." });
       }
     } catch (e: any) {
       setConfigText("");
@@ -152,24 +153,24 @@ export default function ConnectAmneziaWG({ usi }: Props) {
     try {
       const dataUrl = await QRCode.toDataURL(configText, { margin: 2, width: 360 });
       setQrDataUrl(dataUrl); setQrOpen(true);
-      toast.info(t("connectAmneziaWG.toast.qr_ready.title"), { description: t("connectAmneziaWG.toast.qr_ready.desc") });
+      toast.info("📱 QR готов", { description: "Отсканируйте в AmneziaWG." });
     } catch {
-      toast.error(t("connectAmneziaWG.toast.qr_failed.title"), { description: t("connectAmneziaWG.toast.qr_failed.desc") });
+      toast.error("😬 QR не создался", { description: "Попробуйте скачать конфиг вместо QR." });
     }
   }
 
   function downloadConf() {
     if (!configText) return;
     downloadTextFile(configName || `vpn${usi}.conf`, configText);
-    toast.success(t("connectAmneziaWG.toast.download.title"), { description: t("connectAmneziaWG.toast.download.desc") });
+    toast.success("⬇️ Конфиг скачан", { description: "Импортируйте файл в AmneziaWG." });
   }
 
   async function copyConf() {
     if (!configText) return;
     const ok = await copyToClipboard(configText);
     ok
-      ? toast.success(t("connectAmneziaWG.toast.copy_ok.title"),     { description: t("connectAmneziaWG.toast.copy_ok.desc") })
-      : toast.error(t("connectAmneziaWG.toast.copy_failed.title"),   { description: t("connectAmneziaWG.toast.copy_failed.desc") });
+      ? toast.success(getMood("copied") ?? "📋 Скопировано", { description: "Вставьте в AmneziaWG → Добавить туннель." })
+      : toast.error("😬 Не скопировалось", { description: "Попробуйте скачать конфиг." });
   }
 
   const storeLabel = platform === "android"

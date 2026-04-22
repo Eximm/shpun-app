@@ -6,6 +6,7 @@ import { useMe } from "../app/auth/useMe";
 import { apiFetch } from "../shared/api/client";
 import { useI18n } from "../shared/i18n";
 import { toast } from "../shared/ui/toast";
+import { getMood } from "../shared/payments-mood";
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 
@@ -118,7 +119,7 @@ export function Referrals() {
   function copyLink() {
     if (!referralUrl) return;
     navigator.clipboard?.writeText(referralUrl)
-      .then(() => toast.success(t("home.ref.link.k"), { description: referralUrl }))
+      .then(() => toast.success(getMood("copied") ?? "📋 Ссылка скопирована", { description: "Отправьте другу — и ждите бонус." }))
       .catch(() => toast.error(t("home.services.error")));
   }
 

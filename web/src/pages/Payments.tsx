@@ -140,11 +140,11 @@ function RequisitesModal({ open, onClose, amountNumber }: {
 
   async function uploadReceipt(file: File) {
     if (!amountNumber || amountNumber < 1) {
-      toast.error(t("payments.toast.enter_amount"), { description: t("payments.receipt.amount_first") });
+      toast.error("💸 Введите сумму", { description: "Сначала укажите сколько платите — потом чек." });
       return;
     }
     if (file.size > 2 * 1024 * 1024) {
-      toast.error(t("payments.receipt.file_too_large"), { description: t("payments.receipt.file_too_large.desc") });
+      toast.error("📎 Файл великоват", { description: "Максимум 2 МБ. Сожмите или обрежьте скриншот." });
       return;
     }
     setUploading(true); setUploadMsg(null);
@@ -155,7 +155,7 @@ function RequisitesModal({ open, onClose, amountNumber }: {
       const json = await apiFetch("/payments/receipt", { method: "POST", body: fd }) as ReceiptUploadResp;
       if (!json?.ok) throw json ?? { message: "receipt_upload_failed" };
       setUploadMsg(t("payments.receipt.sent_msg"));
-      toast.success(t("payments.receipt.sent"), { description: t("payments.receipt.sent.desc") });
+      toast.success("📬 Чек отправлен", { description: "Проверим и зачислим. Обычно быстро." });
       setTimeout(() => setUploadMsg(null), 5000);
     } catch (e) { toastApiError(e, { title: t("payments.receipt.send_failed") }); }
     finally { setUploading(false); }
@@ -247,7 +247,7 @@ function RequisitesModal({ open, onClose, amountNumber }: {
               {cardRaw && (
                 <button className="btn" type="button" onClick={() => {
                   copyText(cardRaw);
-                  toast.success(t("payments.requisites.copied"), { description: t("payments.requisites.copied.desc") });
+                  toast.success(getMood("copied") ?? "📋 Номер скопирован", { description: "Вставляйте в приложение банка." });
                 }}>
                   📋 {t("payments.requisites.copy_card")}
                 </button>
@@ -332,25 +332,23 @@ export function Payments() {
   useEffect(() => { void load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handlePay(ps: PaySystem) {
-    if (!ps?.shm_url) { toast.error(t("payments.toast.method_unavailable")); return; }
+    if (!ps?.shm_url) { toast.error("😬 Метод недоступен", { description: "Выберите другой способ оплаты." }); return; }
     if (!amountNumber || amountNumber < 1) {
-      toast.error(t("payments.toast.enter_amount"), { description: t("payments.toast.enter_amount.desc") });
+      toast.error("💸 Укажите сумму", { description: "Без суммы платёж не откроется." });
       return;
     }
     const seed    = `${ps.shm_url}|${amountNumber}`;
     const fullUrl = `${ps.shm_url}${amountNumber}`;
     safeOpen(fullUrl);
     setShowOverlay(true);
-    toast.info(t("payments.toast.payment_opened"), {
-      description: getMood("payment_checking", { seed }) ?? t("payments.toast.payment_opened.desc"),
-    });
+    toast.info("🚀 Открываем оплату", { description: getMood("payment_checking", { seed }) ?? "Завершите платёж и вернитесь." });
   }
 
   async function removeAutopayment() {
     if (!window.confirm(t("payments.autopay.confirm_remove"))) return;
     try {
       await apiFetch("/payments/autopayment", { method: "DELETE" });
-      toast.success(t("payments.toast.done"), { description: t("payments.autopay.removed") });
+      toast.success("✅ Автоплатёж отключён", { description: "Теперь платите когда сами захотите." });
       void load();
     } catch (e) { toastApiError(e, { title: t("payments.autopay.remove_failed") }); }
   }
@@ -424,7 +422,7 @@ export function Payments() {
                     className="btn btn--primary" disabled={checkingPay} type="button"
                     onClick={async () => {
                       setCheckingPay(true); setShowOverlay(false);
-                      toast.info(t("payments.toast.checking_status"), { description: t("payments.toast.checking_status.desc") });
+                      toast.info("🔍 Проверяем статус", { description: getMood("payment_checking") ?? "Сверяемся с платёжкой..." });
                       await load();
                       setCheckingPay(false);
                     }}
@@ -567,7 +565,7 @@ export function Payments() {
               type="button"
               onClick={() => {
                 if (!amountNumber) {
-                  toast.error(t("payments.toast.enter_amount"), { description: t("payments.card_transfer.need_amount") });
+                  toast.error("💸 Сначала сумму", { description: "Укажите сколько переводите — и тогда реквизиты." });
                   return;
                 }
                 setReqModal(true);

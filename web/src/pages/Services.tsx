@@ -8,6 +8,7 @@ import { toast } from "../shared/ui/toast";
 import { toastApiError } from "../shared/ui/toast/toastApiError";
 import { useMe } from "../app/auth/useMe";
 import { normalizeError } from "../shared/api/errorText";
+import { getMood } from "../shared/payments-mood";
 import { useI18n } from "../shared/i18n";
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
@@ -571,9 +572,7 @@ export function Services() {
       setItems(r.items || []);
       setSummary(r.summary || null);
       if (toastOnSuccess) {
-        toast.info(t("services.toast.updated", "Обновлено"), {
-          description: t("services.toast.updated_desc", "Статусы услуг обновлены."),
-        });
+        toast.info("🔄 Обновили", { description: getMood("service_status_updated") ?? "Статусы услуг актуальны." });
       }
     } catch (e) {
       setError(e);
@@ -590,9 +589,7 @@ export function Services() {
       await apiFetch(`/services/${encodeURIComponent(String(stopTarget.userServiceId))}/stop`, { method: "POST" });
       setStopTarget(null);
       setExpandedId(stopTarget.userServiceId);
-      toast.success(t("services.toast.blocked", "Заблокировано"), {
-        description: t("services.toast.blocked_desc", "Услуга заблокирована."),
-      });
+      toast.success("🔒 Заблокировано", { description: getMood("service_blocked") ?? "Услуга на паузе." });
       await load({ silent: true });
     } catch (e) {
       setStopError(e);
@@ -609,9 +606,7 @@ export function Services() {
       setDeleteTarget(null);
       setExpandedId((cur) => cur === usi ? null : cur);
       setConnectOpenId((cur) => cur === usi ? null : cur);
-      toast.success(t("services.toast.deleted", "Услуга удалена"), {
-        description: t("services.toast.deleted_desc", "Готово. Услуга удалена из списка."),
-      });
+      toast.success(getMood("service_removed") ?? "🗑️ Удалено", { description: "Услуга убрана из списка." });
       await load({ silent: true });
     } catch (e) {
       setDeleteError(e);
@@ -634,13 +629,13 @@ export function Services() {
       if (!before || !after || before === after) continue;
       const title = it.title || `${t("services.item", "Услуга")} #${it.userServiceId}`;
       if (after === "blocked")
-        toast.error(title, { description: t("services.toast.service_blocked", "Услуга заблокирована.") });
+        toast.error(title, { description: getMood("service_blocked") ?? "Нужны действия." });
       else if (after === "not_paid")
-        toast.info(title,  { description: t("services.toast.service_not_paid", "Требуется оплата.") });
+        toast.info(title,  { description: "💳 Требуется оплата. Загляните в раздел услуг." });
       else if (after === "active" && ["pending","not_paid","blocked","init"].includes(before))
-        toast.success(title, { description: t("services.toast.service_active", "Услуга активирована.") });
+        toast.success(title, { description: getMood("service_activated") ?? "Услуга в строю." });
       else if (after === "removed")
-        toast.success(title, { description: t("services.toast.service_removed", "Услуга завершена.") });
+        toast.success(title, { description: getMood("service_removed") ?? "Услуга завершена." });
     }
     prevStatusesRef.current = cur;
   }, [items, t]);
@@ -651,14 +646,14 @@ export function Services() {
     };
     for (const it of items) byKind[detectKind(it.category)].push(it);
     const sortFn = (a: ApiServiceItem, b: ApiServiceItem) => {
-      // 1. Статус (active первым)
-      const statusDiff = statusSortWeight(a.status) - statusSortWeight(b.status);
-      if (statusDiff !== 0) return statusDiff;
-      // 2. WL — дочерняя услуга, всегда после основной
+      // 1. WL ВСЕГДА после основного — независимо от статуса
       const aIsWL = isWhiteListCategory(a.category) ? 1 : 0;
       const bIsWL = isWhiteListCategory(b.category) ? 1 : 0;
       if (aIsWL !== bIsWL) return aIsWL - bIsWL;
-      // 3. userServiceId от меньшего к большему
+      // 2. Внутри одного типа (оба WL или оба обычные) — сортируем по статусу
+      const statusDiff = statusSortWeight(a.status) - statusSortWeight(b.status);
+      if (statusDiff !== 0) return statusDiff;
+      // 3. Одинаковый тип и статус — по userServiceId от меньшего к большему
       return a.userServiceId - b.userServiceId;
     };
     (Object.keys(byKind) as ServiceKind[]).forEach((k) => byKind[k].sort(sortFn));
