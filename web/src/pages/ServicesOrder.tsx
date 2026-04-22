@@ -1,6 +1,6 @@
 // FILE: web/src/pages/ServicesOrder.tsx
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { apiFetch } from '../shared/api/client'
@@ -12,65 +12,65 @@ import { getMood } from '../shared/payments-mood'
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 
 type Tariff = {
-  serviceId:   number
-  category:    string
-  title:       string
-  descr:       string
-  price:       number
-  currency:    string
-  periodRaw?:  string
+  serviceId: number
+  category: string
+  title: string
+  descr: string
+  price: number
+  currency: string
+  periodRaw?: string
   periodHuman: string
-  flags?:      { orderOnlyOnce?: boolean }
+  flags?: { orderOnlyOnce?: boolean }
 }
 
 type ServiceCategory = {
-  category_key:          string
-  title:                 string
-  descr:                 string
-  short_descr:           string
-  connect_kind:          string
-  sort_order:            number
-  badge:                 string | null
-  badge_tone:            string
-  recommended:           boolean
-  hidden:                boolean
-  emoji:                 string | null
-  accent_from:           string | null
-  accent_to:             string | null
-  card_bg:               string | null
-  button_label:          string | null
+  category_key: string
+  title: string
+  descr: string
+  short_descr: string
+  connect_kind: string
+  sort_order: number
+  badge: string | null
+  badge_tone: string
+  recommended: boolean
+  hidden: boolean
+  emoji: string | null
+  accent_from: string | null
+  accent_to: string | null
+  card_bg: string | null
+  button_label: string | null
   billing_category_keys: string[]
-  service_ids:           number[]
-  hint_enabled:          boolean
-  hint_title:            string | null
-  hint_text:             string | null
-  hint_button_label:     string | null
-  hint_button_url:       string | null
+  service_ids: number[]
+  hint_enabled: boolean
+  hint_title: string | null
+  hint_text: string | null
+  hint_button_label: string | null
+  hint_button_url: string | null
 }
 
 type PaySystem = {
-  name?:      string
-  shm_url?:   string
+  name?: string
+  shm_url?: string
   recurring?: string | number
-  amount?:    number
+  amount?: number
 }
 
 type CreateResp = {
-  ok:   true
+  ok: true
   item: { userServiceId: number; serviceId: number; status: string; statusRaw: string }
 }
 
 type ApiServiceItem = {
   userServiceId: number
-  status:        'active' | 'blocked' | 'pending' | 'not_paid' | 'removed' | 'error' | 'init'
-  statusRaw:     string
+  status: 'active' | 'blocked' | 'pending' | 'not_paid' | 'removed' | 'error' | 'init'
+  statusRaw: string
 }
 
 /* ─── Constants ──────────────────────────────────────────────────────────── */
 
-const AMNEZIA_WARN_KEY    = 'order.amnezia.warn.dismissed.v1'
-const ROUTER_HINT_KEY     = 'order.router.hint.dismissed.v1'
-const HIDDEN_PAYSYSTEMS   = new Set(['Telegram Stars Rescue', 'Telegram Stars Karlson'])
+const AMNEZIA_WARN_KEY = 'order.amnezia.warn.dismissed.v1'
+const ROUTER_HINT_KEY = 'order.router.hint.dismissed.v1'
+const HIDDEN_PAYSYSTEMS = new Set(['Telegram Stars Rescue', 'Telegram Stars Karlson'])
 const HINT_SESSION_PREFIX = 'cat.hint.shown.'
 
 /* ─── Utils ─────────────────────────────────────────────────────────────── */
@@ -83,7 +83,9 @@ function nnum(v: any, def = 0) {
 function fmtMoney(n: number, cur: string) {
   try {
     return new Intl.NumberFormat(undefined, { style: 'currency', currency: cur || 'RUB', maximumFractionDigits: 0 }).format(nnum(n))
-  } catch { return `${nnum(n)} ${cur || 'RUB'}` }
+  } catch {
+    return `${nnum(n)} ${cur || 'RUB'}`
+  }
 }
 
 function matchesPattern(pattern: string, billingCategory: string): boolean {
@@ -108,40 +110,104 @@ function buildPayUrl(base: string, amount: number) {
   return base.includes('{amount}') ? base.replace('{amount}', String(a)) : `${base}${a}`
 }
 
-function getTelegramWebApp(): any | null { return (window as any)?.Telegram?.WebApp || null }
+function getTelegramWebApp(): any | null {
+  return (window as any)?.Telegram?.WebApp || null
+}
 
 async function copyToClipboard(text: string): Promise<boolean> {
-  try { await navigator.clipboard.writeText(text); return true }
-  catch {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
     try {
       const ta = document.createElement('textarea')
-      ta.value = text; ta.style.position = 'fixed'; ta.style.top = '-1000px'
-      document.body.appendChild(ta); ta.focus(); ta.select()
-      const ok = document.execCommand('copy'); document.body.removeChild(ta); return ok
-    } catch { return false }
+      ta.value = text
+      ta.style.position = 'fixed'
+      ta.style.top = '-1000px'
+      document.body.appendChild(ta)
+      ta.focus()
+      ta.select()
+      const ok = document.execCommand('copy')
+      document.body.removeChild(ta)
+      return ok
+    } catch {
+      return false
+    }
   }
 }
 
-function readAmneziaWarnDismissed() { try { return localStorage.getItem(AMNEZIA_WARN_KEY) === '1' } catch { return false } }
-function saveAmneziaWarnDismissed() { try { localStorage.setItem(AMNEZIA_WARN_KEY, '1') } catch { /* ignore */ } }
-function readRouterHintDismissed()  { try { return localStorage.getItem(ROUTER_HINT_KEY) === '1' } catch { return false } }
-function saveRouterHintDismissed()  { try { localStorage.setItem(ROUTER_HINT_KEY, '1') } catch { /* ignore */ } }
+function readAmneziaWarnDismissed() {
+  try {
+    return localStorage.getItem(AMNEZIA_WARN_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+function saveAmneziaWarnDismissed() {
+  try {
+    localStorage.setItem(AMNEZIA_WARN_KEY, '1')
+  } catch {
+    /* ignore */
+  }
+}
+function readRouterHintDismissed() {
+  try {
+    return localStorage.getItem(ROUTER_HINT_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+function saveRouterHintDismissed() {
+  try {
+    localStorage.setItem(ROUTER_HINT_KEY, '1')
+  } catch {
+    /* ignore */
+  }
+}
 
 function getOrderError(e: any): { title: string; description: string } {
   const code = String(e?.error || e?.code || '').trim()
-  const msg  = String(e?.message || '').trim()
-  if (code === 'unpaid_order_exists')        return { title: 'Есть активный или неоплаченный заказ',        description: 'Сначала оплатите или удалите существующую услугу.' }
-  if (code === 'unpaid_same_service_exists') return { title: 'Есть заказ этого типа',                       description: 'Сначала оплатите или удалите существующую услугу этого типа.' }
+  const msg = String(e?.message || '').trim()
+  if (code === 'unpaid_order_exists') return { title: 'Есть активный или неоплаченный заказ', description: 'Сначала оплатите или удалите существующую услугу.' }
+  if (code === 'unpaid_same_service_exists') return { title: 'Есть заказ этого типа', description: 'Сначала оплатите или удалите существующую услугу этого типа.' }
   return { title: 'Не удалось создать услугу', description: msg || 'Попробуйте ещё раз.' }
+}
+
+function getCategoryTheme(cat?: ServiceCategory | null) {
+  const accentFrom = cat?.accent_from || '#7c5cff'
+  const accentTo = cat?.accent_to || '#4dd7ff'
+  const cardBg = cat?.card_bg || 'rgba(255,255,255,0.04)'
+
+  return {
+    accentFrom,
+    accentTo,
+    cardBg,
+    borderColor: `${accentFrom}55`,
+    glow: `0 6px 18px ${accentFrom}35`,
+    buttonBg: `linear-gradient(135deg, ${accentFrom}, ${accentTo})`,
+  }
+}
+
+function getCategoryButtonStyle(cat?: ServiceCategory | null): CSSProperties {
+  const theme = getCategoryTheme(cat)
+  return {
+    width: '100%',
+    minHeight: 44,
+    borderRadius: 12,
+    background: theme.buttonBg,
+    color: '#fff',
+    border: `1px solid ${theme.borderColor}`,
+    boxShadow: theme.glow,
+    fontWeight: 900,
+    letterSpacing: '0.02em',
+  }
 }
 
 /* ─── CategoryCard ───────────────────────────────────────────────────────── */
 
 function CategoryCard({ cat, onClick }: { cat: ServiceCategory; onClick: () => void }) {
-  const accentFrom = cat.accent_from || '#7c5cff'
-  const accentTo   = cat.accent_to   || '#4dd7ff'
-  const cardBg     = cat.card_bg     || 'rgba(255,255,255,0.04)'
-  const btnLabel   = cat.button_label || 'Выбрать'
+  const theme = getCategoryTheme(cat)
+  const btnLabel = cat.button_label || 'Выбрать'
 
   return (
     <button
@@ -149,8 +215,8 @@ function CategoryCard({ cat, onClick }: { cat: ServiceCategory; onClick: () => v
       className={`kv__item so__kindCard${cat.recommended ? ' so__kindCard--recommended' : ''}`}
       onClick={onClick}
       style={{
-        border: `1.5px solid ${accentFrom}55`,
-        background: cardBg,
+        border: `1.5px solid ${theme.borderColor}`,
+        background: theme.cardBg,
         borderRadius: 16,
         padding: 16,
         width: '100%',
@@ -160,16 +226,19 @@ function CategoryCard({ cat, onClick }: { cat: ServiceCategory; onClick: () => v
         overflow: 'hidden',
       }}
     >
-      {/* Subtle glow */}
-      <div style={{
-        position: 'absolute', top: -40, left: -40, width: 180, height: 180,
-        background: `radial-gradient(circle, ${accentFrom}18, transparent 65%)`,
-        pointerEvents: 'none',
-      }} />
+      <div
+        style={{
+          position: 'absolute',
+          top: -40,
+          left: -40,
+          width: 180,
+          height: 180,
+          background: `radial-gradient(circle, ${theme.accentFrom}18, transparent 65%)`,
+          pointerEvents: 'none',
+        }}
+      />
 
-      {cat.recommended && (
-        <div className="so__badgeRecommended">⭐ Рекомендуем</div>
-      )}
+      {cat.recommended && <div className="so__badgeRecommended">⭐ Рекомендуем</div>}
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
         <div style={{ fontWeight: 900, fontSize: 17, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -183,23 +252,26 @@ function CategoryCard({ cat, onClick }: { cat: ServiceCategory; onClick: () => v
         )}
       </div>
 
-      <p className="p" style={{ marginTop: 0, marginBottom: 14 }}>{cat.short_descr}</p>
+      <p className="p" style={{ marginTop: 0, marginBottom: 14 }}>
+        {cat.short_descr}
+      </p>
 
-      {/* Кнопка — строго цвета из админки */}
-      <div style={{
-        width: '100%',
-        minHeight: 44,
-        borderRadius: 12,
-        background: `linear-gradient(135deg, ${accentFrom}, ${accentTo})`,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontWeight: 900,
-        fontSize: 14,
-        color: '#fff',
-        boxShadow: `0 6px 18px ${accentFrom}35`,
-        letterSpacing: '0.02em',
-      }}>
+      <div
+        style={{
+          width: '100%',
+          minHeight: 44,
+          borderRadius: 12,
+          background: theme.buttonBg,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontWeight: 900,
+          fontSize: 14,
+          color: '#fff',
+          boxShadow: theme.glow,
+          letterSpacing: '0.02em',
+        }}
+      >
         {btnLabel}
       </div>
     </button>
@@ -210,37 +282,36 @@ function CategoryCard({ cat, onClick }: { cat: ServiceCategory; onClick: () => v
 
 export function ServicesOrder() {
   const navigate = useNavigate()
-  const { t }    = useI18n()
+  const { t } = useI18n()
   const { me, loading: meLoading, error: meError, refetch } = useMe()
 
-  const balanceAmount   = nnum(me?.balance?.amount)
-  const currency        = String(me?.balance?.currency || 'RUB')
-  const bonus           = nnum((me as any)?.bonus)
+  const balanceAmount = nnum(me?.balance?.amount)
+  const currency = String(me?.balance?.currency || 'RUB')
+  const bonus = nnum((me as any)?.bonus)
   const discountPercent = Math.max(0, nnum((me as any)?.discount))
-  const hasDiscount     = discountPercent > 0
+  const hasDiscount = discountPercent > 0
 
-  const [loading,          setLoading]          = useState(true)
-  const [err,              setErr]              = useState<string | null>(null)
-  const [tariffs,          setTariffs]          = useState<Tariff[]>([])
-  const [categories,       setCategories]       = useState<ServiceCategory[]>([])
-  const [selectedCat,      setSelectedCat]      = useState<ServiceCategory | null>(null)
-  const [selected,         setSelected]         = useState<Tariff | null>(null)
-  const [creating,         setCreating]         = useState(false)
-  const [created,          setCreated]          = useState<CreateResp['item'] | null>(null)
-  const [paySystems,       setPaySystems]       = useState<PaySystem[]>([])
-  const [overlayOpen,      setOverlayOpen]      = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState<string | null>(null)
+  const [tariffs, setTariffs] = useState<Tariff[]>([])
+  const [categories, setCategories] = useState<ServiceCategory[]>([])
+  const [selectedCat, setSelectedCat] = useState<ServiceCategory | null>(null)
+  const [selected, setSelected] = useState<Tariff | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [created, setCreated] = useState<CreateResp['item'] | null>(null)
+  const [paySystems, setPaySystems] = useState<PaySystem[]>([])
+  const [overlayOpen, setOverlayOpen] = useState(false)
   const [detailsCollapsed, setDetailsCollapsed] = useState(false)
-  const [waitMsg,          setWaitMsg]          = useState<string | null>(null)
-  const [lastPayUrl,       setLastPayUrl]       = useState<string | null>(null)
-  const [openingPay,       setOpeningPay]       = useState(false)
-  const [payOpenError,     setPayOpenError]     = useState<string | null>(null)
-  const [copied,           setCopied]           = useState(false)
-  const [amneziaWarnOpen,  setAmneziaWarnOpen]  = useState(false)
-  const [routerHintOpen,   setRouterHintOpen]   = useState(false)
-  const [catHintOpen,      setCatHintOpen]      = useState(false)
-  const [catHintData,      setCatHintData]      = useState<ServiceCategory | null>(null)
+  const [waitMsg, setWaitMsg] = useState<string | null>(null)
+  const [lastPayUrl, setLastPayUrl] = useState<string | null>(null)
+  const [openingPay, setOpeningPay] = useState(false)
+  const [payOpenError, setPayOpenError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+  const [amneziaWarnOpen, setAmneziaWarnOpen] = useState(false)
+  const [routerHintOpen, setRouterHintOpen] = useState(false)
+  const [catHintOpen, setCatHintOpen] = useState(false)
+  const [catHintData, setCatHintData] = useState<ServiceCategory | null>(null)
 
-  /* Тарифы сгруппированные по категории */
   const groupedByCat = useMemo(() => {
     const map = new Map<string, Tariff[]>()
     for (const t of tariffs) {
@@ -253,8 +324,7 @@ export function ServicesOrder() {
   }, [tariffs, categories])
 
   const visibleCategories = useMemo(() => {
-    return categories
-      .filter((c) => !c.hidden && (groupedByCat.get(c.category_key)?.length ?? 0) > 0)
+    return categories.filter((c) => !c.hidden && (groupedByCat.get(c.category_key)?.length ?? 0) > 0)
   }, [categories, groupedByCat])
 
   const tariffsInCat = useMemo(() => {
@@ -264,16 +334,16 @@ export function ServicesOrder() {
 
   const priceCalc = useMemo(() => {
     if (!selected) return { base: 0, discounted: 0, bonusUsed: 0, balanceUsed: 0, needTopup: 0 }
-    const base        = nnum(selected.price)
-    const discounted  = Math.round(base * (1 - discountPercent / 100))
-    const bonusUsed   = Math.min(bonus, Math.floor(discounted * 0.5))
-    const afterBonus  = Math.max(0, discounted - bonusUsed)
+    const base = nnum(selected.price)
+    const discounted = Math.round(base * (1 - discountPercent / 100))
+    const bonusUsed = Math.min(bonus, Math.floor(discounted * 0.5))
+    const afterBonus = Math.max(0, discounted - bonusUsed)
     const balanceUsed = Math.min(balanceAmount, afterBonus)
     return { base, discounted, bonusUsed, balanceUsed, needTopup: Math.max(0, afterBonus - balanceUsed) }
   }, [selected, discountPercent, bonus, balanceAmount])
 
   const needTopup = priceCalc.needTopup
-  const toPay     = Math.max(1, needTopup)
+  const toPay = Math.max(1, needTopup)
 
   const shouldShowPay = useMemo(() => {
     if (!created) return false
@@ -284,20 +354,22 @@ export function ServicesOrder() {
   const calcCards = useMemo(() => {
     if (!selected) return []
     const items = [{ key: 'base', title: t('servicesOrder.calc.base'), value: fmtMoney(priceCalc.base, selected.currency) }]
-    if (hasDiscount && priceCalc.discounted !== priceCalc.base)
+    if (hasDiscount && priceCalc.discounted !== priceCalc.base) {
       items.push({ key: 'discounted', title: t('servicesOrder.calc.discount'), value: fmtMoney(priceCalc.discounted, selected.currency) })
+    }
     items.push({ key: 'period', title: t('servicesOrder.calc.period'), value: selected.periodHuman })
-    if (priceCalc.bonusUsed > 0)   items.push({ key: 'bonus',   title: t('servicesOrder.calc.bonus'),   value: `-${fmtMoney(priceCalc.bonusUsed, currency)}` })
+    if (priceCalc.bonusUsed > 0) items.push({ key: 'bonus', title: t('servicesOrder.calc.bonus'), value: `-${fmtMoney(priceCalc.bonusUsed, currency)}` })
     if (priceCalc.balanceUsed > 0) items.push({ key: 'balance', title: t('servicesOrder.calc.balance'), value: fmtMoney(priceCalc.balanceUsed, currency) })
     return items
   }, [selected, priceCalc, hasDiscount, currency, t])
 
   const moodChecking = (seed: string) => getMood('payment_checking', { seed }) ?? t('connect.wait')
-  const moodSuccess  = (seed: string, amt?: number) => getMood('payment_success', { seed, amount: amt }) ?? t('home.toast.balance_added.title')
+  const moodSuccess = (seed: string, amt?: number) => getMood('payment_success', { seed, amount: amt }) ?? t('home.toast.balance_added.title')
+  const selectedTheme = getCategoryTheme(selectedCat)
 
-  /* ── Load ─────────────────────────────────────────────────────────────── */
   async function loadAll() {
-    setLoading(true); setErr(null)
+    setLoading(true)
+    setErr(null)
     try {
       const [tariffResp, catResp] = await Promise.all([
         apiFetch<{ ok: true; items: Tariff[] }>('/services/order'),
@@ -305,8 +377,11 @@ export function ServicesOrder() {
       ])
       setTariffs(tariffResp.items || [])
       setCategories(catResp.items || [])
-    } catch (e: any) { setErr(e?.message || 'error') }
-    finally { setLoading(false) }
+    } catch (e: any) {
+      setErr(e?.message || 'error')
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function loadPaysystems() {
@@ -328,29 +403,35 @@ export function ServicesOrder() {
         }, 500)
         return () => clearTimeout(timer)
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, [])
 
   useEffect(() => {
     if (!selectedCat) return
-    if (selectedCat.connect_kind === 'amneziawg'     && !readAmneziaWarnDismissed()) setAmneziaWarnOpen(true)
-    if (selectedCat.connect_kind === 'marzban_router' && !readRouterHintDismissed())  setRouterHintOpen(true)
+    if (selectedCat.connect_kind === 'amneziawg' && !readAmneziaWarnDismissed()) setAmneziaWarnOpen(true)
+    if (selectedCat.connect_kind === 'marzban_router' && !readRouterHintDismissed()) setRouterHintOpen(true)
     if (selectedCat.hint_enabled && selectedCat.hint_text) {
       const key = HINT_SESSION_PREFIX + selectedCat.category_key
-      if (!sessionStorage.getItem(key)) { setCatHintData(selectedCat); setCatHintOpen(true) }
+      if (!sessionStorage.getItem(key)) {
+        setCatHintData(selectedCat)
+        setCatHintOpen(true)
+      }
     }
   }, [selectedCat])
 
-  /* ── Actions ──────────────────────────────────────────────────────────── */
   async function createOrder() {
     if (!selected) return
-    setCreating(true); setErr(null)
+    setCreating(true)
+    setErr(null)
     try {
-      const r    = await apiFetch<CreateResp>('/services/order', { method: 'PUT', body: JSON.stringify({ service_id: selected.serviceId }) })
+      const r = await apiFetch<CreateResp>('/services/order', { method: 'PUT', body: JSON.stringify({ service_id: selected.serviceId }) })
       const item = r.item
-      setCreated(item); setDetailsCollapsed(true)
+      setCreated(item)
+      setDetailsCollapsed(true)
       const status = String(item?.status || '').toLowerCase()
-      const seed   = String(item?.userServiceId || '')
+      const seed = String(item?.userServiceId || '')
       if (status === 'not_paid' || needTopup > 0) {
         await loadPaysystems()
         setWaitMsg(t('servicesOrder.status.choose_payment'))
@@ -363,26 +444,44 @@ export function ServicesOrder() {
       const info = getOrderError(e)
       setErr(info.description)
       toast.error(info.title, { description: info.description })
-    } finally { setCreating(false) }
+    } finally {
+      setCreating(false)
+    }
   }
 
   async function tryOpenPayment(url: string): Promise<boolean> {
     const tg = getTelegramWebApp()
-    if (tg?.openLink) { try { tg.openLink(url); return true } catch { return false } }
-    try { return !!window.open(url, '_blank', 'noopener,noreferrer') } catch { return false }
+    if (tg?.openLink) {
+      try {
+        tg.openLink(url)
+        return true
+      } catch {
+        return false
+      }
+    }
+    try {
+      return !!window.open(url, '_blank', 'noopener,noreferrer')
+    } catch {
+      return false
+    }
   }
 
   async function startPay(ps: PaySystem) {
-    setCopied(false); setPayOpenError(null)
+    setCopied(false)
+    setPayOpenError(null)
     if (!ps?.shm_url) {
-      setPayOpenError(t('servicesOrder.pay.no_url')); setOverlayOpen(true)
-      toast.error('😬 Метод недоступен', { description: 'Выберите другой способ оплаты.' }); return
+      setPayOpenError(t('servicesOrder.pay.no_url'))
+      setOverlayOpen(true)
+      toast.error('😬 Метод недоступен', { description: 'Выберите другой способ оплаты.' })
+      return
     }
-    const url  = buildPayUrl(ps.shm_url, toPay)
+    const url = buildPayUrl(ps.shm_url, toPay)
     const seed = String(created?.userServiceId || selected?.serviceId || '')
-    setLastPayUrl(url); setOpeningPay(true)
+    setLastPayUrl(url)
+    setOpeningPay(true)
     const opened = await tryOpenPayment(url)
-    setOpeningPay(false); setOverlayOpen(true)
+    setOpeningPay(false)
+    setOverlayOpen(true)
     if (opened) {
       setWaitMsg(t('servicesOrder.status.pay_opened'))
       toast.info('🚀 Открываем оплату', { description: moodChecking(seed) })
@@ -395,28 +494,40 @@ export function ServicesOrder() {
 
   async function retryOpenLast() {
     if (!lastPayUrl) return
-    setCopied(false); setPayOpenError(null); setOpeningPay(true)
+    setCopied(false)
+    setPayOpenError(null)
+    setOpeningPay(true)
     const opened = await tryOpenPayment(lastPayUrl)
     setOpeningPay(false)
-    if (!opened) { setPayOpenError(t('servicesOrder.pay.blocked')); toast.error('🚫 Браузер заблокировал окно', { description: 'Скопируйте ссылку и откройте вручную.' }); return }
+    if (!opened) {
+      setPayOpenError(t('servicesOrder.pay.blocked'))
+      toast.error('🚫 Браузер заблокировал окно', { description: 'Скопируйте ссылку и откройте вручную.' })
+      return
+    }
     toast.info('🚀 Открыли', { description: 'Завершите платёж и вернитесь.' })
   }
 
   async function pollOnce() {
     const seed = String(created?.userServiceId || selected?.serviceId || '')
     toast.info('🔍 Проверяем', { description: moodChecking(seed) })
-    try { await Promise.resolve(refetch?.()) } catch { /* ignore */ }
+    try {
+      await Promise.resolve(refetch?.())
+    } catch {
+      /* ignore */
+    }
     if (!created?.userServiceId) return
     try {
-      const r    = await apiFetch<{ ok: true; items: ApiServiceItem[] }>('/services')
+      const r = await apiFetch<{ ok: true; items: ApiServiceItem[] }>('/services')
       const item = (r.items || []).find((x) => x.userServiceId === created.userServiceId)
       if (item && (item.status === 'active' || item.status === 'pending')) {
-        setCreated((cur) => cur ? { ...cur, status: item.status, statusRaw: item.statusRaw || cur.statusRaw } : cur)
+        setCreated((cur) => (cur ? { ...cur, status: item.status, statusRaw: item.statusRaw || cur.statusRaw } : cur))
         setWaitMsg(t('servicesOrder.status.activated'))
         toast.success(getMood('service_activated') ?? '🎉 Оплата подтверждена', { description: moodSuccess(seed, toPay) })
         return
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     setWaitMsg(t('servicesOrder.status.not_confirmed'))
     toast.info(getMood('payment_failed') ?? '⏳ Пока не видим', { description: 'Подождите немного и проверьте снова.' })
   }
@@ -425,23 +536,38 @@ export function ServicesOrder() {
     if (!lastPayUrl) return
     const ok = await copyToClipboard(lastPayUrl)
     setCopied(ok)
-    if (!ok) { setPayOpenError('Не скопировалось'); toast.error('😬 Не скопировалось', { description: 'Попробуйте вручную.' }); return }
+    if (!ok) {
+      setPayOpenError('Не скопировалось')
+      toast.error('😬 Не скопировалось', { description: 'Попробуйте вручную.' })
+      return
+    }
     toast.success(getMood('copied') ?? '📋 Ссылка скопирована', { description: 'Вставьте в браузер и оплатите.' })
   }
 
   function resetSelection() {
-    setSelected(null); setSelectedCat(null); setCreated(null); setPaySystems([])
-    setWaitMsg(null); setErr(null); setOverlayOpen(false); setDetailsCollapsed(false)
-    setLastPayUrl(null); setPayOpenError(null); setOpeningPay(false); setCopied(false)
+    setSelected(null)
+    setSelectedCat(null)
+    setCreated(null)
+    setPaySystems([])
+    setWaitMsg(null)
+    setErr(null)
+    setOverlayOpen(false)
+    setDetailsCollapsed(false)
+    setLastPayUrl(null)
+    setPayOpenError(null)
+    setOpeningPay(false)
+    setCopied(false)
   }
 
-  /* ── Loading ──────────────────────────────────────────────────────────── */
   if (loading || meLoading) {
     return (
       <div className="app-loader" style={{ opacity: 1, transition: 'opacity 180ms ease', pointerEvents: 'auto' }}>
         <div className="app-loader__card">
           <div className="app-loader__shine" />
-          <div className="app-loader__brandRow"><div className="app-loader__mark" /><div className="app-loader__title">Shpun App</div></div>
+          <div className="app-loader__brandRow">
+            <div className="app-loader__mark" />
+            <div className="app-loader__title">Shpun App</div>
+          </div>
           <div className="app-loader__text">{t('home.loading.text')}</div>
         </div>
       </div>
@@ -450,136 +576,146 @@ export function ServicesOrder() {
 
   const topError = err || (meError ? String((meError as any)?.message || meError) : null)
 
-  /* ── Render ───────────────────────────────────────────────────────────── */
   return (
     <div className="section">
-
-      {/* ── Оверлей оплаты ── */}
-      {overlayOpen && createPortal(
-        <div className="modal" role="dialog" aria-modal="true" onMouseDown={() => setOverlayOpen(false)}>
-          <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()}>
-            <div className="card__body">
-              <div className="modal__head">
-                <div className="modal__title">
-                  {payOpenError ? '⚠️ ' + t('servicesOrder.pay.failed_title') : '💳 ' + t('servicesOrder.pay.window_title')}
-                </div>
-                <button className="btn modal__close" type="button" onClick={() => setOverlayOpen(false)} aria-label={t('common.close')}>✕</button>
-              </div>
-              <div className="modal__content">
-                <p className="p">{payOpenError ? t('servicesOrder.pay.open_manually') : t('servicesOrder.pay.complete_then_check')}</p>
-                {payOpenError && (
-                  <div className="pre" style={{ marginTop: 10, borderColor: 'rgba(255,77,109,0.28)' }}>{payOpenError}</div>
-                )}
-                {lastPayUrl && (
-                  <div className="pre" style={{ marginTop: 10, wordBreak: 'break-all', userSelect: 'text', fontSize: 12 }}>{lastPayUrl}</div>
-                )}
-                {copied && (
-                  <div className="home-alert home-alert--ok" style={{ marginTop: 8 }}>✅ {t('connect.copy_link')}</div>
-                )}
-              </div>
-              <div className="actions actions--1" style={{ marginTop: 14 }}>
-                <button className="btn btn--primary" onClick={() => void retryOpenLast()} disabled={!lastPayUrl || openingPay} type="button">
-                  {openingPay ? t('connect.wait') : t('servicesOrder.pay.reopen')}
-                </button>
-                <button className="btn" onClick={() => void handleCopyLink()} disabled={!lastPayUrl} type="button">
-                  📋 {t('connect.copy_link')}
-                </button>
-                <button className="btn" onClick={() => void pollOnce()} type="button">
-                  🔄 {t('servicesOrder.pay.poll')}
-                </button>
-                <button className="btn" onClick={() => navigate('/services')} type="button">
-                  → {t('services.page.title')}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-
-      {/* ── Предупреждение AmneziaWG ── */}
-      {amneziaWarnOpen && createPortal(
-        <div className="modal" role="dialog" aria-modal="true" onMouseDown={saveAmneziaWarnDismissed}>
-          <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()}>
-            <div className="card__body">
-              <div className="modal__head">
-                <div className="modal__title">⚠️ {t('servicesOrder.amnezia.warn.title')}</div>
-              </div>
-              <div className="modal__content">
-                <p className="p">{t('servicesOrder.amnezia.warn.text')}</p>
-              </div>
-              <div className="actions actions--1" style={{ marginTop: 14 }}>
-                <button className="btn btn--primary" onClick={() => { saveAmneziaWarnDismissed(); setAmneziaWarnOpen(false) }} type="button">
-                  OK
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-
-      {/* ── Подсказка Router VPN ── */}
-      {routerHintOpen && createPortal(
-        <div className="modal" role="dialog" aria-modal="true" onMouseDown={() => { saveRouterHintDismissed(); setRouterHintOpen(false) }}>
-          <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()}>
-            <div className="card__body">
-              <div className="modal__head">
-                <div className="modal__title">📡 {t('servicesOrder.router.hint.title')}</div>
-              </div>
-              <div className="modal__content">
-                <p className="p">{t('servicesOrder.router.hint.text')}</p>
-              </div>
-              <div className="actions actions--2" style={{ marginTop: 14 }}>
-                <button className="btn" onClick={() => { saveRouterHintDismissed(); setRouterHintOpen(false) }} type="button">
-                  {t('servicesOrder.router.hint.skip')}
-                </button>
-                <button className="btn btn--primary" onClick={() => { saveRouterHintDismissed(); setRouterHintOpen(false); navigate('/help/router') }} type="button">
-                  📘 {t('servicesOrder.router.hint.open')}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-
-      {/* ── Подсказка категории ── */}
-      {catHintOpen && catHintData && createPortal(
-        <div className="modal" role="dialog" aria-modal="true"
-          onMouseDown={() => { sessionStorage.setItem(HINT_SESSION_PREFIX + catHintData.category_key, '1'); setCatHintOpen(false) }}>
-          <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()}>
-            <div className="card__body">
-              {catHintData.hint_title && (
+      {overlayOpen &&
+        createPortal(
+          <div className="modal" role="dialog" aria-modal="true" onMouseDown={() => setOverlayOpen(false)}>
+            <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()}>
+              <div className="card__body">
                 <div className="modal__head">
-                  <div className="modal__title">{catHintData.hint_title}</div>
-                </div>
-              )}
-              <div className="modal__content">
-                <p className="p">{catHintData.hint_text}</p>
-              </div>
-              <div className={`actions actions--${catHintData.hint_button_label ? '2' : '1'}`} style={{ marginTop: 14 }}>
-                {catHintData.hint_button_label && catHintData.hint_button_url && (
-                  <button className="btn" type="button" onClick={() => {
-                    sessionStorage.setItem(HINT_SESSION_PREFIX + catHintData.category_key, '1')
-                    setCatHintOpen(false); navigate(catHintData.hint_button_url!)
-                  }}>
-                    {catHintData.hint_button_label}
+                  <div className="modal__title">
+                    {payOpenError ? '⚠️ ' + t('servicesOrder.pay.failed_title') : '💳 ' + t('servicesOrder.pay.window_title')}
+                  </div>
+                  <button className="btn modal__close" type="button" onClick={() => setOverlayOpen(false)} aria-label={t('common.close')}>
+                    ✕
                   </button>
-                )}
-                <button className="btn btn--primary" type="button" onClick={() => {
-                  sessionStorage.setItem(HINT_SESSION_PREFIX + catHintData.category_key, '1'); setCatHintOpen(false)
-                }}>
-                  OK
-                </button>
+                </div>
+                <div className="modal__content">
+                  <p className="p">{payOpenError ? t('servicesOrder.pay.open_manually') : t('servicesOrder.pay.complete_then_check')}</p>
+                  {payOpenError && <div className="pre" style={{ marginTop: 10, borderColor: 'rgba(255,77,109,0.28)' }}>{payOpenError}</div>}
+                  {lastPayUrl && <div className="pre" style={{ marginTop: 10, wordBreak: 'break-all', userSelect: 'text', fontSize: 12 }}>{lastPayUrl}</div>}
+                  {copied && <div className="home-alert home-alert--ok" style={{ marginTop: 8 }}>✅ {t('connect.copy_link')}</div>}
+                </div>
+                <div className="actions actions--1" style={{ marginTop: 14 }}>
+                  <button className="btn btn--primary" onClick={() => void retryOpenLast()} disabled={!lastPayUrl || openingPay} type="button">
+                    {openingPay ? t('connect.wait') : t('servicesOrder.pay.reopen')}
+                  </button>
+                  <button className="btn" onClick={() => void handleCopyLink()} disabled={!lastPayUrl} type="button">
+                    📋 {t('connect.copy_link')}
+                  </button>
+                  <button className="btn" onClick={() => void pollOnce()} type="button">
+                    🔄 {t('servicesOrder.pay.poll')}
+                  </button>
+                  <button className="btn" onClick={() => navigate('/services')} type="button">
+                    → {t('services.page.title')}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        </div>,
-        document.body
-      )}
+          </div>,
+          document.body,
+        )}
 
-      {/* ── Шапка — баланс и статус ── */}
+      {amneziaWarnOpen &&
+        createPortal(
+          <div className="modal" role="dialog" aria-modal="true" onMouseDown={saveAmneziaWarnDismissed}>
+            <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()}>
+              <div className="card__body">
+                <div className="modal__head">
+                  <div className="modal__title">⚠️ {t('servicesOrder.amnezia.warn.title')}</div>
+                </div>
+                <div className="modal__content">
+                  <p className="p">{t('servicesOrder.amnezia.warn.text')}</p>
+                </div>
+                <div className="actions actions--1" style={{ marginTop: 14 }}>
+                  <button className="btn btn--primary" onClick={() => { saveAmneziaWarnDismissed(); setAmneziaWarnOpen(false) }} type="button">
+                    OK
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
+
+      {routerHintOpen &&
+        createPortal(
+          <div className="modal" role="dialog" aria-modal="true" onMouseDown={() => { saveRouterHintDismissed(); setRouterHintOpen(false) }}>
+            <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()}>
+              <div className="card__body">
+                <div className="modal__head">
+                  <div className="modal__title">📡 {t('servicesOrder.router.hint.title')}</div>
+                </div>
+                <div className="modal__content">
+                  <p className="p">{t('servicesOrder.router.hint.text')}</p>
+                </div>
+                <div className="actions actions--2" style={{ marginTop: 14 }}>
+                  <button className="btn" onClick={() => { saveRouterHintDismissed(); setRouterHintOpen(false) }} type="button">
+                    {t('servicesOrder.router.hint.skip')}
+                  </button>
+                  <button className="btn btn--primary" onClick={() => { saveRouterHintDismissed(); setRouterHintOpen(false); navigate('/help/router') }} type="button">
+                    📘 {t('servicesOrder.router.hint.open')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
+
+      {catHintOpen && catHintData &&
+        createPortal(
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            onMouseDown={() => {
+              sessionStorage.setItem(HINT_SESSION_PREFIX + catHintData.category_key, '1')
+              setCatHintOpen(false)
+            }}
+          >
+            <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()}>
+              <div className="card__body">
+                {catHintData.hint_title && (
+                  <div className="modal__head">
+                    <div className="modal__title">{catHintData.hint_title}</div>
+                  </div>
+                )}
+                <div className="modal__content">
+                  <p className="p">{catHintData.hint_text}</p>
+                </div>
+                <div className={`actions actions--${catHintData.hint_button_label ? '2' : '1'}`} style={{ marginTop: 14 }}>
+                  {catHintData.hint_button_label && catHintData.hint_button_url && (
+                    <button
+                      className="btn"
+                      type="button"
+                      onClick={() => {
+                        sessionStorage.setItem(HINT_SESSION_PREFIX + catHintData.category_key, '1')
+                        setCatHintOpen(false)
+                        navigate(catHintData.hint_button_url!)
+                      }}
+                    >
+                      {catHintData.hint_button_label}
+                    </button>
+                  )}
+                  <button
+                    className="btn btn--primary"
+                    type="button"
+                    onClick={() => {
+                      sessionStorage.setItem(HINT_SESSION_PREFIX + catHintData.category_key, '1')
+                      setCatHintOpen(false)
+                    }}
+                  >
+                    OK
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
+
       <div className="card">
         <div className="card__body">
           <h1 className="h1">{t('servicesOrder.title')}</h1>
@@ -596,12 +732,11 @@ export function ServicesOrder() {
               </span>
             )}
           </div>
-          {waitMsg   && <div className="home-alert home-alert--ok"    style={{ marginTop: 12 }}>{waitMsg}</div>}
-          {topError  && <div className="pre" style={{ marginTop: 12, borderColor: 'rgba(255,77,109,0.28)' }}>{topError}</div>}
+          {waitMsg && <div className="home-alert home-alert--ok" style={{ marginTop: 12 }}>{waitMsg}</div>}
+          {topError && <div className="pre" style={{ marginTop: 12, borderColor: 'rgba(255,77,109,0.28)' }}>{topError}</div>}
         </div>
       </div>
 
-      {/* ── Шаг 1 — выбор категории ── */}
       {!selectedCat && (
         <div className="section">
           <div className="card">
@@ -619,16 +754,15 @@ export function ServicesOrder() {
               <div className="kv" style={{ marginTop: 14 }}>
                 {visibleCategories.length === 0 ? (
                   <div className="pre">{t('servicesOrder.no_categories')}</div>
-                ) : visibleCategories.map((cat) => (
-                  <CategoryCard key={cat.category_key} cat={cat} onClick={() => setSelectedCat(cat)} />
-                ))}
+                ) : (
+                  visibleCategories.map((cat) => <CategoryCard key={cat.category_key} cat={cat} onClick={() => setSelectedCat(cat)} />)
+                )}
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Шаг 2 — выбор тарифа ── */}
       {selectedCat && !selected && (
         <div className="section">
           <div className="card">
@@ -664,20 +798,35 @@ export function ServicesOrder() {
                   const isHighlighted = selectedCat.recommended && idx === 0
                   return (
                     <button
-                      key={tariff.serviceId} type="button"
+                      key={tariff.serviceId}
+                      type="button"
                       className={`kv__item so__tariffBtn${isHighlighted ? ' so__tariffCard--focus' : ''}`}
                       onClick={() => setSelected(tariff)}
-                      style={{ width: '100%', textAlign: 'left', cursor: 'pointer', borderRadius: 14, padding: 14 }}
+                      style={{
+                        width: '100%',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        borderRadius: 14,
+                        padding: 14,
+                        border: `1.5px solid ${selectedTheme.borderColor}`,
+                        background: selectedTheme.cardBg,
+                      }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                         <div style={{ fontWeight: 900, fontSize: 15 }}>{tariff.title}</div>
-                        <span className="chip chip--accent">
+                        <span
+                          className="chip chip--accent"
+                          style={{
+                            borderColor: selectedTheme.borderColor,
+                            boxShadow: `inset 0 0 0 1px ${selectedTheme.accentFrom}22`,
+                          }}
+                        >
                           {fmtMoney(tariff.price, tariff.currency)} / {tariff.periodHuman}
                         </span>
                       </div>
                       {tariff.descr && <p className="p" style={{ marginTop: 6 }}>{tariff.descr}</p>}
                       <div className="actions actions--1" style={{ marginTop: 12 }}>
-                        <span className="btn btn--primary" style={{ width: '100%' }}>
+                        <span className="btn" style={getCategoryButtonStyle(selectedCat)}>
                           {t('servicesOrder.step.tariff.order')}
                         </span>
                       </div>
@@ -690,7 +839,6 @@ export function ServicesOrder() {
         </div>
       )}
 
-      {/* ── Шаг 3 — оформление ── */}
       {selected && (
         <div className="section">
           <div className="card">
@@ -717,11 +865,15 @@ export function ServicesOrder() {
               {!created ? (
                 <div className="actions actions--1" style={{ marginTop: 14 }}>
                   <button
-                    className="btn btn--primary"
+                    className="btn"
                     onClick={() => void createOrder()}
                     disabled={creating}
                     type="button"
-                    style={{ width: '100%', minHeight: 52, fontSize: 16, fontWeight: 900 }}
+                    style={{
+                      ...getCategoryButtonStyle(selectedCat),
+                      minHeight: 52,
+                      fontSize: 16,
+                    }}
                   >
                     {creating
                       ? t('connect.wait')
@@ -738,10 +890,9 @@ export function ServicesOrder() {
             </div>
           </div>
 
-          {/* ── Оплата ── */}
           {created && shouldShowPay && (
             <div className="section">
-              <div className="card" style={{ borderColor: 'rgba(124,92,255,0.25)' }}>
+              <div className="card" style={{ borderColor: selectedTheme.borderColor }}>
                 <div className="card__body">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                     <div>
@@ -751,7 +902,15 @@ export function ServicesOrder() {
                       </div>
                       <p className="p" style={{ marginTop: 4 }}>{t('servicesOrder.pay.choose')}</p>
                     </div>
-                    <span className="chip chip--accent" style={{ fontSize: 16, fontWeight: 900 }}>
+                    <span
+                      className="chip chip--accent"
+                      style={{
+                        fontSize: 16,
+                        fontWeight: 900,
+                        borderColor: selectedTheme.borderColor,
+                        boxShadow: `inset 0 0 0 1px ${selectedTheme.accentFrom}22`,
+                      }}
+                    >
                       {fmtMoney(toPay, currency)}
                     </span>
                   </div>
@@ -764,11 +923,14 @@ export function ServicesOrder() {
                         <div className="kv__item" key={ps.shm_url || idx}>
                           <div style={{ fontWeight: 800, marginBottom: 8 }}>{ps.name || t('servicesOrder.pay.method')}</div>
                           <button
-                            className="btn btn--primary"
+                            className="btn"
                             onClick={() => void startPay(ps)}
                             disabled={!ps.shm_url || openingPay}
                             type="button"
-                            style={{ width: '100%', minHeight: 48, fontWeight: 900 }}
+                            style={{
+                              ...getCategoryButtonStyle(selectedCat),
+                              minHeight: 48,
+                            }}
                           >
                             {openingPay ? t('connect.wait') : `${t('servicesOrder.pay.pay')} ${fmtMoney(toPay, currency)}`}
                           </button>
@@ -798,14 +960,21 @@ export function ServicesOrder() {
 
           {created && !shouldShowPay && (
             <div className="actions actions--1" style={{ marginTop: 12 }}>
-              <button className="btn btn--primary" onClick={() => navigate('/services')} type="button" style={{ width: '100%', minHeight: 52 }}>
+              <button
+                className="btn"
+                onClick={() => navigate('/services')}
+                type="button"
+                style={{
+                  ...getCategoryButtonStyle(selectedCat),
+                  minHeight: 52,
+                }}
+              >
                 → {t('services.page.title')}
               </button>
             </div>
           )}
         </div>
       )}
-
     </div>
   )
 }
