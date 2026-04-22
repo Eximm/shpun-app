@@ -208,28 +208,6 @@ function CategoryCard({ cat, onClick }: { cat: ServiceCategory; onClick: () => v
 
 /* ─── ServicesOrder ──────────────────────────────────────────────────────── */
 
-
-/* ─── catBtnStyle — инлайн-стиль кнопки по цветам категории ─────────────── */
-
-function catBtnStyle(cat: ServiceCategory | null, extra?: React.CSSProperties): React.CSSProperties {
-  if (!cat) return { width: '100%', ...(extra ?? {}) }
-  const from = cat.accent_from || '#7c5cff'
-  const to   = cat.accent_to   || '#4dd7ff'
-  return {
-    width: '100%',
-    minHeight: 48,
-    borderRadius: 12,
-    background: `linear-gradient(135deg, ${from}, ${to})`,
-    border: 'none',
-    color: '#fff',
-    fontWeight: 900,
-    fontSize: 15,
-    boxShadow: `0 6px 18px ${from}40`,
-    letterSpacing: '0.02em',
-    ...(extra ?? {}),
-  }
-}
-
 export function ServicesOrder() {
   const navigate = useNavigate()
   const { t }    = useI18n()
@@ -699,7 +677,7 @@ export function ServicesOrder() {
                       </div>
                       {tariff.descr && <p className="p" style={{ marginTop: 6 }}>{tariff.descr}</p>}
                       <div className="actions actions--1" style={{ marginTop: 12 }}>
-                        <span style={catBtnStyle(selectedCat)}>
+                        <span className="btn btn--primary" style={{ width: '100%' }}>
                           {t('servicesOrder.step.tariff.order')}
                         </span>
                       </div>
@@ -739,10 +717,11 @@ export function ServicesOrder() {
               {!created ? (
                 <div className="actions actions--1" style={{ marginTop: 14 }}>
                   <button
+                    className="btn btn--primary"
                     onClick={() => void createOrder()}
                     disabled={creating}
                     type="button"
-                    style={catBtnStyle(selectedCat, { minHeight: 52, fontSize: 16 })}
+                    style={{ width: '100%', minHeight: 52, fontSize: 16, fontWeight: 900 }}
                   >
                     {creating
                       ? t('connect.wait')
@@ -785,10 +764,11 @@ export function ServicesOrder() {
                         <div className="kv__item" key={ps.shm_url || idx}>
                           <div style={{ fontWeight: 800, marginBottom: 8 }}>{ps.name || t('servicesOrder.pay.method')}</div>
                           <button
+                            className="btn btn--primary"
                             onClick={() => void startPay(ps)}
                             disabled={!ps.shm_url || openingPay}
                             type="button"
-                            style={catBtnStyle(selectedCat)}
+                            style={{ width: '100%', minHeight: 48, fontWeight: 900 }}
                           >
                             {openingPay ? t('connect.wait') : `${t('servicesOrder.pay.pay')} ${fmtMoney(toPay, currency)}`}
                           </button>
@@ -818,7 +798,7 @@ export function ServicesOrder() {
 
           {created && !shouldShowPay && (
             <div className="actions actions--1" style={{ marginTop: 12 }}>
-              <button onClick={() => navigate('/services')} type="button" style={catBtnStyle(selectedCat, { minHeight: 52 })}>
+              <button className="btn btn--primary" onClick={() => navigate('/services')} type="button" style={{ width: '100%', minHeight: 52 }}>
                 → {t('services.page.title')}
               </button>
             </div>
