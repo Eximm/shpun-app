@@ -107,32 +107,56 @@ const EMPTY_FORM = (): Partial<ServiceCategory> & {
 
 function CategoryPreview({ form }: { form: ReturnType<typeof EMPTY_FORM> }) {
   const accentFrom = form.accent_from || PRESETS[0].from;
-  const cardBg     = form.card_bg || "rgba(255,255,255,0.04)";
+  const accentTo   = form.accent_to   || PRESETS[0].to;
+  const cardBg     = form.card_bg     || "rgba(255,255,255,0.04)";
   const btnLabel   = form.button_label || "Выбрать";
 
   return (
     <div style={{
-      border: `1.5px solid ${accentFrom}`,
+      border: `1.5px solid ${accentFrom}55`,
       borderRadius: 16,
       background: cardBg,
       padding: 16,
       marginTop: 8,
+      position: "relative",
+      overflow: "hidden",
     }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-        <div style={{ fontWeight: 700, fontSize: 16 }}>
-          {form.emoji ? `${form.emoji} ` : ""}{form.title || "Название категории"}
+      {/* Glow */}
+      <div style={{
+        position: "absolute", top: -30, left: -30, width: 140, height: 140,
+        background: `radial-gradient(circle, ${accentFrom}18, transparent 65%)`,
+        pointerEvents: "none",
+      }} />
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+        <div style={{ fontWeight: 900, fontSize: 16, display: "flex", alignItems: "center", gap: 8 }}>
+          {form.emoji ? <span style={{ fontSize: 20 }}>{form.emoji}</span> : null}
+          {form.title || "Название категории"}
         </div>
         {form.badge && (
-          <span className={`chip chip--${form.badge_tone || "soft"}`} style={{ marginLeft: 8, whiteSpace: "nowrap" }}>
+          <span className={`chip chip--${form.badge_tone || "soft"}`} style={{ marginLeft: 8, whiteSpace: "nowrap", flexShrink: 0 }}>
             {form.badge}
           </span>
         )}
       </div>
-      <div style={{ fontSize: 13, opacity: 0.68, marginBottom: 12 }}>
+      <div style={{ fontSize: 13, opacity: 0.68, marginBottom: 14 }}>
         {form.short_descr || "Краткое описание"}
       </div>
-      <div className="actions actions--1">
-        <span className="btn btn--primary" style={{ width: "100%" }}>{btnLabel}</span>
+      {/* Кнопка — цвета из пресета, идентично странице заказа */}
+      <div style={{
+        width: "100%",
+        minHeight: 44,
+        borderRadius: 12,
+        background: `linear-gradient(135deg, ${accentFrom}, ${accentTo})`,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontWeight: 900,
+        fontSize: 14,
+        color: "#fff",
+        boxShadow: `0 6px 18px ${accentFrom}35`,
+        letterSpacing: "0.02em",
+      }}>
+        {btnLabel}
       </div>
     </div>
   );
