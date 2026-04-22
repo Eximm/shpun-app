@@ -1,4 +1,4 @@
-// web/src/pages/connect/ConnectMarzban.tsx
+// FILE: web/src/pages/connect/ConnectMarzban.tsx
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
@@ -15,16 +15,13 @@ type Props = {
   onDone?: () => void;
 };
 
-type Platform     = "android" | "ios" | "windows" | "mac" | "linux";
-type Chip         = "auto" | Platform;
-type RuntimeMode  = "telegram-miniapp" | "browser" | "standalone-app";
-type ClientKind   = "hiddify" | "v2ray";
+type Platform    = "android" | "ios" | "windows" | "mac" | "linux";
+type Chip        = "auto" | Platform;
+type RuntimeMode = "telegram-miniapp" | "browser" | "standalone-app";
+type ClientKind  = "hiddify" | "v2ray";
 
 type ClientLinks = Record<Platform, {
-  title: string;
-  market: string;
-  direct?: string;
-  storeLabelKey: string;
+  title: string; market: string; direct?: string; storeLabelKey: string;
 }>;
 
 /* ─── Client links ───────────────────────────────────────────────────────── */
@@ -45,24 +42,29 @@ const HIDDIFY_LINKS: ClientLinks = {
   linux:   { title: "Hiddify", market: "https://github.com/hiddify/hiddify-app/releases", direct: "https://github.com/hiddify/hiddify-app/releases/latest/download/Hiddify-Linux-x64.AppImage", storeLabelKey: "connectAmneziaWG.store.download_page" },
 };
 
+const PLATFORM_ICONS: Record<Platform, string> = {
+  android: "🤖", ios: "🍎", windows: "🪟", mac: "🍏", linux: "🐧",
+};
+
+const V2RAY_TRAFFIC_RULES_URL = "v2raytun://open-traffic-rules?id=d1eda856-3617-447c-b0e9-56da2afe755f";
+
 /* ─── Utils ─────────────────────────────────────────────────────────────── */
 
 function detectOS(): Platform {
   const ua = navigator.userAgent || navigator.vendor || (window as any).opera || "";
   const isAppleTouch = /\bMac\b/.test(ua) && (navigator as any).maxTouchPoints > 1;
-  if (/android/i.test(ua))                          return "android";
-  if (/iPad|iPhone|iPod/.test(ua) || isAppleTouch)  return "ios";
-  if (/Win/i.test(ua))                              return "windows";
-  if (/\bMac\b/i.test(ua))                         return "mac";
-  if (/Linux/i.test(ua))                            return "linux";
+  if (/android/i.test(ua))                         return "android";
+  if (/iPad|iPhone|iPod/.test(ua) || isAppleTouch) return "ios";
+  if (/Win/i.test(ua))                             return "windows";
+  if (/\bMac\b/i.test(ua))                        return "mac";
+  if (/Linux/i.test(ua))                           return "linux";
   return "windows";
 }
 
 function detectRuntime(): RuntimeMode {
   const tg = (window as any).Telegram?.WebApp;
   if (tg) return "telegram-miniapp";
-  if (window.matchMedia?.("(display-mode: standalone)")?.matches || (window.navigator as any).standalone === true)
-    return "standalone-app";
+  if (window.matchMedia?.("(display-mode: standalone)")?.matches || (window.navigator as any).standalone === true) return "standalone-app";
   return "browser";
 }
 
@@ -97,7 +99,8 @@ function tryOpenScheme(url: string, runtime: RuntimeMode, onFail?: () => void) {
 }
 
 async function copyToClipboard(text: string): Promise<boolean> {
-  try { await navigator.clipboard.writeText(text); return true; } catch {
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch {
     try {
       const ta = document.createElement("textarea");
       ta.value = text; ta.style.position = "fixed"; ta.style.top = "-1000px";
@@ -119,8 +122,6 @@ function buildV2RayTunImportLink(url: string, platform: Platform) {
     ? `intent://import/${safeUrl}#Intent;scheme=v2raytun;package=com.v2raytun.android;end`
     : `v2raytun://import/${url}`;
 }
-
-const V2RAY_TRAFFIC_RULES_URL = "v2raytun://open-traffic-rules?id=d1eda856-3617-447c-b0e9-56da2afe755f";
 
 /* ─── Component ──────────────────────────────────────────────────────────── */
 
@@ -148,7 +149,6 @@ export default function ConnectMarzban({ usi }: Props) {
   const [rulesQrOpen,           setRulesQrOpen]           = useState(false);
   const [rulesQrDataUrl,        setRulesQrDataUrl]        = useState("");
 
-  // ── Load ──────────────────────────────────────────────────────────────────
   async function load() {
     setLoading(true); setError(null);
     try {
@@ -159,17 +159,15 @@ export default function ConnectMarzban({ usi }: Props) {
       setSubscriptionUrl(url);
       const mirror = String(r?.subscription_url_mirror ?? r?.subscriptionUrlMirror ?? "").trim();
       setSubscriptionUrlMirror(mirror || null);
+      toast.success(t("connect.ready") || "Подписка готова", { description: url.slice(0, 48) + "…" });
     } catch (e: any) {
-      setSubscriptionUrl("");
-      setSubscriptionUrlMirror(null);
+      setSubscriptionUrl(""); setSubscriptionUrlMirror(null);
       const msg = e?.message || t("connect.load_failed");
       setError(msg);
       toast.error(t("connect.sub_prepare_error"), {
         description: msg === "subscription_url_missing" ? t("connect.sub_prepare_error_desc") : String(msg),
       });
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }
 
   useEffect(() => { void load(); }, [usi]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -179,7 +177,6 @@ export default function ConnectMarzban({ usi }: Props) {
   const v2rayImportHref       = ready ? buildV2RayTunImportLink(subscriptionUrl, platform) : "";
   const v2rayMirrorImportHref = ready && subscriptionUrlMirror ? buildV2RayTunImportLink(subscriptionUrlMirror, platform) : "";
 
-  // ── Actions ───────────────────────────────────────────────────────────────
   function openImport(useMirror = false) {
     const href = useMirror ? v2rayMirrorImportHref : v2rayImportHref;
     if (!ready || !href) return;
@@ -194,6 +191,7 @@ export default function ConnectMarzban({ usi }: Props) {
     try {
       const dataUrl = await QRCode.toDataURL(subscriptionUrl, { margin: 2, width: 360 });
       setQrDataUrl(dataUrl); setQrOpen(true);
+      toast.info(t("connect.qr_title"), { description: t("connect.qr_text") });
     } catch {
       toast.error(t("connect.qr_title"), { description: t("connect.sub_prepare_error_desc") });
     }
@@ -203,22 +201,17 @@ export default function ConnectMarzban({ usi }: Props) {
     const target = useMirror ? (subscriptionUrlMirror ?? "") : subscriptionUrl;
     if (!target) return;
     const ok = await copyToClipboard(target);
-    if (useMirror) {
-      setCopiedMirror(ok);
-      if (ok) setTimeout(() => setCopiedMirror(false), 1500);
-    } else {
-      setCopied(ok);
-      if (ok) setTimeout(() => setCopied(false), 1500);
-    }
-    if (ok) toast.success(t("connect.copied"), { description: t("connect.import_text") });
-    else toast.error(t("connect.copy_link"), { description: t("connect.sub_prepare_error_desc") });
+    if (useMirror) { setCopiedMirror(ok); if (ok) setTimeout(() => setCopiedMirror(false), 1500); }
+    else           { setCopied(ok);       if (ok) setTimeout(() => setCopied(false),       1500); }
+    ok
+      ? toast.success(t("connect.copied"),    { description: t("connect.import_text") })
+      : toast.error(t("connect.copy_link"),   { description: t("connect.sub_prepare_error_desc") });
   }
 
   async function openRulesQr() {
     try {
       const dataUrl = await QRCode.toDataURL(V2RAY_TRAFFIC_RULES_URL, { margin: 2, width: 360 });
-      setRulesQrDataUrl(dataUrl);
-      setRulesQrOpen(true);
+      setRulesQrDataUrl(dataUrl); setRulesQrOpen(true);
     } catch {
       toast.error(t("connect.qr_title"), { description: t("connect.sub_prepare_error_desc") });
     }
@@ -226,13 +219,13 @@ export default function ConnectMarzban({ usi }: Props) {
 
   function openTrafficRules() {
     tryOpenScheme(V2RAY_TRAFFIC_RULES_URL, runtime, () => {
-      toast.info("Откройте v2RayTun вручную", { description: "Скопируйте ссылку на маршруты" });
+      toast.info("Откройте v2RayTun вручную", { description: "Перейдите в Настройки → Правила маршрутизации" });
     });
+    toast.info("⚡ Применяем маршруты", { description: "Открываем v2RayTun…" });
   }
 
   function openClientStore(client: ClientKind) {
-    const links = client === "hiddify" ? HIDDIFY_LINKS[platform] : V2RAYTUN_LINKS[platform];
-    openLinkSafe(links.market);
+    openLinkSafe(client === "hiddify" ? HIDDIFY_LINKS[platform].market : V2RAYTUN_LINKS[platform].market);
   }
 
   function openClientDirect(client: ClientKind) {
@@ -241,110 +234,92 @@ export default function ConnectMarzban({ usi }: Props) {
     openLinkSafe(links.direct);
   }
 
-  // ── Status hint ───────────────────────────────────────────────────────────
-  const statusHint = loading ? t("connect.loading") : error ? t("connect.error") : t("connect.ready");
-
-  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="cm">
 
-      {/* Статус */}
-      <div className="pre">
-        {loading ? "… " : error ? "⚠️ " : "✅ "}{statusHint}
+      {/* Статус-бар */}
+      <div className="pre" style={{
+        borderColor: ready ? "rgba(43,227,143,0.28)" : error ? "rgba(255,77,109,0.28)" : "rgba(77,215,255,0.20)",
+        background:  ready ? "rgba(43,227,143,0.06)"  : error ? "rgba(255,77,109,0.06)"  : "rgba(77,215,255,0.05)",
+        display: "flex", alignItems: "center", gap: 8,
+      }}>
+        <span>{loading ? "⏳" : error ? "⚠️" : "✅"}</span>
+        <span>{loading ? t("connect.loading") : error ? t("connect.error") : t("connect.ready")}</span>
       </div>
 
       {!loading && error && (
         <div className="actions actions--1" style={{ marginTop: 8 }}>
-          <button className="btn" onClick={() => void load()} type="button">
-            {t("connectAmneziaWG.retry")}
+          <button className="btn btn--primary" onClick={() => void load()} type="button">
+            🔄 {t("connectAmneziaWG.retry")}
           </button>
         </div>
       )}
 
       {/* Выбор устройства */}
-      <div className="row" style={{ marginTop: 12, alignItems: "center", justifyContent: "space-between" }}>
-        <span className="p" style={{ margin: 0 }}>{t("connectAmneziaWG.device.label")}</span>
-        <button
-          className="btn cawg__deviceBtn"
-          type="button"
-          onClick={() => setPlatformPickerOpen(true)}
-          disabled={loading}
-        >
+      <div className="row cawg__rowTop">
+        <span className="p cawg__label">{t("connectAmneziaWG.device.label")}</span>
+        <button className="btn cawg__deviceBtn" type="button" onClick={() => setPlatformPickerOpen(true)} disabled={loading}>
+          {PLATFORM_ICONS[platform]}{" "}
           {chip === "auto"
-            ? t("connectAmneziaWG.device.current", "✨ Текущее ({platform})").replace("{platform}", platformLabel(autoPlatform))
+            ? t("connectAmneziaWG.device.current", "Текущее ({platform})").replace("{platform}", platformLabel(autoPlatform))
             : platformLabel(platform)}
-          {" "}<span aria-hidden>▾</span>
+          {" "}▾
         </button>
       </div>
 
-      {/* Главная карточка — два шага, как в AmneziaWG */}
+      {/* Основная карточка */}
       <div className="card" style={{ marginTop: 12 }}>
         <div className="card__body">
 
           {/* Шаг 1 — установка */}
-          <div className="pre">
-            <b>{t("connect.step_install")}</b><br />
-            {t("connect.step_install_desc").replace("{client}", V2RAYTUN_LINKS[platform].title).replace("{platform}", platformLabel(platform))}
+          <div className="pre" style={{ borderColor: "rgba(124,92,255,0.22)", background: "rgba(124,92,255,0.05)" }}>
+            <b>Шаг 1.</b> {t("connect.step_install_desc").replace("{client}", V2RAYTUN_LINKS[platform].title).replace("{platform}", platformLabel(platform))}
           </div>
           {V2RAYTUN_LINKS[platform].direct ? (
             <div className="actions actions--2">
               <button className="btn btn--primary" type="button" onClick={() => openClientStore("v2ray")}>
-                {t("connect.open_store")} {t(V2RAYTUN_LINKS[platform].storeLabelKey)}
+                📲 {t("connect.open_store")} {t(V2RAYTUN_LINKS[platform].storeLabelKey)}
               </button>
               <button className="btn" type="button" onClick={() => openClientDirect("v2ray")}>
-                {platform === "android" ? t("connectAmneziaWG.step1.download_apk") : t("connect.download_direct")}
+                ⬇️ {platform === "android" ? t("connectAmneziaWG.step1.download_apk") : t("connect.download_direct")}
               </button>
             </div>
           ) : (
             <div className="actions actions--1">
               <button className="btn btn--primary" type="button" onClick={() => openClientStore("v2ray")}>
-                {t("connect.open_store")} {t(V2RAYTUN_LINKS[platform].storeLabelKey)}
+                📲 {t("connect.open_store")} {t(V2RAYTUN_LINKS[platform].storeLabelKey)}
               </button>
             </div>
           )}
 
           {/* Шаг 2 — импорт */}
-          <div className="pre" style={{ marginTop: 12 }}>
-            <b>{t("connect.step_import")}</b><br />
-            {t("connect.step_import_desc")}
+          <div className="pre" style={{ marginTop: 12, borderColor: "rgba(77,215,255,0.22)", background: "rgba(77,215,255,0.05)" }}>
+            <b>Шаг 2.</b> {t("connect.step_import_desc")}
           </div>
           <div className="actions actions--1">
-            <button
-              className="btn btn--primary"
-              onClick={() => openImport(false)}
-              disabled={!ready}
-              type="button"
-            >
-              {loading ? t("connect.wait") : t("connect.add_sub")}
+            <button className="btn btn--primary" onClick={() => openImport(false)} disabled={!ready} type="button">
+              {loading ? `⏳ ${t("connect.wait")}` : `⚡ ${t("connect.add_sub")}`}
             </button>
           </div>
 
-          {/* Зеркало */}
           {subscriptionUrlMirror && ready && (
             <div className="actions actions--1" style={{ marginTop: 8 }}>
-              <button
-                className="btn btn--soft"
-                onClick={() => openImport(true)}
-                type="button"
-              >
+              <button className="btn" onClick={() => openImport(true)} type="button">
                 🔄 Не открывается? Попробовать через RU-зеркало
               </button>
             </div>
           )}
 
-          {/* Другие способы */}
           <div className="actions actions--1">
             <button className="btn" onClick={() => setAdvancedOpen((v) => !v)} type="button">
               {advancedOpen ? `▴ ${t("connect.hide_methods")}` : `▾ ${t("connect.more_methods")}`}
             </button>
           </div>
 
-
-          {/* Раскрытый блок — всё в одной карточке как в AmneziaWG */}
+          {/* Расширенный блок */}
           {advancedOpen && ready && (
             <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 12 }}>
 
-              {/* QR и копирование */}
               <div className="actions actions--2">
                 <button className="btn btn--primary" type="button" onClick={() => void copySub(false)}>
                   {copied ? `✅ ${t("connect.copied")}` : `📋 ${t("connect.copy_link")}`}
@@ -353,63 +328,63 @@ export default function ConnectMarzban({ usi }: Props) {
                   📱 {t("connect.show_qr")}
                 </button>
               </div>
+
               {subscriptionUrlMirror && (
                 <div className="actions actions--1">
-                  <button className="btn btn--soft" type="button" onClick={() => void copySub(true)}>
+                  <button className="btn" type="button" onClick={() => void copySub(true)}>
                     {copiedMirror ? `✅ ${t("connect.copied")}` : `📋 ${t("connect.copy_link")} (RU зеркало)`}
                   </button>
                 </div>
               )}
 
               {/* Hiddify */}
-              <div className="pre">
-                <b>Hiddify</b> — {t("connect.more_methods")}<br />
-                {t("connect.step_install_desc").replace("{client}", "Hiddify").replace("{platform}", platformLabel(platform))}
+              <div className="pre" style={{ borderColor: "rgba(43,227,143,0.22)", background: "rgba(43,227,143,0.05)" }}>
+                <b>Hiddify</b> — альтернативный клиент
               </div>
               {HIDDIFY_LINKS[platform].direct ? (
                 <div className="actions actions--2">
                   <button className="btn btn--primary" type="button" onClick={() => openClientStore("hiddify")}>
-                    {t("connect.open_store")} {t(HIDDIFY_LINKS[platform].storeLabelKey)}
+                    📲 {t("connect.open_store")} {t(HIDDIFY_LINKS[platform].storeLabelKey)}
                   </button>
                   <button className="btn" type="button" onClick={() => openClientDirect("hiddify")}>
-                    {platform === "android" ? t("connectAmneziaWG.step1.download_apk") : t("connect.download_direct")}
+                    ⬇️ {platform === "android" ? t("connectAmneziaWG.step1.download_apk") : t("connect.download_direct")}
                   </button>
                 </div>
               ) : (
                 <div className="actions actions--1">
                   <button className="btn btn--primary" type="button" onClick={() => openClientStore("hiddify")}>
-                    {t("connect.open_store")} {t(HIDDIFY_LINKS[platform].storeLabelKey)}
+                    📲 {t("connect.open_store")} {t(HIDDIFY_LINKS[platform].storeLabelKey)}
                   </button>
                 </div>
               )}
               <div className="actions actions--1">
-                <button
-                  className="btn"
-                  type="button"
-                  onClick={() => {
-                    const href = buildHiddifyImportLink(subscriptionUrl, platform);
-                    tryOpenScheme(href, runtime);
-                    toast.info(t("connect.open_client"), { description: t("connect.import_text") });
-                  }}
-                  disabled={!ready}
-                >
-                  {t("connect.add_sub")} в Hiddify
+                <button className="btn" type="button" onClick={() => {
+                  const href = buildHiddifyImportLink(subscriptionUrl, platform);
+                  tryOpenScheme(href, runtime);
+                  toast.info(t("connect.open_client"), { description: t("connect.import_text") });
+                }} disabled={!ready}>
+                  ⚡ {t("connect.add_sub")} в Hiddify
                 </button>
               </div>
-
             </div>
           )}
-
         </div>
       </div>
 
       {/* Маршрутизация v2RayTun */}
-      <div style={{ marginTop: 12, padding: "12px 14px", borderRadius: 14, border: "1px solid rgba(77,215,255,0.45)", background: "linear-gradient(135deg, rgba(77,215,255,0.10), rgba(124,92,255,0.08))", boxShadow: "0 0 20px rgba(77,215,255,0.12)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-          <span style={{ fontSize: 18 }}>🗺️</span>
+      <div style={{
+        marginTop: 12, padding: "14px 16px", borderRadius: 16,
+        border: "1px solid rgba(77,215,255,0.32)",
+        background: "linear-gradient(135deg, rgba(77,215,255,0.08), rgba(124,92,255,0.06))",
+        boxShadow: "0 0 24px rgba(77,215,255,0.10)",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+          <span style={{ fontSize: 20 }}>🗺️</span>
           <div>
-            <div style={{ fontWeight: 800, fontSize: 14, color: "rgba(255,255,255,0.95)" }}>Раздельная маршрутизация</div>
-            <div style={{ fontSize: 12, color: "rgba(77,215,255,0.9)", marginTop: 2 }}>Только РФ-трафик напрямую, остальное в туннель</div>
+            <div style={{ fontWeight: 900, fontSize: 14 }}>Раздельная маршрутизация</div>
+            <div style={{ fontSize: 12, color: "rgba(77,215,255,0.85)", marginTop: 2 }}>
+              Только РФ-трафик напрямую, остальное — в туннель
+            </div>
           </div>
         </div>
         <div className="actions actions--2">
@@ -422,7 +397,7 @@ export default function ConnectMarzban({ usi }: Props) {
         </div>
       </div>
 
-      {/* QR маршрутов v2RayTun */}
+      {/* QR маршрутов */}
       {rulesQrOpen && createPortal(
         <div className="modal" role="dialog" aria-modal="true" onMouseDown={() => setRulesQrOpen(false)}>
           <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()}>
@@ -432,11 +407,11 @@ export default function ConnectMarzban({ usi }: Props) {
                 <button className="btn modal__close" type="button" onClick={() => setRulesQrOpen(false)} aria-label={t("common.close")}>✕</button>
               </div>
               <div className="modal__content">
-                <p className="p">Отсканируйте QR в v2RayTun для автоматической настройки маршрутизации. Весь трафик кроме РФ пойдёт через туннель.</p>
-                <div className="helperMedia" style={{ marginTop: 12 }}>
-                  {rulesQrDataUrl && <img className="helperMedia__img" src={rulesQrDataUrl} alt="QR маршрутов" loading="lazy" width={360} />}
+                <p className="p">Отсканируйте QR в v2RayTun для настройки раздельной маршрутизации.</p>
+                <div className="helperMedia" style={{ marginTop: 12, background: "#fff", borderRadius: 12, padding: 8 }}>
+                  {rulesQrDataUrl && <img className="helperMedia__img" src={rulesQrDataUrl} alt="QR маршрутов" loading="lazy" width={320} />}
                 </div>
-                <div className="actions actions--1" style={{ marginTop: 12 }}>
+                <div className="actions actions--1" style={{ marginTop: 14 }}>
                   <button className="btn btn--primary" onClick={() => setRulesQrOpen(false)} type="button">{t("common.close")}</button>
                 </div>
               </div>
@@ -457,24 +432,17 @@ export default function ConnectMarzban({ usi }: Props) {
               </div>
               <div className="modal__content">
                 <div className="kv">
-                  <button
-                    className={`kv__item cawg__pickItem ${chip === "auto" ? "is-active" : ""}`}
-                    type="button"
-                    onClick={() => { setChip("auto"); setPlatformPickerOpen(false); }}
-                  >
+                  <button className={`kv__item cawg__pickItem${chip === "auto" ? " is-active" : ""}`} type="button"
+                    onClick={() => { setChip("auto"); setPlatformPickerOpen(false); }}>
                     <div className="row" style={{ justifyContent: "space-between" }}>
                       <span className="kv__k">{t("connectAmneziaWG.device.current_short")}</span>
-                      <span className="chip">{platformLabel(autoPlatform)}</span>
+                      <span className="chip">{PLATFORM_ICONS[autoPlatform]} {platformLabel(autoPlatform)}</span>
                     </div>
                   </button>
                   {(["android", "ios", "windows", "mac", "linux"] as Platform[]).map((p) => (
-                    <button
-                      key={p}
-                      className={`kv__item cawg__pickItem ${chip === p ? "is-active" : ""}`}
-                      type="button"
-                      onClick={() => { setChip(p); setPlatformPickerOpen(false); }}
-                    >
-                      <span className="kv__k">{platformLabel(p)}</span>
+                    <button key={p} className={`kv__item cawg__pickItem${chip === p ? " is-active" : ""}`} type="button"
+                      onClick={() => { setChip(p); setPlatformPickerOpen(false); }}>
+                      <span className="kv__k">{PLATFORM_ICONS[p]} {platformLabel(p)}</span>
                     </button>
                   ))}
                 </div>
@@ -485,21 +453,21 @@ export default function ConnectMarzban({ usi }: Props) {
         document.body
       )}
 
-      {/* QR модалка */}
+      {/* QR подписки */}
       {qrOpen && createPortal(
         <div className="modal" role="dialog" aria-modal="true" onMouseDown={() => setQrOpen(false)}>
           <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()}>
             <div className="card__body">
               <div className="modal__head">
-                <div className="modal__title">{t("connect.qr_title")}</div>
+                <div className="modal__title">📱 {t("connect.qr_title")}</div>
                 <button className="btn modal__close" type="button" onClick={() => setQrOpen(false)} aria-label={t("common.close")}>✕</button>
               </div>
               <div className="modal__content">
                 <p className="p">{t("connect.qr_text")}</p>
-                <div className="helperMedia" style={{ marginTop: 12 }}>
-                  {qrDataUrl && <img className="helperMedia__img" src={qrDataUrl} alt={t("connectAmneziaWG.qr.alt")} loading="lazy" width={360} />}
+                <div className="helperMedia" style={{ marginTop: 12, background: "#fff", borderRadius: 12, padding: 8 }}>
+                  {qrDataUrl && <img className="helperMedia__img" src={qrDataUrl} alt={t("connectAmneziaWG.qr.alt")} loading="lazy" width={320} />}
                 </div>
-                <div className="actions actions--1" style={{ marginTop: 12 }}>
+                <div className="actions actions--1" style={{ marginTop: 14 }}>
                   <button className="btn btn--primary" onClick={() => setQrOpen(false)} type="button">{t("common.close")}</button>
                 </div>
               </div>

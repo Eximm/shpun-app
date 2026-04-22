@@ -1,4 +1,4 @@
-// web/src/pages/Referrals.tsx
+// FILE: web/src/pages/Referrals.tsx
 
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -39,7 +39,7 @@ function fmtDate(iso: string) {
   return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "2-digit" });
 }
 
-/* ─── Component ──────────────────────────────────────────────────────────── */
+/* ─── Referrals ──────────────────────────────────────────────────────────── */
 
 export function Referrals() {
   const { t } = useI18n();
@@ -53,7 +53,6 @@ export function Referrals() {
   const [incomePercent, setIncomePercent] = useState(0);
   const [refCount,      setRefCount]      = useState(0);
   const [statusLoading, setStatusLoading] = useState(false);
-  const [statusError,   setStatusError]   = useState<string | null>(null);
 
   const [items,       setItems]       = useState<RefItem[]>([]);
   const [total,       setTotal]       = useState(0);
@@ -72,18 +71,15 @@ export function Referrals() {
     return referralUrl ? `https://t.me/share/url?url=${encodeURIComponent(referralUrl)}` : "";
   }, [referralUrl]);
 
-  // ── Load ──────────────────────────────────────────────────────────────────
   async function loadStatus() {
-    setStatusLoading(true); setStatusError(null);
+    setStatusLoading(true);
     try {
       const r = await apiFetch("/referrals/status", { method: "GET" }) as any;
       const refs = r?.data?.referrals ?? {};
       setIncomePercent(toNum(refs.income_percent));
       setRefCount(toNum(refs.referrals_count));
-    } catch (e: any) {
-      setStatusError(e?.message || "error");
-      setIncomePercent(0); setRefCount(0);
-    } finally { setStatusLoading(false); }
+    } catch { /* ignore */ }
+    finally { setStatusLoading(false); }
   }
 
   async function loadList() {
@@ -108,7 +104,6 @@ export function Referrals() {
       setWebLink(toStr(refs.web_link));
     } catch (e: any) {
       setLinkError(e?.message || "error");
-      setTelegramLink(""); setWebLink("");
     } finally { setLinkLoading(false); }
   }
 
@@ -120,20 +115,10 @@ export function Referrals() {
     }
   }, [(me as any)?.ok]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Actions ───────────────────────────────────────────────────────────────
   function copyLink() {
     if (!referralUrl) return;
     navigator.clipboard?.writeText(referralUrl)
-      .then(() => {
-        toast.success(t("home.ref.link.k"), { description: referralUrl });
-        try {
-          getTelegramWebApp()?.showPopup?.({
-            title: t("home.ref.link.k"),
-            message: referralUrl,
-            buttons: [{ type: "ok" }],
-          });
-        } catch { /* ignore */ }
-      })
+      .then(() => toast.success(t("home.ref.link.k"), { description: referralUrl }))
       .catch(() => toast.error(t("home.services.error")));
   }
 
@@ -147,7 +132,6 @@ export function Referrals() {
     window.open(shareUrl, "_blank", "noopener,noreferrer");
   }
 
-  // ── Loading ───────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="app-loader" style={{ opacity: 1, transition: "opacity 180ms ease", pointerEvents: "auto" }}>
@@ -163,90 +147,85 @@ export function Referrals() {
     );
   }
 
-  // ── Error ─────────────────────────────────────────────────────────────────
   if (error || !(me as any)?.ok) {
     return (
       <div className="section">
-        <div className="card">
-          <div className="card__body">
-            <h1 className="h1">{t("home.ref.title")}</h1>
-            <p className="p">{t("home.error.text")}</p>
-            <div className="actions actions--2" style={{ marginTop: 12 }}>
-              <Link className="btn btn--primary" to="/login">{t("home.actions.login")}</Link>
-              <Link className="btn" to="/">{t("bottomNav.home")}</Link>
-            </div>
+        <div className="card"><div className="card__body">
+          <h1 className="h1">🤝 {t("home.ref.title")}</h1>
+          <p className="p">{t("home.error.text")}</p>
+          <div className="actions actions--2" style={{ marginTop: 12 }}>
+            <Link className="btn btn--primary" to="/login">{t("home.actions.login")}</Link>
+            <Link className="btn" to="/">{t("bottomNav.home")}</Link>
           </div>
-        </div>
+        </div></div>
       </div>
     );
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="section">
 
-      {/* Заголовок + ссылка */}
-      <div className="card">
+      {/* ── Заголовок + ссылка ── */}
+      <div className="card" style={{
+        background: "linear-gradient(135deg, rgba(124,92,255,0.12), rgba(77,215,255,0.07))",
+        borderColor: "rgba(124,92,255,0.22)",
+      }}>
         <div className="card__body">
-          <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
             <div>
               <h1 className="h1">🤝 {t("home.ref.title")}</h1>
               <p className="p">{t("home.ref.sub")}</p>
             </div>
-            <Link className="btn" to="/">{t("bottomNav.home")}</Link>
+            <Link className="btn" to="/" style={{ flexShrink: 0 }}>{t("bottomNav.home")}</Link>
           </div>
 
           {/* Метрики */}
-          <div className="row" style={{ marginTop: 14, gap: 8, flexWrap: "wrap" }}>
-            <div className="chip chip--soft">
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 14 }}>
+            <span className="chip chip--accent">
               👥 {t("home.ref.list.k")}: <b style={{ marginLeft: 4 }}>{statusLoading ? "…" : refCount}</b>
-            </div>
-            <div className="chip chip--soft">
+            </span>
+            <span className="chip chip--ok">
               💸 {t("home.ref.percent.k")}: <b style={{ marginLeft: 4 }}>{statusLoading ? "…" : `${incomePercent}%`}</b>
-            </div>
+            </span>
           </div>
-          {statusError && <p className="p" style={{ marginTop: 6, opacity: 0.6 }}>{statusError}</p>}
 
           {/* Реферальная ссылка */}
-          <div style={{ marginTop: 16 }}>
-            <div className="pre" style={{ userSelect: "text", wordBreak: "break-all" }}>
-              {linkLoading ? "…" : referralUrl || "—"}
+          <div style={{ marginTop: 14 }}>
+            <div className="pre" style={{ userSelect: "text", wordBreak: "break-all", fontSize: 13 }}>
+              {linkLoading ? "Загружаем ссылку…" : referralUrl || "—"}
             </div>
             {linkError && <p className="p" style={{ marginTop: 6, opacity: 0.6 }}>{linkError}</p>}
           </div>
 
-          <div className="actions actions--2" style={{ marginTop: 10 }}>
+          <div className="actions actions--2" style={{ marginTop: 12 }}>
             <button className="btn btn--primary" onClick={shareLink} disabled={!shareUrl} type="button">
-              {t("home.ref.link.v")}
+              📤 {t("home.ref.link.v")}
             </button>
             <button className="btn" onClick={copyLink} disabled={!referralUrl} type="button">
-              {t("connect.copy_link")}
+              📋 {t("connect.copy_link")}
             </button>
           </div>
         </div>
       </div>
 
-      {/* Список приглашённых */}
+      {/* ── Список приглашённых ── */}
       <div className="section">
         <div className="card">
           <div className="card__body">
-            <h1 className="h1">📃 {t("home.ref.list.k")}</h1>
-            <p className="p">
-              {listLoading
-                ? t("home.loading.text")
-                : total
-                  ? `${t("home.ref.list.v")} · ${total}`
-                  : t("home.ref.link.v")}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+              <span style={{ fontSize: 20 }}>👥</span>
+              <h1 className="h1">{t("home.ref.list.k")}</h1>
+              {total > 0 && <span className="chip chip--soft">{total}</span>}
+            </div>
+            <p className="p" style={{ marginTop: 0 }}>
+              {listLoading ? t("home.loading.text") : total ? t("home.ref.list.v") : t("home.ref.link.v")}
             </p>
 
-            {listError && <div className="pre" style={{ marginTop: 12 }}>{listError}</div>}
+            {listError && <div className="pre" style={{ marginTop: 10 }}>{listError}</div>}
 
-            <div className="list" style={{ marginTop: 10 }}>
+            <div className="list" style={{ marginTop: 12 }}>
               {listLoading ? (
-                <>
-                  <div className="skeleton h1" />
-                  <div className="skeleton p" />
-                </>
+                <><div className="skeleton h1" /><div className="skeleton p" /></>
               ) : items.length ? (
                 items.map((r, idx) => {
                   const name    = toStr(r?.full_name, "—");
@@ -257,7 +236,7 @@ export function Referrals() {
                       <div className="list__main">
                         <div className="list__title">
                           {name}
-                          {uname && <span style={{ opacity: 0.65, marginLeft: 6 }}>@{uname}</span>}
+                          {uname && <span style={{ opacity: 0.55, marginLeft: 8, fontWeight: 600, fontSize: 13 }}>@{uname}</span>}
                         </div>
                         <div className="list__sub">{created ? fmtDate(created) : "—"}</div>
                       </div>
