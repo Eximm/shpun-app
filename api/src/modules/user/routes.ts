@@ -109,7 +109,17 @@ async function readCurrentEmail(sessionId: string): Promise<{
 }
 
 async function shmSetLogin2(sessionId: string, email: string) {
-  await shmFetch(sessionId, "v1/user", { method: "POST", body: { login2: email } });
+  return shmFetch<any>(sessionId, "v1/user", {
+    method: "POST",
+    body: { login2: email },
+  });
+}
+
+async function readCurrentLogin2(sessionId: string): Promise<string | null> {
+  const meResult = await fetchMe(sessionId);
+  if (!meResult?.ok) return null;
+  const login2 = String(meResult?.meRaw?.login2 ?? "").trim().toLowerCase();
+  return login2 || null;
 }
 
 async function markOnboardingStep(sessionId: string, step: string) {
@@ -243,7 +253,11 @@ export async function userRoutes(app: FastifyInstance) {
   });
 
   // PUT /user/email
-  app.put("/user/email", async (req, reply) => {
+  // Меняем один пользовательский email сразу в двух местах:
+  // 1) email в настройках пользователя SHM;
+  // 2) login2 в карточке пользователя SHM — используется как дополнительный логин для входа.
+  // Успех возвращаем только если оба значения реально сохранились.
+    app.put("/user/email", async (req, reply) => {
     const s = getSessionFromRequest(req);
     if (!s?.shmSessionId) {
       return reply.code(401).send({ ok: false, error: "not_authenticated" });
@@ -253,33 +267,82 @@ export async function userRoutes(app: FastifyInstance) {
     if (!email)               return reply.code(400).send({ ok: false, error: "empty_email" });
     if (!isValidEmail(email)) return reply.code(400).send({ ok: false, error: "invalid_email" });
 
-    const r = await shmSetUserEmail(s.shmSessionId, email);
-    const shmMsg = extractShmMessage(r.json);
+    const currentLogin2 = await readCurrentLogin2(s.shmSessionId);
 
-    if (!r.ok) {
-      return reply.code(isAlreadyInUseMessage(shmMsg) ? 409 : r.status || 502).send({
+    if (currentLogin2 !== email) {
+      if (currentLogin2) {
+        const clearLogin2Res = await shmSetLogin2(s.shmSessionId, "");
+        if (!clearLogin2Res.ok) {
+          return reply.code(clearLogin2Res.status || 502).send({
+            ok: false,
+            error: "login2_clear_failed",
+            shm: { status: clearLogin2Res.status },
+            text: clearLogin2Res.text,
+          });
+        }
+      }
+
+      const login2Res = await shmSetLogin2(s.shmSessionId, email);
+      const login2Msg = extractShmMessage(login2Res.json);
+
+      if (!login2Res.ok) {
+        return reply.code(login2Res.status || 502).send({
+          ok: false,
+          error: "login2_update_failed",
+          message: login2Msg || null,
+          shm: { status: login2Res.status },
+          text: login2Res.text,
+        });
+      }
+
+      if (isAlreadyInUseMessage(login2Msg)) {
+        return reply.code(409).send({
+          ok: false,
+          error: "email_already_used",
+          message: login2Msg,
+        });
+      }
+    }
+
+    const emailRes = await shmSetUserEmail(s.shmSessionId, email);
+    const emailMsg = extractShmMessage(emailRes.json);
+
+    if (!emailRes.ok) {
+      return reply.code(isAlreadyInUseMessage(emailMsg) ? 409 : emailRes.status || 502).send({
         ok: false,
-        error: isAlreadyInUseMessage(shmMsg) ? "email_already_used" : "shm_email_set_failed",
-        message: shmMsg || null,
-        shm: { status: r.status },
+        error: isAlreadyInUseMessage(emailMsg) ? "email_already_used" : "shm_email_set_failed",
+        message: emailMsg || null,
+        shm: { status: emailRes.status },
       });
     }
 
-    if (isAlreadyInUseMessage(shmMsg)) {
-      return reply.code(409).send({ ok: false, error: "email_already_used", message: shmMsg });
+    if (isAlreadyInUseMessage(emailMsg)) {
+      return reply.code(409).send({
+        ok: false,
+        error: "email_already_used",
+        message: emailMsg,
+      });
     }
-
-    await Promise.allSettled([
-      shmSetLogin2(s.shmSessionId, email),
-      markOnboardingStep(s.shmSessionId, "email"),
-    ]);
 
     try {
       const current = await readCurrentEmail(s.shmSessionId);
       if (current.email !== email) {
         return reply.code(409).send({ ok: false, error: "email_not_saved" });
       }
-      return reply.send({ ok: true, email: current.email, emailVerified: current.emailVerified ?? false });
+
+      const login2 = await readCurrentLogin2(s.shmSessionId);
+      if (login2 !== email) {
+        return reply.code(409).send({ ok: false, error: "login2_not_saved" });
+      }
+
+      void markOnboardingStep(s.shmSessionId, "email");
+
+      return reply.send({
+        ok: true,
+        email: current.email,
+        login2,
+        emailVerified: current.emailVerified ?? false,
+      });
     } catch {
       return reply.code(502).send({ ok: false, error: "email_save_check_failed" });
     }
@@ -320,7 +383,7 @@ export async function userRoutes(app: FastifyInstance) {
   });
 
   // POST /user/email/send-code — отправить письмо с кодом верификации
-  // Вызывает POST /shm/v1/user/email — биллинг шлёт письмо с кодом
+  // Вызывает POST /shm/v1/user/email/verify — биллинг шлёт письмо с кодом.
   app.post("/user/email/send-code", async (req, reply) => {
     const s = getSessionFromRequest(req);
     if (!s?.shmSessionId) {

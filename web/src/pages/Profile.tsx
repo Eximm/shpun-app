@@ -1,5 +1,3 @@
-// FILE: web/src/pages/Profile.tsx
-
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
@@ -193,7 +191,6 @@ function EmailVerifyModal({ open, email, onClose, onVerified }: {
   const codeInputRef = useRef<HTMLInputElement>(null);
   const timerRef     = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Тикаем таймер — запускаем при монтировании и при открытии модалки
   useEffect(() => {
     function tick() {
       const left = getCooldownLeft();
@@ -204,7 +201,7 @@ function EmailVerifyModal({ open, email, onClose, onVerified }: {
       }
     }
 
-    tick(); // сразу показываем актуальное значение
+    tick();
 
     if (timerRef.current) clearInterval(timerRef.current);
     if (getCooldownLeft() > 0) {
@@ -214,14 +211,12 @@ function EmailVerifyModal({ open, email, onClose, onVerified }: {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [open]);
 
-  // Фокус на поле кода когда переходим в sent
   useEffect(() => {
     if (state === "sent") {
       setTimeout(() => codeInputRef.current?.focus(), 100);
     }
   }, [state]);
 
-  // Сбрасываем состояние при закрытии (кроме sent — его помним)
   function handleClose() {
     if (state === "success") {
       clearCodeSentAt();
@@ -240,7 +235,6 @@ function EmailVerifyModal({ open, email, onClose, onVerified }: {
       setCodeSentAt();
       const left = EMAIL_CODE_COOLDOWN_MS / 1000;
       setCooldown(left);
-      // Запускаем таймер сразу
       if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = setInterval(() => {
         const l = getCooldownLeft();
@@ -278,9 +272,8 @@ function EmailVerifyModal({ open, email, onClose, onVerified }: {
     }
   }
 
-  const maskedEmail = email; // показываем полный адрес
+  const maskedEmail = email;
 
-  // ── Экран: отправить код ─────────────────────────────────────────────────
   const idleScreen = (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ textAlign: "center", fontSize: 48, lineHeight: 1 }}>✉️</div>
@@ -304,7 +297,6 @@ function EmailVerifyModal({ open, email, onClose, onVerified }: {
     </div>
   );
 
-  // ── Экран: ввод кода ─────────────────────────────────────────────────────
   const sentScreen = (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ textAlign: "center", fontSize: 48, lineHeight: 1 }}>📬</div>
@@ -365,7 +357,6 @@ function EmailVerifyModal({ open, email, onClose, onVerified }: {
     </div>
   );
 
-  // ── Экран: успех ─────────────────────────────────────────────────────────
   const successScreen = (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, alignItems: "center" }}>
       <div style={{ fontSize: 64, lineHeight: 1 }}>✅</div>
@@ -421,6 +412,10 @@ export function Profile() {
               (profile?.id != null ? `@${profile.id}` : "");
     return l;
   }, [profile?.login, profile?.username, profile?.id]);
+
+  const authLoginText = useMemo(() => {
+    return String(profile?.login2 ?? "").trim();
+  }, [profile?.login2]);
 
   // ── Toast ─────────────────────────────────────────────────────────────────
   const [toast, setToast] = useState<string | null>(null);
@@ -500,7 +495,7 @@ export function Profile() {
     finally { setSavingTg(false); }
   }
 
-  // ── Email ─────────────────────────────────────────────────────────────────
+  // ── Email восстановления ─────────────────────────────────────────────────
   const [email,         setEmail]         = useState("");
   const [emailVerified, setEmailVerified] = useState<boolean | null>(null);
   const [emailLoading,  setEmailLoading]  = useState(false);
@@ -509,7 +504,6 @@ export function Profile() {
   const [emailDraft,    setEmailDraft]    = useState("");
   const [emailError,    setEmailError]    = useState<string | null>(null);
 
-  // Модалка верификации
   const [verifyModal, setVerifyModal] = useState(false);
 
   async function loadEmail() {
@@ -552,7 +546,7 @@ export function Profile() {
         setEmail(String(resp.email ?? clean));
         setEmailVerified(typeof resp.emailVerified === "boolean" ? resp.emailVerified : false);
         setEmailModal(false);
-        showToast("✉️ Email сохранён. Не забудьте подтвердить.");
+        showToast(`✉️ ${t("profile.email.toast.saved_verify")}`);
         return;
       }
       setEmailError(t("profile.email.error.save"));
@@ -735,7 +729,6 @@ export function Profile() {
       : t("profile.email.hint.unverified")
     : t("profile.email.hint.empty");
 
-  // Если код уже был отправлен в этой сессии — показываем подсказку
   const codePending = getCodeSentAt() > 0 && emailVerified !== true;
 
   const pushBadge = pushEnabled
@@ -853,7 +846,16 @@ export function Profile() {
             <SectionTitle icon="🔑">{t("profile.auth.title")}</SectionTitle>
             <div className="profile-list">
 
-              {/* Email */}
+              {/* Логин для входа: SHM login2, только чтение */}
+              <RowLine
+                icon="🔐"
+                label={t("profile.auth.login2.title")}
+                value={authLoginText || t("profile.auth.login2.empty")}
+                right={<Badge text={t("profile.auth.login2.badge")} />}
+                hint={t("profile.auth.login2.hint")}
+              />
+
+              {/* Email для восстановления: настройки пользователя, редактируемое поле */}
               <RowLine
                 icon="✉️"
                 label={t("profile.email.title")}
@@ -870,12 +872,12 @@ export function Profile() {
                         onClick={() => setVerifyModal(true)}
                         type="button"
                       >
-                        {codePending ? "Ввести код" : t("profile.email.verify")}
+                        {codePending ? t("profile.email.enter_code") : t("profile.email.verify")}
                       </button>
                     )}
                   </div>
                 }
-                hint={codePending ? "Код уже отправлен — нажмите «Ввести код»" : emailHint}
+                hint={codePending ? t("profile.email.code_pending") : emailHint}
               />
 
               {/* Telegram */}
@@ -990,7 +992,7 @@ export function Profile() {
         </div>
       </Modal>
 
-      {/* ── Модалка Email ── */}
+      {/* ── Модалка Email восстановления ── */}
       <Modal open={emailModal} title={email ? t("profile.email.modal.change_title") : t("profile.email.modal.add_title")} onClose={() => setEmailModal(false)} closeLabel={t("profile.modal.close")}>
         <p className="p">{t("profile.email.modal.text")}</p>
         <input className="input" style={{ marginTop: 10 }} value={emailDraft} onChange={(e) => setEmailDraft(e.target.value)} placeholder={t("profile.email.modal.placeholder")} autoComplete="email" inputMode="email" />

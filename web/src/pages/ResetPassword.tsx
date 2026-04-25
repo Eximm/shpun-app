@@ -1,6 +1,6 @@
 // FILE: web/src/pages/ResetPassword.tsx
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { apiFetch } from "../shared/api/client";
 import { toast } from "../shared/ui/toast";
@@ -13,6 +13,29 @@ function pwdScore(p: string) {
   if (/\d/.test(p))            s++;
   if (/[^A-Za-z0-9]/.test(p)) s++;
   return Math.min(s, 5);
+}
+
+function pickLoginFromResetVerifyPayload(payload: any): string {
+  const candidates = [
+    payload?.login2,
+    payload?.login,
+    payload?.authLogin,
+    payload?.profile?.login2,
+    payload?.profile?.login,
+    payload?.user?.login2,
+    payload?.user?.login,
+    payload?.data?.login2,
+    payload?.data?.login,
+    payload?.data?.[0]?.login2,
+    payload?.data?.[0]?.login,
+  ];
+
+  for (const v of candidates) {
+    const s = String(v ?? "").trim();
+    if (s) return s;
+  }
+
+  return "";
 }
 
 export function ResetPassword() {
@@ -84,7 +107,7 @@ function RequestForm({ nav }: { nav: ReturnType<typeof useNavigate> }) {
         <div className="card__body">
           <h1 className="h1">🔑 Забыли пароль?</h1>
           <p className="p">
-            Введите email, на который регистрировались. Мы отправим ссылку для сброса пароля.
+            Введите email для восстановления. Мы отправим ссылку для сброса пароля.
           </p>
 
           <form
@@ -93,7 +116,7 @@ function RequestForm({ nav }: { nav: ReturnType<typeof useNavigate> }) {
             onSubmit={(e) => { e.preventDefault(); void submit(); }}
           >
             <div className="field">
-              <label className="field__label">Email</label>
+              <label className="field__label">Email для восстановления</label>
               <input
                 className="input"
                 type="email"
@@ -144,9 +167,41 @@ function ConfirmForm({ token, nav }: { token: string; nav: ReturnType<typeof use
   const [error,    setError]    = useState<string | null>(null);
   const [done,     setDone]     = useState(false);
 
+  const [verifyLoading, setVerifyLoading] = useState(true);
+  const [verifyError,   setVerifyError]   = useState<string | null>(null);
+  const [accountLogin,  setAccountLogin]  = useState("");
+
   const strength       = pwdScore(pwd1);
   const passwordsMatch = pwd2.length === 0 || pwd1 === pwd2;
-  const canSubmit      = pwd1.length >= 8 && pwd2.length > 0 && pwd1 === pwd2 && !loading;
+  const canSubmit      = pwd1.length >= 8 && pwd2.length > 0 && pwd1 === pwd2 && !loading && !verifyLoading && !verifyError;
+
+  const loginView = useMemo(() => accountLogin.trim() || "—", [accountLogin]);
+
+  async function verifyToken() {
+    setVerifyLoading(true);
+    setVerifyError(null);
+    try {
+      const resp = await apiFetch<any>(`/auth/password-reset/verify?token=${encodeURIComponent(token)}`, {
+        method: "GET",
+      });
+      const login = pickLoginFromResetVerifyPayload(resp);
+      setAccountLogin(login);
+    } catch (e: any) {
+      const code = e?.code ?? e?.data?.error ?? "";
+      setVerifyError(
+        code === "invalid_or_expired_token"
+          ? "Ссылка недействительна или устарела. Запросите новую."
+          : "Не удалось проверить ссылку сброса пароля. Запросите новую ссылку."
+      );
+    } finally {
+      setVerifyLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void verifyToken();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
 
   async function submit() {
     if (!canSubmit) return;
@@ -177,6 +232,12 @@ function ConfirmForm({ token, nav }: { token: string; nav: ReturnType<typeof use
           <div className="card__body">
             <h1 className="h1">✅ Пароль изменён</h1>
             <p className="p">Теперь входите с новым паролем.</p>
+
+            <div className="pre" style={{ marginTop: 12 }}>
+              <div style={{ opacity: 0.72, marginBottom: 4 }}>Логин для входа:</div>
+              <strong>{loginView}</strong>
+            </div>
+
             <div className="auth__actions" style={{ marginTop: 16 }}>
               <button
                 type="button"
@@ -192,12 +253,64 @@ function ConfirmForm({ token, nav }: { token: string; nav: ReturnType<typeof use
     );
   }
 
+  if (verifyLoading) {
+    return (
+      <div className="section">
+        <div className="card">
+          <div className="card__body">
+            <h1 className="h1">🔐 Новый пароль</h1>
+            <p className="p">Проверяем ссылку сброса пароля…</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (verifyError) {
+    return (
+      <div className="section">
+        <div className="card">
+          <div className="card__body">
+            <h1 className="h1">⚠️ Ссылка не подходит</h1>
+            <p className="p">{verifyError}</p>
+            <div className="auth__actions" style={{ marginTop: 16 }}>
+              <button
+                type="button"
+                className="btn btn--primary login__btnFull"
+                onClick={() => nav("/reset-password")}
+              >
+                Запросить новую ссылку
+              </button>
+            </div>
+            <div className="login__switchWrap" style={{ marginTop: 12 }}>
+              <button
+                type="button"
+                className="btn login__switchBtn"
+                onClick={() => nav("/login")}
+              >
+                ← Вернуться ко входу
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="section">
       <div className="card">
         <div className="card__body">
           <h1 className="h1">🔐 Новый пароль</h1>
           <p className="p">Придумайте новый пароль для вашего аккаунта.</p>
+
+          <div className="pre" style={{ marginTop: 12 }}>
+            <div style={{ opacity: 0.72, marginBottom: 4 }}>Пароль будет изменён для логина:</div>
+            <strong>{loginView}</strong>
+            <div style={{ opacity: 0.72, marginTop: 8 }}>
+              После сохранения входите именно с этим логином и новым паролем.
+            </div>
+          </div>
 
           <form
             className="auth__form"
@@ -223,7 +336,7 @@ function ConfirmForm({ token, nav }: { token: string; nav: ReturnType<typeof use
                   disabled={loading}
                   aria-label={showPwd1 ? "Скрыть пароль" : "Показать пароль"}
                 >
-                  👁
+                  {showPwd1 ? "🙈" : "👁"}
                 </button>
               </div>
             </div>
@@ -256,7 +369,7 @@ function ConfirmForm({ token, nav }: { token: string; nav: ReturnType<typeof use
                   disabled={loading}
                   aria-label={showPwd2 ? "Скрыть пароль" : "Показать пароль"}
                 >
-                  👁
+                  {showPwd2 ? "🙈" : "👁"}
                 </button>
               </div>
             </div>

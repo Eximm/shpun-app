@@ -210,23 +210,31 @@ export const RU: Dict = {
 
   "profile.auth.title": "Вход и привязки",
 
-  "profile.email.title": "Email",
+  "profile.auth.login2.title": "Логин для входа",
+  "profile.auth.login2.badge": "Нельзя изменить",
+  "profile.auth.login2.hint": "Используется для авторизации. Этот логин был указан при регистрации.",
+  "profile.auth.login2.empty": "Не указан",
+
+  "profile.email.title": "Email для восстановления",
   "profile.email.loading": "Загрузка…",
   "profile.email.empty": "Не указан",
   "profile.email.add": "Добавить",
   "profile.email.change": "Изменить",
   "profile.email.save": "Сохранить",
   "profile.email.verify": "Подтвердить",
+  "profile.email.enter_code": "Ввести код",
+  "profile.email.code_pending": "Код уже отправлен — нажмите «Ввести код»",
 
   "profile.email.badge.verified": "Подтверждён",
   "profile.email.badge.unverified": "Не подтверждён",
   "profile.email.badge.empty": "Не указан",
 
-  "profile.email.hint.verified": "Используется для входа и восстановления доступа.",
-  "profile.email.hint.unverified": "Добавлен как дополнительный логин. Рекомендуем подтвердить.",
-  "profile.email.hint.empty": "Добавьте email для входа и восстановления доступа.",
+  "profile.email.hint.verified": "Используется для восстановления пароля и важных уведомлений.",
+  "profile.email.hint.unverified": "Используется для восстановления пароля. Рекомендуем подтвердить адрес.",
+  "profile.email.hint.empty": "Добавьте email для восстановления пароля и важных уведомлений.",
 
   "profile.email.toast.saved": "Email сохранён",
+  "profile.email.toast.saved_verify": "Email сохранён. Не забудьте подтвердить.",
   "profile.email.toast.verify_sent": "Письмо для подтверждения отправлено",
   "profile.email.toast.verify_failed": "Не удалось отправить письмо для подтверждения",
 
@@ -1137,23 +1145,31 @@ export const EN: Dict = {
 
   "profile.auth.title": "Sign-in and links",
 
-  "profile.email.title": "Email",
+  "profile.auth.login2.title": "Sign-in login",
+  "profile.auth.login2.badge": "Cannot be changed",
+  "profile.auth.login2.hint": "Used for authorization. This login was set during registration.",
+  "profile.auth.login2.empty": "Not set",
+
+  "profile.email.title": "Recovery email",
   "profile.email.loading": "Loading…",
   "profile.email.empty": "Not set",
   "profile.email.add": "Add",
   "profile.email.change": "Change",
   "profile.email.save": "Save",
   "profile.email.verify": "Verify",
+  "profile.email.enter_code": "Enter code",
+  "profile.email.code_pending": "Code has already been sent — tap “Enter code”",
 
   "profile.email.badge.verified": "Verified",
   "profile.email.badge.unverified": "Not verified",
   "profile.email.badge.empty": "Not set",
 
-  "profile.email.hint.verified": "Used for sign-in and account recovery.",
-  "profile.email.hint.unverified": "Added as an additional login. We recommend verifying it.",
-  "profile.email.hint.empty": "Add an email for sign-in and account recovery.",
+  "profile.email.hint.verified": "Used for password recovery and important notifications.",
+  "profile.email.hint.unverified": "Used for password recovery. We recommend verifying this address.",
+  "profile.email.hint.empty": "Add an email for password recovery and important notifications.",
 
   "profile.email.toast.saved": "Email saved",
+  "profile.email.toast.saved_verify": "Email saved. Please verify it.",
   "profile.email.toast.verify_sent": "Verification email sent",
   "profile.email.toast.verify_failed": "Could not send verification email",
 

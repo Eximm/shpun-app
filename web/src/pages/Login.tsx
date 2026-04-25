@@ -35,6 +35,10 @@ function getForgotCooldown(): number {
   const left = Math.ceil((sentAt + FORGOT_COOLDOWN_MS - Date.now()) / 1000);
   return left > 0 ? left : 0;
 }
+// Письмо было отправлено если sentAt есть (неважно истёк ли кулдаун)
+function wasForgotSent(): boolean {
+  return getForgotSentAt() > 0;
+}
 
 function setAuthPending(provider: string) {
   try { sessionStorage.setItem(AUTH_PENDING_KEY, provider); sessionStorage.setItem(AUTH_PENDING_AT_KEY, String(Date.now())); } catch { /* ignore */ }
@@ -213,7 +217,7 @@ export function Login() {
 
   // ── Forgot password state ──────────────────────────────────────────────────
   const [forgotLogin,    setForgotLogin]    = useState("");
-  const [forgotSent,     setForgotSent]     = useState(false);
+  const [forgotSent,     setForgotSent]     = useState(() => wasForgotSent());
   const [forgotLoading,  setForgotLoading]  = useState(false);
   const [forgotCooldown, setForgotCooldown] = useState(() => getForgotCooldown());
   const forgotTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -277,8 +281,8 @@ export function Login() {
       const p = readPendingPartnerId();
       setPartnerIdInput((p > 0 ? p : partnerId) > 0 ? String(p > 0 ? p : partnerId) : "");
     }
-    // сбрасываем forgot при переключении
-    if (next !== "forgot") { setForgotLogin(""); setForgotSent(false); setForgotLoading(false); }
+    // сбрасываем forgot при переключении на другую модалку (не на forgot)
+    if (next !== "forgot") { setForgotLoading(false); }
   }
 
   function closeModal() {
