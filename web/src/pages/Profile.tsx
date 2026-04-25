@@ -1,6 +1,6 @@
 // FILE: web/src/pages/Profile.tsx
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useMe } from "../app/auth/useMe";
@@ -18,6 +18,13 @@ type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform?: string }>;
 };
+
+type VerifyModalState = "idle" | "sent" | "success";
+
+/* ─── Constants ─────────────────────────────────────────────────────────── */
+
+const EMAIL_CODE_SENT_KEY    = "email_verify:sent_at";
+const EMAIL_CODE_COOLDOWN_MS = 60_000; // 60 сек между отправками
 
 /* ─── Utils ─────────────────────────────────────────────────────────────── */
 
@@ -59,6 +66,25 @@ function permissionLabel(p: string, t: (k: string) => string) {
   if (p === "denied")   return t("profile.push.permission.denied");
   if (p === "default")  return t("profile.push.permission.default");
   return t("profile.push.permission.unsupported");
+}
+
+function getCodeSentAt(): number {
+  try { return Number(sessionStorage.getItem(EMAIL_CODE_SENT_KEY) ?? 0) || 0; } catch { return 0; }
+}
+
+function setCodeSentAt() {
+  try { sessionStorage.setItem(EMAIL_CODE_SENT_KEY, String(Date.now())); } catch { /* ignore */ }
+}
+
+function clearCodeSentAt() {
+  try { sessionStorage.removeItem(EMAIL_CODE_SENT_KEY); } catch { /* ignore */ }
+}
+
+function getCooldownLeft(): number {
+  const sentAt = getCodeSentAt();
+  if (!sentAt) return 0;
+  const left = Math.ceil((sentAt + EMAIL_CODE_COOLDOWN_MS - Date.now()) / 1000);
+  return left > 0 ? left : 0;
 }
 
 /* ─── Small components ───────────────────────────────────────────────────── */
@@ -141,25 +167,242 @@ function Segmented({ value, onChange, ariaLabel }: {
 }) {
   return (
     <div className="seg" role="tablist" aria-label={ariaLabel}>
+      <button type="button" className={`btn seg__btn${value === "ru" ? " btn--primary" : ""}`} onClick={() => onChange("ru")} role="tab" aria-selected={value === "ru"}>RU</button>
+      <button type="button" className={`btn seg__btn${value === "en" ? " btn--primary" : ""}`} onClick={() => onChange("en")} role="tab" aria-selected={value === "en"}>EN</button>
+    </div>
+  );
+}
+
+/* ─── Email Verify Modal ─────────────────────────────────────────────────── */
+
+function EmailVerifyModal({ open, email, onClose, onVerified }: {
+  open: boolean;
+  email: string;
+  onClose: () => void;
+  onVerified: () => void;
+}) {
+  const [state,       setState]       = useState<VerifyModalState>(() =>
+    getCodeSentAt() > 0 ? "sent" : "idle"
+  );
+  const [code,        setCode]        = useState("");
+  const [codeError,   setCodeError]   = useState<string | null>(null);
+  const [sending,     setSending]     = useState(false);
+  const [confirming,  setConfirming]  = useState(false);
+  const [cooldown,    setCooldown]    = useState(() => getCooldownLeft());
+
+  const codeInputRef = useRef<HTMLInputElement>(null);
+  const timerRef     = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Тикаем таймер — запускаем при монтировании и при открытии модалки
+  useEffect(() => {
+    function tick() {
+      const left = getCooldownLeft();
+      setCooldown(left);
+      if (left <= 0 && timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    }
+
+    tick(); // сразу показываем актуальное значение
+
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (getCooldownLeft() > 0) {
+      timerRef.current = setInterval(tick, 1000);
+    }
+
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [open]);
+
+  // Фокус на поле кода когда переходим в sent
+  useEffect(() => {
+    if (state === "sent") {
+      setTimeout(() => codeInputRef.current?.focus(), 100);
+    }
+  }, [state]);
+
+  // Сбрасываем состояние при закрытии (кроме sent — его помним)
+  function handleClose() {
+    if (state === "success") {
+      clearCodeSentAt();
+    }
+    setCode("");
+    setCodeError(null);
+    onClose();
+  }
+
+  async function sendCode() {
+    if (cooldown > 0 || sending) return;
+    setSending(true);
+    setCodeError(null);
+    try {
+      await apiFetch("/user/email/send-code", { method: "POST", body: {} });
+      setCodeSentAt();
+      const left = EMAIL_CODE_COOLDOWN_MS / 1000;
+      setCooldown(left);
+      // Запускаем таймер сразу
+      if (timerRef.current) clearInterval(timerRef.current);
+      timerRef.current = setInterval(() => {
+        const l = getCooldownLeft();
+        setCooldown(l);
+        if (l <= 0 && timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+      }, 1000);
+      setState("sent");
+      setCode("");
+    } catch {
+      setCodeError("Не удалось отправить письмо. Попробуйте позже.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function confirmCode() {
+    const trimmed = code.trim();
+    if (!trimmed) { setCodeError("Введите код из письма"); return; }
+    setConfirming(true);
+    setCodeError(null);
+    try {
+      await apiFetch("/user/email/confirm", { method: "POST", body: { code: trimmed } });
+      clearCodeSentAt();
+      setState("success");
+      onVerified();
+    } catch (e: any) {
+      const errCode = e?.code ?? e?.data?.error ?? "";
+      setCodeError(
+        errCode === "invalid_code"
+          ? "Неверный код. Проверьте письмо и попробуйте ещё раз."
+          : "Не удалось подтвердить. Попробуйте ещё раз."
+      );
+    } finally {
+      setConfirming(false);
+    }
+  }
+
+  const maskedEmail = email; // показываем полный адрес
+
+  // ── Экран: отправить код ─────────────────────────────────────────────────
+  const idleScreen = (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ textAlign: "center", fontSize: 48, lineHeight: 1 }}>✉️</div>
+      <p className="p" style={{ textAlign: "center", margin: 0 }}>
+        Отправим письмо с кодом подтверждения на<br />
+        <strong>{maskedEmail}</strong>
+      </p>
+      {codeError && <div className="pre" style={{ textAlign: "center" }}>{codeError}</div>}
       <button
+        className="btn btn--primary"
         type="button"
-        className={`btn seg__btn${value === "ru" ? " btn--primary" : ""}`}
-        onClick={() => onChange("ru")}
-        role="tab"
-        aria-selected={value === "ru"}
+        onClick={() => void sendCode()}
+        disabled={sending || cooldown > 0}
+        style={{ width: "100%" }}
       >
-        RU
+        {sending ? "Отправляем…" : "Отправить код"}
       </button>
-      <button
-        type="button"
-        className={`btn seg__btn${value === "en" ? " btn--primary" : ""}`}
-        onClick={() => onChange("en")}
-        role="tab"
-        aria-selected={value === "en"}
-      >
-        EN
+      <button className="btn" type="button" onClick={handleClose} style={{ width: "100%" }}>
+        Отмена
       </button>
     </div>
+  );
+
+  // ── Экран: ввод кода ─────────────────────────────────────────────────────
+  const sentScreen = (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ textAlign: "center", fontSize: 48, lineHeight: 1 }}>📬</div>
+      <p className="p" style={{ textAlign: "center", margin: 0 }}>
+        Письмо отправлено на <strong>{maskedEmail}</strong>.<br />
+        Введите код из письма.
+      </p>
+
+      <form onSubmit={(e) => { e.preventDefault(); void confirmCode(); }}>
+        <div className="field">
+          <label className="field__label">Код подтверждения</label>
+          <input
+            ref={codeInputRef}
+            className="input"
+            placeholder="Введите код"
+            value={code}
+            onChange={(e) => { setCode(e.target.value); setCodeError(null); }}
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            disabled={confirming}
+            style={{ textAlign: "center", letterSpacing: "0.15em", fontSize: 20 }}
+          />
+        </div>
+
+        {codeError && (
+          <div className="pre" style={{ marginTop: 8, textAlign: "center" }}>{codeError}</div>
+        )}
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
+          <button
+            className="btn btn--primary"
+            type="submit"
+            disabled={confirming || !code.trim()}
+            style={{ width: "100%" }}
+          >
+            {confirming ? "Проверяем…" : "Подтвердить"}
+          </button>
+
+          <button
+            className="btn"
+            type="button"
+            onClick={() => void sendCode()}
+            disabled={sending || cooldown > 0}
+            style={{ width: "100%", opacity: cooldown > 0 ? 0.6 : 1 }}
+          >
+            {sending
+              ? "Отправляем…"
+              : cooldown > 0
+                ? `Повторить через ${cooldown} сек`
+                : "Отправить повторно"}
+          </button>
+        </div>
+      </form>
+
+      <p className="p" style={{ textAlign: "center", margin: 0, opacity: 0.5, fontSize: 13 }}>
+        Проверьте папку «Спам», если письмо не пришло
+      </p>
+    </div>
+  );
+
+  // ── Экран: успех ─────────────────────────────────────────────────────────
+  const successScreen = (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, alignItems: "center" }}>
+      <div style={{ fontSize: 64, lineHeight: 1 }}>✅</div>
+      <div style={{ textAlign: "center" }}>
+        <div className="h1" style={{ marginBottom: 8 }}>Email подтверждён!</div>
+        <p className="p" style={{ margin: 0 }}>
+          Адрес <strong>{maskedEmail}</strong> успешно подтверждён.
+        </p>
+      </div>
+      <button
+        className="btn btn--primary"
+        type="button"
+        onClick={handleClose}
+        style={{ width: "100%" }}
+      >
+        Готово
+      </button>
+    </div>
+  );
+
+  const titles: Record<VerifyModalState, string> = {
+    idle:    "Подтверждение email",
+    sent:    "Введите код",
+    success: "Готово",
+  };
+
+  return (
+    <Modal
+      open={open}
+      title={titles[state]}
+      onClose={handleClose}
+      closeLabel="Закрыть"
+    >
+      {state === "idle"    && idleScreen}
+      {state === "sent"    && sentScreen}
+      {state === "success" && successScreen}
+    </Modal>
   );
 }
 
@@ -266,6 +509,9 @@ export function Profile() {
   const [emailDraft,    setEmailDraft]    = useState("");
   const [emailError,    setEmailError]    = useState<string | null>(null);
 
+  // Модалка верификации
+  const [verifyModal, setVerifyModal] = useState(false);
+
   async function loadEmail() {
     setEmailLoading(true);
     try {
@@ -279,7 +525,10 @@ export function Profile() {
   }
 
   useEffect(() => { void loadEmail(); }, []);
-  useEffect(() => { if (!emailModal) { setEmailDraft(email || ""); setEmailError(null); } }, [emailModal, email]);
+
+  useEffect(() => {
+    if (!emailModal) { setEmailDraft(email || ""); setEmailError(null); }
+  }, [emailModal, email]);
 
   function getEmailError(err: unknown): string {
     const raw = String((err as any)?.message || "").toLowerCase();
@@ -294,7 +543,7 @@ export function Profile() {
   async function saveEmail() {
     setEmailError(null);
     const clean = emailDraft.trim().toLowerCase();
-    if (!clean)             { setEmailError(t("profile.email.error.empty")); return; }
+    if (!clean)               { setEmailError(t("profile.email.error.empty")); return; }
     if (!isValidEmail(clean)) { setEmailError(t("profile.email.error.invalid")); return; }
     setEmailBusy(true);
     try {
@@ -302,18 +551,12 @@ export function Profile() {
       if (resp?.ok) {
         setEmail(String(resp.email ?? clean));
         setEmailVerified(typeof resp.emailVerified === "boolean" ? resp.emailVerified : false);
-        setEmailModal(false); showToast("✉️ Email сохранён. Не забудьте подтвердить."); return;
+        setEmailModal(false);
+        showToast("✉️ Email сохранён. Не забудьте подтвердить.");
+        return;
       }
       setEmailError(t("profile.email.error.save"));
     } catch (e: unknown) { setEmailError(getEmailError(e)); }
-    finally { setEmailBusy(false); }
-  }
-
-  async function requestVerifyEmail() {
-    if (!email) { setEmailError(t("profile.email.error.need_email")); return; }
-    setEmailBusy(true);
-    try { await apiFetch("/user/email/verify", { method: "POST", body: {} }); showToast("📬 Письмо отправлено. Проверьте почту."); }
-    catch { showToast("😬 Не отправилось. Попробуйте позже."); }
     finally { setEmailBusy(false); }
   }
 
@@ -481,12 +724,19 @@ export function Profile() {
   const pushPermText = permissionLabel(String(pushState.permission), t);
 
   const emailBadge = email
-    ? emailVerified === true ? <Badge text={t("profile.email.badge.verified")} tone="ok" /> : <Badge text={t("profile.email.badge.unverified")} />
+    ? emailVerified === true
+      ? <Badge text={t("profile.email.badge.verified")} tone="ok" />
+      : <Badge text={t("profile.email.badge.unverified")} tone="warn" />
     : <Badge text={t("profile.email.badge.empty")} />;
 
   const emailHint = email
-    ? emailVerified === true ? t("profile.email.hint.verified") : t("profile.email.hint.unverified")
+    ? emailVerified === true
+      ? t("profile.email.hint.verified")
+      : t("profile.email.hint.unverified")
     : t("profile.email.hint.empty");
+
+  // Если код уже был отправлен в этой сессии — показываем подсказку
+  const codePending = getCodeSentAt() > 0 && emailVerified !== true;
 
   const pushBadge = pushEnabled
     ? <Badge text={t("profile.push.enabled")} tone="ok" />
@@ -523,7 +773,6 @@ export function Profile() {
             <div className="home-alert home-alert--ok" style={{ marginTop: 10 }}>{toast}</div>
           )}
 
-          {/* Кнопки — в колонку, чётко и без наезда */}
           <div className="profile-header-actions">
             {isAdmin && (
               <button className="btn btn--accent" onClick={() => nav("/admin")} type="button">
@@ -533,12 +782,7 @@ export function Profile() {
             <button className="btn" onClick={() => setPwdModal(true)} type="button">
               🔐 {t("profile.change_password")}
             </button>
-            <button
-              className="btn btn--danger"
-              onClick={() => void logout()}
-              disabled={loggingOut}
-              type="button"
-            >
+            <button className="btn btn--danger" onClick={() => void logout()} disabled={loggingOut} type="button">
               🚪 {loggingOut ? "…" : t("profile.logout")}
             </button>
           </div>
@@ -621,13 +865,17 @@ export function Profile() {
                       {email ? t("profile.email.change") : t("profile.email.add")}
                     </button>
                     {email && emailVerified !== true && (
-                      <button className="btn btn--primary" onClick={() => void requestVerifyEmail()} disabled={emailBusy} type="button">
-                        {emailBusy ? "…" : t("profile.email.verify")}
+                      <button
+                        className="btn btn--primary"
+                        onClick={() => setVerifyModal(true)}
+                        type="button"
+                      >
+                        {codePending ? "Ввести код" : t("profile.email.verify")}
                       </button>
                     )}
                   </div>
                 }
-                hint={emailHint}
+                hint={codePending ? "Код уже отправлен — нажмите «Ввести код»" : emailHint}
               />
 
               {/* Telegram */}
@@ -679,13 +927,9 @@ export function Profile() {
                   <div className="profile-row__hint">{pwaHint}</div>
                 </div>
                 <div className="profile-row__right">
-                  {standalone
-                    ? <Badge text={t("profile.pwa.installed")} tone="ok" />
-                    : <Badge text={t("profile.pwa.not_installed")} />}
+                  {standalone ? <Badge text={t("profile.pwa.installed")} tone="ok" /> : <Badge text={t("profile.pwa.not_installed")} />}
                   {!standalone && (
-                    <button className="btn btn--primary" onClick={() => void doInstallPwa()} type="button">
-                      {pwaBtnText}
-                    </button>
+                    <button className="btn btn--primary" onClick={() => void doInstallPwa()} type="button">{pwaBtnText}</button>
                   )}
                 </div>
               </div>
@@ -704,16 +948,9 @@ export function Profile() {
                   ) : pushState.permission === "denied" ? (
                     <button className="btn" type="button" disabled>{t("profile.push.button.settings")}</button>
                   ) : isIOS() && !standalone ? (
-                    <button className="btn btn--primary" type="button" onClick={() => void doInstallPwa()} disabled={pushLoading}>
-                      {t("profile.pwa.button.install")}
-                    </button>
+                    <button className="btn btn--primary" type="button" onClick={() => void doInstallPwa()} disabled={pushLoading}>{t("profile.pwa.button.install")}</button>
                   ) : (
-                    <button
-                      className={`btn${pushEnabled ? "" : " btn--primary"}`}
-                      type="button"
-                      onClick={() => void togglePush()}
-                      disabled={pushLoading}
-                    >
+                    <button className={`btn${pushEnabled ? "" : " btn--primary"}`} type="button" onClick={() => void togglePush()} disabled={pushLoading}>
                       {pushLoading ? "…" : pushEnabled ? t("profile.push.button.disable") : t("profile.push.button.enable")}
                     </button>
                   )}
@@ -724,6 +961,14 @@ export function Profile() {
           </div>
         </div>
       </div>
+
+      {/* ── Модалка верификации email ── */}
+      <EmailVerifyModal
+        open={verifyModal}
+        email={email}
+        onClose={() => setVerifyModal(false)}
+        onVerified={() => setEmailVerified(true)}
+      />
 
       {/* ── Модалка iOS ── */}
       <Modal open={iosInstallModal} title={t("profile.pwa.ios_modal.title")} onClose={() => setIosInstallModal(false)} closeLabel={t("profile.modal.close")}>
@@ -762,12 +1007,7 @@ export function Profile() {
         <label className="field" style={{ marginTop: 12 }}>
           <span className="field__label">{t("profile.password.field.p1")}</span>
           <div className="pwdfield">
-            <input
-              className="input" placeholder={t("profile.password.field.p1_ph")}
-              value={pwd1} onChange={(e) => setPwd1(e.target.value)}
-              type={showPwd1 ? "text" : "password"}
-              autoComplete="new-password" disabled={pwdBusy}
-            />
+            <input className="input" placeholder={t("profile.password.field.p1_ph")} value={pwd1} onChange={(e) => setPwd1(e.target.value)} type={showPwd1 ? "text" : "password"} autoComplete="new-password" disabled={pwdBusy} />
             <button type="button" className="btn btn--soft pwdfield__btn" onClick={() => setShowPwd1((v) => !v)} disabled={pwdBusy} aria-label={showPwd1 ? t("profile.password.hide_password") : t("profile.password.show_password")}>
               {showPwd1 ? "🙈" : "👁"}
             </button>
@@ -776,12 +1016,7 @@ export function Profile() {
         <label className="field" style={{ marginTop: 10 }}>
           <span className="field__label">{t("profile.password.field.p2")}</span>
           <div className="pwdfield">
-            <input
-              className="input" placeholder={t("profile.password.field.p2_ph")}
-              value={pwd2} onChange={(e) => setPwd2(e.target.value)}
-              type={showPwd2 ? "text" : "password"}
-              autoComplete="new-password" disabled={pwdBusy}
-            />
+            <input className="input" placeholder={t("profile.password.field.p2_ph")} value={pwd2} onChange={(e) => setPwd2(e.target.value)} type={showPwd2 ? "text" : "password"} autoComplete="new-password" disabled={pwdBusy} />
             <button type="button" className="btn btn--soft pwdfield__btn" onClick={() => setShowPwd2((v) => !v)} disabled={pwdBusy} aria-label={showPwd2 ? t("profile.password.hide_password") : t("profile.password.show_password")}>
               {showPwd2 ? "🙈" : "👁"}
             </button>

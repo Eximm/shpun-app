@@ -330,6 +330,7 @@ async function updateAuthMeta(
     });
   }
 }
+
 /* ============================================================
    Deterministic Telegram tech credentials
 ============================================================ */
@@ -517,7 +518,6 @@ async function resolveTelegramMiniAppSession(
 > {
   const clientIp = getClientIp(req);
 
-  // 1) canonical Telegram auth
   let rr = await singleFlightTelegramWebAppAuth(initData, clientIp);
   if (rr.ok && hasShmSession(rr)) {
     return {
@@ -532,12 +532,10 @@ async function resolveTelegramMiniAppSession(
     return { ok: false, status: 400, error: "telegram_id_missing" };
   }
 
-  // 2) existing user via deterministic tech credentials
   const existing = await tryPasswordLoginByTelegram(req, creds);
   if (existing.ok) {
     await bindTelegramToSession(req, existing.shmSessionId, creds.tgId, creds.tgLogin);
 
-    // try to switch back to canonical Telegram session
     rr = await singleFlightTelegramWebAppAuth(initData, clientIp);
     if (rr.ok && hasShmSession(rr)) {
       return {
@@ -554,13 +552,11 @@ async function resolveTelegramMiniAppSession(
     };
   }
 
-  // 3) new user registration
   const reg = await ensureTelegramUserByPasswordRegister(req, body?.partner_id, creds);
   if (!reg.ok) {
     return reg;
   }
 
-  // 4) login newly created user
   const created = await tryPasswordLoginByTelegram(req, creds);
   if (!created.ok) {
     return {
@@ -571,10 +567,8 @@ async function resolveTelegramMiniAppSession(
     };
   }
 
-  // 5) bind Telegram
   await bindTelegramToSession(req, created.shmSessionId, creds.tgId, creds.tgLogin);
 
-  // 6) re-try canonical Telegram auth
   rr = await singleFlightTelegramWebAppAuth(initData, clientIp);
   if (rr.ok && hasShmSession(rr)) {
     return {
@@ -609,7 +603,6 @@ async function resolveTelegramWidgetSession(
 > {
   const clientIp = getClientIp(req);
 
-  // 1) canonical widget auth
   let rr = await singleFlightTelegramWidgetAuth(payload, clientIp);
   if (rr.ok && hasShmSession(rr)) {
     return {
@@ -624,7 +617,6 @@ async function resolveTelegramWidgetSession(
     return { ok: false, status: 400, error: "telegram_id_missing" };
   }
 
-  // 2) existing user via deterministic tech credentials
   const existing = await tryPasswordLoginByTelegram(req, creds);
   if (existing.ok) {
     await bindTelegramToSession(req, existing.shmSessionId, creds.tgId, creds.tgLogin);
@@ -645,13 +637,11 @@ async function resolveTelegramWidgetSession(
     };
   }
 
-  // 3) new user registration
   const reg = await ensureTelegramUserByPasswordRegister(req, payload?.partner_id, creds);
   if (!reg.ok) {
     return reg;
   }
 
-  // 4) login newly created user
   const created = await tryPasswordLoginByTelegram(req, creds);
   if (!created.ok) {
     return {
@@ -662,10 +652,8 @@ async function resolveTelegramWidgetSession(
     };
   }
 
-  // 5) bind Telegram
   await bindTelegramToSession(req, created.shmSessionId, creds.tgId, creds.tgLogin);
 
-  // 6) re-try canonical widget auth
   rr = await singleFlightTelegramWidgetAuth(payload, clientIp);
   if (rr.ok && hasShmSession(rr)) {
     return {
@@ -727,6 +715,8 @@ async function singleFlightTelegramWidgetAuth(
 ============================================================ */
 
 export async function authRoutes(app: FastifyInstance) {
+
+  // ── Telegram Mini App ────────────────────────────────────────────────────
   app.post("/auth/telegram", async (req, reply) => {
     const body = readJsonBody(req);
     const initData = String(body.initData ?? "").trim();
@@ -794,6 +784,7 @@ export async function authRoutes(app: FastifyInstance) {
       });
   });
 
+  // ── Telegram Widget POST ─────────────────────────────────────────────────
   app.post("/auth/telegram_widget", async (req, reply) => {
     const body = (req.body ?? {}) as any;
     if (isProbablyEmptyTelegramWidgetPayload(body)) {
@@ -844,13 +835,6 @@ export async function authRoutes(app: FastifyInstance) {
     await updateAuthMeta(shmSessionId, req, "widget");
 
     const ps = await getPasswordSetFlag(shmSessionId);
-    dbg(req, "telegram_widget_auth_resolved", {
-      source: resolved.source,
-      shmSessionId: maskValue(shmSessionId),
-      shmUserId,
-      login,
-      next: ps === 1 ? "home" : "set_password",
-    });
 
     return reply
       .setCookie("sid", localSid, cookieOptions(req))
@@ -862,6 +846,7 @@ export async function authRoutes(app: FastifyInstance) {
       });
   });
 
+  // ── Telegram Widget Redirect (GET) ───────────────────────────────────────
   app.get("/auth/telegram_widget_redirect", async (req, reply) => {
     const payload = (req.query ?? {}) as any;
     if (isProbablyEmptyTelegramWidgetPayload(payload)) {
@@ -910,19 +895,12 @@ export async function authRoutes(app: FastifyInstance) {
     reply.setCookie("sid", localSid, cookieOptions(req));
     const ps = await getPasswordSetFlag(shmSessionId);
 
-    dbg(req, "telegram_widget_redirect_resolved", {
-      source: resolved.source,
-      shmSessionId: maskValue(shmSessionId),
-      shmUserId,
-      login,
-      next: ps === 1 ? "home" : "set_password",
-    });
-
     return ps === 1
       ? reply.redirect(withAuthOk("/login"))
       : reply.redirect(withAuthOk("/set-password"));
   });
 
+  // ── Password login / register ────────────────────────────────────────────
   app.post("/auth/password", async (req, reply) => {
     const body = readJsonBody(req);
     const modeRaw = String(body?.mode ?? "login").trim().toLowerCase();
@@ -962,17 +940,12 @@ export async function authRoutes(app: FastifyInstance) {
 
     await updateAuthMeta(shmSessionId, req, "password");
 
-    dbg(req, "password_auth:done", {
-      userId: shmUserId,
-      mode,
-      sid: maskValue(localSid),
-    });
-
     return reply
       .setCookie("sid", localSid, cookieOptions(req))
       .send({ ok: true, user_id: shmUserId, login, next: "home" });
   });
 
+  // ── Set password (onboarding) ────────────────────────────────────────────
   app.post("/auth/password/set", async (req, reply) => {
     const body = readJsonBody(req);
     const password = String(body?.password ?? "");
@@ -1022,16 +995,9 @@ export async function authRoutes(app: FastifyInstance) {
               });
             }
             newSessionId = newSid;
-            dbg(req, "password_set:reauth_password_ok", {
-              newSessionId: maskValue(newSid),
-            });
           }
         }
-      } catch (e: any) {
-        dbg(req, "password_set:reauth_password_failed", {
-          error: String(e?.message ?? e),
-        });
-      }
+      } catch {}
     }
 
     if (!newSessionId) {
@@ -1060,9 +1026,6 @@ export async function authRoutes(app: FastifyInstance) {
                 }
               } catch {}
               newSessionId = newSid;
-              dbg(req, "password_set:reauth_tg_webapp_ok", {
-                newSessionId: maskValue(newSid),
-              });
             }
           } else {
             const creds = buildMiniAppTelegramCredentials(
@@ -1088,9 +1051,6 @@ export async function authRoutes(app: FastifyInstance) {
                   });
                 }
                 newSessionId = fb.shmSessionId;
-                dbg(req, "password_set:reauth_tg_webapp_fallback_ok", {
-                  newSessionId: maskValue(fb.shmSessionId),
-                });
               }
             }
           }
@@ -1115,9 +1075,6 @@ export async function authRoutes(app: FastifyInstance) {
                 }
               } catch {}
               newSessionId = newSid;
-              dbg(req, "password_set:reauth_tg_widget_ok", {
-                newSessionId: maskValue(newSid),
-              });
             }
           } else {
             const creds = buildWidgetTelegramCredentials(session.telegramWidgetPayload);
@@ -1141,18 +1098,11 @@ export async function authRoutes(app: FastifyInstance) {
                   });
                 }
                 newSessionId = fb.shmSessionId;
-                dbg(req, "password_set:reauth_tg_widget_fallback_ok", {
-                  newSessionId: maskValue(fb.shmSessionId),
-                });
               }
             }
           }
         }
-      } catch (e: any) {
-        dbg(req, "password_set:reauth_tg_failed", {
-          error: String(e?.message ?? e),
-        });
-      }
+      } catch {}
     }
 
     if (newSessionId && newSessionId !== oldSessionId) {
@@ -1171,6 +1121,7 @@ export async function authRoutes(app: FastifyInstance) {
     });
   });
 
+  // ── Onboarding mark ──────────────────────────────────────────────────────
   app.post("/auth/onboarding/mark", async (req, reply) => {
     const s = getSessionFromRequest(req) as any;
     if (!s) {
@@ -1277,6 +1228,7 @@ export async function authRoutes(app: FastifyInstance) {
     }
   });
 
+  // ── Auth status ──────────────────────────────────────────────────────────
   app.get("/auth/status", async (req, reply) => {
     const s = getSessionFromRequest(req) as any;
     return reply.send({
@@ -1286,9 +1238,62 @@ export async function authRoutes(app: FastifyInstance) {
     });
   });
 
+  // ── Logout ───────────────────────────────────────────────────────────────
   app.post("/logout", async (req, reply) => {
     const sid = (req.cookies as any)?.sid as string | undefined;
     deleteSession(sid);
     return reply.clearCookie("sid", { path: "/" }).send({ ok: true });
+  });
+
+  // ── Сброс пароля: запрос письма ──────────────────────────────────────────
+  // Публичный. Принимает { login }.
+  // Всегда отвечает { ok: true } — не раскрываем существование аккаунта.
+  app.post("/auth/password-reset", async (req, reply) => {
+    const body  = readJsonBody(req);
+    const login = String(body?.login ?? "").trim().toLowerCase();
+
+    if (!login) {
+      return reply.code(400).send({ ok: false, error: "login_required" });
+    }
+
+    try {
+      await shmFetch(null, "v1/user/passwd/reset", {
+        method: "POST",
+        body: { login },
+      });
+    } catch {
+      // best-effort — не раскрываем ошибку
+    }
+
+    return reply.send({ ok: true });
+  });
+
+  // ── Сброс пароля: установка нового пароля по токену ──────────────────────
+  // Публичный. Принимает { token, password }.
+  app.post("/auth/password-reset/confirm", async (req, reply) => {
+    const body     = readJsonBody(req);
+    const token    = String(body?.token    ?? "").trim();
+    const password = String(body?.password ?? "").trim();
+
+    if (!token) {
+      return reply.code(400).send({ ok: false, error: "token_required" });
+    }
+    if (!password || password.length < 8) {
+      return reply.code(400).send({ ok: false, error: "password_too_short" });
+    }
+
+    const r = await shmFetch<any>(null, "v1/user/passwd/reset/verify", {
+      method: "POST",
+      body: { token, password },
+    });
+
+    if (!r.ok) {
+      return reply.code(r.status === 400 ? 400 : 502).send({
+        ok: false,
+        error: r.status === 400 ? "invalid_or_expired_token" : "shm_reset_failed",
+      });
+    }
+
+    return reply.send({ ok: true });
   });
 }

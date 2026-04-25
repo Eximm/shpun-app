@@ -12,6 +12,7 @@ import {
 import "./index.css";
 
 import { Login }            from "./pages/Login";
+import { ResetPassword }    from "./pages/ResetPassword";
 import { Home }             from "./pages/Home";
 import { Feed }             from "./pages/Feed";
 import { Services }         from "./pages/Services";
@@ -33,9 +34,6 @@ import { useBillingNotifications }    from "./app/notifications/useBillingNotifi
 import { apiFetch }                   from "./shared/api/client";
 
 /* ─── PWA install prompt ─────────────────────────────────────────────────── */
-// Перехватываем beforeinstallprompt как можно раньше — до React-рендера.
-// Браузер выдаёт событие один раз; если пропустить — придётся ждать следующего визита.
-// Сохраняем в window.__pwaInstallPrompt, AuthGate вызывает .prompt() по кнопке.
 
 declare global {
   interface Window {
@@ -51,12 +49,10 @@ interface BeforeInstallPromptEvent extends Event {
 window.__pwaInstallPrompt = null;
 
 window.addEventListener("beforeinstallprompt", (e) => {
-  // Предотвращаем автоматический показ — будем управлять моментом сами
   e.preventDefault();
   window.__pwaInstallPrompt = e as BeforeInstallPromptEvent;
 });
 
-// Очищаем после успешной установки
 window.addEventListener("appinstalled", () => {
   window.__pwaInstallPrompt = null;
 });
@@ -92,7 +88,10 @@ type ServicesSummaryResp = { ok: true; summary?: { active?: number } };
 function AppShell({ children }: { children: React.ReactNode }) {
   const { t } = useI18n();
   const loc   = useLocation();
-  const hideNav = loc.pathname === "/login" || loc.pathname.startsWith("/transfer");
+
+  const hideNav = loc.pathname === "/login"
+    || loc.pathname === "/reset-password"
+    || loc.pathname.startsWith("/transfer");
 
   return (
     <div className="app">
@@ -210,9 +209,11 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <AppShell>
             <PageContainer>
               <Routes>
-                <Route path="/login"    element={<Login />} />
-                <Route path="/transfer" element={<Transfer />} />
-                <Route path="/app"      element={<AppPathRedirect />} />
+                {/* Публичные маршруты — без авторизации */}
+                <Route path="/login"          element={<Login />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
+                <Route path="/transfer"       element={<Transfer />} />
+                <Route path="/app"            element={<AppPathRedirect />} />
 
                 <Route element={<AuthedLayout />}>
                   <Route path="/"                    element={<LandingRoute />} />

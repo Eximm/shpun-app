@@ -108,18 +108,10 @@ async function readCurrentEmail(sessionId: string): Promise<{
   };
 }
 
-/**
- * POST /v1/user { login2: email } — email становится вторым логином.
- * Пользователь входит и по login1 и по email.
- */
 async function shmSetLogin2(sessionId: string, email: string) {
   await shmFetch(sessionId, "v1/user", { method: "POST", body: { login2: email } });
 }
 
-/**
- * Фиксируем шаг онбординга через шаблон. best-effort.
- * step=email → ShpynApp.onboarding.step_email = 1
- */
 async function markOnboardingStep(sessionId: string, step: string) {
   try {
     await shmFetch<any>(null, "v1/template/shpun_app", {
@@ -134,15 +126,13 @@ async function markOnboardingStep(sessionId: string, step: string) {
 
 export async function userRoutes(app: FastifyInstance) {
 
-  // GET /me — главный endpoint, вызывается при каждом рендере
+  // GET /me
   app.get("/me", async (req, reply) => {
     const s = getSessionFromRequest(req);
     if (!s?.shmSessionId) {
       return reply.code(401).send({ ok: false, error: "not_authenticated" });
     }
 
-    // fetchMe делает 2 параллельных запроса: shmGetMe + shmShpunAppStatus
-    // email, telegram, admin читаем параллельно с fetchMe
     const [meRes, emailRes, tgRes, adminRes] = await Promise.allSettled([
       fetchMe(s.shmSessionId),
       readCurrentEmail(s.shmSessionId).catch(() => ({ email: null, emailVerified: null })),
@@ -181,17 +171,10 @@ export async function userRoutes(app: FastifyInstance) {
         login2:      meRaw.login2 ?? null,
         fullName:    meRaw.full_name ?? null,
         phone:       meRaw.phone ?? null,
-
-        // Флаги из ShpynApp (через me.ts → shmShpunAppStatus).
-        // passwordStepDone = onboarding.step_password (шаблон v9_6+)
-        // emailStepDone    = onboarding.step_email
         passwordStepDone: meResult.me.passwordStepDone,
         emailStepDone:    meResult.me.emailStepDone,
-
-        // Email из биллинга (settings.email)
         email,
         emailVerified,
-
         created:   meResult.me.created   ?? null,
         lastLogin: meResult.me.lastLogin ?? null,
         role:      admin.role,
@@ -213,7 +196,7 @@ export async function userRoutes(app: FastifyInstance) {
     return reply.send(payload);
   });
 
-  // POST /user/profile — изменение имени и телефона
+  // POST /user/profile
   app.post("/user/profile", async (req, reply) => {
     const s = getSessionFromRequest(req);
     if (!s?.shmSessionId) {
@@ -244,7 +227,7 @@ export async function userRoutes(app: FastifyInstance) {
     return reply.send({ ok: true });
   });
 
-  // GET /user/email — текущий email пользователя
+  // GET /user/email
   app.get("/user/email", async (req, reply) => {
     const s = getSessionFromRequest(req);
     if (!s?.shmSessionId) {
@@ -259,11 +242,7 @@ export async function userRoutes(app: FastifyInstance) {
     }
   });
 
-  // PUT /user/email — установка email при онбординге (пользователь из бота)
-  // Делает три вещи за один запрос:
-  //   1. PUT /v1/user/email → биллинг пишет settings.email + settings.email_verified
-  //   2. POST /v1/user { login2: email } → email становится вторым логином для входа
-  //   3. onboarding.mark step=email → ShpynApp.onboarding.step_email = 1
+  // PUT /user/email
   app.put("/user/email", async (req, reply) => {
     const s = getSessionFromRequest(req);
     if (!s?.shmSessionId) {
@@ -271,10 +250,9 @@ export async function userRoutes(app: FastifyInstance) {
     }
 
     const email = normalizeEmail((req.body as any)?.email);
-    if (!email)              return reply.code(400).send({ ok: false, error: "empty_email" });
+    if (!email)               return reply.code(400).send({ ok: false, error: "empty_email" });
     if (!isValidEmail(email)) return reply.code(400).send({ ok: false, error: "invalid_email" });
 
-    // Шаг 1: устанавливаем email в биллинге
     const r = await shmSetUserEmail(s.shmSessionId, email);
     const shmMsg = extractShmMessage(r.json);
 
@@ -291,13 +269,11 @@ export async function userRoutes(app: FastifyInstance) {
       return reply.code(409).send({ ok: false, error: "email_already_used", message: shmMsg });
     }
 
-    // Шаг 2+3: параллельно — login2 и onboarding.mark step=email
     await Promise.allSettled([
       shmSetLogin2(s.shmSessionId, email),
       markOnboardingStep(s.shmSessionId, "email"),
     ]);
 
-    // Проверяем что email реально сохранился
     try {
       const current = await readCurrentEmail(s.shmSessionId);
       if (current.email !== email) {
@@ -309,7 +285,7 @@ export async function userRoutes(app: FastifyInstance) {
     }
   });
 
-  // DELETE /user/email — удаление email
+  // DELETE /user/email
   app.delete("/user/email", async (req, reply) => {
     const s = getSessionFromRequest(req);
     if (!s?.shmSessionId) {
@@ -326,7 +302,7 @@ export async function userRoutes(app: FastifyInstance) {
     return reply.send({ ok: true });
   });
 
-  // POST /user/email/verify — запрос верификации email
+  // POST /user/email/verify — оставляем как был (legacy, не используется фронтом напрямую)
   app.post("/user/email/verify", async (req, reply) => {
     const s = getSessionFromRequest(req);
     if (!s?.shmSessionId) {
@@ -343,8 +319,67 @@ export async function userRoutes(app: FastifyInstance) {
     return reply.send({ ok: true, result: r.json ?? null });
   });
 
-  // POST /user/prefs — обновление настроек пользователя (locale, dark_mode и т.д.)
-  // Вызывает action=prefs.set в шаблоне shpun_app
+  // POST /user/email/send-code — отправить письмо с кодом верификации
+  // Вызывает POST /shm/v1/user/email — биллинг шлёт письмо с кодом
+  app.post("/user/email/send-code", async (req, reply) => {
+    const s = getSessionFromRequest(req);
+    if (!s?.shmSessionId) {
+      return reply.code(401).send({ ok: false, error: "not_authenticated" });
+    }
+
+    const current = await readCurrentEmail(s.shmSessionId).catch(() => ({ email: null, emailVerified: null }));
+
+    if (!current.email) {
+      return reply.code(400).send({ ok: false, error: "no_email_set" });
+    }
+    if (current.emailVerified === true) {
+      return reply.code(400).send({ ok: false, error: "email_already_verified" });
+    }
+
+    const r = await shmFetch<any>(s.shmSessionId, "v1/user/email/verify", {
+      method: "POST",
+      body: { email: current.email },
+    });
+
+    if (!r.ok) {
+      return reply.code(r.status || 502).send({
+        ok: false, error: "shm_send_code_failed", shm: { status: r.status },
+      });
+    }
+
+    return reply.send({ ok: true });
+  });
+
+  // POST /user/email/confirm — подтвердить email кодом из письма
+  // Принимает { code }. Вызывает POST /shm/v1/user/email/verify.
+  app.post("/user/email/confirm", async (req, reply) => {
+    const s = getSessionFromRequest(req);
+    if (!s?.shmSessionId) {
+      return reply.code(401).send({ ok: false, error: "not_authenticated" });
+    }
+
+    const code = String((req.body as any)?.code ?? "").trim();
+    if (!code) {
+      return reply.code(400).send({ ok: false, error: "code_required" });
+    }
+
+    const r = await shmFetch<any>(s.shmSessionId, "v1/user/email/verify", {
+      method: "POST",
+      body: { code },
+    });
+
+    if (!r.ok) {
+      return reply.code(r.status === 400 ? 400 : 502).send({
+        ok: false,
+        error: r.status === 400 ? "invalid_code" : "shm_confirm_failed",
+        shm: { status: r.status },
+      });
+    }
+
+    return reply.send({ ok: true });
+  });
+
+  // POST /user/prefs
   app.post("/user/prefs", async (req, reply) => {
     const s = getSessionFromRequest(req);
     if (!s?.shmSessionId) {
@@ -376,7 +411,7 @@ export async function userRoutes(app: FastifyInstance) {
     }
   });
 
-  // POST /user/telegram — привязка telegram логина
+  // POST /user/telegram
   app.post("/user/telegram", async (req, reply) => {
     const s = getSessionFromRequest(req);
     if (!s?.shmSessionId) {

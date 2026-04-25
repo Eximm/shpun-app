@@ -1,4 +1,4 @@
-﻿// web/src/pages/Login.tsx
+﻿// FILE: web/src/pages/Login.tsx
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -12,7 +12,7 @@ import { getTelegramWebApp } from "../shared/telegram/sdk";
 
 type TgWebApp = { initData?: string; ready?: () => void; expand?: () => void };
 type Mode = "detecting" | "telegram" | "web";
-type AuthModal = "none" | "login" | "register";
+type AuthModal = "none" | "login" | "register" | "forgot";
 type TgWidgetState = "idle" | "loading" | "ready" | "failed";
 type RegisterEmailClientCode = "email_required" | "email_invalid_format" | "email_non_ascii";
 
@@ -59,9 +59,7 @@ async function waitTelegramInitData(timeoutMs = 1500): Promise<string | null> {
     try { const tg = getTelegramWebApp() as TgWebApp | null; tg?.ready?.(); tg?.expand?.(); } catch { /* ignore */ }
     return immediate;
   }
-  // Нет window.Telegram вообще — это точно не Mini App
   if (!(window as any)?.Telegram) return null;
-  // window.Telegram есть но initData ещё не готов — ждём но не долго
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
     await sleep(50);
@@ -198,6 +196,11 @@ export function Login() {
   const [showPassword2, setShowPassword2] = useState(false);
   const [emailTouched,  setEmailTouched]  = useState(false);
 
+  // ── Forgot password state ──────────────────────────────────────────────────
+  const [forgotLogin,   setForgotLogin]   = useState("");
+  const [forgotSent,    setForgotSent]    = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
+
   const [partnerId,      setPartnerId]      = useState<number>(() => readPendingPartnerId());
   const [partnerIdInput, setPartnerIdInput] = useState<string>(() => {
     const p = readPendingPartnerId(); return p > 0 ? String(p) : "";
@@ -240,11 +243,14 @@ export function Login() {
       const p = readPendingPartnerId();
       setPartnerIdInput((p > 0 ? p : partnerId) > 0 ? String(p > 0 ? p : partnerId) : "");
     }
+    // сбрасываем forgot при переключении
+    if (next !== "forgot") { setForgotLogin(""); setForgotSent(false); setForgotLoading(false); }
   }
 
   function closeModal() {
     setAuthModal("none");
     setPassword(""); setPassword2(""); setShowPassword(false); setShowPassword2(false); setClientName(""); setEmailTouched(false);
+    setForgotLogin(""); setForgotSent(false); setForgotLoading(false);
   }
 
   async function goAfterAuth(r?: AuthResponse, provider?: string) {
@@ -345,6 +351,24 @@ export function Login() {
     } finally { setLoading(false); }
   }
 
+  // ── Forgot password ───────────────────────────────────────────────────────
+  async function forgotPassword() {
+    const email = forgotLogin.trim().toLowerCase();
+    if (!email) { toastError("login_required"); return; }
+    setForgotLoading(true);
+    try {
+      await apiFetch("/auth/password-reset", {
+        method: "POST",
+        body: { login: email },
+      });
+    } catch {
+      // намеренно игнорируем — не раскрываем существование аккаунта
+    } finally {
+      setForgotLoading(false);
+      setForgotSent(true);
+    }
+  }
+
   async function telegramLoginWidget(widgetUser: Record<string, any>) {
     if (authInProgressRef.current) return;
     authInProgressRef.current = true;
@@ -416,10 +440,9 @@ export function Login() {
     if (msg) toastError(msg);
   }, [loc?.search, t]);
 
-  // Реферальная ссылка — открываем регистрацию сразу как mode определился
   useEffect(() => {
     if (referralHandledRef.current) return;
-    if (mode === "detecting") return; // ждём пока mode определится
+    if (mode === "detecting") return;
     referralHandledRef.current = true;
     const fromUrl = getPartnerIdFromLocation();
     const pending = readPendingPartnerId();
@@ -428,7 +451,7 @@ export function Login() {
       savePendingPartnerId(finalId);
       setPartnerId(finalId);
       setPartnerIdInput(String(finalId));
-      if (mode === "web") openModal("register"); // сразу открываем регистрацию
+      if (mode === "web") openModal("register");
     }
   }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -440,9 +463,89 @@ export function Login() {
     };
   }, []);
 
+  // ── Forgot password modal ─────────────────────────────────────────────────
+
+  const forgotModal = authModal === "forgot" ? (
+    <div className="modal" role="dialog" aria-modal="true">
+      <div className="card modal__card">
+        <div className="card__body">
+          <div className="modal__head">
+            <div>
+              <div className="modal__title">🔑 Забыли пароль?</div>
+              <p className="p">
+                {forgotSent
+                  ? "Если аккаунт существует — письмо уже в пути. Проверьте папку «Спам»."
+                  : "Введите email — пришлём ссылку для сброса пароля."}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="btn modal__close"
+              onClick={closeModal}
+              disabled={forgotLoading}
+              aria-label={t("common.close", "Закрыть")}
+            >×</button>
+          </div>
+
+          <div className="modal__content">
+            {!forgotSent ? (
+              <form
+                className="auth__form"
+                onSubmit={(e) => { e.preventDefault(); void forgotPassword(); }}
+              >
+                <div className="field">
+                  <label className="field__label">Email</label>
+                  <input
+                    className="input"
+                    type="email"
+                    placeholder="you@example.com"
+                    value={forgotLogin}
+                    onChange={(e) => setForgotLogin(e.target.value)}
+                    autoComplete="email"
+                    inputMode="email"
+                    disabled={forgotLoading}
+                  />
+                </div>
+                <div className="auth__actions">
+                  <button
+                    type="submit"
+                    className="btn btn--primary login__btnFull"
+                    disabled={forgotLoading || !forgotLogin.trim()}
+                  >
+                    {forgotLoading ? "Отправляем…" : "Отправить ссылку"}
+                  </button>
+                </div>
+                <div className="login__switchWrap">
+                  <button
+                    type="button"
+                    className="btn login__switchBtn"
+                    onClick={() => openModal("login")}
+                    disabled={forgotLoading}
+                  >
+                    ← Вернуться ко входу
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="auth__actions" style={{ marginTop: 8 }}>
+                <button
+                  type="button"
+                  className="btn btn--primary login__btnFull"
+                  onClick={closeModal}
+                >
+                  Понятно
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   // ── Password modal ────────────────────────────────────────────────────────
 
-  const passwordModal = authModal !== "none" ? (
+  const passwordModal = authModal === "login" || authModal === "register" ? (
     <div className="modal" role="dialog" aria-modal="true">
       <div className="card modal__card">
         <div className="card__body">
@@ -451,9 +554,7 @@ export function Login() {
               <div className="modal__title">
                 {authModal === "login"
                   ? t("login.password.form_title_login")
-                  : normalizePartnerId(partnerIdInput) > 0
-                    ? t("login.password.form_title_register")
-                    : t("login.password.form_title_register")}
+                  : t("login.password.form_title_register")}
               </div>
               <p className="p">
                 {authModal === "login"
@@ -510,6 +611,20 @@ export function Login() {
                 </div>
               </div>
 
+              {/* Кнопка "Забыли пароль?" — только в форме логина */}
+              {authModal === "login" && (
+                <div className="login__switchWrap" style={{ marginTop: 4 }}>
+                  <button
+                    type="button"
+                    className="btn login__switchBtn"
+                    onClick={() => openModal("forgot")}
+                    disabled={loading}
+                  >
+                    Забыли пароль?
+                  </button>
+                </div>
+              )}
+
               {authModal === "register" && (
                 <>
                   <div className="field">
@@ -520,9 +635,6 @@ export function Login() {
                       <button type="button" className="btn pwdfield__btn" onClick={() => setShowPassword2((v) => !v)} disabled={loading} aria-label={showPassword2 ? t("login.password.hide") : t("login.password.show")}>👁</button>
                     </div>
                   </div>
-                  {/* Код приглашения:
-                      - Если пришёл по реф ссылке — баннер уже показан выше, поле скрыто
-                      - Обычная регистрация — коллапс "Есть код приглашения?" */}
                   {normalizePartnerId(partnerIdInput) <= 0 && (
                     <div style={{ marginTop: 4 }}>
                       <button
@@ -718,6 +830,7 @@ export function Login() {
         </div>
       </div>
       {passwordModal}
+      {forgotModal}
     </div>
   );
 }
