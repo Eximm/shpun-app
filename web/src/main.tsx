@@ -131,14 +131,6 @@ function AuthedLayout() {
 function LandingRoute() {
   const { t }  = useI18n();
   const loc    = useLocation();
-
-  // Биллинг шлёт ссылки вида https://app.sdnonline.online?token=XXX —
-  // перехватываем здесь и редиректим на reset-password до любой авторизации
-  const token = new URLSearchParams(loc.search).get("token");
-  if (token) {
-    return <Navigate to={`/reset-password?token=${encodeURIComponent(token)}`} replace />;
-  }
-
   const alreadyChecked = sessionStorage.getItem("landing_checked") === "1";
   const [state, setState] = React.useState<"loading" | "home" | "services">(
     alreadyChecked ? "home" : "loading"
@@ -188,6 +180,24 @@ function AppPathRedirect() {
   return <Navigate to={{ pathname: "/", search: loc.search }} replace />;
 }
 
+// Корневой публичный маршрут.
+// Биллинг шлёт ссылки вида https://app.sdnonline.online?token=XXX —
+// перехватываем здесь ДО AuthGate, пока пользователь ещё не авторизован.
+function RootRoute() {
+  const loc   = useLocation();
+  const token = new URLSearchParams(loc.search).get("token");
+  if (token) {
+    return <Navigate to={`/reset-password?token=${encodeURIComponent(token)}`} replace />;
+  }
+  // Нет токена — авторизованный лендинг через AuthGate
+  return <AuthGateRoot />;
+}
+
+function AuthGateRoot() {
+  useBillingNotifications(true);
+  return <AuthGate><LandingRoute /></AuthGate>;
+}
+
 function PageContainer({ children }: { children: React.ReactNode }) {
   const loc = useLocation();
   const [showProgress, setShowProgress] = React.useState(false);
@@ -223,8 +233,13 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                 <Route path="/transfer"       element={<Transfer />} />
                 <Route path="/app"            element={<AppPathRedirect />} />
 
+                {/* Корень — публичный обработчик токена от биллинга.
+                    Биллинг шлёт ссылки вида https://app.sdnonline.online?token=XXX
+                    Неавторизованный пользователь попадает сюда — до AuthGate.
+                    Если есть ?token= — редиректим на reset-password публично. */}
+                <Route path="/" element={<RootRoute />} />
+
                 <Route element={<AuthedLayout />}>
-                  <Route path="/"                    element={<LandingRoute />} />
                   <Route path="/home"                element={<Home />} />
                   <Route path="/referrals"           element={<Referrals />} />
                   <Route path="/feed"                element={<Feed />} />

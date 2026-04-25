@@ -20,6 +20,21 @@ const PARTNER_LS_KEY      = "partner_id_pending";
 const AUTH_PENDING_KEY    = "auth:pending";
 const AUTH_PENDING_AT_KEY = "auth:pending_at";
 const AUTH_EVER_KEY       = "auth:ever_succeeded";
+const FORGOT_SENT_KEY     = "forgot_pwd:sent_at";
+const FORGOT_COOLDOWN_MS  = 60_000;
+
+function getForgotSentAt(): number {
+  try { return Number(localStorage.getItem(FORGOT_SENT_KEY) ?? 0) || 0; } catch { return 0; }
+}
+function setForgotSentAt() {
+  try { localStorage.setItem(FORGOT_SENT_KEY, String(Date.now())); } catch { /* ignore */ }
+}
+function getForgotCooldown(): number {
+  const sentAt = getForgotSentAt();
+  if (!sentAt) return 0;
+  const left = Math.ceil((sentAt + FORGOT_COOLDOWN_MS - Date.now()) / 1000);
+  return left > 0 ? left : 0;
+}
 
 function setAuthPending(provider: string) {
   try { sessionStorage.setItem(AUTH_PENDING_KEY, provider); sessionStorage.setItem(AUTH_PENDING_AT_KEY, String(Date.now())); } catch { /* ignore */ }
@@ -197,9 +212,28 @@ export function Login() {
   const [emailTouched,  setEmailTouched]  = useState(false);
 
   // ── Forgot password state ──────────────────────────────────────────────────
-  const [forgotLogin,   setForgotLogin]   = useState("");
-  const [forgotSent,    setForgotSent]    = useState(false);
-  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotLogin,    setForgotLogin]    = useState("");
+  const [forgotSent,     setForgotSent]     = useState(false);
+  const [forgotLoading,  setForgotLoading]  = useState(false);
+  const [forgotCooldown, setForgotCooldown] = useState(() => getForgotCooldown());
+  const forgotTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Тикаем таймер кулдауна для forgot
+  useEffect(() => {
+    function tick() {
+      const left = getForgotCooldown();
+      setForgotCooldown(left);
+      if (left <= 0 && forgotTimerRef.current) {
+        clearInterval(forgotTimerRef.current);
+        forgotTimerRef.current = null;
+      }
+    }
+    tick();
+    if (getForgotCooldown() > 0) {
+      forgotTimerRef.current = setInterval(tick, 1000);
+    }
+    return () => { if (forgotTimerRef.current) clearInterval(forgotTimerRef.current); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [partnerId,      setPartnerId]      = useState<number>(() => readPendingPartnerId());
   const [partnerIdInput, setPartnerIdInput] = useState<string>(() => {
@@ -250,7 +284,8 @@ export function Login() {
   function closeModal() {
     setAuthModal("none");
     setPassword(""); setPassword2(""); setShowPassword(false); setShowPassword2(false); setClientName(""); setEmailTouched(false);
-    setForgotLogin(""); setForgotSent(false); setForgotLoading(false);
+    // forgotLogin и forgotSent не сбрасываем — помним состояние между открытиями
+    setForgotLoading(false);
   }
 
   async function goAfterAuth(r?: AuthResponse, provider?: string) {
@@ -351,10 +386,10 @@ export function Login() {
     } finally { setLoading(false); }
   }
 
-  // ── Forgot password ───────────────────────────────────────────────────────
   async function forgotPassword() {
     const email = forgotLogin.trim().toLowerCase();
     if (!email) { toastError("login_required"); return; }
+    if (forgotCooldown > 0) return;
     setForgotLoading(true);
     try {
       await apiFetch("/auth/password-reset", {
@@ -364,6 +399,16 @@ export function Login() {
     } catch {
       // намеренно игнорируем — не раскрываем существование аккаунта
     } finally {
+      setForgotSentAt();
+      const left = FORGOT_COOLDOWN_MS / 1000;
+      setForgotCooldown(left);
+      // Запускаем таймер
+      if (forgotTimerRef.current) clearInterval(forgotTimerRef.current);
+      forgotTimerRef.current = setInterval(() => {
+        const l = getForgotCooldown();
+        setForgotCooldown(l);
+        if (l <= 0 && forgotTimerRef.current) { clearInterval(forgotTimerRef.current); forgotTimerRef.current = null; }
+      }, 1000);
       setForgotLoading(false);
       setForgotSent(true);
     }
@@ -474,7 +519,7 @@ export function Login() {
               <div className="modal__title">🔑 Забыли пароль?</div>
               <p className="p">
                 {forgotSent
-                  ? "Если аккаунт существует — письмо уже в пути. Проверьте папку «Спам»."
+                  ? "Письмо отправлено. Перейдите по ссылке из письма чтобы сбросить пароль. Проверьте папку «Спам»."
                   : "Введите email — пришлём ссылку для сброса пароля."}
               </p>
             </div>
@@ -510,9 +555,13 @@ export function Login() {
                   <button
                     type="submit"
                     className="btn btn--primary login__btnFull"
-                    disabled={forgotLoading || !forgotLogin.trim()}
+                    disabled={forgotLoading || !forgotLogin.trim() || forgotCooldown > 0}
                   >
-                    {forgotLoading ? "Отправляем…" : "Отправить ссылку"}
+                    {forgotLoading
+                      ? "Отправляем…"
+                      : forgotCooldown > 0
+                        ? `Повторить через ${forgotCooldown} сек`
+                        : "Отправить ссылку"}
                   </button>
                 </div>
                 <div className="login__switchWrap">
@@ -527,14 +576,30 @@ export function Login() {
                 </div>
               </form>
             ) : (
-              <div className="auth__actions" style={{ marginTop: 8 }}>
-                <button
-                  type="button"
-                  className="btn btn--primary login__btnFull"
-                  onClick={closeModal}
-                >
-                  Понятно
-                </button>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ textAlign: "center", fontSize: 48 }}>📬</div>
+                <div className="auth__actions">
+                  <button
+                    type="button"
+                    className="btn login__btnFull"
+                    onClick={() => void forgotPassword()}
+                    disabled={forgotLoading || forgotCooldown > 0}
+                    style={{ opacity: forgotCooldown > 0 ? 0.6 : 1 }}
+                  >
+                    {forgotLoading
+                      ? "Отправляем…"
+                      : forgotCooldown > 0
+                        ? `Отправить повторно через ${forgotCooldown} сек`
+                        : "Отправить повторно"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--primary login__btnFull"
+                    onClick={closeModal}
+                  >
+                    Понятно
+                  </button>
+                </div>
               </div>
             )}
           </div>
