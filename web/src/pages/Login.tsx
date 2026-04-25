@@ -10,18 +10,24 @@ import { toast } from "../shared/ui/toast";
 import { normalizeError } from "../shared/api/errorText";
 import { getTelegramWebApp } from "../shared/telegram/sdk";
 
-type TgWebApp = { initData?: string; ready?: () => void; expand?: () => void };
-type Mode = "detecting" | "telegram" | "web";
-type AuthModal = "none" | "login" | "register" | "forgot";
-type TgWidgetState = "idle" | "loading" | "ready" | "failed";
+/* ─── Types ─────────────────────────────────────────────────────────────── */
+
+type TgWebApp  = { initData?: string; ready?: () => void; expand?: () => void };
+type Mode      = "detecting" | "telegram" | "web";
+type AuthModal = "none" | "login" | "register" | "forgot" | "reset";
+type TgWidgetState           = "idle" | "loading" | "ready" | "failed";
 type RegisterEmailClientCode = "email_required" | "email_invalid_format" | "email_non_ascii";
 
-const PARTNER_LS_KEY      = "partner_id_pending";
-const AUTH_PENDING_KEY    = "auth:pending";
-const AUTH_PENDING_AT_KEY = "auth:pending_at";
-const AUTH_EVER_KEY       = "auth:ever_succeeded";
-const FORGOT_SENT_KEY     = "forgot_pwd:sent_at";
-const FORGOT_COOLDOWN_MS  = 60_000;
+/* ─── Constants ─────────────────────────────────────────────────────────── */
+
+const PARTNER_LS_KEY     = "partner_id_pending";
+const AUTH_PENDING_KEY   = "auth:pending";
+const AUTH_PENDING_AT_KEY= "auth:pending_at";
+const AUTH_EVER_KEY      = "auth:ever_succeeded";
+const FORGOT_SENT_KEY    = "forgot_pwd:sent_at";
+const FORGOT_COOLDOWN_MS = 60_000;
+
+/* ─── Forgot helpers ─────────────────────────────────────────────────────── */
 
 function getForgotSentAt(): number {
   try { return Number(localStorage.getItem(FORGOT_SENT_KEY) ?? 0) || 0; } catch { return 0; }
@@ -35,10 +41,9 @@ function getForgotCooldown(): number {
   const left = Math.ceil((sentAt + FORGOT_COOLDOWN_MS - Date.now()) / 1000);
   return left > 0 ? left : 0;
 }
-// Письмо было отправлено если sentAt есть (неважно истёк ли кулдаун)
-function wasForgotSent(): boolean {
-  return getForgotSentAt() > 0;
-}
+function wasForgotSent(): boolean { return getForgotSentAt() > 0; }
+
+/* ─── Auth helpers ───────────────────────────────────────────────────────── */
 
 function setAuthPending(provider: string) {
   try { sessionStorage.setItem(AUTH_PENDING_KEY, provider); sessionStorage.setItem(AUTH_PENDING_AT_KEY, String(Date.now())); } catch { /* ignore */ }
@@ -53,6 +58,8 @@ function readPendingPartnerId(): number {
 }
 function savePendingPartnerId(id: number) { try { if (id > 0) localStorage.setItem(PARTNER_LS_KEY, String(id)); } catch { /* ignore */ } }
 function clearPendingPartnerId() { try { localStorage.removeItem(PARTNER_LS_KEY); } catch { /* ignore */ } }
+
+/* ─── Utils ──────────────────────────────────────────────────────────────── */
 
 function sleep(ms: number) { return new Promise<void>((r) => window.setTimeout(r, ms)); }
 
@@ -125,6 +132,16 @@ function validateRegisterEmailClient(value: string): RegisterEmailClientCode | n
   return null;
 }
 
+function pwdScore(p: string): number {
+  let s = 0;
+  if (p.length >= 8)           s++;
+  if (/[A-Z]/.test(p))        s++;
+  if (/[a-z]/.test(p))        s++;
+  if (/\d/.test(p))            s++;
+  if (/[^A-Za-z0-9]/.test(p)) s++;
+  return Math.min(s, 5);
+}
+
 async function ensureAuthorizedAfterAuth(attempts = 12, delayMs = 250) {
   for (let i = 0; i < attempts; i++) {
     const me = await refetchMe().catch(() => null);
@@ -189,6 +206,8 @@ function errorToAuthRaw(e: unknown, fallback: string): string {
   return fallback;
 }
 
+/* ─── LangSwitch ─────────────────────────────────────────────────────────── */
+
 function LangSwitch({ lang, setLang, ariaLabel }: { lang: "ru" | "en"; setLang: (v: "ru" | "en") => void; ariaLabel: string }) {
   return (
     <div className="seg login__langSwitch" aria-label={ariaLabel}>
@@ -198,6 +217,8 @@ function LangSwitch({ lang, setLang, ariaLabel }: { lang: "ru" | "en"; setLang: 
   );
 }
 
+/* ─── Login ──────────────────────────────────────────────────────────────── */
+
 export function Login() {
   const { t, lang, setLang } = useI18n();
   const nav = useNavigate();
@@ -206,6 +227,7 @@ export function Login() {
   const [mode,    setMode]    = useState<Mode>("detecting");
   const [loading, setLoading] = useState(false);
 
+  // ── Modal & auth fields ───────────────────────────────────────────────────
   const [authModal,     setAuthModal]     = useState<AuthModal>("none");
   const [login,         setLogin]         = useState("");
   const [clientName,    setClientName]    = useState("");
@@ -215,47 +237,62 @@ export function Login() {
   const [showPassword2, setShowPassword2] = useState(false);
   const [emailTouched,  setEmailTouched]  = useState(false);
 
-  // ── Forgot password state ──────────────────────────────────────────────────
+  // ── Forgot password ───────────────────────────────────────────────────────
   const [forgotLogin,    setForgotLogin]    = useState("");
   const [forgotSent,     setForgotSent]     = useState(() => wasForgotSent());
   const [forgotLoading,  setForgotLoading]  = useState(false);
   const [forgotCooldown, setForgotCooldown] = useState(() => getForgotCooldown());
   const forgotTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Тикаем таймер кулдауна для forgot
-  useEffect(() => {
-    function tick() {
-      const left = getForgotCooldown();
-      setForgotCooldown(left);
-      if (left <= 0 && forgotTimerRef.current) {
-        clearInterval(forgotTimerRef.current);
-        forgotTimerRef.current = null;
-      }
-    }
-    tick();
-    if (getForgotCooldown() > 0) {
-      forgotTimerRef.current = setInterval(tick, 1000);
-    }
-    return () => { if (forgotTimerRef.current) clearInterval(forgotTimerRef.current); };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // ── Reset password (по токену из письма) ──────────────────────────────────
+  const [resetToken,       setResetToken]       = useState("");
+  const [resetPwd1,        setResetPwd1]        = useState("");
+  const [resetPwd2,        setResetPwd2]        = useState("");
+  const [resetShowPwd1,    setResetShowPwd1]    = useState(false);
+  const [resetShowPwd2,    setResetShowPwd2]    = useState(false);
+  const [resetLoading,     setResetLoading]     = useState(false);
+  const [resetVerifying,   setResetVerifying]   = useState(false);
+  const [resetVerifyError, setResetVerifyError] = useState<string | null>(null);
+  const [resetError,       setResetError]       = useState<string | null>(null);
+  const [resetDone,        setResetDone]        = useState(false);
 
+  const resetStrength  = pwdScore(resetPwd1);
+  const resetPwdMatch  = resetPwd2.length === 0 || resetPwd1 === resetPwd2;
+  const canSubmitReset = resetPwd1.length >= 8 && resetPwd2.length > 0
+                         && resetPwd1 === resetPwd2 && !resetLoading
+                         && !resetVerifying && !resetVerifyError;
+
+  // ── Partner / widget ──────────────────────────────────────────────────────
   const [partnerId,      setPartnerId]      = useState<number>(() => readPendingPartnerId());
   const [partnerIdInput, setPartnerIdInput] = useState<string>(() => {
     const p = readPendingPartnerId(); return p > 0 ? String(p) : "";
   });
+  const [tgWidgetState, setTgWidgetState] = useState<TgWidgetState>("idle");
+  const [partnerOpen,   setPartnerOpen]   = useState(false);
 
-  const [tgWidgetState,  setTgWidgetState]  = useState<TgWidgetState>("idle");
-  const [partnerOpen,    setPartnerOpen]    = useState(false);
-
+  // ── Refs ──────────────────────────────────────────────────────────────────
   const authInProgressRef       = useRef(false);
   const widgetWrapRef           = useRef<HTMLDivElement | null>(null);
   const referralHandledRef      = useRef(false);
   const authOkHandledRef        = useRef(false);
+  const tokenHandledRef         = useRef(false);
   const redirectErrorHandledRef = useRef<string>("");
   const lastToastRef            = useRef<{ msg: string; at: number }>({ msg: "", at: 0 });
 
   const botUsername = useMemo(() => getTelegramBotUsername(), []);
 
+  // ── Derived ───────────────────────────────────────────────────────────────
+  const canPasswordLogin    = login.trim().length > 0 && password.length > 0;
+  const passwordsMatch      = password2.length === 0 ? true : password === password2;
+  const registerEmailCode   = authModal === "register" ? validateRegisterEmailClient(login) : null;
+  const registerEmailMessage = registerEmailCode === "email_required"      ? t("login.err.email_required")
+    : registerEmailCode === "email_non_ascii"      ? t("login.err.email_non_ascii")
+    : registerEmailCode === "email_invalid_format" ? t("login.err.email_invalid_format")
+    : "";
+  const canPasswordRegister = login.trim().length > 0 && password.length > 0
+    && password2.length > 0 && password === password2 && !registerEmailCode;
+
+  // ── Toast ─────────────────────────────────────────────────────────────────
   function toastError(raw: string) {
     const msg = mapAuthError(raw, t);
     const now = Date.now();
@@ -264,15 +301,7 @@ export function Login() {
     toast.error(t("login.toast.error_title", "Ошибка"), { description: msg });
   }
 
-  const canPasswordLogin = login.trim().length > 0 && password.length > 0;
-  const passwordsMatch   = password2.length === 0 ? true : password === password2;
-  const registerEmailCode    = authModal === "register" ? validateRegisterEmailClient(login) : null;
-  const registerEmailMessage = registerEmailCode === "email_required"      ? t("login.err.email_required")
-    : registerEmailCode === "email_non_ascii"      ? t("login.err.email_non_ascii")
-    : registerEmailCode === "email_invalid_format" ? t("login.err.email_invalid_format")
-    : "";
-  const canPasswordRegister = login.trim().length > 0 && password.length > 0 && password2.length > 0 && password === password2 && !registerEmailCode;
-
+  // ── Modal controls ────────────────────────────────────────────────────────
   function openModal(next: AuthModal) {
     setAuthModal(next);
     setPassword(""); setPassword2(""); setShowPassword(false); setShowPassword2(false); setEmailTouched(false);
@@ -284,21 +313,94 @@ export function Login() {
     // При открытии forgot — подставляем email из поля логина если forgotLogin пустой
     if (next === "forgot" && !forgotLogin.trim()) {
       const emailFromLogin = login.trim().toLowerCase();
-      if (emailFromLogin && emailFromLogin.includes("@")) {
-        setForgotLogin(emailFromLogin);
-      }
+      if (emailFromLogin && emailFromLogin.includes("@")) setForgotLogin(emailFromLogin);
     }
-    // сбрасываем forgot при переключении на другую модалку (не на forgot)
-    if (next !== "forgot") { setForgotLoading(false); }
+    if (next !== "forgot") setForgotLoading(false);
   }
 
   function closeModal() {
     setAuthModal("none");
-    setPassword(""); setPassword2(""); setShowPassword(false); setShowPassword2(false); setClientName(""); setEmailTouched(false);
-    // forgotLogin и forgotSent не сбрасываем — помним состояние между открытиями
-    setForgotLoading(false);
+    setPassword(""); setPassword2(""); setShowPassword(false); setShowPassword2(false);
+    setClientName(""); setEmailTouched(false); setForgotLoading(false);
+    // Reset-state сбрасываем полностью
+    setResetToken(""); setResetPwd1(""); setResetPwd2("");
+    setResetShowPwd1(false); setResetShowPwd2(false);
+    setResetError(null); setResetDone(false); setResetVerifyError(null);
   }
 
+  // ── Reset password logic ──────────────────────────────────────────────────
+  function openResetModal(token: string) {
+    // Сбрасываем всё предыдущее
+    setResetToken(token);
+    setResetPwd1(""); setResetPwd2(""); setResetShowPwd1(false); setResetShowPwd2(false);
+    setResetError(null); setResetDone(false); setResetVerifyError(null);
+    setAuthModal("reset");
+    void verifyResetToken(token);
+  }
+
+  async function verifyResetToken(token: string) {
+    setResetVerifying(true);
+    setResetVerifyError(null);
+    try {
+      await apiFetch(`/auth/password-reset/verify?token=${encodeURIComponent(token)}`);
+    } catch (e: any) {
+      const code = String(e?.code ?? e?.data?.error ?? "");
+      setResetVerifyError(
+        code === "invalid_or_expired_token"
+          ? "Ссылка недействительна или устарела."
+          : "Не удалось проверить ссылку."
+      );
+    } finally {
+      setResetVerifying(false);
+    }
+  }
+
+  async function submitReset() {
+    if (!canSubmitReset) return;
+    setResetError(null);
+    setResetLoading(true);
+    try {
+      await apiFetch("/auth/password-reset/confirm", {
+        method: "POST",
+        body: { token: resetToken, password: resetPwd1.trim() },
+      });
+      setResetDone(true);
+    } catch (e: any) {
+      const code = String(e?.code ?? e?.data?.error ?? "");
+      setResetError(
+        code === "invalid_or_expired_token"
+          ? "Ссылка недействительна или устарела. Запросите новую."
+          : "Не удалось сменить пароль. Попробуйте ещё раз."
+      );
+    } finally {
+      setResetLoading(false);
+    }
+  }
+
+  // ── Forgot password logic ─────────────────────────────────────────────────
+  async function forgotPassword() {
+    const email = forgotLogin.trim().toLowerCase();
+    if (!email) { toastError("login_required"); return; }
+    if (forgotCooldown > 0) return;
+    setForgotLoading(true);
+    try {
+      await apiFetch("/auth/password-reset", { method: "POST", body: { login: email } });
+    } catch { /* не раскрываем существование аккаунта */ }
+    finally {
+      setForgotSentAt();
+      setForgotCooldown(FORGOT_COOLDOWN_MS / 1000);
+      if (forgotTimerRef.current) clearInterval(forgotTimerRef.current);
+      forgotTimerRef.current = setInterval(() => {
+        const l = getForgotCooldown();
+        setForgotCooldown(l);
+        if (l <= 0 && forgotTimerRef.current) { clearInterval(forgotTimerRef.current); forgotTimerRef.current = null; }
+      }, 1000);
+      setForgotLoading(false);
+      setForgotSent(true);
+    }
+  }
+
+  // ── Telegram ──────────────────────────────────────────────────────────────
   async function goAfterAuth(r?: AuthResponse, provider?: string) {
     if (!r || !(r as any).ok) { clearAuthPending(); toastError(String((r as any)?.error ?? "") || "login_failed"); return; }
     markAuthEverSucceeded();
@@ -320,33 +422,9 @@ export function Login() {
     nav(String(loc?.state?.from ?? "").trim() || "/", { replace: true });
   }
 
-  // ── Telegram auto-login ───────────────────────────────────────────────────
-  useEffect(() => {
-    let cancelled = false;
-    const run = async () => {
-      const initData = await waitTelegramInitData(1500);
-      if (cancelled) return;
-      if (!initData) { setMode("web"); return; }
-      setMode("telegram");
-      authInProgressRef.current = true;
-      setLoading(true);
-      try {
-        const r = await apiFetch<AuthResponse>("/auth/telegram", {
-          method: "POST",
-          body: { initData, ...(readPendingPartnerId() > 0 ? { partner_id: readPendingPartnerId() } : {}) },
-        });
-        if (!cancelled) await goAfterAuth(r, "telegram");
-      } catch { if (!cancelled) clearAuthPending(); }
-      finally { authInProgressRef.current = false; if (!cancelled) setLoading(false); }
-    };
-    void run();
-    return () => { cancelled = true; };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
   async function telegramLoginMiniApp() {
     if (authInProgressRef.current) return;
-    authInProgressRef.current = true;
-    setLoading(true);
+    authInProgressRef.current = true; setLoading(true);
     try {
       let initData = getTelegramInitData();
       if (!initData) initData = await waitTelegramInitData(3000);
@@ -397,40 +475,14 @@ export function Login() {
     } finally { setLoading(false); }
   }
 
-  async function forgotPassword() {
-    const email = forgotLogin.trim().toLowerCase();
-    if (!email) { toastError("login_required"); return; }
-    if (forgotCooldown > 0) return;
-    setForgotLoading(true);
-    try {
-      await apiFetch("/auth/password-reset", {
-        method: "POST",
-        body: { login: email },
-      });
-    } catch {
-      // намеренно игнорируем — не раскрываем существование аккаунта
-    } finally {
-      setForgotSentAt();
-      const left = FORGOT_COOLDOWN_MS / 1000;
-      setForgotCooldown(left);
-      // Запускаем таймер
-      if (forgotTimerRef.current) clearInterval(forgotTimerRef.current);
-      forgotTimerRef.current = setInterval(() => {
-        const l = getForgotCooldown();
-        setForgotCooldown(l);
-        if (l <= 0 && forgotTimerRef.current) { clearInterval(forgotTimerRef.current); forgotTimerRef.current = null; }
-      }, 1000);
-      setForgotLoading(false);
-      setForgotSent(true);
-    }
-  }
-
   async function telegramLoginWidget(widgetUser: Record<string, any>) {
     if (authInProgressRef.current) return;
-    authInProgressRef.current = true;
-    setLoading(true);
+    authInProgressRef.current = true; setLoading(true);
     try {
-      const r = await apiFetch<AuthResponse>("/auth/telegram_widget", { method: "POST", body: { ...widgetUser, ...(partnerId > 0 ? { partner_id: partnerId } : {}) } });
+      const r = await apiFetch<AuthResponse>("/auth/telegram_widget", {
+        method: "POST",
+        body: { ...widgetUser, ...(partnerId > 0 ? { partner_id: partnerId } : {}) },
+      });
       await goAfterAuth(r, "telegram");
     } catch (e: unknown) { clearAuthPending(); toastError(errorToAuthRaw(e, t("error.telegram_login_failed")));
     } finally { setLoading(false); authInProgressRef.current = false; }
@@ -466,10 +518,47 @@ export function Login() {
 
   // ── Effects ───────────────────────────────────────────────────────────────
 
+  // Telegram auto-login
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      const initData = await waitTelegramInitData(1500);
+      if (cancelled) return;
+      if (!initData) { setMode("web"); return; }
+      setMode("telegram");
+      authInProgressRef.current = true; setLoading(true);
+      try {
+        const r = await apiFetch<AuthResponse>("/auth/telegram", {
+          method: "POST",
+          body: { initData, ...(readPendingPartnerId() > 0 ? { partner_id: readPendingPartnerId() } : {}) },
+        });
+        if (!cancelled) await goAfterAuth(r, "telegram");
+      } catch { if (!cancelled) clearAuthPending(); }
+      finally { authInProgressRef.current = false; if (!cancelled) setLoading(false); }
+    };
+    void run();
+    return () => { cancelled = true; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ?token= — открываем модалку смены пароля
+  useEffect(() => {
+    if (tokenHandledRef.current) return;
+    const sp    = new URLSearchParams(String(loc?.search ?? ""));
+    const token = sp.get("token")?.trim();
+    if (!token) return;
+    tokenHandledRef.current = true;
+    // Убираем токен из URL
+    sp.delete("token");
+    const nextSearch = sp.toString();
+    window.history.replaceState(null, "", window.location.pathname + (nextSearch ? `?${nextSearch}` : ""));
+    openResetModal(token);
+  }, [loc?.search]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ?a=auth_ok — после редиректа из виджета
   useEffect(() => {
     const sp = new URLSearchParams(String(loc?.search ?? ""));
-    const a = String(sp.get("a") ?? "").trim().toLowerCase();
-    const p = String(sp.get("p") ?? "").trim().toLowerCase();
+    const a  = String(sp.get("a") ?? "").trim().toLowerCase();
+    const p  = String(sp.get("p") ?? "").trim().toLowerCase();
     if (a !== "auth_ok" || authOkHandledRef.current) return;
     authOkHandledRef.current = true;
     setAuthPending(p || "auth");
@@ -484,9 +573,10 @@ export function Login() {
     })();
   }, [loc?.search, nav, t]);
 
+  // ?e= — ошибка от редиректа
   useEffect(() => {
     const sp = new URLSearchParams(String(loc?.search ?? ""));
-    const e = String(sp.get("e") ?? "").trim();
+    const e  = String(sp.get("e") ?? "").trim();
     if (!e || redirectErrorHandledRef.current === e) return;
     redirectErrorHandledRef.current = e;
     const hadPreviousAuth = hasEverSucceededAuth() || !!sessionStorage.getItem(AUTH_PENDING_KEY);
@@ -496,6 +586,7 @@ export function Login() {
     if (msg) toastError(msg);
   }, [loc?.search, t]);
 
+  // Реферальный код из URL
   useEffect(() => {
     if (referralHandledRef.current) return;
     if (mode === "detecting") return;
@@ -511,6 +602,19 @@ export function Login() {
     }
   }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Forgot cooldown timer on mount
+  useEffect(() => {
+    function tick() {
+      const left = getForgotCooldown();
+      setForgotCooldown(left);
+      if (left <= 0 && forgotTimerRef.current) { clearInterval(forgotTimerRef.current); forgotTimerRef.current = null; }
+    }
+    tick();
+    if (getForgotCooldown() > 0) forgotTimerRef.current = setInterval(tick, 1000);
+    return () => { if (forgotTimerRef.current) clearInterval(forgotTimerRef.current); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cleanup widget on unmount
   useEffect(() => {
     return () => {
       const container = document.getElementById("tg-widget-container");
@@ -519,69 +623,156 @@ export function Login() {
     };
   }, []);
 
-  // ── Forgot password modal ─────────────────────────────────────────────────
+  // ── Modals ────────────────────────────────────────────────────────────────
 
+  // Reset password modal
+  const resetModal = authModal === "reset" ? (
+    <div className="modal" role="dialog" aria-modal="true">
+      <div className="card modal__card">
+        <div className="card__body">
+          <div className="modal__head">
+            <div className="modal__title">🔐 Новый пароль</div>
+            <button type="button" className="btn modal__close" onClick={closeModal}
+              aria-label={t("common.close", "Закрыть")}>×</button>
+          </div>
+          <div className="modal__content">
+
+            {resetVerifying && (
+              <p className="p" style={{ opacity: 0.6 }}>Проверяем ссылку…</p>
+            )}
+
+            {!resetVerifying && resetVerifyError && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <div style={{ textAlign: "center", fontSize: 48 }}>⚠️</div>
+                <p className="p" style={{ textAlign: "center", margin: 0 }}>{resetVerifyError}</p>
+                <div className="auth__actions">
+                  <button type="button" className="btn btn--primary login__btnFull"
+                    onClick={() => { setResetVerifyError(null); openModal("forgot"); }}>
+                    Запросить новую ссылку
+                  </button>
+                  <button type="button" className="btn login__btnFull" onClick={closeModal}>
+                    ← Вернуться ко входу
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {!resetVerifying && !resetVerifyError && resetDone && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 16, alignItems: "center" }}>
+                <div style={{ fontSize: 56 }}>✅</div>
+                <p className="p" style={{ textAlign: "center", margin: 0 }}>
+                  Пароль успешно изменён. Теперь войдите с новым паролем.
+                </p>
+                <div className="auth__actions" style={{ width: "100%" }}>
+                  <button type="button" className="btn btn--primary login__btnFull"
+                    onClick={() => { closeModal(); openModal("login"); }}>
+                    Войти
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {!resetVerifying && !resetVerifyError && !resetDone && (
+              <form className="auth__form" onSubmit={(e) => { e.preventDefault(); void submitReset(); }}>
+                <p className="p" style={{ marginBottom: 16 }}>Придумайте новый пароль для аккаунта.</p>
+
+                <div className="field">
+                  <label className="field__label">Новый пароль</label>
+                  <div className="pwdfield">
+                    <input className="input" placeholder="Минимум 8 символов"
+                      value={resetPwd1} onChange={(e) => setResetPwd1(e.target.value)}
+                      type={resetShowPwd1 ? "text" : "password"}
+                      autoComplete="new-password" disabled={resetLoading} />
+                    <button type="button" className="btn pwdfield__btn"
+                      onClick={() => setResetShowPwd1((v) => !v)} disabled={resetLoading}>
+                      {resetShowPwd1 ? "🙈" : "👁"}
+                    </button>
+                  </div>
+                </div>
+
+                {resetPwd1.length > 0 && (
+                  <div className="pre pwdmeter" style={{ marginTop: 4 }}>
+                    <div className="pwdmeter__row">
+                      <span className="pwdmeter__title">{t("profile.password.strength", "Надёжность")}</span>
+                      <span className="pwdmeter__score">{resetStrength}/5</span>
+                    </div>
+                    <div className="pwdmeter__tip">{t("profile.password.tip", "8+ символов, цифры и спецсимволы.")}</div>
+                  </div>
+                )}
+
+                <div className="field">
+                  <label className="field__label">Повторите пароль</label>
+                  <div className="pwdfield">
+                    <input className="input" placeholder="Повторите пароль"
+                      value={resetPwd2} onChange={(e) => setResetPwd2(e.target.value)}
+                      type={resetShowPwd2 ? "text" : "password"}
+                      autoComplete="new-password" disabled={resetLoading} />
+                    <button type="button" className="btn pwdfield__btn"
+                      onClick={() => setResetShowPwd2((v) => !v)} disabled={resetLoading}>
+                      {resetShowPwd2 ? "🙈" : "👁"}
+                    </button>
+                  </div>
+                </div>
+
+                {resetPwd2.length > 0 && !resetPwdMatch && (
+                  <div className="pre" style={{ marginTop: 4 }}>{t("login.password.mismatch")}</div>
+                )}
+                {resetError && (
+                  <div className="pre" style={{ marginTop: 8 }}>{resetError}</div>
+                )}
+
+                <div className="auth__actions">
+                  <button type="submit" className="btn btn--primary login__btnFull" disabled={!canSubmitReset}>
+                    {resetLoading ? "Сохраняем…" : "Сохранить пароль"}
+                  </button>
+                </div>
+                <div className="login__switchWrap">
+                  <button type="button" className="btn login__switchBtn" onClick={closeModal} disabled={resetLoading}>
+                    ← Вернуться ко входу
+                  </button>
+                </div>
+              </form>
+            )}
+
+          </div>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
+  // Forgot password modal
   const forgotModal = authModal === "forgot" ? (
     <div className="modal" role="dialog" aria-modal="true">
       <div className="card modal__card">
         <div className="card__body">
           <div className="modal__head">
-            <div>
-              <div className="modal__title">🔑 Забыли пароль?</div>
-              <p className="p">
-                {forgotSent
-                  ? "Письмо отправлено. Перейдите по ссылке из письма чтобы сбросить пароль. Проверьте папку «Спам»."
-                  : "Введите email — пришлём ссылку для сброса пароля."}
-              </p>
-            </div>
-            <button
-              type="button"
-              className="btn modal__close"
-              onClick={closeModal}
-              disabled={forgotLoading}
-              aria-label={t("common.close", "Закрыть")}
-            >×</button>
+            <div className="modal__title">🔑 Забыли пароль?</div>
+            <button type="button" className="btn modal__close" onClick={closeModal}
+              disabled={forgotLoading} aria-label={t("common.close", "Закрыть")}>×</button>
           </div>
-
           <div className="modal__content">
             {!forgotSent || !forgotLogin.trim() ? (
-              <form
-                className="auth__form"
-                onSubmit={(e) => { e.preventDefault(); void forgotPassword(); }}
-              >
+              <form className="auth__form" onSubmit={(e) => { e.preventDefault(); void forgotPassword(); }}>
+                <p className="p" style={{ marginBottom: 16 }}>
+                  Введите email для восстановления — пришлём ссылку для сброса пароля.
+                </p>
                 <div className="field">
                   <label className="field__label">Email</label>
-                  <input
-                    className="input"
-                    type="email"
-                    placeholder="you@example.com"
-                    value={forgotLogin}
-                    onChange={(e) => setForgotLogin(e.target.value)}
-                    autoComplete="email"
-                    inputMode="email"
-                    disabled={forgotLoading}
-                  />
+                  <input className="input" type="email" placeholder="you@example.com"
+                    value={forgotLogin} onChange={(e) => setForgotLogin(e.target.value)}
+                    autoComplete="email" inputMode="email" disabled={forgotLoading} />
                 </div>
                 <div className="auth__actions">
-                  <button
-                    type="submit"
-                    className="btn btn--primary login__btnFull"
-                    disabled={forgotLoading || !forgotLogin.trim() || forgotCooldown > 0}
-                  >
-                    {forgotLoading
-                      ? "Отправляем…"
-                      : forgotCooldown > 0
-                        ? `Повторить через ${forgotCooldown} сек`
-                        : "Отправить ссылку"}
+                  <button type="submit" className="btn btn--primary login__btnFull"
+                    disabled={forgotLoading || !forgotLogin.trim() || forgotCooldown > 0}>
+                    {forgotLoading ? "Отправляем…"
+                      : forgotCooldown > 0 ? `Повторить через ${forgotCooldown} сек`
+                      : "Отправить ссылку"}
                   </button>
                 </div>
                 <div className="login__switchWrap">
-                  <button
-                    type="button"
-                    className="btn login__switchBtn"
-                    onClick={() => openModal("login")}
-                    disabled={forgotLoading}
-                  >
+                  <button type="button" className="btn login__switchBtn"
+                    onClick={() => openModal("login")} disabled={forgotLoading}>
                     ← Вернуться ко входу
                   </button>
                 </div>
@@ -590,42 +781,29 @@ export function Login() {
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 <div style={{ textAlign: "center", fontSize: 48 }}>📬</div>
                 <p className="p" style={{ textAlign: "center", margin: 0 }}>
-                  Письмо отправлено. Перейдите по ссылке из письма, чтобы сбросить пароль. Проверьте папку «Спам».
+                  Письмо отправлено. Перейдите по ссылке из письма, чтобы сбросить пароль.
+                  Проверьте папку «Спам».
                 </p>
                 <div className="auth__actions">
-                  <button
-                    type="button"
-                    className="btn login__btnFull"
+                  <button type="button" className="btn login__btnFull"
                     onClick={() => void forgotPassword()}
                     disabled={forgotLoading || forgotCooldown > 0}
-                    style={{ opacity: forgotCooldown > 0 ? 0.6 : 1 }}
-                  >
-                    {forgotLoading
-                      ? "Отправляем…"
-                      : forgotCooldown > 0
-                        ? `Отправить повторно через ${forgotCooldown} сек`
-                        : "Отправить повторно"}
+                    style={{ opacity: forgotCooldown > 0 ? 0.6 : 1 }}>
+                    {forgotLoading ? "Отправляем…"
+                      : forgotCooldown > 0 ? `Отправить повторно через ${forgotCooldown} сек`
+                      : "Отправить повторно"}
                   </button>
-                  <button
-                    type="button"
-                    className="btn login__btnFull"
+                  <button type="button" className="btn login__btnFull"
                     onClick={() => {
-                      // Сбрасываем — позволяем ввести другой email
-                      setForgotSent(false);
-                      setForgotLogin("");
-                      localStorage.removeItem(FORGOT_SENT_KEY);
+                      setForgotSent(false); setForgotLogin("");
+                      try { localStorage.removeItem(FORGOT_SENT_KEY); } catch { /* ignore */ }
                       setForgotCooldown(0);
                       if (forgotTimerRef.current) { clearInterval(forgotTimerRef.current); forgotTimerRef.current = null; }
                     }}
-                    disabled={forgotLoading}
-                  >
+                    disabled={forgotLoading}>
                     Ввести другой email
                   </button>
-                  <button
-                    type="button"
-                    className="btn btn--primary login__btnFull"
-                    onClick={closeModal}
-                  >
+                  <button type="button" className="btn btn--primary login__btnFull" onClick={closeModal}>
                     Понятно
                   </button>
                 </div>
@@ -637,8 +815,7 @@ export function Login() {
     </div>
   ) : null;
 
-  // ── Password modal ────────────────────────────────────────────────────────
-
+  // Password (login / register) modal
   const passwordModal = authModal === "login" || authModal === "register" ? (
     <div className="modal" role="dialog" aria-modal="true">
       <div className="card modal__card">
@@ -658,9 +835,9 @@ export function Login() {
                     : t("login.password.register_tip")}
               </p>
             </div>
-            <button type="button" className="btn modal__close" onClick={closeModal} disabled={loading} aria-label={t("common.close")}>×</button>
+            <button type="button" className="btn modal__close" onClick={closeModal}
+              disabled={loading} aria-label={t("common.close")}>×</button>
           </div>
-
           <div className="modal__content">
             {authModal === "register" && normalizePartnerId(partnerIdInput) > 0 && (
               <div className="pre" style={{ borderColor: "rgba(124,92,255,.35)", background: "rgba(124,92,255,.08)", marginBottom: 16 }}>
@@ -670,7 +847,6 @@ export function Login() {
                 </div>
               </div>
             )}
-
             <form className="auth__form" onSubmit={(e) => { e.preventDefault(); void (authModal === "login" ? passwordLogin() : passwordRegister()); }}>
               <div className="field">
                 <label className="field__label">
@@ -692,28 +868,30 @@ export function Login() {
               {authModal === "register" && (
                 <div className="field">
                   <label className="field__label">{t("login.password.client")}</label>
-                  <input className="input" placeholder={t("login.password.client_ph")} value={clientName} onChange={(e) => setClientName(e.target.value)} autoComplete="name" disabled={loading} />
+                  <input className="input" placeholder={t("login.password.client_ph")}
+                    value={clientName} onChange={(e) => setClientName(e.target.value)}
+                    autoComplete="name" disabled={loading} />
                 </div>
               )}
 
               <div className="field">
                 <label className="field__label">{t("login.password.password")}</label>
                 <div className="pwdfield">
-                  <input className="input" placeholder={t("login.password.password_ph")} value={password} onChange={(e) => setPassword(e.target.value)}
-                    type={showPassword ? "text" : "password"} autoComplete={authModal === "login" ? "current-password" : "new-password"} disabled={loading} />
-                  <button type="button" className="btn pwdfield__btn" onClick={() => setShowPassword((v) => !v)} disabled={loading} aria-label={showPassword ? t("login.password.hide") : t("login.password.show")}>👁</button>
+                  <input className="input" placeholder={t("login.password.password_ph")}
+                    value={password} onChange={(e) => setPassword(e.target.value)}
+                    type={showPassword ? "text" : "password"}
+                    autoComplete={authModal === "login" ? "current-password" : "new-password"}
+                    disabled={loading} />
+                  <button type="button" className="btn pwdfield__btn"
+                    onClick={() => setShowPassword((v) => !v)} disabled={loading}
+                    aria-label={showPassword ? t("login.password.hide") : t("login.password.show")}>👁</button>
                 </div>
               </div>
 
-              {/* Кнопка "Забыли пароль?" — только в форме логина */}
               {authModal === "login" && (
                 <div className="login__switchWrap" style={{ marginTop: 4 }}>
-                  <button
-                    type="button"
-                    className="btn login__switchBtn"
-                    onClick={() => openModal("forgot")}
-                    disabled={loading}
-                  >
+                  <button type="button" className="btn login__switchBtn"
+                    onClick={() => openModal("forgot")} disabled={loading}>
                     Забыли пароль?
                   </button>
                 </div>
@@ -724,19 +902,19 @@ export function Login() {
                   <div className="field">
                     <label className="field__label">{t("login.password.repeat")}</label>
                     <div className="pwdfield">
-                      <input className="input" placeholder={t("login.password.repeat_ph")} value={password2} onChange={(e) => setPassword2(e.target.value)}
-                        type={showPassword2 ? "text" : "password"} autoComplete="new-password" disabled={loading} />
-                      <button type="button" className="btn pwdfield__btn" onClick={() => setShowPassword2((v) => !v)} disabled={loading} aria-label={showPassword2 ? t("login.password.hide") : t("login.password.show")}>👁</button>
+                      <input className="input" placeholder={t("login.password.repeat_ph")}
+                        value={password2} onChange={(e) => setPassword2(e.target.value)}
+                        type={showPassword2 ? "text" : "password"}
+                        autoComplete="new-password" disabled={loading} />
+                      <button type="button" className="btn pwdfield__btn"
+                        onClick={() => setShowPassword2((v) => !v)} disabled={loading}
+                        aria-label={showPassword2 ? t("login.password.hide") : t("login.password.show")}>👁</button>
                     </div>
                   </div>
                   {normalizePartnerId(partnerIdInput) <= 0 && (
                     <div style={{ marginTop: 4 }}>
-                      <button
-                        type="button"
-                        className="btn login__switchBtn"
-                        onClick={() => setPartnerOpen((v) => !v)}
-                        disabled={loading}
-                      >
+                      <button type="button" className="btn login__switchBtn"
+                        onClick={() => setPartnerOpen((v) => !v)} disabled={loading}>
                         {partnerOpen
                           ? (lang === "ru" ? "▴ Скрыть" : "▴ Hide")
                           : (lang === "ru" ? "▾ Есть код приглашения?" : "▾ Have a referral code?")}
@@ -744,38 +922,31 @@ export function Login() {
                       {partnerOpen && (
                         <div className="field" style={{ marginTop: 8 }}>
                           <label className="field__label">{t("login.partner.field")}</label>
-                          <input
-                            className="input"
-                            placeholder={t("login.partner.field_ph")}
+                          <input className="input" placeholder={t("login.partner.field_ph")}
                             value={partnerIdInput}
                             onChange={(e) => setPartnerIdInput(String(e.target.value).replace(/[^\d]/g, ""))}
-                            inputMode="numeric"
-                            autoComplete="off"
-                            disabled={loading}
-                          />
+                            inputMode="numeric" autoComplete="off" disabled={loading} />
                         </div>
                       )}
                     </div>
                   )}
+                  {password2.length > 0 && !passwordsMatch && (
+                    <div className="pre login__preMt12">{t("login.password.mismatch")}</div>
+                  )}
                 </>
-              )}
-
-              {authModal === "register" && password2.length > 0 && !passwordsMatch && (
-                <div className="pre login__preMt12">{t("login.password.mismatch")}</div>
               )}
 
               <div className="auth__actions">
                 <button type="submit" className="btn btn--primary login__btnFull"
-                  disabled={loading || (authModal === "login" ? !canPasswordLogin : !canPasswordRegister)}
-                >
+                  disabled={loading || (authModal === "login" ? !canPasswordLogin : !canPasswordRegister)}>
                   {loading
                     ? (authModal === "login" ? t("login.password.submit_loading") : t("login.password.register_loading"))
                     : (authModal === "login" ? t("login.password.submit") : t("login.password.register_submit"))}
                 </button>
               </div>
-
               <div className="login__switchWrap">
-                <button type="button" className="btn login__switchBtn" disabled={loading} onClick={() => openModal(authModal === "login" ? "register" : "login")}>
+                <button type="button" className="btn login__switchBtn" disabled={loading}
+                  onClick={() => openModal(authModal === "login" ? "register" : "login")}>
                   {authModal === "login" ? t("login.password.switch_register") : t("login.password.switch_login")}
                 </button>
               </div>
@@ -793,10 +964,7 @@ export function Login() {
       <div className="app-loader" style={{ opacity: 1, transition: "opacity 180ms ease", pointerEvents: "auto" }}>
         <div className="app-loader__card">
           <div className="app-loader__shine" />
-          <div className="app-loader__brandRow">
-            <div className="app-loader__mark" />
-            <div className="app-loader__title">Shpun App</div>
-          </div>
+          <div className="app-loader__brandRow"><div className="app-loader__mark" /><div className="app-loader__title">Shpun App</div></div>
           <div className="app-loader__text">{t("login.desc.tg.detecting", "Загрузка…")}</div>
         </div>
       </div>
@@ -811,10 +979,7 @@ export function Login() {
         <div className="app-loader" style={{ opacity: 1, transition: "opacity 180ms ease", pointerEvents: "auto" }}>
           <div className="app-loader__card">
             <div className="app-loader__shine" />
-            <div className="app-loader__brandRow">
-              <div className="app-loader__mark" />
-              <div className="app-loader__title">Shpun App</div>
-            </div>
+            <div className="app-loader__brandRow"><div className="app-loader__mark" /><div className="app-loader__title">Shpun App</div></div>
             <div className="app-loader__text">{t("login.desc.tg.loading")}</div>
           </div>
         </div>
@@ -825,12 +990,12 @@ export function Login() {
         <div className="card">
           <div className="card__body">
             <div className="app-loader__brandRow" style={{ marginBottom: 12 }}>
-              <div className="app-loader__mark" />
-              <div className="app-loader__title" style={{ fontSize: 20 }}>Shpun App</div>
+              <div className="app-loader__mark" /><div className="app-loader__title" style={{ fontSize: 20 }}>Shpun App</div>
             </div>
             <p className="p">{t("login.desc.tg.only")}</p>
             <div className="auth__actions" style={{ marginTop: 16 }}>
-              <button type="button" className="btn btn--primary login__btnFull" onClick={() => void telegramLoginMiniApp()} disabled={loading}>
+              <button type="button" className="btn btn--primary login__btnFull"
+                onClick={() => void telegramLoginMiniApp()} disabled={loading}>
                 {loading ? t("login.tg.cta_loading") : t("login.tg.retry")}
               </button>
             </div>
@@ -851,7 +1016,8 @@ export function Login() {
               <h1 className="h1">{t("login.title")}</h1>
               <p className="p">{partnerId > 0 ? t("login.desc.web.partner") : t("login.desc.web.short")}</p>
             </div>
-            <LangSwitch lang={(lang as "ru" | "en") === "en" ? "en" : "ru"} setLang={setLang as (v: "ru" | "en") => void} ariaLabel={t("login.lang.aria")} />
+            <LangSwitch lang={(lang as "ru" | "en") === "en" ? "en" : "ru"}
+              setLang={setLang as (v: "ru" | "en") => void} ariaLabel={t("login.lang.aria")} />
           </div>
 
           <div className="pre login__headerCard">
@@ -878,7 +1044,7 @@ export function Login() {
           <div className="auth__divider login__dividerMt14"><span>{t("login.divider.telegram")}</span></div>
           <div ref={widgetWrapRef} className="login__dividerMt14">
             <div className="pre login__preMb10">
-              {tgWidgetState === "failed" ? t("login.widget.failed.soft")
+              {tgWidgetState === "failed"  ? t("login.widget.failed.soft")
                 : tgWidgetState === "loading" ? t("login.widget.loading")
                 : t("login.widget.tip.secondary")}
             </div>
@@ -889,7 +1055,8 @@ export function Login() {
                 <div id="tg-widget-container" className="login__widgetBox" />
                 {(tgWidgetState === "idle" || tgWidgetState === "failed") && (
                   <div className="auth__actions">
-                    <button type="button" className="btn login__btnFull" onClick={() => void mountTelegramWidget(true)} disabled={loading}>
+                    <button type="button" className="btn login__btnFull"
+                      onClick={() => void mountTelegramWidget(true)} disabled={loading}>
                       {tgWidgetState === "failed" ? t("login.widget.retry.alt") : t("login.widget.open.alt")}
                     </button>
                   </div>
@@ -900,31 +1067,36 @@ export function Login() {
 
           <div className="auth__divider login__dividerMt14"><span>{t("login.divider.providers")}</span></div>
           <div className="auth__providers">
-            <button
-              className="btn auth__provider login__providerBtn"
+            <button className="btn auth__provider login__providerBtn" type="button" disabled={loading}
               onClick={() => {
                 if (tgWidgetState === "idle" || tgWidgetState === "failed") void mountTelegramWidget(true);
                 widgetWrapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-              }}
-              disabled={loading} type="button"
-            >
+              }}>
               <span className="auth__providerIcon">✈️</span>
               <span className="auth__providerText">Telegram
-                <span className="auth__providerHint">{tgWidgetState === "loading" ? t("login.providers.telegram.hint.loading") : t("login.providers.telegram.hint.web")}</span>
+                <span className="auth__providerHint">
+                  {tgWidgetState === "loading" ? t("login.providers.telegram.hint.loading") : t("login.providers.telegram.hint.web")}
+                </span>
               </span>
               <span className="auth__providerRight">→</span>
             </button>
             <button className="btn auth__provider login__providerBtn" disabled type="button" title={t("login.providers.soon")}>
-              <span className="auth__providerIcon">🟦</span><span className="auth__providerText">Google<span className="auth__providerHint">{t("login.providers.google.hint")}</span></span><span className="auth__providerRight">🔒</span>
+              <span className="auth__providerIcon">🟦</span>
+              <span className="auth__providerText">Google<span className="auth__providerHint">{t("login.providers.google.hint")}</span></span>
+              <span className="auth__providerRight">🔒</span>
             </button>
             <button className="btn auth__provider login__providerBtn" disabled type="button" title={t("login.providers.soon")}>
-              <span className="auth__providerIcon">🟨</span><span className="auth__providerText">Yandex<span className="auth__providerHint">{t("login.providers.yandex.hint")}</span></span><span className="auth__providerRight">🔒</span>
+              <span className="auth__providerIcon">🟨</span>
+              <span className="auth__providerText">Yandex<span className="auth__providerHint">{t("login.providers.yandex.hint")}</span></span>
+              <span className="auth__providerRight">🔒</span>
             </button>
           </div>
         </div>
       </div>
-      {passwordModal}
+
+      {resetModal}
       {forgotModal}
+      {passwordModal}
     </div>
   );
 }

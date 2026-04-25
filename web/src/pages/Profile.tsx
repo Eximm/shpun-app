@@ -992,16 +992,27 @@ export function Profile() {
         </div>
       </Modal>
 
-      {/* ── Модалка Email восстановления ── */}
-      <Modal open={emailModal} title={email ? t("profile.email.modal.change_title") : t("profile.email.modal.add_title")} onClose={() => setEmailModal(false)} closeLabel={t("profile.modal.close")}>
-        <p className="p">{t("profile.email.modal.text")}</p>
-        <input className="input" style={{ marginTop: 10 }} value={emailDraft} onChange={(e) => setEmailDraft(e.target.value)} placeholder={t("profile.email.modal.placeholder")} autoComplete="email" inputMode="email" />
-        {emailError && <div className="pre" style={{ marginTop: 8 }}>{emailError}</div>}
-        <div className="actions actions--2" style={{ marginTop: 12 }}>
-          <button className="btn" onClick={() => setEmailModal(false)} disabled={emailBusy} type="button">{t("profile.personal.cancel")}</button>
-          <button className="btn btn--primary" onClick={() => void saveEmail()} disabled={emailBusy} type="button">{emailBusy ? "…" : t("profile.email.save")}</button>
+    {/* ── Модалка Email восстановления ── */}
+    <Modal open={emailModal} title={email ? t("profile.email.modal.change_title") : t("profile.email.modal.add_title")} onClose={() => setEmailModal(false)} closeLabel={t("profile.modal.close")}>
+      <div className="pre" style={{ marginBottom: 12, background: "rgba(124,92,255,.06)", borderColor: "rgba(124,92,255,.2)" }}>
+        <div style={{ fontWeight: 600, marginBottom: 4 }}>📌 {t("profile.email.modal.notice_title")}</div>
+        <div style={{ opacity: 0.75, fontSize: 13, lineHeight: 1.5 }}>
+          {t("profile.email.modal.text")}
         </div>
-      </Modal>
+        {authLoginText && (
+          <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,.08)" }}>
+            <div style={{ opacity: 0.6, fontSize: 12, marginBottom: 2 }}>{t("profile.email.modal.login_label")}</div>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>{authLoginText}</div>
+          </div>
+        )}
+      </div>
+      <input className="input" style={{ marginTop: 4 }} value={emailDraft} onChange={(e) => setEmailDraft(e.target.value)} placeholder={t("profile.email.modal.placeholder")} autoComplete="email" inputMode="email" />
+      {emailError && <div className="pre" style={{ marginTop: 8 }}>{emailError}</div>}
+      <div className="actions actions--2" style={{ marginTop: 12 }}>
+        <button className="btn" onClick={() => setEmailModal(false)} disabled={emailBusy} type="button">{t("profile.personal.cancel")}</button>
+        <button className="btn btn--primary" onClick={() => void saveEmail()} disabled={emailBusy} type="button">{emailBusy ? "…" : t("profile.email.save")}</button>
+      </div>
+    </Modal>
 
       {/* ── Модалка пароля ── */}
       <Modal open={pwdModal} title={t("profile.password.modal.title")} onClose={() => setPwdModal(false)} closeLabel={t("profile.modal.close")}>

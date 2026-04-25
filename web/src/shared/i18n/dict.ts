@@ -212,7 +212,7 @@ export const RU: Dict = {
 
   "profile.auth.login2.title": "Логин для входа",
   "profile.auth.login2.badge": "Нельзя изменить",
-  "profile.auth.login2.hint": "Используется для авторизации. Этот логин был указан при регистрации.",
+  "profile.auth.login2.hint": "Логин для авторизации. Устанавливается при регистрации и не может быть изменён.",
   "profile.auth.login2.empty": "Не указан",
 
   "profile.email.title": "Email для восстановления",
@@ -248,7 +248,7 @@ export const RU: Dict = {
 
   "profile.email.modal.add_title": "Добавить email",
   "profile.email.modal.change_title": "Изменить email",
-  "profile.email.modal.text": "Укажите email, который будет использоваться для входа и восстановления доступа.",
+  "profile.email.modal.text": "Укажите email для восстановления пароля. Этот адрес не является логином для входа — логин устанавливается при регистрации и не меняется.",
   "profile.email.modal.placeholder": "name@example.com",
 
   "profile.telegram.unlinked": "Не подключен",
@@ -1147,7 +1147,7 @@ export const EN: Dict = {
 
   "profile.auth.login2.title": "Sign-in login",
   "profile.auth.login2.badge": "Cannot be changed",
-  "profile.auth.login2.hint": "Used for authorization. This login was set during registration.",
+  "profile.auth.login2.hint": "Login used for authorization. Set during registration and cannot be changed.",
   "profile.auth.login2.empty": "Not set",
 
   "profile.email.title": "Recovery email",
@@ -1183,7 +1183,7 @@ export const EN: Dict = {
 
   "profile.email.modal.add_title": "Add email",
   "profile.email.modal.change_title": "Change email",
-  "profile.email.modal.text": "Enter the email that will be used for sign-in and account recovery.",
+  "profile.email.modal.text": "Enter your email for password recovery. This is not a login — your login is set during registration and cannot be changed.",
   "profile.email.modal.placeholder": "name@example.com",
 
   "profile.telegram.unlinked": "Not connected",

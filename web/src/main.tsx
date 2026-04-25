@@ -12,7 +12,6 @@ import {
 import "./index.css";
 
 import { Login }            from "./pages/Login";
-import { ResetPassword }    from "./pages/ResetPassword";
 import { Home }             from "./pages/Home";
 import { Feed }             from "./pages/Feed";
 import { Services }         from "./pages/Services";
@@ -26,52 +25,38 @@ import { PaymentsReceipts } from "./pages/PaymentsReceipts";
 import { ServicesRouter }   from "./pages/help/ServicesRouter";
 import { AdminPage }        from "./pages/AdminPage";
 
-import { AuthGate }                   from "./app/auth/AuthGate";
-import { BottomNav }                  from "./app/layout/BottomNav";
-import { I18nProvider, useI18n }      from "./shared/i18n";
-import { ToastProvider }              from "./shared/ui/toast/ToastProvider";
-import { useBillingNotifications }    from "./app/notifications/useBillingNotifications";
-import { apiFetch }                   from "./shared/api/client";
+import { AuthGate }                from "./app/auth/AuthGate";
+import { BottomNav }               from "./app/layout/BottomNav";
+import { I18nProvider, useI18n }   from "./shared/i18n";
+import { ToastProvider }           from "./shared/ui/toast/ToastProvider";
+import { useBillingNotifications } from "./app/notifications/useBillingNotifications";
+import { apiFetch }                from "./shared/api/client";
 
 /* ─── PWA install prompt ─────────────────────────────────────────────────── */
 
 declare global {
-  interface Window {
-    __pwaInstallPrompt: BeforeInstallPromptEvent | null;
-  }
+  interface Window { __pwaInstallPrompt: BeforeInstallPromptEvent | null; }
 }
-
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
 window.__pwaInstallPrompt = null;
-
-window.addEventListener("beforeinstallprompt", (e) => {
-  e.preventDefault();
-  window.__pwaInstallPrompt = e as BeforeInstallPromptEvent;
-});
-
-window.addEventListener("appinstalled", () => {
-  window.__pwaInstallPrompt = null;
-});
+window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); window.__pwaInstallPrompt = e as BeforeInstallPromptEvent; });
+window.addEventListener("appinstalled", () => { window.__pwaInstallPrompt = null; });
 
 /* ─── PWA service worker ─────────────────────────────────────────────────── */
 
 if (import.meta.env.PROD) {
   import("virtual:pwa-register")
     .then(({ registerSW }) => {
-      const RELOAD_KEY       = "pwa:sw-reloaded";
-      const alreadyReloaded  = sessionStorage.getItem(RELOAD_KEY) === "1";
-      const updateSW         = registerSW({
+      const RELOAD_KEY      = "pwa:sw-reloaded";
+      const alreadyReloaded = sessionStorage.getItem(RELOAD_KEY) === "1";
+      const updateSW        = registerSW({
         immediate: true,
         onNeedRefresh() {
-          if (!alreadyReloaded) {
-            sessionStorage.setItem(RELOAD_KEY, "1");
-            updateSW(true);
-            window.location.reload();
-          }
+          if (!alreadyReloaded) { sessionStorage.setItem(RELOAD_KEY, "1"); updateSW(true); window.location.reload(); }
         },
         onOfflineReady() {},
       });
@@ -79,7 +64,7 @@ if (import.meta.env.PROD) {
     .catch(() => {});
 }
 
-/* ─── Types ─────────────────────────────────────────────────────────────── */
+/* ─── Types ──────────────────────────────────────────────────────────────── */
 
 type ServicesSummaryResp = { ok: true; summary?: { active?: number } };
 
@@ -88,10 +73,7 @@ type ServicesSummaryResp = { ok: true; summary?: { active?: number } };
 function AppShell({ children }: { children: React.ReactNode }) {
   const { t } = useI18n();
   const loc   = useLocation();
-
-  const hideNav = loc.pathname === "/login"
-    || loc.pathname === "/reset-password"
-    || loc.pathname.startsWith("/transfer");
+  const hideNav = loc.pathname === "/login" || loc.pathname.startsWith("/transfer");
 
   return (
     <div className="app">
@@ -107,11 +89,9 @@ function AppShell({ children }: { children: React.ReactNode }) {
           <span className="badge">{t("app.beta")}</span>
         </div>
       </header>
-
       <main className="main">
         <div className="container safe">{children}</div>
       </main>
-
       {!hideNav && <BottomNav />}
     </div>
   );
@@ -129,8 +109,8 @@ function AuthedLayout() {
 /* ─── LandingRoute ───────────────────────────────────────────────────────── */
 
 function LandingRoute() {
-  const { t }  = useI18n();
-  const loc    = useLocation();
+  const { t } = useI18n();
+  const loc   = useLocation();
   const alreadyChecked = sessionStorage.getItem("landing_checked") === "1";
   const [state, setState] = React.useState<"loading" | "home" | "services">(
     alreadyChecked ? "home" : "loading"
@@ -139,7 +119,6 @@ function LandingRoute() {
   React.useEffect(() => {
     if (alreadyChecked) return;
     let cancelled = false;
-
     void (async () => {
       try {
         const resp   = await apiFetch<ServicesSummaryResp>("/services", { method: "GET" });
@@ -147,11 +126,8 @@ function LandingRoute() {
         if (cancelled) return;
         sessionStorage.setItem("landing_checked", "1");
         setState(active > 0 ? "home" : "services");
-      } catch {
-        if (!cancelled) setState("home");
-      }
+      } catch { if (!cancelled) setState("home"); }
     })();
-
     return () => { cancelled = true; };
   }, [loc.search]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -160,16 +136,12 @@ function LandingRoute() {
       <div className="app-loader" style={{ opacity: 1, transition: "opacity 180ms ease", pointerEvents: "auto" }}>
         <div className="app-loader__card">
           <div className="app-loader__shine" />
-          <div className="app-loader__brandRow">
-            <div className="app-loader__mark" />
-            <div className="app-loader__title">Shpun App</div>
-          </div>
+          <div className="app-loader__brandRow"><div className="app-loader__mark" /><div className="app-loader__title">Shpun App</div></div>
           <div className="app-loader__text">{t("home.loading.text")}</div>
         </div>
       </div>
     );
   }
-
   return state === "home" ? <Home /> : <Services />;
 }
 
@@ -180,16 +152,15 @@ function AppPathRedirect() {
   return <Navigate to={{ pathname: "/", search: loc.search }} replace />;
 }
 
-// Корневой публичный маршрут.
+// Корневой маршрут.
 // Биллинг шлёт ссылки вида https://app.sdnonline.online?token=XXX —
-// перехватываем здесь ДО AuthGate, пока пользователь ещё не авторизован.
+// редиректим на /login?token=XXX, там Login.tsx сам откроет модалку смены пароля.
 function RootRoute() {
   const loc   = useLocation();
   const token = new URLSearchParams(loc.search).get("token");
   if (token) {
-    return <Navigate to={`/reset-password?token=${encodeURIComponent(token)}`} replace />;
+    return <Navigate to={`/login?token=${encodeURIComponent(token)}`} replace />;
   }
-  // Нет токена — авторизованный лендинг через AuthGate
   return <AuthGateRoot />;
 }
 
@@ -201,13 +172,11 @@ function AuthGateRoot() {
 function PageContainer({ children }: { children: React.ReactNode }) {
   const loc = useLocation();
   const [showProgress, setShowProgress] = React.useState(false);
-
   React.useEffect(() => {
     setShowProgress(true);
     const id = window.setTimeout(() => setShowProgress(false), 700);
     return () => clearTimeout(id);
   }, [loc.pathname]);
-
   return (
     <>
       {showProgress && <div className="top-progress"><div className="top-progress__bar" /></div>}
@@ -227,30 +196,26 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <AppShell>
             <PageContainer>
               <Routes>
-                {/* Публичные маршруты — без авторизации */}
-                <Route path="/login"          element={<Login />} />
-                <Route path="/reset-password" element={<ResetPassword />} />
-                <Route path="/transfer"       element={<Transfer />} />
-                <Route path="/app"            element={<AppPathRedirect />} />
+                {/* Публичные маршруты */}
+                <Route path="/login"    element={<Login />} />
+                <Route path="/transfer" element={<Transfer />} />
+                <Route path="/app"      element={<AppPathRedirect />} />
 
-                {/* Корень — публичный обработчик токена от биллинга.
-                    Биллинг шлёт ссылки вида https://app.sdnonline.online?token=XXX
-                    Неавторизованный пользователь попадает сюда — до AuthGate.
-                    Если есть ?token= — редиректим на reset-password публично. */}
+                {/* Корень: перехватывает ?token= и редиректит на /login */}
                 <Route path="/" element={<RootRoute />} />
 
                 <Route element={<AuthedLayout />}>
-                  <Route path="/home"                element={<Home />} />
-                  <Route path="/referrals"           element={<Referrals />} />
-                  <Route path="/feed"                element={<Feed />} />
-                  <Route path="/services"            element={<Services />} />
-                  <Route path="/services/order"      element={<ServicesOrder />} />
-                  <Route path="/help/router"         element={<ServicesRouter />} />
-                  <Route path="/payments"            element={<Payments />} />
-                  <Route path="/payments/history"    element={<PaymentsHistory />} />
-                  <Route path="/payments/receipts"   element={<PaymentsReceipts />} />
-                  <Route path="/profile"             element={<Profile />} />
-                  <Route path="/admin"               element={<AdminPage />} />
+                  <Route path="/home"              element={<Home />} />
+                  <Route path="/referrals"         element={<Referrals />} />
+                  <Route path="/feed"              element={<Feed />} />
+                  <Route path="/services"          element={<Services />} />
+                  <Route path="/services/order"    element={<ServicesOrder />} />
+                  <Route path="/help/router"       element={<ServicesRouter />} />
+                  <Route path="/payments"          element={<Payments />} />
+                  <Route path="/payments/history"  element={<PaymentsHistory />} />
+                  <Route path="/payments/receipts" element={<PaymentsReceipts />} />
+                  <Route path="/profile"           element={<Profile />} />
+                  <Route path="/admin"             element={<AdminPage />} />
                 </Route>
 
                 <Route path="*" element={<Navigate to="/" replace />} />
