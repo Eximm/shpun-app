@@ -162,13 +162,10 @@ function ConfirmForm({ token, nav }: { token: string; nav: ReturnType<typeof use
     setVerifyLoading(true);
     setVerifyError(null);
     try {
-      // Наш бэк возвращает { ok, login2, login }
-      const resp = await apiFetch<{ ok: boolean; login2: string | null; login: string | null }>(
+      // Просто проверяем что токен валидный — login2 получим после смены пароля
+      await apiFetch(
         `/auth/password-reset/verify?token=${encodeURIComponent(token)}`
       );
-      // Показываем login2 если есть, иначе login
-      const displayLogin = resp.login2?.trim() || resp.login?.trim() || "";
-      setAuthLogin(displayLogin);
     } catch (e: any) {
       const code = e?.code ?? e?.data?.error ?? "";
       setVerifyError(
@@ -186,10 +183,14 @@ function ConfirmForm({ token, nav }: { token: string; nav: ReturnType<typeof use
     setError(null);
     setLoading(true);
     try {
-      await apiFetch("/auth/password-reset/confirm", {
+      const resp = await apiFetch<{ ok: boolean; login2: string | null; login: string | null }>(
+        "/auth/password-reset/confirm", {
         method: "POST",
         body: { token, password: pwd1.trim() },
       });
+      // Биллинг возвращает login2/login в ответе на смену пароля
+      const displayLogin = resp.login2?.trim() || resp.login?.trim() || "";
+      setAuthLogin(displayLogin);
       setDone(true);
     } catch (e: any) {
       const code = e?.code ?? e?.data?.error ?? "";
@@ -290,18 +291,7 @@ function ConfirmForm({ token, nav }: { token: string; nav: ReturnType<typeof use
           <h1 className="h1">🔐 Новый пароль</h1>
           <p className="p">Придумайте новый пароль для вашего аккаунта.</p>
 
-          {/* Показываем логин чтобы пользователь не запутался */}
-          {authLogin && (
-            <div className="pre" style={{ marginTop: 12 }}>
-              <div style={{ opacity: 0.6, fontSize: 13, marginBottom: 4 }}>
-                Пароль будет изменён для логина:
-              </div>
-              <strong style={{ fontSize: 16 }}>{authLogin}</strong>
-              <div style={{ opacity: 0.6, fontSize: 12, marginTop: 6 }}>
-                После сохранения входите именно с этим логином и новым паролем.
-              </div>
-            </div>
-          )}
+          {/* Логин показываем только после успешной смены — получаем из confirm */}
 
           <form
             className="auth__form"

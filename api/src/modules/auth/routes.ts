@@ -1329,6 +1329,16 @@ export async function authRoutes(app: FastifyInstance) {
       });
     }
 
-    return reply.send({ ok: true });
+    // Биллинг возвращает данные пользователя — вытаскиваем login2 и login
+    const j: any = r.json ?? {};
+    const u = Array.isArray(j?.data) ? j.data[0] : j?.data ?? {};
+    const login2 = String(u?.login2 ?? "").trim();
+    const login  = String(u?.login  ?? "").trim();
+
+    return reply.send({
+      ok: true,
+      login2: login2 || null,
+      login:  login  || null,
+    });
   });
 }
