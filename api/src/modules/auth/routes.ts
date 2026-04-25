@@ -1245,6 +1245,41 @@ export async function authRoutes(app: FastifyInstance) {
     return reply.clearCookie("sid", { path: "/" }).send({ ok: true });
   });
 
+  // ── Сброс пароля: проверка токена и получение login2 ────────────────────
+  // Публичный. GET /auth/password-reset/verify?token=...
+  // Возвращает login2 пользователя чтобы показать его на странице сброса.
+  app.get("/auth/password-reset/verify", async (req, reply) => {
+    const token = String((req.query as any)?.token ?? "").trim();
+
+    if (!token) {
+      return reply.code(400).send({ ok: false, error: "token_required" });
+    }
+
+    const r = await shmFetch<any>(null, `v1/user/passwd/reset/verify`, {
+      method: "GET",
+      query: { token },
+    });
+
+    if (!r.ok) {
+      return reply.code(r.status === 400 ? 400 : 502).send({
+        ok: false,
+        error: r.status === 400 ? "invalid_or_expired_token" : "shm_verify_failed",
+      });
+    }
+
+    // Биллинг возвращает данные пользователя — вытаскиваем login2
+    const j: any = r.json ?? {};
+    const u = Array.isArray(j?.data) ? j.data[0] : j?.data ?? j ?? {};
+    const login2 = String(u?.login2 ?? u?.data?.login2 ?? "").trim();
+    const login  = String(u?.login  ?? u?.data?.login  ?? "").trim();
+
+    return reply.send({
+      ok: true,
+      login2: login2 || null,
+      login:  login  || null,
+    });
+  });
+
   // ── Сброс пароля: запрос письма ──────────────────────────────────────────
   // Публичный. Принимает { login }.
   // Всегда отвечает { ok: true } — не раскрываем существование аккаунта.

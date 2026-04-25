@@ -35,7 +35,6 @@ function getForgotCooldown(): number {
   const left = Math.ceil((sentAt + FORGOT_COOLDOWN_MS - Date.now()) / 1000);
   return left > 0 ? left : 0;
 }
-// Письмо было отправлено если sentAt есть (неважно истёк ли кулдаун)
 function wasForgotSent(): boolean {
   return getForgotSentAt() > 0;
 }
@@ -222,7 +221,6 @@ export function Login() {
   const [forgotCooldown, setForgotCooldown] = useState(() => getForgotCooldown());
   const forgotTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Тикаем таймер кулдауна для forgot
   useEffect(() => {
     function tick() {
       const left = getForgotCooldown();
@@ -281,14 +279,12 @@ export function Login() {
       const p = readPendingPartnerId();
       setPartnerIdInput((p > 0 ? p : partnerId) > 0 ? String(p > 0 ? p : partnerId) : "");
     }
-    // сбрасываем forgot при переключении на другую модалку (не на forgot)
     if (next !== "forgot") { setForgotLoading(false); }
   }
 
   function closeModal() {
     setAuthModal("none");
     setPassword(""); setPassword2(""); setShowPassword(false); setShowPassword2(false); setClientName(""); setEmailTouched(false);
-    // forgotLogin и forgotSent не сбрасываем — помним состояние между открытиями
     setForgotLoading(false);
   }
 
@@ -313,7 +309,6 @@ export function Login() {
     nav(String(loc?.state?.from ?? "").trim() || "/", { replace: true });
   }
 
-  // ── Telegram auto-login ───────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
@@ -406,7 +401,6 @@ export function Login() {
       setForgotSentAt();
       const left = FORGOT_COOLDOWN_MS / 1000;
       setForgotCooldown(left);
-      // Запускаем таймер
       if (forgotTimerRef.current) clearInterval(forgotTimerRef.current);
       forgotTimerRef.current = setInterval(() => {
         const l = getForgotCooldown();
@@ -523,8 +517,8 @@ export function Login() {
               <div className="modal__title">🔑 Забыли пароль?</div>
               <p className="p">
                 {forgotSent
-                  ? "Письмо отправлено. Перейдите по ссылке из письма чтобы сбросить пароль. Проверьте папку «Спам»."
-                  : "Введите email — пришлём ссылку для сброса пароля."}
+                  ? "Письмо отправлено. Перейдите по ссылке из письма, чтобы сбросить пароль. Проверьте папку «Спам»."
+                  : "Введите email для восстановления — пришлём ссылку для сброса пароля."}
               </p>
             </div>
             <button
@@ -543,7 +537,7 @@ export function Login() {
                 onSubmit={(e) => { e.preventDefault(); void forgotPassword(); }}
               >
                 <div className="field">
-                  <label className="field__label">Email</label>
+                  <label className="field__label">Email для восстановления</label>
                   <input
                     className="input"
                     type="email"
@@ -680,7 +674,6 @@ export function Login() {
                 </div>
               </div>
 
-              {/* Кнопка "Забыли пароль?" — только в форме логина */}
               {authModal === "login" && (
                 <div className="login__switchWrap" style={{ marginTop: 4 }}>
                   <button

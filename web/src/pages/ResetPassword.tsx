@@ -1,6 +1,6 @@
 // FILE: web/src/pages/ResetPassword.tsx
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { apiFetch } from "../shared/api/client";
 import { toast } from "../shared/ui/toast";
@@ -13,29 +13,6 @@ function pwdScore(p: string) {
   if (/\d/.test(p))            s++;
   if (/[^A-Za-z0-9]/.test(p)) s++;
   return Math.min(s, 5);
-}
-
-function pickLoginFromResetVerifyPayload(payload: any): string {
-  const candidates = [
-    payload?.login2,
-    payload?.login,
-    payload?.authLogin,
-    payload?.profile?.login2,
-    payload?.profile?.login,
-    payload?.user?.login2,
-    payload?.user?.login,
-    payload?.data?.login2,
-    payload?.data?.login,
-    payload?.data?.[0]?.login2,
-    payload?.data?.[0]?.login,
-  ];
-
-  for (const v of candidates) {
-    const s = String(v ?? "").trim();
-    if (s) return s;
-  }
-
-  return "";
 }
 
 export function ResetPassword() {
@@ -61,7 +38,6 @@ function RequestForm({ nav }: { nav: ReturnType<typeof useNavigate> }) {
       toast.error("Ошибка", { description: "Введите email" });
       return;
     }
-
     setLoading(true);
     try {
       await apiFetch("/auth/password-reset", {
@@ -167,41 +143,43 @@ function ConfirmForm({ token, nav }: { token: string; nav: ReturnType<typeof use
   const [error,    setError]    = useState<string | null>(null);
   const [done,     setDone]     = useState(false);
 
+  // Проверка токена и получение логина
   const [verifyLoading, setVerifyLoading] = useState(true);
   const [verifyError,   setVerifyError]   = useState<string | null>(null);
-  const [accountLogin,  setAccountLogin]  = useState("");
+  const [authLogin,     setAuthLogin]     = useState<string>("");  // login2 или login
 
   const strength       = pwdScore(pwd1);
   const passwordsMatch = pwd2.length === 0 || pwd1 === pwd2;
-  const canSubmit      = pwd1.length >= 8 && pwd2.length > 0 && pwd1 === pwd2 && !loading && !verifyLoading && !verifyError;
-
-  const loginView = useMemo(() => accountLogin.trim() || "—", [accountLogin]);
-
-  async function verifyToken() {
-    setVerifyLoading(true);
-    setVerifyError(null);
-    try {
-      const resp = await apiFetch<any>(`/auth/password-reset/verify?token=${encodeURIComponent(token)}`, {
-        method: "GET",
-      });
-      const login = pickLoginFromResetVerifyPayload(resp);
-      setAccountLogin(login);
-    } catch (e: any) {
-      const code = e?.code ?? e?.data?.error ?? "";
-      setVerifyError(
-        code === "invalid_or_expired_token"
-          ? "Ссылка недействительна или устарела. Запросите новую."
-          : "Не удалось проверить ссылку сброса пароля. Запросите новую ссылку."
-      );
-    } finally {
-      setVerifyLoading(false);
-    }
-  }
+  const canSubmit      = pwd1.length >= 8 && pwd2.length > 0 && pwd1 === pwd2
+                         && !loading && !verifyLoading && !verifyError;
 
   useEffect(() => {
     void verifyToken();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
+
+  async function verifyToken() {
+    setVerifyLoading(true);
+    setVerifyError(null);
+    try {
+      // Наш бэк возвращает { ok, login2, login }
+      const resp = await apiFetch<{ ok: boolean; login2: string | null; login: string | null }>(
+        `/auth/password-reset/verify?token=${encodeURIComponent(token)}`
+      );
+      // Показываем login2 если есть, иначе login
+      const displayLogin = resp.login2?.trim() || resp.login?.trim() || "";
+      setAuthLogin(displayLogin);
+    } catch (e: any) {
+      const code = e?.code ?? e?.data?.error ?? "";
+      setVerifyError(
+        code === "invalid_or_expired_token"
+          ? "Ссылка недействительна или устарела. Запросите новую."
+          : "Не удалось проверить ссылку. Попробуйте запросить новую."
+      );
+    } finally {
+      setVerifyLoading(false);
+    }
+  }
 
   async function submit() {
     if (!canSubmit) return;
@@ -225,47 +203,21 @@ function ConfirmForm({ token, nav }: { token: string; nav: ReturnType<typeof use
     }
   }
 
-  if (done) {
-    return (
-      <div className="section">
-        <div className="card">
-          <div className="card__body">
-            <h1 className="h1">✅ Пароль изменён</h1>
-            <p className="p">Теперь входите с новым паролем.</p>
-
-            <div className="pre" style={{ marginTop: 12 }}>
-              <div style={{ opacity: 0.72, marginBottom: 4 }}>Логин для входа:</div>
-              <strong>{loginView}</strong>
-            </div>
-
-            <div className="auth__actions" style={{ marginTop: 16 }}>
-              <button
-                type="button"
-                className="btn btn--primary login__btnFull"
-                onClick={() => nav("/login")}
-              >
-                Войти
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  // ── Загрузка ─────────────────────────────────────────────────────────────
   if (verifyLoading) {
     return (
       <div className="section">
         <div className="card">
           <div className="card__body">
             <h1 className="h1">🔐 Новый пароль</h1>
-            <p className="p">Проверяем ссылку сброса пароля…</p>
+            <p className="p" style={{ opacity: 0.6 }}>Проверяем ссылку…</p>
           </div>
         </div>
       </div>
     );
   }
 
+  // ── Ошибка токена ─────────────────────────────────────────────────────────
   if (verifyError) {
     return (
       <div className="section">
@@ -297,6 +249,40 @@ function ConfirmForm({ token, nav }: { token: string; nav: ReturnType<typeof use
     );
   }
 
+  // ── Успех ─────────────────────────────────────────────────────────────────
+  if (done) {
+    return (
+      <div className="section">
+        <div className="card">
+          <div className="card__body">
+            <h1 className="h1">✅ Пароль изменён</h1>
+            <p className="p">Теперь входите с новым паролем.</p>
+
+            {authLogin && (
+              <div className="pre" style={{ marginTop: 12 }}>
+                <div style={{ opacity: 0.6, fontSize: 13, marginBottom: 4 }}>
+                  Ваш логин для входа:
+                </div>
+                <strong style={{ fontSize: 16 }}>{authLogin}</strong>
+              </div>
+            )}
+
+            <div className="auth__actions" style={{ marginTop: 16 }}>
+              <button
+                type="button"
+                className="btn btn--primary login__btnFull"
+                onClick={() => nav("/login")}
+              >
+                Войти
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Форма ─────────────────────────────────────────────────────────────────
   return (
     <div className="section">
       <div className="card">
@@ -304,13 +290,18 @@ function ConfirmForm({ token, nav }: { token: string; nav: ReturnType<typeof use
           <h1 className="h1">🔐 Новый пароль</h1>
           <p className="p">Придумайте новый пароль для вашего аккаунта.</p>
 
-          <div className="pre" style={{ marginTop: 12 }}>
-            <div style={{ opacity: 0.72, marginBottom: 4 }}>Пароль будет изменён для логина:</div>
-            <strong>{loginView}</strong>
-            <div style={{ opacity: 0.72, marginTop: 8 }}>
-              После сохранения входите именно с этим логином и новым паролем.
+          {/* Показываем логин чтобы пользователь не запутался */}
+          {authLogin && (
+            <div className="pre" style={{ marginTop: 12 }}>
+              <div style={{ opacity: 0.6, fontSize: 13, marginBottom: 4 }}>
+                Пароль будет изменён для логина:
+              </div>
+              <strong style={{ fontSize: 16 }}>{authLogin}</strong>
+              <div style={{ opacity: 0.6, fontSize: 12, marginTop: 6 }}>
+                После сохранения входите именно с этим логином и новым паролем.
+              </div>
             </div>
-          </div>
+          )}
 
           <form
             className="auth__form"
