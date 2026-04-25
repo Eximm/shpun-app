@@ -131,6 +131,14 @@ function AuthedLayout() {
 function LandingRoute() {
   const { t }  = useI18n();
   const loc    = useLocation();
+
+  // Биллинг шлёт ссылки вида https://app.sdnonline.online?token=XXX —
+  // перехватываем здесь и редиректим на reset-password до любой авторизации
+  const token = new URLSearchParams(loc.search).get("token");
+  if (token) {
+    return <Navigate to={`/reset-password?token=${encodeURIComponent(token)}`} replace />;
+  }
+
   const alreadyChecked = sessionStorage.getItem("landing_checked") === "1";
   const [state, setState] = React.useState<"loading" | "home" | "services">(
     alreadyChecked ? "home" : "loading"
