@@ -105,7 +105,7 @@ function fmtForecastDate(iso: string) {
   }
 }
 
-/* ─── PaymentErrorModal ─────────────────────────────────────────────────── */
+/* ─── Modals ────────────────────────────────────────────────────────────── */
 
 function PaymentErrorModal({
   open,
@@ -131,8 +131,7 @@ function PaymentErrorModal({
             Оплата не прошла
           </div>
           <p className="p" style={{ opacity: 0.75 }}>
-            Платёж был отменён или произошла ошибка. Попробуйте ещё раз или
-            выберите другой способ оплаты.
+            Платёж был отменён или произошла ошибка. Попробуйте ещё раз или выберите другой способ оплаты.
           </p>
           <div className="actions actions--2" style={{ marginTop: 20 }}>
             <button className="btn" type="button" onClick={onClose}>
@@ -140,6 +139,51 @@ function PaymentErrorModal({
             </button>
             <button className="btn btn--primary" type="button" onClick={onRetry}>
               Попробовать снова
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function ReceiptSuccessModal({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
+  if (!open) return null;
+
+  return createPortal(
+    <div role="dialog" aria-modal="true" className="modal" onMouseDown={onClose}>
+      <div
+        className="card modal__card"
+        onMouseDown={(e) => e.stopPropagation()}
+        style={{ textAlign: "center" }}
+      >
+        <div className="card__body">
+          <div style={{ fontSize: 52, marginBottom: 8 }}>📬</div>
+
+          <div className="h1" style={{ fontSize: 20, marginBottom: 8 }}>
+            Квитанция получена
+          </div>
+
+          <p className="p" style={{ opacity: 0.78, lineHeight: 1.6 }}>
+            Мы получили чек и отправили его на ручную проверку.
+            Баланс будет зачислен после подтверждения оплаты.
+            Обычно это занимает до одного часа в рабочее время.
+          </p>
+
+          <p className="p" style={{ marginTop: 10, opacity: 0.5, fontSize: 13 }}>
+            Повторно отправлять эту же квитанцию не нужно.
+          </p>
+
+          <div className="actions actions--1" style={{ marginTop: 20 }}>
+            <button className="btn btn--primary" type="button" onClick={onClose}>
+              Хорошо
             </button>
           </div>
         </div>
@@ -169,16 +213,12 @@ async function fileHash(file: File): Promise<string> {
 
 function loadStoredReceiptHashes(): Set<string> {
   try {
-    const raw = localStorage.getItem(RECEIPT_HASHES_STORAGE_KEY);
+    const raw = sessionStorage.getItem(RECEIPT_HASHES_STORAGE_KEY);
     const arr = raw ? JSON.parse(raw) : [];
 
     if (!Array.isArray(arr)) return new Set();
 
-    return new Set(
-      arr
-        .map((x) => String(x || "").trim())
-        .filter(Boolean),
-    );
+    return new Set(arr.map((x) => String(x || "").trim()).filter(Boolean));
   } catch {
     return new Set();
   }
@@ -187,7 +227,7 @@ function loadStoredReceiptHashes(): Set<string> {
 function saveStoredReceiptHashes(set: Set<string>) {
   try {
     const arr = Array.from(set).filter(Boolean).slice(-80);
-    localStorage.setItem(RECEIPT_HASHES_STORAGE_KEY, JSON.stringify(arr));
+    sessionStorage.setItem(RECEIPT_HASHES_STORAGE_KEY, JSON.stringify(arr));
   } catch {}
 }
 
@@ -197,17 +237,18 @@ function RequisitesModal({
   open,
   onClose,
   amountNumber,
+  onSuccess,
 }: {
   open: boolean;
   onClose: () => void;
   amountNumber: number | null;
+  onSuccess: () => void;
 }) {
   const { t } = useI18n();
 
   const [reqLoading, setReqLoading] = useState(false);
   const [reqError, setReqError] = useState<unknown>(null);
-  const [requisites, setRequisites] =
-    useState<RequisitesResp["requisites"] | null>(null);
+  const [requisites, setRequisites] = useState<RequisitesResp["requisites"] | null>(null);
 
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
@@ -240,7 +281,6 @@ function RequisitesModal({
             window.clearInterval(cooldownRef.current);
             cooldownRef.current = null;
           }
-
           return 0;
         }
 
@@ -374,13 +414,12 @@ function RequisitesModal({
 
       rememberReceiptHash(hash);
       setCooldown(COOLDOWN_SEC);
-      setUploadMsg("sent");
 
       toast.success("📬 Чек получен!", {
         description: "Проверим вручную и зачислим. Повторно отправлять не нужно.",
       });
 
-      window.setTimeout(() => setUploadMsg(null), 30_000);
+      onSuccess();
     } catch (e) {
       toastApiError(e, { title: "😬 Не отправилось" });
     } finally {
@@ -521,51 +560,6 @@ function RequisitesModal({
               )}
             </div>
 
-            {uploadMsg === "sent" && (
-              <div
-                style={{
-                  marginTop: 14,
-                  padding: "14px 16px",
-                  borderRadius: 14,
-                  background: "rgba(43,227,143,0.07)",
-                  border: "1px solid rgba(43,227,143,0.28)",
-                }}
-              >
-                <div
-                  style={{
-                    fontWeight: 900,
-                    fontSize: 14,
-                    color: "rgba(43,227,143,0.9)",
-                    marginBottom: 6,
-                  }}
-                >
-                  📬 Квитанция получена!
-                </div>
-                <div
-                  style={{
-                    fontSize: 13,
-                    lineHeight: 1.6,
-                    color: "rgba(255,255,255,0.82)",
-                  }}
-                >
-                  Мы проверим платёж вручную и зачислим баланс. Обычно это
-                  занимает <b>до одного часа</b> в рабочее время. Повторно
-                  отправлять не нужно — мы уже всё получили. 🙌
-                </div>
-                {cooldown > 0 && (
-                  <div
-                    style={{
-                      marginTop: 8,
-                      fontSize: 12,
-                      color: "rgba(255,255,255,0.45)",
-                    }}
-                  >
-                    Новую квитанцию можно прислать через {cooldown} сек.
-                  </div>
-                )}
-              </div>
-            )}
-
             {uploadMsg === "duplicate" && (
               <div
                 style={{
@@ -593,8 +587,8 @@ function RequisitesModal({
                     color: "rgba(255,255,255,0.82)",
                   }}
                 >
-                  Повторно загружать тот же файл не нужно. Если платёж был
-                  отправлен, он уже находится на ручной проверке.
+                  Повторно загружать тот же файл не нужно. Если платёж был отправлен,
+                  он уже находится на ручной проверке.
                 </div>
               </div>
             )}
@@ -625,6 +619,7 @@ export function Payments() {
   const [reqModal, setReqModal] = useState(false);
   const [checkingPay, setCheckingPay] = useState(false);
   const [showOverlay, setShowOverlay] = useState(false);
+  const [receiptSuccessOpen, setReceiptSuccessOpen] = useState(false);
 
   const [payErrorOpen, setPayErrorOpen] = useState<boolean>(() => {
     try {
@@ -807,11 +802,17 @@ export function Payments() {
           setPayErrorOpen(false);
 
           window.setTimeout(() => {
-            document
-              .querySelector(".kv")
-              ?.scrollIntoView({ behavior: "smooth", block: "start" });
+            document.querySelector(".kv")?.scrollIntoView({
+              behavior: "smooth",
+              block: "start",
+            });
           }, 100);
         }}
+      />
+
+      <ReceiptSuccessModal
+        open={receiptSuccessOpen}
+        onClose={() => setReceiptSuccessOpen(false)}
       />
 
       {showOverlay &&
@@ -850,8 +851,7 @@ export function Payments() {
 
                         toast.info("🔍 Проверяем статус", {
                           description:
-                            getMood("payment_checking") ??
-                            "Сверяемся с платёжкой...",
+                            getMood("payment_checking") ?? "Сверяемся с платёжкой...",
                         });
 
                         await load();
@@ -1087,6 +1087,10 @@ export function Payments() {
         open={reqModal}
         onClose={() => setReqModal(false)}
         amountNumber={amountNumber}
+        onSuccess={() => {
+          setReqModal(false);
+          setReceiptSuccessOpen(true);
+        }}
       />
     </div>
   );
