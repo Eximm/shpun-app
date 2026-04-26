@@ -1,7 +1,7 @@
 // FILE: web/src/pages/Payments.tsx
 
 import { createPortal } from "react-dom";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { apiFetch } from "../shared/api/client";
 import { useI18n } from "../shared/i18n";
@@ -112,21 +112,51 @@ function PaymentErrorModal({ open, onClose, onRetry }: {
 
 /* ─── RequisitesModal ────────────────────────────────────────────────────── */
 
+/* ─── Хэш файла для защиты от дублей ─────────────────────────────────────── */
+
+async function fileHash(file: File): Promise<string> {
+  try {
+    const buf    = await file.arrayBuffer();
+    const digest = await crypto.subtle.digest("SHA-256", buf);
+    return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 16);
+  } catch {
+    // Fallback если crypto недоступен — по имени + размеру + времени изменения
+    return `${file.name}-${file.size}-${file.lastModified}`;
+  }
+}
+
+const COOLDOWN_SEC = 120; // 2 минуты блокировки после отправки
+
 function RequisitesModal({ open, onClose, amountNumber }: {
   open: boolean; onClose: () => void; amountNumber: number | null;
 }) {
   const { t } = useI18n();
 
-  const [reqLoading, setReqLoading] = useState(false);
-  const [reqError,   setReqError]   = useState<unknown>(null);
-  const [requisites, setRequisites] = useState<RequisitesResp["requisites"] | null>(null);
-  const [uploading,  setUploading]  = useState(false);
-  const [uploadMsg,  setUploadMsg]  = useState<string | null>(null);
+  const [reqLoading,   setReqLoading]   = useState(false);
+  const [reqError,     setReqError]     = useState<unknown>(null);
+  const [requisites,   setRequisites]   = useState<RequisitesResp["requisites"] | null>(null);
+  const [uploading,    setUploading]    = useState(false);
+  const [uploadMsg,    setUploadMsg]    = useState<string | null>(null);
+  const [cooldown,     setCooldown]     = useState(0);       // секунды до разблокировки
+  const [sentHashes,   setSentHashes]   = useState<Set<string>>(new Set());
+  const cooldownRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!open) { setUploadMsg(null); return; }
     void loadRequisites();
   }, [open]);
+
+  // Таймер обратного отсчёта
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    cooldownRef.current = window.setInterval(() => {
+      setCooldown((v) => {
+        if (v <= 1) { if (cooldownRef.current) clearInterval(cooldownRef.current); return 0; }
+        return v - 1;
+      });
+    }, 1000);
+    return () => { if (cooldownRef.current) clearInterval(cooldownRef.current); };
+  }, [cooldown > 0]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadRequisites() {
     setReqLoading(true); setReqError(null);
@@ -147,6 +177,18 @@ function RequisitesModal({ open, onClose, amountNumber }: {
       toast.error("📎 Файл великоват", { description: "Максимум 2 МБ. Сожмите или обрежьте скриншот." });
       return;
     }
+    if (cooldown > 0) {
+      toast.error("⏳ Подождите", { description: `Следующий чек можно отправить через ${cooldown} сек.` });
+      return;
+    }
+
+    // Защита от дубля — проверяем хэш файла
+    const hash = await fileHash(file);
+    if (sentHashes.has(hash)) {
+      toast.error("🙅 Такой чек уже отправлен", { description: "Это тот же файл. Мы уже его получили и проверяем." });
+      return;
+    }
+
     setUploading(true); setUploadMsg(null);
     try {
       const fd = new FormData();
@@ -154,11 +196,17 @@ function RequisitesModal({ open, onClose, amountNumber }: {
       fd.append("amount", String(amountNumber));
       const json = await apiFetch("/payments/receipt", { method: "POST", body: fd }) as ReceiptUploadResp;
       if (!json?.ok) throw json ?? { message: "receipt_upload_failed" };
-      setUploadMsg(t("payments.receipt.sent_msg"));
-      toast.success("📬 Чек отправлен", { description: "Проверим и зачислим. Обычно быстро." });
-      setTimeout(() => setUploadMsg(null), 5000);
-    } catch (e) { toastApiError(e, { title: t("payments.receipt.send_failed") }); }
-    finally { setUploading(false); }
+
+      // Запоминаем хэш и запускаем кулдаун
+      setSentHashes((prev) => new Set([...prev, hash]));
+      setCooldown(COOLDOWN_SEC);
+
+      setUploadMsg("sent");
+      toast.success("📬 Чек получен!", { description: "Проверим вручную и зачислим. Обычно до 15 минут." });
+      setTimeout(() => setUploadMsg(null), 30_000);
+    } catch (e) {
+      toastApiError(e, { title: "😬 Не отправилось" });
+    } finally { setUploading(false); }
   }
 
   if (!open) return null;
@@ -230,12 +278,24 @@ function RequisitesModal({ open, onClose, amountNumber }: {
               <div>3. {t("payments.card_page.step_3")}</div>
             </div>
 
+            {/* Кнопка отправки с кулдауном + защита от дублей */}
             <div className="actions actions--1" style={{ marginTop: 16 }}>
-              <label className="btn btn--primary" style={{ cursor: "pointer" }}>
-                <span>{uploading ? t("payments.receipt.uploading_short") : t("payments.receipt.upload_btn")}</span>
+              <label
+                className={`btn${!uploading && cooldown === 0 ? " btn--primary" : ""}`}
+                style={{
+                  cursor: uploading || cooldown > 0 ? "not-allowed" : "pointer",
+                  opacity: uploading || cooldown > 0 ? 0.65 : 1,
+                }}
+              >
+                {uploading
+                  ? "⏳ Отправляем…"
+                  : cooldown > 0
+                    ? `⏳ Повтор через ${cooldown} сек.`
+                    : "📎 Прикрепить квитанцию"}
                 <input
                   type="file" accept=".jpg,.jpeg,.png,.pdf"
-                  style={{ display: "none" }} disabled={uploading}
+                  style={{ display: "none" }}
+                  disabled={uploading || cooldown > 0}
                   onChange={(e) => {
                     const f = e.target.files?.[0];
                     if (!f) return;
@@ -254,8 +314,34 @@ function RequisitesModal({ open, onClose, amountNumber }: {
               )}
             </div>
 
-            {uploadMsg && <div className="home-alert home-alert--ok" style={{ marginTop: 12 }}>{uploadMsg}</div>}
-            <p className="p" style={{ marginTop: 10, opacity: 0.5, fontSize: 12 }}>{t("payments.receipt.supported")}</p>
+            {/* Статус после отправки */}
+            {uploadMsg === "sent" && (
+              <div style={{
+                marginTop: 14,
+                padding: "14px 16px",
+                borderRadius: 14,
+                background: "rgba(43,227,143,0.07)",
+                border: "1px solid rgba(43,227,143,0.28)",
+              }}>
+                <div style={{ fontWeight: 900, fontSize: 14, color: "rgba(43,227,143,0.9)", marginBottom: 6 }}>
+                  📬 Квитанция получена!
+                </div>
+                <div style={{ fontSize: 13, lineHeight: 1.6, color: "rgba(255,255,255,0.82)" }}>
+                  Мы проверим платёж вручную и зачислим баланс.
+                  Обычно это занимает <b>до одного часа</b> в рабочее время.
+                  Повторно отправлять не нужно — мы уже всё получили. 🙌
+                </div>
+                {cooldown > 0 && (
+                  <div style={{ marginTop: 8, fontSize: 12, color: "rgba(255,255,255,0.45)" }}>
+                    Новую квитанцию можно прислать через {cooldown} сек.
+                  </div>
+                )}
+              </div>
+            )}
+
+            <p className="p" style={{ marginTop: 10, opacity: 0.45, fontSize: 12 }}>
+              Форматы: JPG, PNG, PDF · Максимум 2 МБ
+            </p>
           </div>
         </div>
       </div>
