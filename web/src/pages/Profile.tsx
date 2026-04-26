@@ -22,7 +22,7 @@ type VerifyModalState = "idle" | "sent" | "success";
 /* ─── Constants ─────────────────────────────────────────────────────────── */
 
 const EMAIL_CODE_SENT_KEY    = "email_verify:sent_at";
-const EMAIL_CODE_COOLDOWN_MS = 60_000; // 60 сек между отправками
+const EMAIL_CODE_COOLDOWN_MS = 60_000;
 
 /* ─── Utils ─────────────────────────────────────────────────────────────── */
 
@@ -69,15 +69,12 @@ function permissionLabel(p: string, t: (k: string) => string) {
 function getCodeSentAt(): number {
   try { return Number(sessionStorage.getItem(EMAIL_CODE_SENT_KEY) ?? 0) || 0; } catch { return 0; }
 }
-
 function setCodeSentAt() {
   try { sessionStorage.setItem(EMAIL_CODE_SENT_KEY, String(Date.now())); } catch { /* ignore */ }
 }
-
 function clearCodeSentAt() {
   try { sessionStorage.removeItem(EMAIL_CODE_SENT_KEY); } catch { /* ignore */ }
 }
-
 function getCooldownLeft(): number {
   const sentAt = getCodeSentAt();
   if (!sentAt) return 0;
@@ -179,14 +176,12 @@ function EmailVerifyModal({ open, email, onClose, onVerified }: {
   onClose: () => void;
   onVerified: () => void;
 }) {
-  const [state,       setState]       = useState<VerifyModalState>(() =>
-    getCodeSentAt() > 0 ? "sent" : "idle"
-  );
-  const [code,        setCode]        = useState("");
-  const [codeError,   setCodeError]   = useState<string | null>(null);
-  const [sending,     setSending]     = useState(false);
-  const [confirming,  setConfirming]  = useState(false);
-  const [cooldown,    setCooldown]    = useState(() => getCooldownLeft());
+  const [state,      setState]      = useState<VerifyModalState>(() => getCodeSentAt() > 0 ? "sent" : "idle");
+  const [code,       setCode]       = useState("");
+  const [codeError,  setCodeError]  = useState<string | null>(null);
+  const [sending,    setSending]    = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [cooldown,   setCooldown]   = useState(() => getCooldownLeft());
 
   const codeInputRef = useRef<HTMLInputElement>(null);
   const timerRef     = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -195,105 +190,67 @@ function EmailVerifyModal({ open, email, onClose, onVerified }: {
     function tick() {
       const left = getCooldownLeft();
       setCooldown(left);
-      if (left <= 0 && timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
+      if (left <= 0 && timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     }
-
     tick();
-
     if (timerRef.current) clearInterval(timerRef.current);
-    if (getCooldownLeft() > 0) {
-      timerRef.current = setInterval(tick, 1000);
-    }
-
+    if (getCooldownLeft() > 0) timerRef.current = setInterval(tick, 1000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [open]);
 
   useEffect(() => {
-    if (state === "sent") {
-      setTimeout(() => codeInputRef.current?.focus(), 100);
-    }
+    if (state === "sent") setTimeout(() => codeInputRef.current?.focus(), 100);
   }, [state]);
 
   function handleClose() {
-    if (state === "success") {
-      clearCodeSentAt();
-    }
-    setCode("");
-    setCodeError(null);
-    onClose();
+    if (state === "success") clearCodeSentAt();
+    setCode(""); setCodeError(null); onClose();
   }
 
   async function sendCode() {
     if (cooldown > 0 || sending) return;
-    setSending(true);
-    setCodeError(null);
+    setSending(true); setCodeError(null);
     try {
       await apiFetch("/user/email/send-code", { method: "POST", body: {} });
       setCodeSentAt();
-      const left = EMAIL_CODE_COOLDOWN_MS / 1000;
-      setCooldown(left);
+      setCooldown(EMAIL_CODE_COOLDOWN_MS / 1000);
       if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = setInterval(() => {
-        const l = getCooldownLeft();
-        setCooldown(l);
+        const l = getCooldownLeft(); setCooldown(l);
         if (l <= 0 && timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
       }, 1000);
-      setState("sent");
-      setCode("");
-    } catch {
-      setCodeError("Не удалось отправить письмо. Попробуйте позже.");
-    } finally {
-      setSending(false);
-    }
+      setState("sent"); setCode("");
+    } catch { setCodeError("Не удалось отправить письмо. Попробуйте позже."); }
+    finally { setSending(false); }
   }
 
   async function confirmCode() {
     const trimmed = code.trim();
     if (!trimmed) { setCodeError("Введите код из письма"); return; }
-    setConfirming(true);
-    setCodeError(null);
+    setConfirming(true); setCodeError(null);
     try {
       await apiFetch("/user/email/confirm", { method: "POST", body: { code: trimmed } });
-      clearCodeSentAt();
-      setState("success");
-      onVerified();
+      clearCodeSentAt(); setState("success"); onVerified();
     } catch (e: any) {
       const errCode = e?.code ?? e?.data?.error ?? "";
-      setCodeError(
-        errCode === "invalid_code"
-          ? "Неверный код. Проверьте письмо и попробуйте ещё раз."
-          : "Не удалось подтвердить. Попробуйте ещё раз."
-      );
-    } finally {
-      setConfirming(false);
-    }
+      setCodeError(errCode === "invalid_code"
+        ? "Неверный код. Проверьте письмо и попробуйте ещё раз."
+        : "Не удалось подтвердить. Попробуйте ещё раз.");
+    } finally { setConfirming(false); }
   }
-
-  const maskedEmail = email;
 
   const idleScreen = (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ textAlign: "center", fontSize: 48, lineHeight: 1 }}>✉️</div>
       <p className="p" style={{ textAlign: "center", margin: 0 }}>
-        Отправим письмо с кодом подтверждения на<br />
-        <strong>{maskedEmail}</strong>
+        Отправим письмо с кодом подтверждения на<br /><strong>{email}</strong>
       </p>
       {codeError && <div className="pre" style={{ textAlign: "center" }}>{codeError}</div>}
-      <button
-        className="btn btn--primary"
-        type="button"
-        onClick={() => void sendCode()}
-        disabled={sending || cooldown > 0}
-        style={{ width: "100%" }}
-      >
+      <button className="btn btn--primary" type="button" onClick={() => void sendCode()}
+        disabled={sending || cooldown > 0} style={{ width: "100%" }}>
         {sending ? "Отправляем…" : "Отправить код"}
       </button>
-      <button className="btn" type="button" onClick={handleClose} style={{ width: "100%" }}>
-        Отмена
-      </button>
+      <button className="btn" type="button" onClick={handleClose} style={{ width: "100%" }}>Отмена</button>
     </div>
   );
 
@@ -301,56 +258,29 @@ function EmailVerifyModal({ open, email, onClose, onVerified }: {
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ textAlign: "center", fontSize: 48, lineHeight: 1 }}>📬</div>
       <p className="p" style={{ textAlign: "center", margin: 0 }}>
-        Письмо отправлено на <strong>{maskedEmail}</strong>.<br />
-        Введите код из письма.
+        Письмо отправлено на <strong>{email}</strong>.<br />Введите код из письма.
       </p>
-
       <form onSubmit={(e) => { e.preventDefault(); void confirmCode(); }}>
         <div className="field">
           <label className="field__label">Код подтверждения</label>
-          <input
-            ref={codeInputRef}
-            className="input"
-            placeholder="Введите код"
-            value={code}
-            onChange={(e) => { setCode(e.target.value); setCodeError(null); }}
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            disabled={confirming}
-            style={{ textAlign: "center", letterSpacing: "0.15em", fontSize: 20 }}
-          />
+          <input ref={codeInputRef} className="input" placeholder="Введите код"
+            value={code} onChange={(e) => { setCode(e.target.value); setCodeError(null); }}
+            inputMode="numeric" autoComplete="one-time-code" disabled={confirming}
+            style={{ textAlign: "center", letterSpacing: "0.15em", fontSize: 20 }} />
         </div>
-
-        {codeError && (
-          <div className="pre" style={{ marginTop: 8, textAlign: "center" }}>{codeError}</div>
-        )}
-
+        {codeError && <div className="pre" style={{ marginTop: 8, textAlign: "center" }}>{codeError}</div>}
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
-          <button
-            className="btn btn--primary"
-            type="submit"
-            disabled={confirming || !code.trim()}
-            style={{ width: "100%" }}
-          >
+          <button className="btn btn--primary" type="submit"
+            disabled={confirming || !code.trim()} style={{ width: "100%" }}>
             {confirming ? "Проверяем…" : "Подтвердить"}
           </button>
-
-          <button
-            className="btn"
-            type="button"
-            onClick={() => void sendCode()}
+          <button className="btn" type="button" onClick={() => void sendCode()}
             disabled={sending || cooldown > 0}
-            style={{ width: "100%", opacity: cooldown > 0 ? 0.6 : 1 }}
-          >
-            {sending
-              ? "Отправляем…"
-              : cooldown > 0
-                ? `Повторить через ${cooldown} сек`
-                : "Отправить повторно"}
+            style={{ width: "100%", opacity: cooldown > 0 ? 0.6 : 1 }}>
+            {sending ? "Отправляем…" : cooldown > 0 ? `Повторить через ${cooldown} сек` : "Отправить повторно"}
           </button>
         </div>
       </form>
-
       <p className="p" style={{ textAlign: "center", margin: 0, opacity: 0.5, fontSize: 13 }}>
         Проверьте папку «Спам», если письмо не пришло
       </p>
@@ -362,34 +292,18 @@ function EmailVerifyModal({ open, email, onClose, onVerified }: {
       <div style={{ fontSize: 64, lineHeight: 1 }}>✅</div>
       <div style={{ textAlign: "center" }}>
         <div className="h1" style={{ marginBottom: 8 }}>Email подтверждён!</div>
-        <p className="p" style={{ margin: 0 }}>
-          Адрес <strong>{maskedEmail}</strong> успешно подтверждён.
-        </p>
+        <p className="p" style={{ margin: 0 }}>Адрес <strong>{email}</strong> успешно подтверждён.</p>
       </div>
-      <button
-        className="btn btn--primary"
-        type="button"
-        onClick={handleClose}
-        style={{ width: "100%" }}
-      >
-        Готово
-      </button>
+      <button className="btn btn--primary" type="button" onClick={handleClose} style={{ width: "100%" }}>Готово</button>
     </div>
   );
 
   const titles: Record<VerifyModalState, string> = {
-    idle:    "Подтверждение email",
-    sent:    "Введите код",
-    success: "Готово",
+    idle: "Подтверждение email", sent: "Введите код", success: "Готово",
   };
 
   return (
-    <Modal
-      open={open}
-      title={titles[state]}
-      onClose={handleClose}
-      closeLabel="Закрыть"
-    >
+    <Modal open={open} title={titles[state]} onClose={handleClose} closeLabel="Закрыть">
       {state === "idle"    && idleScreen}
       {state === "sent"    && sentScreen}
       {state === "success" && successScreen}
@@ -404,8 +318,8 @@ export function Profile() {
   const { me, loading, error, refetch } = useMe() as any;
   const { lang, setLang, t } = useI18n();
 
-  const profile  = me?.profile;
-  const isAdmin  = Boolean(profile?.isAdmin || me?.admin?.isAdmin);
+  const profile = me?.profile;
+  const isAdmin = Boolean(profile?.isAdmin || me?.admin?.isAdmin);
 
   const loginText = useMemo(() => {
     const l = String(profile?.login ?? profile?.username ?? "").trim() ||
@@ -413,9 +327,7 @@ export function Profile() {
     return l;
   }, [profile?.login, profile?.username, profile?.id]);
 
-  const authLoginText = useMemo(() => {
-    return String(profile?.login2 ?? "").trim();
-  }, [profile?.login2]);
+  const authLoginText = useMemo(() => String(profile?.login2 ?? "").trim(), [profile?.login2]);
 
   // ── Toast ─────────────────────────────────────────────────────────────────
   const [toast, setToast] = useState<string | null>(null);
@@ -445,7 +357,7 @@ export function Profile() {
       const payload = { full_name: fullName.trim(), phone: phone.trim() };
       await apiFetch("/user/profile", { method: "POST", body: payload });
       setSavedFullName(payload.full_name); setSavedPhone(payload.phone);
-      setEditPersonal(false); showToast(getMood("copied") ? "✅ Сохранено" : "✅ Данные обновлены");
+      setEditPersonal(false); showToast("✅ Данные обновлены");
     } catch (e: any) { setPersonalError(e?.message || t("profile.personal.error")); }
     finally { setSavingPersonal(false); }
   }
@@ -490,21 +402,21 @@ export function Profile() {
         ? { login: tg.login ?? clean, username: tg.username ?? null, chatId: tg.chat_id ?? tg.chatId ?? null, status: tg?.ShpynSDNSystem?.status ?? tg.status ?? null }
         : { ...(telegramRaw ?? {}), login: clean }
       );
-      setTgModal(false); showToast("✈️ Telegram привязан. Уведомления полетели.");
+      setTgModal(false); showToast("✈️ Telegram привязан.");
     } catch (e: any) { setTgError(e?.message || t("profile.telegram.error.save")); }
     finally { setSavingTg(false); }
   }
 
-  // ── Email восстановления ─────────────────────────────────────────────────
-  const [email,         setEmail]         = useState("");
-  const [emailVerified, setEmailVerified] = useState<boolean | null>(null);
-  const [emailLoading,  setEmailLoading]  = useState(false);
-  const [emailBusy,     setEmailBusy]     = useState(false);
-  const [emailModal,    setEmailModal]    = useState(false);
-  const [emailDraft,    setEmailDraft]    = useState("");
-  const [emailError,    setEmailError]    = useState<string | null>(null);
-
-  const [verifyModal, setVerifyModal] = useState(false);
+  // ── Email восстановления ──────────────────────────────────────────────────
+  const [email,        setEmail]        = useState("");
+  const [emailVerified,setEmailVerified]= useState<boolean | null>(null);
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [emailBusy,    setEmailBusy]    = useState(false);
+  const [emailModal,   setEmailModal]   = useState(false);
+  const [emailDraft,   setEmailDraft]   = useState("");
+  const [emailError,   setEmailError]   = useState<string | null>(null);
+  const [emailSaved,   setEmailSaved]   = useState(false); // экран успеха после сохранения
+  const [verifyModal,  setVerifyModal]  = useState(false);
 
   async function loadEmail() {
     setEmailLoading(true);
@@ -521,7 +433,11 @@ export function Profile() {
   useEffect(() => { void loadEmail(); }, []);
 
   useEffect(() => {
-    if (!emailModal) { setEmailDraft(email || ""); setEmailError(null); }
+    if (!emailModal) {
+      setEmailDraft(email || "");
+      setEmailError(null);
+      setEmailSaved(false); // сбрасываем экран успеха при закрытии
+    }
   }, [emailModal, email]);
 
   function getEmailError(err: unknown): string {
@@ -545,8 +461,7 @@ export function Profile() {
       if (resp?.ok) {
         setEmail(String(resp.email ?? clean));
         setEmailVerified(typeof resp.emailVerified === "boolean" ? resp.emailVerified : false);
-        setEmailModal(false);
-        showToast(`✉️ ${t("profile.email.toast.saved_verify")}`);
+        setEmailSaved(true); // показываем экран "подтвердите email" вместо закрытия
         return;
       }
       setEmailError(t("profile.email.error.save"));
@@ -555,13 +470,13 @@ export function Profile() {
   }
 
   // ── Password ──────────────────────────────────────────────────────────────
-  const [pwdModal,  setPwdModal]  = useState(false);
-  const [pwd1,      setPwd1]      = useState("");
-  const [pwd2,      setPwd2]      = useState("");
-  const [showPwd1,  setShowPwd1]  = useState(false);
-  const [showPwd2,  setShowPwd2]  = useState(false);
-  const [pwdBusy,   setPwdBusy]   = useState(false);
-  const [pwdError,  setPwdError]  = useState<string | null>(null);
+  const [pwdModal, setPwdModal] = useState(false);
+  const [pwd1,     setPwd1]     = useState("");
+  const [pwd2,     setPwd2]     = useState("");
+  const [showPwd1, setShowPwd1] = useState(false);
+  const [showPwd2, setShowPwd2] = useState(false);
+  const [pwdBusy,  setPwdBusy]  = useState(false);
+  const [pwdError, setPwdError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!pwdModal) { setPwd1(""); setPwd2(""); setShowPwd1(false); setShowPwd2(false); setPwdError(null); setPwdBusy(false); }
@@ -614,31 +529,31 @@ export function Profile() {
   }
 
   // ── PWA ───────────────────────────────────────────────────────────────────
-  const [standalone,      setStandalone]      = useState(false);
-  const [deferredPrompt,  setDeferredPrompt]  = useState<BeforeInstallPromptEvent | null>(null);
-  const [iosInstallModal, setIosInstallModal] = useState(false);
+  const [standalone,     setStandalone]     = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [iosInstallModal,setIosInstallModal]= useState(false);
 
   useEffect(() => {
     setStandalone(isStandalonePwa());
     const onBip       = (e: Event) => { e.preventDefault?.(); setDeferredPrompt(e as BeforeInstallPromptEvent); };
-    const onInstalled = () => { setStandalone(true); setDeferredPrompt(null); showToast("📲 Приложение установлено. Теперь как настоящее."); };
+    const onInstalled = () => { setStandalone(true); setDeferredPrompt(null); showToast("📲 Приложение установлено."); };
     window.addEventListener("beforeinstallprompt", onBip as any);
-    window.addEventListener("appinstalled",        onInstalled as any);
+    window.addEventListener("appinstalled", onInstalled as any);
     return () => {
       window.removeEventListener("beforeinstallprompt", onBip as any);
-      window.removeEventListener("appinstalled",        onInstalled as any);
+      window.removeEventListener("appinstalled", onInstalled as any);
     };
   }, [t]);
 
   async function doInstallPwa() {
-    if (standalone)      { showToast("📲 Уже установлено. Всё хорошо."); return; }
+    if (standalone)      { showToast("📲 Уже установлено."); return; }
     if (isIOS())         { setIosInstallModal(true); return; }
     if (!deferredPrompt) { showToast("📲 Откройте меню браузера → «Добавить на экран»."); return; }
     try {
       await deferredPrompt.prompt();
       const choice = await deferredPrompt.userChoice;
-      showToast(choice?.outcome === "accepted" ? "🚀 Установка началась!" : "😕 Отменили. Можно попробовать снова.");
-    } catch { showToast("😬 Что-то пошло не так. Попробуйте через меню браузера."); }
+      showToast(choice?.outcome === "accepted" ? "🚀 Установка началась!" : "😕 Отменили.");
+    } catch { showToast("😬 Попробуйте через меню браузера."); }
     finally { setDeferredPrompt(null); }
   }
 
@@ -663,14 +578,13 @@ export function Profile() {
     setPushLoading(true);
     try {
       const enabled = pushState.permission === "granted" && pushState.hasSubscription && !pushState.disabledByUser;
-      if (enabled) { await disablePush(); showToast("🔕 Уведомления выключены. Тихий режим."); }
+      if (enabled) { await disablePush(); showToast("🔕 Уведомления выключены."); }
       else {
-        if (isIOS() && !standalone) { showToast("📲 Сначала установите приложение на экран."); setIosInstallModal(true); return; }
+        if (isIOS() && !standalone) { showToast("📲 Сначала установите приложение."); setIosInstallModal(true); return; }
         const ok = await enablePushByUserGesture();
         showToast(ok
-          ? "🔔 Уведомления включены. Будем на связи!"
-          : pushState.permission === "denied" ? "🚫 Доступ закрыт. Разрешите в настройках браузера." : "😬 Не удалось включить. Попробуйте ещё раз."
-        );
+          ? "🔔 Уведомления включены."
+          : pushState.permission === "denied" ? "🚫 Разрешите в настройках браузера." : "😬 Не удалось включить.");
       }
     } finally { setPushLoading(false); await refreshPush(); }
   }
@@ -681,10 +595,7 @@ export function Profile() {
       <div className="app-loader" style={{ opacity: 1, transition: "opacity 180ms ease", pointerEvents: "auto" }}>
         <div className="app-loader__card">
           <div className="app-loader__shine" />
-          <div className="app-loader__brandRow">
-            <div className="app-loader__mark" />
-            <div className="app-loader__title">Shpun App</div>
-          </div>
+          <div className="app-loader__brandRow"><div className="app-loader__mark" /><div className="app-loader__title">Shpun App</div></div>
           <div className="app-loader__text">{t("home.loading.text")}</div>
         </div>
       </div>
@@ -700,7 +611,7 @@ export function Profile() {
             <p className="p">{t("profile.error.text")}</p>
             <div className="actions actions--2" style={{ marginTop: 12 }}>
               <button className="btn btn--primary" onClick={() => refetch?.()} type="button">{t("profile.error.retry")}</button>
-              <button className="btn btn--danger"  onClick={() => void logout()} disabled={loggingOut} type="button">
+              <button className="btn btn--danger" onClick={() => void logout()} disabled={loggingOut} type="button">
                 {loggingOut ? "…" : t("profile.logout")}
               </button>
             </div>
@@ -761,11 +672,7 @@ export function Profile() {
         <div className="card__body">
           <SectionTitle icon="👤">{t("profile.title")}</SectionTitle>
           <p className="p">{t("profile.head.sub")}</p>
-
-          {toast && (
-            <div className="home-alert home-alert--ok" style={{ marginTop: 10 }}>{toast}</div>
-          )}
-
+          {toast && <div className="home-alert home-alert--ok" style={{ marginTop: 10 }}>{toast}</div>}
           <div className="profile-header-actions">
             {isAdmin && (
               <button className="btn btn--accent" onClick={() => nav("/admin")} type="button">
@@ -800,9 +707,7 @@ export function Profile() {
             }>
               {t("profile.personal.title")}
             </SectionTitle>
-
             {personalError && <div className="pre" style={{ marginTop: 10 }}>{personalError}</div>}
-
             <div className="profile-list">
               <RowLine
                 icon="🙍" label={t("profile.personal.name")}
@@ -855,7 +760,7 @@ export function Profile() {
                 hint={t("profile.auth.login2.hint")}
               />
 
-              {/* Email для восстановления: настройки пользователя, редактируемое поле */}
+              {/* Email для восстановления */}
               <RowLine
                 icon="✉️"
                 label={t("profile.email.title")}
@@ -867,11 +772,7 @@ export function Profile() {
                       {email ? t("profile.email.change") : t("profile.email.add")}
                     </button>
                     {email && emailVerified !== true && (
-                      <button
-                        className="btn btn--primary"
-                        onClick={() => setVerifyModal(true)}
-                        type="button"
-                      >
+                      <button className="btn btn--primary" onClick={() => setVerifyModal(true)} type="button">
                         {codePending ? t("profile.email.enter_code") : t("profile.email.verify")}
                       </button>
                     )}
@@ -964,7 +865,8 @@ export function Profile() {
         </div>
       </div>
 
-      {/* ── Модалка верификации email ── */}
+      {/* ── Модалки ── */}
+
       <EmailVerifyModal
         open={verifyModal}
         email={email}
@@ -972,7 +874,6 @@ export function Profile() {
         onVerified={() => setEmailVerified(true)}
       />
 
-      {/* ── Модалка iOS ── */}
       <Modal open={iosInstallModal} title={t("profile.pwa.ios_modal.title")} onClose={() => setIosInstallModal(false)} closeLabel={t("profile.modal.close")}>
         <p className="p">{t("profile.pwa.ios_modal.text")}</p>
         <div className="pre">{t("profile.pwa.ios_modal.steps")}</div>
@@ -981,7 +882,6 @@ export function Profile() {
         </div>
       </Modal>
 
-      {/* ── Модалка Telegram ── */}
       <Modal open={tgModal} title={telegramLogin ? t("profile.telegram.modal.change_title") : t("profile.telegram.modal.link_title")} onClose={() => setTgModal(false)} closeLabel={t("profile.modal.close")}>
         <p className="p">{t("profile.telegram.modal.label")}</p>
         <input className="input" style={{ marginTop: 10 }} value={tgLoginDraft} onChange={(e) => setTgLoginDraft(e.target.value)} placeholder={t("profile.telegram.modal.placeholder")} />
@@ -992,27 +892,74 @@ export function Profile() {
         </div>
       </Modal>
 
-    {/* ── Модалка Email восстановления ── */}
-    <Modal open={emailModal} title={email ? t("profile.email.modal.change_title") : t("profile.email.modal.add_title")} onClose={() => setEmailModal(false)} closeLabel={t("profile.modal.close")}>
-      <div className="pre" style={{ marginBottom: 12, background: "rgba(124,92,255,.06)", borderColor: "rgba(124,92,255,.2)" }}>
-        <div style={{ fontWeight: 600, marginBottom: 4 }}>📌 {t("profile.email.modal.notice_title")}</div>
-        <div style={{ opacity: 0.75, fontSize: 13, lineHeight: 1.5 }}>
-          {t("profile.email.modal.text")}
-        </div>
-        {authLoginText && (
-          <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,.08)" }}>
-            <div style={{ opacity: 0.6, fontSize: 12, marginBottom: 2 }}>{t("profile.email.modal.login_label")}</div>
-            <div style={{ fontWeight: 600, fontSize: 14 }}>{authLoginText}</div>
+      {/* ── Модалка Email восстановления ── */}
+      <Modal
+        open={emailModal}
+        title={emailSaved ? t("profile.email.modal.saved_title") : email ? t("profile.email.modal.change_title") : t("profile.email.modal.add_title")}
+        onClose={() => setEmailModal(false)}
+        closeLabel={t("profile.modal.close")}
+      >
+        {emailSaved ? (
+          /* Экран успеха — предлагаем подтвердить */
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <p className="p" style={{ margin: 0 }}>
+              Email <strong>{email}</strong> — {t("profile.email.toast.saved")}.
+            </p>
+            <div className="pre" style={{ background: "rgba(124,92,255,.06)", borderColor: "rgba(124,92,255,.2)" }}>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>📨 {t("profile.email.modal.verify_title")}</div>
+              <div style={{ opacity: 0.75, fontSize: 13, lineHeight: 1.5 }}>
+                {t("profile.email.modal.verify_text")}
+              </div>
+            </div>
+            <div className="actions actions--2">
+              <button className="btn" onClick={() => setEmailModal(false)} type="button">
+                {t("profile.email.modal.later")}
+              </button>
+              <button
+                className="btn btn--primary"
+                onClick={() => { setEmailModal(false); setVerifyModal(true); }}
+                type="button"
+              >
+                {t("profile.email.modal.verify_now")}
+              </button>
+            </div>
           </div>
+        ) : (
+          /* Форма изменения email */
+          <>
+            <div className="pre" style={{ marginBottom: 12, background: "rgba(124,92,255,.06)", borderColor: "rgba(124,92,255,.2)" }}>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>📌 {t("profile.email.modal.notice_title")}</div>
+              <div style={{ opacity: 0.75, fontSize: 13, lineHeight: 1.5 }}>
+                {t("profile.email.modal.text")}
+              </div>
+              {authLoginText && (
+                <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,.08)" }}>
+                  <div style={{ opacity: 0.6, fontSize: 12, marginBottom: 2 }}>{t("profile.email.modal.login_label")}</div>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{authLoginText}</div>
+                </div>
+              )}
+            </div>
+            <input
+              className="input"
+              style={{ marginTop: 4 }}
+              value={emailDraft}
+              onChange={(e) => setEmailDraft(e.target.value)}
+              placeholder={t("profile.email.modal.placeholder")}
+              autoComplete="email"
+              inputMode="email"
+            />
+            {emailError && <div className="pre" style={{ marginTop: 8 }}>{emailError}</div>}
+            <div className="actions actions--2" style={{ marginTop: 12 }}>
+              <button className="btn" onClick={() => setEmailModal(false)} disabled={emailBusy} type="button">
+                {t("profile.personal.cancel")}
+              </button>
+              <button className="btn btn--primary" onClick={() => void saveEmail()} disabled={emailBusy} type="button">
+                {emailBusy ? "…" : t("profile.email.save")}
+              </button>
+            </div>
+          </>
         )}
-      </div>
-      <input className="input" style={{ marginTop: 4 }} value={emailDraft} onChange={(e) => setEmailDraft(e.target.value)} placeholder={t("profile.email.modal.placeholder")} autoComplete="email" inputMode="email" />
-      {emailError && <div className="pre" style={{ marginTop: 8 }}>{emailError}</div>}
-      <div className="actions actions--2" style={{ marginTop: 12 }}>
-        <button className="btn" onClick={() => setEmailModal(false)} disabled={emailBusy} type="button">{t("profile.personal.cancel")}</button>
-        <button className="btn btn--primary" onClick={() => void saveEmail()} disabled={emailBusy} type="button">{emailBusy ? "…" : t("profile.email.save")}</button>
-      </div>
-    </Modal>
+      </Modal>
 
       {/* ── Модалка пароля ── */}
       <Modal open={pwdModal} title={t("profile.password.modal.title")} onClose={() => setPwdModal(false)} closeLabel={t("profile.modal.close")}>
@@ -1021,7 +968,7 @@ export function Profile() {
           <span className="field__label">{t("profile.password.field.p1")}</span>
           <div className="pwdfield">
             <input className="input" placeholder={t("profile.password.field.p1_ph")} value={pwd1} onChange={(e) => setPwd1(e.target.value)} type={showPwd1 ? "text" : "password"} autoComplete="new-password" disabled={pwdBusy} />
-            <button type="button" className="btn btn--soft pwdfield__btn" onClick={() => setShowPwd1((v) => !v)} disabled={pwdBusy} aria-label={showPwd1 ? t("profile.password.hide_password") : t("profile.password.show_password")}>
+            <button type="button" className="btn btn--soft pwdfield__btn" onClick={() => setShowPwd1((v) => !v)} disabled={pwdBusy}>
               {showPwd1 ? "🙈" : "👁"}
             </button>
           </div>
@@ -1030,7 +977,7 @@ export function Profile() {
           <span className="field__label">{t("profile.password.field.p2")}</span>
           <div className="pwdfield">
             <input className="input" placeholder={t("profile.password.field.p2_ph")} value={pwd2} onChange={(e) => setPwd2(e.target.value)} type={showPwd2 ? "text" : "password"} autoComplete="new-password" disabled={pwdBusy} />
-            <button type="button" className="btn btn--soft pwdfield__btn" onClick={() => setShowPwd2((v) => !v)} disabled={pwdBusy} aria-label={showPwd2 ? t("profile.password.hide_password") : t("profile.password.show_password")}>
+            <button type="button" className="btn btn--soft pwdfield__btn" onClick={() => setShowPwd2((v) => !v)} disabled={pwdBusy}>
               {showPwd2 ? "🙈" : "👁"}
             </button>
           </div>

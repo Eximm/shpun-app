@@ -223,10 +223,15 @@ export const RU: Dict = {
   "profile.email.error.need_email": "Сначала добавьте email.",
   "profile.email.modal.add_title": "Добавить email",
   "profile.email.modal.change_title": "Изменить email",
+  "profile.email.modal.saved_title": "Email сохранён",
   "profile.email.modal.notice_title": "Почта для восстановления",
   "profile.email.modal.text": "Используется для восстановления пароля и уведомлений. Не является логином для входа — логин устанавливается при регистрации и изменить его нельзя.",
   "profile.email.modal.login_label": "Ваш логин для входа (не меняется):",
   "profile.email.modal.placeholder": "name@example.com",
+  "profile.email.modal.verify_title": "Подтвердите адрес",
+  "profile.email.modal.verify_text": "Для восстановления пароля email нужно подтвердить. Нажмите кнопку ниже — пришлём код на этот адрес.",
+  "profile.email.modal.later": "Позже",
+  "profile.email.modal.verify_now": "Подтвердить сейчас",
 
   // profile — telegram
   "profile.telegram.unlinked": "Не подключен",
@@ -1022,10 +1027,15 @@ export const EN: Dict = {
   "profile.email.error.need_email": "Add an email first.",
   "profile.email.modal.add_title": "Add email",
   "profile.email.modal.change_title": "Change email",
+  "profile.email.modal.saved_title": "Email saved",
   "profile.email.modal.notice_title": "Recovery email",
   "profile.email.modal.text": "Used for password recovery and notifications. This is not a login — your login is set during registration and cannot be changed.",
   "profile.email.modal.login_label": "Your sign-in login (cannot be changed):",
   "profile.email.modal.placeholder": "name@example.com",
+  "profile.email.modal.verify_title": "Verify your address",
+  "profile.email.modal.verify_text": "To use this email for password recovery, please verify it. Tap the button below — we will send a code to this address.",
+  "profile.email.modal.later": "Later",
+  "profile.email.modal.verify_now": "Verify now",
 
   // profile — telegram
   "profile.telegram.unlinked": "Not connected",
