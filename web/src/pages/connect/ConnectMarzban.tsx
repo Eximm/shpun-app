@@ -30,7 +30,7 @@ type ClientLinks = Record<Platform, {
 const V2RAYTUN_LINKS: ClientLinks = {
   android: { title: "v2RayTun", market: "https://play.google.com/store/apps/details?id=com.v2raytun.android", direct: "https://github.com/DigneZzZ/v2raytun/releases/latest", storeLabelKey: "connectAmneziaWG.store.google_play" },
   ios:     { title: "v2RayTun", market: "https://apps.apple.com/us/app/v2raytun/id6476628951", storeLabelKey: "connectAmneziaWG.store.app_store" },
-  windows: { title: "v2RayTun", market: "https://v2raytun.com/", storeLabelKey: "connectAmneziaWG.store.download_page" },
+  windows: { title: "v2RayTun", market: "https://v2raytun.com/", direct: "https://github.com/DigneZzZ/v2raytun/releases/download/5.21.68/v2RayTun_Setup.exe", storeLabelKey: "connectAmneziaWG.store.download_page" },
   mac:     { title: "v2RayTun", market: "https://apps.apple.com/us/app/v2raytun/id6476628951", storeLabelKey: "connectAmneziaWG.store.app_store" },
   linux:   { title: "v2RayTun", market: "https://v2raytun.com/", storeLabelKey: "connectAmneziaWG.store.download_page" },
 };
@@ -38,7 +38,7 @@ const V2RAYTUN_LINKS: ClientLinks = {
 const HIDDIFY_LINKS: ClientLinks = {
   android: { title: "Hiddify", market: "https://play.google.com/store/apps/details?id=app.hiddify.com", direct: "https://github.com/hiddify/hiddify-app/releases/latest/download/Hiddify-Android-arm64.apk", storeLabelKey: "connectAmneziaWG.store.google_play" },
   ios:     { title: "Hiddify", market: "https://apps.apple.com/us/app/hiddify-proxy-vpn/id6596777532", storeLabelKey: "connectAmneziaWG.store.app_store" },
-  windows: { title: "Hiddify", market: "https://github.com/hiddify/hiddify-app/releases", storeLabelKey: "connectAmneziaWG.store.download_page" },
+  windows: { title: "Hiddify", market: "https://github.com/hiddify/hiddify-app/releases", direct: "https://github.com/hiddify/hiddify-app/releases/download/v4.1.1/Hiddify-Windows-Setup-x64.Msix", storeLabelKey: "connectAmneziaWG.store.download_page" },
   mac:     { title: "Hiddify", market: "https://github.com/hiddify/hiddify-app/releases", direct: "https://github.com/hiddify/hiddify-app/releases/latest/download/Hiddify-MacOS.dmg", storeLabelKey: "connectAmneziaWG.store.download_page" },
   linux:   { title: "Hiddify", market: "https://github.com/hiddify/hiddify-app/releases", direct: "https://github.com/hiddify/hiddify-app/releases/latest/download/Hiddify-Linux-x64.AppImage", storeLabelKey: "connectAmneziaWG.store.download_page" },
 };
