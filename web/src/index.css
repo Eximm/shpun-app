@@ -34,6 +34,7 @@
 /* ── 1. Design tokens ──────────────────────────────────────── */
 :root {
   color-scheme: dark;
+  --ui-scale: 0.87;
 
   --bg:        #0b0f17;
   --surface:   rgba(255,255,255,0.06);
@@ -81,6 +82,7 @@ html, body { height: 100%; }
 html { -webkit-text-size-adjust: 100%; }
 
 body {
+  zoom: var(--ui-scale);
   margin: 0;
   font-family: var(--font);
   background:
