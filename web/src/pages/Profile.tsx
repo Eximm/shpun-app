@@ -66,14 +66,15 @@ function permissionLabel(p: string, t: (k: string) => string) {
   return t("profile.push.permission.unsupported");
 }
 
+// Используем localStorage (а не sessionStorage) — переживает закрытие вкладки/браузера
 function getCodeSentAt(): number {
-  try { return Number(sessionStorage.getItem(EMAIL_CODE_SENT_KEY) ?? 0) || 0; } catch { return 0; }
+  try { return Number(localStorage.getItem(EMAIL_CODE_SENT_KEY) ?? 0) || 0; } catch { return 0; }
 }
 function setCodeSentAt() {
-  try { sessionStorage.setItem(EMAIL_CODE_SENT_KEY, String(Date.now())); } catch { /* ignore */ }
+  try { localStorage.setItem(EMAIL_CODE_SENT_KEY, String(Date.now())); } catch { /* ignore */ }
 }
 function clearCodeSentAt() {
-  try { sessionStorage.removeItem(EMAIL_CODE_SENT_KEY); } catch { /* ignore */ }
+  try { localStorage.removeItem(EMAIL_CODE_SENT_KEY); } catch { /* ignore */ }
 }
 function getCooldownLeft(): number {
   const sentAt = getCodeSentAt();
@@ -170,32 +171,63 @@ function Segmented({ value, onChange, ariaLabel }: {
 
 /* ─── Email Verify Modal ─────────────────────────────────────────────────── */
 
-function EmailVerifyModal({ open, email, onClose, onVerified }: {
+function EmailVerifyModal({ open, email, onClose, onVerified, t }: {
   open: boolean;
   email: string;
   onClose: () => void;
   onVerified: () => void;
+  t: (k: string) => string;
 }) {
-  const [state,      setState]      = useState<VerifyModalState>(() => getCodeSentAt() > 0 ? "sent" : "idle");
+  // Не инициализируем state из localStorage здесь — делаем это в useEffect на open,
+  // чтобы корректно восстанавливать состояние при каждом открытии модала
+  // (в том числе после закрытия вкладки и возврата из почты)
+  const [state,      setState]      = useState<VerifyModalState>("idle");
   const [code,       setCode]       = useState("");
   const [codeError,  setCodeError]  = useState<string | null>(null);
   const [sending,    setSending]    = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const [cooldown,   setCooldown]   = useState(() => getCooldownLeft());
+  const [cooldown,   setCooldown]   = useState(0);
 
   const codeInputRef = useRef<HTMLInputElement>(null);
   const timerRef     = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Ключевое исправление: при каждом открытии модала проверяем localStorage
+  // и восстанавливаем состояние "sent" если код был отправлен.
+  // Это решает кейс: отправил код → закрыл вкладку → вернулся → модал снова показывает ввод кода.
   useEffect(() => {
-    function tick() {
-      const left = getCooldownLeft();
-      setCooldown(left);
-      if (left <= 0 && timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    if (!open) return;
+
+    const left = getCooldownLeft();
+    setCooldown(left);
+
+    // Восстанавливаем состояние "sent" если код ещё актуален
+    if (getCodeSentAt() > 0) {
+      setState("sent");
     }
-    tick();
+    // Если кода нет — не меняем state принудительно, чтобы не сбросить "success"
+    // (хотя при success мы clearCodeSentAt вызываем, так что getCodeSentAt() вернёт 0)
+
+    // Запускаем/перезапускаем таймер обратного отсчёта
     if (timerRef.current) clearInterval(timerRef.current);
-    if (getCooldownLeft() > 0) timerRef.current = setInterval(tick, 1000);
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    if (left > 0) {
+      timerRef.current = setInterval(() => {
+        const l = getCooldownLeft();
+        setCooldown(l);
+        if (l <= 0 && timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+      }, 1000);
+    }
+
+    return () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } };
+  }, [open]);
+
+  // При закрытии модала сбрасываем в idle, чтобы при следующем открытии
+  // useEffect выше корректно пересчитал состояние из localStorage
+  useEffect(() => {
+    if (!open) {
+      setState("idle");
+      setCode("");
+      setCodeError(null);
+    }
   }, [open]);
 
   useEffect(() => {
@@ -220,13 +252,13 @@ function EmailVerifyModal({ open, email, onClose, onVerified }: {
         if (l <= 0 && timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
       }, 1000);
       setState("sent"); setCode("");
-    } catch { setCodeError("Не удалось отправить письмо. Попробуйте позже."); }
+    } catch { setCodeError(t("profile.email.verify.error.send")); }
     finally { setSending(false); }
   }
 
   async function confirmCode() {
     const trimmed = code.trim();
-    if (!trimmed) { setCodeError("Введите код из письма"); return; }
+    if (!trimmed) { setCodeError(t("profile.email.verify.error.empty_code")); return; }
     setConfirming(true); setCodeError(null);
     try {
       await apiFetch("/user/email/confirm", { method: "POST", body: { code: trimmed } });
@@ -234,8 +266,8 @@ function EmailVerifyModal({ open, email, onClose, onVerified }: {
     } catch (e: any) {
       const errCode = e?.code ?? e?.data?.error ?? "";
       setCodeError(errCode === "invalid_code"
-        ? "Неверный код. Проверьте письмо и попробуйте ещё раз."
-        : "Не удалось подтвердить. Попробуйте ещё раз.");
+        ? t("profile.email.verify.error.invalid_code")
+        : t("profile.email.verify.error.confirm"));
     } finally { setConfirming(false); }
   }
 
@@ -243,14 +275,16 @@ function EmailVerifyModal({ open, email, onClose, onVerified }: {
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ textAlign: "center", fontSize: 48, lineHeight: 1 }}>✉️</div>
       <p className="p" style={{ textAlign: "center", margin: 0 }}>
-        Отправим письмо с кодом подтверждения на<br /><strong>{email}</strong>
+        {t("profile.email.verify.idle.text_pre")}<br /><strong>{email}</strong>
       </p>
       {codeError && <div className="pre" style={{ textAlign: "center" }}>{codeError}</div>}
       <button className="btn btn--primary" type="button" onClick={() => void sendCode()}
         disabled={sending || cooldown > 0} style={{ width: "100%" }}>
-        {sending ? "Отправляем…" : "Отправить код"}
+        {sending ? t("profile.email.verify.sending") : t("profile.email.verify.send_btn")}
       </button>
-      <button className="btn" type="button" onClick={handleClose} style={{ width: "100%" }}>Отмена</button>
+      <button className="btn" type="button" onClick={handleClose} style={{ width: "100%" }}>
+        {t("profile.personal.cancel")}
+      </button>
     </div>
   );
 
@@ -258,12 +292,13 @@ function EmailVerifyModal({ open, email, onClose, onVerified }: {
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ textAlign: "center", fontSize: 48, lineHeight: 1 }}>📬</div>
       <p className="p" style={{ textAlign: "center", margin: 0 }}>
-        Письмо отправлено на <strong>{email}</strong>.<br />Введите код из письма.
+        {t("profile.email.verify.sent.text_pre")} <strong>{email}</strong>.<br />
+        {t("profile.email.verify.sent.text_post")}
       </p>
       <form onSubmit={(e) => { e.preventDefault(); void confirmCode(); }}>
         <div className="field">
-          <label className="field__label">Код подтверждения</label>
-          <input ref={codeInputRef} className="input" placeholder="Введите код"
+          <label className="field__label">{t("profile.email.verify.code_label")}</label>
+          <input ref={codeInputRef} className="input" placeholder={t("profile.email.verify.code_ph")}
             value={code} onChange={(e) => { setCode(e.target.value); setCodeError(null); }}
             inputMode="numeric" autoComplete="one-time-code" disabled={confirming}
             style={{ textAlign: "center", letterSpacing: "0.15em", fontSize: 20 }} />
@@ -272,17 +307,21 @@ function EmailVerifyModal({ open, email, onClose, onVerified }: {
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
           <button className="btn btn--primary" type="submit"
             disabled={confirming || !code.trim()} style={{ width: "100%" }}>
-            {confirming ? "Проверяем…" : "Подтвердить"}
+            {confirming ? t("profile.email.verify.confirming") : t("profile.email.verify.confirm_btn")}
           </button>
           <button className="btn" type="button" onClick={() => void sendCode()}
             disabled={sending || cooldown > 0}
             style={{ width: "100%", opacity: cooldown > 0 ? 0.6 : 1 }}>
-            {sending ? "Отправляем…" : cooldown > 0 ? `Повторить через ${cooldown} сек` : "Отправить повторно"}
+            {sending
+              ? t("profile.email.verify.sending")
+              : cooldown > 0
+                ? t("profile.email.verify.resend_cooldown").replace("{n}", String(cooldown))
+                : t("profile.email.verify.resend_btn")}
           </button>
         </div>
       </form>
       <p className="p" style={{ textAlign: "center", margin: 0, opacity: 0.5, fontSize: 13 }}>
-        Проверьте папку «Спам», если письмо не пришло
+        {t("profile.email.verify.spam_hint")}
       </p>
     </div>
   );
@@ -291,19 +330,25 @@ function EmailVerifyModal({ open, email, onClose, onVerified }: {
     <div style={{ display: "flex", flexDirection: "column", gap: 16, alignItems: "center" }}>
       <div style={{ fontSize: 64, lineHeight: 1 }}>✅</div>
       <div style={{ textAlign: "center" }}>
-        <div className="h1" style={{ marginBottom: 8 }}>Email подтверждён!</div>
-        <p className="p" style={{ margin: 0 }}>Адрес <strong>{email}</strong> успешно подтверждён.</p>
+        <div className="h1" style={{ marginBottom: 8 }}>{t("profile.email.verify.success.title")}</div>
+        <p className="p" style={{ margin: 0 }}>
+          {t("profile.email.verify.success.text_pre")} <strong>{email}</strong> {t("profile.email.verify.success.text_post")}
+        </p>
       </div>
-      <button className="btn btn--primary" type="button" onClick={handleClose} style={{ width: "100%" }}>Готово</button>
+      <button className="btn btn--primary" type="button" onClick={handleClose} style={{ width: "100%" }}>
+        {t("profile.ok")}
+      </button>
     </div>
   );
 
   const titles: Record<VerifyModalState, string> = {
-    idle: "Подтверждение email", sent: "Введите код", success: "Готово",
+    idle:    t("profile.email.verify.modal.title_idle"),
+    sent:    t("profile.email.verify.modal.title_sent"),
+    success: t("profile.email.verify.modal.title_success"),
   };
 
   return (
-    <Modal open={open} title={titles[state]} onClose={handleClose} closeLabel="Закрыть">
+    <Modal open={open} title={titles[state]} onClose={handleClose} closeLabel={t("profile.modal.close")}>
       {state === "idle"    && idleScreen}
       {state === "sent"    && sentScreen}
       {state === "success" && successScreen}
@@ -357,7 +402,7 @@ export function Profile() {
       const payload = { full_name: fullName.trim(), phone: phone.trim() };
       await apiFetch("/user/profile", { method: "POST", body: payload });
       setSavedFullName(payload.full_name); setSavedPhone(payload.phone);
-      setEditPersonal(false); showToast("✅ Данные обновлены");
+      setEditPersonal(false); showToast("✅ " + t("profile.toast.saved"));
     } catch (e: any) { setPersonalError(e?.message || t("profile.personal.error")); }
     finally { setSavingPersonal(false); }
   }
@@ -402,7 +447,7 @@ export function Profile() {
         ? { login: tg.login ?? clean, username: tg.username ?? null, chatId: tg.chat_id ?? tg.chatId ?? null, status: tg?.ShpynSDNSystem?.status ?? tg.status ?? null }
         : { ...(telegramRaw ?? {}), login: clean }
       );
-      setTgModal(false); showToast("✈️ Telegram привязан.");
+      setTgModal(false); showToast("✈️ " + t("profile.telegram.toast.saved"));
     } catch (e: any) { setTgError(e?.message || t("profile.telegram.error.save")); }
     finally { setSavingTg(false); }
   }
@@ -415,7 +460,7 @@ export function Profile() {
   const [emailModal,   setEmailModal]   = useState(false);
   const [emailDraft,   setEmailDraft]   = useState("");
   const [emailError,   setEmailError]   = useState<string | null>(null);
-  const [emailSaved,   setEmailSaved]   = useState(false); // экран успеха после сохранения
+  const [emailSaved,   setEmailSaved]   = useState(false);
   const [verifyModal,  setVerifyModal]  = useState(false);
 
   async function loadEmail() {
@@ -436,7 +481,7 @@ export function Profile() {
     if (!emailModal) {
       setEmailDraft(email || "");
       setEmailError(null);
-      setEmailSaved(false); // сбрасываем экран успеха при закрытии
+      setEmailSaved(false);
     }
   }, [emailModal, email]);
 
@@ -461,7 +506,7 @@ export function Profile() {
       if (resp?.ok) {
         setEmail(String(resp.email ?? clean));
         setEmailVerified(typeof resp.emailVerified === "boolean" ? resp.emailVerified : false);
-        setEmailSaved(true); // показываем экран "подтвердите email" вместо закрытия
+        setEmailSaved(true);
         return;
       }
       setEmailError(t("profile.email.error.save"));
@@ -491,7 +536,7 @@ export function Profile() {
     try {
       const res = await apiFetch<PasswordSetResponse>("/auth/password/set", { method: "POST", body: { password: pwd1.trim() } }) as any;
       if (!res?.ok) throw new Error(String(res?.error || "password_set_failed"));
-      showToast("🔐 Пароль изменён. Входите с новым.");
+      showToast("🔐 " + t("profile.password.toast.changed"));
       try { await apiFetch("/logout", { method: "POST" }); } catch { /* ignore */ }
       nav("/login?reason=pwd_changed", { replace: true, state: { from: "/profile" } });
     } catch (e: unknown) {
@@ -506,7 +551,7 @@ export function Profile() {
   async function doCopyLogin() {
     if (!loginText) return;
     await copyToClipboard(loginText);
-    setCopied(true); showToast(getMood("copied") ?? "📋 Скопировано");
+    setCopied(true); showToast(getMood("copied") ?? "📋 " + t("profile.toast.copied"));
     window.setTimeout(() => setCopied(false), 1200);
   }
 
@@ -536,7 +581,7 @@ export function Profile() {
   useEffect(() => {
     setStandalone(isStandalonePwa());
     const onBip       = (e: Event) => { e.preventDefault?.(); setDeferredPrompt(e as BeforeInstallPromptEvent); };
-    const onInstalled = () => { setStandalone(true); setDeferredPrompt(null); showToast("📲 Приложение установлено."); };
+    const onInstalled = () => { setStandalone(true); setDeferredPrompt(null); showToast("📲 " + t("profile.pwa.toast.installed")); };
     window.addEventListener("beforeinstallprompt", onBip as any);
     window.addEventListener("appinstalled", onInstalled as any);
     return () => {
@@ -546,14 +591,14 @@ export function Profile() {
   }, [t]);
 
   async function doInstallPwa() {
-    if (standalone)      { showToast("📲 Уже установлено."); return; }
+    if (standalone)      { showToast("📲 " + t("profile.pwa.toast.already_installed")); return; }
     if (isIOS())         { setIosInstallModal(true); return; }
-    if (!deferredPrompt) { showToast("📲 Откройте меню браузера → «Добавить на экран»."); return; }
+    if (!deferredPrompt) { showToast("📲 " + t("profile.pwa.toast.menu")); return; }
     try {
       await deferredPrompt.prompt();
       const choice = await deferredPrompt.userChoice;
-      showToast(choice?.outcome === "accepted" ? "🚀 Установка началась!" : "😕 Отменили.");
-    } catch { showToast("😬 Попробуйте через меню браузера."); }
+      showToast(choice?.outcome === "accepted" ? "🚀 " + t("profile.pwa.toast.started") : "😕 " + t("profile.pwa.toast.cancelled"));
+    } catch { showToast("😬 " + t("profile.pwa.toast.failed")); }
     finally { setDeferredPrompt(null); }
   }
 
@@ -578,13 +623,13 @@ export function Profile() {
     setPushLoading(true);
     try {
       const enabled = pushState.permission === "granted" && pushState.hasSubscription && !pushState.disabledByUser;
-      if (enabled) { await disablePush(); showToast("🔕 Уведомления выключены."); }
+      if (enabled) { await disablePush(); showToast("🔕 " + t("profile.push.toast.disabled")); }
       else {
-        if (isIOS() && !standalone) { showToast("📲 Сначала установите приложение."); setIosInstallModal(true); return; }
+        if (isIOS() && !standalone) { showToast("📲 " + t("profile.push.toast.install_ios")); setIosInstallModal(true); return; }
         const ok = await enablePushByUserGesture();
         showToast(ok
-          ? "🔔 Уведомления включены."
-          : pushState.permission === "denied" ? "🚫 Разрешите в настройках браузера." : "😬 Не удалось включить.");
+          ? "🔔 " + t("profile.push.toast.enabled")
+          : pushState.permission === "denied" ? "🚫 " + t("profile.push.toast.denied") : "😬 " + t("profile.push.toast.failed"));
       }
     } finally { setPushLoading(false); await refreshPush(); }
   }
@@ -872,6 +917,7 @@ export function Profile() {
         email={email}
         onClose={() => setVerifyModal(false)}
         onVerified={() => setEmailVerified(true)}
+        t={t}
       />
 
       <Modal open={iosInstallModal} title={t("profile.pwa.ios_modal.title")} onClose={() => setIosInstallModal(false)} closeLabel={t("profile.modal.close")}>
