@@ -39,14 +39,6 @@ function extractRouters(resp: any): ApiRouterItem[] {
 function toClean8(raw: string) { return String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) }
 function toPretty9(raw: string) { const c = toClean8(raw); if (!c) return ''; if (c.length <= 4) return c; return c.slice(0, 4) + '-' + c.slice(4) }
 
-function statusView(status?: string) {
-  const s = String(status || '').trim().toLowerCase()
-  if (!s) return { label: 'unknown', tone: 'muted' as const }
-  if (s === 'bound' || s === 'active' || s === 'ok') return { label: s, tone: 'good' as const }
-  if (s === 'unbound' || s === 'removed' || s === 'none' || s === 'new') return { label: s, tone: 'muted' as const }
-  if (s === 'error' || s === 'fail' || s === 'failed') return { label: s, tone: 'bad' as const }
-  return { label: s, tone: 'muted' as const }
-}
 
 function safeDecode(value: string) { try { return decodeURIComponent(value) } catch { return value } }
 function normalizeLocationLabel(raw: string) {
@@ -69,6 +61,16 @@ function parseRouterLinks(input: string[]): RouterLinkItem[] {
 function errMessage(e: any, fallback: string) { return String(e?.message || fallback || '').trim() || fallback }
 function protocolLabel(protocol: RouterProtocol) { return protocol === 'ss' ? 'Shadowsocks' : 'VLESS' }
 
+const S = {
+  secLabel: { fontSize: 10, fontWeight: 800, color: "rgba(255,255,255,0.35)", textTransform: "uppercase" as const, letterSpacing: "0.08em", marginBottom: 6 } as React.CSSProperties,
+  divider:  { height: "0.5px", background: "rgba(255,255,255,0.07)", margin: "10px 0" } as React.CSSProperties,
+  btnPrimary:{ padding: "9px 12px", borderRadius: 9, fontSize: 12, fontWeight: 800, background: "linear-gradient(135deg,#7c5cff,#4dd7ff)", border: "none", color: "#050a14", cursor: "pointer", width: "100%" } as React.CSSProperties,
+  btnSec:    { padding: "8px 12px", borderRadius: 9, fontSize: 12, fontWeight: 700, background: "rgba(255,255,255,0.07)", border: "0.5px solid rgba(255,255,255,0.13)", color: "rgba(255,255,255,0.75)", cursor: "pointer", width: "100%" } as React.CSSProperties,
+  btnDanger: { padding: "8px 12px", borderRadius: 9, fontSize: 12, fontWeight: 700, background: "rgba(255,77,109,0.10)", border: "0.5px solid rgba(255,77,109,0.25)", color: "#ff4d6d", cursor: "pointer", width: "100%" } as React.CSSProperties,
+  grid2:     { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 } as React.CSSProperties,
+  grid1:     { display: "grid", gridTemplateColumns: "1fr", gap: 6 } as React.CSSProperties,
+}
+
 export default function ConnectRouter({ usi, onDone }: Props) {
   const { t } = useI18n()
   const [loading,          setLoading]          = useState(true)
@@ -86,12 +88,11 @@ export default function ConnectRouter({ usi, onDone }: Props) {
   const [locationOpen,     setLocationOpen]     = useState(false)
   const locationRef = useRef<HTMLDivElement | null>(null)
 
-  const first      = routers?.[0]
-  const shownClean = String(first?.clean_code || first?.cleanCode || '').trim()
-  const shownCode  = String(first?.code || first?.router_code || '').trim()
+  const first       = routers?.[0]
+  const shownClean  = String(first?.clean_code || first?.cleanCode || '').trim()
+  const shownCode   = String(first?.code || first?.router_code || '').trim()
   const shownPretty = useMemo(() => { const base = shownClean || shownCode; return base ? toPretty9(base) : '' }, [shownClean, shownCode])
-  const st = useMemo(() => statusView(first?.status), [first?.status])
-
+ 
   const hasBound = useMemo(() => {
     if (!first) return false
     const normalized = String(first.status || '').toLowerCase()
@@ -199,176 +200,171 @@ export default function ConnectRouter({ usi, onDone }: Props) {
     return () => document.removeEventListener('mousedown', onClickOutside)
   }, [locationOpen])
 
-  const statusToneClass = st.tone === 'good' ? 'cr__badge--good' : st.tone === 'bad' ? 'cr__badge--bad' : 'cr__badge--muted'
   const canBind = !busy && !hasBound && toClean8(code).length === 8
   const inputValue = toPretty9(code)
 
   return (
-    <div className="cm cr">
-      <div className="card section">
-        <div className="card__body">
+    <div style={{ paddingTop: 6 }}>
 
-          {/* Заголовок + статус */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-            <div>
-              <div className="h2">📡 {t('router.config.title')}</div>
-              <p className="p" style={{ marginTop: 4 }}>
-                {hasBound ? t('router.config.location') : t('router.hint')}
-              </p>
+      {/* Загрузка */}
+      {loading && (
+        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", padding: "8px 0" }}>
+          ⏳ {t('router.loading')}
+        </div>
+      )}
+
+      {/* Ошибка */}
+      {error && (
+        <div style={{ padding: "8px 10px", borderRadius: 8, background: "rgba(255,77,109,0.08)", border: "0.5px solid rgba(255,77,109,0.25)", fontSize: 12, color: "#ff4d6d", marginBottom: 8 }}>
+          ⚠️ {error}
+        </div>
+      )}
+
+      {!loading && (
+        <>
+          {/* Статус привязки */}
+          {hasBound ? (
+            <div style={{ padding: "9px 11px", borderRadius: 9, background: "rgba(43,227,143,0.06)", border: "0.5px solid rgba(43,227,143,0.22)", marginBottom: 10, fontSize: 12 }}>
+              <div style={{ fontWeight: 700, color: "#2be38f", marginBottom: 2 }}>
+                ✅ {t('router.bound')} <b>{shownPretty || '—'}</b>
+              </div>
+              {!!fmtTs(first?.created_at)  && <div style={{ fontSize: 10, color: "rgba(255,255,255,0.38)", marginTop: 2 }}>{t('router.bound_at')} {fmtTs(first!.created_at)}</div>}
+              {!!fmtTs(first?.last_seen_at) && <div style={{ fontSize: 10, color: "rgba(255,255,255,0.38)" }}>{t('router.last_seen')} {fmtTs(first!.last_seen_at)}</div>}
             </div>
-            {!loading && first && (
-              <span className={`cr__badge ${statusToneClass}`}>
-                <span className="cr__badgeK">{t('router.status_short')}</span>
-                <b className="cr__badgeV">{st.label}</b>
-              </span>
-            )}
-          </div>
-
-          {loading && <div className="p" style={{ marginTop: 12 }}>⏳ {t('router.loading')}</div>}
-          {error   && <div className="pre cr__mt10" style={{ borderColor: 'rgba(255,77,109,0.28)' }}>{error}</div>}
-
-          {!loading && (
+          ) : (
+            /* Форма привязки */
             <>
-              {/* Статус привязки */}
-              <div className="pre" style={{
-                marginTop: 12,
-                borderColor: hasBound ? 'rgba(43,227,143,0.28)' : 'rgba(255,255,255,0.10)',
-                background:  hasBound ? 'rgba(43,227,143,0.05)' : 'rgba(255,255,255,0.02)',
-              }}>
-                {hasBound ? (
-                  <>
-                    <div>✅ {t('router.bound')} <b>{shownPretty || '—'}</b></div>
-                    {!!fmtTs(first?.created_at)  && <div className="cr__meta cr__mt6">{t('router.bound_at')} <b>{fmtTs(first.created_at)}</b></div>}
-                    {!!fmtTs(first?.last_seen_at) && <div className="cr__meta">{t('router.last_seen')} <b>{fmtTs(first.last_seen_at)}</b></div>}
-                  </>
-                ) : (
-                  <>
-                    <div>🔌 {t('router.not_bound')}</div>
-                    <div className="cr__meta cr__mt6">{t('router.code_format')}</div>
-                  </>
-                )}
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", marginBottom: 8, lineHeight: 1.4 }}>
+                {t('router.hint')}
+              </div>
+              <input
+                value={inputValue}
+                onChange={(e) => { setError(null); setCode(e.target.value) }}
+                onBlur={() => setCode((cur) => toPretty9(cur))}
+                placeholder={t('router.input_placeholder')}
+                className="input"
+                disabled={busy}
+                inputMode="text" lang="en"
+                autoCapitalize="none" autoCorrect="off"
+                spellCheck={false} autoComplete="off"
+                style={{ marginBottom: 8 }}
+              />
+              <div style={{ ...S.grid2, marginBottom: 0 }}>
+                <button style={{ ...S.btnPrimary, opacity: canBind ? 1 : 0.5 }} onClick={() => void bind()} disabled={!canBind} type="button">
+                  🔗 {busy ? t('connect.wait') : t('router.bind')}
+                </button>
+                <button style={S.btnSec} onClick={() => void load({ silent: false })} disabled={busy} type="button">
+                  🔄 {t('services.refresh')}
+                </button>
+              </div>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.30)", marginTop: 6 }}>{t('router.code_format')}</div>
+            </>
+          )}
+
+          {/* Настройки конфига — только если привязан */}
+          {hasBound && (
+            <>
+              <div style={S.divider} />
+
+              {/* Протокол */}
+              <div style={S.secLabel}>{t('router.config.protocol')}</div>
+              <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+                {(['ss', 'vless'] as RouterProtocol[]).map(p => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setSelectedProtocol(p)}
+                    disabled={configSaving || configLoading}
+                    style={{
+                      flex: 1, padding: "7px", borderRadius: 8, fontSize: 11, fontWeight: 700,
+                      border: "0.5px solid",
+                      borderColor: selectedProtocol === p ? "rgba(124,92,255,0.40)" : "rgba(255,255,255,0.10)",
+                      background: selectedProtocol === p ? "rgba(124,92,255,0.15)" : "rgba(255,255,255,0.04)",
+                      color: selectedProtocol === p ? "#a78bff" : "rgba(255,255,255,0.50)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {protocolLabel(p)}
+                  </button>
+                ))}
               </div>
 
-              {/* Форма привязки */}
-              {!hasBound && (
+              {configLoading && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.40)", marginBottom: 8 }}>⏳ {t('router.loading')}</div>}
+              {configError   && <div style={{ fontSize: 12, color: "#ff4d6d", marginBottom: 8 }}>⚠️ {configError}</div>}
+
+              {!configLoading && routerLinks.length > 0 && (
                 <>
-                  <div className="field" style={{ marginTop: 12 }}>
-                    <label className="field__label">{t('router.input_placeholder')}</label>
-                    <input
-                      value={inputValue}
-                      onChange={(e) => { setError(null); setCode(e.target.value) }}
-                      onBlur={() => setCode((cur) => toPretty9(cur))}
-                      placeholder={t('router.input_placeholder')}
-                      className="input cr__input"
-                      disabled={busy}
-                      inputMode="text" lang="en"
-                      autoCapitalize="none" autoCorrect="off"
-                      spellCheck={false} autoComplete="off"
-                      pattern="[A-Za-z0-9-]*"
-                    />
-                  </div>
-                  <div className="actions actions--2" style={{ marginTop: 10 }}>
-                    <button className="btn btn--primary" onClick={() => void bind()} disabled={!canBind} type="button">
-                      🔗 {busy ? t('connect.wait') : t('router.bind')}
+                  {/* Локация */}
+                  <div style={S.secLabel}>{t('router.config.location')}</div>
+                  <div ref={locationRef} style={{ marginBottom: 10 }}>
+                    <button
+                      type="button"
+                      onClick={() => setLocationOpen(v => !v)}
+                      disabled={configSaving || locations.length === 0}
+                      style={{
+                        width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+                        padding: "9px 11px", borderRadius: 9,
+                        background: "rgba(0,0,0,0.25)", border: "0.5px solid rgba(255,255,255,0.12)",
+                        color: "#e8eaf0", fontSize: 12, fontWeight: 600, cursor: "pointer", marginBottom: 4,
+                      }}
+                    >
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {selectedLocation?.locationLabel || t('router.config.location')}
+                      </span>
+                      <span style={{ marginLeft: 10, opacity: 0.5, flexShrink: 0 }}>{locationOpen ? '▴' : '▾'}</span>
                     </button>
-                    <button className="btn" onClick={() => void load({ silent: false })} disabled={busy} type="button">
+                    {savedLocation && (
+                      <div style={{ fontSize: 10, color: "rgba(43,227,143,0.80)", marginBottom: 6 }}>
+                        ✅ Активно: {savedLocation.locationLabel} · {protocolLabel(savedLocation.protocol)}
+                      </div>
+                    )}
+                    {locationOpen && (
+                      <div style={{ background: "rgba(255,255,255,0.03)", border: "0.5px solid rgba(255,255,255,0.08)", borderRadius: 10, padding: 6, maxHeight: 240, overflowY: "auto" }}>
+                        {locations.map((item) => {
+                          const active = item.raw === selectedLinkRaw
+                          const saved  = item.raw === savedLinkRaw
+                          return (
+                            <button
+                              key={item.raw} type="button"
+                              onClick={() => { setSelectedLinkRaw(item.raw); setLocationOpen(false) }}
+                              disabled={configSaving}
+                              style={{
+                                width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+                                padding: "8px 10px", borderRadius: 8, marginBottom: 3,
+                                background: active ? "rgba(124,92,255,0.12)" : "transparent",
+                                border: `0.5px solid ${active ? "rgba(124,92,255,0.32)" : "rgba(255,255,255,0.06)"}`,
+                                color: "#e8eaf0", fontSize: 12, cursor: "pointer", textAlign: "left",
+                              }}
+                            >
+                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.locationLabel}</span>
+                              <span style={{ marginLeft: 10, flexShrink: 0, opacity: active ? 1 : 0.3 }}>{saved ? '✓' : active ? '•' : ''}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ ...S.grid2, marginBottom: 8 }}>
+                    <button style={{ ...S.btnPrimary, opacity: canSaveConfig ? 1 : 0.5 }} onClick={() => void saveConfig()} disabled={!canSaveConfig} type="button">
+                      {configSaving ? t('router.config.saving') : `💾 ${t('router.config.save')}`}
+                    </button>
+                    <button style={S.btnDanger} onClick={() => void unbind()} disabled={busy || configSaving} type="button">
+                      🔓 {busy ? t('connect.wait') : t('router.unbind')}
+                    </button>
+                  </div>
+
+                  <div style={S.grid1}>
+                    <button style={{ ...S.btnSec, fontSize: 11 }} onClick={() => void load({ silent: false })} disabled={busy || configSaving} type="button">
                       🔄 {t('services.refresh')}
                     </button>
                   </div>
                 </>
               )}
-
-              {/* Настройка конфига */}
-              {hasBound && (
-                <>
-                  {/* Протокол */}
-                  <div className="field" style={{ marginTop: 12 }}>
-                    <label className="field__label">{t('router.config.protocol')}</label>
-                    <div className="actions actions--2">
-                      <button className={`btn${selectedProtocol === 'ss' ? ' btn--primary' : ''}`} onClick={() => setSelectedProtocol('ss')} type="button" disabled={configSaving || configLoading}>
-                        {t('router.protocol.ss')}
-                      </button>
-                      <button className={`btn${selectedProtocol === 'vless' ? ' btn--primary' : ''}`} onClick={() => setSelectedProtocol('vless')} type="button" disabled={configSaving || configLoading}>
-                        {t('router.protocol.vless')}
-                      </button>
-                    </div>
-                  </div>
-
-                  {configLoading && <div className="p" style={{ marginTop: 10 }}>⏳ {t('router.loading')}</div>}
-                  {configError   && <div className="pre cr__mt10" style={{ borderColor: 'rgba(255,77,109,0.28)' }}>{configError}</div>}
-
-                  {!configLoading && routerLinks.length > 0 && (
-                    <>
-                      {/* Выбор локации */}
-                      <div className="field" style={{ marginTop: 12 }} ref={locationRef}>
-                        <label className="field__label">{t('router.config.location')}</label>
-                        <button
-                          type="button" className="input"
-                          onClick={() => setLocationOpen((v) => !v)}
-                          disabled={configSaving || locations.length === 0}
-                          aria-expanded={locationOpen}
-                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', textAlign: 'left', cursor: 'pointer' }}
-                        >
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {selectedLocation?.locationLabel || t('router.config.location')}
-                          </span>
-                          <span style={{ marginLeft: 12, opacity: 0.6, flexShrink: 0 }}>{locationOpen ? '▴' : '▾'}</span>
-                        </button>
-                        {savedLocation && (
-                          <div className="p" style={{ marginTop: 6, fontSize: 12 }}>
-                            ✅ Активно: {savedLocation.locationLabel} · {protocolLabel(savedLocation.protocol)}
-                          </div>
-                        )}
-
-                        {locationOpen && (
-                          <div className="card" style={{ marginTop: 8, boxShadow: 'none', border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}>
-                            <div className="card__body" style={{ padding: 8 }}>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 260, overflowY: 'auto' }}>
-                                {locations.map((item) => {
-                                  const active = item.raw === selectedLinkRaw
-                                  const saved  = item.raw === savedLinkRaw
-                                  return (
-                                    <button
-                                      key={item.raw} type="button"
-                                      onClick={() => { setSelectedLinkRaw(item.raw); setLocationOpen(false) }}
-                                      disabled={configSaving}
-                                      className="btn"
-                                      style={{ width: '100%', justifyContent: 'space-between', background: active ? 'rgba(124,92,255,0.12)' : 'transparent', borderColor: active ? 'rgba(124,92,255,0.32)' : 'rgba(255,255,255,0.06)', minHeight: 42 }}
-                                    >
-                                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' }}>{item.locationLabel}</span>
-                                      <span style={{ marginLeft: 12, opacity: active ? 1 : 0.35, flexShrink: 0 }}>{saved ? '✓' : active ? '•' : ''}</span>
-                                    </button>
-                                  )
-                                })}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="actions actions--2" style={{ marginTop: 12 }}>
-                        <button className="btn btn--primary" onClick={() => void saveConfig()} disabled={!canSaveConfig} type="button">
-                          {configSaving ? t('router.config.saving') : `💾 ${t('router.config.save')}`}
-                        </button>
-                        <button className="btn btn--danger" onClick={() => void unbind()} disabled={busy || configSaving} type="button">
-                          🔓 {busy ? t('connect.wait') : t('router.unbind')}
-                        </button>
-                      </div>
-
-                      <div className="actions actions--1" style={{ marginTop: 8 }}>
-                        <button className="btn" onClick={() => void load({ silent: false })} disabled={busy || configSaving} type="button">
-                          🔄 {t('services.refresh')}
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </>
-              )}
             </>
           )}
-
-        </div>
-      </div>
+        </>
+      )}
     </div>
   )
 }

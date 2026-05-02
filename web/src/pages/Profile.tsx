@@ -10,8 +10,6 @@ import { toastApiError } from "../shared/ui/toast/toastApiError";
 import { getMood } from "../shared/payments-mood";
 import { normalizeError } from "../shared/api/errorText";
 
-/* ─── Types ─────────────────────────────────────────────────────────────── */
-
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform?: string }>;
@@ -19,12 +17,8 @@ type BeforeInstallPromptEvent = Event & {
 
 type VerifyModalState = "idle" | "sent" | "success";
 
-/* ─── Constants ─────────────────────────────────────────────────────────── */
-
 const EMAIL_CODE_SENT_KEY    = "email_verify:sent_at";
 const EMAIL_CODE_COOLDOWN_MS = 60_000;
-
-/* ─── Utils ─────────────────────────────────────────────────────────────── */
 
 async function copyToClipboard(text: string) {
   if (!text) return;
@@ -32,7 +26,10 @@ async function copyToClipboard(text: string) {
 }
 
 function formatDate(v?: string | null) {
-  return String(v ?? "").trim() || "—";
+  if (!String(v ?? "").trim()) return "—";
+  try {
+    return new Date(String(v)).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" });
+  } catch { return String(v ?? "").trim(); }
 }
 
 function isStandalonePwa(): boolean {
@@ -66,7 +63,6 @@ function permissionLabel(p: string, t: (k: string) => string) {
   return t("profile.push.permission.unsupported");
 }
 
-// Используем localStorage (а не sessionStorage) — переживает закрытие вкладки/браузера
 function getCodeSentAt(): number {
   try { return Number(localStorage.getItem(EMAIL_CODE_SENT_KEY) ?? 0) || 0; } catch { return 0; }
 }
@@ -83,54 +79,10 @@ function getCooldownLeft(): number {
   return left > 0 ? left : 0;
 }
 
-/* ─── Small components ───────────────────────────────────────────────────── */
-
-function SectionTitle({ icon, children, right }: {
-  icon?: string;
-  children: React.ReactNode;
-  right?: React.ReactNode;
-}) {
-  return (
-    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-      <div className="h1">{icon ? `${icon} ` : ""}{children}</div>
-      {right && <div style={{ flexShrink: 0 }}>{right}</div>}
-    </div>
-  );
-}
-
-function Badge({ text, tone = "neutral" }: { text: string; tone?: "ok" | "warn" | "neutral" }) {
-  const cls = tone === "ok" ? "chip chip--ok" : tone === "warn" ? "chip chip--warn" : "chip";
-  return <span className={cls}>{text}</span>;
-}
-
-function RowLine({ icon, label, value, right, hint }: {
-  icon?: string;
-  label: string;
-  value?: React.ReactNode;
-  right?: React.ReactNode;
-  hint?: React.ReactNode;
-}) {
-  return (
-    <div className="profile-row">
-      <div className="profile-row__main">
-        <div className="profile-row__label">
-          {icon && <span aria-hidden="true">{icon}</span>}
-          <span>{label}</span>
-        </div>
-        {value != null && <div className="profile-row__value">{value}</div>}
-      </div>
-      {right && <div className="profile-row__right">{right}</div>}
-      {hint  && <div className="profile-row__hint">{hint}</div>}
-    </div>
-  );
-}
+/* ─── Shared UI ──────────────────────────────────────────────────────────── */
 
 function Modal({ open, title, children, onClose, closeLabel }: {
-  open: boolean;
-  title: string;
-  children: React.ReactNode;
-  onClose: () => void;
-  closeLabel: string;
+  open: boolean; title: string; children: React.ReactNode; onClose: () => void; closeLabel: string;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -157,9 +109,7 @@ function Modal({ open, title, children, onClose, closeLabel }: {
 }
 
 function Segmented({ value, onChange, ariaLabel }: {
-  value: "ru" | "en";
-  onChange: (v: "ru" | "en") => void;
-  ariaLabel: string;
+  value: "ru" | "en"; onChange: (v: "ru" | "en") => void; ariaLabel: string;
 }) {
   return (
     <div className="seg" role="tablist" aria-label={ariaLabel}>
@@ -169,65 +119,128 @@ function Segmented({ value, onChange, ariaLabel }: {
   );
 }
 
+/* ─── Compact profile row ────────────────────────────────────────────────── */
+
+function PRow({ label, value, muted, right, hint }: {
+  label: string;
+  value?: React.ReactNode;
+  muted?: boolean;
+  right?: React.ReactNode;
+  hint?: string;
+}) {
+  return (
+    <div style={{
+      display: "grid",
+      gridTemplateColumns: right ? "1fr auto" : "1fr",
+      gridTemplateAreas: right ? '"main right" "hint hint"' : '"main" "hint"',
+      gap: "4px 10px",
+      alignItems: "start",
+      padding: "9px 0",
+      borderBottom: "0.5px solid rgba(255,255,255,0.07)",
+    }}>
+      <div style={{ gridArea: "main", minWidth: 0 }}>
+        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.42)", fontWeight: 700, marginBottom: 3 }}>{label}</div>
+        {value != null && (
+          <div style={{ fontSize: 13, fontWeight: 700, color: muted ? "rgba(255,255,255,0.32)" : "rgba(255,255,255,0.90)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {value}
+          </div>
+        )}
+      </div>
+      {right && (
+        <div style={{ gridArea: "right", display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+          {right}
+        </div>
+      )}
+      {hint && (
+        <div style={{ gridArea: "hint", fontSize: 11, color: "rgba(255,255,255,0.38)", lineHeight: 1.4, marginTop: 1 }}>
+          {hint}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="card" style={{ marginTop: 8 }}>
+      <div className="card__body" style={{ padding: "12px 14px" }}>
+        <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,0.35)", marginBottom: 2 }}>
+          {title}
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function SmallBadge({ text, tone }: { text: string; tone?: "ok" | "warn" | "neutral" }) {
+  const bg   = tone === "ok"   ? "rgba(43,227,143,0.12)"  : tone === "warn" ? "rgba(245,158,11,0.12)" : "rgba(255,255,255,0.07)";
+  const bdr  = tone === "ok"   ? "rgba(43,227,143,0.30)"  : tone === "warn" ? "rgba(245,158,11,0.30)" : "rgba(255,255,255,0.12)";
+  const col  = tone === "ok"   ? "#2be38f"                : tone === "warn" ? "#f59e0b"               : "rgba(255,255,255,0.55)";
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", padding: "3px 8px", borderRadius: 999, fontSize: 10, fontWeight: 800, background: bg, border: `0.5px solid ${bdr}`, color: col, whiteSpace: "nowrap" }}>
+      {text}
+    </span>
+  );
+}
+
+function SmallBtn({ children, onClick, primary, danger, disabled }: {
+  children: React.ReactNode; onClick?: () => void; primary?: boolean; danger?: boolean; disabled?: boolean;
+}) {
+  let bg = "rgba(255,255,255,0.07)";
+  let bdr = "rgba(255,255,255,0.14)";
+  let col = "rgba(255,255,255,0.80)";
+  if (primary) { bg = "linear-gradient(135deg,#7c5cff,#4dd7ff)"; bdr = "transparent"; col = "#050a14"; }
+  if (danger)  { bg = "rgba(255,77,109,0.12)"; bdr = "rgba(255,77,109,0.28)"; col = "#ff4d6d"; }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        padding: "5px 10px", borderRadius: 8, fontSize: 11, fontWeight: 700,
+        background: bg, border: `0.5px solid ${bdr}`, color: col,
+        cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1,
+        whiteSpace: "nowrap", minHeight: 28,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
 /* ─── Email Verify Modal ─────────────────────────────────────────────────── */
 
 function EmailVerifyModal({ open, email, onClose, onVerified, t }: {
-  open: boolean;
-  email: string;
-  onClose: () => void;
-  onVerified: () => void;
-  t: (k: string) => string;
+  open: boolean; email: string; onClose: () => void; onVerified: () => void; t: (k: string) => string;
 }) {
-  // Не инициализируем state из localStorage здесь — делаем это в useEffect на open,
-  // чтобы корректно восстанавливать состояние при каждом открытии модала
-  // (в том числе после закрытия вкладки и возврата из почты)
   const [state,      setState]      = useState<VerifyModalState>("idle");
   const [code,       setCode]       = useState("");
   const [codeError,  setCodeError]  = useState<string | null>(null);
   const [sending,    setSending]    = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [cooldown,   setCooldown]   = useState(0);
-
   const codeInputRef = useRef<HTMLInputElement>(null);
   const timerRef     = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Ключевое исправление: при каждом открытии модала проверяем localStorage
-  // и восстанавливаем состояние "sent" если код был отправлен.
-  // Это решает кейс: отправил код → закрыл вкладку → вернулся → модал снова показывает ввод кода.
   useEffect(() => {
     if (!open) return;
-
     const left = getCooldownLeft();
     setCooldown(left);
-
-    // Восстанавливаем состояние "sent" если код ещё актуален
-    if (getCodeSentAt() > 0) {
-      setState("sent");
-    }
-    // Если кода нет — не меняем state принудительно, чтобы не сбросить "success"
-    // (хотя при success мы clearCodeSentAt вызываем, так что getCodeSentAt() вернёт 0)
-
-    // Запускаем/перезапускаем таймер обратного отсчёта
+    if (getCodeSentAt() > 0) setState("sent");
     if (timerRef.current) clearInterval(timerRef.current);
     if (left > 0) {
       timerRef.current = setInterval(() => {
-        const l = getCooldownLeft();
-        setCooldown(l);
+        const l = getCooldownLeft(); setCooldown(l);
         if (l <= 0 && timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
       }, 1000);
     }
-
     return () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } };
   }, [open]);
 
-  // При закрытии модала сбрасываем в idle, чтобы при следующем открытии
-  // useEffect выше корректно пересчитал состояние из localStorage
   useEffect(() => {
-    if (!open) {
-      setState("idle");
-      setCode("");
-      setCodeError(null);
-    }
+    if (!open) { setState("idle"); setCode(""); setCodeError(null); }
   }, [open]);
 
   useEffect(() => {
@@ -244,8 +257,7 @@ function EmailVerifyModal({ open, email, onClose, onVerified, t }: {
     setSending(true); setCodeError(null);
     try {
       await apiFetch("/user/email/send-code", { method: "POST", body: {} });
-      setCodeSentAt();
-      setCooldown(EMAIL_CODE_COOLDOWN_MS / 1000);
+      setCodeSentAt(); setCooldown(EMAIL_CODE_COOLDOWN_MS / 1000);
       if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = setInterval(() => {
         const l = getCooldownLeft(); setCooldown(l);
@@ -265,9 +277,7 @@ function EmailVerifyModal({ open, email, onClose, onVerified, t }: {
       clearCodeSentAt(); setState("success"); onVerified();
     } catch (e: any) {
       const errCode = e?.code ?? e?.data?.error ?? "";
-      setCodeError(errCode === "invalid_code"
-        ? t("profile.email.verify.error.invalid_code")
-        : t("profile.email.verify.error.confirm"));
+      setCodeError(errCode === "invalid_code" ? t("profile.email.verify.error.invalid_code") : t("profile.email.verify.error.confirm"));
     } finally { setConfirming(false); }
   }
 
@@ -278,13 +288,10 @@ function EmailVerifyModal({ open, email, onClose, onVerified, t }: {
         {t("profile.email.verify.idle.text_pre")}<br /><strong>{email}</strong>
       </p>
       {codeError && <div className="pre" style={{ textAlign: "center" }}>{codeError}</div>}
-      <button className="btn btn--primary" type="button" onClick={() => void sendCode()}
-        disabled={sending || cooldown > 0} style={{ width: "100%" }}>
+      <button className="btn btn--primary" type="button" onClick={() => void sendCode()} disabled={sending || cooldown > 0} style={{ width: "100%" }}>
         {sending ? t("profile.email.verify.sending") : t("profile.email.verify.send_btn")}
       </button>
-      <button className="btn" type="button" onClick={handleClose} style={{ width: "100%" }}>
-        {t("profile.personal.cancel")}
-      </button>
+      <button className="btn" type="button" onClick={handleClose} style={{ width: "100%" }}>{t("profile.personal.cancel")}</button>
     </div>
   );
 
@@ -305,24 +312,15 @@ function EmailVerifyModal({ open, email, onClose, onVerified, t }: {
         </div>
         {codeError && <div className="pre" style={{ marginTop: 8, textAlign: "center" }}>{codeError}</div>}
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
-          <button className="btn btn--primary" type="submit"
-            disabled={confirming || !code.trim()} style={{ width: "100%" }}>
+          <button className="btn btn--primary" type="submit" disabled={confirming || !code.trim()} style={{ width: "100%" }}>
             {confirming ? t("profile.email.verify.confirming") : t("profile.email.verify.confirm_btn")}
           </button>
-          <button className="btn" type="button" onClick={() => void sendCode()}
-            disabled={sending || cooldown > 0}
-            style={{ width: "100%", opacity: cooldown > 0 ? 0.6 : 1 }}>
-            {sending
-              ? t("profile.email.verify.sending")
-              : cooldown > 0
-                ? t("profile.email.verify.resend_cooldown").replace("{n}", String(cooldown))
-                : t("profile.email.verify.resend_btn")}
+          <button className="btn" type="button" onClick={() => void sendCode()} disabled={sending || cooldown > 0} style={{ width: "100%", opacity: cooldown > 0 ? 0.6 : 1 }}>
+            {sending ? t("profile.email.verify.sending") : cooldown > 0 ? t("profile.email.verify.resend_cooldown").replace("{n}", String(cooldown)) : t("profile.email.verify.resend_btn")}
           </button>
         </div>
       </form>
-      <p className="p" style={{ textAlign: "center", margin: 0, opacity: 0.5, fontSize: 13 }}>
-        {t("profile.email.verify.spam_hint")}
-      </p>
+      <p className="p" style={{ textAlign: "center", margin: 0, opacity: 0.5, fontSize: 13 }}>{t("profile.email.verify.spam_hint")}</p>
     </div>
   );
 
@@ -331,19 +329,15 @@ function EmailVerifyModal({ open, email, onClose, onVerified, t }: {
       <div style={{ fontSize: 64, lineHeight: 1 }}>✅</div>
       <div style={{ textAlign: "center" }}>
         <div className="h1" style={{ marginBottom: 8 }}>{t("profile.email.verify.success.title")}</div>
-        <p className="p" style={{ margin: 0 }}>
-          {t("profile.email.verify.success.text_pre")} <strong>{email}</strong> {t("profile.email.verify.success.text_post")}
-        </p>
+        <p className="p" style={{ margin: 0 }}>{t("profile.email.verify.success.text_pre")} <strong>{email}</strong> {t("profile.email.verify.success.text_post")}</p>
       </div>
-      <button className="btn btn--primary" type="button" onClick={handleClose} style={{ width: "100%" }}>
-        {t("profile.ok")}
-      </button>
+      <button className="btn btn--primary" type="button" onClick={handleClose} style={{ width: "100%" }}>{t("profile.ok")}</button>
     </div>
   );
 
   const titles: Record<VerifyModalState, string> = {
-    idle:    t("profile.email.verify.modal.title_idle"),
-    sent:    t("profile.email.verify.modal.title_sent"),
+    idle: t("profile.email.verify.modal.title_idle"),
+    sent: t("profile.email.verify.modal.title_sent"),
     success: t("profile.email.verify.modal.title_success"),
   };
 
@@ -363,25 +357,21 @@ export function Profile() {
   const { me, loading, error, refetch } = useMe() as any;
   const { lang, setLang, t } = useI18n();
 
-  const profile = me?.profile;
-  const isAdmin = Boolean(profile?.isAdmin || me?.admin?.isAdmin);
+  const profile  = me?.profile;
+  const isAdmin  = Boolean(profile?.isAdmin || me?.admin?.isAdmin);
 
   const loginText = useMemo(() => {
-    const l = String(profile?.login ?? profile?.username ?? "").trim() ||
-              (profile?.id != null ? `@${profile.id}` : "");
+    const l = String(profile?.login ?? profile?.username ?? "").trim() || (profile?.id != null ? `@${profile.id}` : "");
     return l;
   }, [profile?.login, profile?.username, profile?.id]);
 
   const authLoginText = useMemo(() => String(profile?.login2 ?? "").trim(), [profile?.login2]);
 
-  // ── Toast ─────────────────────────────────────────────────────────────────
+  // ── Toast
   const [toast, setToast] = useState<string | null>(null);
-  function showToast(msg: string) {
-    setToast(msg);
-    window.setTimeout(() => setToast(null), 2200);
-  }
+  function showToast(msg: string) { setToast(msg); window.setTimeout(() => setToast(null), 2200); }
 
-  // ── Personal ──────────────────────────────────────────────────────────────
+  // ── Personal
   const [editPersonal,   setEditPersonal]   = useState(false);
   const [savingPersonal, setSavingPersonal] = useState(false);
   const [personalError,  setPersonalError]  = useState<string | null>(null);
@@ -412,7 +402,7 @@ export function Profile() {
     setFullName(savedFullName); setPhone(savedPhone);
   }
 
-  // ── Telegram ──────────────────────────────────────────────────────────────
+  // ── Telegram
   const [telegramLocal, setTelegramLocal] = useState<any>(null);
   const telegramRaw = telegramLocal ?? me?.telegram ?? null;
 
@@ -452,16 +442,16 @@ export function Profile() {
     finally { setSavingTg(false); }
   }
 
-  // ── Email восстановления ──────────────────────────────────────────────────
-  const [email,        setEmail]        = useState("");
-  const [emailVerified,setEmailVerified]= useState<boolean | null>(null);
-  const [emailLoading, setEmailLoading] = useState(false);
-  const [emailBusy,    setEmailBusy]    = useState(false);
-  const [emailModal,   setEmailModal]   = useState(false);
-  const [emailDraft,   setEmailDraft]   = useState("");
-  const [emailError,   setEmailError]   = useState<string | null>(null);
-  const [emailSaved,   setEmailSaved]   = useState(false);
-  const [verifyModal,  setVerifyModal]  = useState(false);
+  // ── Email
+  const [email,         setEmail]         = useState("");
+  const [emailVerified, setEmailVerified] = useState<boolean | null>(null);
+  const [emailLoading,  setEmailLoading]  = useState(false);
+  const [emailBusy,     setEmailBusy]     = useState(false);
+  const [emailModal,    setEmailModal]    = useState(false);
+  const [emailDraft,    setEmailDraft]    = useState("");
+  const [emailError,    setEmailError]    = useState<string | null>(null);
+  const [emailSaved,    setEmailSaved]    = useState(false);
+  const [verifyModal,   setVerifyModal]   = useState(false);
 
   async function loadEmail() {
     setEmailLoading(true);
@@ -478,11 +468,7 @@ export function Profile() {
   useEffect(() => { void loadEmail(); }, []);
 
   useEffect(() => {
-    if (!emailModal) {
-      setEmailDraft(email || "");
-      setEmailError(null);
-      setEmailSaved(false);
-    }
+    if (!emailModal) { setEmailDraft(email || ""); setEmailError(null); setEmailSaved(false); }
   }, [emailModal, email]);
 
   function getEmailError(err: unknown): string {
@@ -506,15 +492,14 @@ export function Profile() {
       if (resp?.ok) {
         setEmail(String(resp.email ?? clean));
         setEmailVerified(typeof resp.emailVerified === "boolean" ? resp.emailVerified : false);
-        setEmailSaved(true);
-        return;
+        setEmailSaved(true); return;
       }
       setEmailError(t("profile.email.error.save"));
     } catch (e: unknown) { setEmailError(getEmailError(e)); }
     finally { setEmailBusy(false); }
   }
 
-  // ── Password ──────────────────────────────────────────────────────────────
+  // ── Password
   const [pwdModal, setPwdModal] = useState(false);
   const [pwd1,     setPwd1]     = useState("");
   const [pwd2,     setPwd2]     = useState("");
@@ -546,7 +531,7 @@ export function Profile() {
     } finally { setPwdBusy(false); }
   }
 
-  // ── Copy login ────────────────────────────────────────────────────────────
+  // ── Copy login
   const [copied, setCopied] = useState(false);
   async function doCopyLogin() {
     if (!loginText) return;
@@ -555,7 +540,7 @@ export function Profile() {
     window.setTimeout(() => setCopied(false), 1200);
   }
 
-  // ── Logout ────────────────────────────────────────────────────────────────
+  // ── Logout
   const [loggingOut, setLoggingOut] = useState(false);
   async function logout() {
     setLoggingOut(true);
@@ -573,20 +558,20 @@ export function Profile() {
     } finally { setLoggingOut(false); nav("/login", { replace: true }); }
   }
 
-  // ── PWA ───────────────────────────────────────────────────────────────────
-  const [standalone,     setStandalone]     = useState(false);
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [iosInstallModal,setIosInstallModal]= useState(false);
+  // ── PWA
+  const [standalone,      setStandalone]      = useState(false);
+  const [deferredPrompt,  setDeferredPrompt]  = useState<BeforeInstallPromptEvent | null>(null);
+  const [iosInstallModal, setIosInstallModal] = useState(false);
 
   useEffect(() => {
     setStandalone(isStandalonePwa());
     const onBip       = (e: Event) => { e.preventDefault?.(); setDeferredPrompt(e as BeforeInstallPromptEvent); };
     const onInstalled = () => { setStandalone(true); setDeferredPrompt(null); showToast("📲 " + t("profile.pwa.toast.installed")); };
     window.addEventListener("beforeinstallprompt", onBip as any);
-    window.addEventListener("appinstalled", onInstalled as any);
+    window.addEventListener("appinstalled",        onInstalled as any);
     return () => {
       window.removeEventListener("beforeinstallprompt", onBip as any);
-      window.removeEventListener("appinstalled", onInstalled as any);
+      window.removeEventListener("appinstalled",        onInstalled as any);
     };
   }, [t]);
 
@@ -602,20 +587,15 @@ export function Profile() {
     finally { setDeferredPrompt(null); }
   }
 
-  // ── Push ──────────────────────────────────────────────────────────────────
+  // ── Push
   const [pushLoading, setPushLoading] = useState(false);
   const [pushState,   setPushState]   = useState<{
-    supported: boolean;
-    permission: NotificationPermission | "unsupported";
-    hasSubscription: boolean;
-    standalone: boolean;
-    disabledByUser: boolean;
+    supported: boolean; permission: NotificationPermission | "unsupported"; hasSubscription: boolean; standalone: boolean; disabledByUser: boolean;
   }>({ supported: false, permission: "unsupported", hasSubscription: false, standalone: false, disabledByUser: false });
 
   async function refreshPush() {
     try { const s = await getPushState(); setPushState({ ...s, disabledByUser: isPushDisabledByUser() }); } catch { /* ignore */ }
   }
-
   useEffect(() => { void refreshPush(); }, []);
 
   async function togglePush() {
@@ -627,14 +607,12 @@ export function Profile() {
       else {
         if (isIOS() && !standalone) { showToast("📲 " + t("profile.push.toast.install_ios")); setIosInstallModal(true); return; }
         const ok = await enablePushByUserGesture();
-        showToast(ok
-          ? "🔔 " + t("profile.push.toast.enabled")
-          : pushState.permission === "denied" ? "🚫 " + t("profile.push.toast.denied") : "😬 " + t("profile.push.toast.failed"));
+        showToast(ok ? "🔔 " + t("profile.push.toast.enabled") : pushState.permission === "denied" ? "🚫 " + t("profile.push.toast.denied") : "😬 " + t("profile.push.toast.failed"));
       }
     } finally { setPushLoading(false); await refreshPush(); }
   }
 
-  // ── Loading / Error ───────────────────────────────────────────────────────
+  // ── Loading / Error
   if (loading) {
     return (
       <div className="app-loader" style={{ opacity: 1, transition: "opacity 180ms ease", pointerEvents: "auto" }}>
@@ -650,275 +628,262 @@ export function Profile() {
   if (error) {
     return (
       <div className="section">
-        <div className="card">
-          <div className="card__body">
-            <h1 className="h1">{t("profile.title")}</h1>
-            <p className="p">{t("profile.error.text")}</p>
-            <div className="actions actions--2" style={{ marginTop: 12 }}>
-              <button className="btn btn--primary" onClick={() => refetch?.()} type="button">{t("profile.error.retry")}</button>
-              <button className="btn btn--danger" onClick={() => void logout()} disabled={loggingOut} type="button">
-                {loggingOut ? "…" : t("profile.logout")}
-              </button>
-            </div>
+        <div className="card"><div className="card__body">
+          <h1 className="h1">{t("profile.title")}</h1>
+          <p className="p">{t("profile.error.text")}</p>
+          <div className="actions actions--2" style={{ marginTop: 12 }}>
+            <button className="btn btn--primary" onClick={() => refetch?.()} type="button">{t("profile.error.retry")}</button>
+            <button className="btn btn--danger"  onClick={() => void logout()} disabled={loggingOut} type="button">{loggingOut ? "…" : t("profile.logout")}</button>
           </div>
-        </div>
+        </div></div>
       </div>
     );
   }
 
-  // ── Derived ───────────────────────────────────────────────────────────────
+  // ── Derived
   const personalNameView  = savedFullName || profile?.displayName || "—";
   const personalPhoneView = savedPhone || "—";
+  const pushEnabled       = pushState.permission === "granted" && pushState.hasSubscription && !pushState.disabledByUser;
+  const pushPermText      = permissionLabel(String(pushState.permission), t);
+  const codePending       = getCodeSentAt() > 0 && emailVerified !== true;
 
-  const pushEnabled  = pushState.permission === "granted" && pushState.hasSubscription && !pushState.disabledByUser;
-  const pushPermText = permissionLabel(String(pushState.permission), t);
+  const displayName = personalNameView !== "—" ? personalNameView : authLoginText || loginText || "—";
+  const initials    = displayName.trim().split(/\s+/).map((w: string) => w[0]).slice(0, 2).join("").toUpperCase() || "?";
 
-  const emailBadge = email
-    ? emailVerified === true
-      ? <Badge text={t("profile.email.badge.verified")} tone="ok" />
-      : <Badge text={t("profile.email.badge.unverified")} tone="warn" />
-    : <Badge text={t("profile.email.badge.empty")} />;
-
-  const emailHint = email
-    ? emailVerified === true
-      ? t("profile.email.hint.verified")
-      : t("profile.email.hint.unverified")
-    : t("profile.email.hint.empty");
-
-  const codePending = getCodeSentAt() > 0 && emailVerified !== true;
-
-  const pushBadge = pushEnabled
-    ? <Badge text={t("profile.push.enabled")} tone="ok" />
-    : pushState.permission === "denied"  ? <Badge text={t("profile.push.permission.denied")} />
-    : pushState.permission === "granted" ? <Badge text={t("profile.push.permission.granted")} tone="ok" />
-    : <Badge text={pushPermText} />;
-
-  const pushHint = !pushState.supported ? t("profile.push.hint.unsupported")
-    : pushState.permission === "denied"  ? t("profile.push.hint.denied")
-    : isIOS() && !standalone             ? t("profile.push.hint.ios_install")
-    : pushEnabled                        ? t("profile.push.hint.enabled")
-    : pushState.permission === "default" ? t("profile.push.hint.ask")
-    : pushState.permission === "granted" && pushState.disabledByUser ? t("profile.push.hint.disabled_by_user")
-    : t("profile.push.hint.subscription");
-
-  const pwaHint    = standalone ? t("profile.pwa.hint.installed")
-    : isIOS()        ? t("profile.pwa.hint.ios")
-    : deferredPrompt ? t("profile.pwa.hint.available")
-    : t("profile.pwa.hint.menu");
-
-  const pwaBtnText = isIOS() ? t("profile.pwa.button.how") : deferredPrompt ? t("profile.pwa.button.install") : t("profile.pwa.button.menu");
+  // ── Push button
+  let pushBtn: React.ReactNode;
+  if (!pushState.supported) {
+    pushBtn = <SmallBtn disabled>{t("profile.push.button.unavailable")}</SmallBtn>;
+  } else if (pushState.permission === "denied") {
+    pushBtn = <SmallBtn disabled>{t("profile.push.button.settings")}</SmallBtn>;
+  } else if (isIOS() && !standalone) {
+    pushBtn = <SmallBtn primary onClick={() => void doInstallPwa()} disabled={pushLoading}>{t("profile.pwa.button.install")}</SmallBtn>;
+  } else {
+    pushBtn = (
+      <SmallBtn primary={!pushEnabled} onClick={() => void togglePush()} disabled={pushLoading}>
+        {pushLoading ? "…" : pushEnabled ? t("profile.push.button.disable") : t("profile.push.button.enable")}
+      </SmallBtn>
+    );
+  }
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="section">
 
-      {/* ── Шапка ── */}
+      {/* ── Блок 1: шапка профиля ── */}
       <div className="card">
-        <div className="card__body">
-          <SectionTitle icon="👤">{t("profile.title")}</SectionTitle>
-          <p className="p">{t("profile.head.sub")}</p>
-          {toast && <div className="home-alert home-alert--ok" style={{ marginTop: 10 }}>{toast}</div>}
-          <div className="profile-header-actions">
+        <div className="card__body" style={{ padding: "14px" }}>
+
+          {/* Аватар + имя + мета */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+            <div style={{
+              width: 44, height: 44, borderRadius: 14, flexShrink: 0,
+              background: "linear-gradient(135deg,rgba(124,92,255,0.35),rgba(77,215,255,0.25))",
+              border: "0.5px solid rgba(124,92,255,0.35)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 17, fontWeight: 800, color: "#a78bff",
+            }}>
+              {initials}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: "rgba(255,255,255,0.92)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {displayName}
+              </div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", marginTop: 2 }}>
+                ID {profile?.id ?? "—"}
+                {loginText ? ` · ${loginText}` : ""}
+              </div>
+            </div>
             {isAdmin && (
-              <button className="btn btn--accent" onClick={() => nav("/admin")} type="button">
-                🛠 {t("profile.admin")}
-              </button>
+              <SmallBtn onClick={() => nav("/admin")}>🛠 {t("profile.admin")}</SmallBtn>
             )}
-            <button className="btn" onClick={() => setPwdModal(true)} type="button">
+          </div>
+
+          {/* Метадаты: создан + последний вход */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 12 }}>
+            {[
+              { k: t("profile.personal.created"),   v: formatDate(profile?.created) },
+              { k: t("profile.personal.last_login"), v: formatDate(profile?.lastLogin) },
+            ].map(({ k, v }) => (
+              <div key={k} style={{ background: "rgba(255,255,255,0.04)", border: "0.5px solid rgba(255,255,255,0.08)", borderRadius: 10, padding: "8px 10px" }}>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", marginBottom: 3 }}>{k}</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.75)" }}>{v}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Toast */}
+          {toast && <div className="home-alert home-alert--ok" style={{ marginBottom: 10 }}>{toast}</div>}
+
+          {/* Кнопки действий */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <button className="btn" onClick={() => setPwdModal(true)} type="button" style={{ fontSize: 12, minHeight: 36 }}>
               🔐 {t("profile.change_password")}
             </button>
-            <button className="btn btn--danger" onClick={() => void logout()} disabled={loggingOut} type="button">
+            <button className="btn btn--danger" onClick={() => void logout()} disabled={loggingOut} type="button" style={{ fontSize: 12, minHeight: 36 }}>
               🚪 {loggingOut ? "…" : t("profile.logout")}
             </button>
           </div>
+
         </div>
       </div>
 
-      {/* ── Личные данные ── */}
-      <div className="section">
-        <div className="card">
-          <div className="card__body">
-            <SectionTitle icon="🪪" right={
-              !editPersonal
-                ? <button className="btn" onClick={() => setEditPersonal(true)} type="button">{t("profile.personal.edit")}</button>
-                : <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <button className="btn btn--primary" onClick={() => void savePersonal()} disabled={savingPersonal} type="button">
-                      {savingPersonal ? "…" : t("profile.personal.save")}
-                    </button>
-                    <button className="btn" onClick={cancelPersonal} disabled={savingPersonal} type="button">
-                      {t("profile.personal.cancel")}
-                    </button>
-                  </div>
-            }>
-              {t("profile.personal.title")}
-            </SectionTitle>
-            {personalError && <div className="pre" style={{ marginTop: 10 }}>{personalError}</div>}
-            <div className="profile-list">
-              <RowLine
-                icon="🙍" label={t("profile.personal.name")}
-                value={editPersonal
-                  ? <input className="input" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder={t("profile.personal.name_ph")} />
-                  : personalNameView}
-              />
-              <RowLine
-                icon="📞" label={t("profile.personal.phone")}
-                value={editPersonal
-                  ? <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+7…" />
-                  : personalPhoneView}
-              />
-              <RowLine
-                icon="🔢" label={t("profile.personal.login")}
-                value={loginText || "—"}
-                right={loginText
-                  ? <button type="button" className="btn" onClick={() => void doCopyLogin()}>{copied ? "✓" : "📋"}</button>
-                  : null}
-              />
-              <div className="kv kv--2">
-                <div className="kv__item">
-                  <div className="kv__k">{t("profile.personal.id")}</div>
-                  <div className="kv__v">{profile?.id ?? "—"}</div>
-                </div>
-                <div className="kv__item">
-                  <div className="kv__k">{t("profile.personal.created")}</div>
-                  <div className="kv__v">{formatDate(profile?.created)}</div>
-                </div>
-              </div>
-              <RowLine icon="🕒" label={t("profile.personal.last_login")} value={formatDate(profile?.lastLogin)} />
+      {/* ── Блок 2: личные данные ── */}
+      <SectionCard title={t("profile.personal.title")}>
+        {personalError && <div className="pre" style={{ marginBottom: 8 }}>{personalError}</div>}
+
+        {editPersonal ? (
+          /* Режим редактирования */
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingTop: 8 }}>
+            <div className="field">
+              <label className="field__label">{t("profile.personal.name")}</label>
+              <input className="input" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder={t("profile.personal.name_ph")} />
+            </div>
+            <div className="field">
+              <label className="field__label">{t("profile.personal.phone")}</label>
+              <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+7…" />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <SmallBtn onClick={cancelPersonal} disabled={savingPersonal}>{t("profile.personal.cancel")}</SmallBtn>
+              <SmallBtn primary onClick={() => void savePersonal()} disabled={savingPersonal}>{savingPersonal ? "…" : t("profile.personal.save")}</SmallBtn>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* ── Вход и привязки ── */}
-      <div className="section">
-        <div className="card">
-          <div className="card__body">
-            <SectionTitle icon="🔑">{t("profile.auth.title")}</SectionTitle>
-            <div className="profile-list">
-
-              {/* Логин для входа: SHM login2, только чтение */}
-              <RowLine
-                icon="🔐"
-                label={t("profile.auth.login2.title")}
-                value={authLoginText || t("profile.auth.login2.empty")}
-                right={<Badge text={t("profile.auth.login2.badge")} />}
-                hint={t("profile.auth.login2.hint")}
-              />
-
-              {/* Email для восстановления */}
-              <RowLine
-                icon="✉️"
-                label={t("profile.email.title")}
-                value={emailLoading ? t("profile.email.loading") : email || t("profile.email.empty")}
-                right={
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                    {emailBadge}
-                    <button className="btn" onClick={() => setEmailModal(true)} type="button">
-                      {email ? t("profile.email.change") : t("profile.email.add")}
-                    </button>
-                    {email && emailVerified !== true && (
-                      <button className="btn btn--primary" onClick={() => setVerifyModal(true)} type="button">
-                        {codePending ? t("profile.email.enter_code") : t("profile.email.verify")}
-                      </button>
-                    )}
-                  </div>
-                }
-                hint={codePending ? t("profile.email.code_pending") : emailHint}
-              />
-
-              {/* Telegram */}
-              <RowLine
-                icon="✈️"
-                label="Telegram"
-                value={telegramLogin || t("profile.telegram.unlinked")}
-                right={
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                    {telegramLogin
-                      ? <Badge text={t("profile.telegram.badge.linked")} tone="ok" />
-                      : <Badge text={t("profile.telegram.badge.unlinked")} />}
-                    <button className="btn" onClick={() => setTgModal(true)} type="button">
-                      {telegramLogin ? t("profile.telegram.change") : t("profile.telegram.link")}
-                    </button>
-                  </div>
-                }
-                hint={t("profile.telegram.hint")}
-              />
+        ) : (
+          /* Режим просмотра */
+          <>
+            <PRow
+              label={t("profile.personal.name")}
+              value={personalNameView !== "—" ? personalNameView : undefined}
+              muted={personalNameView === "—"}
+              right={<SmallBtn onClick={() => setEditPersonal(true)}>{t("profile.personal.edit")}</SmallBtn>}
+            />
+            <PRow
+              label={t("profile.personal.phone")}
+              value={personalPhoneView !== "—" ? personalPhoneView : t("profile.email.empty")}
+              muted={personalPhoneView === "—"}
+            />
+            <div style={{ padding: "9px 0", borderBottom: "0.5px solid rgba(255,255,255,0.07)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.42)", fontWeight: 700, marginBottom: 3 }}>{t("profile.personal.login")}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.90)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{loginText || "—"}</div>
+              </div>
+              {loginText && (
+                <SmallBtn onClick={() => void doCopyLogin()}>{copied ? "✓" : "📋"}</SmallBtn>
+              )}
             </div>
+            {/* Последняя строка без бордера */}
+            <div style={{ padding: "9px 0 0" }}>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.42)", fontWeight: 700, marginBottom: 3 }}>{t("profile.personal.id")}</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.90)" }}>{profile?.id ?? "—"}</div>
+            </div>
+          </>
+        )}
+      </SectionCard>
+
+      {/* ── Блок 3: вход и привязки ── */}
+      <SectionCard title={t("profile.auth.title")}>
+
+        {/* Логин для входа */}
+        <PRow
+          label={t("profile.auth.login2.title")}
+          value={authLoginText || t("profile.auth.login2.empty")}
+          muted={!authLoginText}
+          right={<SmallBadge text={t("profile.auth.login2.badge")} />}
+          hint={t("profile.auth.login2.hint")}
+        />
+
+        {/* Email */}
+        <PRow
+          label={t("profile.email.title")}
+          value={emailLoading ? t("profile.email.loading") : email || t("profile.email.empty")}
+          muted={!email}
+          right={
+            <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end" }}>
+              {email && (
+                <SmallBadge
+                  text={emailVerified === true ? t("profile.email.badge.verified") : t("profile.email.badge.unverified")}
+                  tone={emailVerified === true ? "ok" : "warn"}
+                />
+              )}
+              <SmallBtn onClick={() => setEmailModal(true)}>
+                {email ? t("profile.email.change") : t("profile.email.add")}
+              </SmallBtn>
+              {email && emailVerified !== true && (
+                <SmallBtn primary onClick={() => setVerifyModal(true)}>
+                  {codePending ? t("profile.email.enter_code") : t("profile.email.verify")}
+                </SmallBtn>
+              )}
+            </div>
+          }
+          hint={codePending ? t("profile.email.code_pending") : email ? (emailVerified === true ? t("profile.email.hint.verified") : t("profile.email.hint.unverified")) : t("profile.email.hint.empty")}
+        />
+
+        {/* Telegram */}
+        <div style={{ padding: "9px 0 0", display: "grid", gridTemplateColumns: "1fr auto", gap: "4px 10px", alignItems: "start" }}>
+          <div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.42)", fontWeight: 700, marginBottom: 3 }}>Telegram</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: telegramLogin ? "rgba(255,255,255,0.90)" : "rgba(255,255,255,0.32)" }}>
+              {telegramLogin || t("profile.telegram.unlinked")}
+            </div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.38)", lineHeight: 1.4, marginTop: 1 }}>{t("profile.telegram.hint")}</div>
+          </div>
+          <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
+            {telegramLogin
+              ? <SmallBadge text={t("profile.telegram.badge.linked")} tone="ok" />
+              : <SmallBadge text={t("profile.telegram.badge.unlinked")} />}
+            <SmallBtn onClick={() => setTgModal(true)}>
+              {telegramLogin ? t("profile.telegram.change") : t("profile.telegram.link")}
+            </SmallBtn>
           </div>
         </div>
-      </div>
 
-      {/* ── Настройки ── */}
-      <div className="section">
-        <div className="card">
-          <div className="card__body">
-            <SectionTitle icon="⚙️">{t("profile.settings.title")}</SectionTitle>
-            <div className="profile-list">
+      </SectionCard>
 
-              {/* Язык */}
-              <div className="profile-row">
-                <div className="profile-row__main">
-                  <div className="profile-row__label"><span aria-hidden="true">🌍</span><span>{t("profile.language.title")}</span></div>
-                  <div className="profile-row__value">{lang === "ru" ? t("profile.language.ru") : t("profile.language.en")}</div>
-                  <div className="profile-row__hint">{t("profile.language.hint")}</div>
-                </div>
-                <div className="profile-row__right">
-                  <Segmented value={(lang as any) === "en" ? "en" : "ru"} onChange={setLang as any} ariaLabel={t("profile.language.aria")} />
-                </div>
-              </div>
+      {/* ── Блок 4: настройки ── */}
+      <SectionCard title={t("profile.settings.title")}>
 
-              {/* PWA */}
-              <div className="profile-row">
-                <div className="profile-row__main">
-                  <div className="profile-row__label"><span aria-hidden="true">📲</span><span>{t("profile.pwa.title")}</span></div>
-                  <div className="profile-row__value">{standalone ? t("profile.pwa.installed") : t("profile.pwa.not_installed")}</div>
-                  <div className="profile-row__hint">{pwaHint}</div>
-                </div>
-                <div className="profile-row__right">
-                  {standalone ? <Badge text={t("profile.pwa.installed")} tone="ok" /> : <Badge text={t("profile.pwa.not_installed")} />}
-                  {!standalone && (
-                    <button className="btn btn--primary" onClick={() => void doInstallPwa()} type="button">{pwaBtnText}</button>
-                  )}
-                </div>
-              </div>
-
-              {/* Push */}
-              <div className="profile-row">
-                <div className="profile-row__main">
-                  <div className="profile-row__label"><span aria-hidden="true">🔔</span><span>{t("profile.push.title")}</span></div>
-                  <div className="profile-row__value">{pushEnabled ? t("profile.push.enabled") : t("profile.push.disabled")} · {pushPermText}</div>
-                  <div className="profile-row__hint">{pushHint}</div>
-                </div>
-                <div className="profile-row__right">
-                  {pushBadge}
-                  {!pushState.supported ? (
-                    <button className="btn" type="button" disabled>{t("profile.push.button.unavailable")}</button>
-                  ) : pushState.permission === "denied" ? (
-                    <button className="btn" type="button" disabled>{t("profile.push.button.settings")}</button>
-                  ) : isIOS() && !standalone ? (
-                    <button className="btn btn--primary" type="button" onClick={() => void doInstallPwa()} disabled={pushLoading}>{t("profile.pwa.button.install")}</button>
-                  ) : (
-                    <button className={`btn${pushEnabled ? "" : " btn--primary"}`} type="button" onClick={() => void togglePush()} disabled={pushLoading}>
-                      {pushLoading ? "…" : pushEnabled ? t("profile.push.button.disable") : t("profile.push.button.enable")}
-                    </button>
-                  )}
-                </div>
-              </div>
-
-            </div>
-          </div>
+      {/* Язык */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "9px 0", borderBottom: "0.5px solid rgba(255,255,255,0.07)" }}>
+        <div>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.42)", fontWeight: 700, marginBottom: 3 }}>{t("profile.language.title")}</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.90)" }}>{lang === "ru" ? t("profile.language.ru") : t("profile.language.en")}</div>
+        </div>
+        <div style={{ flexShrink: 0 }}>
+          <Segmented value={(lang as any) === "en" ? "en" : "ru"} onChange={setLang as any} ariaLabel={t("profile.language.aria")} />
         </div>
       </div>
 
-      {/* ── Модалки ── */}
+        {/* PWA */}
+        <PRow
+          label={t("profile.pwa.title")}
+          value={standalone ? t("profile.pwa.installed") : t("profile.pwa.not_installed")}
+          muted={!standalone}
+          right={
+            standalone
+              ? <SmallBadge text={t("profile.pwa.installed")} tone="ok" />
+              : <SmallBtn primary onClick={() => void doInstallPwa()}>{isIOS() ? t("profile.pwa.button.how") : deferredPrompt ? t("profile.pwa.button.install") : t("profile.pwa.button.menu")}</SmallBtn>
+          }
+        />
 
-      <EmailVerifyModal
-        open={verifyModal}
-        email={email}
-        onClose={() => setVerifyModal(false)}
-        onVerified={() => setEmailVerified(true)}
-        t={t}
-      />
+        {/* Push — последний, без бордера снизу */}
+        <div style={{ padding: "9px 0 0", display: "grid", gridTemplateColumns: "1fr auto", gap: "4px 10px", alignItems: "start" }}>
+          <div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.42)", fontWeight: 700, marginBottom: 3 }}>{t("profile.push.title")}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: pushEnabled ? "rgba(255,255,255,0.90)" : "rgba(255,255,255,0.32)" }}>
+              {pushEnabled ? t("profile.push.enabled") : t("profile.push.disabled")}
+              <span style={{ opacity: 0.5, fontWeight: 600 }}> · {pushPermText}</span>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
+            {pushBtn}
+          </div>
+        </div>
+
+      </SectionCard>
+
+      {/* ── Модалки (без изменений) ── */}
+
+      <EmailVerifyModal open={verifyModal} email={email} onClose={() => setVerifyModal(false)} onVerified={() => setEmailVerified(true)} t={t} />
 
       <Modal open={iosInstallModal} title={t("profile.pwa.ios_modal.title")} onClose={() => setIosInstallModal(false)} closeLabel={t("profile.modal.close")}>
         <p className="p">{t("profile.pwa.ios_modal.text")}</p>
@@ -938,7 +903,6 @@ export function Profile() {
         </div>
       </Modal>
 
-      {/* ── Модалка Email восстановления ── */}
       <Modal
         open={emailModal}
         title={emailSaved ? t("profile.email.modal.saved_title") : email ? t("profile.email.modal.change_title") : t("profile.email.modal.add_title")}
@@ -946,38 +910,22 @@ export function Profile() {
         closeLabel={t("profile.modal.close")}
       >
         {emailSaved ? (
-          /* Экран успеха — предлагаем подтвердить */
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <p className="p" style={{ margin: 0 }}>
-              Email <strong>{email}</strong> — {t("profile.email.toast.saved")}.
-            </p>
+            <p className="p" style={{ margin: 0 }}>Email <strong>{email}</strong> — {t("profile.email.toast.saved")}.</p>
             <div className="pre" style={{ background: "rgba(124,92,255,.06)", borderColor: "rgba(124,92,255,.2)" }}>
               <div style={{ fontWeight: 600, marginBottom: 4 }}>📨 {t("profile.email.modal.verify_title")}</div>
-              <div style={{ opacity: 0.75, fontSize: 13, lineHeight: 1.5 }}>
-                {t("profile.email.modal.verify_text")}
-              </div>
+              <div style={{ opacity: 0.75, fontSize: 13, lineHeight: 1.5 }}>{t("profile.email.modal.verify_text")}</div>
             </div>
             <div className="actions actions--2">
-              <button className="btn" onClick={() => setEmailModal(false)} type="button">
-                {t("profile.email.modal.later")}
-              </button>
-              <button
-                className="btn btn--primary"
-                onClick={() => { setEmailModal(false); setVerifyModal(true); }}
-                type="button"
-              >
-                {t("profile.email.modal.verify_now")}
-              </button>
+              <button className="btn" onClick={() => setEmailModal(false)} type="button">{t("profile.email.modal.later")}</button>
+              <button className="btn btn--primary" onClick={() => { setEmailModal(false); setVerifyModal(true); }} type="button">{t("profile.email.modal.verify_now")}</button>
             </div>
           </div>
         ) : (
-          /* Форма изменения email */
           <>
             <div className="pre" style={{ marginBottom: 12, background: "rgba(124,92,255,.06)", borderColor: "rgba(124,92,255,.2)" }}>
               <div style={{ fontWeight: 600, marginBottom: 4 }}>📌 {t("profile.email.modal.notice_title")}</div>
-              <div style={{ opacity: 0.75, fontSize: 13, lineHeight: 1.5 }}>
-                {t("profile.email.modal.text")}
-              </div>
+              <div style={{ opacity: 0.75, fontSize: 13, lineHeight: 1.5 }}>{t("profile.email.modal.text")}</div>
               {authLoginText && (
                 <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,.08)" }}>
                   <div style={{ opacity: 0.6, fontSize: 12, marginBottom: 2 }}>{t("profile.email.modal.login_label")}</div>
@@ -985,47 +933,30 @@ export function Profile() {
                 </div>
               )}
             </div>
-            <input
-              className="input"
-              style={{ marginTop: 4 }}
-              value={emailDraft}
-              onChange={(e) => setEmailDraft(e.target.value)}
-              placeholder={t("profile.email.modal.placeholder")}
-              autoComplete="email"
-              inputMode="email"
-            />
+            <input className="input" style={{ marginTop: 4 }} value={emailDraft} onChange={(e) => setEmailDraft(e.target.value)} placeholder={t("profile.email.modal.placeholder")} autoComplete="email" inputMode="email" />
             {emailError && <div className="pre" style={{ marginTop: 8 }}>{emailError}</div>}
             <div className="actions actions--2" style={{ marginTop: 12 }}>
-              <button className="btn" onClick={() => setEmailModal(false)} disabled={emailBusy} type="button">
-                {t("profile.personal.cancel")}
-              </button>
-              <button className="btn btn--primary" onClick={() => void saveEmail()} disabled={emailBusy} type="button">
-                {emailBusy ? "…" : t("profile.email.save")}
-              </button>
+              <button className="btn" onClick={() => setEmailModal(false)} disabled={emailBusy} type="button">{t("profile.personal.cancel")}</button>
+              <button className="btn btn--primary" onClick={() => void saveEmail()} disabled={emailBusy} type="button">{emailBusy ? "…" : t("profile.email.save")}</button>
             </div>
           </>
         )}
       </Modal>
 
-      {/* ── Модалка пароля ── */}
       <Modal open={pwdModal} title={t("profile.password.modal.title")} onClose={() => setPwdModal(false)} closeLabel={t("profile.modal.close")}>
         <p className="p">{t("profile.password.modal.text")}</p>
         <label className="field" style={{ marginTop: 12 }}>
           <span className="field__label">{t("profile.password.field.p1")}</span>
           <div className="pwdfield">
             <input className="input" placeholder={t("profile.password.field.p1_ph")} value={pwd1} onChange={(e) => setPwd1(e.target.value)} type={showPwd1 ? "text" : "password"} autoComplete="new-password" disabled={pwdBusy} />
-            <button type="button" className="btn btn--soft pwdfield__btn" onClick={() => setShowPwd1((v) => !v)} disabled={pwdBusy}>
-              {showPwd1 ? "🙈" : "👁"}
-            </button>
+            <button type="button" className="btn btn--soft pwdfield__btn" onClick={() => setShowPwd1((v) => !v)} disabled={pwdBusy}>{showPwd1 ? "🙈" : "👁"}</button>
           </div>
         </label>
         <label className="field" style={{ marginTop: 10 }}>
           <span className="field__label">{t("profile.password.field.p2")}</span>
           <div className="pwdfield">
             <input className="input" placeholder={t("profile.password.field.p2_ph")} value={pwd2} onChange={(e) => setPwd2(e.target.value)} type={showPwd2 ? "text" : "password"} autoComplete="new-password" disabled={pwdBusy} />
-            <button type="button" className="btn btn--soft pwdfield__btn" onClick={() => setShowPwd2((v) => !v)} disabled={pwdBusy}>
-              {showPwd2 ? "🙈" : "👁"}
-            </button>
+            <button type="button" className="btn btn--soft pwdfield__btn" onClick={() => setShowPwd2((v) => !v)} disabled={pwdBusy}>{showPwd2 ? "🙈" : "👁"}</button>
           </div>
         </label>
         <div className="pre pwdmeter" style={{ marginTop: 10 }}>
@@ -1038,9 +969,7 @@ export function Profile() {
         {pwdError && <div className="pre" style={{ marginTop: 8 }}>{pwdError}</div>}
         <div className="actions actions--2" style={{ marginTop: 12 }}>
           <button className="btn" onClick={() => setPwdModal(false)} disabled={pwdBusy} type="button">{t("profile.personal.cancel")}</button>
-          <button className="btn btn--primary" onClick={() => void savePassword()} disabled={!canSavePassword} type="button">
-            {pwdBusy ? "…" : t("profile.password.save")}
-          </button>
+          <button className="btn btn--primary" onClick={() => void savePassword()} disabled={!canSavePassword} type="button">{pwdBusy ? "…" : t("profile.password.save")}</button>
         </div>
       </Modal>
 
