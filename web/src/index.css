@@ -34,7 +34,7 @@
 /* ── 1. Design tokens ──────────────────────────────────────── */
 :root {
   color-scheme: dark;
-  --ui-scale: 0.85;
+  --ui-scale: 0.87;
 
   --bg:        #0b0f17;
   --surface:   rgba(255,255,255,0.06);
