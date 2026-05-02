@@ -79,7 +79,7 @@ function getCooldownLeft(): number {
   return left > 0 ? left : 0;
 }
 
-/* ─── Shared UI ──────────────────────────────────────────────────────────── */
+/* ─── UI primitives ──────────────────────────────────────────────────────── */
 
 function Modal({ open, title, children, onClose, closeLabel }: {
   open: boolean; title: string; children: React.ReactNode; onClose: () => void; closeLabel: string;
@@ -90,7 +90,6 @@ function Modal({ open, title, children, onClose, closeLabel }: {
     document.addEventListener("keydown", h);
     return () => document.removeEventListener("keydown", h);
   }, [open, onClose]);
-
   if (!open) return null;
   return createPortal(
     <div role="dialog" aria-modal="true" onMouseDown={onClose} className="modal">
@@ -112,60 +111,55 @@ function Segmented({ value, onChange, ariaLabel }: {
   value: "ru" | "en"; onChange: (v: "ru" | "en") => void; ariaLabel: string;
 }) {
   return (
-    <div className="seg" role="tablist" aria-label={ariaLabel}>
+    <div className="seg profile-seg" role="tablist" aria-label={ariaLabel}>
       <button type="button" className={`btn seg__btn${value === "ru" ? " btn--primary" : ""}`} onClick={() => onChange("ru")} role="tab" aria-selected={value === "ru"}>RU</button>
       <button type="button" className={`btn seg__btn${value === "en" ? " btn--primary" : ""}`} onClick={() => onChange("en")} role="tab" aria-selected={value === "en"}>EN</button>
     </div>
   );
 }
 
-/* ─── Compact profile row ────────────────────────────────────────────────── */
+/* ─── Compact row — вариант А ────────────────────────────────────────────── */
 
-function PRow({ label, value, muted, right, hint }: {
-  label: string;
-  value?: React.ReactNode;
-  muted?: boolean;
-  right?: React.ReactNode;
-  hint?: string;
+function PRow({ label, value, muted, right, hint, last }: {
+  label: string; value?: React.ReactNode; muted?: boolean;
+  right?: React.ReactNode; hint?: string; last?: boolean;
 }) {
   return (
     <div style={{
-      display: "grid",
-      gridTemplateColumns: right ? "1fr auto" : "1fr",
-      gridTemplateAreas: right ? '"main right" "hint hint"' : '"main" "hint"',
-      gap: "4px 10px",
-      alignItems: "start",
-      padding: "9px 0",
-      borderBottom: "0.5px solid rgba(255,255,255,0.07)",
+      display: "flex", alignItems: "flex-start", justifyContent: "space-between",
+      gap: 10, padding: "8px 0",
+      borderBottom: last ? "none" : "0.5px solid rgba(255,255,255,0.06)",
     }}>
-      <div style={{ gridArea: "main", minWidth: 0 }}>
-        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.42)", fontWeight: 700, marginBottom: 3 }}>{label}</div>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ fontSize: 10, color: "rgba(255,255,255,0.38)", fontWeight: 700, marginBottom: 2 }}>{label}</div>
         {value != null && (
-          <div style={{ fontSize: 13, fontWeight: 700, color: muted ? "rgba(255,255,255,0.32)" : "rgba(255,255,255,0.90)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: muted ? "rgba(255,255,255,0.30)" : "rgba(255,255,255,0.88)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {value}
           </div>
         )}
+        {hint && <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", lineHeight: 1.4, marginTop: 2 }}>{hint}</div>}
       </div>
       {right && (
-        <div style={{ gridArea: "right", display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+        <div style={{ display: "flex", gap: 5, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end", flexShrink: 0 }}>
           {right}
-        </div>
-      )}
-      {hint && (
-        <div style={{ gridArea: "hint", fontSize: 11, color: "rgba(255,255,255,0.38)", lineHeight: 1.4, marginTop: 1 }}>
-          {hint}
         </div>
       )}
     </div>
   );
 }
 
-function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
+function SectionCard({ icon, title, children, action }: {
+  icon?: string; title: string; children: React.ReactNode; action?: React.ReactNode;
+}) {
   return (
     <div className="card" style={{ marginTop: 8 }}>
       <div className="card__body" style={{ padding: "12px 14px" }}>
-        <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,0.35)", marginBottom: 2 }}>
-          {title}
+        <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
+          {icon && <span style={{ fontSize: 13, opacity: 0.7 }}>{icon}</span>}
+          <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase" as const, color: "rgba(255,255,255,0.32)", flex: 1 }}>
+            {title}
+          </div>
+          {action && <div style={{ flexShrink: 0 }}>{action}</div>}
         </div>
         {children}
       </div>
@@ -174,11 +168,11 @@ function SectionCard({ title, children }: { title: string; children: React.React
 }
 
 function SmallBadge({ text, tone }: { text: string; tone?: "ok" | "warn" | "neutral" }) {
-  const bg   = tone === "ok"   ? "rgba(43,227,143,0.12)"  : tone === "warn" ? "rgba(245,158,11,0.12)" : "rgba(255,255,255,0.07)";
-  const bdr  = tone === "ok"   ? "rgba(43,227,143,0.30)"  : tone === "warn" ? "rgba(245,158,11,0.30)" : "rgba(255,255,255,0.12)";
-  const col  = tone === "ok"   ? "#2be38f"                : tone === "warn" ? "#f59e0b"               : "rgba(255,255,255,0.55)";
+  const bg  = tone === "ok" ? "rgba(43,227,143,0.12)" : tone === "warn" ? "rgba(245,158,11,0.12)" : "rgba(255,255,255,0.07)";
+  const bdr = tone === "ok" ? "rgba(43,227,143,0.30)" : tone === "warn" ? "rgba(245,158,11,0.30)" : "rgba(255,255,255,0.12)";
+  const col = tone === "ok" ? "#2be38f"               : tone === "warn" ? "#f59e0b"               : "rgba(255,255,255,0.55)";
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", padding: "3px 8px", borderRadius: 999, fontSize: 10, fontWeight: 800, background: bg, border: `0.5px solid ${bdr}`, color: col, whiteSpace: "nowrap" }}>
+    <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: 999, fontSize: 10, fontWeight: 800, background: bg, border: `0.5px solid ${bdr}`, color: col, whiteSpace: "nowrap" }}>
       {text}
     </span>
   );
@@ -187,24 +181,17 @@ function SmallBadge({ text, tone }: { text: string; tone?: "ok" | "warn" | "neut
 function SmallBtn({ children, onClick, primary, danger, disabled }: {
   children: React.ReactNode; onClick?: () => void; primary?: boolean; danger?: boolean; disabled?: boolean;
 }) {
-  let bg = "rgba(255,255,255,0.07)";
-  let bdr = "rgba(255,255,255,0.14)";
-  let col = "rgba(255,255,255,0.80)";
+  let bg = "rgba(255,255,255,0.07)"; let bdr = "rgba(255,255,255,0.14)"; let col = "rgba(255,255,255,0.80)";
   if (primary) { bg = "linear-gradient(135deg,#7c5cff,#4dd7ff)"; bdr = "transparent"; col = "#050a14"; }
   if (danger)  { bg = "rgba(255,77,109,0.12)"; bdr = "rgba(255,77,109,0.28)"; col = "#ff4d6d"; }
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        display: "inline-flex", alignItems: "center", justifyContent: "center",
-        padding: "5px 10px", borderRadius: 8, fontSize: 11, fontWeight: 700,
-        background: bg, border: `0.5px solid ${bdr}`, color: col,
-        cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1,
-        whiteSpace: "nowrap", minHeight: 28,
-      }}
-    >
+    <button type="button" onClick={onClick} disabled={disabled} style={{
+      display: "inline-flex", alignItems: "center", justifyContent: "center",
+      padding: "4px 9px", borderRadius: 7, fontSize: 11, fontWeight: 700,
+      background: bg, border: `0.5px solid ${bdr}`, color: col,
+      cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1,
+      whiteSpace: "nowrap", minHeight: 26,
+    }}>
       {children}
     </button>
   );
@@ -239,18 +226,10 @@ function EmailVerifyModal({ open, email, onClose, onVerified, t }: {
     return () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } };
   }, [open]);
 
-  useEffect(() => {
-    if (!open) { setState("idle"); setCode(""); setCodeError(null); }
-  }, [open]);
+  useEffect(() => { if (!open) { setState("idle"); setCode(""); setCodeError(null); } }, [open]);
+  useEffect(() => { if (state === "sent") setTimeout(() => codeInputRef.current?.focus(), 100); }, [state]);
 
-  useEffect(() => {
-    if (state === "sent") setTimeout(() => codeInputRef.current?.focus(), 100);
-  }, [state]);
-
-  function handleClose() {
-    if (state === "success") clearCodeSentAt();
-    setCode(""); setCodeError(null); onClose();
-  }
+  function handleClose() { if (state === "success") clearCodeSentAt(); setCode(""); setCodeError(null); onClose(); }
 
   async function sendCode() {
     if (cooldown > 0 || sending) return;
@@ -284,9 +263,7 @@ function EmailVerifyModal({ open, email, onClose, onVerified, t }: {
   const idleScreen = (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ textAlign: "center", fontSize: 48, lineHeight: 1 }}>✉️</div>
-      <p className="p" style={{ textAlign: "center", margin: 0 }}>
-        {t("profile.email.verify.idle.text_pre")}<br /><strong>{email}</strong>
-      </p>
+      <p className="p" style={{ textAlign: "center", margin: 0 }}>{t("profile.email.verify.idle.text_pre")}<br /><strong>{email}</strong></p>
       {codeError && <div className="pre" style={{ textAlign: "center" }}>{codeError}</div>}
       <button className="btn btn--primary" type="button" onClick={() => void sendCode()} disabled={sending || cooldown > 0} style={{ width: "100%" }}>
         {sending ? t("profile.email.verify.sending") : t("profile.email.verify.send_btn")}
@@ -298,10 +275,7 @@ function EmailVerifyModal({ open, email, onClose, onVerified, t }: {
   const sentScreen = (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ textAlign: "center", fontSize: 48, lineHeight: 1 }}>📬</div>
-      <p className="p" style={{ textAlign: "center", margin: 0 }}>
-        {t("profile.email.verify.sent.text_pre")} <strong>{email}</strong>.<br />
-        {t("profile.email.verify.sent.text_post")}
-      </p>
+      <p className="p" style={{ textAlign: "center", margin: 0 }}>{t("profile.email.verify.sent.text_pre")} <strong>{email}</strong>.<br />{t("profile.email.verify.sent.text_post")}</p>
       <form onSubmit={(e) => { e.preventDefault(); void confirmCode(); }}>
         <div className="field">
           <label className="field__label">{t("profile.email.verify.code_label")}</label>
@@ -357,8 +331,8 @@ export function Profile() {
   const { me, loading, error, refetch } = useMe() as any;
   const { lang, setLang, t } = useI18n();
 
-  const profile  = me?.profile;
-  const isAdmin  = Boolean(profile?.isAdmin || me?.admin?.isAdmin);
+  const profile = me?.profile;
+  const isAdmin = Boolean(profile?.isAdmin || me?.admin?.isAdmin);
 
   const loginText = useMemo(() => {
     const l = String(profile?.login ?? profile?.username ?? "").trim() || (profile?.id != null ? `@${profile.id}` : "");
@@ -367,11 +341,10 @@ export function Profile() {
 
   const authLoginText = useMemo(() => String(profile?.login2 ?? "").trim(), [profile?.login2]);
 
-  // ── Toast
   const [toast, setToast] = useState<string | null>(null);
   function showToast(msg: string) { setToast(msg); window.setTimeout(() => setToast(null), 2200); }
 
-  // ── Personal
+  // Personal
   const [editPersonal,   setEditPersonal]   = useState(false);
   const [savingPersonal, setSavingPersonal] = useState(false);
   const [personalError,  setPersonalError]  = useState<string | null>(null);
@@ -402,7 +375,7 @@ export function Profile() {
     setFullName(savedFullName); setPhone(savedPhone);
   }
 
-  // ── Telegram
+  // Telegram
   const [telegramLocal, setTelegramLocal] = useState<any>(null);
   const telegramRaw = telegramLocal ?? me?.telegram ?? null;
 
@@ -442,7 +415,7 @@ export function Profile() {
     finally { setSavingTg(false); }
   }
 
-  // ── Email
+  // Email
   const [email,         setEmail]         = useState("");
   const [emailVerified, setEmailVerified] = useState<boolean | null>(null);
   const [emailLoading,  setEmailLoading]  = useState(false);
@@ -457,19 +430,13 @@ export function Profile() {
     setEmailLoading(true);
     try {
       const resp = await apiFetch<UserEmailResponse>("/user/email", { method: "GET" }) as any;
-      if (resp?.ok) {
-        setEmail(String(resp.email ?? "").trim());
-        setEmailVerified(typeof resp.emailVerified === "boolean" ? resp.emailVerified : null);
-      }
+      if (resp?.ok) { setEmail(String(resp.email ?? "").trim()); setEmailVerified(typeof resp.emailVerified === "boolean" ? resp.emailVerified : null); }
     } catch { /* ignore */ }
     finally { setEmailLoading(false); }
   }
 
   useEffect(() => { void loadEmail(); }, []);
-
-  useEffect(() => {
-    if (!emailModal) { setEmailDraft(email || ""); setEmailError(null); setEmailSaved(false); }
-  }, [emailModal, email]);
+  useEffect(() => { if (!emailModal) { setEmailDraft(email || ""); setEmailError(null); setEmailSaved(false); } }, [emailModal, email]);
 
   function getEmailError(err: unknown): string {
     const raw = String((err as any)?.message || "").toLowerCase();
@@ -489,17 +456,13 @@ export function Profile() {
     setEmailBusy(true);
     try {
       const resp = await apiFetch<UserEmailResponse>("/user/email", { method: "PUT", body: { email: clean } }) as any;
-      if (resp?.ok) {
-        setEmail(String(resp.email ?? clean));
-        setEmailVerified(typeof resp.emailVerified === "boolean" ? resp.emailVerified : false);
-        setEmailSaved(true); return;
-      }
+      if (resp?.ok) { setEmail(String(resp.email ?? clean)); setEmailVerified(typeof resp.emailVerified === "boolean" ? resp.emailVerified : false); setEmailSaved(true); return; }
       setEmailError(t("profile.email.error.save"));
     } catch (e: unknown) { setEmailError(getEmailError(e)); }
     finally { setEmailBusy(false); }
   }
 
-  // ── Password
+  // Password
   const [pwdModal, setPwdModal] = useState(false);
   const [pwd1,     setPwd1]     = useState("");
   const [pwd2,     setPwd2]     = useState("");
@@ -508,9 +471,7 @@ export function Profile() {
   const [pwdBusy,  setPwdBusy]  = useState(false);
   const [pwdError, setPwdError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!pwdModal) { setPwd1(""); setPwd2(""); setShowPwd1(false); setShowPwd2(false); setPwdError(null); setPwdBusy(false); }
-  }, [pwdModal]);
+  useEffect(() => { if (!pwdModal) { setPwd1(""); setPwd2(""); setShowPwd1(false); setShowPwd2(false); setPwdError(null); setPwdBusy(false); } }, [pwdModal]);
 
   const pwdStrength     = useMemo(() => pwdScore(pwd1), [pwd1]);
   const canSavePassword = pwd1.trim().length >= 8 && pwd2.length > 0 && pwd1 === pwd2 && !pwdBusy;
@@ -531,7 +492,6 @@ export function Profile() {
     } finally { setPwdBusy(false); }
   }
 
-  // ── Copy login
   const [copied, setCopied] = useState(false);
   async function doCopyLogin() {
     if (!loginText) return;
@@ -540,25 +500,19 @@ export function Profile() {
     window.setTimeout(() => setCopied(false), 1200);
   }
 
-  // ── Logout
   const [loggingOut, setLoggingOut] = useState(false);
   async function logout() {
     setLoggingOut(true);
     try {
       const uid = Number(profile?.id ?? me?.id ?? 0) || 0;
       if (uid) {
-        try {
-          ["browser", "pwa"].forEach((k) => {
-            sessionStorage.removeItem(`push.onboarding.dismissed:${k}:u:${uid}`);
-            sessionStorage.removeItem(`push.onboarding.${k}.dismissed.session.v1`);
-          });
-        } catch { /* ignore */ }
+        try { ["browser", "pwa"].forEach((k) => { sessionStorage.removeItem(`push.onboarding.dismissed:${k}:u:${uid}`); sessionStorage.removeItem(`push.onboarding.${k}.dismissed.session.v1`); }); } catch { /* ignore */ }
       }
       await apiFetch("/logout", { method: "POST" });
     } finally { setLoggingOut(false); nav("/login", { replace: true }); }
   }
 
-  // ── PWA
+  // PWA
   const [standalone,      setStandalone]      = useState(false);
   const [deferredPrompt,  setDeferredPrompt]  = useState<BeforeInstallPromptEvent | null>(null);
   const [iosInstallModal, setIosInstallModal] = useState(false);
@@ -569,10 +523,7 @@ export function Profile() {
     const onInstalled = () => { setStandalone(true); setDeferredPrompt(null); showToast("📲 " + t("profile.pwa.toast.installed")); };
     window.addEventListener("beforeinstallprompt", onBip as any);
     window.addEventListener("appinstalled",        onInstalled as any);
-    return () => {
-      window.removeEventListener("beforeinstallprompt", onBip as any);
-      window.removeEventListener("appinstalled",        onInstalled as any);
-    };
+    return () => { window.removeEventListener("beforeinstallprompt", onBip as any); window.removeEventListener("appinstalled", onInstalled as any); };
   }, [t]);
 
   async function doInstallPwa() {
@@ -587,15 +538,13 @@ export function Profile() {
     finally { setDeferredPrompt(null); }
   }
 
-  // ── Push
+  // Push
   const [pushLoading, setPushLoading] = useState(false);
   const [pushState,   setPushState]   = useState<{
     supported: boolean; permission: NotificationPermission | "unsupported"; hasSubscription: boolean; standalone: boolean; disabledByUser: boolean;
   }>({ supported: false, permission: "unsupported", hasSubscription: false, standalone: false, disabledByUser: false });
 
-  async function refreshPush() {
-    try { const s = await getPushState(); setPushState({ ...s, disabledByUser: isPushDisabledByUser() }); } catch { /* ignore */ }
-  }
+  async function refreshPush() { try { const s = await getPushState(); setPushState({ ...s, disabledByUser: isPushDisabledByUser() }); } catch { /* ignore */ } }
   useEffect(() => { void refreshPush(); }, []);
 
   async function togglePush() {
@@ -612,7 +561,6 @@ export function Profile() {
     } finally { setPushLoading(false); await refreshPush(); }
   }
 
-  // ── Loading / Error
   if (loading) {
     return (
       <div className="app-loader" style={{ opacity: 1, transition: "opacity 180ms ease", pointerEvents: "auto" }}>
@@ -633,108 +581,94 @@ export function Profile() {
           <p className="p">{t("profile.error.text")}</p>
           <div className="actions actions--2" style={{ marginTop: 12 }}>
             <button className="btn btn--primary" onClick={() => refetch?.()} type="button">{t("profile.error.retry")}</button>
-            <button className="btn btn--danger"  onClick={() => void logout()} disabled={loggingOut} type="button">{loggingOut ? "…" : t("profile.logout")}</button>
+            <button className="btn btn--danger" onClick={() => void logout()} disabled={loggingOut} type="button">{loggingOut ? "…" : t("profile.logout")}</button>
           </div>
         </div></div>
       </div>
     );
   }
 
-  // ── Derived
+  // Derived
   const personalNameView  = savedFullName || profile?.displayName || "—";
   const personalPhoneView = savedPhone || "—";
   const pushEnabled       = pushState.permission === "granted" && pushState.hasSubscription && !pushState.disabledByUser;
   const pushPermText      = permissionLabel(String(pushState.permission), t);
   const codePending       = getCodeSentAt() > 0 && emailVerified !== true;
+  const displayName       = personalNameView !== "—" ? personalNameView : authLoginText || loginText || "—";
+  const initials          = displayName.trim().split(/\s+/).map((w: string) => w[0]).slice(0, 2).join("").toUpperCase() || "?";
 
-  const displayName = personalNameView !== "—" ? personalNameView : authLoginText || loginText || "—";
-  const initials    = displayName.trim().split(/\s+/).map((w: string) => w[0]).slice(0, 2).join("").toUpperCase() || "?";
-
-  // ── Push button
   let pushBtn: React.ReactNode;
-  if (!pushState.supported) {
-    pushBtn = <SmallBtn disabled>{t("profile.push.button.unavailable")}</SmallBtn>;
-  } else if (pushState.permission === "denied") {
-    pushBtn = <SmallBtn disabled>{t("profile.push.button.settings")}</SmallBtn>;
-  } else if (isIOS() && !standalone) {
-    pushBtn = <SmallBtn primary onClick={() => void doInstallPwa()} disabled={pushLoading}>{t("profile.pwa.button.install")}</SmallBtn>;
-  } else {
-    pushBtn = (
-      <SmallBtn primary={!pushEnabled} onClick={() => void togglePush()} disabled={pushLoading}>
-        {pushLoading ? "…" : pushEnabled ? t("profile.push.button.disable") : t("profile.push.button.enable")}
-      </SmallBtn>
-    );
-  }
+  if (!pushState.supported)              pushBtn = <SmallBtn disabled>{t("profile.push.button.unavailable")}</SmallBtn>;
+  else if (pushState.permission === "denied") pushBtn = <SmallBtn disabled>{t("profile.push.button.settings")}</SmallBtn>;
+  else if (isIOS() && !standalone)       pushBtn = <SmallBtn primary onClick={() => void doInstallPwa()} disabled={pushLoading}>{t("profile.pwa.button.install")}</SmallBtn>;
+  else pushBtn = (
+    <SmallBtn primary={!pushEnabled} onClick={() => void togglePush()} disabled={pushLoading}>
+      {pushLoading ? "…" : pushEnabled ? t("profile.push.button.disable") : t("profile.push.button.enable")}
+    </SmallBtn>
+  );
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  /* ── Render ── */
   return (
     <div className="section">
 
-      {/* ── Блок 1: шапка профиля ── */}
+      {/* ── Шапка ── */}
       <div className="card">
-        <div className="card__body" style={{ padding: "14px" }}>
-
-          {/* Аватар + имя + мета */}
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+        <div className="card__body" style={{ padding: "13px 14px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
             <div style={{
-              width: 44, height: 44, borderRadius: 14, flexShrink: 0,
+              width: 42, height: 42, borderRadius: 13, flexShrink: 0,
               background: "linear-gradient(135deg,rgba(124,92,255,0.35),rgba(77,215,255,0.25))",
               border: "0.5px solid rgba(124,92,255,0.35)",
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 17, fontWeight: 800, color: "#a78bff",
+              fontSize: 16, fontWeight: 800, color: "#a78bff",
             }}>
               {initials}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 16, fontWeight: 800, color: "rgba(255,255,255,0.92)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: "rgba(255,255,255,0.92)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {displayName}
               </div>
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", marginTop: 2 }}>
-                ID {profile?.id ?? "—"}
-                {loginText ? ` · ${loginText}` : ""}
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.38)", marginTop: 2 }}>
+                ID {profile?.id ?? "—"}{loginText ? ` · ${loginText}` : ""}
               </div>
             </div>
-            {isAdmin && (
-              <SmallBtn onClick={() => nav("/admin")}>🛠 {t("profile.admin")}</SmallBtn>
-            )}
+            {isAdmin && <SmallBtn onClick={() => nav("/admin")}>🛠 {t("profile.admin")}</SmallBtn>}
           </div>
 
-          {/* Метадаты: создан + последний вход */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 12 }}>
+          {/* Метадаты */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 10 }}>
             {[
               { k: t("profile.personal.created"),   v: formatDate(profile?.created) },
               { k: t("profile.personal.last_login"), v: formatDate(profile?.lastLogin) },
             ].map(({ k, v }) => (
-              <div key={k} style={{ background: "rgba(255,255,255,0.04)", border: "0.5px solid rgba(255,255,255,0.08)", borderRadius: 10, padding: "8px 10px" }}>
-                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", marginBottom: 3 }}>{k}</div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.75)" }}>{v}</div>
+              <div key={k} style={{ background: "rgba(255,255,255,0.04)", border: "0.5px solid rgba(255,255,255,0.07)", borderRadius: 9, padding: "7px 10px" }}>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.32)", marginBottom: 2 }}>{k}</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.72)" }}>{v}</div>
               </div>
             ))}
           </div>
 
-          {/* Toast */}
-          {toast && <div className="home-alert home-alert--ok" style={{ marginBottom: 10 }}>{toast}</div>}
+          {toast && <div className="home-alert home-alert--ok" style={{ marginBottom: 8 }}>{toast}</div>}
 
-          {/* Кнопки действий */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            <button className="btn" onClick={() => setPwdModal(true)} type="button" style={{ fontSize: 12, minHeight: 36 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
+            <button className="btn" onClick={() => setPwdModal(true)} type="button" style={{ fontSize: 12, minHeight: 34 }}>
               🔐 {t("profile.change_password")}
             </button>
-            <button className="btn btn--danger" onClick={() => void logout()} disabled={loggingOut} type="button" style={{ fontSize: 12, minHeight: 36 }}>
+            <button className="btn btn--danger" onClick={() => void logout()} disabled={loggingOut} type="button" style={{ fontSize: 12, minHeight: 34 }}>
               🚪 {loggingOut ? "…" : t("profile.logout")}
             </button>
           </div>
-
         </div>
       </div>
 
-      {/* ── Блок 2: личные данные ── */}
-      <SectionCard title={t("profile.personal.title")}>
+      {/* ── Личные данные ── */}
+      <SectionCard icon="🪪" title={t("profile.personal.title")}
+        action={!editPersonal ? <SmallBtn onClick={() => setEditPersonal(true)}>{t("profile.personal.edit")}</SmallBtn> : undefined}>
+
         {personalError && <div className="pre" style={{ marginBottom: 8 }}>{personalError}</div>}
 
         {editPersonal ? (
-          /* Режим редактирования */
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingTop: 8 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <div className="field">
               <label className="field__label">{t("profile.personal.name")}</label>
               <input className="input" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder={t("profile.personal.name_ph")} />
@@ -743,145 +677,92 @@ export function Profile() {
               <label className="field__label">{t("profile.personal.phone")}</label>
               <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+7…" />
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
               <SmallBtn onClick={cancelPersonal} disabled={savingPersonal}>{t("profile.personal.cancel")}</SmallBtn>
               <SmallBtn primary onClick={() => void savePersonal()} disabled={savingPersonal}>{savingPersonal ? "…" : t("profile.personal.save")}</SmallBtn>
             </div>
           </div>
         ) : (
-          /* Режим просмотра */
           <>
+            <PRow label={t("profile.personal.name")} value={personalNameView !== "—" ? personalNameView : undefined} muted={personalNameView === "—"} />
+            <PRow label={t("profile.personal.phone")} value={personalPhoneView !== "—" ? personalPhoneView : t("profile.email.empty")} muted={personalPhoneView === "—"} />
             <PRow
-              label={t("profile.personal.name")}
-              value={personalNameView !== "—" ? personalNameView : undefined}
-              muted={personalNameView === "—"}
-              right={<SmallBtn onClick={() => setEditPersonal(true)}>{t("profile.personal.edit")}</SmallBtn>}
+              label={t("profile.personal.login")}
+              value={loginText || "—"}
+              right={loginText ? <SmallBtn onClick={() => void doCopyLogin()}>{copied ? "✓" : "📋"}</SmallBtn> : undefined}
             />
-            <PRow
-              label={t("profile.personal.phone")}
-              value={personalPhoneView !== "—" ? personalPhoneView : t("profile.email.empty")}
-              muted={personalPhoneView === "—"}
-            />
-            <div style={{ padding: "9px 0", borderBottom: "0.5px solid rgba(255,255,255,0.07)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.42)", fontWeight: 700, marginBottom: 3 }}>{t("profile.personal.login")}</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.90)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{loginText || "—"}</div>
-              </div>
-              {loginText && (
-                <SmallBtn onClick={() => void doCopyLogin()}>{copied ? "✓" : "📋"}</SmallBtn>
-              )}
-            </div>
-            {/* Последняя строка без бордера */}
-            <div style={{ padding: "9px 0 0" }}>
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.42)", fontWeight: 700, marginBottom: 3 }}>{t("profile.personal.id")}</div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.90)" }}>{profile?.id ?? "—"}</div>
-            </div>
+            <PRow label={t("profile.personal.id")} value={profile?.id ?? "—"} last />
           </>
         )}
       </SectionCard>
 
-      {/* ── Блок 3: вход и привязки ── */}
-      <SectionCard title={t("profile.auth.title")}>
+      {/* ── Вход и привязки ── */}
+      <SectionCard icon="🔑" title={t("profile.auth.title")}>
 
-        {/* Логин для входа */}
         <PRow
           label={t("profile.auth.login2.title")}
           value={authLoginText || t("profile.auth.login2.empty")}
           muted={!authLoginText}
           right={<SmallBadge text={t("profile.auth.login2.badge")} />}
-          hint={t("profile.auth.login2.hint")}
         />
 
-        {/* Email */}
         <PRow
           label={t("profile.email.title")}
           value={emailLoading ? t("profile.email.loading") : email || t("profile.email.empty")}
           muted={!email}
+          hint={codePending ? t("profile.email.code_pending") : undefined}
           right={
-            <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end" }}>
-              {email && (
-                <SmallBadge
-                  text={emailVerified === true ? t("profile.email.badge.verified") : t("profile.email.badge.unverified")}
-                  tone={emailVerified === true ? "ok" : "warn"}
-                />
-              )}
-              <SmallBtn onClick={() => setEmailModal(true)}>
-                {email ? t("profile.email.change") : t("profile.email.add")}
-              </SmallBtn>
+            <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center" }}>
+              {email && <SmallBadge text={emailVerified === true ? t("profile.email.badge.verified") : t("profile.email.badge.unverified")} tone={emailVerified === true ? "ok" : "warn"} />}
+              <SmallBtn onClick={() => setEmailModal(true)}>{email ? t("profile.email.change") : t("profile.email.add")}</SmallBtn>
               {email && emailVerified !== true && (
-                <SmallBtn primary onClick={() => setVerifyModal(true)}>
-                  {codePending ? t("profile.email.enter_code") : t("profile.email.verify")}
-                </SmallBtn>
+                <SmallBtn primary onClick={() => setVerifyModal(true)}>{codePending ? t("profile.email.enter_code") : t("profile.email.verify")}</SmallBtn>
               )}
             </div>
           }
-          hint={codePending ? t("profile.email.code_pending") : email ? (emailVerified === true ? t("profile.email.hint.verified") : t("profile.email.hint.unverified")) : t("profile.email.hint.empty")}
         />
 
-        {/* Telegram */}
-        <div style={{ padding: "9px 0 0", display: "grid", gridTemplateColumns: "1fr auto", gap: "4px 10px", alignItems: "start" }}>
-          <div>
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.42)", fontWeight: 700, marginBottom: 3 }}>Telegram</div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: telegramLogin ? "rgba(255,255,255,0.90)" : "rgba(255,255,255,0.32)" }}>
-              {telegramLogin || t("profile.telegram.unlinked")}
+        <PRow
+          label="Telegram"
+          value={telegramLogin || t("profile.telegram.unlinked")}
+          muted={!telegramLogin}
+          right={
+            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+              {telegramLogin ? <SmallBadge text={t("profile.telegram.badge.linked")} tone="ok" /> : <SmallBadge text={t("profile.telegram.badge.unlinked")} />}
+              <SmallBtn onClick={() => setTgModal(true)}>{telegramLogin ? t("profile.telegram.change") : t("profile.telegram.link")}</SmallBtn>
             </div>
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.38)", lineHeight: 1.4, marginTop: 1 }}>{t("profile.telegram.hint")}</div>
-          </div>
-          <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
-            {telegramLogin
-              ? <SmallBadge text={t("profile.telegram.badge.linked")} tone="ok" />
-              : <SmallBadge text={t("profile.telegram.badge.unlinked")} />}
-            <SmallBtn onClick={() => setTgModal(true)}>
-              {telegramLogin ? t("profile.telegram.change") : t("profile.telegram.link")}
-            </SmallBtn>
-          </div>
-        </div>
-
+          }
+          last
+        />
       </SectionCard>
 
-      {/* ── Блок 4: настройки ── */}
-      <SectionCard title={t("profile.settings.title")}>
+      {/* ── Настройки ── */}
+      <SectionCard icon="⚙️" title={t("profile.settings.title")}>
 
-      {/* Язык */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "9px 0", borderBottom: "0.5px solid rgba(255,255,255,0.07)" }}>
-        <div>
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.42)", fontWeight: 700, marginBottom: 3 }}>{t("profile.language.title")}</div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.90)" }}>{lang === "ru" ? t("profile.language.ru") : t("profile.language.en")}</div>
-        </div>
-        <div style={{ flexShrink: 0 }}>
-          <Segmented value={(lang as any) === "en" ? "en" : "ru"} onChange={setLang as any} ariaLabel={t("profile.language.aria")} />
-        </div>
-      </div>
+        <PRow
+          label={t("profile.language.title")}
+          value={lang === "ru" ? t("profile.language.ru") : t("profile.language.en")}
+          right={<Segmented value={(lang as any) === "en" ? "en" : "ru"} onChange={setLang as any} ariaLabel={t("profile.language.aria")} />}
+        />
 
-        {/* PWA */}
         <PRow
           label={t("profile.pwa.title")}
           value={standalone ? t("profile.pwa.installed") : t("profile.pwa.not_installed")}
           muted={!standalone}
-          right={
-            standalone
-              ? <SmallBadge text={t("profile.pwa.installed")} tone="ok" />
-              : <SmallBtn primary onClick={() => void doInstallPwa()}>{isIOS() ? t("profile.pwa.button.how") : deferredPrompt ? t("profile.pwa.button.install") : t("profile.pwa.button.menu")}</SmallBtn>
-          }
+          right={standalone
+            ? <SmallBadge text={t("profile.pwa.installed")} tone="ok" />
+            : <SmallBtn primary onClick={() => void doInstallPwa()}>{isIOS() ? t("profile.pwa.button.how") : deferredPrompt ? t("profile.pwa.button.install") : t("profile.pwa.button.menu")}</SmallBtn>}
         />
 
-        {/* Push — последний, без бордера снизу */}
-        <div style={{ padding: "9px 0 0", display: "grid", gridTemplateColumns: "1fr auto", gap: "4px 10px", alignItems: "start" }}>
-          <div>
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.42)", fontWeight: 700, marginBottom: 3 }}>{t("profile.push.title")}</div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: pushEnabled ? "rgba(255,255,255,0.90)" : "rgba(255,255,255,0.32)" }}>
-              {pushEnabled ? t("profile.push.enabled") : t("profile.push.disabled")}
-              <span style={{ opacity: 0.5, fontWeight: 600 }}> · {pushPermText}</span>
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
-            {pushBtn}
-          </div>
-        </div>
-
+        <PRow
+          label={t("profile.push.title")}
+          value={<>{pushEnabled ? t("profile.push.enabled") : t("profile.push.disabled")}<span style={{ opacity: 0.45, fontWeight: 600, fontSize: 11 }}> · {pushPermText}</span></>}
+          right={<div style={{ display: "flex", gap: 4 }}>{pushBtn}</div>}
+          last
+        />
       </SectionCard>
 
-      {/* ── Модалки (без изменений) ── */}
+      {/* ── Модалки ── */}
 
       <EmailVerifyModal open={verifyModal} email={email} onClose={() => setVerifyModal(false)} onVerified={() => setEmailVerified(true)} t={t} />
 
