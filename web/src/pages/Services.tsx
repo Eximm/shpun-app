@@ -55,7 +55,6 @@ function detectKind(category?: string): ServiceKind {
   return "unknown";
 }
 
-function isWhiteListCategory(category?: string) { return category === "marzban-wl"; }
 
 function kindTitle(k: ServiceKind, t: T) {
   switch (k) {

@@ -1,6 +1,6 @@
 // FILE: web/src/pages/Home.tsx
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMe } from "../app/auth/useMe";
 import { useI18n } from "../shared/i18n";
@@ -144,11 +144,6 @@ export function Home() {
   const displayName = profile?.displayName || profile?.login || "";
   const bonusValue  = typeof (me as any)?.bonus === "number" ? (me as any).bonus : 0;
 
-  const attentionCount = useMemo(() => {
-    const s = svcSummary;
-    return s ? Number(s.blocked || 0) + Number(s.notPaid || 0) : 0;
-  }, [svcSummary]);
-
   const prevBonusRef   = useRef<number | null>(null);
   const prevBalRef     = useRef<number | null>(null);
   const initializedRef = useRef(false);
@@ -241,8 +236,6 @@ export function Home() {
         : svcForecast.nextDate ? fmtShortDate(svcForecast.nextDate) : "—"
       }${svcForecast.nextAmount != null ? ` · ~${fmtMoneyForecast(svcForecast.nextAmount, svcForecast.currency || currencyFallback)}` : ""}`
     : null;
-
-  const forecastSub = forecastWhenText || servicesForecastText || (payLoading ? t("home.tiles.forecast.loading") : "—");
 
   const attentionSub = (() => {
     if (!s) return svcLoading ? t("home.tiles.forecast.loading") : "—";
