@@ -1246,34 +1246,32 @@ button, a { -webkit-tap-highlight-color: transparent; }
 
 
 /* ── 28. PromoModal ────────────────────────────────────────── */
+/* ── 28. PromoModal ────────────────────────────────────────── */
 .promo-modal {
   position: fixed; inset: 0; z-index: 60;
-  display: flex; align-items: flex-end; justify-content: center;
-  padding: 0 0 env(safe-area-inset-bottom);
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px;
   background: rgba(0,0,0,0);
   backdrop-filter: blur(0px); -webkit-backdrop-filter: blur(0px);
   transition: background 260ms ease, backdrop-filter 260ms ease, -webkit-backdrop-filter 260ms ease;
 }
-@media (min-width: 560px) { .promo-modal { align-items: center; padding: 16px; } }
 
 .promo-modal--open    { background: rgba(0,0,0,0.72); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
 .promo-modal--closing { background: rgba(0,0,0,0); backdrop-filter: blur(0px); -webkit-backdrop-filter: blur(0px); }
 
 .promo-modal__card {
   position: relative; width: min(520px,100%);
-  border-radius: 24px 24px 0 0;
+  border-radius: var(--radius);
   border: 1px solid var(--border);
   background: linear-gradient(180deg, rgba(255,255,255,0.09), rgba(255,255,255,0.05));
-  box-shadow: 0 -8px 40px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.06) inset;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.06) inset;
   overflow: hidden;
-  transform: translateY(100%); opacity: 0;
+  transform: translateY(24px) scale(0.96); opacity: 0;
   transition: transform 300ms cubic-bezier(0.2,0.9,0.2,1), opacity 260ms ease;
 }
-@media (min-width: 560px) { .promo-modal__card { border-radius: var(--radius); transform: translateY(24px) scale(0.96); } }
 
 .promo-modal--open    .promo-modal__card { transform: translateY(0) scale(1); opacity: 1; }
-.promo-modal--closing .promo-modal__card { transform: translateY(100%); opacity: 0; }
-@media (min-width: 560px) { .promo-modal--closing .promo-modal__card { transform: translateY(16px) scale(0.96); opacity: 0; } }
+.promo-modal--closing .promo-modal__card { transform: translateY(16px) scale(0.96); opacity: 0; }
 
 .promo-modal__head     { display: flex; align-items: center; gap: 12px; padding: 18px 18px 0; }
 .promo-modal__headIcon { font-size: 28px; line-height: 1; flex: 0 0 auto; filter: drop-shadow(0 0 10px rgba(124,92,255,0.50)); }
@@ -1300,7 +1298,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .promo-modal__chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 2px; }
 .promo-modal__chip  { font-size: 13px; font-weight: 800; }
 
-.promo-modal__footer   { padding: 14px 18px max(18px, env(safe-area-inset-bottom)); margin-top: 10px; }
+.promo-modal__footer    { padding: 14px 18px 18px; margin-top: 10px; }
 .promo-modal__footerRow { display: flex; flex-direction: column; gap: 8px; }
 .promo-modal__applyBtn  { width: 100%; min-height: 48px; font-size: 15px; font-weight: 900; border-radius: 16px; gap: 10px; }
 .promo-modal__applyBtn--loading { opacity: 0.80; }
@@ -1312,9 +1310,9 @@ button, a { -webkit-tap-highlight-color: transparent; }
   animation: promo-spin 0.65s linear infinite; flex: 0 0 auto;
 }
 
-@keyframes promo-spin    { to { transform: rotate(360deg); } }
-@keyframes promo-pop     { 0% { transform: scale(0.4); opacity: 0; } 65% { transform: scale(1.18); opacity: 1; } 100% { transform: scale(1); } }
-@keyframes promo-fadein  { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes promo-spin   { to { transform: rotate(360deg); } }
+@keyframes promo-pop    { 0% { transform: scale(0.4); opacity: 0; } 65% { transform: scale(1.18); opacity: 1; } 100% { transform: scale(1); } }
+@keyframes promo-fadein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 
 @media (prefers-reduced-motion: reduce) {
   .btn::after, .home-tile::after,

@@ -1,7 +1,7 @@
 // FILE: web/src/pages/Home.tsx
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useMe } from "../app/auth/useMe";
 import { useI18n } from "../shared/i18n";
 import { apiFetch } from "../shared/api/client";
@@ -79,22 +79,38 @@ function tr(template: string, params: Record<string, string | number>) {
   return Object.entries(params).reduce((acc, [k, v]) => acc.replace(new RegExp(`\\{${k}\\}`, "g"), String(v)), template);
 }
 
-/* ─── Tile ───────────────────────────────────────────────────────────────── */
+/* ─── StatCell — ячейка сетки 2×2 ───────────────────────────────────────── */
 
-function Tile({ to, title, value, sub, icon, tone = "default" }: {
-  to: string; title: string; value: React.ReactNode; sub?: React.ReactNode; icon?: string; tone?: TileTone;
+function StatCell({ to, icon, label, value, sub, accent }: {
+  to: string; icon: string; label: string;
+  value: React.ReactNode; sub?: string; accent?: "ok" | "warn" | "danger";
 }) {
+  const borderColor = accent === "ok"     ? "rgba(43,227,143,0.22)"
+                    : accent === "warn"   ? "rgba(245,158,11,0.22)"
+                    : accent === "danger" ? "rgba(255,77,109,0.22)"
+                    : "rgba(255,255,255,0.07)";
+  const bg          = accent === "ok"     ? "rgba(43,227,143,0.05)"
+                    : accent === "warn"   ? "rgba(245,158,11,0.05)"
+                    : accent === "danger" ? "rgba(255,77,109,0.05)"
+                    : "rgba(255,255,255,0.04)";
+  const subColor    = accent === "ok"     ? "rgba(43,227,143,0.75)"
+                    : accent === "warn"   ? "rgba(245,158,11,0.75)"
+                    : accent === "danger" ? "rgba(255,77,109,0.75)"
+                    : "rgba(255,255,255,0.32)";
   return (
-    <Link to={to} className={`home-tile home-tile--${tone}`}>
-      <div className="home-tile__head">
-        <div className="home-tile__title">
-          {icon && <span className="home-tile__icon" aria-hidden>{icon}</span>}
-          <span>{title}</span>
-        </div>
-        <div className="home-tile__chev">→</div>
+    <Link to={to} style={{
+      display: "block", background: bg,
+      border: `0.5px solid ${borderColor}`, borderRadius: 13,
+      padding: "11px 12px", textDecoration: "none", color: "inherit",
+    }}>
+      <div style={{ fontSize: 16, lineHeight: 1, marginBottom: 6 }}>{icon}</div>
+      <div style={{ fontSize: 10, color: "rgba(255,255,255,0.38)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>
+        {label}
       </div>
-      <div className="home-tile__value">{value}</div>
-      {sub ? <div className="home-tile__sub">{sub}</div> : <div className="home-tile__sub home-tile__sub--empty" />}
+      <div style={{ fontSize: 18, fontWeight: 900, color: "rgba(255,255,255,0.92)", lineHeight: 1.2 }}>
+        {value}
+      </div>
+      {sub && <div style={{ fontSize: 10, color: subColor, marginTop: 3, lineHeight: 1.3 }}>{sub}</div>}
     </Link>
   );
 }
@@ -109,6 +125,7 @@ function Money({ amount, currency }: { amount: number; currency: string }) {
 
 export function Home() {
   const { t }  = useI18n();
+  const nav    = useNavigate();
   const { me, loading, error, refetch } = useMe();
 
   const [promoOpen,   setPromoOpen]   = useState(false);
@@ -235,53 +252,87 @@ export function Home() {
     return parts.length === 0 ? t("home.tiles.state.ok") : parts.join(" · ");
   })();
 
-  // Семантический тон плитки состояния
   const stateTone: TileTone = !s ? "default" : s.blocked > 0 ? "danger" : s.notPaid > 0 ? "warn" : "ok";
-  const stateIcon  = stateTone === "danger" ? "🔴" : stateTone === "warn" ? "⚠️" : "✅";
-  const stateTitle = stateTone !== "ok" ? t("home.tiles.attention") : t("home.tiles.state");
+  const svcAccent = stateTone === "danger" ? "danger" as const : stateTone === "warn" ? "warn" as const : stateTone === "ok" ? "ok" as const : undefined;
+
+  const initials = displayName.trim().split(/\s+/).map((w: string) => w[0]).slice(0, 2).join("").toUpperCase() || "?";
+
+  const nextPaySub = forecastWhenText
+    ? forecastWhenText
+    : servicesForecastText || undefined;
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="section">
 
-      {/* ── Приветствие + плитки ── */}
-      <div className="card">
-        <div className="card__body">
-          <div className="home-head">
-            <div className="home-head__left">
-              <div className="home-head__title">{t("home.hello")}{displayName ? `, ${displayName}` : ""} 👋</div>
-              <div className="home-head__sub">{t("home.head.sub")}</div>
-            </div>
-          </div>
-
-          <div className="home-tiles">
-            <Tile to="/payments" icon="💰" title={t("home.tiles.balance")}
-              value={balance ? <Money amount={balance.amount} currency={balance.currency} /> : "—"}
-              sub={t("home.tiles.balance.sub")} tone="accent" />
-
-            <Tile to="/services" icon="🛰️" title={t("home.tiles.services")}
-              value={svcLoading ? "…" : s ? `${s.active}/${s.total}` : "—"}
-              sub={t("home.tiles.services.sub")} tone="ok" />
-
-            <Tile to="/services" icon={stateIcon} title={stateTitle}
-              value={svcLoading ? "…" : s ? attentionCount : "—"}
-              sub={attentionSub} tone={stateTone} />
-
-            <Tile to="/services" icon="📦" title={t("home.tiles.monthly")}
-              value={svcLoading ? "…" : s ? fmtMoney(s.monthlyCost || 0, currencyFallback) : "—"}
-              sub={t("home.tiles.monthly.sub")} tone="default" />
-
-            <Tile to="/payments" icon="🎁" title={t("home.tiles.bonus")}
-              value={bonusValue} sub={t("home.tiles.bonus.sub")} tone="default" />
-
-            <Tile to="/payments" icon="🗓️" title={t("home.tiles.forecast")}
-              value={forecastAmountText || (payLoading ? "…" : "—")}
-              sub={forecastSub} tone="default" />
-          </div>
-
-          {svcError && <div className="muted" style={{ marginTop: 10 }}>{t("home.services.error")}</div>}
+      {/* ── Мини-шапка ── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 10 }}>
+        <div style={{
+          width: 34, height: 34, borderRadius: 10, flexShrink: 0,
+          background: "rgba(124,92,255,0.22)", border: "0.5px solid rgba(124,92,255,0.40)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 13, fontWeight: 800, color: "#c4b0ff",
+        }}>
+          {initials}
+        </div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "rgba(255,255,255,0.78)" }}>
+          {t("home.hello")}{displayName ? `, ${displayName}` : ""} 👋
         </div>
       </div>
+
+      {/* ── Акцентный блок: баланс + CTA ── */}
+      <div style={{
+        background: "rgba(124,92,255,0.12)",
+        border: "0.5px solid rgba(124,92,255,0.28)",
+        borderRadius: 18, padding: "15px 15px 13px", marginBottom: 8,
+      }}>
+        <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(124,92,255,0.65)", marginBottom: 6 }}>
+          {t("home.tiles.balance")}
+        </div>
+        <div style={{ fontSize: 32, fontWeight: 900, color: "#fff", lineHeight: 1, marginBottom: 5 }}>
+          {balance ? <Money amount={balance.amount} currency={balance.currency} /> : "…"}
+        </div>
+        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.38)", marginBottom: 14, lineHeight: 1.4 }}>
+          {forecastAmountText
+            ? `${t("home.tiles.forecast")}: ${forecastAmountText}${forecastWhenText ? ` · ${forecastWhenText}` : ""}`
+            : t("home.tiles.balance.sub")}
+        </div>
+        <button type="button" className="btn btn--primary" onClick={() => nav("/payments")} style={{ width: "100%", fontSize: 13, minHeight: 38, fontWeight: 800 }}>
+          ⚡ {t("home.tiles.balance.sub")}
+        </button>
+      </div>
+
+      {/* ── Сетка 2×2 ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, marginBottom: 8 }}>
+        <StatCell
+          to="/services" icon="🛰️"
+          label={t("home.tiles.services")}
+          value={svcLoading ? "…" : s ? `${s.active}/${s.total}` : "—"}
+          sub={attentionSub}
+          accent={svcAccent}
+        />
+        <StatCell
+          to="/payments" icon="📅"
+          label={t("home.tiles.forecast")}
+          value={forecastAmountText || (payLoading ? "…" : "—")}
+          sub={nextPaySub}
+        />
+        <StatCell
+          to="/payments" icon="🎁"
+          label={t("home.tiles.bonus")}
+          value={bonusValue}
+          sub={t("home.tiles.bonus.sub")}
+          accent={bonusValue > 0 ? "ok" : undefined}
+        />
+        <StatCell
+          to="/services" icon="📦"
+          label={t("home.tiles.monthly")}
+          value={svcLoading ? "…" : s ? fmtMoney(s.monthlyCost || 0, currencyFallback) : "—"}
+          sub={t("home.tiles.monthly.sub")}
+        />
+      </div>
+
+      {svcError && <div className="muted" style={{ marginBottom: 8, fontSize: 11 }}>{t("home.services.error")}</div>}
 
       {/* ── Telegram Mini App: открыть в браузере ── */}
       {inTelegramMiniApp && (

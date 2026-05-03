@@ -277,6 +277,7 @@ export async function servicesRoutes(app: FastifyInstance) {
         price: Number(svc?.cost ?? 0) || 0,
         periodMonths: Number(svc?.period ?? 1) || 1,
         currency: "RUB",
+        parent: us?.parent != null ? Number(us.parent) || null : null,
       };
     });
 
