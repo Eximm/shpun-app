@@ -86,12 +86,12 @@ function kindIcon(k: ServiceKind): string {
 function statusLabel(s: UiStatus, t: T) {
   switch (s) {
     case "active":   return t("services.status.active",   "Активна");
-    case "pending":  return t("services.status.pending",  "Подключается");
+    case "pending":  return t("services.status.pending",  "Обработка");
+    case "init":     return t("services.status.init",     "Обработка");
     case "not_paid": return t("services.status.not_paid", "Не оплачена");
     case "blocked":  return t("services.status.blocked",  "Заблокирована");
     case "removed":  return t("services.status.removed",  "Завершена");
     case "error":    return t("services.status.error",    "Ошибка");
-    case "init":     return t("services.status.init",     "Инициализация");
     default:         return t("services.status.default",  "Статус");
   }
 }
@@ -106,7 +106,9 @@ function statusTint(s: UiStatus) {
     case "not_paid":
       return { bg: "rgba(245,158,11,.06)", border: "rgba(245,158,11,.22)", stripe: "#f59e0b", chipBg: "rgba(245,158,11,.12)", chipBorder: "rgba(245,158,11,.28)", chipColor: "#f59e0b" };
     case "blocked":
-      return { bg: "rgba(245,158,11,.08)", border: "rgba(245,158,11,.28)", stripe: "#f59e0b", chipBg: "rgba(245,158,11,.12)", chipBorder: "rgba(245,158,11,.30)", chipColor: "#f59e0b" };
+  return {
+    bg: "rgba(255,77,109,.06)", border: "rgba(255,77,109,.22)", stripe: "#ff4d6d", chipBg: "rgba(255,77,109,.12)", chipBorder: "rgba(255,77,109,.28)", chipColor: "#ff4d6d"
+  };
     case "error":
       return { bg: "rgba(255,77,109,.06)", border: "rgba(255,77,109,.22)", stripe: "#ff4d6d", chipBg: "rgba(255,77,109,.12)", chipBorder: "rgba(255,77,109,.28)", chipColor: "#ff4d6d" };
     default:
@@ -180,8 +182,8 @@ function DaysProgress({ daysLeft, periodMonths }: { daysLeft: number | null; per
   const pct   = Math.min(100, Math.max(0, Math.round((daysLeft / total) * 100)));
   const color = daysLeft <= 5 ? "#f59e0b" : daysLeft <= 10 ? "#f59e0b" : "#2be38f";
   return (
-    <div style={{ height: 3, borderRadius: 99, background: "rgba(255,255,255,.08)", overflow: "hidden", margin: "6px 0 0" }}>
-      <div style={{ height: "100%", width: `${pct}%`, borderRadius: 99, background: color, transition: "width 500ms ease" }} />
+    <div className="svc-progress" style={{ height: 3, borderRadius: 99, background: "rgba(255,255,255,.08)", overflow: "hidden", margin: "6px 0 0" }}>
+      <div className="svc-progress__bar" style={{ height: "100%", width: `${pct}%`, borderRadius: 99, background: color, transition: "width 500ms ease" }} />
     </div>
   );
 }
@@ -284,20 +286,21 @@ function ServiceRow({ s, expanded, connectOpen, onToggle, onToggleConnect, onRef
   const supportUrl = `/support?topic=service&usi=${encodeURIComponent(String(s.userServiceId))}`;
 
   return (
-    <div style={{
+    <div className={"svc-row" + (isChild ? " svc-row--child" : "") + (expanded ? " svc-row--expanded" : "")} style={{
       borderRadius: isChild ? "0 0 11px 11px" : 11,
       background: tint.bg,
       border: isChild ? "none" : `.5px solid ${tint.border}`,
-    }}>
+      "--svc-stripe": tint.stripe,
+    } as React.CSSProperties}>
 
       {/* Заголовок — кликабельный */}
-      <button type="button" onClick={onToggle} aria-expanded={expanded} style={{
+      <button className="svc-row__toggle" type="button" onClick={onToggle} aria-expanded={expanded} style={{
         width: "100%", display: "flex", alignItems: "center", gap: 10,
         padding: isChild ? "10px 12px" : "10px 12px",
         background: "transparent", border: "none", cursor: "pointer", textAlign: "left",
       }}>
         {/* Цветная полоска */}
-        <div style={{ width: 3, height: 36, borderRadius: 99, flexShrink: 0, background: tint.stripe }} />
+        <div className="svc-row__stripe" style={{ width: 3, height: 36, borderRadius: 99, flexShrink: 0, background: tint.stripe }} />
 
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
@@ -326,7 +329,7 @@ function ServiceRow({ s, expanded, connectOpen, onToggle, onToggleConnect, onRef
 
       {/* Действия */}
       {expanded && (
-        <div style={{ padding: "0 12px 10px", display: "flex", flexDirection: "column", gap: 6 }}>
+        <div className="svc-row__details" style={{ padding: "0 12px 10px", display: "flex", flexDirection: "column", gap: 6 }}>
           {s.descr ? <p className="p" style={{ marginTop: 0, marginBottom: 2, fontSize: 12 }}>{s.descr}</p> : null}
 
           {isChild && (
@@ -400,13 +403,22 @@ function ServiceCard({ main, children, expandedId, connectOpenId, onToggle, onTo
   const tint = statusTint(main.status);
   const hasWL = children.length > 0;
 
+  const pulseAnim =
+    main.status === "blocked" || main.status === "error"
+      ? "svc-danger-pulse 1.8s ease-in-out infinite"
+      : main.status === "not_paid"
+        ? "svc-warn-pulse 2.2s ease-in-out infinite"
+        : undefined;
+
   return (
-    <div style={{
+    <div className={`svc-card svc-card--${main.status}`} style={{
       borderRadius: 12,
       background: tint.bg,
       border: `.5px solid ${tint.border}`,
       overflow: "hidden",
-    }}>
+      animation: pulseAnim,
+      "--svc-stripe": tint.stripe,
+    } as React.CSSProperties}>
       {/* Основная услуга */}
       <ServiceRow
         s={main}
@@ -636,6 +648,11 @@ export function Services() {
         <div className="app-loader__card">
           <div className="app-loader__shine" />
           <div className="app-loader__brandRow"><div className="app-loader__mark" /><div className="app-loader__title">Shpun App</div></div>
+          <div className="app-loader__skeleton app-loader__skeleton--services" aria-hidden="true">
+            <div className="skeleton app-loader__skeletonLine" />
+            <div className="skeleton app-loader__skeletonService" />
+            <div className="skeleton app-loader__skeletonService" />
+          </div>
           <div className="app-loader__text">{t("services.loading", "Загружаем услуги…")}</div>
         </div>
       </div>
@@ -667,7 +684,7 @@ export function Services() {
 
   /* ── Render ── */
   return (
-    <div className="section">
+    <div className="section services-page">
 
       <PaymentSuccessModal open={paySuccessOpen} onClose={() => setPaySuccessOpen(false)} />
 
@@ -736,8 +753,8 @@ export function Services() {
         const total = arr.reduce((acc, g) => acc + 1 + g.children.length, 0);
 
         return (
-          <div className="section" key={kind}>
-            <div className="card">
+          <div className="section services-group" key={kind}>
+            <div className="card services-group__card">
               <div className="card__body">
                 <button type="button" className="services-cat__head services-cat__head--toggle" onClick={() => toggleGroup(kind)} aria-expanded={open}>
                   <div className="services-cat__headLeft">
@@ -752,7 +769,7 @@ export function Services() {
                 </button>
 
                 {open && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
+                  <div className="services-group__list" style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
                     {arr.map(({ main, children }) => (
                       <ServiceCard
                         key={main.userServiceId}

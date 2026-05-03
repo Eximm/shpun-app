@@ -480,7 +480,7 @@ export function Payments() {
 
   /* ── Render ── */
   return (
-    <div className="section">
+    <div className="section payments-page">
 
       <PaymentErrorModal
         open={payErrorOpen}
@@ -547,7 +547,7 @@ export function Payments() {
       )}
 
       {/* ── Сумма ── */}
-      <div className="card">
+      <div className="card payments-amount-card">
         <div className="card__body" style={{ padding: "12px 14px" }}>
           <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,0.35)", marginBottom: 8 }}>
             {t("payments.amount.title")}
@@ -559,7 +559,7 @@ export function Payments() {
             </div>
           )}
           <input
-            className="input"
+            className="input payments-amount-input"
             style={{ fontSize: 20, fontWeight: 800, marginBottom: 8 }}
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
@@ -567,10 +567,11 @@ export function Payments() {
             inputMode="numeric"
             autoComplete="off"
           />
-          <div style={{ display: "flex", gap: 5 }}>
+          <div className="payments-quickAmounts" style={{ display: "flex", gap: 5 }}>
             {quickAmounts.map((x) => (
               <button
                 key={x}
+                className={"payments-quickAmount" + (amountNumber === x ? " payments-quickAmount--active" : "")}
                 type="button"
                 onClick={() => setAmount(String(x))}
                 style={{
@@ -590,7 +591,7 @@ export function Payments() {
       </div>
 
       {/* ── Способы оплаты — вариант Б: левая полоса ── */}
-      <div className="card">
+      <div className="card payments-methods-card">
         <div className="card__body" style={{ padding: "12px 14px" }}>
           <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,0.35)", marginBottom: 10 }}>
             {t("payments.methods.title")}
@@ -600,7 +601,7 @@ export function Payments() {
             <p className="p">{t("payments.methods.empty")}</p>
           )}
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div className="payments-methods-list" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {oneSystems.map((ps, idx) => {
               const cardMethod = isCard(ps);
               const accent     = methodAccent(ps);
@@ -608,6 +609,7 @@ export function Payments() {
               return (
                 <button
                   key={ps.shm_url || idx}
+                  className={"payments-method" + (cardMethod && !amountNumber ? " payments-method--muted" : "")}
                   type="button"
                   onClick={() => {
                     if (cardMethod) {
@@ -658,13 +660,14 @@ export function Payments() {
                   </div>
 
                   {/* Стрелка */}
-                  <span style={{ fontSize: 14, color: accent.stripe, opacity: cardMethod ? 0.4 : 0.7, flexShrink: 0 }}>→</span>
+                  <span className="payments-method__arrow" style={{ fontSize: 14, color: accent.stripe, opacity: cardMethod ? 0.4 : 0.7, flexShrink: 0 }}>→</span>
                 </button>
               );
             })}
 
             {/* Карта — зашита в приложение, не от биллинга */}
             <button
+              className="payments-method payments-method--card"
               type="button"
               onClick={() => {
                 if (!amountNumber) {
@@ -694,7 +697,7 @@ export function Payments() {
               <div style={{ fontSize: 14, fontWeight: 900, color: "rgba(255,255,255,0.80)", flexShrink: 0, whiteSpace: "nowrap" }}>
                 {t("payments.methods.card_open")}
               </div>
-              <span style={{ fontSize: 14, color: "rgba(255,255,255,0.40)", flexShrink: 0 }}>→</span>
+              <span className="payments-method__arrow" style={{ fontSize: 14, color: "rgba(255,255,255,0.40)", flexShrink: 0 }}>→</span>
             </button>
 
             {/* Примечание */}
@@ -706,7 +709,7 @@ export function Payments() {
       </div>
 
       {/* ── История ── */}
-      <div className="card">
+      <div className="card payments-history-card">
         <div className="card__body" style={{ padding: "10px 14px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             <Link className="btn" to="/payments/history" style={{ justifyContent: "center", fontSize: 12, minHeight: 36 }}>

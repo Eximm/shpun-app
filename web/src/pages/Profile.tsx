@@ -111,7 +111,8 @@ function Segmented({ value, onChange, ariaLabel }: {
   value: "ru" | "en"; onChange: (v: "ru" | "en") => void; ariaLabel: string;
 }) {
   return (
-    <div className="seg profile-seg" role="tablist" aria-label={ariaLabel}>
+    <div className="seg profile-seg" role="tablist" aria-label={ariaLabel} style={{ "--profile-lang-index": value === "en" ? 1 : 0 } as any}>
+      <span className="profile-seg__rail" aria-hidden="true" />
       <button type="button" className={`btn seg__btn${value === "ru" ? " btn--primary" : ""}`} onClick={() => onChange("ru")} role="tab" aria-selected={value === "ru"}>RU</button>
       <button type="button" className={`btn seg__btn${value === "en" ? " btn--primary" : ""}`} onClick={() => onChange("en")} role="tab" aria-selected={value === "en"}>EN</button>
     </div>
@@ -125,7 +126,7 @@ function PRow({ label, value, muted, right, hint, last }: {
   right?: React.ReactNode; hint?: string; last?: boolean;
 }) {
   return (
-    <div style={{
+    <div className={`profile-compact-row${last ? " profile-compact-row--last" : ""}`} style={{
       display: "flex", alignItems: "flex-start", justifyContent: "space-between",
       gap: 10, padding: "8px 0",
       borderBottom: last ? "none" : "0.5px solid rgba(255,255,255,0.06)",
@@ -140,7 +141,7 @@ function PRow({ label, value, muted, right, hint, last }: {
         {hint && <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", lineHeight: 1.4, marginTop: 2 }}>{hint}</div>}
       </div>
       {right && (
-        <div style={{ display: "flex", gap: 5, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end", flexShrink: 0 }}>
+        <div className="profile-compact-row__right" style={{ display: "flex", gap: 5, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end", flexShrink: 0 }}>
           {right}
         </div>
       )}
@@ -152,7 +153,7 @@ function SectionCard({ icon, title, children, action }: {
   icon?: string; title: string; children: React.ReactNode; action?: React.ReactNode;
 }) {
   return (
-    <div className="card" style={{ marginTop: 8 }}>
+    <div className="card profile-section-card" style={{ marginTop: 8 }}>
       <div className="card__body" style={{ padding: "12px 14px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
           {icon && <span style={{ fontSize: 13, opacity: 0.7 }}>{icon}</span>}
@@ -172,7 +173,7 @@ function SmallBadge({ text, tone }: { text: string; tone?: "ok" | "warn" | "neut
   const bdr = tone === "ok" ? "rgba(43,227,143,0.30)" : tone === "warn" ? "rgba(245,158,11,0.30)" : "rgba(255,255,255,0.12)";
   const col = tone === "ok" ? "#2be38f"               : tone === "warn" ? "#f59e0b"               : "rgba(255,255,255,0.55)";
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: 999, fontSize: 10, fontWeight: 800, background: bg, border: `0.5px solid ${bdr}`, color: col, whiteSpace: "nowrap" }}>
+    <span className={`profile-smallBadge profile-smallBadge--${tone || "neutral"}`} style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: 999, fontSize: 10, fontWeight: 800, background: bg, border: `0.5px solid ${bdr}`, color: col, whiteSpace: "nowrap" }}>
       {text}
     </span>
   );
@@ -185,7 +186,7 @@ function SmallBtn({ children, onClick, primary, danger, disabled }: {
   if (primary) { bg = "linear-gradient(135deg,#7c5cff,#4dd7ff)"; bdr = "transparent"; col = "#050a14"; }
   if (danger)  { bg = "rgba(255,77,109,0.12)"; bdr = "rgba(255,77,109,0.28)"; col = "#ff4d6d"; }
   return (
-    <button type="button" onClick={onClick} disabled={disabled} style={{
+    <button type="button" className={`profile-smallBtn${primary ? " profile-smallBtn--primary" : ""}${danger ? " profile-smallBtn--danger" : ""}`} onClick={onClick} disabled={disabled} style={{
       display: "inline-flex", alignItems: "center", justifyContent: "center",
       padding: "4px 9px", borderRadius: 7, fontSize: 11, fontWeight: 700,
       background: bg, border: `0.5px solid ${bdr}`, color: col,
@@ -609,10 +610,10 @@ export function Profile() {
 
   /* ── Render ── */
   return (
-    <div className="section">
+    <div className="section profile-page">
 
       {/* ── Шапка ── */}
-      <div className="card">
+      <div className="card profile-hero-card">
         <div className="card__body" style={{ padding: "13px 14px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
             <div style={{

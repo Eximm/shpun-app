@@ -170,13 +170,27 @@ export function BottomNav() {
 
   useEffect(() => { if (onFeed) setHasNew(false); }, [onFeed]);
 
+  const activeIndex = useMemo(() => {
+    const path = loc.pathname;
+    if (path === "/" || path === "/home") return 0;
+    if (path.startsWith("/feed")) return 1;
+    if (path.startsWith("/services") || path.startsWith("/help")) return 2;
+    if (path.startsWith("/payments")) return 3;
+    if (path.startsWith("/profile") || path.startsWith("/admin") || path.startsWith("/referrals")) return 4;
+    return 0;
+  }, [loc.pathname]);
+
   return (
     <nav
       className="bottomnav"
       role="navigation"
       aria-label={t("bottomNav.aria", "Навигация по приложению")}
     >
-      <div className="bottomnav__inner">
+      <div
+        className="bottomnav__inner"
+        style={{ "--active-index": activeIndex } as React.CSSProperties}
+      >
+        <span className="bottomnav__activeRail" aria-hidden="true" />
         <Tab to="/" end label={t("bottomNav.home")} icon={<IconHome />} />
 
         <Tab

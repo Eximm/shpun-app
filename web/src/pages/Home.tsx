@@ -97,11 +97,19 @@ function StatCell({ to, icon, label, value, sub, accent }: {
                     : accent === "warn"   ? "rgba(245,158,11,0.75)"
                     : accent === "danger" ? "rgba(255,77,109,0.75)"
                     : "rgba(255,255,255,0.32)";
+  const pulseAnim = accent === "danger"
+    ? "stat-danger-pulse 1.8s ease-in-out infinite"
+    : accent === "warn"
+      ? "stat-warn-pulse 2.2s ease-in-out infinite"
+      : undefined;
+
   return (
     <Link to={to} style={{
       display: "block", background: bg,
       border: `0.5px solid ${borderColor}`, borderRadius: 13,
       padding: "11px 12px", textDecoration: "none", color: "inherit",
+      animation: pulseAnim,
+      transition: "transform 150ms ease, filter 150ms ease",
     }}>
       <div style={{ fontSize: 16, lineHeight: 1, marginBottom: 6 }}>{icon}</div>
       <div style={{ fontSize: 10, color: "rgba(255,255,255,0.38)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>
@@ -122,6 +130,39 @@ function Money({ amount, currency }: { amount: number; currency: string }) {
 }
 
 /* ─── Home ───────────────────────────────────────────────────────────────── */
+
+function AnimatedMoney({ amount, currency }: { amount: number; currency: string }) {
+  const [displayAmount, setDisplayAmount] = useState(amount);
+  const previousAmountRef = useRef(amount);
+
+  useEffect(() => {
+    const from = previousAmountRef.current;
+    const to = amount;
+    previousAmountRef.current = to;
+
+    if (from === to || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      setDisplayAmount(to);
+      return;
+    }
+
+    let frame = 0;
+    let start = 0;
+    const duration = 650;
+    const ease = (x: number) => 1 - Math.pow(1 - x, 3);
+
+    function tick(ts: number) {
+      if (!start) start = ts;
+      const progress = Math.min(1, (ts - start) / duration);
+      setDisplayAmount(from + (to - from) * ease(progress));
+      if (progress < 1) frame = window.requestAnimationFrame(tick);
+    }
+
+    frame = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(frame);
+  }, [amount, currency]);
+
+  return <Money amount={displayAmount} currency={currency} />;
+}
 
 export function Home() {
   const { t }  = useI18n();
@@ -202,6 +243,15 @@ export function Home() {
           <div className="app-loader__shine" />
           <div className="app-loader__brandRow"><div className="app-loader__mark" /><div className="app-loader__title">Shpun App</div></div>
           <div className="app-loader__text">{t("home.loading.text")}</div>
+          <div className="app-loader__skeleton app-loader__skeleton--home" aria-hidden="true">
+            <div className="skeleton app-loader__skeletonBalance" />
+            <div className="app-loader__skeletonGrid">
+              <div className="skeleton" />
+              <div className="skeleton" />
+              <div className="skeleton" />
+              <div className="skeleton" />
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -254,9 +304,44 @@ export function Home() {
     ? forecastWhenText
     : servicesForecastText || undefined;
 
+  const balanceAmount =
+    typeof balance?.amount === "number" ? Number(balance.amount) : 0;
+
+  const balanceTone =
+    balanceAmount < 0
+      ? "danger"
+      : balanceAmount <= 50
+        ? "warn"
+        : "ok";
+
+  const balanceCardStyle =
+    balanceTone === "danger"
+      ? {
+          background: "rgba(255,77,109,0.10)",
+          border: "0.5px solid rgba(255,77,109,0.34)",
+          animation: "balance-danger-blink 1.35s ease-in-out infinite",
+          boxShadow: "0 0 0 1px rgba(255,77,109,0.08), 0 16px 34px rgba(255,77,109,0.12)",
+          labelColor: "rgba(255,77,109,0.78)",
+        }
+      : balanceTone === "warn"
+        ? {
+            background: "rgba(245,158,11,0.08)",
+            border: "0.5px solid rgba(245,158,11,0.34)",
+            animation: "none",
+            boxShadow: "0 0 0 1px rgba(245,158,11,0.05), 0 14px 30px rgba(245,158,11,0.08)",
+            labelColor: "rgba(245,158,11,0.78)",
+          }
+        : {
+            background: "rgba(77,215,255,0.09)",
+            border: "0.5px solid rgba(77,215,255,0.28)",
+            animation: "none",
+            boxShadow: "0 0 0 1px rgba(77,215,255,0.05), 0 18px 42px rgba(77,215,255,0.12)",
+            labelColor: "rgba(77,215,255,0.70)",
+          };
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="section">
+    <div className="section home-page">
 
       {/* ── Мини-шапка ── */}
       <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 10 }}>
@@ -274,16 +359,18 @@ export function Home() {
       </div>
 
       {/* ── Акцентный блок: баланс + CTA ── */}
-      <div style={{
-        background: "rgba(124,92,255,0.12)",
-        border: "0.5px solid rgba(124,92,255,0.28)",
+      <div className="home-balance-card" style={{
+        background: balanceCardStyle.background,
+        border: balanceCardStyle.border,
         borderRadius: 18, padding: "15px 15px 13px", marginBottom: 8,
+        animation: balanceCardStyle.animation,
+        boxShadow: balanceCardStyle.boxShadow,
       }}>
-        <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(124,92,255,0.65)", marginBottom: 6 }}>
+        <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: balanceCardStyle.labelColor, marginBottom: 6 }}>
           {t("home.tiles.balance")}
         </div>
         <div style={{ fontSize: 32, fontWeight: 900, color: "#fff", lineHeight: 1, marginBottom: 5 }}>
-          {balance ? <Money amount={balance.amount} currency={balance.currency} /> : "…"}
+          {balance ? <AnimatedMoney amount={balance.amount} currency={balance.currency} /> : "…"}
         </div>
         <div style={{ fontSize: 11, color: "rgba(255,255,255,0.38)", marginBottom: 14, lineHeight: 1.4 }}>
           {forecastAmountText

@@ -68,15 +68,37 @@ if (import.meta.env.PROD) {
 
 type ServicesSummaryResp = { ok: true; summary?: { active?: number } };
 
+const ROUTE_ORDER = ["/", "/home", "/feed", "/services", "/payments", "/profile"];
+
+function routeTone(pathname: string) {
+  if (pathname === "/" || pathname === "/home") return "home";
+  if (pathname.startsWith("/feed")) return "feed";
+  if (pathname.startsWith("/services") || pathname.startsWith("/help")) return "services";
+  if (pathname.startsWith("/payments")) return "payments";
+  if (pathname.startsWith("/profile")) return "profile";
+  if (pathname.startsWith("/admin")) return "admin";
+  if (pathname.startsWith("/login")) return "login";
+  return "default";
+}
+
+function routeRank(pathname: string) {
+  if (pathname.startsWith("/services")) return ROUTE_ORDER.indexOf("/services");
+  if (pathname.startsWith("/payments")) return ROUTE_ORDER.indexOf("/payments");
+  const exact = ROUTE_ORDER.indexOf(pathname);
+  return exact >= 0 ? exact : -1;
+}
+
 /* ─── AppShell ───────────────────────────────────────────────────────────── */
 
 function AppShell({ children }: { children: React.ReactNode }) {
   const { t } = useI18n();
   const loc   = useLocation();
   const hideNav = loc.pathname === "/login" || loc.pathname.startsWith("/transfer");
+  const tone = routeTone(loc.pathname);
 
   return (
-    <div className="app">
+    <div className={`app app--${tone}`}>
+      <div className="app-ambient" aria-hidden="true" />
       <header className="topbar">
         <div className="topbar__inner safe">
           <div className="brand">
@@ -172,16 +194,29 @@ function AuthGateRoot() {
 function PageContainer({ children }: { children: React.ReactNode }) {
   const loc = useLocation();
   const [showProgress, setShowProgress] = React.useState(false);
+  const prevPathRef = React.useRef(loc.pathname);
+  const [motion, setMotion] = React.useState<"forward" | "back" | "soft">("soft");
+
   React.useEffect(() => {
+    const prevRank = routeRank(prevPathRef.current);
+    const nextRank = routeRank(loc.pathname);
+    if (prevRank >= 0 && nextRank >= 0 && prevRank !== nextRank) {
+      setMotion(nextRank > prevRank ? "forward" : "back");
+    } else {
+      setMotion("soft");
+    }
+    prevPathRef.current = loc.pathname;
+
     setShowProgress(true);
     const id = window.setTimeout(() => setShowProgress(false), 700);
     return () => clearTimeout(id);
   }, [loc.pathname]);
+
   return (
     <>
       {showProgress && <div className="top-progress"><div className="top-progress__bar" /></div>}
-      <div className="page-frost" style={{ opacity: showProgress ? 1 : 0, pointerEvents: "none" }} />
-      <div key={loc.pathname} className="page">{children}</div>
+      {showProgress && <div className="page-frost" aria-hidden="true" />}
+      <div key={loc.pathname} className={`page page--${motion}`}>{children}</div>
     </>
   );
 }

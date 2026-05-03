@@ -196,7 +196,7 @@ export function Feed() {
   /* ── Render ──────────────────────────────────────────────────────────── */
   return (
     <>
-      <div className="section">
+      <div className="section feed-page">
         <div className="card">
           <div className="card__body">
 
@@ -206,6 +206,11 @@ export function Feed() {
 
             {/* Сегментированный контрол фильтров */}
             <div className="feed-seg" role="tablist">
+              <span
+                className="feed-seg__rail"
+                aria-hidden="true"
+                style={{ "--feed-active-index": CATEGORIES.findIndex((x) => x.key === cat) } as React.CSSProperties}
+              />
               {CATEGORIES.map(({ key, i18n }) => (
                 <button
                   key={key}
@@ -226,7 +231,7 @@ export function Feed() {
             </p>
 
             {/* Список */}
-            <div className="list" style={{ marginTop: 12 }}>
+            <div className="list feed-list" style={{ marginTop: 12 }}>
               {loading && items.length === 0 ? (
                 <>
                   <div className="skeleton h1" />
@@ -252,7 +257,7 @@ export function Feed() {
 
                 if (news) {
                   return (
-                    <div key={e.event_id} className="list__item feed-newsCard">
+                    <div key={e.event_id} className={`list__item feed-item feed-newsCard feed-item--${e.level || "info"}`}>
                       <div className="feed-newsCard__top">
                         <div className="kicker">{dt}</div>
                         <span className={`chip chip--${chipKind(e.level)}`}>{chipText(e, t)}</span>
@@ -273,7 +278,7 @@ export function Feed() {
                 return (
                   <div
                     key={e.event_id}
-                    className={`list__item${clickable ? " is-clickable" : ""}`}
+                    className={`list__item feed-item feed-item--${e.level || "info"}${clickable ? " is-clickable" : ""}`}
                     role={clickable ? "button" : undefined}
                     tabIndex={clickable ? 0 : undefined}
                     onClick={clickable ? goLink : undefined}
@@ -330,7 +335,7 @@ export function Feed() {
           aria-labelledby="feed-modal-title"
           onMouseDown={() => setOpenedEvent(null)}
         >
-          <div className="card modal__card feed-modalCard" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="card modal__card feed-modalCard" onMouseDown={(e) => e.stopPropagation()}>
             <div className="card__body">
               <div className="modal__head">
                 <div>
