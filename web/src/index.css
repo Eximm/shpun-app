@@ -44,11 +44,9 @@
   --text:  rgba(255,255,255,0.92);
   --muted: rgba(255,255,255,0.58);
 
-  /* Основной акцент — фиолетово-синий */
   --accent:   #7c5cff;
   --accent-2: #4dd7ff;
 
-  /* Семантические цвета */
   --ok:      #2be38f;
   --warn:    #f59e0b;
   --danger:  #ff4d6d;
@@ -68,12 +66,14 @@
   --font: "Segoe UI", Inter, Roboto, Arial, sans-serif,
           "Apple Color Emoji", "Segoe UI Emoji";
 
-  /* Shimmer для кнопок */
   --shimmer: linear-gradient(90deg,
     transparent 0%,
     rgba(255,255,255,0.10) 50%,
     transparent 100%);
 }
+
+@media (min-width: 600px)  { :root { --ui-scale: 0.92; } }
+@media (min-width: 1024px) { :root { --ui-scale: 1; } }
 
 
 /* ── 2. Reset / base ───────────────────────────────────────── */
@@ -197,7 +197,6 @@ button, a { -webkit-tap-highlight-color: transparent; }
 }
 
 .card__body { padding: 18px; }
-
 
 /* ── 7. Inputs ─────────────────────────────────────────────── */
 .input {
