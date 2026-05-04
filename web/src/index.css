@@ -134,7 +134,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .app-ambient {
   position: fixed;
   inset: 0;
-  z-index: -1;
+  z-index: 0;
   pointer-events: none;
   background:
     radial-gradient(640px 320px at 85% 4%, var(--route-a), transparent 64%),
@@ -187,6 +187,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
   position: relative;
   z-index: 1;
 }
+
 .section { margin-top: 18px; }
 
 
@@ -731,17 +732,15 @@ button, a { -webkit-tap-highlight-color: transparent; }
 
 /* ── 17. Page transitions ──────────────────────────────────── */
 .page {
-  transform-origin: 50% 20%;
-  will-change: opacity, transform, filter;
-  animation: pageIn 260ms cubic-bezier(.2,.9,.2,1) both;
+  animation: pageIn 180ms ease-out both;
 }
 .page--forward { animation-name: pageInForward; }
 .page--back    { animation-name: pageInBack; }
 .page--soft    { animation-name: pageInSoft; }
-@keyframes pageIn        { from { opacity: 0; transform: translateY(8px) scale(0.995); filter: blur(3px); } to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); } }
-@keyframes pageInForward { from { opacity: 0; transform: translateX(16px) scale(0.992); filter: blur(4px); } to { opacity: 1; transform: translateX(0) scale(1); filter: blur(0); } }
-@keyframes pageInBack    { from { opacity: 0; transform: translateX(-16px) scale(0.992); filter: blur(4px); } to { opacity: 1; transform: translateX(0) scale(1); filter: blur(0); } }
-@keyframes pageInSoft    { from { opacity: 0; transform: translateY(7px); filter: blur(3px); } to { opacity: 1; transform: translateY(0); filter: blur(0); } }
+@keyframes pageIn        { from { opacity: 0.01; } to { opacity: 1; } }
+@keyframes pageInForward { from { opacity: 0.01; } to { opacity: 1; } }
+@keyframes pageInBack    { from { opacity: 0.01; } to { opacity: 1; } }
+@keyframes pageInSoft    { from { opacity: 0.01; } to { opacity: 1; } }
 
 .page-frost {
   position: fixed;
@@ -749,16 +748,14 @@ button, a { -webkit-tap-highlight-color: transparent; }
   z-index: 19;
   pointer-events: none;
   background:
-    radial-gradient(560px 260px at 50% 4%, rgba(77,215,255,0.10), transparent 62%),
+    radial-gradient(520px 220px at 50% 2%, rgba(77,215,255,0.08), transparent 64%),
     rgba(10,14,22,0);
-  backdrop-filter: blur(0px);
-  -webkit-backdrop-filter: blur(0px);
-  animation: pageFrost 300ms ease-out forwards;
+  animation: pageFrost 220ms ease-out forwards;
 }
 @keyframes pageFrost {
-  0%   { background-color: rgba(10,14,22,0.00); backdrop-filter: blur(0px);  -webkit-backdrop-filter: blur(0px);  opacity: 0; }
-  34%  { background-color: rgba(10,14,22,0.13); backdrop-filter: blur(5px);  -webkit-backdrop-filter: blur(5px);  opacity: 1; }
-  100% { background-color: rgba(10,14,22,0.00); backdrop-filter: blur(0px);  -webkit-backdrop-filter: blur(0px);  opacity: 0; }
+  0%   { background-color: rgba(10,14,22,0.00); opacity: 0; }
+  42%  { background-color: rgba(10,14,22,0.07); opacity: 1; }
+  100% { background-color: rgba(10,14,22,0.00); opacity: 0; }
 }
 
 .top-progress {
