@@ -644,18 +644,19 @@ export function Services() {
   /* ── Loading ── */
   if (loading) {
     return (
-      <div className="app-loader" style={{ opacity: 1, transition: "opacity 180ms ease", pointerEvents: "auto" }}>
-        <div className="app-loader__card">
-          <div className="app-loader__shine" />
-          <div className="app-loader__brandRow"><div className="app-loader__mark" /><div className="app-loader__title">Shpun App</div></div>
-          <div className="app-loader__skeleton app-loader__skeleton--services" aria-hidden="true">
-            <div className="skeleton app-loader__skeletonLine" />
-            <div className="skeleton app-loader__skeletonService" />
-            <div className="skeleton app-loader__skeletonService" />
+      <section className="section services-page">
+        <div className="card services-loading-card">
+          <div className="card__body">
+            <h1 className="h1">{t("services.title", "Услуги")}</h1>
+            <p className="p">{t("services.loading", "Загружаем услуги…")}</p>
+            <div className="app-loader__skeleton app-loader__skeleton--services" aria-hidden="true">
+              <div className="skeleton app-loader__skeletonLine" />
+              <div className="skeleton app-loader__skeletonService" />
+              <div className="skeleton app-loader__skeletonService" />
+            </div>
           </div>
-          <div className="app-loader__text">{t("services.loading", "Загружаем услуги…")}</div>
         </div>
-      </div>
+      </section>
     );
   }
 

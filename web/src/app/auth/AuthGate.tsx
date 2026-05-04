@@ -358,9 +358,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const notifiedRef = useRef(false);
   const successShownRef = useRef(false);
 
-  const [showLoader, setShowLoader] = useState(true);
-  const [fadeOut, setFadeOut] = useState(false);
-
   const [pushPromptOpen, setPushPromptOpen] = useState(false);
   const [pushPromptBusy, setPushPromptBusy] = useState(false);
   const [pushState, setPushState] = useState<PushState>({
@@ -524,17 +521,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       });
     }
   }, [authRequired, loc.pathname, loc.search]);
-
-  useEffect(() => {
-    if (loading) {
-      setShowLoader(true);
-      setFadeOut(false);
-      return;
-    }
-    setFadeOut(true);
-    const t = setTimeout(() => setShowLoader(false), 180);
-    return () => clearTimeout(t);
-  }, [loading]);
 
   useEffect(() => {
     if (!me || !uid) {
@@ -703,25 +689,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         onDismiss={() => setPushPromptOpen(false)}
       />
 
-      {showLoader && (
-        <div
-          className="app-loader"
-          style={{
-            opacity: fadeOut ? 0 : 1,
-            transition: "opacity 180ms ease",
-            pointerEvents: "none",
-          }}
-        >
-          <div className="app-loader__card">
-            <div className="app-loader__shine" />
-            <div className="app-loader__brandRow">
-              <div className="app-loader__mark" />
-              <div className="app-loader__title">Shpun App</div>
-            </div>
-            <div className="app-loader__text">Проверяем авторизацию…</div>
-          </div>
-        </div>
-      )}
     </>
   );
 }
