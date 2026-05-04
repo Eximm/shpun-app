@@ -1624,11 +1624,153 @@ button, a { -webkit-tap-highlight-color: transparent; }
   margin-top: 6px;
   opacity: 0.6;
 }
+.router-help-page {
+  padding-bottom: 8px;
+}
+.router-help-hero {
+  border-color: rgba(77,215,255,0.20);
+  background:
+    radial-gradient(620px 240px at 12% -18%, rgba(77,215,255,0.18), transparent 60%),
+    radial-gradient(480px 220px at 100% 0%, rgba(124,92,255,0.16), transparent 58%),
+    linear-gradient(160deg, rgba(255,255,255,0.08), rgba(255,255,255,0.035));
+}
+.router-help-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.router-help-card {
+  position: relative;
+  overflow: hidden;
+}
+.router-help-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: rgba(77,215,255,0.45);
+  opacity: 0.8;
+}
+.router-help-card--good::before { background: var(--color-ok); }
+.router-help-card--warn::before { background: #f59e0b; }
+.router-help-card--good {
+  border-color: rgba(43,227,143,0.18);
+  background:
+    radial-gradient(480px 160px at 0% 0%, rgba(43,227,143,0.10), transparent 58%),
+    linear-gradient(160deg, rgba(255,255,255,0.07), rgba(255,255,255,0.035));
+}
+.router-help-card--warn {
+  border-color: rgba(245,158,11,0.22);
+  background:
+    radial-gradient(480px 160px at 0% 0%, rgba(245,158,11,0.11), transparent 58%),
+    linear-gradient(160deg, rgba(255,255,255,0.07), rgba(255,255,255,0.035));
+}
+.router-help-card__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.router-help-card__icon {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.08);
+  font-size: 18px;
+}
+.router-help-card__title {
+  font-size: 17px;
+  line-height: 1.2;
+}
+.router-help-card__body {
+  margin-top: 10px;
+  line-height: 1.48;
+}
+.router-help-note {
+  margin-top: 12px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(77,215,255,0.18);
+  background: rgba(77,215,255,0.055);
+  color: rgba(255,255,255,0.78);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.router-help-steps {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.router-help-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 11px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.075);
+  background: rgba(255,255,255,0.035);
+  transition: transform 150ms cubic-bezier(.2,.9,.2,1), border-color 150ms ease, background 150ms ease;
+}
+.router-help-step:hover {
+  transform: translateY(-1px);
+  border-color: rgba(77,215,255,0.16);
+  background: rgba(255,255,255,0.052);
+}
+.router-help-step__num {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #060814;
+  font-size: 12px;
+  font-weight: 950;
+}
+.router-help-list {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.router-help-list__item {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  color: rgba(255,255,255,0.84);
+  font-size: 14px;
+  line-height: 1.48;
+}
+.router-help-list__item > span:first-child {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--accent-2);
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 950;
+}
+.router-help-footer {
+  border-color: rgba(124,92,255,0.18);
+}
 @media (max-width: 520px) {
   .miniPage__back {
     width: auto;
     padding-left: 12px;
     padding-right: 12px;
+  }
+  .router-help-page .actions--2 {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -2080,6 +2222,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .page, .page-frost, .page-vibe, .page-vibe span, .top-progress__bar, .top-progress__bar::after, .app-ambient,
   .feed-list > .feed-item, .feed-seg__rail,
   .miniPage > .card, .miniPage > .miniPage__section, .miniPage__hero::after, .miniPage__item, .miniPage__item::after,
+  .router-help-step,
   .profile-page > .card, .profile-hero-card::after, .profile-hero-card, .profile-section-card, .profile-compact-row, .profile-compact-row__right, .profile-smallBtn, .profile-smallBadge, .profile-seg__rail,
   .skeleton, .brand__dot, .app-loader__shine { animation: none !important; transition: none !important; }
 }

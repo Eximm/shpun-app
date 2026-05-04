@@ -18,7 +18,6 @@ import { Services }         from "./pages/Services";
 import { ServicesOrder }    from "./pages/ServicesOrder";
 import { Payments }         from "./pages/Payments";
 import { Profile }          from "./pages/Profile";
-import { Transfer }         from "./pages/Transfer";
 import { Referrals }        from "./pages/Referrals";
 import { PaymentsHistory }  from "./pages/PaymentsHistory";
 import { PaymentsReceipts } from "./pages/PaymentsReceipts";
@@ -93,7 +92,7 @@ function routeRank(pathname: string) {
 function AppShell({ children }: { children: React.ReactNode }) {
   const { t } = useI18n();
   const loc   = useLocation();
-  const hideNav = loc.pathname === "/login" || loc.pathname.startsWith("/transfer");
+  const hideNav = loc.pathname === "/login";
   const tone = routeTone(loc.pathname);
 
   return (
@@ -123,7 +122,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
 
 function AuthedLayout() {
   const loc  = useLocation();
-  const hide = loc.pathname === "/login" || loc.pathname.startsWith("/transfer");
+  const hide = loc.pathname === "/login";
   useBillingNotifications(!hide);
   return <AuthGate><Outlet /></AuthGate>;
 }
@@ -234,7 +233,6 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               <Routes>
                 {/* Публичные маршруты */}
                 <Route path="/login"    element={<Login />} />
-                <Route path="/transfer" element={<Transfer />} />
                 <Route path="/app"      element={<AppPathRedirect />} />
 
                 {/* Корень: перехватывает ?token= и редиректит на /login */}
