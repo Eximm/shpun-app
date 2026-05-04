@@ -216,6 +216,7 @@ function PageContainer({ children }: { children: React.ReactNode }) {
     <>
       {showProgress && <div className="top-progress"><div className="top-progress__bar" /></div>}
       {showProgress && <div className="page-frost" aria-hidden="true" />}
+      {showProgress && <div className={`page-vibe page-vibe--${motion}`} aria-hidden="true"><span /></div>}
       <div key={loc.pathname} className={`page page--${motion}`}>{children}</div>
     </>
   );

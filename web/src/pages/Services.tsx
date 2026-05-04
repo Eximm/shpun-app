@@ -491,6 +491,7 @@ export function Services() {
   const navigate = useNavigate();
 
   const [loading,  setLoading]  = useState(true);
+  const [showInitialLoading, setShowInitialLoading] = useState(false);
   const [error,    setError]    = useState<unknown>(null);
   const [items,    setItems]    = useState<ApiServiceItem[]>([]);
   const [summary,  setSummary]  = useState<ApiSummary | null>(null);
@@ -528,6 +529,15 @@ export function Services() {
   const discountPercent = Math.max(0, nnum((me as any)?.discount, 0));
 
   useEffect(() => { saveGroupsState(openGroups); }, [openGroups]);
+
+  useEffect(() => {
+    if (!loading) {
+      setShowInitialLoading(false);
+      return;
+    }
+    const id = window.setTimeout(() => setShowInitialLoading(true), 220);
+    return () => window.clearTimeout(id);
+  }, [loading]);
 
   const prevStatusesRef = useRef<Map<number, UiStatus> | null>(null);
   const statusInitRef   = useRef(false);
@@ -644,21 +654,22 @@ export function Services() {
   /* ── Loading ── */
   if (loading) {
     return (
-      <section className="section services-page">
-        <div className="card services-loading-card">
-          <div className="card__body">
-            <h1 className="h1">{t("services.title", "Услуги")}</h1>
-            <p className="p">{t("services.loading", "Загружаем услуги…")}</p>
+      <section className="section services-page services-page--preload" aria-busy="true">
+        {showInitialLoading && (
+          <div className="services-loading-inline" aria-live="polite">
+            <div className="services-loading-inline__title">{t("services.title", "РЈСЃР»СѓРіРё")}</div>
+            <div className="services-loading-inline__text">{t("services.loading", "Р—Р°РіСЂСѓР¶Р°РµРј СѓСЃР»СѓРіРёвЂ¦")}</div>
             <div className="app-loader__skeleton app-loader__skeleton--services" aria-hidden="true">
               <div className="skeleton app-loader__skeletonLine" />
               <div className="skeleton app-loader__skeletonService" />
               <div className="skeleton app-loader__skeletonService" />
             </div>
           </div>
-        </div>
+        )}
       </section>
     );
   }
+
 
   /* ── Error ── */
   if (error) {

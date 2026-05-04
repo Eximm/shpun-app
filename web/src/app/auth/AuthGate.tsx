@@ -635,7 +635,9 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   // ── Лоадер ────────────────────────────────────────────────────────────────
 
-  if (loading || authInProgress) {
+  const shouldShowBlockingLoader = (!me && loading) || authInProgress;
+
+  if (shouldShowBlockingLoader) {
     return (
       <div
         className="app-loader"

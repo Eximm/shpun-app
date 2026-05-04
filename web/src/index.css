@@ -732,15 +732,15 @@ button, a { -webkit-tap-highlight-color: transparent; }
 
 /* ── 17. Page transitions ──────────────────────────────────── */
 .page {
-  animation: pageIn 180ms ease-out both;
+  animation: pageIn 220ms ease-out both;
 }
 .page--forward { animation-name: pageInForward; }
 .page--back    { animation-name: pageInBack; }
 .page--soft    { animation-name: pageInSoft; }
-@keyframes pageIn        { from { opacity: 0.01; } to { opacity: 1; } }
-@keyframes pageInForward { from { opacity: 0.01; } to { opacity: 1; } }
-@keyframes pageInBack    { from { opacity: 0.01; } to { opacity: 1; } }
-@keyframes pageInSoft    { from { opacity: 0.01; } to { opacity: 1; } }
+@keyframes pageIn        { from { opacity: 0.08; } to { opacity: 1; } }
+@keyframes pageInForward { from { opacity: 0.08; } to { opacity: 1; } }
+@keyframes pageInBack    { from { opacity: 0.08; } to { opacity: 1; } }
+@keyframes pageInSoft    { from { opacity: 0.08; } to { opacity: 1; } }
 
 .page-frost {
   position: fixed;
@@ -756,6 +756,58 @@ button, a { -webkit-tap-highlight-color: transparent; }
   0%   { background-color: rgba(10,14,22,0.00); opacity: 0; }
   42%  { background-color: rgba(10,14,22,0.07); opacity: 1; }
   100% { background-color: rgba(10,14,22,0.00); opacity: 0; }
+}
+
+.page-vibe {
+  position: fixed;
+  inset: 0;
+  z-index: 18;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 0;
+  animation: pageVibeFade 520ms ease-out forwards;
+}
+.page-vibe span {
+  position: absolute;
+  top: calc(56px + env(safe-area-inset-top));
+  bottom: calc(var(--nav-h) + env(safe-area-inset-bottom));
+  width: min(46vw, 260px);
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, transparent, rgba(77,215,255,0.18), rgba(124,92,255,0.10), transparent);
+  filter: blur(14px);
+  transform: translateX(-110%) skewX(-10deg);
+  animation: pageVibeForward 520ms cubic-bezier(.2,.9,.2,1) forwards;
+}
+.page-vibe--back span {
+  right: 0;
+  left: auto;
+  transform: translateX(110%) skewX(10deg);
+  animation-name: pageVibeBack;
+}
+.page-vibe--soft span {
+  left: 50%;
+  width: min(54vw, 320px);
+  transform: translateX(-50%) scaleX(0.65);
+  animation-name: pageVibeSoft;
+}
+@keyframes pageVibeFade {
+  0%   { opacity: 0; }
+  18%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes pageVibeForward {
+  from { transform: translateX(-110%) skewX(-10deg); }
+  to   { transform: translateX(245%) skewX(-10deg); }
+}
+@keyframes pageVibeBack {
+  from { transform: translateX(110%) skewX(10deg); }
+  to   { transform: translateX(-245%) skewX(10deg); }
+}
+@keyframes pageVibeSoft {
+  0%   { transform: translateX(-50%) scaleX(0.45); opacity: 0; }
+  38%  { opacity: 1; }
+  100% { transform: translateX(-50%) scaleX(1.08); opacity: 0; }
 }
 
 .top-progress {
@@ -1043,6 +1095,26 @@ button, a { -webkit-tap-highlight-color: transparent; }
 @keyframes services-block-in {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+.services-page--preload {
+  min-height: 240px;
+}
+.services-loading-inline {
+  padding: 8px 16px 0;
+  animation: services-block-in 260ms ease-out both;
+}
+.services-loading-inline__title {
+  font-size: 22px;
+  line-height: 1.1;
+  font-weight: 900;
+  color: rgba(255,255,255,0.78);
+}
+.services-loading-inline__text {
+  margin-top: 8px;
+  color: rgba(255,255,255,0.48);
+  font-size: 13px;
+  font-weight: 750;
 }
 
 .services-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -1847,7 +1919,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .home-tile--warn, .home-tile--danger, .home-balance-card,
   .home-page > *, .payments-page > .card, .payments-amount-card::after, .payments-method::after,
   .services-page > .card, .services-page > .services-group, .svc-card::after, .svc-row__details, .svc-progress__bar::after,
-  .page, .page-frost, .top-progress__bar, .top-progress__bar::after, .app-ambient,
+  .page, .page-frost, .page-vibe, .page-vibe span, .top-progress__bar, .top-progress__bar::after, .app-ambient,
   .feed-list > .feed-item, .feed-seg__rail,
   .profile-page > .card, .profile-hero-card::after, .profile-hero-card, .profile-section-card, .profile-compact-row, .profile-compact-row__right, .profile-smallBtn, .profile-smallBadge, .profile-seg__rail,
   .skeleton, .brand__dot, .app-loader__shine { animation: none !important; transition: none !important; }
