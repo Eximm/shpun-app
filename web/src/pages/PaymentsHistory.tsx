@@ -63,7 +63,7 @@ function Pager({ page, hasMore, disabled, onPrev, onNext }: {
   page: number; hasMore: boolean; disabled?: boolean; onPrev: () => void; onNext: () => void;
 }) {
   return (
-    <div className="actions actions--2" style={{ marginTop: 10 }}>
+    <div className="actions actions--2 miniPage__pager">
       <button className="btn" onClick={onPrev} disabled={disabled || page <= 1} type="button">←</button>
       <button className="btn" onClick={onNext} disabled={disabled || !hasMore} type="button">→</button>
     </div>
@@ -79,8 +79,8 @@ function CollapseToggle({ shownAll, total, preview, disabled, onToggle, t }: {
   if (total <= preview) return null
   const hidden = Math.max(0, total - preview)
   return (
-    <div style={{ marginTop: 8 }}>
-      <button className="btn" onClick={onToggle} disabled={disabled} type="button">
+    <div className="miniPage__collapse">
+      <button className="btn miniPage__collapseBtn" onClick={onToggle} disabled={disabled} type="button">
         {shownAll
           ? t('paymentsHistory.collapse.hide')
           : t('paymentsHistory.collapse.show_more').replace('{count}', String(hidden))}
@@ -150,16 +150,19 @@ export function PaymentsHistory() {
 
   /* ── Render ────────────────────────────────────────────────────────────── */
   return (
-    <div className="section">
+    <div className="section miniPage payments-history-page">
 
       {/* Шапка */}
-      <div className="card">
+      <div className="card miniPage__hero">
         <div className="card__body">
-          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-            <h1 className="h1">{t('paymentsHistory.title')}</h1>
-            <Link className="btn" to="/payments">{t('paymentsHistory.back')}</Link>
+          <div className="miniPage__head">
+            <div>
+              <h1 className="h1">{t('paymentsHistory.title')}</h1>
+              <p className="p miniPage__subtitle">{busy ? t('paymentsHistory.loading') : pageInfo(paysResp, paysPage, paysView)}</p>
+            </div>
+            <Link className="btn miniPage__back" to="/payments">{t('paymentsHistory.back')}</Link>
           </div>
-          <div className="actions actions--2" style={{ marginTop: 12 }}>
+          <div className="actions actions--2 miniPage__actions">
             <button className="btn" onClick={() => void loadAll()} disabled={busy} type="button">
               {t('paymentsHistory.refresh')}
             </button>
@@ -170,20 +173,20 @@ export function PaymentsHistory() {
       </div>
 
       {/* Пополнения */}
-      <div className="section">
-        <div className="card">
+      <div className="miniPage__section">
+        <div className="card miniPage__panel">
           <div className="card__body">
             <h1 className="h1">{t('paymentsHistory.topups.title')}</h1>
-            <p className="p" style={{ marginTop: 6 }}>
+            <p className="p miniPage__sectionText">
               {paysLoading ? t('paymentsHistory.loading') : pays.length ? pageInfo(paysResp, paysPage, paysView) : t('paymentsHistory.empty.short')}
             </p>
 
-            <div className="list" style={{ marginTop: 10 }}>
+            <div className="list miniPage__list">
               {paysLoading ? (
                 <><div className="skeleton h1" /><div className="skeleton p" /></>
               ) : paysView.length ? (
                 paysView.map((x, idx) => (
-                  <div className="list__item" key={`pay-${x?.id ?? idx}`}>
+                  <div className="list__item miniPage__item miniPage__item--income" key={`pay-${x?.id ?? idx}`}>
                     <div className="list__main">
                       <div className="list__title">
                         <span style={{ color: 'var(--color-ok)' }}>+ {fmtMoney(x?.money, 'RUB')}</span>
@@ -195,7 +198,7 @@ export function PaymentsHistory() {
                   </div>
                 ))
               ) : (
-                <div className="list__item">
+                <div className="list__item miniPage__item miniPage__empty">
                   <div className="list__main">
                     <div className="list__title">{t('paymentsHistory.topups.empty.title')}</div>
                     <div className="list__sub">{t('paymentsHistory.topups.empty.sub')}</div>
@@ -227,15 +230,15 @@ export function PaymentsHistory() {
       </div>
 
       {/* Списания */}
-      <div className="section">
-        <div className="card">
+      <div className="miniPage__section">
+        <div className="card miniPage__panel">
           <div className="card__body">
             <h1 className="h1">{t('paymentsHistory.withdrawals.title')}</h1>
-            <p className="p" style={{ marginTop: 6 }}>
+            <p className="p miniPage__sectionText">
               {withdrawsLoading ? t('paymentsHistory.loading') : withdraws.length ? pageInfo(withdrawsResp, withdrawsPage, withdrawsView) : t('paymentsHistory.empty.short')}
             </p>
 
-            <div className="list" style={{ marginTop: 10 }}>
+            <div className="list miniPage__list">
               {withdrawsLoading ? (
                 <><div className="skeleton h1" /><div className="skeleton p" /></>
               ) : withdrawsView.length ? (
@@ -266,7 +269,7 @@ export function PaymentsHistory() {
                   ].filter(Boolean)
 
                   return (
-                    <div className="list__item" key={`w-${wid}-${idx}`}>
+                    <div className="list__item miniPage__item miniPage__item--expense" key={`w-${wid}-${idx}`}>
                       <div className="list__main">
                         <div className="list__title">
                           <span style={{ color: 'var(--color-danger)' }}>− {fmtMoney(total, 'RUB')}</span>
@@ -282,7 +285,7 @@ export function PaymentsHistory() {
                   )
                 })
               ) : (
-                <div className="list__item">
+                <div className="list__item miniPage__item miniPage__empty">
                   <div className="list__main">
                     <div className="list__title">{t('paymentsHistory.withdrawals.empty.title')}</div>
                     <div className="list__sub">{t('paymentsHistory.withdrawals.empty.sub')}</div>

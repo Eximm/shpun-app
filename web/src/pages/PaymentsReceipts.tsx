@@ -74,20 +74,20 @@ export function PaymentsReceipts() {
 
   /* ── Render ────────────────────────────────────────────────────────────── */
   return (
-    <div className="section">
+    <div className="section miniPage receipts-page">
 
       {/* Шапка */}
-      <div className="card">
+      <div className="card miniPage__hero">
         <div className="card__body">
-          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="miniPage__head">
             <div>
               <h1 className="h1">{t('paymentsReceipts.title')}</h1>
-              <p className="p" style={{ marginTop: 4 }}>{t('paymentsReceipts.subtitle')}</p>
+              <p className="p miniPage__subtitle">{t('paymentsReceipts.subtitle')}</p>
             </div>
-            <Link className="btn" to="/payments">{t('paymentsReceipts.back')}</Link>
+            <Link className="btn miniPage__back" to="/payments">{t('paymentsReceipts.back')}</Link>
           </div>
 
-          <div className="actions actions--2" style={{ marginTop: 12 }}>
+          <div className="actions actions--2 miniPage__actions">
             <button className="btn" onClick={() => void load()} disabled={loading} type="button">
               {t('paymentsReceipts.refresh')}
             </button>
@@ -99,10 +99,10 @@ export function PaymentsReceipts() {
       </div>
 
       {/* Список */}
-      <div className="section">
-        <div className="card">
+      <div className="miniPage__section">
+        <div className="card miniPage__panel">
           <div className="card__body">
-            <p className="p">
+            <p className="p miniPage__sectionText">
               {loading
                 ? t('paymentsReceipts.loading')
                 : items.length
@@ -110,7 +110,7 @@ export function PaymentsReceipts() {
                   : t('paymentsReceipts.empty.short')}
             </p>
 
-            <div className="list" style={{ marginTop: 10 }}>
+            <div className="list miniPage__list">
               {loading ? (
                 <><div className="skeleton h1" /><div className="skeleton p" /></>
               ) : items.length ? (
@@ -132,7 +132,7 @@ export function PaymentsReceipts() {
                   ].filter(Boolean)
 
                   return (
-                    <div className="list__item" key={`r-${idx}`}>
+                    <div className="list__item miniPage__item miniPage__item--receipt" key={`r-${idx}`}>
                       <div className="list__main">
                         <div className="list__title">{title}</div>
                         <div className="list__sub">{subParts.length ? subParts.join(' · ') : '—'}</div>
@@ -141,7 +141,7 @@ export function PaymentsReceipts() {
                   )
                 })
               ) : (
-                <div className="list__item">
+                <div className="list__item miniPage__item miniPage__empty">
                   <div className="list__main">
                     <div className="list__title">{t('paymentsReceipts.empty.title')}</div>
                     <div className="list__sub">{t('paymentsReceipts.empty.sub')}</div>

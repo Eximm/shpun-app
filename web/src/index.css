@@ -1474,6 +1474,164 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .paymentsHist__collapseRow { margin-top: 10px; display: flex; justify-content: center; }
 .paymentsHist__collapseBtn { width: 100%; }
 
+/* Small utility pages: history, receipts, referrals */
+.miniPage {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.miniPage > .card,
+.miniPage > .miniPage__section {
+  animation: miniPageBlockIn 340ms cubic-bezier(.2,.9,.2,1) both;
+}
+.miniPage > .miniPage__section:nth-of-type(2) { animation-delay: 45ms; }
+.miniPage > .miniPage__section:nth-of-type(3) { animation-delay: 90ms; }
+@keyframes miniPageBlockIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.miniPage__hero {
+  position: relative;
+  border-color: rgba(77,215,255,0.16);
+  background:
+    radial-gradient(540px 220px at 12% -20%, rgba(77,215,255,0.14), transparent 62%),
+    linear-gradient(160deg, rgba(255,255,255,0.085), rgba(255,255,255,0.035));
+}
+.miniPage__hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 0%, rgba(255,255,255,0.10) 46%, transparent 70%);
+  transform: translateX(-120%);
+  opacity: 0;
+}
+.miniPage__hero:hover::after {
+  animation: miniPageShine 880ms ease-out both;
+}
+@keyframes miniPageShine {
+  0%   { transform: translateX(-120%); opacity: 0; }
+  25%  { opacity: 1; }
+  100% { transform: translateX(120%); opacity: 0; }
+}
+.miniPage__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.miniPage__head > div { min-width: 0; }
+.miniPage__subtitle,
+.miniPage__sectionText {
+  margin-top: 6px;
+  color: rgba(255,255,255,0.68);
+}
+.miniPage__back {
+  flex: 0 0 auto;
+}
+.miniPage__actions {
+  margin-top: 12px;
+}
+.miniPage__section {
+  margin-top: 0;
+}
+.miniPage__panel {
+  transition: border-color 180ms ease, box-shadow 180ms ease, filter 180ms ease;
+}
+.miniPage__panel:hover {
+  border-color: rgba(77,215,255,0.16);
+  box-shadow: 0 14px 30px rgba(77,215,255,0.06), var(--shadow);
+}
+.miniPage__sectionHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.miniPage__sectionIcon {
+  font-size: 20px;
+  line-height: 1;
+}
+.miniPage__list {
+  margin-top: 12px;
+}
+.miniPage__item {
+  overflow: hidden;
+  transition: filter 150ms ease, border-color 150ms ease, transform 150ms cubic-bezier(.2,.9,.2,1), background 150ms ease;
+}
+.miniPage__item::before {
+  content: "";
+  position: absolute;
+  inset: 10px auto 10px 0;
+  width: 3px;
+  border-radius: 999px;
+  background: rgba(77,215,255,0.45);
+  opacity: 0.65;
+}
+.miniPage__item::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(95deg, transparent, rgba(255,255,255,0.08), transparent);
+  transform: translateX(-120%);
+  opacity: 0;
+}
+.miniPage__item:hover {
+  transform: translateY(-1px);
+  border-color: rgba(77,215,255,0.18);
+  background: rgba(255,255,255,0.05);
+}
+.miniPage__item:hover::after {
+  animation: miniPageShine 760ms ease-out both;
+}
+.miniPage__item--income::before { background: var(--color-ok); }
+.miniPage__item--expense::before { background: var(--color-danger); }
+.miniPage__item--receipt::before { background: #4dd7ff; }
+.miniPage__item--ref::before { background: #7c5cff; }
+.miniPage__empty {
+  border-style: dashed;
+  background: rgba(255,255,255,0.025);
+}
+.miniPage__collapse,
+.miniPage__pager {
+  margin-top: 10px;
+}
+.miniPage__collapseBtn {
+  width: 100%;
+}
+.referrals-hero {
+  border-color: rgba(124,92,255,0.24);
+}
+.referrals-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.referrals-linkBox {
+  margin-top: 14px;
+}
+.referrals-linkBox__value {
+  user-select: text;
+  word-break: break-all;
+  font-size: 13px;
+  background:
+    radial-gradient(360px 120px at 0% 0%, rgba(77,215,255,0.08), transparent 60%),
+    rgba(0,0,0,0.28);
+}
+.referrals-linkBox__error {
+  margin-top: 6px;
+  opacity: 0.6;
+}
+@media (max-width: 520px) {
+  .miniPage__back {
+    width: auto;
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
+
 
 /* ── 25. Profile ───────────────────────────────────────────── */
 .profile-list { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
@@ -1921,6 +2079,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .services-page > .card, .services-page > .services-group, .svc-card::after, .svc-row__details, .svc-progress__bar::after,
   .page, .page-frost, .page-vibe, .page-vibe span, .top-progress__bar, .top-progress__bar::after, .app-ambient,
   .feed-list > .feed-item, .feed-seg__rail,
+  .miniPage > .card, .miniPage > .miniPage__section, .miniPage__hero::after, .miniPage__item, .miniPage__item::after,
   .profile-page > .card, .profile-hero-card::after, .profile-hero-card, .profile-section-card, .profile-compact-row, .profile-compact-row__right, .profile-smallBtn, .profile-smallBadge, .profile-seg__rail,
   .skeleton, .brand__dot, .app-loader__shine { animation: none !important; transition: none !important; }
 }

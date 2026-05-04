@@ -150,11 +150,11 @@ export function Referrals() {
 
   if (error || !(me as any)?.ok) {
     return (
-      <div className="section">
+      <div className="section miniPage referrals-page">
         <div className="card"><div className="card__body">
           <h1 className="h1">🤝 {t("home.ref.title")}</h1>
           <p className="p">{t("home.error.text")}</p>
-          <div className="actions actions--2" style={{ marginTop: 12 }}>
+          <div className="actions actions--2 miniPage__actions">
             <Link className="btn btn--primary" to="/login">{t("home.actions.login")}</Link>
             <Link className="btn" to="/">{t("bottomNav.home")}</Link>
           </div>
@@ -164,24 +164,24 @@ export function Referrals() {
   }
 
   return (
-    <div className="section">
+    <div className="section miniPage referrals-page">
 
       {/* ── Заголовок + ссылка ── */}
-      <div className="card" style={{
+      <div className="card miniPage__hero referrals-hero" style={{
         background: "linear-gradient(135deg, rgba(124,92,255,0.12), rgba(77,215,255,0.07))",
         borderColor: "rgba(124,92,255,0.22)",
       }}>
         <div className="card__body">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+          <div className="miniPage__head">
             <div>
               <h1 className="h1">🤝 {t("home.ref.title")}</h1>
-              <p className="p">{t("home.ref.sub")}</p>
+              <p className="p miniPage__subtitle">{t("home.ref.sub")}</p>
             </div>
-            <Link className="btn" to="/" style={{ flexShrink: 0 }}>{t("bottomNav.home")}</Link>
+            <Link className="btn miniPage__back" to="/" style={{ flexShrink: 0 }}>{t("bottomNav.home")}</Link>
           </div>
 
           {/* Метрики */}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 14 }}>
+          <div className="referrals-metrics">
             <span className="chip chip--accent">
               👥 {t("home.ref.list.k")}: <b style={{ marginLeft: 4 }}>{statusLoading ? "…" : refCount}</b>
             </span>
@@ -191,14 +191,14 @@ export function Referrals() {
           </div>
 
           {/* Реферальная ссылка */}
-          <div style={{ marginTop: 14 }}>
-            <div className="pre" style={{ userSelect: "text", wordBreak: "break-all", fontSize: 13 }}>
+          <div className="referrals-linkBox">
+            <div className="pre referrals-linkBox__value">
               {linkLoading ? "Загружаем ссылку…" : referralUrl || "—"}
             </div>
-            {linkError && <p className="p" style={{ marginTop: 6, opacity: 0.6 }}>{linkError}</p>}
+            {linkError && <p className="p referrals-linkBox__error">{linkError}</p>}
           </div>
 
-          <div className="actions actions--2" style={{ marginTop: 12 }}>
+          <div className="actions actions--2 miniPage__actions">
             <button className="btn btn--primary" onClick={shareLink} disabled={!shareUrl} type="button">
               📤 {t("home.ref.link.v")}
             </button>
@@ -210,21 +210,21 @@ export function Referrals() {
       </div>
 
       {/* ── Список приглашённых ── */}
-      <div className="section">
-        <div className="card">
+      <div className="miniPage__section">
+        <div className="card miniPage__panel">
           <div className="card__body">
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
               <span style={{ fontSize: 20 }}>👥</span>
               <h1 className="h1">{t("home.ref.list.k")}</h1>
               {total > 0 && <span className="chip chip--soft">{total}</span>}
             </div>
-            <p className="p" style={{ marginTop: 0 }}>
+            <p className="p miniPage__sectionText">
               {listLoading ? t("home.loading.text") : total ? t("home.ref.list.v") : t("home.ref.link.v")}
             </p>
 
             {listError && <div className="pre" style={{ marginTop: 10 }}>{listError}</div>}
 
-            <div className="list" style={{ marginTop: 12 }}>
+            <div className="list miniPage__list">
               {listLoading ? (
                 <><div className="skeleton h1" /><div className="skeleton p" /></>
               ) : items.length ? (
@@ -233,7 +233,7 @@ export function Referrals() {
                   const uname   = toStr(r?.username);
                   const created = toStr(r?.created_at);
                   return (
-                    <div className="list__item" key={`${r?.id ?? "x"}-${idx}`}>
+                    <div className="list__item miniPage__item miniPage__item--ref" key={`${r?.id ?? "x"}-${idx}`}>
                       <div className="list__main">
                         <div className="list__title">
                           {name}
@@ -245,7 +245,7 @@ export function Referrals() {
                   );
                 })
               ) : (
-                <div className="list__item">
+                <div className="list__item miniPage__item miniPage__empty">
                   <div className="list__main">
                     <div className="list__title">{t("home.news.empty.title")}</div>
                     <div className="list__sub">{t("home.ref.link.v")}</div>
