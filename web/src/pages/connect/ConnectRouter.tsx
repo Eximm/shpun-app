@@ -204,18 +204,18 @@ export default function ConnectRouter({ usi, onDone }: Props) {
   const inputValue = toPretty9(code)
 
   return (
-    <div style={{ paddingTop: 6 }}>
+    <div className="cr">
 
       {/* Загрузка */}
       {loading && (
-        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", padding: "8px 0" }}>
+        <div className="cr__loading">
           ⏳ {t('router.loading')}
         </div>
       )}
 
       {/* Ошибка */}
       {error && (
-        <div style={{ padding: "8px 10px", borderRadius: 8, background: "rgba(255,77,109,0.08)", border: "0.5px solid rgba(255,77,109,0.25)", fontSize: 12, color: "#ff4d6d", marginBottom: 8 }}>
+        <div className="cr__error">
           ⚠️ {error}
         </div>
       )}
@@ -224,17 +224,17 @@ export default function ConnectRouter({ usi, onDone }: Props) {
         <>
           {/* Статус привязки */}
           {hasBound ? (
-            <div style={{ padding: "9px 11px", borderRadius: 9, background: "rgba(43,227,143,0.06)", border: "0.5px solid rgba(43,227,143,0.22)", marginBottom: 10, fontSize: 12 }}>
-              <div style={{ fontWeight: 700, color: "#2be38f", marginBottom: 2 }}>
+            <div className="cr__boundCard">
+              <div className="cr__boundTitle">
                 ✅ {t('router.bound')} <b>{shownPretty || '—'}</b>
               </div>
-              {!!fmtTs(first?.created_at)  && <div style={{ fontSize: 10, color: "rgba(255,255,255,0.38)", marginTop: 2 }}>{t('router.bound_at')} {fmtTs(first!.created_at)}</div>}
-              {!!fmtTs(first?.last_seen_at) && <div style={{ fontSize: 10, color: "rgba(255,255,255,0.38)" }}>{t('router.last_seen')} {fmtTs(first!.last_seen_at)}</div>}
+              {!!fmtTs(first?.created_at)  && <div className="cr__boundMeta">{t('router.bound_at')} {fmtTs(first!.created_at)}</div>}
+              {!!fmtTs(first?.last_seen_at) && <div className="cr__boundMeta">{t('router.last_seen')} {fmtTs(first!.last_seen_at)}</div>}
             </div>
           ) : (
             /* Форма привязки */
             <>
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", marginBottom: 8, lineHeight: 1.4 }}>
+              <div className="cr__hint">
                 {t('router.hint')}
               </div>
               <input
@@ -247,17 +247,16 @@ export default function ConnectRouter({ usi, onDone }: Props) {
                 inputMode="text" lang="en"
                 autoCapitalize="none" autoCorrect="off"
                 spellCheck={false} autoComplete="off"
-                style={{ marginBottom: 8 }}
               />
-              <div style={{ ...S.grid2, marginBottom: 0 }}>
-                <button style={{ ...S.btnPrimary, opacity: canBind ? 1 : 0.5 }} onClick={() => void bind()} disabled={!canBind} type="button">
+              <div className="cr__actionsGrid cr__actionsGrid--2">
+                <button className="btn btn--primary cr__btnFull" style={{ opacity: canBind ? 1 : 0.5 }} onClick={() => void bind()} disabled={!canBind} type="button">
                   🔗 {busy ? t('connect.wait') : t('router.bind')}
                 </button>
-                <button style={S.btnSec} onClick={() => void load({ silent: false })} disabled={busy} type="button">
+                <button className="btn cr__btnFull" onClick={() => void load({ silent: false })} disabled={busy} type="button">
                   🔄 {t('services.refresh')}
                 </button>
               </div>
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.30)", marginTop: 6 }}>{t('router.code_format')}</div>
+              <div className="cr__codeFormat">{t('router.code_format')}</div>
             </>
           )}
 

@@ -262,14 +262,21 @@ export default function ConnectAmneziaWG({ usi }: Props) {
             </button>
           </div>
 
-          <div className="actions actions--1">
-            <button className="btn" onClick={() => setMoreOpen((v) => !v)} disabled={!ready} type="button">
-              {moreOpen ? `▴ ${t("connectAmneziaWG.step2.hide_more")}` : `▾ ${t("connectAmneziaWG.step2.show_more")}`}
-            </button>
-          </div>
+        </div>
+      </div>
 
-          {moreOpen && ready && (
-            <div className="actions actions--2" style={{ marginTop: 8 }}>
+      <div className="actions actions--1" style={{ marginTop: 12 }}>
+        <button className="btn" onClick={() => setMoreOpen((v) => !v)} disabled={!ready} type="button">
+          {moreOpen ? `▴ ${t("connectAmneziaWG.step2.hide_more")}` : `▾ ${t("connectAmneziaWG.step2.show_more")}`}
+        </button>
+      </div>
+
+      {moreOpen && ready && (
+        <div className="card cm__extraCard">
+          <div className="card__body">
+            <div className="cm__extraTitle">Дополнительно</div>
+            <div className="cm__extraSub">QR-код и копирование конфига для ручного импорта.</div>
+            <div className="actions actions--2" style={{ marginTop: 12 }}>
               <button className="btn btn--primary" type="button" onClick={() => void openQr()}>
                 📱 {t("connectAmneziaWG.step2.show_qr")}
               </button>
@@ -277,9 +284,9 @@ export default function ConnectAmneziaWG({ usi }: Props) {
                 📋 {t("connectAmneziaWG.step2.copy_conf")}
               </button>
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Пикер платформы */}
       {platformPickerOpen && createPortal(

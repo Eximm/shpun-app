@@ -303,92 +303,38 @@ export default function ConnectMarzban({ usi }: Props) {
             </button>
           </div>
 
-          {subscriptionUrlMirror && ready && (
-            <div className="actions actions--1" style={{ marginTop: 8 }}>
-              <button className="btn" onClick={() => openImport(true)} type="button">
-                🔄 Не открывается? Попробовать через RU-зеркало
-              </button>
-            </div>
-          )}
-
-          <div className="actions actions--1">
-            <button className="btn" onClick={() => setAdvancedOpen((v) => !v)} type="button">
-              {advancedOpen ? `▴ ${t("connect.hide_methods")}` : `▾ ${t("connect.more_methods")}`}
-            </button>
-          </div>
-
-          {/* Расширенный блок */}
-          {advancedOpen && ready && (
-            <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 12 }}>
-
-              <div className="actions actions--2">
-                <button className="btn btn--primary" type="button" onClick={() => void copySub(false)}>
-                  {copied ? `✅ ${t("connect.copied")}` : `📋 ${t("connect.copy_link")}`}
-                </button>
-                <button className="btn btn--primary" type="button" onClick={() => void openQr()}>
-                  📱 {t("connect.show_qr")}
-                </button>
-              </div>
-
-              {subscriptionUrlMirror && (
-                <div className="actions actions--1">
-                  <button className="btn" type="button" onClick={() => void copySub(true)}>
-                    {copiedMirror ? `✅ ${t("connect.copied")}` : `📋 ${t("connect.copy_link")} (RU зеркало)`}
-                  </button>
-                </div>
-              )}
-
-              {/* Hiddify */}
-              <div className="pre" style={{ borderColor: "rgba(43,227,143,0.22)", background: "rgba(43,227,143,0.05)" }}>
-                <b>Hiddify</b> — альтернативный клиент
-              </div>
-              {HIDDIFY_LINKS[platform].direct ? (
-                <div className="actions actions--2">
-                  <button className="btn btn--primary" type="button" onClick={() => openClientStore("hiddify")}>
-                    📲 {t("connect.open_store")} {t(HIDDIFY_LINKS[platform].storeLabelKey)}
-                  </button>
-                  <button className="btn" type="button" onClick={() => openClientDirect("hiddify")}>
-                    ⬇️ {platform === "android" ? t("connectAmneziaWG.step1.download_apk") : t("connect.download_direct")}
-                  </button>
-                </div>
-              ) : (
-                <div className="actions actions--1">
-                  <button className="btn btn--primary" type="button" onClick={() => openClientStore("hiddify")}>
-                    📲 {t("connect.open_store")} {t(HIDDIFY_LINKS[platform].storeLabelKey)}
-                  </button>
-                </div>
-              )}
-              <div className="actions actions--1">
-                <button className="btn" type="button" onClick={() => {
-                  const href = buildHiddifyImportLink(subscriptionUrl, platform);
-                  tryOpenScheme(href, runtime);
-                  toast.info(t("connect.open_client"), { description: t("connect.import_text") });
-                }} disabled={!ready}>
-                  ⚡ {t("connect.add_sub")} в Hiddify
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
+      {subscriptionUrlMirror && ready && (
+        <div className="cm__priorityCard cm__priorityCard--mirror">
+          <div className="cm__priorityHead">
+            <span className="cm__priorityIcon">↔</span>
+            <div>
+              <div className="cm__priorityTitle">Альтернативная подписка</div>
+              <div className="cm__prioritySub">Используйте RU-зеркало, если основной импорт не открылся.</div>
+            </div>
+          </div>
+          <div className="actions actions--1 cm__priorityActions">
+            <button className="btn btn--primary" onClick={() => openImport(true)} type="button">
+              🔄 Подключить через RU-зеркало
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Маршрутизация v2RayTun */}
-      <div style={{
-        marginTop: 12, padding: "14px 16px", borderRadius: 16,
-        border: "1px solid rgba(77,215,255,0.32)",
-        background: "linear-gradient(135deg, rgba(77,215,255,0.08), rgba(124,92,255,0.06))",
-        boxShadow: "0 0 24px rgba(77,215,255,0.10)",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-          <span style={{ fontSize: 20 }}>🗺️</span>
+      <div className="cm__priorityCard cm__priorityCard--routing">
+        <div className="cm__priorityHead">
+          <span className="cm__priorityIcon">🗺️</span>
           <div>
-            <div style={{ fontWeight: 900, fontSize: 14 }}>Раздельная маршрутизация</div>
-            <div style={{ fontSize: 12, color: "rgba(77,215,255,0.85)", marginTop: 2 }}>
+            <div className="cm__priorityTitle">Раздельная маршрутизация</div>
+            <div className="cm__prioritySub">
               Только РФ-трафик напрямую, остальное — в туннель
             </div>
           </div>
         </div>
-        <div className="actions actions--2">
+        <div className="actions actions--2 cm__priorityActions">
           <button className="btn btn--primary" onClick={openTrafficRules} type="button">
             ⚡ Применить маршруты
           </button>
@@ -397,6 +343,69 @@ export default function ConnectMarzban({ usi }: Props) {
           </button>
         </div>
       </div>
+
+      <div className="actions actions--1" style={{ marginTop: 12 }}>
+        <button className="btn" onClick={() => setAdvancedOpen((v) => !v)} type="button">
+          {advancedOpen ? `▴ ${t("connect.hide_methods")}` : `▾ ${t("connect.more_methods")}`}
+        </button>
+      </div>
+
+      {/* Расширенный блок */}
+      {advancedOpen && ready && (
+        <div className="card cm__extraCard">
+          <div className="card__body">
+            <div className="cm__extraTitle">Дополнительно</div>
+            <div className="cm__extraSub">QR, копирование подписки и альтернативный клиент.</div>
+
+            <div className="actions actions--2" style={{ marginTop: 12 }}>
+              <button className="btn btn--primary" type="button" onClick={() => void copySub(false)}>
+                {copied ? `✅ ${t("connect.copied")}` : `📋 ${t("connect.copy_link")}`}
+              </button>
+              <button className="btn btn--primary" type="button" onClick={() => void openQr()}>
+                📱 {t("connect.show_qr")}
+              </button>
+            </div>
+
+            {subscriptionUrlMirror && (
+              <div className="actions actions--1" style={{ marginTop: 8 }}>
+                <button className="btn" type="button" onClick={() => void copySub(true)}>
+                  {copiedMirror ? `✅ ${t("connect.copied")}` : `📋 ${t("connect.copy_link")} (RU зеркало)`}
+                </button>
+              </div>
+            )}
+
+            {/* Hiddify */}
+            <div className="pre" style={{ marginTop: 12, borderColor: "rgba(43,227,143,0.22)", background: "rgba(43,227,143,0.05)" }}>
+              <b>Hiddify</b> — альтернативный клиент
+            </div>
+            {HIDDIFY_LINKS[platform].direct ? (
+              <div className="actions actions--2">
+                <button className="btn btn--primary" type="button" onClick={() => openClientStore("hiddify")}>
+                  📲 {t("connect.open_store")} {t(HIDDIFY_LINKS[platform].storeLabelKey)}
+                </button>
+                <button className="btn" type="button" onClick={() => openClientDirect("hiddify")}>
+                  ⬇️ {platform === "android" ? t("connectAmneziaWG.step1.download_apk") : t("connect.download_direct")}
+                </button>
+              </div>
+            ) : (
+              <div className="actions actions--1">
+                <button className="btn btn--primary" type="button" onClick={() => openClientStore("hiddify")}>
+                  📲 {t("connect.open_store")} {t(HIDDIFY_LINKS[platform].storeLabelKey)}
+                </button>
+              </div>
+            )}
+            <div className="actions actions--1">
+              <button className="btn" type="button" onClick={() => {
+                const href = buildHiddifyImportLink(subscriptionUrl, platform);
+                tryOpenScheme(href, runtime);
+                toast.info(t("connect.open_client"), { description: t("connect.import_text") });
+              }} disabled={!ready}>
+                ⚡ {t("connect.add_sub")} в Hiddify
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* QR маршрутов */}
       {rulesQrOpen && createPortal(

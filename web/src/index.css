@@ -1316,15 +1316,59 @@ button, a { -webkit-tap-highlight-color: transparent; }
 
 
 /* ── 23. ConnectRouter / ConnectAmneziaWG ──────────────────── */
+.cr { padding-top: 6px; }
 .cr__mt6  { margin-top: 6px; }  .cr__mt10 { margin-top: 10px; } .cr__mt12 { margin-top: 12px; }
 .cr__hintTop { margin-top: 0; }
 .cr__state     { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .cr__stateMain { min-width: 0; }
 .cr__meta      { opacity: 0.82; margin-top: 2px; }
 .cr__form      { margin-top: 12px; }
-.cr__input     { width: 100%; letter-spacing: 1px; }
+.cr__input     { width: 100%; letter-spacing: 1px; margin-bottom: 8px; }
 .cr__note      { opacity: 0.75; font-size: 12px; line-height: 1.35; }
 .cr__btnFull   { width: 100%; }
+.cr__loading {
+  font-size: 12px;
+  color: rgba(255,255,255,0.45);
+  padding: 8px 0;
+}
+.cr__error {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255,77,109,0.08);
+  border: 0.5px solid rgba(255,77,109,0.25);
+  font-size: 12px;
+  color: #ff4d6d;
+  margin-bottom: 8px;
+}
+.cr__boundCard {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(43,227,143,0.06);
+  border: 0.5px solid rgba(43,227,143,0.22);
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+.cr__boundTitle {
+  font-weight: 800;
+  color: #2be38f;
+  margin-bottom: 2px;
+}
+.cr__boundMeta {
+  font-size: 10px;
+  color: rgba(255,255,255,0.40);
+  margin-top: 2px;
+}
+.cr__hint {
+  font-size: 12px;
+  color: rgba(255,255,255,0.58);
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+.cr__codeFormat {
+  font-size: 10px;
+  color: rgba(255,255,255,0.34);
+  margin-top: 6px;
+}
 .cr__badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12px; line-height: 1.2; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.09); opacity: 0.90; flex: 0 0 auto; }
 .cr__badgeK { opacity: 0.72; } .cr__badgeV { text-transform: uppercase; }
 .cr__badge--good  { border-color: rgba(43,227,143,0.34); background: rgba(43,227,143,0.07); }
@@ -1348,6 +1392,99 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .cawg__accBody    { overflow: hidden; max-height: 0; opacity: 0; transition: max-height 300ms ease, opacity 220ms ease; }
 .cawg__accBody.is-open  { opacity: 1; }
 .cawg__accBodyInner     { border-top: 1px solid rgba(255,255,255,0.07); }
+.cm__priorityCard {
+  position: relative;
+  margin-top: 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(77,215,255,0.28);
+  background:
+    linear-gradient(135deg, rgba(77,215,255,0.08), rgba(124,92,255,0.06)),
+    rgba(255,255,255,0.03);
+  box-shadow: 0 0 24px rgba(77,215,255,0.10);
+}
+.cm__priorityCard::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: linear-gradient(180deg, var(--accent-2), var(--accent));
+  box-shadow: 0 0 18px rgba(77,215,255,0.55);
+}
+.cm__priorityCard::after {
+  content: "";
+  position: absolute;
+  inset: -40% auto -40% -20%;
+  width: 38%;
+  transform: translateX(-120%) rotate(12deg);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+  animation: cmPrioritySweep 4.8s ease-in-out infinite;
+  pointer-events: none;
+}
+.cm__priorityCard--mirror {
+  border-color: rgba(43,227,143,0.24);
+  background:
+    linear-gradient(135deg, rgba(43,227,143,0.08), rgba(77,215,255,0.05)),
+    rgba(255,255,255,0.03);
+}
+.cm__priorityCard--mirror::before {
+  background: linear-gradient(180deg, var(--color-ok), var(--accent-2));
+  box-shadow: 0 0 18px rgba(43,227,143,0.48);
+}
+.cm__priorityHead {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.cm__priorityIcon {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.10);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+}
+.cm__priorityTitle {
+  font-weight: 900;
+  font-size: 14px;
+  line-height: 1.2;
+}
+.cm__prioritySub {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: rgba(190,225,255,0.86);
+}
+.cm__priorityActions {
+  position: relative;
+  margin-top: 12px;
+}
+.cm__extraCard {
+  margin-top: 12px;
+  border-color: rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.025);
+}
+.cm__extraTitle {
+  font-size: 13px;
+  font-weight: 900;
+}
+.cm__extraSub {
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: rgba(255,255,255,0.54);
+}
+@keyframes cmPrioritySweep {
+  0%, 48% { transform: translateX(-130%) rotate(12deg); opacity: 0; }
+  58% { opacity: 1; }
+  78%, 100% { transform: translateX(360%) rotate(12deg); opacity: 0; }
+}
 
 
 /* ── 24. Payments ──────────────────────────────────────────── */
@@ -2222,7 +2359,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .page, .page-frost, .page-vibe, .page-vibe span, .top-progress__bar, .top-progress__bar::after, .app-ambient,
   .feed-list > .feed-item, .feed-seg__rail,
   .miniPage > .card, .miniPage > .miniPage__section, .miniPage__hero::after, .miniPage__item, .miniPage__item::after,
-  .router-help-step,
+  .router-help-step, .cm__priorityCard::after,
   .profile-page > .card, .profile-hero-card::after, .profile-hero-card, .profile-section-card, .profile-compact-row, .profile-compact-row__right, .profile-smallBtn, .profile-smallBadge, .profile-seg__rail,
   .skeleton, .brand__dot, .app-loader__shine { animation: none !important; transition: none !important; }
 }
