@@ -999,7 +999,7 @@ export function ServicesOrder() {
                     type="button"
                     style={{ borderColor: 'rgba(96,165,250,0.38)', color: 'rgba(147,197,253,1)' }}
                   >
-                    📘 {t('servicesRouter.footer.text')}
+                    📘 {t('servicesOrder.router.hint.open_short', 'Инструкция')}
                   </button>
                 </div>
               )}

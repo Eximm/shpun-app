@@ -807,6 +807,7 @@ export const RU: Dict = {
   "servicesOrder.router.hint.text": "Router VPN работает только на роутерах с OpenWrt 24.10.x и установленным пакетом ShpunRouter. Перед заказом рекомендуем ознакомиться с инструкцией — это займёт пару минут.",
   "servicesOrder.router.hint.skip": "Всё понятно",
   "servicesOrder.router.hint.open": "Открыть инструкцию",
+  "servicesOrder.router.hint.open_short": "Инструкция",
   "servicesOrder.amnezia.warn.title": "Важно про AmneziaWG",
   "servicesOrder.amnezia.warn.text": "Стабильность AmneziaWG не гарантирована и зависит от провайдера. Для надёжной работы рекомендуем Marzban.",
 
@@ -1632,6 +1633,7 @@ export const EN: Dict = {
   "servicesOrder.router.hint.text": "Router VPN only works on routers running OpenWrt 24.10.x with the ShpunRouter package installed. We recommend reading the guide before ordering — it takes just a couple of minutes.",
   "servicesOrder.router.hint.skip": "Got it",
   "servicesOrder.router.hint.open": "Open guide",
+  "servicesOrder.router.hint.open_short": "Guide",
   "servicesOrder.amnezia.warn.title": "Important about AmneziaWG",
   "servicesOrder.amnezia.warn.text": "AmneziaWG stability is not guaranteed and depends on your provider. For reliable use, we recommend Marzban.",
 
