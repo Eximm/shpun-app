@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiFetch } from "../../shared/api/client";
+import { useI18n } from "../../shared/i18n";
 import { toast } from "../../shared/ui/toast";
 import { toastApiError } from "../../shared/ui/toast/toastApiError";
 import { refetchMe } from "./useMe";
@@ -32,15 +33,15 @@ export function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-export function getEmailErrorText(err: unknown): string {
+export function getEmailErrorText(err: unknown, t: (key: string) => string): string {
   const raw = String((err as any)?.message || "").toLowerCase();
   if (raw.includes("email_already_used") || raw.includes("already in use"))
-    return "Этот email уже привязан к другому аккаунту.";
-  if (raw.includes("invalid_email")) return "Укажите корректный email.";
-  if (raw.includes("empty_email"))   return "Введите email.";
+    return t("onboarding.error.email_used");
+  if (raw.includes("invalid_email")) return t("onboarding.error.email_invalid");
+  if (raw.includes("empty_email"))   return t("onboarding.error.email_empty");
   if (raw.includes("email_not_saved"))
-    return "Не удалось сохранить email. Проверьте адрес и попробуйте снова.";
-  return "Не удалось сохранить email. Попробуйте ещё раз.";
+    return t("onboarding.error.email_not_saved");
+  return t("onboarding.error.email_failed");
 }
 
 // ─── ModalShell ───────────────────────────────────────────────────────────────
@@ -70,6 +71,7 @@ function ModalShell({
 
 export function FirstLoginOnboardingModal({ open, me, onSkip }: Props) {
   const navigate = useNavigate();
+  const { t } = useI18n();
 
   const emailStepDone    = Boolean(me?.profile?.emailStepDone);
   const passwordStepDone = Boolean(me?.profile?.passwordStepDone);
@@ -121,15 +123,17 @@ export function FirstLoginOnboardingModal({ open, me, onSkip }: Props) {
   const canSavePassword = pwd1.trim().length >= 8 && pwd2.length > 0 && pwd1 === pwd2 && !pwdBusy;
 
   const currentStepNumber = step === "email" ? 1 : needEmail ? 2 : 1;
-  const badge = totalSteps > 1 ? `Шаг ${currentStepNumber} из ${totalSteps}` : undefined;
+  const badge = totalSteps > 1
+    ? t("onboarding.step_badge").replace("{current}", String(currentStepNumber)).replace("{total}", String(totalSteps))
+    : undefined;
 
   const emailForDisplay = String(emailDraft || currentEmail || "").trim();
 
   // ── saveEmail ─────────────────────────────────────────────────────────────
   async function saveEmail() {
     const clean = String(emailDraft || "").trim().toLowerCase();
-    if (!clean)               { setEmailError("Введите email."); return; }
-    if (!isValidEmail(clean)) { setEmailError("Укажите корректный email."); return; }
+    if (!clean)               { setEmailError(t("onboarding.error.email_empty")); return; }
+    if (!isValidEmail(clean)) { setEmailError(t("onboarding.error.email_invalid")); return; }
 
     setEmailBusy(true);
     setEmailError(null);
@@ -145,8 +149,8 @@ export function FirstLoginOnboardingModal({ open, me, onSkip }: Props) {
 
       if (needPassword) {
         setStep("password");
-        toast.success("Email сохранён", {
-          description: "Теперь создайте пароль для входа.",
+        toast.success(t("onboarding.toast.email_saved"), {
+          description: t("onboarding.toast.email_saved.desc"),
           durationMs: 2500,
         });
       } else {
@@ -154,8 +158,8 @@ export function FirstLoginOnboardingModal({ open, me, onSkip }: Props) {
         setShowDoneScreen(true);
       }
     } catch (e: unknown) {
-      setEmailError(getEmailErrorText(e));
-      toastApiError(e, { title: "Не удалось сохранить email." });
+      setEmailError(getEmailErrorText(e, t));
+      toastApiError(e, { title: t("onboarding.toast.email_failed") });
     } finally {
       setEmailBusy(false);
     }
@@ -184,11 +188,11 @@ export function FirstLoginOnboardingModal({ open, me, onSkip }: Props) {
     } catch (e: unknown) {
       const raw = String((e as any)?.message || "").toLowerCase();
       if (raw.includes("password_too_short")) {
-        setPwdError("Пароль должен быть не короче 8 символов.");
+        setPwdError(t("onboarding.error.password_short"));
         return;
       }
-      setPwdError("Не удалось сохранить пароль. Попробуйте ещё раз.");
-      toastApiError(e, { title: "Не удалось сохранить пароль." });
+      setPwdError(t("onboarding.error.password_failed"));
+      toastApiError(e, { title: t("onboarding.toast.password_failed") });
     } finally {
       setPwdBusy(false);
     }
@@ -212,8 +216,8 @@ export function FirstLoginOnboardingModal({ open, me, onSkip }: Props) {
 
   function handleSkip() {
     onSkip?.();
-    toast.info("Настройку можно завершить позже", {
-      description: "При следующем входе мы снова предложим добавить недостающие данные.",
+    toast.info(t("onboarding.toast.skip"), {
+      description: t("onboarding.toast.skip.desc"),
       durationMs: 3000,
     });
   }
@@ -223,18 +227,18 @@ export function FirstLoginOnboardingModal({ open, me, onSkip }: Props) {
   // ── Финальный экран — всё сохранено, нужно войти заново ──────────────────
   if (showDoneScreen) {
     return (
-      <ModalShell title="Готово ✅">
+      <ModalShell title={t("onboarding.done.title")}>
         <p className="p">
-          Email и пароль сохранены. Теперь войдите заново — это нужно один раз после смены пароля.
+          {t("onboarding.done.text")}
         </p>
 
         <div className="pre">
           <div><strong>Email:</strong> {emailForDisplay || "—"}</div>
-          <div><strong>Пароль:</strong> тот, который вы только что задали</div>
+          <div><strong>{t("onboarding.done.password")}:</strong> {t("onboarding.done.password_value")}</div>
         </div>
 
         <p className="p" style={{ opacity: 0.8, fontSize: 13 }}>
-          В Telegram вход пройдёт автоматически. В браузере введите email и пароль.
+          {t("onboarding.done.hint")}
         </p>
 
         <div className="actions actions--1">
@@ -244,7 +248,7 @@ export function FirstLoginOnboardingModal({ open, me, onSkip }: Props) {
             onClick={() => void goToLogin()}
             disabled={goingToLogin}
           >
-            {goingToLogin ? "Выходим…" : "Перейти к авторизации →"}
+            {goingToLogin ? t("onboarding.done.logging_out") : t("onboarding.done.go_login")}
           </button>
         </div>
       </ModalShell>
@@ -257,20 +261,20 @@ export function FirstLoginOnboardingModal({ open, me, onSkip }: Props) {
   // ── Шаг EMAIL ─────────────────────────────────────────────────────────────
   if (step === "email" && !effectiveEmailDone) {
     return (
-      <ModalShell title="Добавьте email" badge={badge}>
+      <ModalShell title={t("onboarding.email.title")} badge={badge}>
         <p className="p">
-          Email нужен для входа вне Telegram и восстановления доступа.
+          {t("onboarding.email.text")}
         </p>
 
         <div className="kv">
           <div className="kv__item">
-            <div className="kv__k">Логин в боте</div>
+            <div className="kv__k">{t("onboarding.bot_login")}</div>
             <div className="kv__v">{login || "—"}</div>
           </div>
           {needPassword ? (
             <div className="kv__item">
-              <div className="kv__k">Дальше</div>
-              <div className="kv__v">Создание пароля</div>
+              <div className="kv__k">{t("onboarding.next")}</div>
+              <div className="kv__v">{t("onboarding.next.password")}</div>
             </div>
           ) : null}
         </div>
@@ -290,14 +294,14 @@ export function FirstLoginOnboardingModal({ open, me, onSkip }: Props) {
 
         {emailError ? (
           <div className="auth__error">
-            <div className="auth__errorTitle">Ошибка</div>
+            <div className="auth__errorTitle">{t("onboarding.error.title")}</div>
             <div className="auth__errorText">{emailError}</div>
           </div>
         ) : null}
 
         <div className="actions actions--2">
           <button className="btn" type="button" onClick={handleSkip} disabled={emailBusy}>
-            Пропустить
+            {t("onboarding.skip")}
           </button>
           <button
             className="btn btn--primary"
@@ -305,7 +309,7 @@ export function FirstLoginOnboardingModal({ open, me, onSkip }: Props) {
             disabled={!canSaveEmail}
             onClick={() => void saveEmail()}
           >
-            {emailBusy ? "Сохраняем…" : "Сохранить"}
+            {emailBusy ? t("onboarding.saving") : t("onboarding.save")}
           </button>
         </div>
       </ModalShell>
@@ -314,14 +318,14 @@ export function FirstLoginOnboardingModal({ open, me, onSkip }: Props) {
 
   // ── Шаг ПАРОЛЬ ────────────────────────────────────────────────────────────
   return (
-    <ModalShell title="Создайте пароль" badge={badge}>
+    <ModalShell title={t("onboarding.password.title")} badge={badge}>
       <p className="p">
-        Пароль нужен для входа в браузере вне Telegram.
+        {t("onboarding.password.text")}
       </p>
 
       <div className="kv">
         <div className="kv__item">
-          <div className="kv__k">Логин в боте</div>
+          <div className="kv__k">{t("onboarding.bot_login")}</div>
           <div className="kv__v">{login || "—"}</div>
         </div>
         {effectiveEmailDone ? (
@@ -333,11 +337,11 @@ export function FirstLoginOnboardingModal({ open, me, onSkip }: Props) {
       </div>
 
       <label className="field">
-        <span className="field__label">Новый пароль</span>
+        <span className="field__label">{t("onboarding.password.new")}</span>
         <div className="pwdfield">
           <input
             className="input"
-            placeholder="Минимум 8 символов"
+            placeholder={t("onboarding.password.placeholder")}
             value={pwd1}
             onChange={(e) => { setPwd1(e.target.value); setPwdError(null); }}
             type={showPwd1 ? "text" : "password"}
@@ -346,18 +350,18 @@ export function FirstLoginOnboardingModal({ open, me, onSkip }: Props) {
           />
           <button type="button" className="btn btn--soft pwdfield__btn"
             onClick={() => setShowPwd1(v => !v)} disabled={pwdBusy}
-            aria-label={showPwd1 ? "Скрыть" : "Показать"}>
+            aria-label={showPwd1 ? t("onboarding.password.hide") : t("onboarding.password.show")}>
             {showPwd1 ? "🙈" : "👁"}
           </button>
         </div>
       </label>
 
       <label className="field">
-        <span className="field__label">Повторите пароль</span>
+        <span className="field__label">{t("onboarding.password.repeat")}</span>
         <div className="pwdfield">
           <input
             className="input"
-            placeholder="Повторите пароль"
+            placeholder={t("onboarding.password.repeat")}
             value={pwd2}
             onChange={(e) => setPwd2(e.target.value)}
             type={showPwd2 ? "text" : "password"}
@@ -366,7 +370,7 @@ export function FirstLoginOnboardingModal({ open, me, onSkip }: Props) {
           />
           <button type="button" className="btn btn--soft pwdfield__btn"
             onClick={() => setShowPwd2(v => !v)} disabled={pwdBusy}
-            aria-label={showPwd2 ? "Скрыть" : "Показать"}>
+            aria-label={showPwd2 ? t("onboarding.password.hide") : t("onboarding.password.show")}>
             {showPwd2 ? "🙈" : "👁"}
           </button>
         </div>
@@ -374,24 +378,24 @@ export function FirstLoginOnboardingModal({ open, me, onSkip }: Props) {
 
       <div className="pre">
         <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <span>Надёжность пароля</span>
+          <span>{t("onboarding.password.strength")}</span>
           <span>{pwdStrength}/5</span>
         </div>
         {pwd2.length > 0 && pwd1 !== pwd2 ? (
-          <div style={{ marginTop: 4, opacity: 0.8 }}>Пароли не совпадают</div>
+          <div style={{ marginTop: 4, opacity: 0.8 }}>{t("onboarding.password.mismatch")}</div>
         ) : null}
       </div>
 
       {pwdError ? (
         <div className="auth__error">
-          <div className="auth__errorTitle">Ошибка</div>
+          <div className="auth__errorTitle">{t("onboarding.error.title")}</div>
           <div className="auth__errorText">{pwdError}</div>
         </div>
       ) : null}
 
       <div className="actions actions--2">
         <button className="btn" type="button" onClick={handleSkip} disabled={pwdBusy}>
-          Пропустить
+          {t("onboarding.skip")}
         </button>
         <button
           className="btn btn--primary"
@@ -399,7 +403,7 @@ export function FirstLoginOnboardingModal({ open, me, onSkip }: Props) {
           disabled={!canSavePassword}
           onClick={() => void savePassword()}
         >
-          {pwdBusy ? "Сохраняем…" : "Сохранить пароль"}
+          {pwdBusy ? t("onboarding.saving") : t("onboarding.password.save")}
         </button>
       </div>
     </ModalShell>

@@ -299,7 +299,7 @@ export function Login() {
     const now = Date.now();
     if (lastToastRef.current.msg === msg && now - lastToastRef.current.at < 1200) return;
     lastToastRef.current = { msg, at: now };
-    toast.error(t("login.toast.error_title", "Ошибка"), { description: msg });
+    toast.error(t("login.toast.error_title"), { description: msg });
   }
 
   // ── Modal controls ────────────────────────────────────────────────────────
@@ -348,8 +348,8 @@ export function Login() {
       const code = String(e?.code ?? e?.data?.error ?? "");
       setResetVerifyError(
         code === "invalid_or_expired_token"
-          ? "Ссылка недействительна или устарела."
-          : "Не удалось проверить ссылку."
+          ? t("login.reset.invalid")
+          : t("login.reset.verify_failed")
       );
     } finally {
       setResetVerifying(false);
@@ -370,8 +370,8 @@ export function Login() {
       const code = String(e?.code ?? e?.data?.error ?? "");
       setResetError(
         code === "invalid_or_expired_token"
-          ? "Ссылка недействительна или устарела. Запросите новую."
-          : "Не удалось сменить пароль. Попробуйте ещё раз."
+          ? t("login.reset.invalid_request_new")
+          : t("login.reset.change_failed")
       );
     } finally {
       setResetLoading(false);
@@ -632,14 +632,14 @@ export function Login() {
       <div className="card modal__card">
         <div className="card__body">
           <div className="modal__head">
-            <div className="modal__title">🔐 Новый пароль</div>
+            <div className="modal__title">🔐 {t("login.reset.title")}</div>
             <button type="button" className="btn modal__close" onClick={closeModal}
-              aria-label={t("common.close", "Закрыть")}>×</button>
+              aria-label={t("common.close")}>×</button>
           </div>
           <div className="modal__content">
 
             {resetVerifying && (
-              <p className="p" style={{ opacity: 0.6 }}>Проверяем ссылку…</p>
+              <p className="p" style={{ opacity: 0.6 }}>{t("login.reset.verifying")}</p>
             )}
 
             {!resetVerifying && resetVerifyError && (
@@ -649,10 +649,10 @@ export function Login() {
                 <div className="auth__actions">
                   <button type="button" className="btn btn--primary login__btnFull"
                     onClick={() => { setResetVerifyError(null); openModal("forgot"); }}>
-                    Запросить новую ссылку
+                    {t("login.reset.request_new")}
                   </button>
                   <button type="button" className="btn login__btnFull" onClick={closeModal}>
-                    ← Вернуться ко входу
+                    {t("login.reset.back")}
                   </button>
                 </div>
               </div>
@@ -662,12 +662,12 @@ export function Login() {
               <div style={{ display: "flex", flexDirection: "column", gap: 16, alignItems: "center" }}>
                 <div style={{ fontSize: 56 }}>✅</div>
                 <p className="p" style={{ textAlign: "center", margin: 0 }}>
-                  Пароль успешно изменён. Теперь войдите с новым паролем.
+                  {t("login.reset.done")}
                 </p>
                 <div className="auth__actions" style={{ width: "100%" }}>
                   <button type="button" className="btn btn--primary login__btnFull"
                     onClick={() => { closeModal(); openModal("login"); }}>
-                    Войти
+                    {t("login.reset.login")}
                   </button>
                 </div>
               </div>
@@ -675,12 +675,12 @@ export function Login() {
 
             {!resetVerifying && !resetVerifyError && !resetDone && (
               <form className="auth__form" onSubmit={(e) => { e.preventDefault(); void submitReset(); }}>
-                <p className="p" style={{ marginBottom: 16 }}>Придумайте новый пароль для аккаунта.</p>
+                <p className="p" style={{ marginBottom: 16 }}>{t("login.reset.text")}</p>
 
                 <div className="field">
-                  <label className="field__label">Новый пароль</label>
+                  <label className="field__label">{t("onboarding.password.new")}</label>
                   <div className="pwdfield">
-                    <input className="input" placeholder="Минимум 8 символов"
+                    <input className="input" placeholder={t("onboarding.password.placeholder")}
                       value={resetPwd1} onChange={(e) => setResetPwd1(e.target.value)}
                       type={resetShowPwd1 ? "text" : "password"}
                       autoComplete="new-password" disabled={resetLoading} />
@@ -694,17 +694,17 @@ export function Login() {
                 {resetPwd1.length > 0 && (
                   <div className="pre pwdmeter" style={{ marginTop: 4 }}>
                     <div className="pwdmeter__row">
-                      <span className="pwdmeter__title">{t("profile.password.strength", "Надёжность")}</span>
+                      <span className="pwdmeter__title">{t("profile.password.strength")}</span>
                       <span className="pwdmeter__score">{resetStrength}/5</span>
                     </div>
-                    <div className="pwdmeter__tip">{t("profile.password.tip", "8+ символов, цифры и спецсимволы.")}</div>
+                    <div className="pwdmeter__tip">{t("profile.password.tip")}</div>
                   </div>
                 )}
 
                 <div className="field">
-                  <label className="field__label">Повторите пароль</label>
+                  <label className="field__label">{t("onboarding.password.repeat")}</label>
                   <div className="pwdfield">
-                    <input className="input" placeholder="Повторите пароль"
+                    <input className="input" placeholder={t("onboarding.password.repeat")}
                       value={resetPwd2} onChange={(e) => setResetPwd2(e.target.value)}
                       type={resetShowPwd2 ? "text" : "password"}
                       autoComplete="new-password" disabled={resetLoading} />
@@ -724,12 +724,12 @@ export function Login() {
 
                 <div className="auth__actions">
                   <button type="submit" className="btn btn--primary login__btnFull" disabled={!canSubmitReset}>
-                    {resetLoading ? "Сохраняем…" : "Сохранить пароль"}
+                    {resetLoading ? t("onboarding.saving") : t("login.reset.submit")}
                   </button>
                 </div>
                 <div className="login__switchWrap">
                   <button type="button" className="btn login__switchBtn" onClick={closeModal} disabled={resetLoading}>
-                    ← Вернуться ко входу
+                    {t("login.reset.back")}
                   </button>
                 </div>
               </form>
@@ -747,15 +747,15 @@ export function Login() {
       <div className="card modal__card">
         <div className="card__body">
           <div className="modal__head">
-            <div className="modal__title">🔑 Забыли пароль?</div>
+            <div className="modal__title">🔑 {t("login.forgot.title")}</div>
             <button type="button" className="btn modal__close" onClick={closeModal}
-              disabled={forgotLoading} aria-label={t("common.close", "Закрыть")}>×</button>
+              disabled={forgotLoading} aria-label={t("common.close")}>×</button>
           </div>
           <div className="modal__content">
             {!forgotSent || !forgotLogin.trim() ? (
               <form className="auth__form" onSubmit={(e) => { e.preventDefault(); void forgotPassword(); }}>
                 <p className="p" style={{ marginBottom: 16 }}>
-                  Введите email для восстановления — пришлём ссылку для сброса пароля.
+                  {t("login.forgot.text")}
                 </p>
                 <div className="field">
                   <label className="field__label">Email</label>
@@ -766,15 +766,15 @@ export function Login() {
                 <div className="auth__actions">
                   <button type="submit" className="btn btn--primary login__btnFull"
                     disabled={forgotLoading || !forgotLogin.trim() || forgotCooldown > 0}>
-                    {forgotLoading ? "Отправляем…"
-                      : forgotCooldown > 0 ? `Повторить через ${forgotCooldown} сек`
-                      : "Отправить ссылку"}
+                    {forgotLoading ? t("login.forgot.sending")
+                      : forgotCooldown > 0 ? t("login.forgot.retry_in").replace("{seconds}", String(forgotCooldown))
+                      : t("login.forgot.send")}
                   </button>
                 </div>
                 <div className="login__switchWrap">
                   <button type="button" className="btn login__switchBtn"
                     onClick={() => openModal("login")} disabled={forgotLoading}>
-                    ← Вернуться ко входу
+                    {t("login.reset.back")}
                   </button>
                 </div>
               </form>
@@ -782,17 +782,16 @@ export function Login() {
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 <div style={{ textAlign: "center", fontSize: 48 }}>📬</div>
                 <p className="p" style={{ textAlign: "center", margin: 0 }}>
-                  Письмо отправлено. Перейдите по ссылке из письма, чтобы сбросить пароль.
-                  Проверьте папку «Спам».
+                  {t("login.forgot.sent")}
                 </p>
                 <div className="auth__actions">
                   <button type="button" className="btn login__btnFull"
                     onClick={() => void forgotPassword()}
                     disabled={forgotLoading || forgotCooldown > 0}
                     style={{ opacity: forgotCooldown > 0 ? 0.6 : 1 }}>
-                    {forgotLoading ? "Отправляем…"
-                      : forgotCooldown > 0 ? `Отправить повторно через ${forgotCooldown} сек`
-                      : "Отправить повторно"}
+                    {forgotLoading ? t("login.forgot.sending")
+                      : forgotCooldown > 0 ? t("login.forgot.resend_in").replace("{seconds}", String(forgotCooldown))
+                      : t("login.forgot.resend")}
                   </button>
                   <button type="button" className="btn login__btnFull"
                     onClick={() => {
@@ -802,10 +801,10 @@ export function Login() {
                       if (forgotTimerRef.current) { clearInterval(forgotTimerRef.current); forgotTimerRef.current = null; }
                     }}
                     disabled={forgotLoading}>
-                    Ввести другой email
+                    {t("login.forgot.other_email")}
                   </button>
                   <button type="button" className="btn btn--primary login__btnFull" onClick={closeModal}>
-                    Понятно
+                    {t("login.forgot.ok")}
                   </button>
                 </div>
               </div>
@@ -844,7 +843,7 @@ export function Login() {
               <div className="pre" style={{ borderColor: "rgba(124,92,255,.35)", background: "rgba(124,92,255,.08)", marginBottom: 16 }}>
                 <div style={{ fontWeight: 700, marginBottom: 2 }}>🎉 {t("login.partner.notice")}</div>
                 <div style={{ opacity: 0.65, fontSize: 13, marginTop: 4 }}>
-                  {lang === "ru" ? "Код приглашения" : "Referral code"}: <b>{partnerIdInput}</b>
+                  {t("login.partner.code")}: <b>{partnerIdInput}</b>
                 </div>
               </div>
             )}
@@ -893,7 +892,7 @@ export function Login() {
                 <div className="login__switchWrap" style={{ marginTop: 4 }}>
                   <button type="button" className="btn login__switchBtn"
                     onClick={() => openModal("forgot")} disabled={loading}>
-                    Забыли пароль?
+                    {t("login.forgot.title")}
                   </button>
                 </div>
               )}
@@ -917,8 +916,8 @@ export function Login() {
                       <button type="button" className="btn login__switchBtn"
                         onClick={() => setPartnerOpen((v) => !v)} disabled={loading}>
                         {partnerOpen
-                          ? (lang === "ru" ? "▴ Скрыть" : "▴ Hide")
-                          : (lang === "ru" ? "▾ Есть код приглашения?" : "▾ Have a referral code?")}
+                          ? t("login.partner.hide")
+                          : t("login.partner.have_code")}
                       </button>
                       {partnerOpen && (
                         <div className="field" style={{ marginTop: 8 }}>
@@ -966,7 +965,7 @@ export function Login() {
         <div className="app-loader__card">
           <div className="app-loader__shine" />
           <div className="app-loader__brandRow"><div className="app-loader__mark" /><div className="app-loader__title">Shpun App</div></div>
-          <div className="app-loader__text">{t("login.desc.tg.detecting", "Загрузка…")}</div>
+          <div className="app-loader__text">{t("login.desc.tg.detecting")}</div>
         </div>
       </div>
     );
