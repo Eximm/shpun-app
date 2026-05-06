@@ -126,7 +126,7 @@ function isCard(ps: PaySystem) {
   return n.includes('карт') || n.includes('card') || n.includes('перевод') || u.includes('card')
 }
 
-function methodAccent(ps: PaySystem): { stripe: string; amountColor: string; hintColor: string; icon: string; hint: string } {
+function methodAccent(ps: PaySystem, t: (key: string) => string): { stripe: string; amountColor: string; hintColor: string; icon: string; hint: string } {
   const name = String(ps?.name || '').toLowerCase()
 
   if (name.includes('сбп') || name.includes('sbp') || name.includes('быстр')) {
@@ -135,7 +135,7 @@ function methodAccent(ps: PaySystem): { stripe: string; amountColor: string; hin
       amountColor: '#2be38f',
       hintColor: 'rgba(43,227,143,0.80)',
       icon: '⚡',
-      hint: 'Мгновенно · рекомендуем',
+      hint: t('payments.methods.hint.instant'),
     }
   }
 
@@ -155,7 +155,7 @@ function methodAccent(ps: PaySystem): { stripe: string; amountColor: string; hin
       amountColor: 'rgba(255,255,255,0.80)',
       hintColor: 'rgba(255,255,255,0.38)',
       icon: '💜',
-      hint: 'Внешняя оплата',
+      hint: t('payments.methods.hint.external'),
     }
   }
 
@@ -165,7 +165,7 @@ function methodAccent(ps: PaySystem): { stripe: string; amountColor: string; hin
       amountColor: 'rgba(255,255,255,0.80)',
       hintColor: 'rgba(255,255,255,0.38)',
       icon: '🔶',
-      hint: 'Криптовалюта',
+      hint: t('payments.methods.hint.crypto'),
     }
   }
 
@@ -175,7 +175,7 @@ function methodAccent(ps: PaySystem): { stripe: string; amountColor: string; hin
       amountColor: 'rgba(255,255,255,0.35)',
       hintColor: 'rgba(255,255,255,0.28)',
       icon: '💳',
-      hint: 'Ручная проверка · до 1 ч',
+      hint: t('payments.methods.hint.card_manual'),
     }
   }
 
@@ -184,7 +184,7 @@ function methodAccent(ps: PaySystem): { stripe: string; amountColor: string; hin
     amountColor: 'rgba(255,255,255,0.80)',
     hintColor: 'rgba(255,255,255,0.38)',
     icon: '💳',
-    hint: 'Внешняя оплата',
+    hint: t('payments.methods.hint.external'),
   }
 }
 
@@ -246,27 +246,27 @@ function saveRouterHintDismissed() {
   }
 }
 
-function getOrderError(e: any): { title: string; description: string } {
+function getOrderError(e: any, t: (key: string) => string): { title: string; description: string } {
   const code = String(e?.error || e?.code || '').trim()
   const msg = String(e?.message || '').trim()
 
   if (code === 'unpaid_order_exists') {
     return {
-      title: 'Есть активный или неоплаченный заказ',
-      description: 'Сначала оплатите или удалите существующую услугу.',
+      title: t('servicesOrder.error.unpaid_order.title'),
+      description: t('servicesOrder.error.unpaid_order.desc'),
     }
   }
 
   if (code === 'unpaid_same_service_exists') {
     return {
-      title: 'Есть заказ этого типа',
-      description: 'Сначала оплатите или удалите существующую услугу этого типа.',
+      title: t('servicesOrder.error.unpaid_same.title'),
+      description: t('servicesOrder.error.unpaid_same.desc'),
     }
   }
 
   return {
-    title: 'Не удалось создать услугу',
-    description: msg || 'Попробуйте ещё раз.',
+    title: t('servicesOrder.error.create_failed'),
+    description: msg || t('servicesOrder.error.try_again'),
   }
 }
 
@@ -304,8 +304,9 @@ function getCategoryButtonStyle(cat?: ServiceCategory | null): CSSProperties {
 /* ─── CategoryCard ───────────────────────────────────────────────────────── */
 
 function CategoryCard({ cat, onClick }: { cat: ServiceCategory; onClick: () => void }) {
+  const { t } = useI18n()
   const theme = getCategoryTheme(cat)
-  const btnLabel = cat.button_label || 'Выбрать'
+  const btnLabel = cat.button_label || t('servicesOrder.step.kind.select')
 
   return (
     <button
@@ -336,7 +337,7 @@ function CategoryCard({ cat, onClick }: { cat: ServiceCategory; onClick: () => v
         }}
       />
 
-      {cat.recommended && <div className="so__badgeRecommended">⭐ Рекомендуем</div>}
+      {cat.recommended && <div className="so__badgeRecommended">⭐ {t('servicesOrder.recommended')}</div>}
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
         <div style={{ fontWeight: 900, fontSize: 17, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -600,13 +601,13 @@ export function ServicesOrder() {
       if (status === 'not_paid' || needTopup > 0) {
         await loadPaysystems()
         setWaitMsg(t('servicesOrder.status.choose_payment'))
-        toast.info(getMood('service_order_created') ?? '🛒 Заказ создан', { description: moodChecking(seed) })
+        toast.info(getMood('service_order_created') ?? t('servicesOrder.toast.created'), { description: moodChecking(seed) })
       } else {
         setWaitMsg(t('servicesOrder.status.activated'))
-        toast.success(getMood('service_activated') ?? '🚀 Готово', { description: moodSuccess(seed, nnum(selected.price)) })
+        toast.success(getMood('service_activated') ?? t('servicesOrder.toast.done'), { description: moodSuccess(seed, nnum(selected.price)) })
       }
     } catch (e: any) {
-      const info = getOrderError(e)
+      const info = getOrderError(e, t)
       setErr(info.description)
       toast.error(info.title, { description: info.description })
     } finally {
@@ -640,7 +641,7 @@ export function ServicesOrder() {
     if (!ps?.shm_url) {
       setPayOpenError(t('servicesOrder.pay.no_url'))
       setOverlayOpen(true)
-      toast.error('😬 Метод недоступен', { description: 'Выберите другой способ оплаты.' })
+      toast.error(t('payments.toast.method_unavailable'), { description: t('payments.toast.method_unavailable.desc') })
       return
     }
 
@@ -657,11 +658,11 @@ export function ServicesOrder() {
 
     if (opened) {
       setWaitMsg(t('servicesOrder.status.pay_opened'))
-      toast.info('🚀 Открываем оплату', { description: moodChecking(seed) })
+      toast.info(t('servicesOrder.pay.opening'), { description: moodChecking(seed) })
     } else {
       setPayOpenError(t('servicesOrder.pay.blocked'))
       setWaitMsg(t('servicesOrder.status.pay_manual'))
-      toast.error('🚫 Браузер заблокировал окно', { description: 'Скопируйте ссылку и откройте вручную.' })
+      toast.error(t('servicesOrder.pay.browser_blocked'), { description: t('servicesOrder.pay.browser_blocked.desc') })
     }
   }
 
@@ -678,17 +679,17 @@ export function ServicesOrder() {
 
     if (!opened) {
       setPayOpenError(t('servicesOrder.pay.blocked'))
-      toast.error('🚫 Браузер заблокировал окно', { description: 'Скопируйте ссылку и откройте вручную.' })
+      toast.error(t('servicesOrder.pay.browser_blocked'), { description: t('servicesOrder.pay.browser_blocked.desc') })
       return
     }
 
-    toast.info('🚀 Открыли', { description: 'Завершите платёж и вернитесь.' })
+    toast.info(t('servicesOrder.pay.opened'), { description: t('servicesOrder.pay.opened.desc') })
   }
 
   async function pollOnce() {
     const seed = String(created?.userServiceId || selected?.serviceId || '')
 
-    toast.info('🔍 Проверяем', { description: moodChecking(seed) })
+    toast.info(t('servicesOrder.toast.checking'), { description: moodChecking(seed) })
 
     try {
       await Promise.resolve(refetch?.())
@@ -705,7 +706,7 @@ export function ServicesOrder() {
       if (item && (item.status === 'active' || item.status === 'pending')) {
         setCreated((cur) => (cur ? { ...cur, status: item.status, statusRaw: item.statusRaw || cur.statusRaw } : cur))
         setWaitMsg(t('servicesOrder.status.activated'))
-        toast.success(getMood('service_activated') ?? '🎉 Оплата подтверждена', { description: moodSuccess(seed, toPay) })
+        toast.success(getMood('service_activated') ?? t('servicesOrder.toast.paid'), { description: moodSuccess(seed, toPay) })
         return
       }
     } catch {
@@ -713,7 +714,7 @@ export function ServicesOrder() {
     }
 
     setWaitMsg(t('servicesOrder.status.not_confirmed'))
-    toast.info(getMood('payment_failed') ?? '⏳ Пока не видим', { description: 'Подождите немного и проверьте снова.' })
+    toast.info(getMood('payment_failed') ?? t('servicesOrder.pay.not_seen'), { description: t('servicesOrder.pay.not_seen.desc') })
   }
 
   async function handleCopyLink() {
@@ -723,12 +724,12 @@ export function ServicesOrder() {
     setCopied(ok)
 
     if (!ok) {
-      setPayOpenError('Не скопировалось')
-      toast.error('😬 Не скопировалось', { description: 'Попробуйте вручную.' })
+      setPayOpenError(t('servicesOrder.pay.copy_failed.short'))
+      toast.error(t('servicesOrder.pay.copy_failed.short'), { description: t('servicesOrder.pay.copy_failed.desc') })
       return
     }
 
-    toast.success(getMood('copied') ?? '📋 Ссылка скопирована', { description: 'Вставьте в браузер и оплатите.' })
+    toast.success(getMood('copied') ?? t('servicesOrder.pay.copy_link_ok'), { description: t('servicesOrder.pay.copy_link_ok.desc') })
   }
 
   function resetSelection() {
@@ -999,7 +1000,7 @@ export function ServicesOrder() {
                     type="button"
                     style={{ borderColor: 'rgba(96,165,250,0.38)', color: 'rgba(147,197,253,1)' }}
                   >
-                    📘 {t('servicesOrder.router.hint.open_short', 'Инструкция')}
+                    📘 {t('servicesOrder.router.hint.open_short')}
                   </button>
                 </div>
               )}
@@ -1131,7 +1132,7 @@ export function ServicesOrder() {
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 12 }}>
                       {paySystems.map((ps, idx) => {
-                        const accent = methodAccent(ps)
+                        const accent = methodAccent(ps, t)
 
                         return (
                           <button
@@ -1197,7 +1198,7 @@ export function ServicesOrder() {
                       })}
 
                       <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.28)', lineHeight: 1.4, marginTop: 4 }}>
-                        После оплаты вернитесь сюда и нажмите “Проверить оплату”.
+                        {t('servicesOrder.pay.complete_hint')}
                       </p>
                     </div>
                   )}

@@ -91,25 +91,25 @@ function fmtForecastDate(iso: string) {
 
 /* ─── Method accent — левая полоса и цвет суммы ─────────────────────────── */
 
-function methodAccent(ps: PaySystem): { stripe: string; amountColor: string; hintColor: string; icon: string; hint: string } {
+function methodAccent(ps: PaySystem, t: (key: string) => string): { stripe: string; amountColor: string; hintColor: string; icon: string; hint: string } {
   const name = String(ps?.name || "").toLowerCase();
 
   if (name.includes("сбп") || name.includes("sbp") || name.includes("быстр")) {
-    return { stripe: "#2be38f", amountColor: "#2be38f", hintColor: "rgba(43,227,143,0.80)", icon: "⚡", hint: "Мгновенно · рекомендуем" };
+    return { stripe: "#2be38f", amountColor: "#2be38f", hintColor: "rgba(43,227,143,0.80)", icon: "⚡", hint: t("payments.methods.hint.instant") };
   }
   if (isStars(ps)) {
     return { stripe: "#f59e0b", amountColor: "rgba(255,255,255,0.80)", hintColor: "rgba(255,255,255,0.38)", icon: "⭐", hint: "Telegram Stars" };
   }
   if (name.includes("юмани") || name.includes("yoomoney") || name.includes("юмoney") || name.includes("юmon")) {
-    return { stripe: "#a78bff", amountColor: "rgba(255,255,255,0.80)", hintColor: "rgba(255,255,255,0.38)", icon: "💜", hint: "Внешняя оплата" };
+    return { stripe: "#a78bff", amountColor: "rgba(255,255,255,0.80)", hintColor: "rgba(255,255,255,0.38)", icon: "💜", hint: t("payments.methods.hint.external") };
   }
   if (name.includes("crypto") || name.includes("крипт")) {
-    return { stripe: "#4dd7ff", amountColor: "rgba(255,255,255,0.80)", hintColor: "rgba(255,255,255,0.38)", icon: "🔶", hint: "Криптовалюта" };
+    return { stripe: "#4dd7ff", amountColor: "rgba(255,255,255,0.80)", hintColor: "rgba(255,255,255,0.38)", icon: "🔶", hint: t("payments.methods.hint.crypto") };
   }
   if (isCard(ps)) {
-    return { stripe: "rgba(255,255,255,0.18)", amountColor: "rgba(255,255,255,0.35)", hintColor: "rgba(255,255,255,0.28)", icon: "💳", hint: "Ручная проверка · до 1 ч" };
+    return { stripe: "rgba(255,255,255,0.18)", amountColor: "rgba(255,255,255,0.35)", hintColor: "rgba(255,255,255,0.28)", icon: "💳", hint: t("payments.methods.hint.card_manual") };
   }
-  return { stripe: "rgba(124,92,255,0.60)", amountColor: "rgba(255,255,255,0.80)", hintColor: "rgba(255,255,255,0.38)", icon: "💳", hint: "Внешняя оплата" };
+  return { stripe: "rgba(124,92,255,0.60)", amountColor: "rgba(255,255,255,0.80)", hintColor: "rgba(255,255,255,0.38)", icon: "💳", hint: t("payments.methods.hint.external") };
 }
 
 /* ─── Modals ─────────────────────────────────────────────────────────────── */
@@ -117,19 +117,20 @@ function methodAccent(ps: PaySystem): { stripe: string; amountColor: string; hin
 function PaymentErrorModal({ open, onClose, onRetry }: {
   open: boolean; onClose: () => void; onRetry: () => void;
 }) {
+  const { t } = useI18n();
   if (!open) return null;
   return createPortal(
     <div role="dialog" aria-modal="true" className="modal" onMouseDown={onClose}>
       <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()} style={{ textAlign: "center" }}>
         <div className="card__body">
           <div style={{ fontSize: 52, marginBottom: 8 }}>❌</div>
-          <div className="h1" style={{ fontSize: 20, marginBottom: 8 }}>Оплата не прошла</div>
+          <div className="h1" style={{ fontSize: 20, marginBottom: 8 }}>{t("payments.modal.error.title")}</div>
           <p className="p" style={{ opacity: 0.75 }}>
-            Платёж был отменён или произошла ошибка. Попробуйте ещё раз или выберите другой способ оплаты.
+            {t("payments.modal.error.text")}
           </p>
           <div className="actions actions--2" style={{ marginTop: 20 }}>
-            <button className="btn" type="button" onClick={onClose}>Закрыть</button>
-            <button className="btn btn--primary" type="button" onClick={onRetry}>Попробовать снова</button>
+            <button className="btn" type="button" onClick={onClose}>{t("common.close")}</button>
+            <button className="btn btn--primary" type="button" onClick={onRetry}>{t("payments.modal.error.retry")}</button>
           </div>
         </div>
       </div>
@@ -139,22 +140,22 @@ function PaymentErrorModal({ open, onClose, onRetry }: {
 }
 
 function ReceiptSuccessModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { t } = useI18n();
   if (!open) return null;
   return createPortal(
     <div role="dialog" aria-modal="true" className="modal" onMouseDown={onClose}>
       <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()} style={{ textAlign: "center" }}>
         <div className="card__body">
           <div style={{ fontSize: 52, marginBottom: 8 }}>📬</div>
-          <div className="h1" style={{ fontSize: 20, marginBottom: 8 }}>Квитанция получена</div>
+          <div className="h1" style={{ fontSize: 20, marginBottom: 8 }}>{t("payments.modal.receipt.title")}</div>
           <p className="p" style={{ opacity: 0.78, lineHeight: 1.6 }}>
-            Мы получили чек и отправили его на ручную проверку.
-            Баланс будет зачислен после подтверждения оплаты. Обычно это занимает до одного часа в рабочее время.
+            {t("payments.modal.receipt.text")}
           </p>
           <p className="p" style={{ marginTop: 10, opacity: 0.5, fontSize: 13 }}>
-            Повторно отправлять эту же квитанцию не нужно.
+            {t("payments.modal.receipt.note")}
           </p>
           <div className="actions actions--1" style={{ marginTop: 20 }}>
-            <button className="btn btn--primary" type="button" onClick={onClose}>Хорошо</button>
+            <button className="btn btn--primary" type="button" onClick={onClose}>{t("payments.modal.receipt.ok")}</button>
           </div>
         </div>
       </div>
@@ -246,23 +247,23 @@ function RequisitesModal({ open, onClose, amountNumber, onSuccess }: {
 
   async function uploadReceipt(file: File) {
     if (inFlightRef.current || uploading) {
-      toast.error("⏳ Уже отправляем", { description: "Дождитесь завершения текущей отправки." }); return;
+      toast.error(t("payments.receipt.already_uploading"), { description: t("payments.receipt.already_uploading.desc") }); return;
     }
     if (!amountNumber || amountNumber < 1) {
-      toast.error("💸 Введите сумму", { description: "Сначала укажите сколько платите — потом чек." }); return;
+      toast.error(t("payments.receipt.amount_first"), { description: t("payments.receipt.amount_first.short_desc") }); return;
     }
     if (file.size > 2 * 1024 * 1024) {
-      toast.error("📎 Файл великоват", { description: "Максимум 2 МБ. Сожмите или обрежьте скриншот." }); return;
+      toast.error(t("payments.receipt.file_too_large.short_title"), { description: t("payments.receipt.file_too_large.short_desc") }); return;
     }
     if (cooldown > 0) {
-      toast.error("⏳ Подождите", { description: `Следующий чек можно отправить через ${cooldown} сек.` }); return;
+      toast.error(t("payments.receipt.wait"), { description: t("payments.receipt.wait.desc").replace("{seconds}", String(cooldown)) }); return;
     }
     inFlightRef.current = true; setUploading(true); setUploadMsg(null);
     try {
       const hash = await fileHash(file);
       if (sentHashesRef.current.has(hash)) {
         setUploadMsg("duplicate");
-        toast.error("🙅 Такой чек уже отправлен", { description: "Это тот же файл. Мы уже его получили и проверяем." });
+        toast.error(t("payments.receipt.duplicate.sent"), { description: t("payments.receipt.duplicate.sent.desc") });
         window.setTimeout(() => setUploadMsg(null), 20_000); return;
       }
       const fd = new FormData();
@@ -271,21 +272,21 @@ function RequisitesModal({ open, onClose, amountNumber, onSuccess }: {
       if (!json?.ok) {
         if (json?.error === "duplicate_receipt") {
           rememberReceiptHash(hash); setCooldown(COOLDOWN_SEC); setUploadMsg("duplicate");
-          toast.error("🙅 Такой чек уже есть", { description: "Повторно отправлять его не нужно — он уже на проверке." });
+          toast.error(t("payments.receipt.duplicate.exists"), { description: t("payments.receipt.duplicate.exists.desc") });
           window.setTimeout(() => setUploadMsg(null), 20_000); return;
         }
         if (json?.error === "receipt_rate_limited") {
           const nextCooldown = Number.isFinite(Number(json.cooldown_sec)) && Number(json.cooldown_sec) > 0
             ? Math.ceil(Number(json.cooldown_sec)) : COOLDOWN_SEC;
           setCooldown(nextCooldown);
-          toast.error("⏳ Слишком часто", { description: `Следующий чек можно отправить через ${nextCooldown} сек.` }); return;
+          toast.error(t("payments.receipt.rate_limited"), { description: t("payments.receipt.wait.desc").replace("{seconds}", String(nextCooldown)) }); return;
         }
         throw json ?? { message: "receipt_upload_failed" };
       }
       rememberReceiptHash(hash); setCooldown(COOLDOWN_SEC);
-      toast.success("📬 Чек получен!", { description: "Проверим вручную и зачислим. Повторно отправлять не нужно." });
+      toast.success(t("payments.receipt.received"), { description: t("payments.receipt.received.desc") });
       onSuccess();
-    } catch (e) { toastApiError(e, { title: "😬 Не отправилось" }); }
+    } catch (e) { toastApiError(e, { title: t("payments.receipt.send_failed") }); }
     finally { inFlightRef.current = false; setUploading(false); }
   }
 
@@ -336,7 +337,7 @@ function RequisitesModal({ open, onClose, amountNumber, onSuccess }: {
             <div className="actions actions--1" style={{ marginTop: 16 }}>
               <label className={`btn${!uploading && cooldown === 0 ? " btn--primary" : ""}`}
                 style={{ cursor: uploading || cooldown > 0 ? "not-allowed" : "pointer", opacity: uploading || cooldown > 0 ? 0.65 : 1 }}>
-                {uploading ? "⏳ Отправляем…" : cooldown > 0 ? `⏳ Повтор через ${cooldown} сек.` : "📎 Прикрепить квитанцию"}
+                {uploading ? t("payments.receipt.uploading_short") : cooldown > 0 ? t("payments.receipt.retry_in").replace("{seconds}", String(cooldown)) : t("payments.receipt.attach")}
                 <input type="file" accept=".jpg,.jpeg,.png,.pdf" style={{ display: "none" }}
                   disabled={uploading || cooldown > 0}
                   onChange={(e) => { const f = e.target.files?.[0]; e.currentTarget.value = ""; if (!f) return; void uploadReceipt(f); }} />
@@ -344,7 +345,7 @@ function RequisitesModal({ open, onClose, amountNumber, onSuccess }: {
               {cardRaw && (
                 <button className="btn" type="button" onClick={() => {
                   copyText(cardRaw);
-                  toast.success(getMood("copied") ?? "📋 Номер скопирован", { description: "Вставляйте в приложение банка." });
+                  toast.success(getMood("copied") ?? t("payments.requisites.copied"), { description: t("payments.receipt.copy_card.desc") });
                 }}>
                   📋 {t("payments.requisites.copy_card")}
                 </button>
@@ -352,13 +353,13 @@ function RequisitesModal({ open, onClose, amountNumber, onSuccess }: {
             </div>
             {uploadMsg === "duplicate" && (
               <div style={{ marginTop: 14, padding: "14px 16px", borderRadius: 14, background: "rgba(255,184,77,0.08)", border: "1px solid rgba(255,184,77,0.28)" }}>
-                <div style={{ fontWeight: 900, fontSize: 14, color: "rgba(255,184,77,0.95)", marginBottom: 6 }}>🙅 Эта квитанция уже отправлена</div>
+                <div style={{ fontWeight: 900, fontSize: 14, color: "rgba(255,184,77,0.95)", marginBottom: 6 }}>{t("payments.receipt.duplicate.panel_title")}</div>
                 <div style={{ fontSize: 13, lineHeight: 1.6, color: "rgba(255,255,255,0.82)" }}>
-                  Повторно загружать тот же файл не нужно. Если платёж был отправлен, он уже находится на ручной проверке.
+                  {t("payments.receipt.duplicate.panel_text")}
                 </div>
               </div>
             )}
-            <p className="p" style={{ marginTop: 10, opacity: 0.45, fontSize: 12 }}>Форматы: JPG, PNG, PDF · Максимум 2 МБ</p>
+            <p className="p" style={{ marginTop: 10, opacity: 0.45, fontSize: 12 }}>{t("payments.receipt.supported_short")}</p>
           </div>
         </div>
       </div>
@@ -432,19 +433,19 @@ export function Payments() {
   useEffect(() => { void load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handlePay(ps: PaySystem) {
-    if (!ps?.shm_url) { toast.error("😬 Метод недоступен", { description: "Выберите другой способ оплаты." }); return; }
-    if (!amountNumber || amountNumber < 1) { toast.error("💸 Укажите сумму", { description: "Без суммы платёж не откроется." }); return; }
+    if (!ps?.shm_url) { toast.error(t("payments.toast.method_unavailable"), { description: t("payments.toast.method_unavailable.desc") }); return; }
+    if (!amountNumber || amountNumber < 1) { toast.error(t("payments.toast.enter_amount"), { description: t("payments.toast.enter_amount_for_pay.desc") }); return; }
     const fullUrl = `${ps.shm_url}${amountNumber}`;
     safeOpen(fullUrl);
     setShowOverlay(true);
-    toast.info("🚀 Открываем оплату", { description: getMood("payment_checking", { seed: `${ps.shm_url}|${amountNumber}` }) ?? "Завершите платёж и вернитесь." });
+    toast.info(t("payments.toast.payment_opening"), { description: getMood("payment_checking", { seed: `${ps.shm_url}|${amountNumber}` }) ?? t("payments.toast.payment_opening.desc") });
   }
 
   async function removeAutopayment() {
     if (!window.confirm(t("payments.autopay.confirm_remove"))) return;
     try {
       await apiFetch("/payments/autopayment", { method: "DELETE" });
-      toast.success("✅ Автоплатёж отключён", { description: "Теперь платите когда сами захотите." });
+      toast.success(t("payments.toast.autopay_removed"), { description: t("payments.toast.autopay_removed.desc") });
       void load();
     } catch (e) { toastApiError(e, { title: t("payments.autopay.remove_failed") }); }
   }
@@ -506,7 +507,7 @@ export function Payments() {
                 <div className="actions actions--2" style={{ marginTop: 16 }}>
                   <button className="btn btn--primary" disabled={checkingPay} type="button" onClick={async () => {
                     setCheckingPay(true); setShowOverlay(false);
-                    toast.info("🔍 Проверяем статус", { description: getMood("payment_checking") ?? "Сверяемся с платёжкой..." });
+                    toast.info(t("payments.toast.checking_status"), { description: getMood("payment_checking") ?? t("payments.toast.checking_status.pay_desc") });
                     await load(); setCheckingPay(false);
                   }}>
                     {checkingPay ? "…" : t("payments.overlay.refresh")}
@@ -604,7 +605,7 @@ export function Payments() {
           <div className="payments-methods-list" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {oneSystems.map((ps, idx) => {
               const cardMethod = isCard(ps);
-              const accent     = methodAccent(ps);
+              const accent     = methodAccent(ps, t);
 
               return (
                 <button
@@ -613,7 +614,7 @@ export function Payments() {
                   type="button"
                   onClick={() => {
                     if (cardMethod) {
-                      if (!amountNumber) { toast.error("💸 Сначала сумму", { description: "Укажите сколько переводите — и тогда реквизиты." }); return; }
+                      if (!amountNumber) { toast.error(t("payments.toast.enter_amount_for_card"), { description: t("payments.toast.enter_amount_for_card.desc") }); return; }
                       setReqModal(true);
                     } else {
                       void handlePay(ps);
@@ -671,7 +672,7 @@ export function Payments() {
               type="button"
               onClick={() => {
                 if (!amountNumber) {
-                  toast.error("💸 Сначала сумму", { description: "Укажите сколько переводите — и тогда реквизиты." });
+                  toast.error(t("payments.toast.enter_amount_for_card"), { description: t("payments.toast.enter_amount_for_card.desc") });
                   return;
                 }
                 setReqModal(true);
@@ -691,7 +692,7 @@ export function Payments() {
                   {t("payments.methods.card_transfer")}
                 </div>
                 <div style={{ fontSize: 10, color: "rgba(255,255,255,0.38)", marginTop: 2 }}>
-                  {t("payments.methods.type.card")} · до 1 ч
+                  {t("payments.methods.type.card")} · {t("payments.methods.card.manual_hint")}
                 </div>
               </div>
               <div style={{ fontSize: 14, fontWeight: 900, color: "rgba(255,255,255,0.80)", flexShrink: 0, whiteSpace: "nowrap" }}>

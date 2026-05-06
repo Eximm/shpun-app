@@ -118,7 +118,7 @@ export default function ConnectRouter({ usi, onDone }: Props) {
       const r = (await apiFetch(`/services/${encodeURIComponent(String(usi))}/router`, { method: 'GET' })) as any
       if (r && (r.ok === false || r.ok === 0) && (r.error || r.message)) throw new Error(String(r.error || r.message))
       setRouters(extractRouters(r))
-      if (!silent) toast.success('🔄 Обновили', { description: getMood('service_status_updated') ?? 'Статус актуален.' })
+      if (!silent) toast.success(t('router.toast.refreshed.title'), { description: getMood('service_status_updated') ?? t('router.toast.refreshed.desc') })
     } catch (e: any) {
       const msg = errMessage(e, t('router.load_error'))
       setError(msg); setRouters([])
@@ -153,7 +153,7 @@ export default function ConnectRouter({ usi, onDone }: Props) {
       const r = (await apiFetch(`/services/${encodeURIComponent(String(usi))}/router/bind`, { method: 'POST', body: { code: clean } })) as any
       if (r && (r.ok === false || r.ok === 0) && (r.error || r.message)) throw new Error(String(r.error || r.message))
       setCode(''); await load({ silent: true }); await loadConfig(); onDone?.()
-      toast.success(getMood('router_bound') ?? '📡 Роутер привязан', { description: `Код: ${toPretty9(clean)}` })
+      toast.success(getMood('router_bound') ?? t('router.toast.bound.title'), { description: `${t('router.toast.code')}: ${toPretty9(clean)}` })
     } catch (e: any) { const msg = errMessage(e, t('router.bind_error')); setError(msg); toast.error(t('router.bind_error'), { description: msg })
     } finally { setBusy(false) }
   }
@@ -168,7 +168,7 @@ export default function ConnectRouter({ usi, onDone }: Props) {
       if (r && (r.ok === false || r.ok === 0) && (r.error || r.message)) throw new Error(String(r.error || r.message))
       setRouterLinks([]); setSelectedLinkRaw(''); setSavedLinkRaw(''); setLocationOpen(false)
       await load({ silent: true }); onDone?.()
-      toast.success(getMood('router_unbound') ?? '🔓 Роутер отвязан', { description: 'Можно привязать новый.' })
+      toast.success(getMood('router_unbound') ?? t('router.toast.unbound.title'), { description: t('router.toast.unbound.desc') })
     } catch (e: any) { const msg = errMessage(e, t('router.unbind_error')); setError(msg); toast.error(t('router.unbind_error'), { description: msg })
     } finally { setBusy(false) }
   }
@@ -180,7 +180,7 @@ export default function ConnectRouter({ usi, onDone }: Props) {
       const r = (await apiFetch(`/services/${encodeURIComponent(String(usi))}/router/config`, { method: 'POST', body: { link: selectedLinkRaw } })) as any
       if (r && (r.ok === false || r.ok === 0) && (r.error || r.message)) throw new Error(String(r.error || r.message))
       setSavedLinkRaw(selectedLinkRaw); setLocationOpen(false)
-      toast.success('💾 Конфиг сохранён', { description: `${selectedLocation?.locationLabel ?? ''} · ${protocolLabel(selectedProtocol)}` })
+      toast.success(t('router.toast.config_saved.title'), { description: `${selectedLocation?.locationLabel ?? ''} · ${protocolLabel(selectedProtocol)}` })
       await loadConfig({ preserveSelection: true })
     } catch (e: any) { const msg = errMessage(e, t('router.config.save_error')); setConfigError(msg); toast.error(t('router.config.save_error'), { description: msg })
     } finally { setConfigSaving(false) }
@@ -314,7 +314,7 @@ export default function ConnectRouter({ usi, onDone }: Props) {
                     </button>
                     {savedLocation && (
                       <div style={{ fontSize: 10, color: "rgba(43,227,143,0.80)", marginBottom: 6 }}>
-                        ✅ Активно: {savedLocation.locationLabel} · {protocolLabel(savedLocation.protocol)}
+                        ✅ {t('router.config.active')}: {savedLocation.locationLabel} · {protocolLabel(savedLocation.protocol)}
                       </div>
                     )}
                     {locationOpen && (

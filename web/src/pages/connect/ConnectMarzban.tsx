@@ -160,7 +160,7 @@ export default function ConnectMarzban({ usi }: Props) {
       setSubscriptionUrl(url);
       const mirror = String(r?.subscription_url_mirror ?? r?.subscriptionUrlMirror ?? "").trim();
       setSubscriptionUrlMirror(mirror || null);
-      toast.success(t("connect.ready") || "Подписка готова", { description: getMood("subscription_ready") ?? "Импортируйте в v2RayTun." });
+      toast.success(t("connect.ready"), { description: getMood("subscription_ready") ?? t("connect.sub_ready_desc") });
     } catch (e: any) {
       setSubscriptionUrl(""); setSubscriptionUrlMirror(null);
       const msg = e?.message || t("connect.load_failed");
@@ -190,7 +190,11 @@ export default function ConnectMarzban({ usi }: Props) {
   async function openQr() {
     if (!subscriptionUrl) return;
     try {
-      const dataUrl = await QRCode.toDataURL(subscriptionUrl, { margin: 2, width: 360 });
+      const dataUrl = await QRCode.toDataURL(subscriptionUrl, {
+        margin: 2,
+        width: 360,
+        color: { dark: "#f8fbff", light: "#07111f" },
+      });
       setQrDataUrl(dataUrl); setQrOpen(true);
       toast.info(t("connect.qr_title"), { description: t("connect.qr_text") });
     } catch {
@@ -211,7 +215,11 @@ export default function ConnectMarzban({ usi }: Props) {
 
   async function openRulesQr() {
     try {
-      const dataUrl = await QRCode.toDataURL(V2RAY_TRAFFIC_RULES_URL, { margin: 2, width: 360 });
+      const dataUrl = await QRCode.toDataURL(V2RAY_TRAFFIC_RULES_URL, {
+        margin: 2,
+        width: 360,
+        color: { dark: "#f8fbff", light: "#07111f" },
+      });
       setRulesQrDataUrl(dataUrl); setRulesQrOpen(true);
     } catch {
       toast.error(t("connect.qr_title"), { description: t("connect.sub_prepare_error_desc") });
@@ -220,9 +228,9 @@ export default function ConnectMarzban({ usi }: Props) {
 
   function openTrafficRules() {
     tryOpenScheme(V2RAY_TRAFFIC_RULES_URL, runtime, () => {
-      toast.info("Откройте v2RayTun вручную", { description: "Перейдите в Настройки → Правила маршрутизации" });
+      toast.info(t("connectMarzban.routing.manual_title"), { description: t("connectMarzban.routing.manual_desc") });
     });
-    toast.info("⚡ Применяем маршруты", { description: "Открываем v2RayTun…" });
+    toast.info(t("connectMarzban.routing.opening_title"), { description: t("connectMarzban.routing.opening_desc") });
   }
 
   function openClientStore(client: ClientKind) {
@@ -262,7 +270,7 @@ export default function ConnectMarzban({ usi }: Props) {
         <button className="btn cawg__deviceBtn" type="button" onClick={() => setPlatformPickerOpen(true)} disabled={loading}>
           {PLATFORM_ICONS[platform]}{" "}
           {chip === "auto"
-            ? t("connectAmneziaWG.device.current", "Текущее ({platform})").replace("{platform}", platformLabel(autoPlatform))
+            ? t("connectAmneziaWG.device.current").replace("{platform}", platformLabel(autoPlatform))
             : platformLabel(platform)}
           {" "}▾
         </button>
@@ -274,7 +282,7 @@ export default function ConnectMarzban({ usi }: Props) {
 
           {/* Шаг 1 — установка */}
           <div className="pre" style={{ borderColor: "rgba(124,92,255,0.22)", background: "rgba(124,92,255,0.05)" }}>
-            <b>Шаг 1.</b> {t("connect.step_install_desc").replace("{client}", V2RAYTUN_LINKS[platform].title).replace("{platform}", platformLabel(platform))}
+            <b>{t("connect.step1.label")}</b> {t("connect.step_install_desc").replace("{client}", V2RAYTUN_LINKS[platform].title).replace("{platform}", platformLabel(platform))}
           </div>
           {V2RAYTUN_LINKS[platform].direct ? (
             <div className="actions actions--2">
@@ -295,7 +303,7 @@ export default function ConnectMarzban({ usi }: Props) {
 
           {/* Шаг 2 — импорт */}
           <div className="pre" style={{ marginTop: 12, borderColor: "rgba(77,215,255,0.22)", background: "rgba(77,215,255,0.05)" }}>
-            <b>Шаг 2.</b> {t("connect.step_import_desc")}
+            <b>{t("connect.step2.label")}</b> {t("connect.step_import_desc")}
           </div>
           <div className="actions actions--1">
             <button className="btn btn--primary" onClick={() => openImport(false)} disabled={!ready} type="button">
@@ -311,13 +319,13 @@ export default function ConnectMarzban({ usi }: Props) {
           <div className="cm__priorityHead">
             <span className="cm__priorityIcon">↔</span>
             <div>
-              <div className="cm__priorityTitle">Альтернативная подписка</div>
-              <div className="cm__prioritySub">Используйте RU-зеркало, если основной импорт не открылся.</div>
+                  <div className="cm__priorityTitle">{t("connectMarzban.mirror.title")}</div>
+                  <div className="cm__prioritySub">{t("connectMarzban.mirror.sub")}</div>
             </div>
           </div>
           <div className="actions actions--1 cm__priorityActions">
             <button className="btn btn--primary" onClick={() => openImport(true)} type="button">
-              🔄 Подключить через RU-зеркало
+                  🔄 {t("connectMarzban.mirror.cta")}
             </button>
           </div>
         </div>
@@ -328,18 +336,18 @@ export default function ConnectMarzban({ usi }: Props) {
         <div className="cm__priorityHead">
           <span className="cm__priorityIcon">🗺️</span>
           <div>
-            <div className="cm__priorityTitle">Раздельная маршрутизация</div>
+            <div className="cm__priorityTitle">{t("connectMarzban.routing.title")}</div>
             <div className="cm__prioritySub">
-              Только РФ-трафик напрямую, остальное — в туннель
+              {t("connectMarzban.routing.sub")}
             </div>
           </div>
         </div>
         <div className="actions actions--2 cm__priorityActions">
           <button className="btn btn--primary" onClick={openTrafficRules} type="button">
-            ⚡ Применить маршруты
+            ⚡ {t("connectMarzban.routing.apply")}
           </button>
           <button className="btn" onClick={() => void openRulesQr()} type="button">
-            📱 QR-код
+            📱 {t("connectMarzban.routing.qr")}
           </button>
         </div>
       </div>
@@ -354,8 +362,8 @@ export default function ConnectMarzban({ usi }: Props) {
       {advancedOpen && ready && (
         <div className="card cm__extraCard">
           <div className="card__body">
-            <div className="cm__extraTitle">Дополнительно</div>
-            <div className="cm__extraSub">QR, копирование подписки и альтернативный клиент.</div>
+            <div className="cm__extraTitle">{t("connect.extra.title")}</div>
+            <div className="cm__extraSub">{t("connectMarzban.extra.sub")}</div>
 
             <div className="actions actions--2" style={{ marginTop: 12 }}>
               <button className="btn btn--primary" type="button" onClick={() => void copySub(false)}>
@@ -369,14 +377,14 @@ export default function ConnectMarzban({ usi }: Props) {
             {subscriptionUrlMirror && (
               <div className="actions actions--1" style={{ marginTop: 8 }}>
                 <button className="btn" type="button" onClick={() => void copySub(true)}>
-                  {copiedMirror ? `✅ ${t("connect.copied")}` : `📋 ${t("connect.copy_link")} (RU зеркало)`}
+                  {copiedMirror ? `✅ ${t("connect.copied")}` : `📋 ${t("connect.copy_link")} (${t("connectMarzban.mirror.short")})`}
                 </button>
               </div>
             )}
 
             {/* Hiddify */}
             <div className="pre" style={{ marginTop: 12, borderColor: "rgba(43,227,143,0.22)", background: "rgba(43,227,143,0.05)" }}>
-              <b>Hiddify</b> — альтернативный клиент
+              <b>Hiddify</b> — {t("connectMarzban.hiddify.alt_client")}
             </div>
             {HIDDIFY_LINKS[platform].direct ? (
               <div className="actions actions--2">
@@ -400,7 +408,7 @@ export default function ConnectMarzban({ usi }: Props) {
                 tryOpenScheme(href, runtime);
                 toast.info(t("connect.open_client"), { description: t("connect.import_text") });
               }} disabled={!ready}>
-                ⚡ {t("connect.add_sub")} в Hiddify
+                ⚡ {t("connect.add_sub")} {t("connectMarzban.hiddify.to_hiddify")}
               </button>
             </div>
           </div>
@@ -413,13 +421,13 @@ export default function ConnectMarzban({ usi }: Props) {
           <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()}>
             <div className="card__body">
               <div className="modal__head">
-                <div className="modal__title">🗺️ Маршруты v2RayTun</div>
+                <div className="modal__title">🗺️ {t("connectMarzban.routing.modal_title")}</div>
                 <button className="btn modal__close" type="button" onClick={() => setRulesQrOpen(false)} aria-label={t("common.close")}>✕</button>
               </div>
               <div className="modal__content">
-                <p className="p">Отсканируйте QR в v2RayTun для настройки раздельной маршрутизации.</p>
-                <div className="helperMedia" style={{ marginTop: 12, background: "#fff", borderRadius: 12, padding: 8 }}>
-                  {rulesQrDataUrl && <img className="helperMedia__img" src={rulesQrDataUrl} alt="QR маршрутов" loading="lazy" width={320} />}
+                <p className="p">{t("connectMarzban.routing.modal_sub")}</p>
+                <div className="helperMedia helperMedia--qr">
+                  {rulesQrDataUrl && <img className="helperMedia__img" src={rulesQrDataUrl} alt={t("connectMarzban.routing.qr_alt")} loading="lazy" width={320} />}
                 </div>
                 <div className="actions actions--1" style={{ marginTop: 14 }}>
                   <button className="btn btn--primary" onClick={() => setRulesQrOpen(false)} type="button">{t("common.close")}</button>
@@ -474,7 +482,7 @@ export default function ConnectMarzban({ usi }: Props) {
               </div>
               <div className="modal__content">
                 <p className="p">{t("connect.qr_text")}</p>
-                <div className="helperMedia" style={{ marginTop: 12, background: "#fff", borderRadius: 12, padding: 8 }}>
+                <div className="helperMedia helperMedia--qr">
                   {qrDataUrl && <img className="helperMedia__img" src={qrDataUrl} alt={t("connectAmneziaWG.qr.alt")} loading="lazy" width={320} />}
                 </div>
                 <div className="actions actions--1" style={{ marginTop: 14 }}>

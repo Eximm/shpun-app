@@ -138,10 +138,11 @@ async function shmLogin(
   });
 
   if (!r.ok) {
+    const upstreamUnavailable = (r.status || 0) >= 500;
     return {
       ok: false,
       status: r.status || 401,
-      error: "invalid_credentials",
+      error: upstreamUnavailable ? "shm_auth_unavailable" : "invalid_credentials",
       detail: r.json ?? r.text,
     };
   }

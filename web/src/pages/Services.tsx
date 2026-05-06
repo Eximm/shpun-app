@@ -87,7 +87,7 @@ function statusLabel(s: UiStatus, t: T) {
   switch (s) {
     case "active":   return t("services.status.active",   "Активна");
     case "pending":  return t("services.status.pending",  "Обработка");
-    case "init":     return t("services.status.init",     "Обработка");
+    case "init":     return t("services.status.init",     "Обрабатывается");
     case "not_paid": return t("services.status.not_paid", "Не оплачена");
     case "blocked":  return t("services.status.blocked",  "Заблокирована");
     case "removed":  return t("services.status.removed",  "Завершена");

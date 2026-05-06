@@ -131,7 +131,7 @@ export default function ConnectAmneziaWG({ usi }: Props) {
       setConfigName(picked.name || `vpn${usi}.conf`);
       if (!didToastReadyRef.current) {
         didToastReadyRef.current = true;
-        toast.success("🔑 Конфиг готов!", { description: getMood("subscription_ready") ?? "Скачайте и импортируйте в AmneziaWG." });
+        toast.success(t("connectAmneziaWG.toast.ready.title"), { description: getMood("subscription_ready") ?? t("connectAmneziaWG.toast.ready.desc") });
       }
     } catch (e: any) {
       setConfigText("");
@@ -151,26 +151,30 @@ export default function ConnectAmneziaWG({ usi }: Props) {
   async function openQr() {
     if (!configText) return;
     try {
-      const dataUrl = await QRCode.toDataURL(configText, { margin: 2, width: 360 });
+      const dataUrl = await QRCode.toDataURL(configText, {
+        margin: 2,
+        width: 360,
+        color: { dark: "#f8fbff", light: "#07111f" },
+      });
       setQrDataUrl(dataUrl); setQrOpen(true);
-      toast.info("📱 QR готов", { description: "Отсканируйте в AmneziaWG." });
+      toast.info(t("connectAmneziaWG.toast.qr_ready.title"), { description: t("connectAmneziaWG.toast.qr_ready.desc") });
     } catch {
-      toast.error("😬 QR не создался", { description: "Попробуйте скачать конфиг вместо QR." });
+      toast.error(t("connectAmneziaWG.toast.qr_failed.title"), { description: t("connectAmneziaWG.toast.qr_failed.desc") });
     }
   }
 
   function downloadConf() {
     if (!configText) return;
     downloadTextFile(configName || `vpn${usi}.conf`, configText);
-    toast.success("⬇️ Конфиг скачан", { description: "Импортируйте файл в AmneziaWG." });
+    toast.success(t("connectAmneziaWG.toast.download.title"), { description: t("connectAmneziaWG.toast.download.desc") });
   }
 
   async function copyConf() {
     if (!configText) return;
     const ok = await copyToClipboard(configText);
     ok
-      ? toast.success(getMood("copied") ?? "📋 Скопировано", { description: "Вставьте в AmneziaWG → Добавить туннель." })
-      : toast.error("😬 Не скопировалось", { description: "Попробуйте скачать конфиг." });
+      ? toast.success(getMood("copied") ?? t("connectAmneziaWG.toast.copy_ok.title"), { description: t("connectAmneziaWG.toast.copy_ok.desc") })
+      : toast.error(t("connectAmneziaWG.toast.copy_failed.title"), { description: t("connectAmneziaWG.toast.copy_failed.desc") });
   }
 
   const storeLabel = platform === "android"
@@ -191,10 +195,10 @@ export default function ConnectAmneziaWG({ usi }: Props) {
         <span>{loading ? "⏳" : error ? "⚠️" : "✅"}</span>
         <span>
           {(loading
-            ? t("connectAmneziaWG.top_hint.loading", "Готовим подключение для {platform}…")
+            ? t("connectAmneziaWG.top_hint.loading")
             : error
-              ? t("connectAmneziaWG.top_hint.error",   "Не удалось подготовить подключение.")
-              : t("connectAmneziaWG.top_hint.ready",   "Конфиг готов · Устройство: {platform}")
+              ? t("connectAmneziaWG.top_hint.error")
+              : t("connectAmneziaWG.top_hint.ready")
           ).replace("{platform}", platformLabel(platform))}
         </span>
       </div>
@@ -216,7 +220,7 @@ export default function ConnectAmneziaWG({ usi }: Props) {
         >
           {PLATFORM_ICONS[platform]}{" "}
           {chip === "auto"
-            ? t("connectAmneziaWG.device.current", "Текущее ({platform})").replace("{platform}", platformLabel(autoPlatform))
+            ? t("connectAmneziaWG.device.current").replace("{platform}", platformLabel(autoPlatform))
             : platformLabel(platform)}
           {" "}▾
         </button>
@@ -228,12 +232,12 @@ export default function ConnectAmneziaWG({ usi }: Props) {
 
           {/* Шаг 1 */}
           <div className="pre" style={{ borderColor: "rgba(124,92,255,0.22)", background: "rgba(124,92,255,0.05)" }}>
-            <b>Шаг 1.</b> {t("connectAmneziaWG.step1.sub")} <b>AmneziaWG</b>
-            {t("connectAmneziaWG.step1.sub_for", " для {platform}.").replace("{platform}", platformLabel(platform))}
+            <b>{t("connect.step1.label")}</b> {t("connectAmneziaWG.step1.sub")} <b>AmneziaWG</b>
+            {t("connectAmneziaWG.step1.sub_for").replace("{platform}", platformLabel(platform))}
           </div>
           <div className="actions actions--2">
             <button className="btn btn--primary" onClick={() => openLinkSafe(APP_LINKS[platform])} disabled={loading} type="button">
-              📲 {t("connectAmneziaWG.step1.open_store", "Открыть {store}").replace("{store}", storeLabel)}
+              📲 {t("connectAmneziaWG.step1.open_store").replace("{store}", storeLabel)}
             </button>
             {platform === "android" ? (
               <button className="btn" onClick={() => openLinkSafe(APK_LINK)} disabled={loading} type="button">
@@ -248,7 +252,7 @@ export default function ConnectAmneziaWG({ usi }: Props) {
 
           {/* Шаг 2 */}
           <div className="pre" style={{ marginTop: 12, borderColor: "rgba(77,215,255,0.22)", background: "rgba(77,215,255,0.05)" }}>
-            <b>Шаг 2.</b> {t("connectAmneziaWG.step2.sub_1")} <b>.conf</b>
+            <b>{t("connect.step2.label")}</b> {t("connectAmneziaWG.step2.sub_1")} <b>.conf</b>
             {t("connectAmneziaWG.step2.sub_2")} <b>AmneziaWG</b>.
           </div>
           <div className="actions actions--1">
@@ -274,8 +278,8 @@ export default function ConnectAmneziaWG({ usi }: Props) {
       {moreOpen && ready && (
         <div className="card cm__extraCard">
           <div className="card__body">
-            <div className="cm__extraTitle">Дополнительно</div>
-            <div className="cm__extraSub">QR-код и копирование конфига для ручного импорта.</div>
+            <div className="cm__extraTitle">{t("connect.extra.title")}</div>
+            <div className="cm__extraSub">{t("connectAmneziaWG.extra.sub")}</div>
             <div className="actions actions--2" style={{ marginTop: 12 }}>
               <button className="btn btn--primary" type="button" onClick={() => void openQr()}>
                 📱 {t("connectAmneziaWG.step2.show_qr")}
@@ -338,7 +342,7 @@ export default function ConnectAmneziaWG({ usi }: Props) {
               </div>
               <div className="modal__content">
                 <p className="p">{t("connectAmneziaWG.qr.sub")}</p>
-                <div className="helperMedia" style={{ marginTop: 12, background: "#fff", borderRadius: 12, padding: 8 }}>
+                <div className="helperMedia helperMedia--qr">
                   {qrDataUrl && <img className="helperMedia__img" src={qrDataUrl} alt={t("connectAmneziaWG.qr.alt")} loading="lazy" decoding="async" width={320} />}
                 </div>
                 <div className="actions actions--1" style={{ marginTop: 14 }}>

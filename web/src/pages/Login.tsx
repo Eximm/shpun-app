@@ -172,6 +172,7 @@ function mapAuthError(raw: string, t: (k: string, fb?: string) => string): strin
     case "login_required":              return t("login.err.login_required");
     case "password_required":           return t("login.err.password_required");
     case "invalid_credentials":         return t("login.err.invalid_credentials");
+    case "shm_auth_unavailable":        return t("login.err.shm_auth_unavailable");
     case "password_too_short":
     case "password_too_short_or_weak":  return t("login.err.password_too_short");
     case "login_taken":
