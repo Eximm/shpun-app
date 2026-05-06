@@ -454,6 +454,7 @@ export async function shmShpunAppAdminSettingsSet(
     trialIpPrefixDistinctDevicesThreshold?: number
     trialIpPrefixUserAgentAttemptThreshold?: number
     trialIpPrefixDistinctUsersThreshold?: number
+    trialRequireVerifiedEmail?: boolean
   }
 ) {
   return await shmShpunAppTemplate<any>(shmSessionId, 'admin.settings.set', payload)

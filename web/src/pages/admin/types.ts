@@ -40,6 +40,7 @@ export type TrialProtectionStatusResp = {
   ipPrefixDistinctDevicesThreshold?: number;
   ipPrefixUserAgentAttemptThreshold?: number;
   ipPrefixDistinctUsersThreshold?: number;
+  requireVerifiedEmail?: boolean;
   devicesWithTrial: number;
   activeTrialGroups?: number;
   activeBlockedDevices?: number;
@@ -57,6 +58,7 @@ export type TrialProtectionStatusResp = {
   blockIpPrefix24h?: number;
   missingDeviceToken24h?: number;
   manualBlocks24h?: number;
+  emailBlocks24h?: number;
 };
 
 export type TrialProtectionSettingsSaveResp = {
@@ -68,6 +70,7 @@ export type TrialProtectionSettingsSaveResp = {
   ipPrefixDistinctDevicesThreshold: number;
   ipPrefixUserAgentAttemptThreshold: number;
   ipPrefixDistinctUsersThreshold: number;
+  requireVerifiedEmail: boolean;
 };
 
 export type TrialProtectionEventItem = {

@@ -164,6 +164,7 @@ export async function adminRoutes(app: FastifyInstance) {
     let ipPrefixDistinctDevicesThreshold = 3;
     let ipPrefixUserAgentAttemptThreshold = 2;
     let ipPrefixDistinctUsersThreshold = 3;
+    let requireVerifiedEmail = false;
 
     try {
       const settingsRes = await shmShpunAppAdminSettingsGet(s.shmSessionId);
@@ -204,6 +205,11 @@ export async function adminRoutes(app: FastifyInstance) {
       if (Number.isFinite(distinctUsersThresholdRaw) && distinctUsersThresholdRaw >= 1) {
         ipPrefixDistinctUsersThreshold = Math.floor(distinctUsersThresholdRaw);
       }
+
+      requireVerifiedEmail =
+        settings?.trialRequireVerifiedEmail === true ||
+        settings?.trialRequireVerifiedEmail === 1 ||
+        settings?.trialRequireVerifiedEmail === "1";
     } catch {
       // fallback to cached/env/default values
     }
@@ -262,6 +268,7 @@ export async function adminRoutes(app: FastifyInstance) {
       ipPrefixDistinctDevicesThreshold,
       ipPrefixUserAgentAttemptThreshold,
       ipPrefixDistinctUsersThreshold,
+      requireVerifiedEmail,
       devicesWithTrial: Number(devicesWithTrialRow?.cnt ?? 0),
       activeTrialGroups: Number(activeTrialGroupsRow?.cnt ?? 0),
       activeBlockedDevices: Number(activeBlockedDevicesRow?.cnt ?? 0),
@@ -317,6 +324,10 @@ export async function adminRoutes(app: FastifyInstance) {
       manualBlocks24h: countEvents({
         sinceTs: since24h,
         reason: "device_manually_blocked",
+      }),
+      emailBlocks24h: countEvents({
+        sinceTs: since24h,
+        reason: "trial_email_not_verified",
       }),
     });
   });
@@ -378,6 +389,8 @@ export async function adminRoutes(app: FastifyInstance) {
       return reply.code(400).send({ ok: false, error: "bad_ip_prefix_distinct_users_threshold" });
     }
 
+    const requireVerifiedEmail = Boolean(body?.requireVerifiedEmail);
+
     const r = await shmShpunAppAdminSettingsSet(s.shmSessionId, {
       trialDeviceMode: mode,
       trialDeviceTtlHours: ttlHours,
@@ -386,6 +399,7 @@ export async function adminRoutes(app: FastifyInstance) {
       trialIpPrefixDistinctDevicesThreshold: Math.floor(ipPrefixDistinctDevicesThreshold),
       trialIpPrefixUserAgentAttemptThreshold: Math.floor(ipPrefixUserAgentAttemptThreshold),
       trialIpPrefixDistinctUsersThreshold: Math.floor(ipPrefixDistinctUsersThreshold),
+      trialRequireVerifiedEmail: requireVerifiedEmail,
     });
 
     if (!r.ok) {
@@ -404,6 +418,7 @@ export async function adminRoutes(app: FastifyInstance) {
       ipPrefixDistinctDevicesThreshold: Math.floor(ipPrefixDistinctDevicesThreshold),
       ipPrefixUserAgentAttemptThreshold: Math.floor(ipPrefixUserAgentAttemptThreshold),
       ipPrefixDistinctUsersThreshold: Math.floor(ipPrefixDistinctUsersThreshold),
+      requireVerifiedEmail,
     });
   });
 

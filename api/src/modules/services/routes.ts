@@ -6,6 +6,7 @@ import {
   shmCreateServiceOrder,
   shmDeleteUserService,
   shmGetServiceOrder,
+  shmGetUserEmail,
   shmGetUserServices,
   shmShpunAppConnectGet,
   shmShpunAppOrderRulesGet,
@@ -938,6 +939,7 @@ export async function servicesRoutes(app: FastifyInstance) {
     let trialIpPrefixDistinctDevicesThreshold = 3;
     let trialIpPrefixUserAgentAttemptThreshold = 2;
     let trialIpPrefixDistinctUsersThreshold = 3;
+    let trialRequireVerifiedEmail = false;
 
     try {
       const [orderRulesRes, adminSettingsRes] = await Promise.all([
@@ -979,9 +981,55 @@ export async function servicesRoutes(app: FastifyInstance) {
         if (Number.isFinite(distinctUsersThreshold) && distinctUsersThreshold >= 1) {
           trialIpPrefixDistinctUsersThreshold = Math.floor(distinctUsersThreshold);
         }
+
+        trialRequireVerifiedEmail =
+          settings?.trialRequireVerifiedEmail === true ||
+          settings?.trialRequireVerifiedEmail === 1 ||
+          settings?.trialRequireVerifiedEmail === "1";
       }
     } catch {
       // fail-open
+    }
+
+    if (isTrialService && trialRequireVerifiedEmail) {
+      let emailState: { email: string | null; emailVerified: boolean | null } = {
+        email: null,
+        emailVerified: null,
+      };
+
+      try {
+        emailState = await readTrialEmailState(shmSessionId);
+      } catch {
+        emailState = { email: null, emailVerified: null };
+      }
+
+      if (emailState.emailVerified !== true) {
+        if (deviceToken) {
+          logTrialEvent({
+            deviceToken,
+            userId,
+            ip,
+            userAgent,
+            eventType: "trial_group_block",
+            decision: "block",
+            reason: "trial_email_not_verified",
+            meta: {
+              serviceId,
+              trialGroup,
+              isTrialService,
+              hasEmail: Boolean(emailState.email),
+              emailVerified: emailState.emailVerified,
+              ...trialMeta,
+            },
+          });
+        }
+
+        return reply.code(403).send({
+          ok: false,
+          error: "trial_email_verification_required",
+          message: "Для тестового доступа сначала подтвердите почту в профиле.",
+        });
+      }
     }
 
     if (deviceToken && isTrialService && isDeviceManuallyBlocked(deviceToken)) {
@@ -1258,4 +1306,43 @@ export async function servicesRoutes(app: FastifyInstance) {
     const categories = listServiceCategories({ includeHidden: false });
     return reply.send({ ok: true, items: categories });
   });
+}
+
+function extractEmailFromPayload(payload: any): string | null {
+  const candidates = [
+    payload?.email,
+    payload?.data?.email,
+    payload?.data?.[0]?.email,
+    payload?.data?.[0]?.login2,
+  ];
+  for (const value of candidates) {
+    const email = String(value ?? "").trim().toLowerCase();
+    if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return email;
+  }
+  return null;
+}
+
+function extractEmailVerifiedFromPayload(payload: any): boolean | null {
+  const candidates = [
+    payload?.email_verified,
+    payload?.data?.email_verified,
+    payload?.data?.[0]?.email_verified,
+  ];
+  for (const value of candidates) {
+    if (value === undefined || value === null || value === "") continue;
+    return value === 1 || value === "1" || value === true;
+  }
+  return null;
+}
+
+async function readTrialEmailState(shmSessionId: string): Promise<{
+  email: string | null;
+  emailVerified: boolean | null;
+}> {
+  const r = await shmGetUserEmail(shmSessionId);
+  if (!r.ok) throw new Error("shm_email_get_failed");
+  return {
+    email: extractEmailFromPayload(r.json),
+    emailVerified: extractEmailVerifiedFromPayload(r.json),
+  };
 }

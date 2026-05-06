@@ -50,6 +50,7 @@ export function TrialProtectionSection() {
   const [ipPrefixDistinctDevicesThresholdDraft,  setIpPrefixDistinctDevicesThresholdDraft]  = useState("3");
   const [ipPrefixUserAgentAttemptThresholdDraft, setIpPrefixUserAgentAttemptThresholdDraft] = useState("2");
   const [ipPrefixDistinctUsersThresholdDraft,    setIpPrefixDistinctUsersThresholdDraft]    = useState("3");
+  const [requireVerifiedEmailDraft,              setRequireVerifiedEmailDraft]              = useState(false);
 
   async function load(opts?: { silent?: boolean }) {
     const silent = Boolean(opts?.silent);
@@ -73,6 +74,7 @@ export function TrialProtectionSection() {
       setIpPrefixDistinctDevicesThresholdDraft(String(statusResp.ipPrefixDistinctDevicesThreshold ?? 3));
       setIpPrefixUserAgentAttemptThresholdDraft(String(statusResp.ipPrefixUserAgentAttemptThreshold ?? 2));
       setIpPrefixDistinctUsersThresholdDraft(String(statusResp.ipPrefixDistinctUsersThreshold ?? 3));
+      setRequireVerifiedEmailDraft(Boolean(statusResp.requireVerifiedEmail));
       setEvents(Array.isArray(eventsResp.items) ? eventsResp.items : []);
       setDevices(Array.isArray(devicesResp.items) ? devicesResp.items : []);
       setPrefixes(Array.isArray(prefixesResp.items) ? prefixesResp.items : []);
@@ -96,6 +98,7 @@ export function TrialProtectionSection() {
           ipPrefixDistinctDevicesThreshold:  Number(ipPrefixDistinctDevicesThresholdDraft),
           ipPrefixUserAgentAttemptThreshold: Number(ipPrefixUserAgentAttemptThresholdDraft),
           ipPrefixDistinctUsersThreshold:    Number(ipPrefixDistinctUsersThresholdDraft),
+          requireVerifiedEmail:              requireVerifiedEmailDraft,
         },
       });
       setOkText(`Сохранено: mode=${r.mode}, ttl=${r.ttlHours}h`);
@@ -211,7 +214,8 @@ export function TrialProtectionSection() {
     ipPrefixAttemptThresholdDraft          !== String(status?.ipPrefixAttemptThreshold ?? 3) ||
     ipPrefixDistinctDevicesThresholdDraft  !== String(status?.ipPrefixDistinctDevicesThreshold ?? 3) ||
     ipPrefixUserAgentAttemptThresholdDraft !== String(status?.ipPrefixUserAgentAttemptThreshold ?? 2) ||
-    ipPrefixDistinctUsersThresholdDraft    !== String(status?.ipPrefixDistinctUsersThreshold ?? 3);
+    ipPrefixDistinctUsersThresholdDraft    !== String(status?.ipPrefixDistinctUsersThreshold ?? 3) ||
+    requireVerifiedEmailDraft              !== Boolean(status?.requireVerifiedEmail);
 
   function renderDecisionChip(decision: TrialProtectionEventItem["decision"]) {
     if (decision === "block")   return <span className="chip chip--bad">BLOCK</span>;
@@ -250,6 +254,7 @@ export function TrialProtectionSection() {
             <>
               <div className="admin-metricsGrid admin-gap-top-md">
                 <AdminMetric label="Mode"         value={status?.mode || "—"} tone={status?.mode === "enforce" ? "bad" : status?.mode === "observe" ? "warn" : "soft"} />
+                <AdminMetric label="Email gate"   value={status?.requireVerifiedEmail ? "on" : "off"} tone={status?.requireVerifiedEmail ? "warn" : "soft"} />
                 <AdminMetric label="TTL"          value={`${status?.ttlHours ?? "—"}h`} />
                 <AdminMetric label="Devices now"  value={status?.devicesWithTrial ?? 0} />
                 <AdminMetric label="Blocks 24h"   value={status?.blocks24h ?? 0}   tone="bad" />
@@ -293,6 +298,24 @@ export function TrialProtectionSection() {
                     </div>
                   </div>
                 </div>
+
+                <div className="list__item admin-tightItem">
+                  <div className="list__main">
+                    <div className="list__title">Подтвержденная почта для тестов</div>
+                    <div className="list__sub admin-gap-top-sm">
+                      <label className="admin-radio admin-radio--last">
+                        <input type="checkbox"
+                          checked={requireVerifiedEmailDraft}
+                          onChange={(e) => setRequireVerifiedEmailDraft(e.target.checked)} />
+                        {" "}Тестовый ключ можно заказать только после подтверждения почты
+                      </label>
+                    </div>
+                    <div className="admin-inlineMeta admin-gap-top-sm">
+                      <span>blocked by email 24h: {status?.emailBlocks24h ?? 0}</span>
+                      <span>{status?.requireVerifiedEmail ? "email gate: on" : "email gate: off"}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Пороги */}
@@ -329,6 +352,7 @@ export function TrialProtectionSection() {
                 <AdminMetric label="Observe 24h"          value={status?.observes24h ?? 0}            tone="warn" />
                 <AdminMetric label="Distinct devices 24h" value={status?.distinctDevices24h ?? 0} />
                 <AdminMetric label="Missing token 24h"    value={status?.missingDeviceToken24h ?? 0}  tone="warn" />
+                <AdminMetric label="Email blocks 24h"     value={status?.emailBlocks24h ?? 0}         tone="warn" />
                 <AdminMetric label="Manual blocks 24h"    value={status?.manualBlocks24h ?? 0}        tone="bad" />
                 <AdminMetric label="Block device 24h"     value={status?.blockDevice24h ?? 0}         tone="bad" />
                 <AdminMetric label="Block ip/prefix 24h"  value={(status?.blockIp24h ?? 0) + (status?.blockIpPrefix24h ?? 0)} tone="bad" />

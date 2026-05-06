@@ -264,6 +264,13 @@ function getOrderError(e: any, t: (key: string) => string): { title: string; des
     }
   }
 
+  if (code === 'trial_email_verification_required') {
+    return {
+      title: t('servicesOrder.error.trial_email.title'),
+      description: t('servicesOrder.error.trial_email.desc'),
+    }
+  }
+
   return {
     title: t('servicesOrder.error.create_failed'),
     description: msg || t('servicesOrder.error.try_again'),
