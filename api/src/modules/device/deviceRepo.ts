@@ -86,6 +86,12 @@ export function ensureDeviceTables() {
       meta_json TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS trial_protection_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_trial_devices_token
       ON trial_devices(device_token);
 
@@ -142,6 +148,31 @@ export function getDeviceByToken(deviceToken: string): DeviceRow | null {
     .get(deviceToken) as DeviceRow | undefined;
 
   return row ?? null;
+}
+
+export function getTrialProtectionSetting(key: string): string | null {
+  ensureDeviceTables();
+
+  const row = linkDb
+    .prepare(`SELECT value FROM trial_protection_settings WHERE key = ? LIMIT 1`)
+    .get(key) as { value?: string } | undefined;
+
+  return row?.value ?? null;
+}
+
+export function setTrialProtectionSetting(key: string, value: string) {
+  ensureDeviceTables();
+
+  const now = Math.floor(Date.now() / 1000);
+  linkDb
+    .prepare(`
+      INSERT INTO trial_protection_settings (key, value, updated_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(key) DO UPDATE SET
+        value = excluded.value,
+        updated_at = excluded.updated_at
+    `)
+    .run(key, value, now);
 }
 
 export function createDevice(input: {

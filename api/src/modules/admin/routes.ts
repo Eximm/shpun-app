@@ -10,8 +10,10 @@ import { linkDb } from "../../shared/linkdb/db.js";
 import {
   getTrialDeviceMode,
   getTrialDeviceTtlHours,
+  getTrialRequireVerifiedEmail,
   setCachedTrialDeviceMode,
   setCachedTrialDeviceTtlHours,
+  setTrialRequireVerifiedEmail,
   logTrialEvent,
 } from "../device/deviceService.js";
 import {
@@ -164,7 +166,7 @@ export async function adminRoutes(app: FastifyInstance) {
     let ipPrefixDistinctDevicesThreshold = 3;
     let ipPrefixUserAgentAttemptThreshold = 2;
     let ipPrefixDistinctUsersThreshold = 3;
-    let requireVerifiedEmail = false;
+    let requireVerifiedEmail = getTrialRequireVerifiedEmail();
 
     try {
       const settingsRes = await shmShpunAppAdminSettingsGet(s.shmSessionId);
@@ -206,10 +208,6 @@ export async function adminRoutes(app: FastifyInstance) {
         ipPrefixDistinctUsersThreshold = Math.floor(distinctUsersThresholdRaw);
       }
 
-      requireVerifiedEmail =
-        settings?.trialRequireVerifiedEmail === true ||
-        settings?.trialRequireVerifiedEmail === 1 ||
-        settings?.trialRequireVerifiedEmail === "1";
     } catch {
       // fallback to cached/env/default values
     }
@@ -399,7 +397,6 @@ export async function adminRoutes(app: FastifyInstance) {
       trialIpPrefixDistinctDevicesThreshold: Math.floor(ipPrefixDistinctDevicesThreshold),
       trialIpPrefixUserAgentAttemptThreshold: Math.floor(ipPrefixUserAgentAttemptThreshold),
       trialIpPrefixDistinctUsersThreshold: Math.floor(ipPrefixDistinctUsersThreshold),
-      trialRequireVerifiedEmail: requireVerifiedEmail,
     });
 
     if (!r.ok) {
@@ -408,6 +405,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
     setCachedTrialDeviceMode(mode);
     setCachedTrialDeviceTtlHours(ttlHours);
+    setTrialRequireVerifiedEmail(requireVerifiedEmail);
 
     return reply.send({
       ok: true,

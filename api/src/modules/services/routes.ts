@@ -24,6 +24,7 @@ import {
   getRequestIp,
   getRequestUserAgent,
   getTrialDeviceMode,
+  getTrialRequireVerifiedEmail,
   hasDeviceUsedTrialInGroup,
   getTrialRiskProfile,
   rememberTrialUsedInGroup,
@@ -939,7 +940,7 @@ export async function servicesRoutes(app: FastifyInstance) {
     let trialIpPrefixDistinctDevicesThreshold = 3;
     let trialIpPrefixUserAgentAttemptThreshold = 2;
     let trialIpPrefixDistinctUsersThreshold = 3;
-    let trialRequireVerifiedEmail = false;
+    let trialRequireVerifiedEmail = getTrialRequireVerifiedEmail();
 
     try {
       const [orderRulesRes, adminSettingsRes] = await Promise.all([
@@ -982,10 +983,6 @@ export async function servicesRoutes(app: FastifyInstance) {
           trialIpPrefixDistinctUsersThreshold = Math.floor(distinctUsersThreshold);
         }
 
-        trialRequireVerifiedEmail =
-          settings?.trialRequireVerifiedEmail === true ||
-          settings?.trialRequireVerifiedEmail === 1 ||
-          settings?.trialRequireVerifiedEmail === "1";
       }
     } catch {
       // fail-open

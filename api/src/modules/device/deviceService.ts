@@ -17,6 +17,8 @@ import {
   countRecentTrialUsageByIpPrefix,
   countRecentDistinctDevicesByIpPrefix,
   countDistinctUsersByIpPrefix,
+  getTrialProtectionSetting,
+  setTrialProtectionSetting,
 } from "./deviceRepo.js";
 
 export type TrialDeviceMode = "off" | "observe" | "enforce";
@@ -24,6 +26,8 @@ export type TrialDeviceMode = "off" | "observe" | "enforce";
 let cachedMode: TrialDeviceMode | null = null;
 let cachedTtlHours: number | null = null;
 let lastCleanupTs = 0;
+
+const TRIAL_REQUIRE_VERIFIED_EMAIL_KEY = "require_verified_email";
 
 function nowTs(): number {
   return Math.floor(Date.now() / 1000);
@@ -362,4 +366,13 @@ export function logTrialEvent(input: {
     reason: input.reason ?? null,
     metaJson: input.meta == null ? null : JSON.stringify(input.meta),
   });
+}
+
+export function getTrialRequireVerifiedEmail(): boolean {
+  const raw = getTrialProtectionSetting(TRIAL_REQUIRE_VERIFIED_EMAIL_KEY);
+  return raw === "1" || raw === "true";
+}
+
+export function setTrialRequireVerifiedEmail(enabled: boolean) {
+  setTrialProtectionSetting(TRIAL_REQUIRE_VERIFIED_EMAIL_KEY, enabled ? "1" : "0");
 }
