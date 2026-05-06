@@ -68,8 +68,6 @@ type ApiServiceItem = {
 
 /* ─── Constants ──────────────────────────────────────────────────────────── */
 
-const AMNEZIA_WARN_KEY = 'order.amnezia.warn.dismissed.v1'
-const ROUTER_HINT_KEY = 'order.router.hint.dismissed.v1'
 const HIDDEN_PAYSYSTEMS = new Set(['Telegram Stars Rescue', 'Telegram Stars Karlson'])
 const HINT_SESSION_PREFIX = 'cat.hint.shown.'
 
@@ -214,38 +212,6 @@ async function copyToClipboard(text: string): Promise<boolean> {
   }
 }
 
-function readAmneziaWarnDismissed() {
-  try {
-    return localStorage.getItem(AMNEZIA_WARN_KEY) === '1'
-  } catch {
-    return false
-  }
-}
-
-function saveAmneziaWarnDismissed() {
-  try {
-    localStorage.setItem(AMNEZIA_WARN_KEY, '1')
-  } catch {
-    /* ignore */
-  }
-}
-
-function readRouterHintDismissed() {
-  try {
-    return localStorage.getItem(ROUTER_HINT_KEY) === '1'
-  } catch {
-    return false
-  }
-}
-
-function saveRouterHintDismissed() {
-  try {
-    localStorage.setItem(ROUTER_HINT_KEY, '1')
-  } catch {
-    /* ignore */
-  }
-}
-
 function getOrderError(e: any, t: (key: string) => string): { title: string; description: string } {
   const code = String(e?.error || e?.code || '').trim()
   const msg = String(e?.message || '').trim()
@@ -306,6 +272,18 @@ function getCategoryButtonStyle(cat?: ServiceCategory | null): CSSProperties {
     fontWeight: 900,
     letterSpacing: '0.02em',
   }
+}
+
+function openCategoryHintUrl(url: string, navigate: ReturnType<typeof useNavigate>) {
+  const target = String(url || '').trim()
+  if (!target) return
+
+  if (/^https?:\/\//i.test(target)) {
+    window.open(target, '_blank', 'noopener,noreferrer')
+    return
+  }
+
+  navigate(target)
 }
 
 /* ─── CategoryCard ───────────────────────────────────────────────────────── */
@@ -414,8 +392,6 @@ export function ServicesOrder() {
   const [openingPay, setOpeningPay] = useState(false)
   const [payOpenError, setPayOpenError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
-  const [amneziaWarnOpen, setAmneziaWarnOpen] = useState(false)
-  const [routerHintOpen, setRouterHintOpen] = useState(false)
   const [catHintOpen, setCatHintOpen] = useState(false)
   const [catHintData, setCatHintData] = useState<ServiceCategory | null>(null)
 
@@ -567,14 +543,6 @@ export function ServicesOrder() {
 
   useEffect(() => {
     if (!selectedCat) return
-
-    if (selectedCat.connect_kind === 'amneziawg' && !readAmneziaWarnDismissed()) {
-      setAmneziaWarnOpen(true)
-    }
-
-    if (selectedCat.connect_kind === 'marzban_router' && !readRouterHintDismissed()) {
-      setRouterHintOpen(true)
-    }
 
     if (selectedCat.hint_enabled && selectedCat.hint_text) {
       const key = HINT_SESSION_PREFIX + selectedCat.category_key
@@ -825,53 +793,6 @@ export function ServicesOrder() {
           document.body,
         )}
 
-      {amneziaWarnOpen &&
-        createPortal(
-          <div className="modal" role="dialog" aria-modal="true" onMouseDown={saveAmneziaWarnDismissed}>
-            <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()}>
-              <div className="card__body">
-                <div className="modal__head">
-                  <div className="modal__title">⚠️ {t('servicesOrder.amnezia.warn.title')}</div>
-                </div>
-                <div className="modal__content">
-                  <p className="p">{t('servicesOrder.amnezia.warn.text')}</p>
-                </div>
-                <div className="actions actions--1" style={{ marginTop: 14 }}>
-                  <button className="btn btn--primary" onClick={() => { saveAmneziaWarnDismissed(); setAmneziaWarnOpen(false) }} type="button">
-                    OK
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )}
-
-      {routerHintOpen &&
-        createPortal(
-          <div className="modal" role="dialog" aria-modal="true" onMouseDown={() => { saveRouterHintDismissed(); setRouterHintOpen(false) }}>
-            <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()}>
-              <div className="card__body">
-                <div className="modal__head">
-                  <div className="modal__title">📡 {t('servicesOrder.router.hint.title')}</div>
-                </div>
-                <div className="modal__content">
-                  <p className="p">{t('servicesOrder.router.hint.text')}</p>
-                </div>
-                <div className="actions actions--2" style={{ marginTop: 14 }}>
-                  <button className="btn" onClick={() => { saveRouterHintDismissed(); setRouterHintOpen(false) }} type="button">
-                    {t('servicesOrder.router.hint.skip')}
-                  </button>
-                  <button className="btn btn--primary" onClick={() => { saveRouterHintDismissed(); setRouterHintOpen(false); navigate('/help/router') }} type="button">
-                    📘 {t('servicesOrder.router.hint.open')}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )}
-
       {catHintOpen && catHintData &&
         createPortal(
           <div
@@ -895,7 +816,7 @@ export function ServicesOrder() {
                   <p className="p">{catHintData.hint_text}</p>
                 </div>
 
-                <div className={`actions actions--${catHintData.hint_button_label ? '2' : '1'}`} style={{ marginTop: 14 }}>
+                <div className={`actions actions--${catHintData.hint_button_label && catHintData.hint_button_url ? '2' : '1'}`} style={{ marginTop: 14 }}>
                   {catHintData.hint_button_label && catHintData.hint_button_url && (
                     <button
                       className="btn"
@@ -903,7 +824,7 @@ export function ServicesOrder() {
                       onClick={() => {
                         sessionStorage.setItem(HINT_SESSION_PREFIX + catHintData.category_key, '1')
                         setCatHintOpen(false)
-                        navigate(catHintData.hint_button_url!)
+                        openCategoryHintUrl(catHintData.hint_button_url!, navigate)
                       }}
                     >
                       {catHintData.hint_button_label}
@@ -999,15 +920,15 @@ export function ServicesOrder() {
                 </button>
               </div>
 
-              {selectedCat.connect_kind === 'marzban_router' && (
+              {selectedCat.hint_button_label && selectedCat.hint_button_url && (
                 <div className="actions actions--1" style={{ marginTop: 12 }}>
                   <button
                     className="btn"
-                    onClick={() => navigate('/help/router')}
+                    onClick={() => openCategoryHintUrl(selectedCat.hint_button_url!, navigate)}
                     type="button"
                     style={{ borderColor: 'rgba(96,165,250,0.38)', color: 'rgba(147,197,253,1)' }}
                   >
-                    📘 {t('servicesOrder.router.hint.open_short')}
+                    {selectedCat.hint_button_label}
                   </button>
                 </div>
               )}

@@ -269,6 +269,11 @@ export function updateServiceCategory(
     card_bg: string | null;
     button_label: string | null;
     billing_category_keys: string[];
+    hint_enabled: boolean;
+    hint_title: string | null;
+    hint_text: string | null;
+    hint_button_label: string | null;
+    hint_button_url: string | null;
     service_ids: number[];
   }>
 ): { ok: true; category: ServiceCategory } | { ok: false; error: string } {
