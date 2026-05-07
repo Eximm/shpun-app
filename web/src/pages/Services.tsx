@@ -729,31 +729,35 @@ export function Services() {
             </div>
           )}
 
-          <div className="services-head__actions">
-            <button className="btn btn--primary services-head__cta" onClick={() => go("/services/order")} type="button">
-              {hasServices ? t("services.cta.add_more") : t("services.cta.choose_plan")}
-            </button>
-            {hasServices && (
+          {hasServices && (
+            <div className="services-head__actions">
+              <button className="btn btn--primary services-head__cta" onClick={() => go("/services/order")} type="button">
+                {t("services.cta.add_more")}
+              </button>
               <button className="btn services-head__cta" onClick={() => void load({ silent: false, toastOnSuccess: true })} type="button">
                 {t("services.refresh")}
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
 
       {/* ── Empty state ── */}
       {!hasServices && (
         <div className="section">
-          <div className="card" style={{ background: "linear-gradient(135deg,rgba(124,92,255,.14),rgba(77,215,255,.08))", borderColor: "rgba(124,92,255,.30)" }}>
+          <div className="card services-empty">
             <div className="card__body">
-              <div className="h1">{t("services.empty.title")}</div>
-              <p className="p" style={{ marginTop: 4, opacity: 0.7 }}>{t("services.empty.text")}</p>
-              <div className="actions actions--1" style={{ marginTop: 16 }}>
-                <button className="btn btn--primary" style={{ fontSize: 16, minHeight: 52, boxShadow: "0 0 24px rgba(124,92,255,.40)" }} onClick={() => go("/services/order")} type="button">
-                  {t("services.cta.choose_plan")} →
+              <div className="services-empty__eyebrow">{t("services.empty.eyebrow")}</div>
+              <div className="services-empty__title">{t("services.empty.title")}</div>
+              <p className="services-empty__text">{t("services.empty.text")}</p>
+
+              <div className="services-empty__actions">
+                <button className="btn btn--primary services-empty__cta" onClick={() => go("/services/order")} type="button">
+                  {t("services.empty.cta")}
                 </button>
               </div>
+
+              <div className="services-empty__hint">{t("services.empty.hint")}</div>
             </div>
           </div>
         </div>
