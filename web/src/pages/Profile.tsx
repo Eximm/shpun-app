@@ -9,6 +9,7 @@ import { disablePush, enablePushByUserGesture, getPushState, isPushDisabledByUse
 import { toastApiError } from "../shared/ui/toast/toastApiError";
 import { getMood } from "../shared/payments-mood";
 import { normalizeError } from "../shared/api/errorText";
+import { detectPwaInstallPlatform, isIOSPwaInstallPlatform, pwaGuideKey } from "../shared/pwa/install";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -36,10 +37,6 @@ function isStandalonePwa(): boolean {
   try {
     return Boolean(window.matchMedia?.("(display-mode: standalone)")?.matches) || Boolean((navigator as any)?.standalone);
   } catch { return false; }
-}
-
-function isIOS(): boolean {
-  return /iPad|iPhone|iPod/.test(String(navigator.userAgent || "")) && !(window as any).MSStream;
 }
 
 function isValidEmail(email: string) {
@@ -516,7 +513,9 @@ export function Profile() {
   // PWA
   const [standalone,      setStandalone]      = useState(false);
   const [deferredPrompt,  setDeferredPrompt]  = useState<BeforeInstallPromptEvent | null>(null);
-  const [iosInstallModal, setIosInstallModal] = useState(false);
+  const [pwaGuideOpen,    setPwaGuideOpen]    = useState(false);
+  const pwaPlatform = useMemo(() => detectPwaInstallPlatform(), []);
+  const pwaGuide = pwaGuideKey(pwaPlatform);
 
   useEffect(() => {
     setStandalone(isStandalonePwa());
@@ -529,8 +528,7 @@ export function Profile() {
 
   async function doInstallPwa() {
     if (standalone)      { showToast("📲 " + t("profile.pwa.toast.already_installed")); return; }
-    if (isIOS())         { setIosInstallModal(true); return; }
-    if (!deferredPrompt) { showToast("📲 " + t("profile.pwa.toast.menu")); return; }
+    if (!deferredPrompt) { setPwaGuideOpen(true); return; }
     try {
       await deferredPrompt.prompt();
       const choice = await deferredPrompt.userChoice;
@@ -555,7 +553,7 @@ export function Profile() {
       const enabled = pushState.permission === "granted" && pushState.hasSubscription && !pushState.disabledByUser;
       if (enabled) { await disablePush(); showToast("🔕 " + t("profile.push.toast.disabled")); }
       else {
-        if (isIOS() && !standalone) { showToast("📲 " + t("profile.push.toast.install_ios")); setIosInstallModal(true); return; }
+        if (isIOSPwaInstallPlatform(pwaPlatform) && !standalone) { showToast("📲 " + t("profile.push.toast.install_ios")); setPwaGuideOpen(true); return; }
         const ok = await enablePushByUserGesture();
         showToast(ok ? "🔔 " + t("profile.push.toast.enabled") : pushState.permission === "denied" ? "🚫 " + t("profile.push.toast.denied") : "😬 " + t("profile.push.toast.failed"));
       }
@@ -601,7 +599,7 @@ export function Profile() {
   let pushBtn: React.ReactNode;
   if (!pushState.supported)              pushBtn = <SmallBtn disabled>{t("profile.push.button.unavailable")}</SmallBtn>;
   else if (pushState.permission === "denied") pushBtn = <SmallBtn disabled>{t("profile.push.button.settings")}</SmallBtn>;
-  else if (isIOS() && !standalone)       pushBtn = <SmallBtn primary onClick={() => void doInstallPwa()} disabled={pushLoading}>{t("profile.pwa.button.install")}</SmallBtn>;
+  else if (isIOSPwaInstallPlatform(pwaPlatform) && !standalone) pushBtn = <SmallBtn primary onClick={() => void doInstallPwa()} disabled={pushLoading}>{t("profile.pwa.button.install")}</SmallBtn>;
   else pushBtn = (
     <SmallBtn primary={!pushEnabled} onClick={() => void togglePush()} disabled={pushLoading}>
       {pushLoading ? "…" : pushEnabled ? t("profile.push.button.disable") : t("profile.push.button.enable")}
@@ -750,9 +748,10 @@ export function Profile() {
           label={t("profile.pwa.title")}
           value={standalone ? t("profile.pwa.installed") : t("profile.pwa.not_installed")}
           muted={!standalone}
+          hint={standalone ? t("profile.pwa.hint.installed") : deferredPrompt ? t("profile.pwa.hint.available") : t(`profile.pwa.hint.${pwaGuide}`)}
           right={standalone
             ? <SmallBadge text={t("profile.pwa.installed")} tone="ok" />
-            : <SmallBtn primary onClick={() => void doInstallPwa()}>{isIOS() ? t("profile.pwa.button.how") : deferredPrompt ? t("profile.pwa.button.install") : t("profile.pwa.button.menu")}</SmallBtn>}
+            : <SmallBtn primary onClick={() => void doInstallPwa()}>{deferredPrompt ? t("profile.pwa.button.install") : t("profile.pwa.button.how")}</SmallBtn>}
         />
 
         <PRow
@@ -767,11 +766,11 @@ export function Profile() {
 
       <EmailVerifyModal open={verifyModal} email={email} onClose={() => setVerifyModal(false)} onVerified={() => setEmailVerified(true)} t={t} />
 
-      <Modal open={iosInstallModal} title={t("profile.pwa.ios_modal.title")} onClose={() => setIosInstallModal(false)} closeLabel={t("profile.modal.close")}>
-        <p className="p">{t("profile.pwa.ios_modal.text")}</p>
-        <div className="pre">{t("profile.pwa.ios_modal.steps")}</div>
+      <Modal open={pwaGuideOpen} title={t(`profile.pwa.guide.${pwaGuide}.title`)} onClose={() => setPwaGuideOpen(false)} closeLabel={t("profile.modal.close")}>
+        <p className="p">{t(`profile.pwa.guide.${pwaGuide}.text`)}</p>
+        <div className="pre">{t(`profile.pwa.guide.${pwaGuide}.steps`)}</div>
         <div className="actions actions--1" style={{ marginTop: 12 }}>
-          <button className="btn btn--primary" onClick={() => setIosInstallModal(false)} type="button">{t("profile.ok")}</button>
+          <button className="btn btn--primary" onClick={() => setPwaGuideOpen(false)} type="button">{t("profile.ok")}</button>
         </div>
       </Modal>
 

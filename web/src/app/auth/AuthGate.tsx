@@ -13,6 +13,8 @@ import {
 } from "../notifications/push";
 import { toast } from "../../shared/ui/toast";
 import { apiFetch } from "../../shared/api/client";
+import { useI18n } from "../../shared/i18n";
+import { detectPwaInstallPlatform, pwaGuideKey } from "../../shared/pwa/install";
 
 const PARTNER_LS_KEY = "partner_id_pending";
 const AUTH_PENDING_KEY = "auth:pending";
@@ -244,6 +246,8 @@ function PushOnboardingModal({
   standalone,
   permission,
   pwaInstallAvailable,
+  pwaGuide,
+  t,
   onAccept,
   onDismiss,
 }: {
@@ -252,6 +256,8 @@ function PushOnboardingModal({
   standalone: boolean;
   permission: string;
   pwaInstallAvailable: boolean;
+  pwaGuide: "ios" | "android" | "windows" | "desktop";
+  t: (key: string) => string;
   onAccept: () => void;
   onDismiss: () => void;
 }) {
@@ -266,22 +272,22 @@ function PushOnboardingModal({
   const isDenied = standalone && permission === "denied";
 
   const title = isInstallOnly
-    ? "📲 Установите приложение"
-    : "🔔 Включите уведомления";
+    ? t(`pwa.onboarding.install.${pwaGuide}.title`)
+    : t("pwa.onboarding.push.title");
 
   const hint = canInstallProgrammatically
-    ? "Установите Shpun App на устройство — это займёт секунду. После установки можно включить уведомления о балансе, оплате и услугах."
+    ? t("pwa.onboarding.install.prompt.text")
     : isInstallOnly
-      ? "Установите Shpun App на устройство. Откройте меню браузера (⋮) и выберите «Установить приложение» или «Добавить на главный экран»."
+      ? t(`pwa.onboarding.install.${pwaGuide}.text`)
       : isDenied
-        ? "Уведомления отключены в настройках браузера. Их можно разрешить позже в настройках профиля."
-        : "Получайте важные события о балансе, оплате и услугах даже когда приложение закрыто.";
+        ? t("pwa.onboarding.push.denied")
+        : t("pwa.onboarding.push.text");
 
   const primaryText = canInstallProgrammatically
-    ? "Установить"
+    ? t("pwa.onboarding.button.install")
     : isInstallOnly || isDenied
-      ? "Понятно"
-      : "Включить";
+      ? t("pwa.onboarding.button.ok")
+      : t("pwa.onboarding.button.enable");
 
   return (
     <div
@@ -325,12 +331,12 @@ function PushOnboardingModal({
                 onClick={onDismiss}
                 disabled={busy}
               >
-                Понятно
+                {t("pwa.onboarding.button.ok")}
               </button>
             ) : (
               <>
                 <button className="btn" type="button" onClick={onDismiss} disabled={busy}>
-                  Не сейчас
+                  {t("pwa.onboarding.button.later")}
                 </button>
                 <button
                   className="btn btn--primary"
@@ -353,6 +359,7 @@ function PushOnboardingModal({
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const { me, loading, authRequired } = useMe();
+  const { t } = useI18n();
   const loc = useLocation();
 
   const notifiedRef = useRef(false);
@@ -372,6 +379,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const telegramMiniApp = useMemo(() => isTelegramMiniApp(), []);
+  const pwaGuide = useMemo(() => pwaGuideKey(detectPwaInstallPlatform()), []);
 
   const uid = useMemo(() => {
     const n = Number((me as any)?.profile?.id ?? (me as any)?.profile?.user_id ?? 0);
@@ -585,19 +593,19 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         const outcome = await triggerPwaInstall();
 
         if (outcome === "accepted") {
-          toast.success("Приложение устанавливается", {
-            description: "После установки откройте приложение и включите уведомления.",
+          toast.success(t("pwa.onboarding.install.accepted.title"), {
+            description: t("pwa.onboarding.install.accepted.text"),
             durationMs: 4000,
           });
         } else if (outcome === "dismissed") {
-          toast.info("Установка отменена", {
-            description: "Вы можете установить приложение позже через меню браузера.",
+          toast.info(t("pwa.onboarding.install.dismissed.title"), {
+            description: t("pwa.onboarding.install.dismissed.text"),
             durationMs: 3000,
           });
         } else {
           // install prompt недоступен — показываем инструкцию
-          toast.info("Как установить", {
-            description: "Откройте меню браузера (⋮) и выберите «Установить приложение».",
+          toast.info(t(`pwa.onboarding.install.${pwaGuide}.title`), {
+            description: t(`pwa.onboarding.install.${pwaGuide}.text`),
             durationMs: 4000,
           });
         }
@@ -612,12 +620,12 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       if (s) setPushState(s);
 
       if (ok) {
-        toast.success("Уведомления включены ✅", {
-          description: "Теперь вы будете получать важные события.",
+        toast.success(t("pwa.onboarding.push.enabled.title"), {
+          description: t("pwa.onboarding.push.enabled.text"),
         });
       } else {
-        toast.info("Уведомления не включены", {
-          description: "Их можно включить позже в профиле.",
+        toast.info(t("pwa.onboarding.push.skipped.title"), {
+          description: t("pwa.onboarding.push.skipped.text"),
           durationMs: 2500,
         });
       }
@@ -687,6 +695,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         standalone={pushState.standalone}
         permission={String(pushState.permission)}
         pwaInstallAvailable={pwaInstallAvailable}
+        pwaGuide={pwaGuide}
+        t={t}
         onAccept={onPushPromptAccept}
         onDismiss={() => setPushPromptOpen(false)}
       />
