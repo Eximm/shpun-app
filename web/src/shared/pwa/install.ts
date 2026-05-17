@@ -1,5 +1,8 @@
 export type PwaInstallPlatform = "ios" | "android" | "windows" | "mac" | "linux" | "desktop" | "unknown";
 
+export const PWA_INSTALL_PROMPT_SESSION_KEY = "pwa.install.prompt.shown.session.v1";
+export const PWA_INSTALLED_MARKER_KEY = "pwa.installed.marker.v1";
+
 function userAgent(): string {
   try {
     return String(navigator.userAgent || "");
@@ -40,4 +43,52 @@ export function pwaGuideKey(platform: PwaInstallPlatform): "ios" | "android" | "
   if (platform === "android") return "android";
   if (platform === "windows") return "windows";
   return "desktop";
+}
+
+export function isStandalonePwa(): boolean {
+  try {
+    return Boolean(window.matchMedia?.("(display-mode: standalone)")?.matches) || Boolean((navigator as any)?.standalone);
+  } catch {
+    return false;
+  }
+}
+
+export function hasInstalledPwaMarker(): boolean {
+  try {
+    return localStorage.getItem(PWA_INSTALLED_MARKER_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function markPwaInstalled() {
+  try {
+    localStorage.setItem(PWA_INSTALLED_MARKER_KEY, "1");
+  } catch {
+    // ignore
+  }
+}
+
+export function clearPwaInstalledMarker() {
+  try {
+    localStorage.removeItem(PWA_INSTALLED_MARKER_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+export function shouldTreatPwaAsInstalled(): boolean {
+  if (isStandalonePwa()) {
+    markPwaInstalled();
+    return true;
+  }
+  return hasInstalledPwaMarker();
+}
+
+export function resetPwaInstallPromptForNextSession() {
+  try {
+    sessionStorage.removeItem(PWA_INSTALL_PROMPT_SESSION_KEY);
+  } catch {
+    // ignore
+  }
 }

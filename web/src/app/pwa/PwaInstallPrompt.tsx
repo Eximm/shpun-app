@@ -1,23 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useI18n } from "../../shared/i18n";
-import { detectPwaInstallPlatform, pwaGuideKey } from "../../shared/pwa/install";
+import {
+  clearPwaInstalledMarker,
+  detectPwaInstallPlatform,
+  markPwaInstalled,
+  PWA_INSTALL_PROMPT_SESSION_KEY,
+  pwaGuideKey,
+  shouldTreatPwaAsInstalled,
+} from "../../shared/pwa/install";
 import { toast } from "../../shared/ui/toast";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform?: string }>;
 };
-
-const INSTALL_PROMPT_SESSION_KEY = "pwa.install.prompt.shown.session.v1";
-
-function isStandalonePwa(): boolean {
-  try {
-    return Boolean(window.matchMedia?.("(display-mode: standalone)")?.matches) || Boolean((navigator as any)?.standalone);
-  } catch {
-    return false;
-  }
-}
 
 function isTelegramMiniApp(): boolean {
   try {
@@ -38,7 +35,7 @@ function getPwaInstallPrompt(): BeforeInstallPromptEvent | null {
 
 function hasShownThisSession(): boolean {
   try {
-    return sessionStorage.getItem(INSTALL_PROMPT_SESSION_KEY) === "1";
+    return sessionStorage.getItem(PWA_INSTALL_PROMPT_SESSION_KEY) === "1";
   } catch {
     return false;
   }
@@ -46,7 +43,7 @@ function hasShownThisSession(): boolean {
 
 function markShownThisSession() {
   try {
-    sessionStorage.setItem(INSTALL_PROMPT_SESSION_KEY, "1");
+    sessionStorage.setItem(PWA_INSTALL_PROMPT_SESSION_KEY, "1");
   } catch {
     // ignore
   }
@@ -66,13 +63,16 @@ export function PwaInstallPrompt() {
     const onInstallAvailable = () => {
       const next = getPwaInstallPrompt();
       setPrompt(next);
-      if (isStandalonePwa() || isTelegramMiniApp() || hasShownThisSession()) return;
+      if (!next) return;
+      clearPwaInstalledMarker();
+      if (shouldTreatPwaAsInstalled() || isTelegramMiniApp() || hasShownThisSession()) return;
       markShownThisSession();
       setShowGuide(false);
       setOpen(true);
     };
 
     const onInstalled = () => {
+      markPwaInstalled();
       setPrompt(null);
       setOpen(false);
       toast.success(t("pwa.onboarding.install.accepted.title"), {
@@ -85,7 +85,7 @@ export function PwaInstallPrompt() {
     window.addEventListener("appinstalled", onInstalled);
 
     const timer = window.setTimeout(() => {
-      if (isStandalonePwa() || isTelegramMiniApp() || hasShownThisSession()) return;
+      if (shouldTreatPwaAsInstalled() || isTelegramMiniApp() || hasShownThisSession()) return;
       const next = getPwaInstallPrompt();
       setPrompt(next);
       markShownThisSession();
@@ -101,7 +101,7 @@ export function PwaInstallPrompt() {
   }, [t]);
 
   useEffect(() => {
-    if (isStandalonePwa() || isTelegramMiniApp()) setOpen(false);
+    if (shouldTreatPwaAsInstalled() || isTelegramMiniApp()) setOpen(false);
   }, [loc.pathname]);
 
   async function install() {
@@ -118,6 +118,7 @@ export function PwaInstallPrompt() {
       setPrompt(null);
 
       if (choice?.outcome === "accepted") {
+        markPwaInstalled();
         setOpen(false);
       } else {
         toast.info(t("pwa.onboarding.install.dismissed.title"), {

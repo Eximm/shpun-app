@@ -8,6 +8,7 @@ import { useI18n } from "../../shared/i18n";
 import { toast } from "../../shared/ui/toast";
 import { toastApiError } from "../../shared/ui/toast/toastApiError";
 import { refetchMe } from "./useMe";
+import { resetPwaInstallPromptForNextSession } from "../../shared/pwa/install";
 
 type Props = {
   open: boolean;
@@ -207,7 +208,7 @@ export function FirstLoginOnboardingModal({ open, me, onSkip }: Props) {
       try {
         sessionStorage.removeItem("auth:pending");
         sessionStorage.removeItem("auth:pending_at");
-        sessionStorage.removeItem("pwa.install.prompt.shown.session.v1");
+        resetPwaInstallPromptForNextSession();
         sessionStorage.removeItem("push.prompt.shown_this_session");
       } catch { /* ignore */ }
       navigate("/login", { replace: true });

@@ -9,7 +9,7 @@ import { disablePush, enablePushByUserGesture, getPushState, isPushDisabledByUse
 import { toastApiError } from "../shared/ui/toast/toastApiError";
 import { getMood } from "../shared/payments-mood";
 import { normalizeError } from "../shared/api/errorText";
-import { detectPwaInstallPlatform, isIOSPwaInstallPlatform, pwaGuideKey } from "../shared/pwa/install";
+import { detectPwaInstallPlatform, isIOSPwaInstallPlatform, pwaGuideKey, resetPwaInstallPromptForNextSession } from "../shared/pwa/install";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -490,7 +490,7 @@ export function Profile() {
       if (!res?.ok) throw new Error(String(res?.error || "password_set_failed"));
       showToast("🔐 " + t("profile.password.toast.changed"));
       try {
-        sessionStorage.removeItem("pwa.install.prompt.shown.session.v1");
+        resetPwaInstallPromptForNextSession();
         sessionStorage.removeItem("push.prompt.shown_this_session");
       } catch { /* ignore */ }
       try { await apiFetch("/logout", { method: "POST" }); } catch { /* ignore */ }
@@ -519,7 +519,7 @@ export function Profile() {
         try { ["browser", "pwa"].forEach((k) => { sessionStorage.removeItem(`push.onboarding.dismissed:${k}:u:${uid}`); sessionStorage.removeItem(`push.onboarding.${k}.dismissed.session.v1`); }); } catch { /* ignore */ }
       }
       try {
-        sessionStorage.removeItem("pwa.install.prompt.shown.session.v1");
+        resetPwaInstallPromptForNextSession();
         sessionStorage.removeItem("push.prompt.shown_this_session");
       } catch { /* ignore */ }
       await apiFetch("/logout", { method: "POST" });
