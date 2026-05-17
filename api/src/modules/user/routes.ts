@@ -121,7 +121,6 @@ async function markOnboardingStep(sessionId: string, step: string) {
 // ─── routes ──────────────────────────────────────────────────────────────────
 
 export async function userRoutes(app: FastifyInstance) {
-
   // GET /me
   app.get("/me", async (req, reply) => {
     const s = getSessionFromRequest(req);

@@ -294,37 +294,22 @@ function PushOnboardingModal({
       role="dialog"
       aria-modal="true"
       onMouseDown={onDismiss}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,.65)",
-        backdropFilter: "blur(6px)",
-        WebkitBackdropFilter: "blur(6px)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 16,
-        zIndex: 9999,
-      }}
+      className="modal push-onboarding"
+      style={{ zIndex: 9999 }}
     >
       <div
-        className="card"
+        className="card modal__card push-onboarding__card"
         onMouseDown={(e) => e.stopPropagation()}
-        style={{ width: "min(520px, 92vw)" }}
       >
         <div className="card__body">
-          <div className="h1" style={{ fontSize: 18, margin: 0 }}>
+          <div className="modal__title">
             {title}
           </div>
           <p className="p" style={{ marginTop: 8 }}>
             {hint}
           </p>
-          <div
-            className="row"
-            style={{ marginTop: 16, justifyContent: "flex-end", gap: 10 }}
-          >
+          <div className={`actions ${isInstallOnly && !canInstallProgrammatically ? "actions--1" : "actions--2"} modal-actions`}>
             {isInstallOnly && !canInstallProgrammatically ? (
-              // Только инструкция — одна кнопка «Понятно»
               <button
                 className="btn btn--primary"
                 type="button"

@@ -550,10 +550,15 @@ button, a { -webkit-tap-highlight-color: transparent; }
 
 .modal__card {
   width: min(560px,100%);
+  max-height: calc(100vh - 32px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   box-shadow: 0 20px 60px rgba(0,0,0,0.55);
   background: rgba(16,18,26,0.96);
   border: 1px solid rgba(255,255,255,0.09);
   animation: modal-card-in 240ms cubic-bezier(0.2,0.9,0.2,1) both;
+}
+.modal__card > .card__body {
+  max-height: inherit;
+  overflow: auto;
 }
 @keyframes modal-card-in {
   from { transform: scale(0.95) translateY(12px); opacity: 0; }
@@ -564,6 +569,27 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .modal__title { font-size: 18px; line-height: 1.2; font-weight: 950; letter-spacing: 0.1px; }
 .modal__close { flex: 0 0 auto; width: var(--tap); min-width: var(--tap); padding: 0; }
 .modal__content { margin-top: 12px; }
+.modal-actions,
+.modal .actions {
+  width: 100%;
+}
+.modal .actions .btn {
+  min-width: 0;
+  min-height: 46px;
+  padding-left: 12px;
+  padding-right: 12px;
+  text-align: center;
+  white-space: normal;
+  line-height: 1.2;
+}
+@media (max-width: 420px) {
+  .modal {
+    padding: 12px;
+  }
+  .modal .actions--2 {
+    grid-template-columns: 1fr;
+  }
+}
 
 .overlay { position: fixed; inset: 0; z-index: 50; padding: 16px; background: rgba(0,0,0,0.62); backdrop-filter: blur(10px); }
 .overlay__card  { max-width: 620px; margin: 10vh auto 0; box-shadow: 0 30px 80px rgba(0,0,0,0.65); }
