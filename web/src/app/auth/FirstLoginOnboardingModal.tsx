@@ -207,6 +207,8 @@ export function FirstLoginOnboardingModal({ open, me, onSkip }: Props) {
       try {
         sessionStorage.removeItem("auth:pending");
         sessionStorage.removeItem("auth:pending_at");
+        sessionStorage.removeItem("pwa.install.prompt.shown.session.v1");
+        sessionStorage.removeItem("push.prompt.shown_this_session");
       } catch { /* ignore */ }
       navigate("/login", { replace: true });
     } finally {

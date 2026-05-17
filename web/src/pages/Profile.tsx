@@ -39,6 +39,14 @@ function isStandalonePwa(): boolean {
   } catch { return false; }
 }
 
+function getPwaInstallPrompt(): BeforeInstallPromptEvent | null {
+  try {
+    return (window as any).__pwaInstallPrompt ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
@@ -481,6 +489,10 @@ export function Profile() {
       const res = await apiFetch<PasswordSetResponse>("/auth/password/set", { method: "POST", body: { password: pwd1.trim() } }) as any;
       if (!res?.ok) throw new Error(String(res?.error || "password_set_failed"));
       showToast("🔐 " + t("profile.password.toast.changed"));
+      try {
+        sessionStorage.removeItem("pwa.install.prompt.shown.session.v1");
+        sessionStorage.removeItem("push.prompt.shown_this_session");
+      } catch { /* ignore */ }
       try { await apiFetch("/logout", { method: "POST" }); } catch { /* ignore */ }
       nav("/login?reason=pwd_changed", { replace: true, state: { from: "/profile" } });
     } catch (e: unknown) {
@@ -506,13 +518,17 @@ export function Profile() {
       if (uid) {
         try { ["browser", "pwa"].forEach((k) => { sessionStorage.removeItem(`push.onboarding.dismissed:${k}:u:${uid}`); sessionStorage.removeItem(`push.onboarding.${k}.dismissed.session.v1`); }); } catch { /* ignore */ }
       }
+      try {
+        sessionStorage.removeItem("pwa.install.prompt.shown.session.v1");
+        sessionStorage.removeItem("push.prompt.shown_this_session");
+      } catch { /* ignore */ }
       await apiFetch("/logout", { method: "POST" });
     } finally { setLoggingOut(false); nav("/login", { replace: true }); }
   }
 
   // PWA
   const [standalone,      setStandalone]      = useState(false);
-  const [deferredPrompt,  setDeferredPrompt]  = useState<BeforeInstallPromptEvent | null>(null);
+  const [deferredPrompt,  setDeferredPrompt]  = useState<BeforeInstallPromptEvent | null>(() => getPwaInstallPrompt());
   const [pwaGuideOpen,    setPwaGuideOpen]    = useState(false);
   const pwaPlatform = useMemo(() => detectPwaInstallPlatform(), []);
   const pwaGuide = pwaGuideKey(pwaPlatform);
@@ -528,10 +544,12 @@ export function Profile() {
 
   async function doInstallPwa() {
     if (standalone)      { showToast("📲 " + t("profile.pwa.toast.already_installed")); return; }
-    if (!deferredPrompt) { setPwaGuideOpen(true); return; }
+    const prompt = deferredPrompt || getPwaInstallPrompt();
+    if (prompt && prompt !== deferredPrompt) setDeferredPrompt(prompt);
+    if (!prompt) { setPwaGuideOpen(true); return; }
     try {
-      await deferredPrompt.prompt();
-      const choice = await deferredPrompt.userChoice;
+      await prompt!.prompt();
+      const choice = await prompt!.userChoice;
       showToast(choice?.outcome === "accepted" ? "🚀 " + t("profile.pwa.toast.started") : "😕 " + t("profile.pwa.toast.cancelled"));
     } catch { showToast("😬 " + t("profile.pwa.toast.failed")); }
     finally { setDeferredPrompt(null); }

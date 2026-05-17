@@ -26,6 +26,7 @@ import { AdminPage }        from "./pages/AdminPage";
 
 import { AuthGate }                from "./app/auth/AuthGate";
 import { BottomNav }               from "./app/layout/BottomNav";
+import { PwaInstallPrompt }        from "./app/pwa/PwaInstallPrompt";
 import { I18nProvider, useI18n }   from "./shared/i18n";
 import { ToastProvider }           from "./shared/ui/toast/ToastProvider";
 import { useBillingNotifications } from "./app/notifications/useBillingNotifications";
@@ -113,6 +114,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
       <main className="main">
         <div className="container safe">{children}</div>
       </main>
+      <PwaInstallPrompt />
       {!hideNav && <BottomNav />}
     </div>
   );

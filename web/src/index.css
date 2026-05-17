@@ -582,6 +582,10 @@ button, a { -webkit-tap-highlight-color: transparent; }
   white-space: normal;
   line-height: 1.2;
 }
+.pwa-install-steps {
+  margin-top: 12px;
+  white-space: pre-line;
+}
 @media (max-width: 420px) {
   .modal {
     padding: 12px;

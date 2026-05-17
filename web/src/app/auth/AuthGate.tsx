@@ -14,7 +14,6 @@ import {
 import { toast } from "../../shared/ui/toast";
 import { apiFetch } from "../../shared/api/client";
 import { useI18n } from "../../shared/i18n";
-import { detectPwaInstallPlatform, pwaGuideKey } from "../../shared/pwa/install";
 
 const PARTNER_LS_KEY = "partner_id_pending";
 const AUTH_PENDING_KEY = "auth:pending";
@@ -207,87 +206,38 @@ function rememberPartnerIdFromUrl() {
   }
 }
 
-// ─── PWA install prompt helper ────────────────────────────────────────────────
-
-interface BeforeInstallPromptEvent extends Event {
-  prompt(): Promise<void>;
-  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
-}
-
-function getPwaInstallPrompt(): BeforeInstallPromptEvent | null {
-  return (window as any).__pwaInstallPrompt ?? null;
-}
-
-// Возвращает true если установочный промпт доступен (Android Chrome / Edge)
-function isPwaInstallAvailable(): boolean {
-  return getPwaInstallPrompt() !== null;
-}
-
-// Вызывает системный install prompt и возвращает результат выбора пользователя
-async function triggerPwaInstall(): Promise<"accepted" | "dismissed" | "unavailable"> {
-  const prompt = getPwaInstallPrompt();
-  if (!prompt) return "unavailable";
-  try {
-    await prompt.prompt();
-    const { outcome } = await prompt.userChoice;
-    // После вызова prompt становится одноразовым — очищаем
-    (window as any).__pwaInstallPrompt = null;
-    return outcome;
-  } catch {
-    return "unavailable";
-  }
-}
-
 // ─── PushOnboardingModal ──────────────────────────────────────────────────────
 
 function PushOnboardingModal({
   open,
   busy,
-  standalone,
   permission,
-  pwaInstallAvailable,
-  pwaGuide,
+  guide,
   t,
   onAccept,
   onDismiss,
 }: {
   open: boolean;
   busy: boolean;
-  standalone: boolean;
   permission: string;
-  pwaInstallAvailable: boolean;
-  pwaGuide: "ios" | "android" | "windows" | "desktop";
+  guide: boolean;
   t: (key: string) => string;
   onAccept: () => void;
   onDismiss: () => void;
 }) {
   if (!open) return null;
 
-  // Три состояния:
-  // 1. PWA не установлена, но браузер поддерживает install prompt → предлагаем установить программно
-  // 2. PWA не установлена, install prompt недоступен → инструкция через меню браузера
-  // 3. PWA установлена, пуши не включены → предлагаем включить уведомления
-  const isInstallOnly = !standalone;
-  const canInstallProgrammatically = isInstallOnly && pwaInstallAvailable;
-  const isDenied = standalone && permission === "denied";
+  const isDenied = permission === "denied";
+  const showGuide = guide || isDenied;
+  const title = showGuide ? t("pwa.onboarding.push.guide.title") : t("pwa.onboarding.push.title");
 
-  const title = isInstallOnly
-    ? t(`pwa.onboarding.install.${pwaGuide}.title`)
-    : t("pwa.onboarding.push.title");
+  const hint = showGuide
+    ? (isDenied ? t("pwa.onboarding.push.denied") : t("pwa.onboarding.push.guide.text"))
+    : t("pwa.onboarding.push.text");
 
-  const hint = canInstallProgrammatically
-    ? t("pwa.onboarding.install.prompt.text")
-    : isInstallOnly
-      ? t(`pwa.onboarding.install.${pwaGuide}.text`)
-      : isDenied
-        ? t("pwa.onboarding.push.denied")
-        : t("pwa.onboarding.push.text");
-
-  const primaryText = canInstallProgrammatically
-    ? t("pwa.onboarding.button.install")
-    : isInstallOnly || isDenied
-      ? t("pwa.onboarding.button.ok")
-      : t("pwa.onboarding.button.enable");
+  const primaryText = showGuide
+    ? t("pwa.onboarding.button.ok")
+    : t("pwa.onboarding.button.enable");
 
   return (
     <div
@@ -308,8 +258,13 @@ function PushOnboardingModal({
           <p className="p" style={{ marginTop: 8 }}>
             {hint}
           </p>
-          <div className={`actions ${isInstallOnly && !canInstallProgrammatically ? "actions--1" : "actions--2"} modal-actions`}>
-            {isInstallOnly && !canInstallProgrammatically ? (
+          {showGuide ? (
+            <div className="pre pwa-install-steps">
+              {t("pwa.onboarding.push.guide.steps")}
+            </div>
+          ) : null}
+          <div className={`actions ${showGuide ? "actions--1" : "actions--2"} modal-actions`}>
+            {showGuide ? (
               <button
                 className="btn btn--primary"
                 type="button"
@@ -352,6 +307,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   const [pushPromptOpen, setPushPromptOpen] = useState(false);
   const [pushPromptBusy, setPushPromptBusy] = useState(false);
+  const [pushGuideOpen, setPushGuideOpen] = useState(false);
   const [pushState, setPushState] = useState<PushState>({
     supported: false,
     permission: "unsupported",
@@ -359,12 +315,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     standalone: false,
     disabledByUser: false,
   });
-  // Отслеживаем наличие install prompt реактивно
-  const [pwaInstallAvailable, setPwaInstallAvailable] = useState<boolean>(isPwaInstallAvailable());
-
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const telegramMiniApp = useMemo(() => isTelegramMiniApp(), []);
-  const pwaGuide = useMemo(() => pwaGuideKey(detectPwaInstallPlatform()), []);
 
   const uid = useMemo(() => {
     const n = Number((me as any)?.profile?.id ?? (me as any)?.profile?.user_id ?? 0);
@@ -390,20 +342,25 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   const authInProgress = hasFreshAuthPending();
 
-  // Синхронизируем pwaInstallAvailable: слушаем появление/исчезновение события
-  // (appinstalled очищает window.__pwaInstallPrompt в main.tsx)
   useEffect(() => {
-    const onInstallAvailable = () => setPwaInstallAvailable(true);
-    const onInstalled = () => setPwaInstallAvailable(false);
+    const onInstalled = () => {
+      setPushPromptOpen(false);
 
-    window.addEventListener("beforeinstallprompt", onInstallAvailable);
+      window.setTimeout(() => {
+        if (!uid || telegramMiniApp || needsFirstLoginOnboarding) return;
+        void getPushState().then((s) => {
+          setPushState(s);
+          if (!isPushActive(s)) setPushPromptOpen(true);
+        }).catch(() => {});
+      }, 450);
+    };
+
     window.addEventListener("appinstalled", onInstalled);
 
     return () => {
-      window.removeEventListener("beforeinstallprompt", onInstallAvailable);
       window.removeEventListener("appinstalled", onInstalled);
     };
-  }, []);
+  }, [needsFirstLoginOnboarding, telegramMiniApp, uid]);
 
   useEffect(() => {
     if (!authInProgress) return;
@@ -520,6 +477,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       onboardingCheckedForUidRef.current = 0;
       setPushPromptOpen(false);
       setPushPromptBusy(false);
+      setPushGuideOpen(false);
     }
   }, [me, uid]);
 
@@ -551,9 +509,11 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         // Если промпт уже показывали в этой сессии — не спамим
         if (isPushPromptShownThisSession()) return;
 
-        // Показываем модалку:
-        // - если PWA не установлена (предложим установить)
-        // - или PWA установлена но пуши не включены
+        // Установку PWA предлагает глобальный PwaInstallPrompt.
+        // Здесь показываем только следующий шаг: уведомления в установленном приложении.
+        if (!s.standalone) return;
+
+        setPushGuideOpen(s.permission === "denied");
         setPushPromptOpen(true);
         markPushPromptShownThisSession();
       } catch {
@@ -573,28 +533,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     setPushPromptBusy(true);
 
     try {
-      // Если PWA не установлена — пробуем системный install prompt
+      // Если PWA не установлена, глобальный PwaInstallPrompt отвечает за установку.
       if (!isStandalonePwa()) {
-        const outcome = await triggerPwaInstall();
-
-        if (outcome === "accepted") {
-          toast.success(t("pwa.onboarding.install.accepted.title"), {
-            description: t("pwa.onboarding.install.accepted.text"),
-            durationMs: 4000,
-          });
-        } else if (outcome === "dismissed") {
-          toast.info(t("pwa.onboarding.install.dismissed.title"), {
-            description: t("pwa.onboarding.install.dismissed.text"),
-            durationMs: 3000,
-          });
-        } else {
-          // install prompt недоступен — показываем инструкцию
-          toast.info(t(`pwa.onboarding.install.${pwaGuide}.title`), {
-            description: t(`pwa.onboarding.install.${pwaGuide}.text`),
-            durationMs: 4000,
-          });
-        }
-
         setPushPromptOpen(false);
         return;
       }
@@ -608,13 +548,12 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         toast.success(t("pwa.onboarding.push.enabled.title"), {
           description: t("pwa.onboarding.push.enabled.text"),
         });
+        setPushGuideOpen(false);
+        setPushPromptOpen(false);
       } else {
-        toast.info(t("pwa.onboarding.push.skipped.title"), {
-          description: t("pwa.onboarding.push.skipped.text"),
-          durationMs: 2500,
-        });
+        setPushGuideOpen(true);
+        setPushPromptOpen(true);
       }
-      setPushPromptOpen(false);
     } finally {
       setPushPromptBusy(false);
     }
@@ -677,13 +616,11 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       <PushOnboardingModal
         open={!needsFirstLoginOnboarding && pushPromptOpen}
         busy={pushPromptBusy}
-        standalone={pushState.standalone}
         permission={String(pushState.permission)}
-        pwaInstallAvailable={pwaInstallAvailable}
-        pwaGuide={pwaGuide}
+        guide={pushGuideOpen}
         t={t}
         onAccept={onPushPromptAccept}
-        onDismiss={() => setPushPromptOpen(false)}
+        onDismiss={() => { setPushPromptOpen(false); setPushGuideOpen(false); }}
       />
 
     </>
