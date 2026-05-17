@@ -586,12 +586,63 @@ button, a { -webkit-tap-highlight-color: transparent; }
   margin-top: 12px;
   white-space: pre-line;
 }
+.onboarding-modal__head {
+  display: grid;
+  grid-template-columns: 46px minmax(0,1fr);
+  gap: 13px;
+  align-items: flex-start;
+}
+.onboarding-modal__icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 23px;
+  background:
+    radial-gradient(circle at 35% 25%, rgba(255,255,255,0.24), transparent 42%),
+    linear-gradient(135deg, rgba(124,92,255,0.92), rgba(77,215,255,0.82));
+  box-shadow: 0 12px 28px rgba(77,215,255,0.16), inset 0 1px 0 rgba(255,255,255,0.28);
+}
+.onboarding-modal__text {
+  margin-top: 7px;
+  color: rgba(255,255,255,0.74);
+}
+.pwa-install-modal .modal__card,
+.push-onboarding__card {
+  border-color: rgba(124,92,255,0.24);
+  background:
+    radial-gradient(circle at 18% 0%, rgba(124,92,255,0.20), transparent 36%),
+    radial-gradient(circle at 100% 100%, rgba(77,215,255,0.14), transparent 32%),
+    rgba(16,18,26,0.97);
+}
+.pwa-install-modal .modal-actions,
+.push-onboarding .modal-actions {
+  margin-top: 18px;
+}
+.pwa-install-modal .modal-actions .btn:not(.btn--primary),
+.push-onboarding .modal-actions .btn:not(.btn--primary) {
+  background: rgba(255,255,255,0.055);
+  color: rgba(255,255,255,0.86);
+  border-color: rgba(255,255,255,0.11);
+}
 @media (max-width: 420px) {
   .modal {
     padding: 12px;
   }
   .modal .actions--2 {
     grid-template-columns: 1fr;
+  }
+  .onboarding-modal__head {
+    grid-template-columns: 40px minmax(0,1fr);
+    gap: 11px;
+  }
+  .onboarding-modal__icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 13px;
+    font-size: 20px;
   }
 }
 

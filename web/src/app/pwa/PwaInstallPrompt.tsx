@@ -151,10 +151,17 @@ export function PwaInstallPrompt({ enabled = true }: PwaInstallPromptProps) {
     <div role="dialog" aria-modal="true" onMouseDown={close} className="modal pwa-install-modal" style={{ zIndex: 9998 }}>
       <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()}>
         <div className="card__body">
-          <div className="modal__title">{t(`pwa.onboarding.install.${guide}.title`)}</div>
-          <p className="p" style={{ marginTop: 8 }}>
-            {showGuide ? t(`pwa.onboarding.install.${guide}.text`) : t("pwa.onboarding.install.prompt.text")}
-          </p>
+          <div className="onboarding-modal__head">
+            <div className="onboarding-modal__icon" aria-hidden="true">
+              {showGuide ? "🧭" : "✨"}
+            </div>
+            <div>
+              <div className="modal__title">{t(`pwa.onboarding.install.${guide}.title`)}</div>
+              <p className="p onboarding-modal__text">
+                {showGuide ? t(`pwa.onboarding.install.${guide}.text`) : t("pwa.onboarding.install.prompt.text")}
+              </p>
+            </div>
+          </div>
           {showGuide ? (
             <div className="pre pwa-install-steps">{t(`pwa.onboarding.install.${guide}.steps`)}</div>
           ) : null}

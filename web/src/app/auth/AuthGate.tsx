@@ -252,12 +252,19 @@ function PushOnboardingModal({
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="card__body">
-          <div className="modal__title">
-            {title}
+          <div className="onboarding-modal__head">
+            <div className="onboarding-modal__icon" aria-hidden="true">
+              {showGuide ? "🛠️" : "🔔"}
+            </div>
+            <div>
+              <div className="modal__title">
+                {title}
+              </div>
+              <p className="p onboarding-modal__text">
+                {hint}
+              </p>
+            </div>
           </div>
-          <p className="p" style={{ marginTop: 8 }}>
-            {hint}
-          </p>
           {showGuide ? (
             <div className="pre pwa-install-steps">
               {t("pwa.onboarding.push.guide.steps")}
