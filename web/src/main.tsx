@@ -114,7 +114,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
       <main className="main">
         <div className="container safe">{children}</div>
       </main>
-      <PwaInstallPrompt />
+      <PwaInstallPrompt enabled={!hideNav} />
       {!hideNav && <BottomNav />}
     </div>
   );

@@ -49,7 +49,11 @@ function markShownThisSession() {
   }
 }
 
-export function PwaInstallPrompt() {
+type PwaInstallPromptProps = {
+  enabled?: boolean;
+};
+
+export function PwaInstallPrompt({ enabled = true }: PwaInstallPromptProps) {
   const { t } = useI18n();
   const loc = useLocation();
   const guide = useMemo(() => pwaGuideKey(detectPwaInstallPlatform()), []);
@@ -65,6 +69,7 @@ export function PwaInstallPrompt() {
       setPrompt(next);
       if (!next) return;
       clearPwaInstalledMarker();
+      if (!enabled) return;
       if (shouldTreatPwaAsInstalled() || isTelegramMiniApp() || hasShownThisSession()) return;
       markShownThisSession();
       setShowGuide(false);
@@ -85,6 +90,7 @@ export function PwaInstallPrompt() {
     window.addEventListener("appinstalled", onInstalled);
 
     const timer = window.setTimeout(() => {
+      if (!enabled) return;
       if (shouldTreatPwaAsInstalled() || isTelegramMiniApp() || hasShownThisSession()) return;
       const next = getPwaInstallPrompt();
       setPrompt(next);
@@ -98,11 +104,11 @@ export function PwaInstallPrompt() {
       window.removeEventListener("beforeinstallprompt", onInstallAvailable);
       window.removeEventListener("appinstalled", onInstalled);
     };
-  }, [t]);
+  }, [enabled, t]);
 
   useEffect(() => {
-    if (shouldTreatPwaAsInstalled() || isTelegramMiniApp()) setOpen(false);
-  }, [loc.pathname]);
+    if (!enabled || shouldTreatPwaAsInstalled() || isTelegramMiniApp()) setOpen(false);
+  }, [enabled, loc.pathname]);
 
   async function install() {
     const activePrompt = prompt || getPwaInstallPrompt();
