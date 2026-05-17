@@ -350,7 +350,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         if (!uid || telegramMiniApp || needsFirstLoginOnboarding) return;
         void getPushState().then((s) => {
           setPushState(s);
-          if (!isPushActive(s)) setPushPromptOpen(true);
+          if (s.standalone && !isPushActive(s)) setPushPromptOpen(true);
         }).catch(() => {});
       }, 450);
     };
