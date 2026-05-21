@@ -433,6 +433,10 @@ export const RU: Dict = {
   "profile.push.button.settings": "В настройках",
   "profile.push.button.enable": "Включить",
   "profile.push.button.disable": "Выключить",
+  "profile.legal.title": "Документы",
+  "profile.legal.value": "Оферта, политика и условия",
+  "profile.legal.hint": "Публичный раздел с правилами сервиса.",
+  "profile.legal.open": "Открыть",
 
   // profile — password
   "profile.password.modal.title": "Сменить пароль",
@@ -1475,6 +1479,10 @@ export const EN: Dict = {
   "profile.push.button.settings": "In settings",
   "profile.push.button.enable": "Enable",
   "profile.push.button.disable": "Disable",
+  "profile.legal.title": "Documents",
+  "profile.legal.value": "Offer, privacy, and terms",
+  "profile.legal.hint": "Public service rules and policies.",
+  "profile.legal.open": "Open",
 
   // profile — password
   "profile.password.modal.title": "Change password",

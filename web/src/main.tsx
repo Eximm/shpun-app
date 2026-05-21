@@ -23,6 +23,7 @@ import { PaymentsHistory }  from "./pages/PaymentsHistory";
 import { PaymentsReceipts } from "./pages/PaymentsReceipts";
 import { ServicesRouter }   from "./pages/help/ServicesRouter";
 import { AdminPage }        from "./pages/AdminPage";
+import { LegalDocs }        from "./pages/LegalDocs";
 
 import { AuthGate }                from "./app/auth/AuthGate";
 import { BottomNav }               from "./app/layout/BottomNav";
@@ -77,6 +78,7 @@ function routeTone(pathname: string) {
   if (pathname.startsWith("/payments")) return "payments";
   if (pathname.startsWith("/profile")) return "profile";
   if (pathname.startsWith("/admin")) return "admin";
+  if (pathname.startsWith("/legal")) return "profile";
   if (pathname.startsWith("/login")) return "login";
   return "default";
 }
@@ -93,7 +95,7 @@ function routeRank(pathname: string) {
 function AppShell({ children }: { children: React.ReactNode }) {
   const { t } = useI18n();
   const loc   = useLocation();
-  const hideNav = loc.pathname === "/login";
+  const hideNav = loc.pathname === "/login" || loc.pathname.startsWith("/legal");
   const tone = routeTone(loc.pathname);
 
   return (
@@ -236,6 +238,8 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                 {/* Публичные маршруты */}
                 <Route path="/login"    element={<Login />} />
                 <Route path="/app"      element={<AppPathRedirect />} />
+                <Route path="/legal"    element={<LegalDocs />} />
+                <Route path="/legal/:docKey" element={<LegalDocs />} />
 
                 {/* Корень: перехватывает ?token= и редиректит на /login */}
                 <Route path="/" element={<RootRoute />} />

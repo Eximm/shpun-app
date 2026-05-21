@@ -776,6 +776,13 @@ export function Profile() {
           label={t("profile.push.title")}
           value={<>{pushEnabled ? t("profile.push.enabled") : t("profile.push.disabled")}<span style={{ opacity: 0.45, fontWeight: 600, fontSize: 11 }}> · {pushPermText}</span></>}
           right={<div style={{ display: "flex", gap: 4 }}>{pushBtn}</div>}
+        />
+
+        <PRow
+          label={t("profile.legal.title")}
+          value={t("profile.legal.value")}
+          hint={t("profile.legal.hint")}
+          right={<SmallBtn onClick={() => nav("/legal")}>{t("profile.legal.open")}</SmallBtn>}
           last
         />
       </SectionCard>
