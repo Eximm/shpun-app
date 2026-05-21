@@ -6,6 +6,7 @@ import { useMe, refetchMe } from "./useMe";
 import { FirstLoginOnboardingModal } from "./FirstLoginOnboardingModal";
 import {
   enablePushByUserGesture,
+  ensurePushSubscribed,
   getPushState,
   isPushSupported,
   isStandalonePwa,
@@ -506,6 +507,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
     const run = async () => {
       try {
+        await ensurePushSubscribed().catch(() => false);
         const s = await getPushState();
         if (cancelled) return;
         setPushState(s);
