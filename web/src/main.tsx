@@ -178,7 +178,7 @@ function AppPathRedirect() {
 }
 
 // Корневой маршрут.
-// Биллинг шлёт ссылки вида https://app.sdnonline.online?token=XXX —
+// Биллинг шлёт ссылки вида https://app.shpun.net?token=XXX —
 // редиректим на /login?token=XXX, там Login.tsx сам откроет модалку смены пароля.
 function RootRoute() {
   const loc   = useLocation();
