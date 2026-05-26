@@ -8,7 +8,37 @@ import type { BroadcastItem, DeleteResp, HideResp, UpdateResp, ListResp } from "
 
 const PREVIEW_LIMIT = 160;
 
-type CreateResp = { ok: true; originId: string; event_id: string; ts: number; dedup: boolean };
+type CreateResp = {
+  ok: true;
+  originId: string;
+  event_id: string;
+  ts: number;
+  dedup: boolean;
+  pushRequested?: boolean;
+};
+
+function toDateTimeLocal(tsSec?: number) {
+  if (!tsSec || !Number.isFinite(tsSec)) return "";
+  const date = new Date(tsSec * 1000);
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return localDate.toISOString().slice(0, 16);
+}
+
+function parseLocalDateTime(value: string): number | null {
+  if (!value.trim()) return null;
+  const ms = new Date(value).getTime();
+  return Number.isFinite(ms) && ms > 0 ? Math.floor(ms / 1000) : null;
+}
+
+function isPastCalendarDate(value: string) {
+  if (!value.trim()) return false;
+  const selected = new Date(value);
+  if (!Number.isFinite(selected.getTime())) return false;
+  const today = new Date();
+  selected.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
+  return selected.getTime() < today.getTime();
+}
 
 export function BroadcastsSection() {
   const [loading,     setLoading]     = useState(false);
@@ -22,6 +52,7 @@ export function BroadcastsSection() {
   const [editMode,    setEditMode]    = useState(false);
   const [editTitle,   setEditTitle]   = useState("");
   const [editMessage, setEditMessage] = useState("");
+  const [editPublishedAt, setEditPublishedAt] = useState("");
   const [saving,      setSaving]      = useState(false);
   const [saveError,   setSaveError]   = useState<string | null>(null);
 
@@ -29,6 +60,8 @@ export function BroadcastsSection() {
   const [createMode,    setCreateMode]    = useState(false);
   const [newTitle,      setNewTitle]      = useState("");
   const [newMessage,    setNewMessage]    = useState("");
+  const [newPublishedAt, setNewPublishedAt] = useState("");
+  const [newSendPush,   setNewSendPush]   = useState(true);
   const [creating,      setCreating]      = useState(false);
   const [createError,   setCreateError]   = useState<string | null>(null);
 
@@ -78,19 +111,25 @@ export function BroadcastsSection() {
   function openEdit(item: BroadcastItem) {
     setEditTitle(item.title || "");
     setEditMessage(item.message || "");
+    setEditPublishedAt(toDateTimeLocal(item.ts));
     setEditMode(true);
     setSaveError(null);
   }
 
   async function saveEdit() {
     if (!opened) return;
+    const publishedTs = parseLocalDateTime(editPublishedAt);
+    if (!publishedTs) {
+      setSaveError("Укажите корректную дату публикации.");
+      return;
+    }
     setSaving(true); setSaveError(null);
     try {
       await apiFetch<UpdateResp>(`/admin/broadcast/${encodeURIComponent(opened.origin_id)}`, {
         method: "PUT",
-        body: { title: editTitle, message: editMessage },
+        body: { title: editTitle, message: editMessage, publishedTs },
       });
-      const updated = { ...opened, title: editTitle, message: editMessage };
+      const updated = { ...opened, title: editTitle, message: editMessage, ts: publishedTs };
       setItems((prev) => prev.map((x) => x.origin_id === opened.origin_id ? updated : x));
       setOpened(updated);
       setEditMode(false);
@@ -104,13 +143,23 @@ export function BroadcastsSection() {
       setCreateError("Заполните заголовок или текст.");
       return;
     }
+    const publishedTs = parseLocalDateTime(newPublishedAt);
+    if (newPublishedAt && !publishedTs) {
+      setCreateError("Укажите корректную дату публикации.");
+      return;
+    }
     setCreating(true); setCreateError(null);
     try {
       await apiFetch<CreateResp>("/admin/broadcast", {
         method: "POST",
-        body: { title: newTitle.trim(), message: newMessage.trim() },
+        body: {
+          title: newTitle.trim(),
+          message: newMessage.trim(),
+          push: newSendPush,
+          ...(publishedTs ? { publishedTs } : {}),
+        },
       });
-      setNewTitle(""); setNewMessage(""); setCreateMode(false);
+      setNewTitle(""); setNewMessage(""); setNewPublishedAt(""); setNewSendPush(true); setCreateMode(false);
       await load();
     } catch (e: any) {
       setCreateError(e?.message || "Не удалось создать новость.");
@@ -154,6 +203,44 @@ export function BroadcastsSection() {
                       placeholder="Заголовок"
                       style={{ marginBottom: 8 }}
                     />
+                    <label className="field admin-broadcastDate">
+                      <span className="field__label">Дата публикации</span>
+                      <input
+                        className="input"
+                        type="datetime-local"
+                        value={newPublishedAt}
+                        max={toDateTimeLocal(Math.floor(Date.now() / 1000))}
+                        onChange={(e) => {
+                          const next = e.target.value;
+                          setNewPublishedAt(next);
+                          setNewSendPush(!isPastCalendarDate(next));
+                        }}
+                      />
+                      <span className="admin-fieldHint">
+                        Оставьте пустым для публикации сейчас. Для восстановления укажите исходную дату.
+                      </span>
+                    </label>
+                    <label className="admin-pushToggle">
+                      <input
+                        type="checkbox"
+                        checked={newSendPush}
+                        onChange={(e) => setNewSendPush(e.target.checked)}
+                      />
+                      <span className="admin-pushToggle__track" aria-hidden="true" />
+                      <span className="admin-pushToggle__text">
+                        <strong>Отправить push-уведомление</strong>
+                        <small>
+                          {newSendPush
+                            ? "Пользователи получат уведомление о новости."
+                            : "Новость появится только в ленте, без уведомления."}
+                        </small>
+                      </span>
+                    </label>
+                    {newSendPush && isPastCalendarDate(newPublishedAt) && (
+                      <div className="pre admin-broadcastWarning">
+                        У новости прошлая дата. Push всё равно будет отправлен сейчас всем подписанным пользователям.
+                      </div>
+                    )}
                     <textarea
                       className="input"
                       style={{ minHeight: 100, resize: "vertical" }}
@@ -236,6 +323,19 @@ export function BroadcastsSection() {
                     <input className="input" value={editTitle}
                       onChange={(e) => setEditTitle(e.target.value)}
                       placeholder="Заголовок новости" />
+                  </div>
+                </div>
+                <div className="list__item admin-tightItem">
+                  <div className="list__main">
+                    <div className="list__title">Дата публикации</div>
+                    <input
+                      className="input"
+                      type="datetime-local"
+                      value={editPublishedAt}
+                      max={toDateTimeLocal(Math.floor(Date.now() / 1000))}
+                      onChange={(e) => setEditPublishedAt(e.target.value)}
+                    />
+                    <div className="admin-fieldHint">Дата определяет место новости в ленте.</div>
                   </div>
                 </div>
                 <div className="list__item admin-tightItem">

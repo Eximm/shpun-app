@@ -2652,6 +2652,79 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .admin-inlineMeta         { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 12px; color: rgba(255,255,255,0.62); line-height: 1.35; }
 .admin-inlineMeta strong  { font-weight: 900; color: rgba(255,255,255,0.88); }
 .admin-tightItem          { padding: 10px 12px; }
+.admin-broadcastDate      { display: flex; flex-direction: column; gap: 6px; margin: 0 0 8px; }
+.admin-fieldHint          { display: block; margin-top: 6px; font-size: 12px; line-height: 1.38; color: rgba(255,255,255,0.54); }
+.admin-pushToggle {
+  display: grid;
+  grid-template-columns: 42px minmax(0,1fr);
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-xs);
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.035);
+  cursor: pointer;
+}
+.admin-pushToggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.admin-pushToggle__track {
+  width: 42px;
+  height: 24px;
+  border-radius: 999px;
+  position: relative;
+  background: rgba(255,255,255,0.14);
+  border: 1px solid rgba(255,255,255,0.12);
+  transition: background 150ms ease, border-color 150ms ease;
+}
+.admin-pushToggle__track::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.82);
+  transition: transform 150ms ease, background 150ms ease;
+}
+.admin-pushToggle input:checked + .admin-pushToggle__track {
+  border-color: rgba(77,215,255,0.44);
+  background: linear-gradient(135deg, rgba(124,92,255,0.82), rgba(77,215,255,0.82));
+}
+.admin-pushToggle input:checked + .admin-pushToggle__track::after {
+  transform: translateX(18px);
+  background: #fff;
+}
+.admin-pushToggle input:focus-visible + .admin-pushToggle__track {
+  outline: 2px solid rgba(77,215,255,0.64);
+  outline-offset: 2px;
+}
+.admin-pushToggle__text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  color: rgba(255,255,255,0.88);
+  font-size: 13px;
+}
+.admin-pushToggle__text strong {
+  font-weight: 850;
+}
+.admin-pushToggle__text small {
+  color: rgba(255,255,255,0.54);
+  font-size: 12px;
+  line-height: 1.35;
+}
+.admin-broadcastWarning {
+  margin: 0 0 10px;
+  border-color: rgba(245,158,11,0.27);
+  background: rgba(245,158,11,0.08);
+  color: rgba(255,226,170,0.9);
+}
 .admin-numberInput        { max-width: 160px; }
 .admin-compactList        { gap: 8px; }
 .admin-compactItem        { padding: 10px 12px; }

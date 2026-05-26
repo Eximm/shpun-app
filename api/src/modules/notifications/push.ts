@@ -34,6 +34,23 @@ function parseBool(v: any): boolean {
   return s === "1" || s === "true" || s === "yes" || s === "on";
 }
 
+function parsePublishedTs(v: any): { ok: true; ts: number } | { ok: false; error: string } {
+  const now = Math.floor(Date.now() / 1000);
+  if (v == null || String(v).trim() === "") return { ok: true, ts: now };
+
+  let raw = Number(v);
+  if (!Number.isFinite(raw) && typeof v === "string") {
+    raw = Date.parse(v) / 1000;
+  }
+  if (raw > 10_000_000_000) raw = Math.floor(raw / 1000);
+  const ts = Math.floor(raw);
+
+  if (!Number.isFinite(ts) || ts <= 0) return { ok: false, error: "invalid_published_at" };
+  if (ts > now + 60) return { ok: false, error: "published_at_in_future" };
+
+  return { ok: true, ts };
+}
+
 function pickKeys(body: any): { endpoint: string; p256dh: string; auth: string } {
   const root = body ?? {};
   const sub = root?.subscription ?? root;
@@ -89,6 +106,64 @@ const stmtListUsersWithPushSubs = linkDb.prepare(`
 function endpointTail(endpoint: string, n = 28) {
   const s = String(endpoint || "");
   return s.length > n ? "…" + s.slice(-n) : s;
+}
+
+async function sendBroadcastPush(event: BillingPushEvent) {
+  const rows = stmtListUsersWithPushSubs.all() as Array<{ user_id: number }>;
+
+  let totalCandidates = 0;
+  let skippedInvalid = 0;
+  let skippedActive = 0;
+  let attempted = 0;
+  let sentUsers = 0;
+  let failedUsers = 0;
+  let removedSubs = 0;
+
+  for (const row of rows) {
+    const targetUid = Number(row.user_id);
+    totalCandidates += 1;
+
+    if (!Number.isFinite(targetUid) || targetUid <= 0) {
+      skippedInvalid += 1;
+      continue;
+    }
+
+    if (isUserActive(targetUid)) {
+      skippedActive += 1;
+      continue;
+    }
+
+    attempted += 1;
+
+    try {
+      const wp = await sendWebPushToUser(targetUid, event);
+
+      if (wp?.ok) {
+        if (Number(wp?.sent ?? 0) > 0) sentUsers += 1;
+        if (Number(wp?.failed ?? 0) > 0 && Number(wp?.sent ?? 0) <= 0) failedUsers += 1;
+        removedSubs += Number(wp?.removed ?? 0) || 0;
+      } else {
+        failedUsers += 1;
+      }
+    } catch (e: any) {
+      failedUsers += 1;
+      console.warn("WEBPUSH_BROADCAST_USER_FAIL", {
+        event_id: event.event_id ?? null,
+        targetUid,
+        msg: String(e?.message || e || ""),
+      });
+    }
+  }
+
+  return {
+    totalCandidates,
+    skippedInvalid,
+    skippedActive,
+    attempted,
+    sentUsers,
+    failedUsers,
+    removedSubs,
+  };
 }
 
 export async function pushRoutes(app: FastifyInstance) {
@@ -314,14 +389,18 @@ export async function pushRoutes(app: FastifyInstance) {
     const body = (req.body ?? {}) as any;
     const title   = String(body?.title   ?? "").trim();
     const message = String(body?.message ?? "").trim();
+    const published = parsePublishedTs(body?.publishedTs ?? body?.publishedAt);
 
     if (!title && !message) {
       return reply.code(400).send({ ok: false, error: "title_or_message_required" });
     }
+    if (!published.ok) {
+      return reply.code(400).send({ ok: false, error: published.error });
+    }
 
     const originId  = randomUUID();
     const event_id  = `sys:broadcast:${originId}`;
-    const ts        = Math.floor(Date.now() / 1000);
+    const ts        = published.ts;
 
     const r = putNotifEvent({
       event_id,
@@ -336,7 +415,36 @@ export async function pushRoutes(app: FastifyInstance) {
 
     if (!r.ok) return reply.code(500).send({ ok: false, error: r.error });
 
-    return reply.send({ ok: true, originId, event_id, ts, dedup: r.dedup });
+    const wantsPush = parseBool(body?.push);
+    let pushResult: Awaited<ReturnType<typeof sendBroadcastPush>> | null = null;
+
+    if (wantsPush) {
+      pushResult = await sendBroadcastPush({
+        event_id,
+        ts,
+        type: "broadcast.news",
+        level: "info",
+        title: title || undefined,
+        message: message || undefined,
+        target: "all",
+      });
+
+      console.info("ADMIN_BROADCAST_PUSH_RESULT", {
+        event_id,
+        ts,
+        ...pushResult,
+      });
+    }
+
+    return reply.send({
+      ok: true,
+      originId,
+      event_id,
+      ts,
+      dedup: r.dedup,
+      pushRequested: wantsPush,
+      pushResult,
+    });
   });
 
   app.delete("/admin/broadcast/:originId", async (req, reply) => {
@@ -383,12 +491,22 @@ export async function pushRoutes(app: FastifyInstance) {
     const body = (req.body ?? {}) as any;
     const title   = body?.title   != null ? String(body.title).trim()   : undefined;
     const message = body?.message != null ? String(body.message).trim() : undefined;
+    const published = body?.publishedTs != null || body?.publishedAt != null
+      ? parsePublishedTs(body?.publishedTs ?? body?.publishedAt)
+      : null;
 
-    if (title === undefined && message === undefined) {
+    if (title === undefined && message === undefined && published === null) {
       return reply.code(400).send({ ok: false, error: "nothing_to_update" });
     }
+    if (published && !published.ok) {
+      return reply.code(400).send({ ok: false, error: published.error });
+    }
 
-    const result = updateBroadcastByOriginId(originId, { title, message });
+    const result = updateBroadcastByOriginId(originId, {
+      title,
+      message,
+      ts: published?.ts,
+    });
     if (!result.ok) return reply.code(500).send({ ok: false, error: result.error });
 
     return reply.send({ ok: true, originId, updated: result.updated });

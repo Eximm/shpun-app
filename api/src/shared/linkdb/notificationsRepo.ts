@@ -213,7 +213,10 @@ const stmtHideBroadcast = linkDb.prepare(`
 
 const stmtUpdateBroadcast = linkDb.prepare(`
   UPDATE notif_events
-  SET title = @title, message = @message
+  SET
+    title = COALESCE(@title, title),
+    message = COALESCE(@message, message),
+    ts = COALESCE(@ts, ts)
   WHERE
     type LIKE 'broadcast.%'
     AND (
@@ -407,7 +410,7 @@ export function hideBroadcastByOriginId(
 
 export function updateBroadcastByOriginId(
   originId: string,
-  fields: { title?: string; message?: string },
+  fields: { title?: string; message?: string; ts?: number },
 ): { ok: true; updated: number } | { ok: false; error: string } {
   const cleanOriginId = String(originId ?? "").trim();
   if (!cleanOriginId) return { ok: false, error: "missing_origin_id" };
@@ -419,6 +422,7 @@ export function updateBroadcastByOriginId(
     const res = stmtUpdateBroadcast.run({
       title: fields.title ?? null,
       message: fields.message ?? null,
+      ts: fields.ts ?? null,
       userPattern,
       sysEventId,
     });
