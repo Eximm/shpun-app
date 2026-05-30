@@ -16,6 +16,8 @@ type Block = {
   tone?: BlockTone;
 };
 
+const ROUTER_PACKAGE_URL = "https://spb.shpyn.online/files/ipk/shpun-router_1.1.0_all.ipk";
+
 export function ServicesRouter() {
   const { t } = useI18n();
   const nav = useNavigate();
@@ -70,7 +72,7 @@ export function ServicesRouter() {
       note: t("servicesRouter.quick_start.note", "Если OpenWrt 24.10.x уже установлена, вся настройка обычно занимает несколько минут."),
       steps: [
         t("servicesRouter.quick_start.step_1", "Подготовьте роутер с OpenWrt 24.10.x"),
-        t("servicesRouter.quick_start.step_2", "Установите пакет shpun-router_1.0.0_all.ipk"),
+        t("servicesRouter.quick_start.step_2", "Установите пакет shpun-router_1.1.0_all.ipk"),
         t("servicesRouter.quick_start.step_3", "Откройте LuCI и перейдите на главную страницу"),
         t("servicesRouter.quick_start.step_4", "Найдите виджет Shpun Router / SDN System"),
         t("servicesRouter.quick_start.step_5", "Сканируйте QR-код и привяжите роутер в боте"),
@@ -137,7 +139,7 @@ export function ServicesRouter() {
             </button>
             <button
               className="btn"
-              onClick={() => window.open("https://spb.shpyn.online/files/ipk/shpun-router_1.0.0_all.ipk", "_blank", "noopener,noreferrer")}
+              onClick={() => window.open(ROUTER_PACKAGE_URL, "_blank", "noopener,noreferrer")}
               type="button"
             >
               ⬇️ {t("servicesRouter.page.download", "Скачать пакет")}
