@@ -31,6 +31,15 @@ export async function ensureTelegramWebAppSdk(timeoutMs = 3000): Promise<TgWebAp
 
   telegramSdkPromise = new Promise<TgWebApp | null>((resolve) => {
     const prev = document.querySelector<HTMLScriptElement>('script[data-shpun-tg-webapp="1"]');
+    let settled = false;
+    let timeoutId = 0;
+
+    const done = (tg: TgWebApp | null) => {
+      if (settled) return;
+      settled = true;
+      if (timeoutId) window.clearTimeout(timeoutId);
+      resolve(tg);
+    };
 
     const waitForWebApp = () => {
       const started = Date.now();
@@ -39,16 +48,16 @@ export async function ensureTelegramWebAppSdk(timeoutMs = 3000): Promise<TgWebAp
         const tg = getTelegramWebApp();
 
         if (tg) {
-          resolve(tg);
+          done(tg);
           return;
         }
 
         if (Date.now() - started >= timeoutMs) {
-          resolve(null);
+          done(null);
           return;
         }
 
-        setTimeout(poll, 50);
+        window.setTimeout(poll, 50);
       };
 
       poll();
@@ -65,8 +74,14 @@ export async function ensureTelegramWebAppSdk(timeoutMs = 3000): Promise<TgWebAp
     script.defer = true;
     script.setAttribute("data-shpun-tg-webapp", "1");
 
+    timeoutId = window.setTimeout(() => {
+      script.onload = null;
+      script.onerror = null;
+      script.remove();
+      done(null);
+    }, timeoutMs);
     script.onload = waitForWebApp;
-    script.onerror = () => resolve(null);
+    script.onerror = () => done(null);
 
     document.head.appendChild(script);
   }).finally(() => {

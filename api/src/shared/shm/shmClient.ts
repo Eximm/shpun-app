@@ -22,7 +22,13 @@ function envBool(name: string, def = false): boolean {
   return v === '1' || v === 'true' || v === 'yes' || v === 'on'
 }
 
+function envInt(name: string, def: number): number {
+  const n = Number(String(process.env[name] ?? '').trim())
+  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : def
+}
+
 const SHM_DEBUG = envBool('SHM_DEBUG', false) || envBool('AUTH_DEBUG', false)
+const SHM_TIMEOUT_MS = envInt('SHM_TIMEOUT_MS', 4500)
 
 function dbg(label: string, data: Record<string, any>) {
   if (!SHM_DEBUG) return
@@ -117,12 +123,28 @@ export async function shmFetch<T = unknown>(
   }
 
   const startedAt = Date.now()
+  const controller = new AbortController()
+  let externalAbort: (() => void) | null = null
+  let timeoutId: ReturnType<typeof setTimeout> | null = null
+
+  if (opts?.signal) {
+    if (opts.signal.aborted) controller.abort(opts.signal.reason)
+    else {
+      externalAbort = () => controller.abort(opts.signal?.reason)
+      opts.signal.addEventListener('abort', externalAbort, { once: true })
+    }
+  }
+
+  timeoutId = setTimeout(() => {
+    controller.abort(new Error(`shm_timeout:${SHM_TIMEOUT_MS}`))
+  }, SHM_TIMEOUT_MS)
 
   dbg('request', {
     method,
     url: sanitizeUrlForLog(url),
     hasSessionId: !!sessionId,
     contentType: headers['Content-Type'] || '',
+    timeoutMs: SHM_TIMEOUT_MS,
   })
 
   try {
@@ -130,7 +152,7 @@ export async function shmFetch<T = unknown>(
       method,
       headers,
       body,
-      signal: opts?.signal,
+      signal: controller.signal,
     })
 
     const contentType = String(res.headers.get('content-type') ?? '')
@@ -156,15 +178,20 @@ export async function shmFetch<T = unknown>(
   } catch (e: any) {
     const ms = Date.now() - startedAt
     const msg = String(e?.message ?? e ?? 'unknown_fetch_error')
+    const aborted = controller.signal.aborted
 
     dbg('fetch_error', {
       method,
       url: sanitizeUrlForLog(url),
       ms,
       error: clip(msg, 300),
+      aborted,
     })
 
-    return { ok: false, status: 502, text: `fetch_error:${msg}` }
+    return { ok: false, status: aborted ? 504 : 502, text: `fetch_error:${msg}` }
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId)
+    if (opts?.signal && externalAbort) opts.signal.removeEventListener('abort', externalAbort)
   }
 }
 

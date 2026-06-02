@@ -501,6 +501,16 @@ export function Login() {
     try {
       await new Promise<void>((resolve, reject) => {
         const script = document.createElement("script");
+        let settled = false;
+        const done = (ok: boolean, error?: Error) => {
+          if (settled) return;
+          settled = true;
+          window.clearTimeout(tid);
+          script.onload = null;
+          script.onerror = null;
+          if (ok) resolve();
+          else reject(error ?? new Error("tg_widget_failed"));
+        };
         script.async = true;
         script.src = "https://telegram.org/js/telegram-widget.js?22";
         script.setAttribute("data-telegram-login", botUsername);
@@ -508,9 +518,12 @@ export function Login() {
         script.setAttribute("data-userpic", "true");
         script.setAttribute("data-request-access", "write");
         script.setAttribute("data-onauth", "__shpunTelegramWidgetAuth(user)");
-        const tid = window.setTimeout(() => reject(new Error("tg_widget_timeout")), 1500);
-        script.onload  = () => { window.clearTimeout(tid); resolve(); };
-        script.onerror = () => { window.clearTimeout(tid); reject(new Error("tg_widget_failed")); };
+        const tid = window.setTimeout(() => {
+          script.remove();
+          done(false, new Error("tg_widget_timeout"));
+        }, 1500);
+        script.onload  = () => done(true);
+        script.onerror = () => done(false, new Error("tg_widget_failed"));
         container.appendChild(script);
       });
       setTgWidgetState("ready");
