@@ -9,6 +9,7 @@ import { useI18n } from "../shared/i18n";
 import { toast } from "../shared/ui/toast";
 import { normalizeError } from "../shared/api/errorText";
 import { getTelegramWebApp, readTelegramInitData } from "../shared/telegram/sdk";
+import { resetOnboardingPromptSession } from "../shared/onboardingPromptSession";
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 
@@ -404,6 +405,7 @@ export function Login() {
   async function goAfterAuth(r?: AuthResponse, provider?: string) {
     if (!r || !(r as any).ok) { clearAuthPending(); toastError(String((r as any)?.error ?? "") || "login_failed"); return; }
     markAuthEverSucceeded();
+    resetOnboardingPromptSession();
     setAuthPending(provider || "auth");
     clearPendingPartnerId();
     setPartnerId(0); setPartnerIdInput(""); setClientName("");
@@ -580,7 +582,7 @@ export function Login() {
     window.history.replaceState(null, "", window.location.pathname + (nextSearch ? `?${nextSearch}` : "") + window.location.hash);
     void (async () => {
       const me = await ensureAuthorizedAfterAuth();
-      if (me) { markAuthEverSucceeded(); nav("/", { replace: true }); return; }
+      if (me) { markAuthEverSucceeded(); resetOnboardingPromptSession(); nav("/", { replace: true }); return; }
       clearAuthPending();
       toast.error(t("login.toast.error_title"), { description: t("login.auth.finish_failed") });
     })();
