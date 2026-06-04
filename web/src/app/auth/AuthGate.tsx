@@ -154,6 +154,13 @@ function shouldNotifyExpiredSession(pathname: string, search: string): boolean {
   return true;
 }
 
+function buildLoginRedirectTarget(): string {
+  if (!isTelegramMiniAppEnv()) return "/login";
+  const search = String(window.location.search || "");
+  const hash = String(window.location.hash || "");
+  return search || hash ? `/login${search}${hash}` : "/login";
+}
+
 function parsePartnerIdFromUrl(): number {
   try {
     const direct = new URLSearchParams(window.location.search || "");
@@ -578,7 +585,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   if (authRequired || !me) {
     return (
       <Navigate
-        to="/login"
+        to={buildLoginRedirectTarget()}
         replace
         state={{ from: loc.pathname + (loc.search || "") }}
       />
