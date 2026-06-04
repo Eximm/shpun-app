@@ -192,6 +192,31 @@ function mapAuthError(raw: string, t: (k: string, fb?: string) => string): strin
   }
 }
 
+function mapTelegramAuthError(raw: string, t: (k: string, fb?: string) => string): string {
+  const code = String(raw || "").trim();
+  if (!code) return t("login.err.tg_failed");
+  if (!looksLikeCode(code)) return code;
+  switch (code) {
+    case "init_data_required":
+    case "missing_telegram_payload":
+      return t("login.err.init_data_required");
+    case "not_authenticated":
+    case "session_expired":
+    case "no_shm_session":
+      return t("login.err.telegram_session");
+    case "telegram_auth_limited":
+      return t("login.err.telegram_auth_limited");
+    case "invalid_credentials":
+    case "shm_auth_unavailable":
+    case "shm_telegram_auth_failed":
+    case "shm_telegram_widget_auth_failed":
+    case "telegram_password_login_failed":
+    case "shm_register_failed":
+    default:
+      return t("login.err.tg_failed");
+  }
+}
+
 function errorToAuthRaw(e: unknown, fallback: string): string {
   if (typeof e === "string") return e;
   if (e && typeof e === "object") {
@@ -302,6 +327,14 @@ export function Login() {
     toast.error(t("login.toast.error_title"), { description: msg });
   }
 
+  function toastTelegramError(raw: string) {
+    const msg = mapTelegramAuthError(raw, t);
+    const now = Date.now();
+    if (lastToastRef.current.msg === msg && now - lastToastRef.current.at < 1200) return;
+    lastToastRef.current = { msg, at: now };
+    toast.error(t("login.toast.error_title"), { description: msg });
+  }
+
   // ── Modal controls ────────────────────────────────────────────────────────
   function openModal(next: AuthModal) {
     setAuthModal(next);
@@ -403,7 +436,13 @@ export function Login() {
 
   // ── Telegram ──────────────────────────────────────────────────────────────
   async function goAfterAuth(r?: AuthResponse, provider?: string) {
-    if (!r || !(r as any).ok) { clearAuthPending(); toastError(String((r as any)?.error ?? "") || "login_failed"); return; }
+    if (!r || !(r as any).ok) {
+      clearAuthPending();
+      const raw = String((r as any)?.error ?? "") || "login_failed";
+      if (provider === "telegram") toastTelegramError(raw);
+      else toastError(raw);
+      return;
+    }
     markAuthEverSucceeded();
     resetOnboardingPromptSession();
     setAuthPending(provider || "auth");
@@ -430,13 +469,13 @@ export function Login() {
     try {
       let initData = getTelegramInitData();
       if (!initData) initData = await waitTelegramInitData(3000);
-      if (!initData) { toastError(t("error.open_in_tg")); return; }
+      if (!initData) { toastTelegramError("init_data_required"); return; }
       const r = await apiFetch<AuthResponse>("/auth/telegram", {
         method: "POST",
         body: { initData, ...(partnerId > 0 ? { partner_id: partnerId } : {}) },
       });
       await goAfterAuth(r, "telegram");
-    } catch (e: unknown) { clearAuthPending(); toastError(errorToAuthRaw(e, t("error.telegram_login_failed")));
+    } catch (e: unknown) { clearAuthPending(); toastTelegramError(errorToAuthRaw(e, t("error.telegram_login_failed")));
     } finally { setLoading(false); authInProgressRef.current = false; }
   }
 
@@ -486,7 +525,7 @@ export function Login() {
         body: { ...widgetUser, ...(partnerId > 0 ? { partner_id: partnerId } : {}) },
       });
       await goAfterAuth(r, "telegram");
-    } catch (e: unknown) { clearAuthPending(); toastError(errorToAuthRaw(e, t("error.telegram_login_failed")));
+    } catch (e: unknown) { clearAuthPending(); toastTelegramError(errorToAuthRaw(e, t("error.telegram_login_failed")));
     } finally { setLoading(false); authInProgressRef.current = false; }
   }
 
@@ -988,31 +1027,52 @@ export function Login() {
   // ── Telegram Mini App UI ──────────────────────────────────────────────────
 
   if (mode === "telegram") {
-    if (loading) {
-      return (
-        <div className="app-loader" style={{ opacity: 1, transition: "opacity 180ms ease", pointerEvents: "auto" }}>
-          <div className="app-loader__card">
-            <div className="app-loader__shine" />
-            <div className="app-loader__brandRow"><div className="app-loader__mark" /><div className="app-loader__title">Shpun App</div></div>
-            <div className="app-loader__text">{t("login.desc.tg.loading")}</div>
-          </div>
-        </div>
-      );
-    }
     return (
-      <div className="section">
-        <div className="card">
-          <div className="card__body">
-            <div className="app-loader__brandRow" style={{ marginBottom: 12 }}>
-              <div className="app-loader__mark" /><div className="app-loader__title" style={{ fontSize: 20 }}>Shpun App</div>
+      <div className="section telegram-login-section">
+        <div className={`tg-login ${loading ? "tg-login--loading" : "tg-login--fallback"}`}>
+          <div className="tg-login__glow" />
+          <div className="tg-login__head">
+            <div className="tg-login__brand">
+              <div className="tg-login__mark" />
+              <div>
+                <div className="tg-login__title">Shpun App</div>
+                <div className="tg-login__subtitle">{t("login.tg.subtitle")}</div>
+              </div>
             </div>
-            <p className="p">{t("login.desc.tg.only")}</p>
-            <div className="auth__actions" style={{ marginTop: 16 }}>
+            <div className="tg-login__badge">{loading ? t("login.tg.badge.auto") : t("login.tg.badge.manual")}</div>
+          </div>
+
+          <div className="tg-login__body">
+            <h1 className="tg-login__heading">{loading ? t("login.tg.heading.loading") : t("login.tg.heading.fallback")}</h1>
+            <p className="tg-login__text">{loading ? t("login.desc.tg.loading") : t("login.desc.tg.only")}</p>
+
+            <div className="tg-login__steps" aria-label={t("login.tg.steps_label")}>
+              <div className={`tg-login__step ${loading ? "is-active" : "is-done"}`}>
+                <span className="tg-login__dot" />
+                <span>{t("login.tg.step.session")}</span>
+              </div>
+              <div className={`tg-login__step ${loading ? "" : "is-active"}`}>
+                <span className="tg-login__dot" />
+                <span>{t("login.tg.step.token")}</span>
+              </div>
+              <div className="tg-login__step">
+                <span className="tg-login__dot" />
+                <span>{t("login.tg.step.cabinet")}</span>
+              </div>
+            </div>
+
+            {!loading && (
+              <div className="tg-login__note">{t("login.tg.fallback.note")}</div>
+            )}
+
+            {!loading && (
+              <div className="auth__actions tg-login__actions">
               <button type="button" className="btn btn--primary login__btnFull"
                 onClick={() => void telegramLoginMiniApp()} disabled={loading}>
                 {loading ? t("login.tg.cta_loading") : t("login.tg.retry")}
               </button>
             </div>
+            )}
           </div>
         </div>
       </div>
