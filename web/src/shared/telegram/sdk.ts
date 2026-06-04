@@ -10,6 +10,8 @@ declare global {
     Telegram?: {
       WebApp?: TgWebApp;
     };
+    TelegramWebviewProxy?: unknown;
+    TelegramWebviewProxyProto?: unknown;
   }
 }
 
@@ -66,8 +68,15 @@ export function hasTelegramMiniAppParams(): boolean {
   return hasParam(window.location.hash) || hasParam(window.location.search);
 }
 
+export function isLikelyTelegramWebView(): boolean {
+  const ua = String(navigator.userAgent || "");
+  return /\bTelegram(?:Bot)?\b|TDesktop/i.test(ua)
+    || Boolean(window.TelegramWebviewProxy)
+    || Boolean(window.TelegramWebviewProxyProto);
+}
+
 export function isTelegramMiniAppEnv(): boolean {
-  const detected = readTelegramInitData().length > 50 || hasTelegramMiniAppParams();
+  const detected = readTelegramInitData().length > 50 || hasTelegramMiniAppParams() || isLikelyTelegramWebView();
   try {
     if (detected) markTelegramMiniAppSession();
     return detected || sessionStorage.getItem(TELEGRAM_MINI_APP_SESSION_KEY) === "1";

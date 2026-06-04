@@ -8,7 +8,13 @@ import type { AuthResponse } from "../shared/api/types";
 import { useI18n } from "../shared/i18n";
 import { toast } from "../shared/ui/toast";
 import { normalizeError } from "../shared/api/errorText";
-import { getTelegramWebApp, hasTelegramMiniAppParams, readTelegramInitData } from "../shared/telegram/sdk";
+import {
+  ensureTelegramWebAppSdk,
+  getTelegramWebApp,
+  hasTelegramMiniAppParams,
+  isLikelyTelegramWebView,
+  readTelegramInitData,
+} from "../shared/telegram/sdk";
 import { resetOnboardingPromptSession } from "../shared/onboardingPromptSession";
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
@@ -575,9 +581,14 @@ export function Login() {
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
+      const telegramSignal = hasTelegramMiniAppParams() || isLikelyTelegramWebView() || Boolean(getTelegramWebApp());
+      if (telegramSignal) {
+        setMode("telegram");
+        await ensureTelegramWebAppSdk(1200);
+      }
       const initData = await waitTelegramInitData(1500);
       if (cancelled) return;
-      if (!initData) { setMode(hasTelegramMiniAppParams() ? "telegram" : "web"); return; }
+      if (!initData) { setMode(telegramSignal || hasTelegramMiniAppParams() ? "telegram" : "web"); return; }
       setMode("telegram");
       authInProgressRef.current = true; setLoading(true);
       try {
