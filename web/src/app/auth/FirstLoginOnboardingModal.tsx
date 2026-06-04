@@ -10,7 +10,6 @@ import { toastApiError } from "../../shared/ui/toast/toastApiError";
 import { refetchMe } from "./useMe";
 import { resetPwaInstallPromptForNextSession } from "../../shared/pwa/install";
 import { resetOnboardingPromptSession } from "../../shared/onboardingPromptSession";
-import { clearTelegramInitDataSession } from "../../shared/telegram/sdk";
 
 type Props = {
   open: boolean;
@@ -212,7 +211,6 @@ export function FirstLoginOnboardingModal({ open, me, onSkip }: Props) {
         sessionStorage.removeItem("auth:pending_at");
         resetPwaInstallPromptForNextSession();
         resetOnboardingPromptSession();
-        clearTelegramInitDataSession();
       } catch { /* ignore */ }
       navigate("/login", { replace: true });
     } finally {

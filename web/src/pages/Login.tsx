@@ -33,7 +33,6 @@ const AUTH_PENDING_AT_KEY= "auth:pending_at";
 const AUTH_EVER_KEY      = "auth:ever_succeeded";
 const FORGOT_SENT_KEY    = "forgot_pwd:sent_at";
 const FORGOT_COOLDOWN_MS = 60_000;
-const TG_AUTO_LOGIN_WAIT_MS = [3000, 2500, 2500, 2000];
 
 /* ─── Forgot helpers ─────────────────────────────────────────────────────── */
 
@@ -203,27 +202,6 @@ function mapAuthError(raw: string, t: (k: string, fb?: string) => string): strin
   }
 }
 
-function mapTelegramAuthError(raw: string, t: (k: string, fb?: string) => string): string {
-  const code = String(raw || "").trim();
-  if (!code) return t("login.err.tg_failed");
-  if (!looksLikeCode(code)) return code;
-  switch (code) {
-    case "invalid_credentials":
-    case "shm_auth_unavailable":
-    case "shm_telegram_auth_failed":
-    case "shm_telegram_widget_auth_failed":
-      return t("login.err.tg_failed");
-    case "init_data_required":
-      return t("login.err.init_data_required");
-    case "no_shm_session":
-      return t("login.err.no_shm_session");
-    case "not_authenticated":
-      return t("login.err.not_authenticated");
-    default:
-      return t("login.err.tg_failed");
-  }
-}
-
 function errorToAuthRaw(e: unknown, fallback: string): string {
   if (typeof e === "string") return e;
   if (e && typeof e === "object") {
@@ -334,14 +312,6 @@ export function Login() {
     toast.error(t("login.toast.error_title"), { description: msg });
   }
 
-  function toastTelegramError(raw: string) {
-    const msg = mapTelegramAuthError(raw, t);
-    const now = Date.now();
-    if (lastToastRef.current.msg === msg && now - lastToastRef.current.at < 1200) return;
-    lastToastRef.current = { msg, at: now };
-    toast.error(t("login.toast.error_title"), { description: msg });
-  }
-
   // ── Modal controls ────────────────────────────────────────────────────────
   function openModal(next: AuthModal) {
     setAuthModal(next);
@@ -442,13 +412,10 @@ export function Login() {
   }
 
   // ── Telegram ──────────────────────────────────────────────────────────────
-  async function goAfterAuth(r?: AuthResponse, provider?: string, opts?: { silentFailure?: boolean }) {
+  async function goAfterAuth(r?: AuthResponse, provider?: string) {
     if (!r || !(r as any).ok) {
       clearAuthPending();
-      if (opts?.silentFailure) return;
-      const raw = String((r as any)?.error ?? "") || "login_failed";
-      if (provider === "telegram") toastTelegramError(raw);
-      else toastError(raw);
+      toastError(String((r as any)?.error ?? "") || "login_failed");
       return;
     }
     markAuthEverSucceeded();
@@ -477,13 +444,13 @@ export function Login() {
     try {
       let initData = getTelegramInitData();
       if (!initData) initData = await waitTelegramInitData(3000);
-      if (!initData) { toastTelegramError("init_data_required"); return; }
+      if (!initData) { toastError(t("error.open_in_tg")); return; }
       const r = await apiFetch<AuthResponse>("/auth/telegram", {
         method: "POST",
         body: { initData, ...(partnerId > 0 ? { partner_id: partnerId } : {}) },
       });
       await goAfterAuth(r, "telegram");
-    } catch (e: unknown) { clearAuthPending(); toastTelegramError(errorToAuthRaw(e, t("error.telegram_login_failed")));
+    } catch (e: unknown) { clearAuthPending(); toastError(errorToAuthRaw(e, t("error.telegram_login_failed")));
     } finally { setLoading(false); authInProgressRef.current = false; }
   }
 
@@ -533,7 +500,7 @@ export function Login() {
         body: { ...widgetUser, ...(partnerId > 0 ? { partner_id: partnerId } : {}) },
       });
       await goAfterAuth(r, "telegram");
-    } catch (e: unknown) { clearAuthPending(); toastTelegramError(errorToAuthRaw(e, t("error.telegram_login_failed")));
+    } catch (e: unknown) { clearAuthPending(); toastError(errorToAuthRaw(e, t("error.telegram_login_failed")));
     } finally { setLoading(false); authInProgressRef.current = false; }
   }
 
@@ -585,23 +552,10 @@ export function Login() {
     let cancelled = false;
     const run = async () => {
       const likelyTelegram = isLikelyTelegramWebView() || isTelegramMiniAppEnv();
-      if (likelyTelegram) {
-        setMode("telegram");
-        setLoading(true);
-      }
-
-      let initData: string | null = null;
-      const waits = likelyTelegram ? TG_AUTO_LOGIN_WAIT_MS : [3000];
-      for (let i = 0; i < waits.length; i++) {
-        initData = await waitTelegramInitData(waits[i]);
-        if (cancelled || initData) break;
-        if (i < waits.length - 1) await sleep(250 + i * 150);
-      }
-
+      const initData = await waitTelegramInitData(3000);
       if (cancelled) return;
       if (!initData) {
-        if (likelyTelegram) setLoading(false);
-        else setMode("web");
+        setMode(likelyTelegram ? "telegram" : "web");
         return;
       }
       setMode("telegram");
@@ -611,7 +565,7 @@ export function Login() {
           method: "POST",
           body: { initData, ...(readPendingPartnerId() > 0 ? { partner_id: readPendingPartnerId() } : {}) },
         });
-        if (!cancelled) await goAfterAuth(r, "telegram", { silentFailure: true });
+        if (!cancelled) await goAfterAuth(r, "telegram");
       } catch { if (!cancelled) clearAuthPending(); }
       finally { authInProgressRef.current = false; if (!cancelled) setLoading(false); }
     };
