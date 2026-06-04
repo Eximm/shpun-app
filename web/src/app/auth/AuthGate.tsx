@@ -578,9 +578,9 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   if (authRequired || !me) {
     return (
       <Navigate
-        to="/login"
+        to={{ pathname: "/login", search: loc.search, hash: loc.hash }}
         replace
-        state={{ from: loc.pathname + (loc.search || "") }}
+        state={{ from: loc.pathname + (loc.search || "") + (loc.hash || "") }}
       />
     );
   }

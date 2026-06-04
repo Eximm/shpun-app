@@ -174,7 +174,7 @@ function LandingRoute() {
 
 function AppPathRedirect() {
   const loc = useLocation();
-  return <Navigate to={{ pathname: "/", search: loc.search }} replace />;
+  return <Navigate to={{ pathname: "/", search: loc.search, hash: loc.hash }} replace />;
 }
 
 // Корневой маршрут.
@@ -258,7 +258,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                   <Route path="/admin"             element={<AdminPage />} />
                 </Route>
 
-                <Route path="*" element={<Navigate to="/" replace />} />
+                <Route path="*" element={<Navigate to={{ pathname: "/", search: window.location.search, hash: window.location.hash }} replace />} />
               </Routes>
             </PageContainer>
           </AppShell>

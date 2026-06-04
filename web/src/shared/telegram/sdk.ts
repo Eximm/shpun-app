@@ -17,12 +17,31 @@ declare global {
 
 let telegramSdkPromise: Promise<TgWebApp | null> | null = null;
 const TELEGRAM_MINI_APP_SESSION_KEY = "telegram.mini_app.session.v1";
+const TELEGRAM_INIT_DATA_SESSION_KEY = "telegram.init_data.session.v1";
 
 function markTelegramMiniAppSession() {
   try {
     sessionStorage.setItem(TELEGRAM_MINI_APP_SESSION_KEY, "1");
   } catch {
     // ignore
+  }
+}
+
+function writeTelegramInitDataSession(initData: string) {
+  const value = String(initData || "").trim();
+  if (value.length <= 50) return;
+  try {
+    sessionStorage.setItem(TELEGRAM_INIT_DATA_SESSION_KEY, value);
+  } catch {
+    // ignore
+  }
+}
+
+function readTelegramInitDataSession(): string {
+  try {
+    return String(sessionStorage.getItem(TELEGRAM_INIT_DATA_SESSION_KEY) || "").trim();
+  } catch {
+    return "";
   }
 }
 
@@ -47,8 +66,12 @@ function readTelegramInitDataFromUrl(): string {
 
 export function readTelegramInitData(): string {
   const fromSdk = String(getTelegramWebApp()?.initData ?? "").trim();
-  const initData = fromSdk || readTelegramInitDataFromUrl();
-  if (initData.length > 50) markTelegramMiniAppSession();
+  const fromUrl = readTelegramInitDataFromUrl();
+  const initData = fromSdk || fromUrl || readTelegramInitDataSession();
+  if (initData.length > 50) {
+    markTelegramMiniAppSession();
+    writeTelegramInitDataSession(initData);
+  }
   return initData;
 }
 
