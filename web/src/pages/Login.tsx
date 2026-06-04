@@ -12,6 +12,7 @@ import {
   ensureTelegramWebAppSdk,
   getTelegramWebApp,
   isLikelyTelegramWebView,
+  isTelegramMiniAppEnv,
   readTelegramInitData,
 } from "../shared/telegram/sdk";
 import { resetOnboardingPromptSession } from "../shared/onboardingPromptSession";
@@ -90,10 +91,11 @@ async function waitTelegramInitData(timeoutMs = 1500): Promise<string | null> {
     try { const tg = getTelegramWebApp() as TgWebApp | null; tg?.ready?.(); tg?.expand?.(); } catch { /* ignore */ }
     return immediate;
   }
-  if (!(window as any)?.Telegram && isLikelyTelegramWebView()) {
+  const maybeTelegram = isLikelyTelegramWebView() || isTelegramMiniAppEnv();
+  if (!(window as any)?.Telegram && maybeTelegram) {
     await ensureTelegramWebAppSdk(timeoutMs);
   }
-  if (!(window as any)?.Telegram && !isLikelyTelegramWebView()) return null;
+  if (!(window as any)?.Telegram && !maybeTelegram) return null;
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
     await sleep(50);
@@ -545,9 +547,10 @@ export function Login() {
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
+      const likelyTelegram = isLikelyTelegramWebView() || isTelegramMiniAppEnv();
       const initData = await waitTelegramInitData(3000);
       if (cancelled) return;
-      if (!initData) { setMode("web"); return; }
+      if (!initData) { setMode(likelyTelegram ? "telegram" : "web"); return; }
       setMode("telegram");
       authInProgressRef.current = true; setLoading(true);
       try {
@@ -996,31 +999,56 @@ export function Login() {
   // ── Telegram Mini App UI ──────────────────────────────────────────────────
 
   if (mode === "telegram") {
-    if (loading) {
-      return (
-        <div className="app-loader" style={{ opacity: 1, transition: "opacity 180ms ease", pointerEvents: "auto" }}>
-          <div className="app-loader__card">
-            <div className="app-loader__shine" />
-            <div className="app-loader__brandRow"><div className="app-loader__mark" /><div className="app-loader__title">Shpun App</div></div>
-            <div className="app-loader__text">{t("login.desc.tg.loading")}</div>
-          </div>
-        </div>
-      );
-    }
     return (
-      <div className="section">
-        <div className="card">
-          <div className="card__body">
-            <div className="app-loader__brandRow" style={{ marginBottom: 12 }}>
-              <div className="app-loader__mark" /><div className="app-loader__title" style={{ fontSize: 20 }}>Shpun App</div>
+      <div className="section telegram-login-section">
+        <div className={`tg-login ${loading ? "tg-login--loading" : "tg-login--fallback"}`}>
+          <div className="tg-login__glow" />
+          <div className="tg-login__body">
+            <div className="tg-login__brand">
+              <div className="tg-login__mark"><span /></div>
+              <div>
+                <div className="tg-login__title">Shpun App</div>
+                <div className="tg-login__subtitle">{t("login.tg.subtitle")}</div>
+              </div>
             </div>
-            <p className="p">{t("login.desc.tg.only")}</p>
-            <div className="auth__actions" style={{ marginTop: 16 }}>
-              <button type="button" className="btn btn--primary login__btnFull"
-                onClick={() => void telegramLoginMiniApp()} disabled={loading}>
-                {loading ? t("login.tg.cta_loading") : t("login.tg.retry")}
-              </button>
+            <div className="tg-login__badge">
+              {loading ? t("login.tg.badge.auto") : t("login.tg.badge.manual")}
             </div>
+
+            <div className="tg-login__copy">
+              <h1 className="tg-login__heading">{loading ? t("login.tg.heading.loading") : t("login.tg.heading.fallback")}</h1>
+              <p>{loading ? t("login.desc.tg.loading") : t("login.desc.tg.only")}</p>
+            </div>
+
+            <div className="tg-login__steps" aria-label={t("login.tg.steps_label")}>
+              <div className={`tg-login__step ${loading ? "is-active" : "is-done"}`}>
+                <span className="tg-login__dot" />
+                <span>{t("login.tg.step.session")}</span>
+              </div>
+              <div className={`tg-login__step ${loading ? "is-active" : "is-waiting"}`}>
+                <span className="tg-login__dot" />
+                <span>{t("login.tg.step.token")}</span>
+              </div>
+              <div className={`tg-login__step ${loading ? "is-active" : "is-waiting"}`}>
+                <span className="tg-login__dot" />
+                <span>{t("login.tg.step.cabinet")}</span>
+              </div>
+            </div>
+
+            {!loading && (
+              <div className="tg-login__note">
+                {t("login.tg.fallback.note")}
+              </div>
+            )}
+
+            {!loading && (
+              <div className="auth__actions tg-login__actions">
+                <button type="button" className="btn btn--primary login__btnFull"
+                  onClick={() => void telegramLoginMiniApp()} disabled={loading}>
+                  {t("login.tg.retry")}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
