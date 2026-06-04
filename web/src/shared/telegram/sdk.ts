@@ -64,6 +64,15 @@ export function hasTelegramMiniAppParams(): boolean {
   return hasParam(window.location.hash) || hasParam(window.location.search);
 }
 
+export function isLikelyTelegramWebView(): boolean {
+  try {
+    const ua = String(navigator.userAgent || "");
+    return /telegram/i.test(ua) || hasTelegramMiniAppParams();
+  } catch {
+    return hasTelegramMiniAppParams();
+  }
+}
+
 export function isTelegramMiniAppEnv(): boolean {
   const detected = readTelegramInitData().length > 50 || hasTelegramMiniAppParams();
   try {

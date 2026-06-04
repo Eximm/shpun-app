@@ -8,7 +8,12 @@ import type { AuthResponse } from "../shared/api/types";
 import { useI18n } from "../shared/i18n";
 import { toast } from "../shared/ui/toast";
 import { normalizeError } from "../shared/api/errorText";
-import { getTelegramWebApp, readTelegramInitData } from "../shared/telegram/sdk";
+import {
+  ensureTelegramWebAppSdk,
+  getTelegramWebApp,
+  isLikelyTelegramWebView,
+  readTelegramInitData,
+} from "../shared/telegram/sdk";
 import { resetOnboardingPromptSession } from "../shared/onboardingPromptSession";
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
@@ -85,7 +90,10 @@ async function waitTelegramInitData(timeoutMs = 1500): Promise<string | null> {
     try { const tg = getTelegramWebApp() as TgWebApp | null; tg?.ready?.(); tg?.expand?.(); } catch { /* ignore */ }
     return immediate;
   }
-  if (!(window as any)?.Telegram) return null;
+  if (!(window as any)?.Telegram && isLikelyTelegramWebView()) {
+    await ensureTelegramWebAppSdk(timeoutMs);
+  }
+  if (!(window as any)?.Telegram && !isLikelyTelegramWebView()) return null;
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
     await sleep(50);
@@ -537,7 +545,7 @@ export function Login() {
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
-      const initData = await waitTelegramInitData(1500);
+      const initData = await waitTelegramInitData(3000);
       if (cancelled) return;
       if (!initData) { setMode("web"); return; }
       setMode("telegram");
