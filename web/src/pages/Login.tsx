@@ -1067,11 +1067,11 @@ export function Login() {
 
             {!loading && (
               <div className="auth__actions tg-login__actions">
-              <button type="button" className="btn btn--primary login__btnFull"
-                onClick={() => void telegramLoginMiniApp()} disabled={loading}>
-                {loading ? t("login.tg.cta_loading") : t("login.tg.retry")}
-              </button>
-            </div>
+                <button type="button" className="btn btn--primary login__btnFull"
+                  onClick={() => void telegramLoginMiniApp()} disabled={loading}>
+                  {loading ? t("login.tg.cta_loading") : t("login.tg.retry")}
+                </button>
+              </div>
             )}
           </div>
         </div>
