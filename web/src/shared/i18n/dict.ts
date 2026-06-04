@@ -36,7 +36,7 @@ export const RU: Dict = {
   "login.tg.badge.auto": "Автоматический вход",
   "login.tg.badge.manual": "Нужен повтор",
   "login.tg.heading.loading": "Подключаем ваш Telegram",
-  "login.tg.heading.fallback": "Telegram не ответил сразу",
+  "login.tg.heading.fallback": "Telegram задумался",
   "login.tg.steps_label": "Статус входа через Telegram",
   "login.tg.step.session": "Проверяем сессию Telegram",
   "login.tg.step.token": "Получаем данные для входа",
@@ -129,7 +129,7 @@ export const RU: Dict = {
   "login.err.email_domain_unresolvable": "Не удалось подтвердить домен e-mail. Проверьте адрес.",
   "login.desc.tg.detecting": "Загрузка…",
   "login.desc.tg.loading": "Страница сама пытается войти по сессии Telegram. Обычно это занимает пару секунд.",
-  "login.desc.tg.only": "Мы не показываем пароль внутри Telegram: здесь вход должен пройти по вашей Telegram-сессии.",
+  "login.desc.tg.only": "Так бывает: Telegram иногда берёт паузу. Пароль тут не нужен, попробуем ещё раз поймать вашу сессию.",
 
   // common
   "common.close": "Закрыть",
@@ -1092,7 +1092,7 @@ export const EN: Dict = {
   "login.tg.badge.auto": "Automatic sign-in",
   "login.tg.badge.manual": "Retry needed",
   "login.tg.heading.loading": "Connecting your Telegram",
-  "login.tg.heading.fallback": "Telegram did not answer right away",
+  "login.tg.heading.fallback": "Telegram is taking a moment",
   "login.tg.steps_label": "Telegram sign-in status",
   "login.tg.step.session": "Checking Telegram session",
   "login.tg.step.token": "Getting sign-in data",
@@ -1185,7 +1185,7 @@ export const EN: Dict = {
   "login.err.email_domain_unresolvable": "Could not verify the e-mail domain. Please check the address.",
   "login.desc.tg.detecting": "Loading…",
   "login.desc.tg.loading": "The page is trying to sign you in with your Telegram session. This usually takes a few seconds.",
-  "login.desc.tg.only": "Password sign-in is hidden inside Telegram: this screen should use your Telegram session.",
+  "login.desc.tg.only": "It happens: Telegram sometimes takes a breath. No password needed here, let us try your session once more.",
 
   // common
   "common.close": "Close",
