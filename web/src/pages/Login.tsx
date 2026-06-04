@@ -442,9 +442,10 @@ export function Login() {
   }
 
   // ── Telegram ──────────────────────────────────────────────────────────────
-  async function goAfterAuth(r?: AuthResponse, provider?: string) {
+  async function goAfterAuth(r?: AuthResponse, provider?: string, opts?: { silentFailure?: boolean }) {
     if (!r || !(r as any).ok) {
       clearAuthPending();
+      if (opts?.silentFailure) return;
       const raw = String((r as any)?.error ?? "") || "login_failed";
       if (provider === "telegram") toastTelegramError(raw);
       else toastError(raw);
@@ -610,7 +611,7 @@ export function Login() {
           method: "POST",
           body: { initData, ...(readPendingPartnerId() > 0 ? { partner_id: readPendingPartnerId() } : {}) },
         });
-        if (!cancelled) await goAfterAuth(r, "telegram");
+        if (!cancelled) await goAfterAuth(r, "telegram", { silentFailure: true });
       } catch { if (!cancelled) clearAuthPending(); }
       finally { authInProgressRef.current = false; if (!cancelled) setLoading(false); }
     };

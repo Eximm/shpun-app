@@ -16,6 +16,8 @@ declare global {
 let telegramSdkPromise: Promise<TgWebApp | null> | null = null;
 const TELEGRAM_MINI_APP_SESSION_KEY = "telegram.mini_app.session.v1";
 const TELEGRAM_INIT_DATA_SESSION_KEY = "telegram.init_data.session.v1";
+const TELEGRAM_INIT_DATA_AT_SESSION_KEY = "telegram.init_data.at.session.v1";
+const TELEGRAM_INIT_DATA_MAX_AGE_MS = 30_000;
 
 function markTelegramMiniAppSession() {
   try {
@@ -30,6 +32,7 @@ function writeTelegramInitDataSession(initData: string) {
   if (value.length <= 50) return;
   try {
     sessionStorage.setItem(TELEGRAM_INIT_DATA_SESSION_KEY, value);
+    sessionStorage.setItem(TELEGRAM_INIT_DATA_AT_SESSION_KEY, String(Date.now()));
   } catch {
     // ignore
   }
@@ -37,9 +40,24 @@ function writeTelegramInitDataSession(initData: string) {
 
 function readTelegramInitDataSession(): string {
   try {
+    const ts = Number(sessionStorage.getItem(TELEGRAM_INIT_DATA_AT_SESSION_KEY) || "0");
+    if (!ts || Date.now() - ts > TELEGRAM_INIT_DATA_MAX_AGE_MS) {
+      sessionStorage.removeItem(TELEGRAM_INIT_DATA_SESSION_KEY);
+      sessionStorage.removeItem(TELEGRAM_INIT_DATA_AT_SESSION_KEY);
+      return "";
+    }
     return String(sessionStorage.getItem(TELEGRAM_INIT_DATA_SESSION_KEY) || "").trim();
   } catch {
     return "";
+  }
+}
+
+export function clearTelegramInitDataSession() {
+  try {
+    sessionStorage.removeItem(TELEGRAM_INIT_DATA_SESSION_KEY);
+    sessionStorage.removeItem(TELEGRAM_INIT_DATA_AT_SESSION_KEY);
+  } catch {
+    // ignore
   }
 }
 
