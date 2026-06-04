@@ -214,6 +214,8 @@ function mapTelegramDisplayError(raw: string, t: (k: string, fb?: string) => str
     case "telegram_password_login_failed":
     case "shm_register_failed":
       return t("login.err.tg_failed");
+    case "telegram_auth_limited":
+      return t("login.err.telegram_auth_limited");
     case "init_data_required":
       return t("login.err.init_data_required");
     case "no_shm_session":

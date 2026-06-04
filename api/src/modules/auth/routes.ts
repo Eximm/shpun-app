@@ -372,6 +372,18 @@ function isProbablyRegisterConflict(status: number, detail?: unknown): boolean {
   );
 }
 
+function isProbablyShmApiRejected(error?: string, detail?: unknown): boolean {
+  const s = `${String(error ?? "")} ${String(detail ?? "")}`.toLowerCase();
+  return (
+    s.includes("api rejected") ||
+    s.includes("api_safe") ||
+    s.includes("too many") ||
+    s.includes("rate") ||
+    s.includes("limit") ||
+    s.includes("rejected")
+  );
+}
+
 type TgCredentialBundle = {
   tgId: string;
   tgLogin?: string;
@@ -552,6 +564,15 @@ async function resolveTelegramMiniAppSession(
     };
   }
 
+  if (isProbablyShmApiRejected(existing.error, existing.detail)) {
+    return {
+      ok: false,
+      status: existing.status || 429,
+      error: "telegram_auth_limited",
+      detail: existing.detail,
+    };
+  }
+
   const reg = await ensureTelegramUserByPasswordRegister(req, body?.partner_id, creds);
   if (!reg.ok) {
     return reg;
@@ -634,6 +655,15 @@ async function resolveTelegramWidgetSession(
       ok: true,
       shmSessionId: existing.shmSessionId,
       source: "widget_password_existing",
+    };
+  }
+
+  if (isProbablyShmApiRejected(existing.error, existing.detail)) {
+    return {
+      ok: false,
+      status: existing.status || 429,
+      error: "telegram_auth_limited",
+      detail: existing.detail,
     };
   }
 
