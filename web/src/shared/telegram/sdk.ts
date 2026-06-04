@@ -33,7 +33,8 @@ function readTelegramInitDataFromUrl(): string {
     const value = String(raw || "").trim().replace(/^[?#]/, "");
     if (!value) return "";
     try {
-      return new URLSearchParams(value).get("tgWebAppData")?.trim() || "";
+      const query = value.includes("?") ? value.slice(value.indexOf("?") + 1) : value;
+      return new URLSearchParams(query).get("tgWebAppData")?.trim() || "";
     } catch {
       return "";
     }
@@ -54,7 +55,8 @@ export function hasTelegramMiniAppParams(): boolean {
     const value = String(raw || "").trim().replace(/^[?#]/, "");
     if (!value) return false;
     try {
-      const params = new URLSearchParams(value);
+      const query = value.includes("?") ? value.slice(value.indexOf("?") + 1) : value;
+      const params = new URLSearchParams(query);
       return params.has("tgWebAppData") || params.has("tgWebAppVersion") || params.has("tgWebAppPlatform");
     } catch {
       return false;

@@ -8,7 +8,7 @@ import type { AuthResponse } from "../shared/api/types";
 import { useI18n } from "../shared/i18n";
 import { toast } from "../shared/ui/toast";
 import { normalizeError } from "../shared/api/errorText";
-import { getTelegramWebApp, readTelegramInitData } from "../shared/telegram/sdk";
+import { getTelegramWebApp, hasTelegramMiniAppParams, readTelegramInitData } from "../shared/telegram/sdk";
 import { resetOnboardingPromptSession } from "../shared/onboardingPromptSession";
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
@@ -85,7 +85,6 @@ async function waitTelegramInitData(timeoutMs = 1500): Promise<string | null> {
     try { const tg = getTelegramWebApp() as TgWebApp | null; tg?.ready?.(); tg?.expand?.(); } catch { /* ignore */ }
     return immediate;
   }
-  if (!(window as any)?.Telegram) return null;
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
     await sleep(50);
@@ -578,7 +577,7 @@ export function Login() {
     const run = async () => {
       const initData = await waitTelegramInitData(1500);
       if (cancelled) return;
-      if (!initData) { setMode("web"); return; }
+      if (!initData) { setMode(hasTelegramMiniAppParams() ? "telegram" : "web"); return; }
       setMode("telegram");
       authInProgressRef.current = true; setLoading(true);
       try {
