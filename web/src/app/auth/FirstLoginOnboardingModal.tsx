@@ -9,6 +9,7 @@ import { toast } from "../../shared/ui/toast";
 import { toastApiError } from "../../shared/ui/toast/toastApiError";
 import { refetchMe } from "./useMe";
 import { resetPwaInstallPromptForNextSession } from "../../shared/pwa/install";
+import { resetOnboardingPromptSession } from "../../shared/onboardingPromptSession";
 
 type Props = {
   open: boolean;
@@ -209,7 +210,7 @@ export function FirstLoginOnboardingModal({ open, me, onSkip }: Props) {
         sessionStorage.removeItem("auth:pending");
         sessionStorage.removeItem("auth:pending_at");
         resetPwaInstallPromptForNextSession();
-        sessionStorage.removeItem("push.prompt.shown_this_session");
+        resetOnboardingPromptSession();
       } catch { /* ignore */ }
       navigate("/login", { replace: true });
     } finally {

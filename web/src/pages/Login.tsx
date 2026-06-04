@@ -9,6 +9,7 @@ import { useI18n } from "../shared/i18n";
 import { toast } from "../shared/ui/toast";
 import { normalizeError } from "../shared/api/errorText";
 import { getTelegramWebApp, readTelegramInitData } from "../shared/telegram/sdk";
+import { resetOnboardingPromptSession } from "../shared/onboardingPromptSession";
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 
@@ -404,6 +405,7 @@ export function Login() {
   async function goAfterAuth(r?: AuthResponse, provider?: string) {
     if (!r || !(r as any).ok) { clearAuthPending(); toastError(String((r as any)?.error ?? "") || "login_failed"); return; }
     markAuthEverSucceeded();
+    resetOnboardingPromptSession();
     setAuthPending(provider || "auth");
     clearPendingPartnerId();
     setPartnerId(0); setPartnerIdInput(""); setClientName("");
