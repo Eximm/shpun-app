@@ -23,6 +23,17 @@
 
   <body>
     <div id="root"></div>
+    <script>
+      (function () {
+        try {
+          var raw = String(window.location.search || "") + String(window.location.hash || "");
+          var ua = String(window.navigator && window.navigator.userAgent || "");
+          var isTelegram = /Telegram/i.test(ua) || /tgWebApp(Data|Version|Platform)=/i.test(raw);
+          if (!isTelegram) return;
+          document.write('<script src="https://telegram.org/js/telegram-web-app.js"><\/script>');
+        } catch (e) {}
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

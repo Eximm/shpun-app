@@ -202,6 +202,29 @@ function mapAuthError(raw: string, t: (k: string, fb?: string) => string): strin
   }
 }
 
+function mapTelegramDisplayError(raw: string, t: (k: string, fb?: string) => string): string {
+  const code = String(raw || "").trim();
+  if (!code) return t("login.err.tg_failed");
+  if (!looksLikeCode(code)) return code;
+  switch (code) {
+    case "invalid_credentials":
+    case "shm_auth_unavailable":
+    case "shm_telegram_auth_failed":
+    case "shm_telegram_widget_auth_failed":
+    case "telegram_password_login_failed":
+    case "shm_register_failed":
+      return t("login.err.tg_failed");
+    case "init_data_required":
+      return t("login.err.init_data_required");
+    case "no_shm_session":
+      return t("login.err.no_shm_session");
+    case "not_authenticated":
+      return t("login.err.not_authenticated");
+    default:
+      return t("login.err.tg_failed");
+  }
+}
+
 function errorToAuthRaw(e: unknown, fallback: string): string {
   if (typeof e === "string") return e;
   if (e && typeof e === "object") {
@@ -312,6 +335,14 @@ export function Login() {
     toast.error(t("login.toast.error_title"), { description: msg });
   }
 
+  function toastTelegramDisplayError(raw: string) {
+    const msg = mapTelegramDisplayError(raw, t);
+    const now = Date.now();
+    if (lastToastRef.current.msg === msg && now - lastToastRef.current.at < 1200) return;
+    lastToastRef.current = { msg, at: now };
+    toast.error(t("login.toast.error_title"), { description: msg });
+  }
+
   // ── Modal controls ────────────────────────────────────────────────────────
   function openModal(next: AuthModal) {
     setAuthModal(next);
@@ -415,7 +446,9 @@ export function Login() {
   async function goAfterAuth(r?: AuthResponse, provider?: string) {
     if (!r || !(r as any).ok) {
       clearAuthPending();
-      toastError(String((r as any)?.error ?? "") || "login_failed");
+      const raw = String((r as any)?.error ?? "") || "login_failed";
+      if (provider === "telegram") toastTelegramDisplayError(raw);
+      else toastError(raw);
       return;
     }
     markAuthEverSucceeded();
@@ -444,13 +477,13 @@ export function Login() {
     try {
       let initData = getTelegramInitData();
       if (!initData) initData = await waitTelegramInitData(3000);
-      if (!initData) { toastError(t("error.open_in_tg")); return; }
+      if (!initData) { toastTelegramDisplayError("init_data_required"); return; }
       const r = await apiFetch<AuthResponse>("/auth/telegram", {
         method: "POST",
         body: { initData, ...(partnerId > 0 ? { partner_id: partnerId } : {}) },
       });
       await goAfterAuth(r, "telegram");
-    } catch (e: unknown) { clearAuthPending(); toastError(errorToAuthRaw(e, t("error.telegram_login_failed")));
+    } catch (e: unknown) { clearAuthPending(); toastTelegramDisplayError(errorToAuthRaw(e, t("error.telegram_login_failed")));
     } finally { setLoading(false); authInProgressRef.current = false; }
   }
 
@@ -500,7 +533,7 @@ export function Login() {
         body: { ...widgetUser, ...(partnerId > 0 ? { partner_id: partnerId } : {}) },
       });
       await goAfterAuth(r, "telegram");
-    } catch (e: unknown) { clearAuthPending(); toastError(errorToAuthRaw(e, t("error.telegram_login_failed")));
+    } catch (e: unknown) { clearAuthPending(); toastTelegramDisplayError(errorToAuthRaw(e, t("error.telegram_login_failed")));
     } finally { setLoading(false); authInProgressRef.current = false; }
   }
 
