@@ -10,20 +10,12 @@ import {
   shouldTreatPwaAsInstalled,
 } from "../../shared/pwa/install";
 import { toast } from "../../shared/ui/toast";
+import { isTelegramMiniAppEnv } from "../../shared/telegram/sdk";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform?: string }>;
 };
-
-function isTelegramMiniApp(): boolean {
-  try {
-    const tg = (window as any)?.Telegram?.WebApp;
-    return String(tg?.initData ?? "").trim().length > 50;
-  } catch {
-    return false;
-  }
-}
 
 function getPwaInstallPrompt(): BeforeInstallPromptEvent | null {
   try {
@@ -70,7 +62,7 @@ export function PwaInstallPrompt({ enabled = true }: PwaInstallPromptProps) {
       if (!next) return;
       clearPwaInstalledMarker();
       if (!enabled) return;
-      if (shouldTreatPwaAsInstalled() || isTelegramMiniApp() || hasShownThisSession()) return;
+      if (shouldTreatPwaAsInstalled() || isTelegramMiniAppEnv() || hasShownThisSession()) return;
       markShownThisSession();
       setShowGuide(false);
       setOpen(true);
@@ -91,7 +83,7 @@ export function PwaInstallPrompt({ enabled = true }: PwaInstallPromptProps) {
 
     const timer = window.setTimeout(() => {
       if (!enabled) return;
-      if (shouldTreatPwaAsInstalled() || isTelegramMiniApp() || hasShownThisSession()) return;
+      if (shouldTreatPwaAsInstalled() || isTelegramMiniAppEnv() || hasShownThisSession()) return;
       const next = getPwaInstallPrompt();
       setPrompt(next);
       markShownThisSession();
@@ -107,7 +99,7 @@ export function PwaInstallPrompt({ enabled = true }: PwaInstallPromptProps) {
   }, [enabled, t]);
 
   useEffect(() => {
-    if (!enabled || shouldTreatPwaAsInstalled() || isTelegramMiniApp()) setOpen(false);
+    if (!enabled || shouldTreatPwaAsInstalled() || isTelegramMiniAppEnv()) setOpen(false);
   }, [enabled, loc.pathname]);
 
   async function install() {

@@ -2,6 +2,7 @@ type TgWebApp = {
   initData?: string;
   ready?: () => void;
   expand?: () => void;
+  openLink?: (url: string, options?: Record<string, unknown>) => void;
 };
 
 declare global {
@@ -13,14 +14,64 @@ declare global {
 }
 
 let telegramSdkPromise: Promise<TgWebApp | null> | null = null;
+const TELEGRAM_MINI_APP_SESSION_KEY = "telegram.mini_app.session.v1";
+
+function markTelegramMiniAppSession() {
+  try {
+    sessionStorage.setItem(TELEGRAM_MINI_APP_SESSION_KEY, "1");
+  } catch {
+    // ignore
+  }
+}
 
 export function getTelegramWebApp(): TgWebApp | null {
   return window.Telegram?.WebApp ?? null;
 }
 
-// ❗ УПРОЩЕНО: только реальный WebApp
+function readTelegramInitDataFromUrl(): string {
+  const read = (raw: string) => {
+    const value = String(raw || "").trim().replace(/^[?#]/, "");
+    if (!value) return "";
+    try {
+      return new URLSearchParams(value).get("tgWebAppData")?.trim() || "";
+    } catch {
+      return "";
+    }
+  };
+
+  return read(window.location.hash) || read(window.location.search);
+}
+
+export function readTelegramInitData(): string {
+  const fromSdk = String(getTelegramWebApp()?.initData ?? "").trim();
+  const initData = fromSdk || readTelegramInitDataFromUrl();
+  if (initData.length > 50) markTelegramMiniAppSession();
+  return initData;
+}
+
+export function hasTelegramMiniAppParams(): boolean {
+  const hasParam = (raw: string) => {
+    const value = String(raw || "").trim().replace(/^[?#]/, "");
+    if (!value) return false;
+    try {
+      const params = new URLSearchParams(value);
+      return params.has("tgWebAppData") || params.has("tgWebAppVersion") || params.has("tgWebAppPlatform");
+    } catch {
+      return false;
+    }
+  };
+
+  return hasParam(window.location.hash) || hasParam(window.location.search);
+}
+
 export function isTelegramMiniAppEnv(): boolean {
-  return !!getTelegramWebApp();
+  const detected = readTelegramInitData().length > 50 || hasTelegramMiniAppParams();
+  try {
+    if (detected) markTelegramMiniAppSession();
+    return detected || sessionStorage.getItem(TELEGRAM_MINI_APP_SESSION_KEY) === "1";
+  } catch {
+    return detected;
+  }
 }
 
 export async function ensureTelegramWebAppSdk(timeoutMs = 3000): Promise<TgWebApp | null> {

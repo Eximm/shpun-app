@@ -9,12 +9,12 @@ import {
   ensurePushSubscribed,
   getPushState,
   isPushSupported,
-  isStandalonePwa,
   type PushState,
 } from "../notifications/push";
 import { toast } from "../../shared/ui/toast";
 import { apiFetch } from "../../shared/api/client";
 import { useI18n } from "../../shared/i18n";
+import { isTelegramMiniAppEnv } from "../../shared/telegram/sdk";
 
 const PARTNER_LS_KEY = "partner_id_pending";
 const AUTH_PENDING_KEY = "auth:pending";
@@ -29,16 +29,6 @@ const PUSH_PROMPT_SHOWN_KEY = "push.prompt.shown_this_session";
 function hasEverSucceededAuth(): boolean {
   try {
     return localStorage.getItem(AUTH_EVER_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function isTelegramMiniApp(): boolean {
-  try {
-    const tg = (window as any)?.Telegram?.WebApp;
-    const initData = String(tg?.initData ?? "").trim();
-    return initData.length > 50;
   } catch {
     return false;
   }
@@ -324,7 +314,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     disabledByUser: false,
   });
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
-  const telegramMiniApp = useMemo(() => isTelegramMiniApp(), []);
+  const telegramMiniApp = useMemo(() => isTelegramMiniAppEnv(), []);
 
   const uid = useMemo(() => {
     const n = Number((me as any)?.profile?.id ?? (me as any)?.profile?.user_id ?? 0);
@@ -518,10 +508,10 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         // Если промпт уже показывали в этой сессии — не спамим
         if (isPushPromptShownThisSession()) return;
 
-        // Установку PWA предлагает глобальный PwaInstallPrompt.
-        // Здесь показываем только следующий шаг: уведомления в установленном приложении.
-        if (!s.standalone) return;
+        if (!s.supported) return;
 
+        await waitForPwaInstallModalToClose();
+        if (cancelled) return;
         setPushGuideOpen(s.permission === "denied");
         setPushPromptOpen(true);
         markPushPromptShownThisSession();
@@ -542,13 +532,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     setPushPromptBusy(true);
 
     try {
-      // Если PWA не установлена, глобальный PwaInstallPrompt отвечает за установку.
-      if (!isStandalonePwa()) {
-        setPushPromptOpen(false);
-        return;
-      }
-
-      // PWA установлена — включаем пуши
       const ok = await enablePushByUserGesture();
       const s = await getPushState().catch(() => null);
       if (s) setPushState(s);
@@ -634,4 +617,11 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
     </>
   );
+}
+
+async function waitForPwaInstallModalToClose(timeoutMs = 12_000): Promise<void> {
+  const started = Date.now();
+  while (document.querySelector(".pwa-install-modal") && Date.now() - started < timeoutMs) {
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
+  }
 }

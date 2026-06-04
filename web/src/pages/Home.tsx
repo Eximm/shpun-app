@@ -8,6 +8,7 @@ import { apiFetch } from "../shared/api/client";
 import { toast } from "../shared/ui/toast";
 import { buildHomeNewsPreview } from "../shared/ui/newsPreview";
 import { PromoModal } from "./PromoModal";
+import { getTelegramWebApp, isTelegramMiniAppEnv } from "../shared/telegram/sdk";
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 
@@ -27,9 +28,6 @@ type Category      = "all" | "money" | "services" | "news";
 type TileTone      = "default" | "ok" | "warn" | "danger" | "accent";
 
 /* ─── Utils ─────────────────────────────────────────────────────────────── */
-
-function getTelegramWebApp(): any | null { return (window as any)?.Telegram?.WebApp ?? null; }
-function hasTelegramInitData(): boolean { return String(getTelegramWebApp()?.initData ?? "").trim().length > 0; }
 
 function openExternalAuthPage() {
   const url = new URL(window.location.origin);
@@ -179,7 +177,7 @@ export function Home() {
   const [newsLoading, setNewsLoading] = useState(false);
   const [newsItems,   setNewsItems]   = useState<NotifEvent[]>([]);
 
-  const inTelegramMiniApp = hasTelegramInitData();
+  const inTelegramMiniApp = isTelegramMiniAppEnv();
   const profile     = me?.profile;
   const balance     = me?.balance;
   const displayName = profile?.displayName || profile?.login || "";

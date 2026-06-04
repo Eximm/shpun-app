@@ -8,7 +8,7 @@ import type { AuthResponse } from "../shared/api/types";
 import { useI18n } from "../shared/i18n";
 import { toast } from "../shared/ui/toast";
 import { normalizeError } from "../shared/api/errorText";
-import { getTelegramWebApp } from "../shared/telegram/sdk";
+import { getTelegramWebApp, readTelegramInitData } from "../shared/telegram/sdk";
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 
@@ -74,8 +74,7 @@ function getTelegramBotUsername(): string {
 }
 
 function getTelegramInitData(): string | null {
-  const tg = getTelegramWebApp() as TgWebApp | null;
-  const d = tg?.initData;
+  const d = readTelegramInitData();
   return d && d.length > 0 ? d : null;
 }
 
