@@ -15,7 +15,6 @@ import { toast } from "../../shared/ui/toast";
 import { apiFetch } from "../../shared/api/client";
 import { useI18n } from "../../shared/i18n";
 import { isTelegramMiniAppEnv } from "../../shared/telegram/sdk";
-import { hasSeenOnboardingPrompt, markOnboardingPromptSeen } from "../../shared/onboardingPromptSession";
 
 const PARTNER_LS_KEY = "partner_id_pending";
 const AUTH_PENDING_KEY = "auth:pending";
@@ -23,6 +22,7 @@ const AUTH_PENDING_AT_KEY = "auth:pending_at";
 const AUTH_SESSION_ID_PREFIX = "auth.session.id:u:";
 const AUTH_EVER_KEY = "auth:ever_succeeded";
 const ONBOARDING_DISMISSED_PREFIX = "onboarding.dismissed:";
+const PUSH_PROMPT_SHOWN_KEY = "push.prompt.shown_this_session";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -113,11 +113,19 @@ function writeDismissed(uid: number, authSessionId: string, value: boolean) {
 }
 
 function isPushPromptShownThisSession(): boolean {
-  return hasSeenOnboardingPrompt("push");
+  try {
+    return sessionStorage.getItem(PUSH_PROMPT_SHOWN_KEY) === "1";
+  } catch {
+    return false;
+  }
 }
 
 function markPushPromptShownThisSession() {
-  markOnboardingPromptSeen("push");
+  try {
+    sessionStorage.setItem(PUSH_PROMPT_SHOWN_KEY, "1");
+  } catch {
+    // ignore
+  }
 }
 
 function isPushActive(s: PushState): boolean {
@@ -152,13 +160,6 @@ function shouldNotifyExpiredSession(pathname: string, search: string): boolean {
   if (hasReferralContext(search)) return false;
   if (!hasEverSucceededAuth()) return false;
   return true;
-}
-
-function buildLoginRedirectTarget(): string {
-  if (!isTelegramMiniAppEnv()) return "/login";
-  const search = String(window.location.search || "");
-  const hash = String(window.location.hash || "");
-  return search || hash ? `/login${search}${hash}` : "/login";
 }
 
 function parsePartnerIdFromUrl(): number {
@@ -585,7 +586,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   if (authRequired || !me) {
     return (
       <Navigate
-        to={buildLoginRedirectTarget()}
+        to="/login"
         replace
         state={{ from: loc.pathname + (loc.search || "") }}
       />

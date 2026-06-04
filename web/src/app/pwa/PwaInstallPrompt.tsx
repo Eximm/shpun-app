@@ -5,12 +5,12 @@ import {
   clearPwaInstalledMarker,
   detectPwaInstallPlatform,
   markPwaInstalled,
+  PWA_INSTALL_PROMPT_SESSION_KEY,
   pwaGuideKey,
   shouldTreatPwaAsInstalled,
 } from "../../shared/pwa/install";
 import { toast } from "../../shared/ui/toast";
 import { isTelegramMiniAppEnv } from "../../shared/telegram/sdk";
-import { hasSeenOnboardingPrompt, markOnboardingPromptSeen } from "../../shared/onboardingPromptSession";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -26,11 +26,19 @@ function getPwaInstallPrompt(): BeforeInstallPromptEvent | null {
 }
 
 function hasShownThisSession(): boolean {
-  return hasSeenOnboardingPrompt("pwa_install");
+  try {
+    return sessionStorage.getItem(PWA_INSTALL_PROMPT_SESSION_KEY) === "1";
+  } catch {
+    return false;
+  }
 }
 
 function markShownThisSession() {
-  markOnboardingPromptSeen("pwa_install");
+  try {
+    sessionStorage.setItem(PWA_INSTALL_PROMPT_SESSION_KEY, "1");
+  } catch {
+    // ignore
+  }
 }
 
 type PwaInstallPromptProps = {

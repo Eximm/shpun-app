@@ -8,7 +8,6 @@ import { useI18n } from "../shared/i18n";
 import { disablePush, enablePushByUserGesture, getPushState, isPushDisabledByUser } from "../app/notifications/push";
 import { toastApiError } from "../shared/ui/toast/toastApiError";
 import { getMood } from "../shared/payments-mood";
-import { resetOnboardingPromptSession } from "../shared/onboardingPromptSession";
 import { normalizeError } from "../shared/api/errorText";
 import { detectPwaInstallPlatform, isIOSPwaInstallPlatform, pwaGuideKey, resetPwaInstallPromptForNextSession } from "../shared/pwa/install";
 
@@ -492,7 +491,7 @@ export function Profile() {
       showToast("🔐 " + t("profile.password.toast.changed"));
       try {
         resetPwaInstallPromptForNextSession();
-        resetOnboardingPromptSession();
+        sessionStorage.removeItem("push.prompt.shown_this_session");
       } catch { /* ignore */ }
       try { await apiFetch("/logout", { method: "POST" }); } catch { /* ignore */ }
       nav("/login?reason=pwd_changed", { replace: true, state: { from: "/profile" } });
@@ -521,7 +520,7 @@ export function Profile() {
       }
       try {
         resetPwaInstallPromptForNextSession();
-        resetOnboardingPromptSession();
+        sessionStorage.removeItem("push.prompt.shown_this_session");
       } catch { /* ignore */ }
       await apiFetch("/logout", { method: "POST" });
     } finally { setLoggingOut(false); nav("/login", { replace: true }); }
