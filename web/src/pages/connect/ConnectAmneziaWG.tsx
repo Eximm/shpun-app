@@ -131,7 +131,7 @@ export default function ConnectAmneziaWG({ usi }: Props) {
       setConfigName(picked.name || `vpn${usi}.conf`);
       if (!didToastReadyRef.current) {
         didToastReadyRef.current = true;
-        toast.success(t("connectAmneziaWG.toast.ready.title"), { description: getMood("subscription_ready") ?? t("connectAmneziaWG.toast.ready.desc") });
+        toast.success(t("connectAmneziaWG.toast.ready.title"), { description: t("connectAmneziaWG.toast.ready.desc") });
       }
     } catch (e: any) {
       setConfigText("");

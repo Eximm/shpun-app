@@ -28,6 +28,7 @@ import { LegalDocs }        from "./pages/LegalDocs";
 import { AuthGate }                from "./app/auth/AuthGate";
 import { BottomNav }               from "./app/layout/BottomNav";
 import { PwaInstallPrompt }        from "./app/pwa/PwaInstallPrompt";
+import { ReferralNudge }           from "./app/referrals/ReferralNudge";
 import { I18nProvider, useI18n }   from "./shared/i18n";
 import { ToastProvider }           from "./shared/ui/toast/ToastProvider";
 import { useBillingNotifications } from "./app/notifications/useBillingNotifications";
@@ -117,6 +118,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
         <div className="container safe">{children}</div>
       </main>
       <PwaInstallPrompt enabled={!hideNav} />
+      <ReferralNudge enabled={!hideNav} />
       {!hideNav && <BottomNav />}
     </div>
   );

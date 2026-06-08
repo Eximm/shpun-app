@@ -406,7 +406,7 @@ export default function ConnectMarzban({ usi }: Props) {
               <button className="btn" type="button" onClick={() => {
                 const href = buildHiddifyImportLink(subscriptionUrl, platform);
                 tryOpenScheme(href, runtime);
-                toast.info(t("connect.open_client"), { description: t("connect.import_text") });
+                toast.info(t("connect.open_client"), { description: t("connectMarzban.hiddify.import_text") });
               }} disabled={!ready}>
                 ⚡ {t("connect.add_sub")} {t("connectMarzban.hiddify.to_hiddify")}
               </button>
