@@ -22,7 +22,13 @@ function getTelegramWebApp(): any | null {
 function isTelegramMiniApp(): boolean {
   try {
     const tg = getTelegramWebApp();
-    return typeof tg?.initData === "string" && tg.initData.trim().length > 0;
+    if (typeof tg?.initData === "string" && tg.initData.trim().length > 0) return true;
+    if (tg?.initDataUnsafe?.user) return true;
+    if (typeof tg?.platform === "string" && tg.platform && tg.platform !== "unknown") return true;
+    if (typeof tg?.version === "string" && tg.version) return true;
+    const rawUrlState = `${window.location.search || ""} ${window.location.hash || ""}`;
+    if (rawUrlState.includes("tgWebAppData") || rawUrlState.includes("tgWebAppVersion")) return true;
+    return /Telegram/i.test(navigator.userAgent || "");
   } catch {
     return false;
   }
@@ -35,6 +41,14 @@ function toNum(v: any, def = 0) {
 
 function toStr(v: any, def = "") {
   return String(v ?? "").trim() || def;
+}
+
+function firstStr(...values: any[]) {
+  for (const value of values) {
+    const s = toStr(value);
+    if (s) return s;
+  }
+  return "";
 }
 
 function fmtDate(iso: string) {
@@ -111,9 +125,26 @@ export function Referrals() {
     setLinkError(null);
     try {
       const r = await apiFetch("/referrals/link", { method: "GET" }) as any;
-      const refs = r?.data?.referrals ?? {};
-      setTelegramLink(toStr(refs.telegram_link));
-      setWebLink(toStr(refs.web_link));
+      const refs = r?.data?.referrals ?? r?.referrals ?? r?.data ?? r ?? {};
+      setTelegramLink(firstStr(
+        refs.telegram_link,
+        refs.telegramLink,
+        refs.tg_link,
+        refs.tgLink,
+        refs.bot_link,
+        refs.botLink,
+        refs.bot_url,
+        refs.botUrl
+      ));
+      setWebLink(firstStr(
+        refs.web_link,
+        refs.webLink,
+        refs.app_link,
+        refs.appLink,
+        refs.web_url,
+        refs.webUrl,
+        refs.url
+      ));
     } catch (e: any) {
       setLinkError(e?.message || "error");
     } finally {
@@ -241,6 +272,9 @@ export function Referrals() {
           </div>
 
           <div className="referrals-linkBox">
+            <div className="referrals-linkBox__label">
+              {inMiniApp ? t("home.ref.link.telegram") : t("home.ref.link.web")}
+            </div>
             <div className="pre referrals-linkBox__value">
               {linkLoading ? t("home.ref.link.loading") : referralUrl || "—"}
             </div>
