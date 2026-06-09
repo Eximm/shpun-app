@@ -8,16 +8,12 @@ import { useI18n } from "../shared/i18n";
 import { toast } from "../shared/ui/toast";
 import { getMood } from "../shared/payments-mood";
 
-/* ─── Types ─────────────────────────────────────────────────────────────── */
-
 type RefItem = {
   id?: number;
   full_name?: string;
   username?: string;
   created_at?: string;
 };
-
-/* ─── Utils ─────────────────────────────────────────────────────────────── */
 
 function getTelegramWebApp(): any | null {
   return (window as any)?.Telegram?.WebApp ?? null;
@@ -27,11 +23,19 @@ function isTelegramMiniApp(): boolean {
   try {
     const tg = getTelegramWebApp();
     return typeof tg?.initData === "string" && tg.initData.trim().length > 0;
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 }
 
-function toNum(v: any, def = 0) { const n = Number(v); return Number.isFinite(n) ? n : def; }
-function toStr(v: any, def = "") { return String(v ?? "").trim() || def; }
+function toNum(v: any, def = 0) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : def;
+}
+
+function toStr(v: any, def = "") {
+  return String(v ?? "").trim() || def;
+}
 
 function fmtDate(iso: string) {
   if (!iso) return "";
@@ -40,37 +44,36 @@ function fmtDate(iso: string) {
   return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "2-digit" });
 }
 
-/* ─── Referrals ──────────────────────────────────────────────────────────── */
-
 export function Referrals() {
   const { t } = useI18n();
   const { me, loading, error } = useMe();
 
   const [telegramLink, setTelegramLink] = useState("");
-  const [webLink,      setWebLink]      = useState("");
-  const [linkLoading,  setLinkLoading]  = useState(false);
-  const [linkError,    setLinkError]    = useState<string | null>(null);
+  const [webLink, setWebLink] = useState("");
+  const [linkLoading, setLinkLoading] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
 
   const [incomePercent, setIncomePercent] = useState(0);
-  const [refCount,      setRefCount]      = useState(0);
+  const [refCount, setRefCount] = useState(0);
   const [statusLoading, setStatusLoading] = useState(false);
 
-  const [items,       setItems]       = useState<RefItem[]>([]);
-  const [total,       setTotal]       = useState(0);
+  const [items, setItems] = useState<RefItem[]>([]);
+  const [total, setTotal] = useState(0);
   const [listLoading, setListLoading] = useState(false);
-  const [listError,   setListError]   = useState<string | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
 
   const inMiniApp = isTelegramMiniApp();
 
   const referralUrl = useMemo(() => {
-    const tg  = telegramLink.trim();
+    const tg = telegramLink.trim();
     const web = webLink.trim();
     return inMiniApp ? (tg || web) : (web || tg);
   }, [telegramLink, webLink, inMiniApp]);
 
-  const shareUrl = useMemo(() => {
-    return referralUrl ? `https://t.me/share/url?url=${encodeURIComponent(referralUrl)}` : "";
-  }, [referralUrl]);
+  const telegramShareUrl = useMemo(() => {
+    if (!referralUrl) return "";
+    return `https://t.me/share/url?url=${encodeURIComponent(referralUrl)}&text=${encodeURIComponent(t("home.ref.share.text"))}`;
+  }, [referralUrl, t]);
 
   async function loadStatus() {
     setStatusLoading(true);
@@ -79,12 +82,16 @@ export function Referrals() {
       const refs = r?.data?.referrals ?? {};
       setIncomePercent(toNum(refs.income_percent));
       setRefCount(toNum(refs.referrals_count));
-    } catch { /* ignore */ }
-    finally { setStatusLoading(false); }
+    } catch {
+      /* ignore */
+    } finally {
+      setStatusLoading(false);
+    }
   }
 
   async function loadList() {
-    setListLoading(true); setListError(null);
+    setListLoading(true);
+    setListError(null);
     try {
       const r = await apiFetch("/referrals/list?limit=10&offset=0", { method: "GET" }) as any;
       const refs = r?.data?.referrals ?? {};
@@ -92,12 +99,16 @@ export function Referrals() {
       setTotal(toNum(refs.total));
     } catch (e: any) {
       setListError(e?.message || "error");
-      setItems([]); setTotal(0);
-    } finally { setListLoading(false); }
+      setItems([]);
+      setTotal(0);
+    } finally {
+      setListLoading(false);
+    }
   }
 
   async function loadLink() {
-    setLinkLoading(true); setLinkError(null);
+    setLinkLoading(true);
+    setLinkError(null);
     try {
       const r = await apiFetch("/referrals/link", { method: "GET" }) as any;
       const refs = r?.data?.referrals ?? {};
@@ -105,7 +116,9 @@ export function Referrals() {
       setWebLink(toStr(refs.web_link));
     } catch (e: any) {
       setLinkError(e?.message || "error");
-    } finally { setLinkLoading(false); }
+    } finally {
+      setLinkLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -116,21 +129,59 @@ export function Referrals() {
     }
   }, [(me as any)?.ok]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function copyLink() {
+  async function copyReferralLink(showSuccess = true) {
     if (!referralUrl) return;
-    navigator.clipboard?.writeText(referralUrl)
-      .then(() => toast.success(getMood("copied") ?? "📋 Ссылка скопирована", { description: "Отправьте другу — и ждите бонус." }))
-      .catch(() => toast.error(t("home.services.error")));
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("clipboard_unavailable");
+      await navigator.clipboard.writeText(referralUrl);
+      if (showSuccess) {
+        toast.success(getMood("copied") ?? t("home.ref.copy_ok"), { description: t("home.ref.copy_ok.desc") });
+      }
+    } catch {
+      toast.error(t("home.services.error"));
+    }
   }
 
-  function shareLink() {
-    if (!shareUrl) return;
+  function copyLink() {
+    void copyReferralLink(true);
+  }
+
+  async function shareLink() {
+    if (!referralUrl) return;
+
+    if (!inMiniApp && navigator.share) {
+      try {
+        await navigator.share({
+          title: t("home.ref.share.title"),
+          text: t("home.ref.share.text"),
+          url: referralUrl,
+        });
+        return;
+      } catch (e: any) {
+        if (String(e?.name || "").toLowerCase() === "aborterror") return;
+      }
+    }
+
+    if (!inMiniApp) {
+      await copyReferralLink(false);
+      toast.info(t("home.ref.share.copied"), { description: t("home.ref.share.copied.desc") });
+      return;
+    }
+
     const tg = getTelegramWebApp();
     try {
-      if (tg?.openTelegramLink) { tg.openTelegramLink(shareUrl); return; }
-      if (tg?.openLink)         { tg.openLink(shareUrl, { try_instant_view: false }); return; }
-    } catch { /* ignore */ }
-    window.open(shareUrl, "_blank", "noopener,noreferrer");
+      if (tg?.openTelegramLink) {
+        tg.openTelegramLink(telegramShareUrl);
+        return;
+      }
+      if (tg?.openLink) {
+        tg.openLink(telegramShareUrl, { try_instant_view: false });
+        return;
+      }
+    } catch {
+      /* ignore */
+    }
+    window.open(telegramShareUrl, "_blank", "noopener,noreferrer");
   }
 
   if (loading) {
@@ -151,22 +202,22 @@ export function Referrals() {
   if (error || !(me as any)?.ok) {
     return (
       <div className="section miniPage referrals-page">
-        <div className="card"><div className="card__body">
-          <h1 className="h1">🤝 {t("home.ref.title")}</h1>
-          <p className="p">{t("home.error.text")}</p>
-          <div className="actions actions--2 miniPage__actions">
-            <Link className="btn btn--primary" to="/login">{t("home.actions.login")}</Link>
-            <Link className="btn" to="/">{t("bottomNav.home")}</Link>
+        <div className="card">
+          <div className="card__body">
+            <h1 className="h1">🤝 {t("home.ref.title")}</h1>
+            <p className="p">{t("home.error.text")}</p>
+            <div className="actions actions--2 miniPage__actions">
+              <Link className="btn btn--primary" to="/login">{t("home.actions.login")}</Link>
+              <Link className="btn" to="/">{t("bottomNav.home")}</Link>
+            </div>
           </div>
-        </div></div>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="section miniPage referrals-page">
-
-      {/* ── Заголовок + ссылка ── */}
       <div className="card miniPage__hero referrals-hero" style={{
         background: "linear-gradient(135deg, rgba(124,92,255,0.12), rgba(77,215,255,0.07))",
         borderColor: "rgba(124,92,255,0.22)",
@@ -180,7 +231,6 @@ export function Referrals() {
             <Link className="btn miniPage__back" to="/" style={{ flexShrink: 0 }}>{t("bottomNav.home")}</Link>
           </div>
 
-          {/* Метрики */}
           <div className="referrals-metrics">
             <span className="chip chip--accent">
               👥 {t("home.ref.list.k")}: <b style={{ marginLeft: 4 }}>{statusLoading ? "…" : refCount}</b>
@@ -190,16 +240,15 @@ export function Referrals() {
             </span>
           </div>
 
-          {/* Реферальная ссылка */}
           <div className="referrals-linkBox">
             <div className="pre referrals-linkBox__value">
-              {linkLoading ? "Загружаем ссылку…" : referralUrl || "—"}
+              {linkLoading ? t("home.ref.link.loading") : referralUrl || "—"}
             </div>
             {linkError && <p className="p referrals-linkBox__error">{linkError}</p>}
           </div>
 
           <div className="actions actions--2 miniPage__actions">
-            <button className="btn btn--primary" onClick={shareLink} disabled={!shareUrl} type="button">
+            <button className="btn btn--primary" onClick={() => void shareLink()} disabled={!referralUrl} type="button">
               📤 {t("home.ref.link.v")}
             </button>
             <button className="btn" onClick={copyLink} disabled={!referralUrl} type="button">
@@ -209,7 +258,6 @@ export function Referrals() {
         </div>
       </div>
 
-      {/* ── Список приглашённых ── */}
       <div className="miniPage__section">
         <div className="card miniPage__panel">
           <div className="card__body">
@@ -226,11 +274,14 @@ export function Referrals() {
 
             <div className="list miniPage__list">
               {listLoading ? (
-                <><div className="skeleton h1" /><div className="skeleton p" /></>
+                <>
+                  <div className="skeleton h1" />
+                  <div className="skeleton p" />
+                </>
               ) : items.length ? (
                 items.map((r, idx) => {
-                  const name    = toStr(r?.full_name, "—");
-                  const uname   = toStr(r?.username);
+                  const name = toStr(r?.full_name, "—");
+                  const uname = toStr(r?.username);
                   const created = toStr(r?.created_at);
                   return (
                     <div className="list__item miniPage__item miniPage__item--ref" key={`${r?.id ?? "x"}-${idx}`}>
@@ -256,7 +307,6 @@ export function Referrals() {
           </div>
         </div>
       </div>
-
     </div>
   );
 }

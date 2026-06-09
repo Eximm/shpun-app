@@ -3,9 +3,10 @@ import { Link, useLocation } from "react-router-dom";
 import { useMe } from "../auth/useMe";
 import { useI18n } from "../../shared/i18n";
 
-const MIN_DELAY_MS = 45_000;
-const MAX_DELAY_MS = 180_000;
-const DAY_MS = 24 * 60 * 60 * 1000;
+const MIN_DELAY_MS = 20_000;
+const MAX_DELAY_MS = 75_000;
+const RETRY_DELAY_MS = 30_000;
+const QUIET_MS = 12 * 60 * 60 * 1000;
 const SHOW_MS = 14_000;
 
 const HIDDEN_ROUTES = ["/login", "/legal", "/referrals"];
@@ -21,7 +22,7 @@ function storageKey(uid: number) {
 function canShowForUser(uid: number) {
   try {
     const last = Number(localStorage.getItem(storageKey(uid)) || "0");
-    return !last || Date.now() - last > DAY_MS;
+    return !last || Date.now() - last > QUIET_MS;
   } catch {
     return true;
   }
@@ -42,6 +43,7 @@ export function ReferralNudge({ enabled = true }: { enabled?: boolean }) {
   const [visible, setVisible] = useState(false);
   const timerRef = useRef<number | null>(null);
   const hideTimerRef = useRef<number | null>(null);
+  const pathRef = useRef(loc.pathname);
 
   const uid = useMemo(() => {
     const n = Number(me?.profile?.id ?? me?.profile?.user_id ?? me?.id ?? 0);
@@ -71,21 +73,33 @@ export function ReferralNudge({ enabled = true }: { enabled?: boolean }) {
   }
 
   useEffect(() => {
+    pathRef.current = loc.pathname;
+    if (isHiddenRoute(loc.pathname)) setVisible(false);
+  }, [loc.pathname]);
+
+  useEffect(() => {
     clearTimers();
     setVisible(false);
 
-    if (!enabled || !uid || isHiddenRoute(loc.pathname) || !canShowForUser(uid)) return;
-    if (document.visibilityState !== "visible") return;
+    if (!enabled || !uid || !canShowForUser(uid)) return;
 
-    timerRef.current = window.setTimeout(() => {
-      if (document.visibilityState !== "visible" || isHiddenRoute(window.location.pathname)) return;
-      markShown(uid);
-      setVisible(true);
-      hideTimerRef.current = window.setTimeout(() => setVisible(false), SHOW_MS);
-    }, randomDelay());
+    function schedule(delay: number) {
+      timerRef.current = window.setTimeout(() => {
+        timerRef.current = null;
+        if (!canShowForUser(uid)) return;
+        if (document.visibilityState !== "visible" || isHiddenRoute(pathRef.current)) {
+          schedule(RETRY_DELAY_MS);
+          return;
+        }
+        markShown(uid);
+        setVisible(true);
+        hideTimerRef.current = window.setTimeout(() => setVisible(false), SHOW_MS);
+      }, delay);
+    }
 
+    schedule(randomDelay());
     return clearTimers;
-  }, [enabled, uid, loc.pathname]);
+  }, [enabled, uid]);
 
   useEffect(() => {
     const onVisibility = () => {
@@ -100,7 +114,7 @@ export function ReferralNudge({ enabled = true }: { enabled?: boolean }) {
   return (
     <div className="referralNudge" role="status" aria-live="polite">
       <button className="referralNudge__close" type="button" onClick={dismiss} aria-label={t("common.close")}>
-        ×
+        x
       </button>
       <div className="referralNudge__eyebrow">{t("referralNudge.eyebrow")}</div>
       <div className="referralNudge__text">{t(messageKey)}</div>
