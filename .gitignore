@@ -51,3 +51,4 @@ api/data/*.db-*
 # Docker / local data dirs
 # ================================
 docker-data/
+web/referral-nudge-preview.svg
