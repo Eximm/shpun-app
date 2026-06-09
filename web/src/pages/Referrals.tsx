@@ -7,6 +7,7 @@ import { apiFetch } from "../shared/api/client";
 import { useI18n } from "../shared/i18n";
 import { toast } from "../shared/ui/toast";
 import { getMood } from "../shared/payments-mood";
+import { ensureTelegramWebAppSdk, getTelegramWebApp, isTelegramMiniAppEnv } from "../shared/telegram/sdk";
 
 type RefItem = {
   id?: number;
@@ -14,25 +15,6 @@ type RefItem = {
   username?: string;
   created_at?: string;
 };
-
-function getTelegramWebApp(): any | null {
-  return (window as any)?.Telegram?.WebApp ?? null;
-}
-
-function isTelegramMiniApp(): boolean {
-  try {
-    const tg = getTelegramWebApp();
-    if (typeof tg?.initData === "string" && tg.initData.trim().length > 0) return true;
-    if (tg?.initDataUnsafe?.user) return true;
-    if (typeof tg?.platform === "string" && tg.platform && tg.platform !== "unknown") return true;
-    if (typeof tg?.version === "string" && tg.version) return true;
-    const rawUrlState = `${window.location.search || ""} ${window.location.hash || ""}`;
-    if (rawUrlState.includes("tgWebAppData") || rawUrlState.includes("tgWebAppVersion")) return true;
-    return /Telegram/i.test(navigator.userAgent || "");
-  } catch {
-    return false;
-  }
-}
 
 function toNum(v: any, def = 0) {
   const n = Number(v);
@@ -75,8 +57,9 @@ export function Referrals() {
   const [total, setTotal] = useState(0);
   const [listLoading, setListLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
+  const [telegramEnv, setTelegramEnv] = useState(() => isTelegramMiniAppEnv());
 
-  const inMiniApp = isTelegramMiniApp();
+  const inMiniApp = telegramEnv;
 
   const referralUrl = useMemo(() => {
     const tg = telegramLink.trim();
@@ -134,7 +117,14 @@ export function Referrals() {
         refs.bot_link,
         refs.botLink,
         refs.bot_url,
-        refs.botUrl
+        refs.botUrl,
+        refs.links?.telegram,
+        refs.links?.tg,
+        refs.links?.bot,
+        refs.telegram?.link,
+        refs.telegram?.url,
+        refs.bot?.link,
+        refs.bot?.url
       ));
       setWebLink(firstStr(
         refs.web_link,
@@ -143,7 +133,13 @@ export function Referrals() {
         refs.appLink,
         refs.web_url,
         refs.webUrl,
-        refs.url
+        refs.url,
+        refs.links?.web,
+        refs.links?.app,
+        refs.web?.link,
+        refs.web?.url,
+        refs.app?.link,
+        refs.app?.url
       ));
     } catch (e: any) {
       setLinkError(e?.message || "error");
@@ -159,6 +155,18 @@ export function Referrals() {
       void loadLink();
     }
   }, [(me as any)?.ok]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    let cancelled = false;
+    if (isTelegramMiniAppEnv()) {
+      setTelegramEnv(true);
+      return;
+    }
+    void ensureTelegramWebAppSdk(1200).then((tg) => {
+      if (!cancelled && tg) setTelegramEnv(true);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   async function copyReferralLink(showSuccess = true) {
     if (!referralUrl) return;
@@ -199,7 +207,7 @@ export function Referrals() {
       return;
     }
 
-    const tg = getTelegramWebApp();
+    const tg = (await ensureTelegramWebAppSdk(1200)) ?? getTelegramWebApp();
     try {
       if (tg?.openTelegramLink) {
         tg.openTelegramLink(telegramShareUrl);
@@ -212,7 +220,7 @@ export function Referrals() {
     } catch {
       /* ignore */
     }
-    window.open(telegramShareUrl, "_blank", "noopener,noreferrer");
+    window.location.href = telegramShareUrl;
   }
 
   if (loading) {

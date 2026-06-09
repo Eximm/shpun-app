@@ -3,6 +3,7 @@ type TgWebApp = {
   ready?: () => void;
   expand?: () => void;
   openLink?: (url: string, options?: Record<string, unknown>) => void;
+  openTelegramLink?: (url: string) => void;
 };
 
 declare global {
