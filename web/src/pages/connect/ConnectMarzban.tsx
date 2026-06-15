@@ -81,23 +81,20 @@ function openLinkSafe(url: string) {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
-function closeTelegramMiniAppSoon(delay = 150) {
-  setTimeout(() => {
-    try { const tg = (window as any).Telegram?.WebApp; if (tg?.close) tg.close(); } catch { /* ignore */ }
-  }, delay);
-}
-
 function tryOpenScheme(url: string, runtime: RuntimeMode, onFail?: () => void) {
   try {
+    if (runtime === "telegram-miniapp") {
+      window.location.href = url;
+      return;
+    }
+
     const a = document.createElement("a");
     a.href = url;
     a.rel = "noopener noreferrer";
     a.style.display = "none";
-    if (runtime === "telegram-miniapp") a.target = "_blank";
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { try { document.body.removeChild(a); } catch { /* ignore */ } }, 300);
-    if (runtime === "telegram-miniapp") closeTelegramMiniAppSoon(150);
   } catch {
     onFail?.();
   }
@@ -123,23 +120,15 @@ async function copyToClipboard(text: string): Promise<boolean> {
   }
 }
 
-function base64Utf8(value: string) {
-  const bytes = new TextEncoder().encode(value);
-  let binary = "";
-  bytes.forEach((b) => { binary += String.fromCharCode(b); });
-  return btoa(binary);
+function buildHappImportLink(url: string, platform: Platform, runtime: RuntimeMode) {
+  void platform;
+  void runtime;
+  return `happ://add/${url}`;
 }
 
-function buildHappImportLink(url: string, platform: Platform) {
-  const payload = encodeURIComponent(base64Utf8(url));
-  return platform === "android"
-    ? `intent://add/${payload}#Intent;scheme=happ;package=com.happproxy;end`
-    : `happ://add/${payload}`;
-}
-
-function buildV2RayTunImportLink(url: string, platform: Platform) {
+function buildV2RayTunImportLink(url: string, platform: Platform, runtime: RuntimeMode) {
   const safeUrl = url.replace(/#/g, "%23");
-  return platform === "android"
+  return platform === "android" && runtime !== "telegram-miniapp"
     ? `intent://import/${safeUrl}#Intent;scheme=v2raytun;package=com.v2raytun.android;end`
     : `v2raytun://import/${url}`;
 }
@@ -195,16 +184,15 @@ export default function ConnectMarzban({ usi }: Props) {
 
   const ready = !loading && !error && !!subscriptionUrl;
 
-  const v2rayImportHref = ready ? buildV2RayTunImportLink(subscriptionUrl, platform) : "";
-  const v2rayMirrorImportHref = ready && subscriptionUrlMirror ? buildV2RayTunImportLink(subscriptionUrlMirror, platform) : "";
+  const v2rayImportHref = ready ? buildV2RayTunImportLink(subscriptionUrl, platform, runtime) : "";
+  const v2rayMirrorImportHref = ready && subscriptionUrlMirror ? buildV2RayTunImportLink(subscriptionUrlMirror, platform, runtime) : "";
 
   async function openImport(useMirror = false, client: ClientKind = "happ") {
     const target = useMirror ? (subscriptionUrlMirror ?? "") : subscriptionUrl;
     if (!ready || !target) return;
 
     if (client === "happ") {
-      void copyToClipboard(target);
-      tryOpenScheme(buildHappImportLink(target, platform), runtime, () => {
+      tryOpenScheme(buildHappImportLink(target, platform, runtime), runtime, () => {
         toast.info(t("connect.open_client"), { description: t("connect.more_methods") });
       });
       toast.info(t("connect.open_client"), { description: t("connectMarzban.happ.import_text") });
@@ -213,7 +201,6 @@ export default function ConnectMarzban({ usi }: Props) {
 
     const href = useMirror ? v2rayMirrorImportHref : v2rayImportHref;
     if (!href) return;
-    void copyToClipboard(target);
     tryOpenScheme(href, runtime, () => {
       toast.info(t("connect.open_client"), { description: t("connect.more_methods") });
     });
