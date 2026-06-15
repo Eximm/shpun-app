@@ -123,16 +123,10 @@ async function copyToClipboard(text: string): Promise<boolean> {
   }
 }
 
-function buildHappImportLink(url: string, platform: Platform) {
-  if (platform === "android") {
-    try {
-      const u = new URL(url);
-      if (u.protocol === "http:" || u.protocol === "https:") {
-        return `intent://${u.host}${u.pathname}${u.search}${u.hash}#Intent;scheme=${u.protocol.slice(0, -1)};package=com.happproxy;S.browser_fallback_url=${encodeURIComponent(url)};end`;
-      }
-    } catch { /* fall back to plain subscription URL */ }
-  }
-  return url;
+function buildHappOpenLink(platform: Platform) {
+  return platform === "android"
+    ? "intent://open#Intent;scheme=happ;package=com.happproxy;end"
+    : "happ://";
 }
 
 function buildV2RayTunImportLink(url: string, platform: Platform) {
@@ -193,24 +187,29 @@ export default function ConnectMarzban({ usi }: Props) {
 
   const ready = !loading && !error && !!subscriptionUrl;
 
-  const happImportHref = ready ? buildHappImportLink(subscriptionUrl, platform) : "";
-  const happMirrorImportHref = ready && subscriptionUrlMirror ? buildHappImportLink(subscriptionUrlMirror, platform) : "";
   const v2rayImportHref = ready ? buildV2RayTunImportLink(subscriptionUrl, platform) : "";
   const v2rayMirrorImportHref = ready && subscriptionUrlMirror ? buildV2RayTunImportLink(subscriptionUrlMirror, platform) : "";
 
   async function openImport(useMirror = false, client: ClientKind = "happ") {
     const target = useMirror ? (subscriptionUrlMirror ?? "") : subscriptionUrl;
-    const href = client === "happ"
-      ? (useMirror ? happMirrorImportHref : happImportHref)
-      : (useMirror ? v2rayMirrorImportHref : v2rayImportHref);
-    if (!ready || !target || !href) return;
+    if (!ready || !target) return;
+
+    if (client === "happ") {
+      void copyToClipboard(target);
+      tryOpenScheme(buildHappOpenLink(platform), runtime, () => {
+        toast.info(t("connect.open_client"), { description: t("connect.more_methods") });
+      });
+      toast.info(t("connect.open_client"), { description: t("connectMarzban.happ.import_text") });
+      return;
+    }
+
+    const href = useMirror ? v2rayMirrorImportHref : v2rayImportHref;
+    if (!href) return;
     void copyToClipboard(target);
     tryOpenScheme(href, runtime, () => {
       toast.info(t("connect.open_client"), { description: t("connect.more_methods") });
     });
-    toast.info(t("connect.open_client"), {
-      description: client === "happ" ? t("connectMarzban.happ.import_text") : t("connectMarzban.v2ray.import_text"),
-    });
+    toast.info(t("connect.open_client"), { description: t("connectMarzban.v2ray.import_text") });
   }
 
   async function openQr() {
@@ -307,7 +306,7 @@ export default function ConnectMarzban({ usi }: Props) {
           </div>
           <div className="actions actions--1">
             <button className="btn btn--primary" onClick={() => void openImport(false, "happ")} disabled={!ready} type="button">
-              {loading ? `⏳ ${t("connect.wait")}` : `⚡ ${t("connect.add_sub")}`}
+              {loading ? `⏳ ${t("connect.wait")}` : `⚡ ${t("connectMarzban.happ.add_cta")}`}
             </button>
           </div>
         </div>
