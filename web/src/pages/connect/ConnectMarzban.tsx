@@ -123,10 +123,18 @@ async function copyToClipboard(text: string): Promise<boolean> {
   }
 }
 
-function buildHappOpenLink(platform: Platform) {
+function base64Utf8(value: string) {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  bytes.forEach((b) => { binary += String.fromCharCode(b); });
+  return btoa(binary);
+}
+
+function buildHappImportLink(url: string, platform: Platform) {
+  const payload = encodeURIComponent(base64Utf8(url));
   return platform === "android"
-    ? "intent://open#Intent;scheme=happ;package=com.happproxy;end"
-    : "happ://";
+    ? `intent://add/${payload}#Intent;scheme=happ;package=com.happproxy;end`
+    : `happ://add/${payload}`;
 }
 
 function buildV2RayTunImportLink(url: string, platform: Platform) {
@@ -196,7 +204,7 @@ export default function ConnectMarzban({ usi }: Props) {
 
     if (client === "happ") {
       void copyToClipboard(target);
-      tryOpenScheme(buildHappOpenLink(platform), runtime, () => {
+      tryOpenScheme(buildHappImportLink(target, platform), runtime, () => {
         toast.info(t("connect.open_client"), { description: t("connect.more_methods") });
       });
       toast.info(t("connect.open_client"), { description: t("connectMarzban.happ.import_text") });
