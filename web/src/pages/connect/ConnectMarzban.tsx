@@ -42,7 +42,7 @@ const V2RAYTUN_LINKS: ClientLinks = {
   linux: { title: "v2RayTun", market: "https://v2raytun.com/", storeLabelKey: "connectAmneziaWG.store.download_page" },
 };
 
-const HAPP_RU_ROUTING_LINK = "happ://routing/add/eyJOYW1lIjoiU2hwdW5fUlVfUm91dGluZyIsIkdsb2JhbFByb3h5IjoidHJ1ZSIsIlJvdXRlT3JkZXIiOiJibG9jay1kaXJlY3QtcHJveHkiLCJSZW1vdGVETlNUeXBlIjoiRG9VIiwiUmVtb3RlRE5TRG9tYWluIjoiaHR0cHM6Ly9jbG91ZGZsYXJlLWRucy5jb20vZG5zLXF1ZXJ5IiwiUmVtb3RlRE5TSVAiOiI3Ny44OC44LjEiLCJEb21lc3RpY0ROU1R5cGUiOiJEb1UiLCJEb21lc3RpY0ROU0RvbWFpbiI6Imh0dHBzOi8vZG5zLmdvb2dsZS9kbnMtcXVlcnkiLCJEb21lc3RpY0ROU0lQIjoiNzcuODguOC44IiwiR2VvaXB1cmwiOiJodHRwczovL2dpdGh1Yi5jb20vTG95YWxzb2xkaWVyL3YycmF5LXJ1bGVzLWRhdC9yZWxlYXNlcy9sYXRlc3QvZG93bmxvYWQvZ2VvaXAuZGF0IiwiR2Vvc2l0ZXVybCI6Imh0dHBzOi8vZ2l0aHViLmNvbS9Mb3lhbHNvbGRpZXIvdjJyYXktcnVsZXMtZGF0L3JlbGVhc2VzL2xhdGVzdC9kb3dubG9hZC9nZW9zaXRlLmRhdCIsIkxhc3RVcGRhdGVkIjoiMTc3NTU4Mzg0MyIsIkRuc0hvc3RzIjp7ImNsb3VkZmxhcmUtZG5zLmNvbSI6IjEuMS4xLjEiLCJkbnMuZ29vZ2xlIjoiOC44LjguOCJ9LCJEaXJlY3RTaXRlcyI6WyJnZW9zaXRlOmNhdGVnb3J5LXJ1IiwiZ2Vvc2l0ZTpjYXRlZ29yeS1nb3YtcnUiLCJnZW9zaXRlOm1haWxydSIsImdlb3NpdGU6dmsiXSwiRGlyZWN0SXAiOlsiMjU1LjI1NS4yNTUuMjU1IiwiZ2VvaXA6cHJpdmF0ZSIsImdlb2lwOnJ1Il0sIlByb3h5U2l0ZXMiOltdLCJQcm94eUlwIjpbXSwiQmxvY2tTaXRlcyI6W10sIkJsb2NrSXAiOltdLCJEb21haW5TdHJhdGVneSI6IkFzSXMiLCJGYWtlRE5TIjoiZmFsc2UiLCJVc2VDaHVua0ZpbGVzIjoidHJ1ZSJ9";
+const HAPP_RU_ROUTING_LINK = "happ://routing/onadd/eyJOYW1lIjoiU2hwdW5fUlVfUm91dGluZyIsIkdsb2JhbFByb3h5IjoidHJ1ZSIsIlJvdXRlT3JkZXIiOiJibG9jay1kaXJlY3QtcHJveHkiLCJSZW1vdGVETlNUeXBlIjoiRG9VIiwiUmVtb3RlRE5TRG9tYWluIjoiaHR0cHM6Ly9jbG91ZGZsYXJlLWRucy5jb20vZG5zLXF1ZXJ5IiwiUmVtb3RlRE5TSVAiOiI3Ny44OC44LjEiLCJEb21lc3RpY0ROU1R5cGUiOiJEb1UiLCJEb21lc3RpY0ROU0RvbWFpbiI6Imh0dHBzOi8vZG5zLmdvb2dsZS9kbnMtcXVlcnkiLCJEb21lc3RpY0ROU0lQIjoiNzcuODguOC44IiwiR2VvaXB1cmwiOiJodHRwczovL2dpdGh1Yi5jb20vTG95YWxzb2xkaWVyL3YycmF5LXJ1bGVzLWRhdC9yZWxlYXNlcy9sYXRlc3QvZG93bmxvYWQvZ2VvaXAuZGF0IiwiR2Vvc2l0ZXVybCI6Imh0dHBzOi8vZ2l0aHViLmNvbS9Mb3lhbHNvbGRpZXIvdjJyYXktcnVsZXMtZGF0L3JlbGVhc2VzL2xhdGVzdC9kb3dubG9hZC9nZW9zaXRlLmRhdCIsIkxhc3RVcGRhdGVkIjoiMTc3NTU4Mzg0MyIsIkRuc0hvc3RzIjp7ImNsb3VkZmxhcmUtZG5zLmNvbSI6IjEuMS4xLjEiLCJkbnMuZ29vZ2xlIjoiOC44LjguOCJ9LCJEaXJlY3RTaXRlcyI6WyJnZW9zaXRlOmNhdGVnb3J5LXJ1IiwiZ2Vvc2l0ZTpjYXRlZ29yeS1nb3YtcnUiLCJnZW9zaXRlOm1haWxydSIsImdlb3NpdGU6dmsiXSwiRGlyZWN0SXAiOlsiMjU1LjI1NS4yNTUuMjU1IiwiZ2VvaXA6cHJpdmF0ZSIsImdlb2lwOnJ1Il0sIlByb3h5U2l0ZXMiOltdLCJQcm94eUlwIjpbXSwiQmxvY2tTaXRlcyI6W10sIkJsb2NrSXAiOltdLCJEb21haW5TdHJhdGVneSI6IkFzSXMiLCJGYWtlRE5TIjoiZmFsc2UiLCJVc2VDaHVua0ZpbGVzIjoidHJ1ZSJ9";
 
 const PLATFORM_ICONS: Record<Platform, string> = {
   android: "🤖",
@@ -86,6 +86,10 @@ function openLinkSafe(url: string) {
 function tryOpenScheme(url: string, runtime: RuntimeMode, onFail?: () => void) {
   void runtime;
   try {
+    if (detectOS() === "ios") {
+      window.location.href = url;
+      return true;
+    }
     const a = document.createElement("a");
     a.href = url;
     a.rel = "noopener noreferrer";
@@ -93,8 +97,10 @@ function tryOpenScheme(url: string, runtime: RuntimeMode, onFail?: () => void) {
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { try { document.body.removeChild(a); } catch { /* ignore */ } }, 300);
+    return true;
   } catch {
     onFail?.();
+    return false;
   }
 }
 
@@ -253,19 +259,19 @@ export default function ConnectMarzban({ usi }: Props) {
         toast.info(t("connect.open_client"), { description: t("connectMarzban.happ.import_text") });
         return;
       }
-      tryOpenScheme(buildHappImportLink(target, platform, runtime), runtime, () => {
+      const opened = tryOpenScheme(buildHappImportLink(target, platform, runtime), runtime, () => {
         toast.info(t("connect.open_client"), { description: t("connect.more_methods") });
       });
-      toast.info(t("connect.open_client"), { description: t("connectMarzban.happ.import_text") });
+      if (opened && platform !== "ios") toast.info(t("connect.open_client"), { description: t("connectMarzban.happ.import_text") });
       return;
     }
 
     const href = useMirror ? v2rayMirrorImportHref : v2rayImportHref;
     if (!href) return;
-    tryOpenScheme(href, runtime, () => {
+    const opened = tryOpenScheme(href, runtime, () => {
       toast.info(t("connect.open_client"), { description: t("connect.more_methods") });
     });
-    toast.info(t("connect.open_client"), { description: t("connectMarzban.v2ray.import_text") });
+    if (opened && platform !== "ios") toast.info(t("connect.open_client"), { description: t("connectMarzban.v2ray.import_text") });
   }
 
   async function openQr() {
@@ -310,10 +316,10 @@ export default function ConnectMarzban({ usi }: Props) {
       toast.info(t("connectMarzban.routing.open_title"), { description: t("connectMarzban.routing.open_desc") });
       return;
     }
-    tryOpenScheme(HAPP_RU_ROUTING_LINK, runtime, () => {
+    const opened = tryOpenScheme(HAPP_RU_ROUTING_LINK, runtime, () => {
       toast.info(t("connect.open_client"), { description: t("connect.more_methods") });
     });
-    toast.info(t("connectMarzban.routing.open_title"), { description: t("connectMarzban.routing.open_desc") });
+    if (opened && platform !== "ios") toast.info(t("connectMarzban.routing.open_title"), { description: t("connectMarzban.routing.open_desc") });
   }
 
   if (bridgeDeepLink) {
