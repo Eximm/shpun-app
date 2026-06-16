@@ -1,4 +1,4 @@
-// FILE: web/src/pages/connect/ConnectMarzban.tsx
+﻿// FILE: web/src/pages/connect/ConnectMarzban.tsx
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
@@ -434,67 +434,71 @@ export default function ConnectMarzban({ usi }: Props) {
             <div className="cm__extraTitle">{t("connect.extra.title")}</div>
             <div className="cm__extraSub">{t("connectMarzban.extra.sub")}</div>
 
-            <div className="actions actions--2" style={{ marginTop: 12 }}>
-              <button className="btn btn--primary" type="button" onClick={() => void copySub(false)}>
-                {copied ? `✅ ${t("connect.copied")}` : `📋 ${t("connect.copy_link")}`}
-              </button>
-              <button className="btn btn--primary" type="button" onClick={() => void openQr()}>
-                📱 {t("connect.show_qr")}
-              </button>
+            <div className="cm__extraSection cm__extraSection--routing">
+              <div className="cm__extraSectionTitle">{t("connectMarzban.routing.title")}</div>
+              <div className="cm__extraSectionSub">{t("connectMarzban.routing.desc")}</div>
+              <div className="actions actions--1 cm__extraSectionActions">
+                <button className="btn btn--primary cm__extraSectionButton" type="button" onClick={() => openRuRouting()}>
+                  {t("connectMarzban.routing.cta")}
+                </button>
+              </div>
             </div>
 
-            {subscriptionUrlMirror && (
-              <div className="actions actions--1" style={{ marginTop: 8 }}>
-                <button className="btn" type="button" onClick={() => void copySub(true)}>
-                  {copiedMirror ? `✅ ${t("connect.copied")}` : `📋 ${t("connect.copy_link")} (${t("connectMarzban.mirror.short")})`}
+            <div className="cm__extraSection">
+              <div className="cm__extraSectionTitle">v2RayTun</div>
+              <div className="cm__extraSectionSub">{t("connectMarzban.v2ray.alt_client")}</div>
+              {V2RAYTUN_LINKS[platform].direct ? (
+                <div className="actions actions--2 cm__extraSectionActions">
+                  <button className="btn btn--primary" type="button" onClick={() => openClientStore("v2ray")}>
+                    📲 {t("connect.open_store")} {t(V2RAYTUN_LINKS[platform].storeLabelKey)}
+                  </button>
+                  <button className="btn" type="button" onClick={() => openClientDirect("v2ray")}>
+                    ⬇️ {platform === "android" ? t("connectAmneziaWG.step1.download_apk") : t("connect.download_direct")}
+                  </button>
+                </div>
+              ) : (
+                <div className="actions actions--1 cm__extraSectionActions">
+                  <button className="btn btn--primary" type="button" onClick={() => openClientStore("v2ray")}>
+                    📲 {t("connect.open_store")} {t(V2RAYTUN_LINKS[platform].storeLabelKey)}
+                  </button>
+                </div>
+              )}
+              <div className="actions actions--1 cm__extraSectionActions">
+                <button className="btn" type="button" onClick={() => void openImport(false, "v2ray")} disabled={!ready}>
+                  ⚡ {t("connect.add_sub")} {t("connectMarzban.v2ray.to_v2ray")}
                 </button>
               </div>
-            )}
+              {subscriptionUrlMirror && (
+                <div className="actions actions--1 cm__extraSectionActions">
+                  <button className="btn" type="button" onClick={() => void openImport(true, "v2ray")} disabled={!ready}>
+                    🔄 {t("connectMarzban.v2ray.mirror_cta")}
+                  </button>
+                </div>
+              )}
+            </div>
 
-            <div className="pre" style={{ marginTop: 12, borderColor: "rgba(77,215,255,0.22)", background: "rgba(77,215,255,0.05)" }}>
-              <b>{t("connectMarzban.routing.title")}</b> — {t("connectMarzban.routing.desc")}
-            </div>
-            <div className="actions actions--1">
-              <button className="btn" type="button" onClick={() => openRuRouting()}>
-                {t("connectMarzban.routing.cta")}
-              </button>
-            </div>
-
-            <div className="pre" style={{ marginTop: 12, borderColor: "rgba(43,227,143,0.22)", background: "rgba(43,227,143,0.05)" }}>
-              <b>v2RayTun</b> — {t("connectMarzban.v2ray.alt_client")}
-            </div>
-            {V2RAYTUN_LINKS[platform].direct ? (
-              <div className="actions actions--2">
-                <button className="btn btn--primary" type="button" onClick={() => openClientStore("v2ray")}>
-                  📲 {t("connect.open_store")} {t(V2RAYTUN_LINKS[platform].storeLabelKey)}
+            <div className="cm__extraSection cm__extraSection--manual">
+              <div className="cm__extraSectionTitle">{t("connectMarzban.manual.title")}</div>
+              <div className="cm__extraSectionSub">{t("connectMarzban.manual.desc")}</div>
+              <div className="actions actions--2 cm__extraSectionActions">
+                <button className="btn" type="button" onClick={() => void copySub(false)}>
+                  {copied ? `✅ ${t("connect.copied")}` : `📋 ${t("connect.copy_link")}`}
                 </button>
-                <button className="btn" type="button" onClick={() => openClientDirect("v2ray")}>
-                  ⬇️ {platform === "android" ? t("connectAmneziaWG.step1.download_apk") : t("connect.download_direct")}
+                <button className="btn" type="button" onClick={() => void openQr()}>
+                  📱 {t("connect.show_qr")}
                 </button>
               </div>
-            ) : (
-              <div className="actions actions--1">
-                <button className="btn btn--primary" type="button" onClick={() => openClientStore("v2ray")}>
-                  📲 {t("connect.open_store")} {t(V2RAYTUN_LINKS[platform].storeLabelKey)}
-                </button>
-              </div>
-            )}
-            <div className="actions actions--1">
-              <button className="btn" type="button" onClick={() => void openImport(false, "v2ray")} disabled={!ready}>
-                ⚡ {t("connect.add_sub")} {t("connectMarzban.v2ray.to_v2ray")}
-              </button>
+              {subscriptionUrlMirror && (
+                <div className="actions actions--1 cm__extraSectionActions">
+                  <button className="btn" type="button" onClick={() => void copySub(true)}>
+                    {copiedMirror ? `✅ ${t("connect.copied")}` : `📋 ${t("connect.copy_link")} (${t("connectMarzban.mirror.short")})`}
+                  </button>
+                </div>
+              )}
             </div>
-            {subscriptionUrlMirror && (
-              <div className="actions actions--1" style={{ marginTop: 8 }}>
-                <button className="btn" type="button" onClick={() => void openImport(true, "v2ray")} disabled={!ready}>
-                  🔄 {t("connectMarzban.v2ray.mirror_cta")}
-                </button>
-              </div>
-            )}
           </div>
         </div>
       )}
-
       {platformPickerOpen && createPortal(
         <div className="modal" role="dialog" aria-modal="true" onMouseDown={() => setPlatformPickerOpen(false)}>
           <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()}>
@@ -551,3 +555,4 @@ export default function ConnectMarzban({ usi }: Props) {
     </div>
   );
 }
+
