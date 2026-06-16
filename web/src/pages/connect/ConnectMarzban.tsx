@@ -42,6 +42,8 @@ const V2RAYTUN_LINKS: ClientLinks = {
   linux: { title: "v2RayTun", market: "https://v2raytun.com/", storeLabelKey: "connectAmneziaWG.store.download_page" },
 };
 
+const HAPP_RU_ROUTING_LINK = "happ://routing/add/eyJOYW1lIjoiU2hwdW5fUlVfUm91dGluZyIsIkdsb2JhbFByb3h5IjoidHJ1ZSIsIlJvdXRlT3JkZXIiOiJibG9jay1kaXJlY3QtcHJveHkiLCJSZW1vdGVETlNUeXBlIjoiRG9VIiwiUmVtb3RlRE5TRG9tYWluIjoiaHR0cHM6Ly9jbG91ZGZsYXJlLWRucy5jb20vZG5zLXF1ZXJ5IiwiUmVtb3RlRE5TSVAiOiI3Ny44OC44LjEiLCJEb21lc3RpY0ROU1R5cGUiOiJEb1UiLCJEb21lc3RpY0ROU0RvbWFpbiI6Imh0dHBzOi8vZG5zLmdvb2dsZS9kbnMtcXVlcnkiLCJEb21lc3RpY0ROU0lQIjoiNzcuODguOC44IiwiR2VvaXB1cmwiOiJodHRwczovL2dpdGh1Yi5jb20vTG95YWxzb2xkaWVyL3YycmF5LXJ1bGVzLWRhdC9yZWxlYXNlcy9sYXRlc3QvZG93bmxvYWQvZ2VvaXAuZGF0IiwiR2Vvc2l0ZXVybCI6Imh0dHBzOi8vZ2l0aHViLmNvbS9Mb3lhbHNvbGRpZXIvdjJyYXktcnVsZXMtZGF0L3JlbGVhc2VzL2xhdGVzdC9kb3dubG9hZC9nZW9zaXRlLmRhdCIsIkxhc3RVcGRhdGVkIjoiMTc3NTU4Mzg0MyIsIkRuc0hvc3RzIjp7ImNsb3VkZmxhcmUtZG5zLmNvbSI6IjEuMS4xLjEiLCJkbnMuZ29vZ2xlIjoiOC44LjguOCJ9LCJEaXJlY3RTaXRlcyI6WyJnZW9zaXRlOmNhdGVnb3J5LXJ1IiwiZ2Vvc2l0ZTpjYXRlZ29yeS1nb3YtcnUiLCJnZW9zaXRlOm1haWxydSIsImdlb3NpdGU6dmsiXSwiRGlyZWN0SXAiOlsiMjU1LjI1NS4yNTUuMjU1IiwiZ2VvaXA6cHJpdmF0ZSIsImdlb2lwOnJ1Il0sIlByb3h5U2l0ZXMiOltdLCJQcm94eUlwIjpbXSwiQmxvY2tTaXRlcyI6W10sIkJsb2NrSXAiOltdLCJEb21haW5TdHJhdGVneSI6IkFzSXMiLCJGYWtlRE5TIjoiZmFsc2UiLCJVc2VDaHVua0ZpbGVzIjoidHJ1ZSJ9";
+
 const PLATFORM_ICONS: Record<Platform, string> = {
   android: "🤖",
   ios: "🍎",
@@ -130,13 +132,36 @@ function buildHappBridgeLink(url: string) {
   return bridgeUrl.toString();
 }
 
-function getHappBridgeTarget() {
-  const target = new URLSearchParams(window.location.search).get("happ_import");
-  return target?.trim() || "";
+function buildHappDeepLinkBridge(deepLink: string) {
+  if (!/^https?:$/.test(window.location.protocol)) return "";
+  const bridgeUrl = new URL(window.location.href);
+  bridgeUrl.searchParams.set("happ_link", deepLink.trim());
+  return bridgeUrl.toString();
+}
+
+function getHappBridgeDeepLink() {
+  const params = new URLSearchParams(window.location.search);
+  const directLink = params.get("happ_link")?.trim();
+  if (directLink) return directLink;
+  const target = params.get("happ_import")?.trim();
+  return target ? buildHappImportLink(target, "android", "browser") : "";
 }
 
 function openViaTelegramBridge(url: string) {
   const bridge = buildHappBridgeLink(url);
+  if (!bridge) return false;
+  try {
+    const tg = (window as any).Telegram?.WebApp;
+    if (tg && typeof tg.openLink === "function") {
+      tg.openLink(bridge, { try_instant_view: false });
+      return true;
+    }
+  } catch { /* ignore */ }
+  return false;
+}
+
+function openDeepLinkViaTelegramBridge(deepLink: string) {
+  const bridge = buildHappDeepLinkBridge(deepLink);
   if (!bridge) return false;
   try {
     const tg = (window as any).Telegram?.WebApp;
@@ -158,8 +183,7 @@ function buildV2RayTunImportLink(url: string, platform: Platform, runtime: Runti
 export default function ConnectMarzban({ usi }: Props) {
   const { t } = useI18n();
 
-  const bridgeTarget = useMemo(() => getHappBridgeTarget(), []);
-  const bridgeDeepLink = useMemo(() => bridgeTarget ? buildHappImportLink(bridgeTarget, "android", "browser") : "", [bridgeTarget]);
+  const bridgeDeepLink = useMemo(() => getHappBridgeDeepLink(), []);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -281,7 +305,18 @@ export default function ConnectMarzban({ usi }: Props) {
     openLinkSafe(links.direct);
   }
 
-  if (bridgeTarget) {
+  function openRuRouting() {
+    if (runtime === "telegram-miniapp" && openDeepLinkViaTelegramBridge(HAPP_RU_ROUTING_LINK)) {
+      toast.info(t("connectMarzban.routing.open_title"), { description: t("connectMarzban.routing.open_desc") });
+      return;
+    }
+    tryOpenScheme(HAPP_RU_ROUTING_LINK, runtime, () => {
+      toast.info(t("connect.open_client"), { description: t("connect.more_methods") });
+    });
+    toast.info(t("connectMarzban.routing.open_title"), { description: t("connectMarzban.routing.open_desc") });
+  }
+
+  if (bridgeDeepLink) {
     return (
       <div className="cm">
         <div className="card">
@@ -293,7 +328,7 @@ export default function ConnectMarzban({ usi }: Props) {
               <a className="btn btn--primary" href={bridgeDeepLink}>
                 Открыть Happ
               </a>
-              <button className="btn" type="button" onClick={() => void copyToClipboard(bridgeTarget).then((ok) => {
+              <button className="btn" type="button" onClick={() => void copyToClipboard(bridgeDeepLink).then((ok) => {
                 ok
                   ? toast.success(t("connect.copied"), { description: t("connect.import_text") })
                   : toast.error(t("connect.copy_link"), { description: t("connect.sub_prepare_error_desc") });
@@ -415,6 +450,15 @@ export default function ConnectMarzban({ usi }: Props) {
                 </button>
               </div>
             )}
+
+            <div className="pre" style={{ marginTop: 12, borderColor: "rgba(77,215,255,0.22)", background: "rgba(77,215,255,0.05)" }}>
+              <b>{t("connectMarzban.routing.title")}</b> — {t("connectMarzban.routing.desc")}
+            </div>
+            <div className="actions actions--1">
+              <button className="btn" type="button" onClick={() => openRuRouting()}>
+                {t("connectMarzban.routing.cta")}
+              </button>
+            </div>
 
             <div className="pre" style={{ marginTop: 12, borderColor: "rgba(43,227,143,0.22)", background: "rgba(43,227,143,0.05)" }}>
               <b>v2RayTun</b> — {t("connectMarzban.v2ray.alt_client")}
