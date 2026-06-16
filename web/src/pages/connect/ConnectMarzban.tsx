@@ -82,12 +82,8 @@ function openLinkSafe(url: string) {
 }
 
 function tryOpenScheme(url: string, runtime: RuntimeMode, onFail?: () => void) {
+  void runtime;
   try {
-    if (runtime === "telegram-miniapp") {
-      window.location.href = url;
-      return;
-    }
-
     const a = document.createElement("a");
     a.href = url;
     a.rel = "noopener noreferrer";
@@ -121,9 +117,35 @@ async function copyToClipboard(text: string): Promise<boolean> {
 }
 
 function buildHappImportLink(url: string, platform: Platform, runtime: RuntimeMode) {
+  const safeUrl = url.replace(/#/g, "%23");
   void platform;
   void runtime;
-  return `happ://add/${url}`;
+  return `happ://add/${safeUrl}`;
+}
+
+function buildHappBridgeLink(url: string) {
+  if (!/^https?:$/.test(window.location.protocol)) return "";
+  const bridgeUrl = new URL(window.location.href);
+  bridgeUrl.searchParams.set("happ_import", url.trim());
+  return bridgeUrl.toString();
+}
+
+function getHappBridgeTarget() {
+  const target = new URLSearchParams(window.location.search).get("happ_import");
+  return target?.trim() || "";
+}
+
+function openViaTelegramBridge(url: string) {
+  const bridge = buildHappBridgeLink(url);
+  if (!bridge) return false;
+  try {
+    const tg = (window as any).Telegram?.WebApp;
+    if (tg && typeof tg.openLink === "function") {
+      tg.openLink(bridge, { try_instant_view: false });
+      return true;
+    }
+  } catch { /* ignore */ }
+  return false;
 }
 
 function buildV2RayTunImportLink(url: string, platform: Platform, runtime: RuntimeMode) {
@@ -135,6 +157,9 @@ function buildV2RayTunImportLink(url: string, platform: Platform, runtime: Runti
 
 export default function ConnectMarzban({ usi }: Props) {
   const { t } = useI18n();
+
+  const bridgeTarget = useMemo(() => getHappBridgeTarget(), []);
+  const bridgeDeepLink = useMemo(() => bridgeTarget ? buildHappImportLink(bridgeTarget, "android", "browser") : "", [bridgeTarget]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -180,7 +205,15 @@ export default function ConnectMarzban({ usi }: Props) {
     }
   }
 
-  useEffect(() => { void load(); }, [usi]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (bridgeDeepLink) {
+      const timer = window.setTimeout(() => {
+        window.location.href = bridgeDeepLink;
+      }, 80);
+      return () => window.clearTimeout(timer);
+    }
+    void load();
+  }, [usi, bridgeDeepLink]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const ready = !loading && !error && !!subscriptionUrl;
 
@@ -192,6 +225,10 @@ export default function ConnectMarzban({ usi }: Props) {
     if (!ready || !target) return;
 
     if (client === "happ") {
+      if (runtime === "telegram-miniapp" && openViaTelegramBridge(target)) {
+        toast.info(t("connect.open_client"), { description: t("connectMarzban.happ.import_text") });
+        return;
+      }
       tryOpenScheme(buildHappImportLink(target, platform, runtime), runtime, () => {
         toast.info(t("connect.open_client"), { description: t("connect.more_methods") });
       });
@@ -242,6 +279,32 @@ export default function ConnectMarzban({ usi }: Props) {
     const links = client === "happ" ? HAPP_LINKS[platform] : V2RAYTUN_LINKS[platform];
     if (!links.direct) return;
     openLinkSafe(links.direct);
+  }
+
+  if (bridgeTarget) {
+    return (
+      <div className="cm">
+        <div className="card">
+          <div className="card__body">
+            <div className="pre" style={{ borderColor: "rgba(77,215,255,0.22)", background: "rgba(77,215,255,0.05)" }}>
+              <b>Открываем Happ.</b> Если приложение не открылось автоматически, нажмите кнопку ниже.
+            </div>
+            <div className="actions actions--1" style={{ marginTop: 12 }}>
+              <a className="btn btn--primary" href={bridgeDeepLink}>
+                Открыть Happ
+              </a>
+              <button className="btn" type="button" onClick={() => void copyToClipboard(bridgeTarget).then((ok) => {
+                ok
+                  ? toast.success(t("connect.copied"), { description: t("connect.import_text") })
+                  : toast.error(t("connect.copy_link"), { description: t("connect.sub_prepare_error_desc") });
+              })}>
+                {t("connect.copy_link")}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
