@@ -18,6 +18,7 @@ type Platform = "android" | "ios" | "windows" | "mac" | "linux";
 type Chip = "auto" | Platform;
 type RuntimeMode = "telegram-miniapp" | "browser" | "standalone-app";
 type ClientKind = "happ" | "v2ray";
+type QrKind = "subscription" | "routing";
 
 type ClientLinks = Record<Platform, {
   title: string;
@@ -208,6 +209,7 @@ export default function ConnectMarzban({ usi }: Props) {
   const [copied, setCopied] = useState(false);
   const [copiedMirror, setCopiedMirror] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
+  const [qrKind, setQrKind] = useState<QrKind>("subscription");
   const [qrDataUrl, setQrDataUrl] = useState("");
 
   async function load() {
@@ -274,19 +276,23 @@ export default function ConnectMarzban({ usi }: Props) {
     if (opened && platform !== "ios") toast.info(t("connect.open_client"), { description: t("connectMarzban.v2ray.import_text") });
   }
 
-  async function openQr() {
-    if (!subscriptionUrl) return;
+  async function openQr(kind: QrKind = "subscription") {
+    const target = kind === "routing" ? HAPP_RU_ROUTING_LINK : subscriptionUrl;
+    if (!target) return;
+    const title = kind === "routing" ? t("connectMarzban.routing.qr_title") : t("connect.qr_title");
+    const text = kind === "routing" ? t("connectMarzban.routing.qr_text") : t("connect.qr_text");
     try {
-      const dataUrl = await QRCode.toDataURL(subscriptionUrl, {
+      const dataUrl = await QRCode.toDataURL(target, {
         margin: 2,
         width: 360,
         color: { dark: "#f8fbff", light: "#07111f" },
       });
+      setQrKind(kind);
       setQrDataUrl(dataUrl);
       setQrOpen(true);
-      toast.info(t("connect.qr_title"), { description: t("connect.qr_text") });
+      toast.info(title, { description: text });
     } catch {
-      toast.error(t("connect.qr_title"), { description: t("connect.sub_prepare_error_desc") });
+      toast.error(title, { description: t("connect.sub_prepare_error_desc") });
     }
   }
 
@@ -443,9 +449,12 @@ export default function ConnectMarzban({ usi }: Props) {
             <div className="cm__extraSection cm__extraSection--routing">
               <div className="cm__extraSectionTitle">{t("connectMarzban.routing.title")}</div>
               <div className="cm__extraSectionSub">{t("connectMarzban.routing.desc")}</div>
-              <div className="actions actions--1 cm__extraSectionActions">
+              <div className="actions actions--2 cm__extraSectionActions">
                 <button className="btn btn--primary cm__extraSectionButton" type="button" onClick={() => openRuRouting()}>
                   {t("connectMarzban.routing.cta")}
+                </button>
+                <button className="btn cm__extraSectionButton" type="button" onClick={() => void openQr("routing")}>
+                  📱 {t("connectMarzban.routing.qr_cta")}
                 </button>
               </div>
             </div>
@@ -490,7 +499,7 @@ export default function ConnectMarzban({ usi }: Props) {
                 <button className="btn" type="button" onClick={() => void copySub(false)}>
                   {copied ? `✅ ${t("connect.copied")}` : `📋 ${t("connect.copy_link")}`}
                 </button>
-                <button className="btn" type="button" onClick={() => void openQr()}>
+                <button className="btn" type="button" onClick={() => void openQr("subscription")}>
                   📱 {t("connect.show_qr")}
                 </button>
               </div>
@@ -541,11 +550,11 @@ export default function ConnectMarzban({ usi }: Props) {
           <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()}>
             <div className="card__body">
               <div className="modal__head">
-                <div className="modal__title">📱 {t("connect.qr_title")}</div>
+                <div className="modal__title">📱 {qrKind === "routing" ? t("connectMarzban.routing.qr_title") : t("connect.qr_title")}</div>
                 <button className="btn modal__close" type="button" onClick={() => setQrOpen(false)} aria-label={t("common.close")}>✕</button>
               </div>
               <div className="modal__content">
-                <p className="p">{t("connect.qr_text")}</p>
+                <p className="p">{qrKind === "routing" ? t("connectMarzban.routing.qr_text") : t("connect.qr_text")}</p>
                 <div className="helperMedia helperMedia--qr">
                   {qrDataUrl && <img className="helperMedia__img" src={qrDataUrl} alt={t("connectAmneziaWG.qr.alt")} loading="lazy" width={320} />}
                 </div>
