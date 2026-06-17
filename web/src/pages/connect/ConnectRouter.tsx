@@ -236,8 +236,10 @@ export default function ConnectRouter({ usi, onDone }: Props) {
                 <div className="cr__boundTitle">
                   ✅ {t('router.bound')} <b>{shownPretty || '—'}</b>
                 </div>
-                {!!fmtTs(first?.created_at) && <div className="cr__boundMeta">{t('router.bound_at')} {fmtTs(first!.created_at)}</div>}
-                {!!fmtTs(first?.last_seen_at) && <div className="cr__boundMeta">{t('router.last_seen')} {fmtTs(first!.last_seen_at)}</div>}
+                <div className="cr__boundMeta">
+                  {!!fmtTs(first?.created_at) && <span>{t('router.bound_at')} {fmtTs(first!.created_at)}</span>}
+                  {!!fmtTs(first?.last_seen_at) && <span>{t('router.last_seen')} {fmtTs(first!.last_seen_at)}</span>}
+                </div>
               </div>
 
               <div style={S.divider} />

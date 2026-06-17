@@ -1549,9 +1549,13 @@ button, a { -webkit-tap-highlight-color: transparent; }
   margin-bottom: 2px;
 }
 .cr__boundMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 10px;
   font-size: 10px;
   color: rgba(255,255,255,0.40);
   margin-top: 2px;
+  line-height: 1.25;
 }
 .cr__hint {
   font-size: 12px;
