@@ -484,11 +484,11 @@ export const RU: Dict = {
 
   // services
   "services.wl.badge": "WL",
-  "services.wl.hint": "Дополнительный ключ WL — используйте если основной не работает в вашей сети.",
-  "services.wl.warning": "Работает только в v2RayTun, трафик может быть ограничен.",
+  "services.wl.hint": "WL-ключ для мобильных сетей и обхода глушилок. Работает только в приложении Happ.",
+  "services.wl.warning": "Есть суточный лимит трафика. Используйте разумно, как резерв для сложных сетей.",
   "services.wl.child_title": "Доп. ключ",
-  "services.wl.child_text": "Работает только совместно с основным. Используйте как резерв, если основной ключ не работает в вашей сети или регионе.",
-  "services.wl.separator": "Доп. ключ · резерв для сложных сетей",
+  "services.wl.child_text": "Для мобильных сетей и обхода глушилок. Работает только в приложении Happ, имеет суточный лимит трафика — используйте разумно.",
+  "services.wl.separator": "WL-ключ · Happ · мобильные сети",
   "services.title": "Услуги",
   "services.page.title": "Услуги",
   "services.sub": "Ваши услуги и их текущий статус.",
@@ -1568,11 +1568,11 @@ export const EN: Dict = {
 
   // services
   "services.wl.badge": "WL",
-  "services.wl.hint": "WL key — use it if the main key does not work on your network.",
-  "services.wl.warning": "Works only in v2RayTun, traffic may be limited.",
+  "services.wl.hint": "WL key for mobile networks and interference-heavy areas. Works only in the Happ app.",
+  "services.wl.warning": "Has a daily traffic limit. Use it reasonably as a fallback for difficult networks.",
   "services.wl.child_title": "Extra key",
-  "services.wl.child_text": "Works only together with the main key. Use it as a fallback if the main key does not work on your network or region.",
-  "services.wl.separator": "Extra key · fallback for difficult networks",
+  "services.wl.child_text": "For mobile networks and interference-heavy areas. Works only in the Happ app and has a daily traffic limit; use it reasonably.",
+  "services.wl.separator": "WL key · Happ · mobile networks",
   "services.title": "Services",
   "services.page.title": "Services",
   "services.sub": "Your services and their current status.",
