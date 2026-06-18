@@ -19,6 +19,12 @@ type Chip = "auto" | Platform;
 type RuntimeMode = "telegram-miniapp" | "browser" | "standalone-app";
 type ClientKind = "happ" | "v2ray";
 type QrKind = "subscription" | "routing";
+type DeepLinkFallback = {
+  title: string;
+  desc: string;
+  href: string;
+  copyText: string;
+};
 
 type ClientLinks = Record<Platform, {
   title: string;
@@ -43,7 +49,7 @@ const V2RAYTUN_LINKS: ClientLinks = {
   linux: { title: "v2RayTun", market: "https://v2raytun.com/", storeLabelKey: "connectAmneziaWG.store.download_page" },
 };
 
-const HAPP_RU_ROUTING_LINK = "happ://routing/onadd/eyJOYW1lIjoiU2hwdW5fUlVfUm91dGluZyIsIkdsb2JhbFByb3h5IjoidHJ1ZSIsIlJvdXRlT3JkZXIiOiJibG9jay1kaXJlY3QtcHJveHkiLCJSZW1vdGVETlNUeXBlIjoiRG9IIiwiUmVtb3RlRE5TRG9tYWluIjoiaHR0cHM6Ly9jbG91ZGZsYXJlLWRucy5jb20vZG5zLXF1ZXJ5IiwiUmVtb3RlRE5TSVAiOiIxLjEuMS4xIiwiRG9tZXN0aWNETlNUeXBlIjoiRG9IIiwiRG9tZXN0aWNETlNEb21haW4iOiJodHRwczovL2Rucy5nb29nbGUvZG5zLXF1ZXJ5IiwiRG9tZXN0aWNETlNJUCI6IjguOC44LjgiLCJHZW9pcHVybCI6Imh0dHBzOi8vZ2l0aHViLmNvbS9Mb3lhbHNvbGRpZXIvdjJyYXktcnVsZXMtZGF0L3JlbGVhc2VzL2xhdGVzdC9kb3dubG9hZC9nZW9pcC5kYXQiLCJHZW9zaXRldXJsIjoiaHR0cHM6Ly9naXRodWIuY29tL0xveWFsc29sZGllci92MnJheS1ydWxlcy1kYXQvcmVsZWFzZXMvbGF0ZXN0L2Rvd25sb2FkL2dlb3NpdGUuZGF0IiwiRG5zSG9zdHMiOnsiY2xvdWRmbGFyZS1kbnMuY29tIjoiMS4xLjEuMSIsImRucy5nb29nbGUiOiI4LjguOC44In0sIkRpcmVjdFNpdGVzIjpbImdlb3NpdGU6Y2F0ZWdvcnktcnUiLCJnZW9zaXRlOmNhdGVnb3J5LWdvdi1ydSIsImdlb3NpdGU6bWFpbHJ1IiwiZ2Vvc2l0ZTp2ayIsImdlb3NpdGU6eWFuZGV4IiwiZG9tYWluOnZrLmNvbSIsImRvbWFpbjp2ay5ydSIsImRvbWFpbjp2a29udGFrdGUucnUiLCJkb21haW46dmsubWUiLCJkb21haW46dmsuY2MiLCJkb21haW46YXBpLnZrLmNvbSIsImRvbWFpbjpvYXV0aC52ay5jb20iLCJkb21haW46bG9naW4udmsuY29tIiwiZG9tYWluOmltLnZrLmNvbSIsImRvbWFpbjpzdGF0aWMudmsuY29tIiwiZG9tYWluOnVzZXJhcGkuY29tIiwiZG9tYWluOnZrLWNkbi5uZXQiLCJkb21haW46dmstY2RuLm1lIiwiZG9tYWluOnZrdXNlci5uZXQiLCJkb21haW46dmt1c2VyYXVkaW8ubmV0IiwiZG9tYWluOnZrdXNlcmxpdmUubmV0IiwiZG9tYWluOnZrLWFwcHMuY29tIiwiZG9tYWluOnZrLWFwcHMucnUiLCJkb21haW46dmt2aWRlby5ydSIsImRvbWFpbjp2a2NhY2hlLmNvbSIsImRvbWFpbjp2ay1wb3J0YWwubmV0IiwiZG9tYWluOm9rLnJ1IiwiZG9tYWluOm9kbm9rbGFzc25pa2kucnUiLCJkb21haW46bXljZG4ubWUiLCJkb21haW46bWFpbC5ydSIsImRvbWFpbjppbnRlcm5ldC5ydSIsImRvbWFpbjpiay5ydSIsImRvbWFpbjpsaXN0LnJ1IiwiZG9tYWluOmluYm94LnJ1IiwiZG9tYWluOmltZ3NtYWlsLnJ1IiwiZG9tYWluOm15Lm1haWwucnUiLCJkb21haW46Y2xvdWQubWFpbC5ydSIsImRvbWFpbjp5YW5kZXgucnUiLCJkb21haW46eWFuZGV4LmNvbSIsImRvbWFpbjp5YW5kZXgubmV0IiwiZG9tYWluOnlhc3RhdGljLm5ldCIsImRvbWFpbjp5YS5ydSIsImRvbWFpbjp5YW5kZXhjbG91ZC5uZXQiLCJkb21haW46eWFuZGV4Y2RuLm5ldCIsImRvbWFpbjp5YW5kZXgtdGVhbS5ydSIsImRvbWFpbjpkemVuLnJ1IiwiZG9tYWluOnplbi55YW5kZXgucnUiLCJkb21haW46a2lub3BvaXNrLnJ1IiwiZG9tYWluOmtpbm9wb2lza2FwaXVub2ZmaWNpYWwudGVjaCIsImRvbWFpbjpnb3N1c2x1Z2kucnUiLCJkb21haW46ZXNpYS5nb3N1c2x1Z2kucnUiLCJkb21haW46bW9zLnJ1IiwiZG9tYWluOm5hbG9nLmdvdi5ydSIsImRvbWFpbjpsa2ZsMi5uYWxvZy5ydSIsImRvbWFpbjp6YWt1cGtpLmdvdi5ydSIsImRvbWFpbjpnb3YucnUiLCJkb21haW46c2JlcmJhbmsucnUiLCJkb21haW46c2Jlci5ydSIsImRvbWFpbjpzYmVyYmFuay5jb20iLCJkb21haW46b25saW5lLnNiZXJiYW5rLnJ1IiwiZG9tYWluOnRiYW5rLnJ1IiwiZG9tYWluOnRpbmtvZmYucnUiLCJkb21haW46dGlua29mZmJhbmsucnUiLCJkb21haW46YWxmYWJhbmsucnUiLCJkb21haW46dnRiLnJ1IiwiZG9tYWluOnBvY2h0YWJhbmsucnUiLCJkb21haW46Z2F6cHJvbWJhbmsucnUiLCJkb21haW46cmFpZmZlaXNlbi5ydSIsImRvbWFpbjpvcGVuLnJ1IiwiZG9tYWluOm1rYi5ydSIsImRvbWFpbjpwc2JhbmsucnUiLCJkb21haW46cnNiLnJ1IiwiZG9tYWluOnJuY2IucnUiLCJkb21haW46bWlyb25saW5lLnJ1IiwiZG9tYWluOnByaXZldG1pci5ydSIsImRvbWFpbjpzYnJmLnJ1IiwiZG9tYWluOnNiaXMucnUiLCJkb21haW46YXZpdG8ucnUiLCJkb21haW46b3pvbi5ydSIsImRvbWFpbjpvem9udXNlcmNvbnRlbnQuY29tIiwiZG9tYWluOndpbGRiZXJyaWVzLnJ1IiwiZG9tYWluOndiLnJ1IiwiZG9tYWluOnN0YXRpYy1iYXNrZXQtMDEud2JiYXNrZXQucnUiLCJkb21haW46d2JiYXNrZXQucnUiLCJkb21haW46eW9vbW9uZXkucnUiLCJkb21haW46eW91bGEucnUiLCJkb21haW46bWFya2V0LnlhbmRleC5ydSIsImRvbWFpbjpsYXZrYS55YW5kZXgucnUiLCJkb21haW46Mmdpcy5ydSIsImRvbWFpbjoyZ2lzLmNvbSIsImRvbWFpbjoyZ2lzLmNvbS5jeSIsImRvbWFpbjpkdWJsZ2lzLmNvbSIsImRvbWFpbjpyemQucnUiLCJkb21haW46dGlja2V0LnJ6ZC5ydSIsImRvbWFpbjp0dXR1LnJ1IiwiZG9tYWluOmFlcm9mbG90LnJ1IiwiZG9tYWluOnBvYmVkYS5hZXJvIiwiZG9tYWluOnV0YWlyLnJ1IiwiZG9tYWluOnM3LnJ1IiwiZG9tYWluOnN2by5hZXJvIiwiZG9tYWluOnJ1dHViZS5ydSIsImRvbWFpbjpzbW90cmltLnJ1IiwiZG9tYWluOnByZW1pZXIub25lIiwiZG9tYWluOml2aS5ydSIsImRvbWFpbjpva2tvLnR2IiwiZG9tYWluOm1vcmUudHYiLCJkb21haW46c3RhcnQucnUiLCJkb21haW46d2luay5ydSIsImRvbWFpbjpraW9uLnJ1IiwiZG9tYWluOmFtZWRpYXRla2EucnUiLCJkb21haW46bGl0cmVzLnJ1IiwiZG9tYWluOmNoYW1waW9uYXQuY29tIiwiZG9tYWluOnNwb3J0Ym94LnJ1IiwiZG9tYWluOm10cy5ydSIsImRvbWFpbjpiZWVsaW5lLnJ1IiwiZG9tYWluOm1lZ2Fmb24ucnUiLCJkb21haW46dGVsZTIucnUiLCJkb21haW46cnQucnUiLCJkb21haW46cm9zdGVsZWNvbS5ydSIsImRvbWFpbjpkb21ydS5ydSIsImRvbWFpbjpza3lsaW5rLnJ1IiwiZG9tYWluOmhoLnJ1IiwiZG9tYWluOmhhYnIuY29tIiwiZG9tYWluOnZjLnJ1IiwiZG9tYWluOnBpa2FidS5ydSIsImRvbWFpbjpyaWEucnUiLCJkb21haW46cmJjLnJ1IiwiZG9tYWluOmtvbW1lcnNhbnQucnUiLCJkb21haW46dmVkb21vc3RpLnJ1IiwiZG9tYWluOmZvbnRhbmthLnJ1IiwiZG9tYWluOmxlbnRhLnJ1Il0sIkRpcmVjdElwIjpbImdlb2lwOnByaXZhdGUiLCJnZW9pcDpydSIsIjEwLjAuMC4wLzgiLCIxNzIuMTYuMC4wLzEyIiwiMTkyLjE2OC4wLjAvMTYiLCIxNjkuMjU0LjAuMC8xNiIsIjIyNC4wLjAuMC80IiwiMjU1LjI1NS4yNTUuMjU1Il0sIlByb3h5U2l0ZXMiOltdLCJQcm94eUlwIjpbXSwiQmxvY2tTaXRlcyI6W10sIkJsb2NrSXAiOltdLCJEb21haW5TdHJhdGVneSI6IklQSWZOb25NYXRjaCIsIkZha2VETlMiOiJmYWxzZSJ9";
+const HAPP_RU_ROUTING_LINK = "happ://routing/onadd/eyJOYW1lIjoiU2hwdW5fUlVfUm91dGluZyIsIkdsb2JhbFByb3h5IjoidHJ1ZSIsIlJvdXRlT3JkZXIiOiJibG9jay1kaXJlY3QtcHJveHkiLCJSZW1vdGVETlNUeXBlIjoiRG9IIiwiUmVtb3RlRE5TRG9tYWluIjoiaHR0cHM6Ly9jbG91ZGZsYXJlLWRucy5jb20vZG5zLXF1ZXJ5IiwiUmVtb3RlRE5TSVAiOiIxLjEuMS4xIiwiRG9tZXN0aWNETlNUeXBlIjoiRG9IIiwiRG9tZXN0aWNETlNEb21haW4iOiJodHRwczovL2Rucy5nb29nbGUvZG5zLXF1ZXJ5IiwiRG9tZXN0aWNETlNJUCI6IjguOC44LjgiLCJEbnNIb3N0cyI6eyJjbG91ZGZsYXJlLWRucy5jb20iOiIxLjEuMS4xIiwiZG5zLmdvb2dsZSI6IjguOC44LjgifSwiRGlyZWN0U2l0ZXMiOlsiZ2Vvc2l0ZTpjYXRlZ29yeS1ydSIsImdlb3NpdGU6Y2F0ZWdvcnktZ292LXJ1IiwiZ2Vvc2l0ZTptYWlscnUiLCJnZW9zaXRlOnZrIiwiZ2Vvc2l0ZTp5YW5kZXgiLCJkb21haW46dmsuY29tIiwiZG9tYWluOnZrLnJ1IiwiZG9tYWluOnZrb250YWt0ZS5ydSIsImRvbWFpbjp2ay5tZSIsImRvbWFpbjp2ay5jYyIsImRvbWFpbjphcGkudmsuY29tIiwiZG9tYWluOm9hdXRoLnZrLmNvbSIsImRvbWFpbjpsb2dpbi52ay5jb20iLCJkb21haW46aW0udmsuY29tIiwiZG9tYWluOnN0YXRpYy52ay5jb20iLCJkb21haW46dXNlcmFwaS5jb20iLCJkb21haW46dmstY2RuLm5ldCIsImRvbWFpbjp2ay1jZG4ubWUiLCJkb21haW46dmt1c2VyLm5ldCIsImRvbWFpbjp2a3VzZXJhdWRpby5uZXQiLCJkb21haW46dmt1c2VybGl2ZS5uZXQiLCJkb21haW46dmstYXBwcy5jb20iLCJkb21haW46dmstYXBwcy5ydSIsImRvbWFpbjp2a3ZpZGVvLnJ1IiwiZG9tYWluOnZrY2FjaGUuY29tIiwiZG9tYWluOnZrLXBvcnRhbC5uZXQiLCJkb21haW46b2sucnUiLCJkb21haW46b2Rub2tsYXNzbmlraS5ydSIsImRvbWFpbjpteWNkbi5tZSIsImRvbWFpbjp5YW5kZXgucnUiLCJkb21haW46eWFuZGV4Lm5ldCIsImRvbWFpbjp5YXN0YXRpYy5uZXQiLCJkb21haW46eWEucnUiLCJkb21haW46ZHplbi5ydSIsImRvbWFpbjpnb3N1c2x1Z2kucnUiLCJkb21haW46c2Jlci5ydSIsImRvbWFpbjp0YmFuay5ydSIsImRvbWFpbjp0aW5rb2ZmLnJ1IiwiZG9tYWluOm96b24ucnUiLCJkb21haW46d2lsZGJlcnJpZXMucnUiLCJkb21haW46d2IucnUiLCJkb21haW46YXZpdG8ucnUiLCJkb21haW46Mmdpcy5ydSIsImRvbWFpbjpydXR1YmUucnUiXSwiRGlyZWN0SXAiOlsiZ2VvaXA6cHJpdmF0ZSIsImdlb2lwOnJ1IiwiMTAuMC4wLjAvOCIsIjE3Mi4xNi4wLjAvMTIiLCIxOTIuMTY4LjAuMC8xNiIsIjE2OS4yNTQuMC4wLzE2IiwiMjI0LjAuMC4wLzQiLCIyNTUuMjU1LjI1NS4yNTUiXSwiUHJveHlTaXRlcyI6W10sIlByb3h5SXAiOltdLCJCbG9ja1NpdGVzIjpbXSwiQmxvY2tJcCI6W10sIkRvbWFpblN0cmF0ZWd5IjoiSVBJZk5vbk1hdGNoIiwiRmFrZUROUyI6ImZhbHNlIn0=";
 
 const PLATFORM_ICONS: Record<Platform, string> = {
   android: "🤖",
@@ -211,6 +217,7 @@ export default function ConnectMarzban({ usi }: Props) {
   const [qrOpen, setQrOpen] = useState(false);
   const [qrKind, setQrKind] = useState<QrKind>("subscription");
   const [qrDataUrl, setQrDataUrl] = useState("");
+  const [deepLinkFallback, setDeepLinkFallback] = useState<DeepLinkFallback | null>(null);
 
   async function load() {
     setLoading(true);
@@ -252,19 +259,36 @@ export default function ConnectMarzban({ usi }: Props) {
   const v2rayImportHref = ready ? buildV2RayTunImportLink(subscriptionUrl, platform, runtime) : "";
   const v2rayMirrorImportHref = ready && subscriptionUrlMirror ? buildV2RayTunImportLink(subscriptionUrlMirror, platform, runtime) : "";
 
+  function openWithVisibleFallback(fallback: DeepLinkFallback) {
+    setDeepLinkFallback(fallback);
+    window.setTimeout(() => {
+      try { window.location.href = fallback.href; } catch { /* ignore */ }
+    }, 0);
+  }
+
   async function openImport(useMirror = false, client: ClientKind = "happ") {
     const target = useMirror ? (subscriptionUrlMirror ?? "") : subscriptionUrl;
     if (!ready || !target) return;
 
     if (client === "happ") {
+      const href = buildHappImportLink(target, platform, runtime);
+      if (platform === "ios") {
+        openWithVisibleFallback({
+          title: t("connectMarzban.fallback.happ_title"),
+          desc: t("connectMarzban.fallback.happ_desc"),
+          href,
+          copyText: target,
+        });
+        return;
+      }
       if (runtime === "telegram-miniapp" && openViaTelegramBridge(target)) {
         toast.info(t("connect.open_client"), { description: t("connectMarzban.happ.import_text") });
         return;
       }
-      const opened = tryOpenScheme(buildHappImportLink(target, platform, runtime), runtime, () => {
+      const opened = tryOpenScheme(href, runtime, () => {
         toast.info(t("connect.open_client"), { description: t("connect.more_methods") });
       });
-      if (opened && platform !== "ios") toast.info(t("connect.open_client"), { description: t("connectMarzban.happ.import_text") });
+      if (opened) toast.info(t("connect.open_client"), { description: t("connectMarzban.happ.import_text") });
       return;
     }
 
@@ -318,6 +342,15 @@ export default function ConnectMarzban({ usi }: Props) {
   }
 
   function openRuRouting() {
+    if (platform === "ios") {
+      openWithVisibleFallback({
+        title: t("connectMarzban.fallback.routing_title"),
+        desc: t("connectMarzban.fallback.routing_desc"),
+        href: HAPP_RU_ROUTING_LINK,
+        copyText: HAPP_RU_ROUTING_LINK,
+      });
+      return;
+    }
     if (runtime === "telegram-miniapp" && openDeepLinkViaTelegramBridge(HAPP_RU_ROUTING_LINK)) {
       toast.info(t("connectMarzban.routing.open_title"), { description: t("connectMarzban.routing.open_desc") });
       return;
@@ -325,7 +358,7 @@ export default function ConnectMarzban({ usi }: Props) {
     const opened = tryOpenScheme(HAPP_RU_ROUTING_LINK, runtime, () => {
       toast.info(t("connect.open_client"), { description: t("connect.more_methods") });
     });
-    if (opened && platform !== "ios") toast.info(t("connectMarzban.routing.open_title"), { description: t("connectMarzban.routing.open_desc") });
+    if (opened) toast.info(t("connectMarzban.routing.open_title"), { description: t("connectMarzban.routing.open_desc") });
   }
 
   if (bridgeDeepLink) {
@@ -370,6 +403,34 @@ export default function ConnectMarzban({ usi }: Props) {
           <button className="btn btn--primary" onClick={() => void load()} type="button">
             🔄 {t("connectAmneziaWG.retry")}
           </button>
+        </div>
+      )}
+
+      {deepLinkFallback && (
+        <div className="card cm__openFallback">
+          <div className="card__body">
+            <div className="cm__extraSectionTitle">{deepLinkFallback.title}</div>
+            <div className="cm__extraSectionSub">{deepLinkFallback.desc}</div>
+            <div className="actions actions--2 cm__extraSectionActions">
+              <a
+                className="btn btn--primary"
+                href={deepLinkFallback.href}
+                onClick={(e) => {
+                  e.preventDefault();
+                  try { window.location.href = deepLinkFallback.href; } catch { /* ignore */ }
+                }}
+              >
+                {t("connectMarzban.fallback.open_happ")}
+              </a>
+              <button className="btn" type="button" onClick={() => void copyToClipboard(deepLinkFallback.copyText).then((ok) => {
+                ok
+                  ? toast.success(t("connect.copied"), { description: t("connect.import_text") })
+                  : toast.error(t("connect.copy_link"), { description: t("connect.sub_prepare_error_desc") });
+              })}>
+                {t("connect.copy_link")}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
