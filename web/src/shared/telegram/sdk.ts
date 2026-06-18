@@ -20,6 +20,11 @@ let telegramSdkPromise: Promise<TgWebApp | null> | null = null;
 const TELEGRAM_MINI_APP_SESSION_KEY = "telegram.mini_app.session.v1";
 const TELEGRAM_INIT_DATA_SESSION_KEY = "telegram.init_data.session.v1";
 
+function isStandalonePwaRuntime(): boolean {
+  const nav = navigator as Navigator & { standalone?: boolean };
+  return Boolean(nav.standalone) || window.matchMedia?.("(display-mode: standalone)")?.matches === true;
+}
+
 function markTelegramMiniAppSession() {
   try {
     sessionStorage.setItem(TELEGRAM_MINI_APP_SESSION_KEY, "1");
@@ -65,10 +70,14 @@ function readTelegramInitDataFromUrl(): string {
   return read(window.location.hash) || read(window.location.search);
 }
 
-export function readTelegramInitData(): string {
+function readTelegramLiveInitData(): string {
   const fromSdk = String(getTelegramWebApp()?.initData ?? "").trim();
   const fromUrl = readTelegramInitDataFromUrl();
-  const initData = fromSdk || fromUrl || readTelegramInitDataSession();
+  return fromSdk || fromUrl;
+}
+
+export function readTelegramInitData(): string {
+  const initData = readTelegramLiveInitData() || readTelegramInitDataSession();
   if (initData.length > 50) {
     markTelegramMiniAppSession();
     writeTelegramInitDataSession(initData);
@@ -99,8 +108,22 @@ export function isLikelyTelegramWebView(): boolean {
     || Boolean(window.TelegramWebviewProxyProto);
 }
 
+export function clearTelegramMiniAppSession() {
+  try {
+    sessionStorage.removeItem(TELEGRAM_MINI_APP_SESSION_KEY);
+    sessionStorage.removeItem(TELEGRAM_INIT_DATA_SESSION_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 export function isTelegramMiniAppEnv(): boolean {
-  const detected = readTelegramInitData().length > 50 || hasTelegramMiniAppParams() || isLikelyTelegramWebView();
+  if (isStandalonePwaRuntime()) {
+    clearTelegramMiniAppSession();
+    return false;
+  }
+
+  const detected = readTelegramLiveInitData().length > 50 || hasTelegramMiniAppParams();
   try {
     if (detected) markTelegramMiniAppSession();
     return detected || sessionStorage.getItem(TELEGRAM_MINI_APP_SESSION_KEY) === "1";

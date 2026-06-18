@@ -299,8 +299,8 @@ export function Referrals() {
       setTelegramEnv(true);
       return;
     }
-    void ensureTelegramWebAppSdk(1200).then((tg) => {
-      if (!cancelled && tg) setTelegramEnv(true);
+    void ensureTelegramWebAppSdk(1200).then(() => {
+      if (!cancelled && isTelegramMiniAppEnv()) setTelegramEnv(true);
     });
     return () => { cancelled = true; };
   }, []);

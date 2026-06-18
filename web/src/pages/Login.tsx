@@ -12,7 +12,7 @@ import {
   ensureTelegramWebAppSdk,
   getTelegramWebApp,
   hasTelegramMiniAppParams,
-  isLikelyTelegramWebView,
+  isTelegramMiniAppEnv,
   readTelegramInitData,
 } from "../shared/telegram/sdk";
 import { resetOnboardingPromptSession } from "../shared/onboardingPromptSession";
@@ -581,7 +581,7 @@ export function Login() {
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
-      const telegramSignal = hasTelegramMiniAppParams() || isLikelyTelegramWebView() || Boolean(getTelegramWebApp());
+      const telegramSignal = isTelegramMiniAppEnv() || hasTelegramMiniAppParams();
       if (telegramSignal) {
         setMode("telegram");
         await ensureTelegramWebAppSdk(1200);
