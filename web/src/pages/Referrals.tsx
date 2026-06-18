@@ -33,6 +33,132 @@ function firstStr(...values: any[]) {
   return "";
 }
 
+function normalizePartnerId(v: unknown): number {
+  const n = Number(v ?? 0);
+  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : 0;
+}
+
+function isTelegramUrl(raw: string): boolean {
+  const value = String(raw || "").trim();
+  if (!value) return false;
+  try {
+    const u = new URL(value);
+    const host = u.hostname.toLowerCase();
+    return host === "t.me" || host === "telegram.me" || host.endsWith(".telegram.me");
+  } catch {
+    return /^https?:\/\/(?:t\.me|telegram\.me)\//i.test(value);
+  }
+}
+
+function partnerIdFromText(raw: unknown): number {
+  const value = String(raw ?? "").trim();
+  if (!value) return 0;
+
+  const direct = normalizePartnerId(value);
+  if (direct > 0) return direct;
+
+  try {
+    const u = new URL(value);
+    const params = [
+      u.searchParams.get("partner_id"),
+      u.searchParams.get("partnerId"),
+      u.searchParams.get("ref"),
+      u.searchParams.get("start"),
+      u.searchParams.get("startapp"),
+    ];
+    for (const param of params) {
+      const id = partnerIdFromText(param);
+      if (id > 0) return id;
+    }
+  } catch {
+    /* continue with plain text parsing */
+  }
+
+  const tagged = value.match(/(?:partner[_-]?id|partner|ref|startapp|start)[=:_-]?(\d{1,12})/i);
+  if (tagged) return normalizePartnerId(tagged[1]);
+
+  return 0;
+}
+
+function extractPartnerId(refs: any, fallback: unknown): number {
+  const candidates = [
+    refs?.partner_id,
+    refs?.partnerId,
+    refs?.referral_id,
+    refs?.referralId,
+    refs?.ref_id,
+    refs?.refId,
+    refs?.id,
+    refs?.user_id,
+    refs?.userId,
+    refs?.data?.partner_id,
+    refs?.data?.partnerId,
+    refs?.links?.partner_id,
+    refs?.links?.partnerId,
+    refs?._telegramLink,
+    refs?._webLink,
+    refs?.telegram_link,
+    refs?.telegramLink,
+    refs?.tg_link,
+    refs?.tgLink,
+    refs?.bot_link,
+    refs?.botLink,
+    refs?.bot_url,
+    refs?.botUrl,
+    refs?.web_link,
+    refs?.webLink,
+    refs?.app_link,
+    refs?.appLink,
+    refs?.web_url,
+    refs?.webUrl,
+    refs?.url,
+    refs?.links?.telegram,
+    refs?.links?.tg,
+    refs?.links?.bot,
+    refs?.links?.web,
+    refs?.links?.app,
+    refs?.telegram?.link,
+    refs?.telegram?.url,
+    refs?.bot?.link,
+    refs?.bot?.url,
+    refs?.web?.link,
+    refs?.web?.url,
+    refs?.app?.link,
+    refs?.app?.url,
+    fallback,
+  ];
+  for (const value of candidates) {
+    const id = partnerIdFromText(value);
+    if (id > 0) return id;
+  }
+  return 0;
+}
+
+function webReferralUrl(partnerId: number, rawWebLink = ""): string {
+  const existing = rawWebLink.trim();
+  if (existing && !isTelegramUrl(existing)) {
+    try {
+      const origin = window.location.origin;
+      if (/^https?:\/\//i.test(existing)) return existing;
+      if (/^https?:\/\//i.test(origin)) return new URL(existing, origin).toString();
+    } catch {
+      return existing;
+    }
+    return existing;
+  }
+  if (partnerId <= 0) return "";
+
+  try {
+    const origin = window.location.origin;
+    if (!/^https?:\/\//i.test(origin)) return "";
+    const u = new URL("/login", origin);
+    u.searchParams.set("partner_id", String(partnerId));
+    return u.toString();
+  } catch {
+    return "";
+  }
+}
+
 function fmtDate(iso: string) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -109,7 +235,7 @@ export function Referrals() {
     try {
       const r = await apiFetch("/referrals/link", { method: "GET" }) as any;
       const refs = r?.data?.referrals ?? r?.referrals ?? r?.data ?? r ?? {};
-      setTelegramLink(firstStr(
+      const nextTelegramLink = firstStr(
         refs.telegram_link,
         refs.telegramLink,
         refs.tg_link,
@@ -125,8 +251,8 @@ export function Referrals() {
         refs.telegram?.url,
         refs.bot?.link,
         refs.bot?.url
-      ));
-      setWebLink(firstStr(
+      );
+      const rawWebLink = firstStr(
         refs.web_link,
         refs.webLink,
         refs.app_link,
@@ -140,7 +266,18 @@ export function Referrals() {
         refs.web?.url,
         refs.app?.link,
         refs.app?.url
-      ));
+      );
+      const partnerId = extractPartnerId(
+        {
+          ...refs,
+          _telegramLink: nextTelegramLink,
+          _webLink: rawWebLink,
+        },
+        (me as any)?.profile?.id
+      );
+
+      setTelegramLink(nextTelegramLink);
+      setWebLink(webReferralUrl(partnerId, rawWebLink));
     } catch (e: any) {
       setLinkError(e?.message || "error");
     } finally {
