@@ -1590,9 +1590,9 @@ button, a { -webkit-tap-highlight-color: transparent; }
 }
 .helperMedia__img { display: block; max-width: 100%; height: auto; margin: 0 auto; }
 .helperMedia--qr .helperMedia__img {
-  width: min(320px, 100%);
+  width: min(420px, 100%);
   border-radius: 12px;
-  background: #07111f;
+  background: #ffffff;
   box-shadow: 0 0 0 1px rgba(255,255,255,0.08);
 }
 .cawg__rowTop    { margin-top: 12px; gap: 10px; align-items: center; justify-content: space-between; }
