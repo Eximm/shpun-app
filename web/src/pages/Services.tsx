@@ -290,7 +290,7 @@ function ServiceRow({ s, expanded, connectOpen, onToggle, onToggleConnect, onRef
   const supportUrl = `/support?topic=service&usi=${encodeURIComponent(String(s.userServiceId))}`;
 
   return (
-    <div className={"svc-row" + (isChild ? " svc-row--child" : "") + (expanded ? " svc-row--expanded" : "")} style={{
+    <div data-usi={s.userServiceId} className={"svc-row" + (isChild ? " svc-row--child" : "") + (expanded ? " svc-row--expanded" : "")} style={{
       borderRadius: isChild ? "0 0 11px 11px" : 11,
       background: tint.bg,
       border: isChild ? "none" : `.5px solid ${tint.border}`,
@@ -544,6 +544,7 @@ export function Services() {
 
   const prevStatusesRef = useRef<Map<number, UiStatus> | null>(null);
   const statusInitRef   = useRef(false);
+  const focusedUsiRef   = useRef<number | null>(null);
 
   async function load(opts?: { silent?: boolean; toastOnSuccess?: boolean }) {
     const silent         = !!opts?.silent;
@@ -589,6 +590,28 @@ export function Services() {
   }
 
   useEffect(() => { void load({ silent: false }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (loading || !items.length) return;
+    const sp = new URLSearchParams(location.search);
+    const target = Number(sp.get("usi") || "0");
+    if (!Number.isFinite(target) || target <= 0) return;
+    if (focusedUsiRef.current === target) return;
+
+    const item = items.find((x) => x.userServiceId === target) ?? null;
+    if (!item) return;
+
+    focusedUsiRef.current = target;
+    setOpenGroups((cur) => ({ ...cur, [detectKind(item.category)]: true }));
+    setExpandedId(target);
+
+    window.setTimeout(() => {
+      document.querySelector<HTMLElement>(`[data-usi="${target}"]`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 120);
+  }, [items, loading, location.search]);
 
   useEffect(() => {
     const cur = new Map<number, UiStatus>();

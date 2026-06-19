@@ -60,6 +60,16 @@ type CreateResp = {
   item: { userServiceId: number; serviceId: number; status: string; statusRaw: string }
 }
 
+type OrderConflict = {
+  userServiceId?: number
+  serviceId?: number
+  title?: string
+  category?: string
+  status?: string
+  statusRaw?: string
+  price?: number
+}
+
 type ApiServiceItem = {
   userServiceId: number
   status: 'active' | 'blocked' | 'pending' | 'not_paid' | 'removed' | 'error' | 'init'
@@ -212,21 +222,50 @@ async function copyToClipboard(text: string): Promise<boolean> {
   }
 }
 
-function getOrderError(e: any, t: (key: string) => string): { title: string; description: string } {
+function getOrderConflict(e: any): OrderConflict | null {
+  const raw = e?.data?.conflict ?? e?.conflict ?? null
+  if (!raw || typeof raw !== 'object') return null
+  const userServiceId = Number(raw.userServiceId ?? raw.user_service_id ?? 0) || 0
+  return {
+    userServiceId,
+    serviceId: Number(raw.serviceId ?? raw.service_id ?? 0) || 0,
+    title: String(raw.title ?? raw.name ?? '').trim(),
+    category: String(raw.category ?? '').trim(),
+    status: String(raw.status ?? '').trim(),
+    statusRaw: String(raw.statusRaw ?? raw.status_raw ?? '').trim(),
+    price: Number(raw.price ?? 0) || 0,
+  }
+}
+
+function conflictLabel(conflict: OrderConflict | null, t: (key: string) => string): string {
+  if (!conflict?.userServiceId) return ''
+  const title = String(conflict.title || '').trim() || t('services.item')
+  return `#${conflict.userServiceId} — ${title}`
+}
+
+function getOrderError(e: any, t: (key: string) => string): { title: string; description: string; conflict: OrderConflict | null } {
   const code = String(e?.error || e?.code || '').trim()
   const msg = String(e?.message || '').trim()
+  const conflict = getOrderConflict(e)
+  const label = conflictLabel(conflict, t)
 
   if (code === 'unpaid_order_exists') {
     return {
       title: t('servicesOrder.error.unpaid_order.title'),
-      description: t('servicesOrder.error.unpaid_order.desc'),
+      description: label
+        ? t('servicesOrder.error.unpaid_order.desc_named').replace('{service}', label)
+        : t('servicesOrder.error.unpaid_order.desc'),
+      conflict,
     }
   }
 
   if (code === 'unpaid_same_service_exists') {
     return {
       title: t('servicesOrder.error.unpaid_same.title'),
-      description: t('servicesOrder.error.unpaid_same.desc'),
+      description: label
+        ? t('servicesOrder.error.unpaid_same.desc_named').replace('{service}', label)
+        : t('servicesOrder.error.unpaid_same.desc'),
+      conflict,
     }
   }
 
@@ -234,12 +273,14 @@ function getOrderError(e: any, t: (key: string) => string): { title: string; des
     return {
       title: t('servicesOrder.error.trial_email.title'),
       description: t('servicesOrder.error.trial_email.desc'),
+      conflict,
     }
   }
 
   return {
     title: t('servicesOrder.error.create_failed'),
     description: msg || t('servicesOrder.error.try_again'),
+    conflict,
   }
 }
 
@@ -591,6 +632,14 @@ export function ServicesOrder() {
           durationMs: 9000,
           actionLabel: t('servicesOrder.error.trial_email.action'),
           onAction: () => navigate('/profile'),
+        })
+      } else if ((code === 'unpaid_order_exists' || code === 'unpaid_same_service_exists') && info.conflict?.userServiceId) {
+        const usi = info.conflict.userServiceId
+        toast.error(info.title, {
+          description: info.description,
+          durationMs: 9000,
+          actionLabel: t('servicesOrder.error.open_service'),
+          onAction: () => navigate(`/services?usi=${encodeURIComponent(String(usi))}`),
         })
       } else {
         toast.error(info.title, { description: info.description })

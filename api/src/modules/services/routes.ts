@@ -221,6 +221,28 @@ function isTrialServiceCandidate(x: any) {
   };
 }
 
+function serviceConflictPayload(x: any) {
+  if (!x || typeof x !== "object") return null;
+  const service = x?.service && typeof x.service === "object" ? x.service : {};
+  const userServiceId = Number(x?.user_service_id ?? x?.userServiceId ?? 0) || 0;
+  const serviceId = Number(x?.service_id ?? service?.service_id ?? 0) || 0;
+  const title = String(service?.name ?? x?.name ?? x?.title ?? "").trim();
+  const category = String(service?.category ?? x?.category ?? "").trim();
+  const statusRaw = String(x?.status ?? "").trim();
+  const status = mapStatus(statusRaw);
+  const price = pickPrice(service?.cost != null ? service : x);
+
+  return {
+    userServiceId,
+    serviceId,
+    title: title || (userServiceId ? `#${userServiceId}` : ""),
+    category,
+    status,
+    statusRaw,
+    price,
+  };
+}
+
 /* ============================================================
    Clean error helpers (no tech codes in UX)
 ============================================================ */
@@ -1132,10 +1154,12 @@ export async function servicesRoutes(app: FastifyInstance) {
 
       if (unpaidServices.length > 0) {
         if (orderBlockMode === "any") {
+          const conflict = serviceConflictPayload(unpaidServices[0]);
           return reply.code(409).send({
             ok: false,
             error: "unpaid_order_exists",
             message: "У вас уже есть неоплаченная услуга. Оплатите её или удалите, чтобы создать новую.",
+            conflict,
           });
         }
 
@@ -1158,16 +1182,18 @@ export async function servicesRoutes(app: FastifyInstance) {
           const requestedCategory = String(requestedService?.category ?? "").trim();
 
           if (requestedCategory) {
-            const hasSameTypeUnpaid = unpaidServices.some((x: any) => {
+            const sameTypeConflict = unpaidServices.find((x: any) => {
               const existingCategory = String(x?.service?.category ?? x?.category ?? "").trim();
               return existingCategory === requestedCategory;
-            });
+            }) ?? null;
 
-            if (hasSameTypeUnpaid) {
+            if (sameTypeConflict) {
+              const conflict = serviceConflictPayload(sameTypeConflict);
               return reply.code(409).send({
                 ok: false,
                 error: "unpaid_same_service_exists",
                 message: "У вас уже есть неоплаченная услуга этого типа. Оплатите её или удалите, чтобы создать новую.",
+                conflict,
               });
             }
           }
