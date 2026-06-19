@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { apiFetch } from "../shared/api/client";
 import { useI18n } from "../shared/i18n";
 import { buildFeedPreview, shouldShowFeedMore, isNewsEvent } from "../shared/ui/newsPreview";
+import { renderNewsText } from "../shared/ui/newsRichText";
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 
@@ -262,8 +263,7 @@ export function Feed() {
                         <div className="kicker">{dt}</div>
                         <span className={`chip chip--${chipKind(e.level)}`}>{chipText(e, t)}</span>
                       </div>
-                      <div className="feed-newsCard__title">{title}</div>
-                      {preview && <div className="list__sub feed-news__preview">{preview}</div>}
+                      <div className="feed-newsCard__title">{renderNewsText(title)}</div>
                       {hasDetails && (
                         <div className="feed__more">
                           <button type="button" className="btn btn--accent" onClick={openDetail}>
@@ -341,7 +341,7 @@ export function Feed() {
                 <div>
                   <div className="kicker">{formatDateTime(openedEvent.ts)}</div>
                   <div id="feed-modal-title" className="modal__title">
-                    {openedEvent.title || t("feed.item.fallback")}
+                    {renderNewsText(openedEvent.title || t("feed.item.fallback"))}
                   </div>
                 </div>
                 <button
@@ -355,7 +355,7 @@ export function Feed() {
               </div>
 
               <div className="modal__content">
-                <div className="list__sub feed__fulltext">{openedEvent.message || ""}</div>
+                <div className="list__sub feed__fulltext">{renderNewsText(openedEvent.message || "")}</div>
               </div>
 
               {openedIsForecast && openedLink?.startsWith("/payments") && (
