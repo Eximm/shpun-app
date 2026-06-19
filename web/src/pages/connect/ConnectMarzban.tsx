@@ -49,11 +49,11 @@ const V2RAYTUN_LINKS: ClientLinks = {
 };
 
 const PLATFORM_ICONS: Record<Platform, string> = {
-  android: "??",
-  ios: "??",
-  windows: "??",
-  mac: "??",
-  linux: "??",
+  android: "Android",
+  ios: "iOS",
+  windows: "Win",
+  mac: "Mac",
+  linux: "Linux",
 };
 
 function detectOS(): Platform {
@@ -350,14 +350,14 @@ export default function ConnectMarzban({ usi }: Props) {
         background: ready ? "rgba(43,227,143,0.06)" : error ? "rgba(255,77,109,0.06)" : "rgba(77,215,255,0.05)",
         display: "flex", alignItems: "center", gap: 8,
       }}>
-        <span>{loading ? "?" : error ? "??" : "?"}</span>
+        <span>{loading ? "..." : error ? "!" : "OK"}</span>
         <span>{loading ? t("connect.loading") : error ? t("connect.error") : t("connect.ready")}</span>
       </div>
 
       {!loading && error && (
         <div className="actions actions--1" style={{ marginTop: 8 }}>
           <button className="btn btn--primary" onClick={() => void load()} type="button">
-            ?? {t("connectAmneziaWG.retry")}
+            {t("connectAmneziaWG.retry")}
           </button>
         </div>
       )}
@@ -409,16 +409,16 @@ export default function ConnectMarzban({ usi }: Props) {
           {HAPP_LINKS[platform].direct ? (
             <div className="actions actions--2">
               <button className="btn btn--primary" type="button" onClick={() => openClientStore("happ")}>
-                ?? {t("connect.open_store")} {t(HAPP_LINKS[platform].storeLabelKey)}
+                {t("connect.open_store")} {t(HAPP_LINKS[platform].storeLabelKey)}
               </button>
               <button className="btn" type="button" onClick={() => openClientDirect("happ")}>
-                ?? {platform === "android" ? t("connectAmneziaWG.step1.download_apk") : t("connect.download_direct")}
+                {platform === "android" ? t("connectAmneziaWG.step1.download_apk") : t("connect.download_direct")}
               </button>
             </div>
           ) : (
             <div className="actions actions--1">
               <button className="btn btn--primary" type="button" onClick={() => openClientStore("happ")}>
-                ?? {t("connect.open_store")} {t(HAPP_LINKS[platform].storeLabelKey)}
+                {t("connect.open_store")} {t(HAPP_LINKS[platform].storeLabelKey)}
               </button>
             </div>
           )}
@@ -428,7 +428,7 @@ export default function ConnectMarzban({ usi }: Props) {
           </div>
           <div className="actions actions--1">
             <button className="btn btn--primary" onClick={() => void openImport(false, "happ")} disabled={!ready} type="button">
-              {loading ? `? ${t("connect.wait")}` : `? ${t("connectMarzban.happ.add_cta")}`}
+              {loading ? t("connect.wait") : t("connectMarzban.happ.add_cta")}
             </button>
           </div>
         </div>
@@ -445,7 +445,7 @@ export default function ConnectMarzban({ usi }: Props) {
           </div>
           <div className="actions actions--1 cm__priorityActions">
             <button className="btn btn--primary" onClick={() => void openImport(true, "happ")} type="button">
-              ?? {t("connectMarzban.mirror.cta")}
+              {t("connectMarzban.mirror.cta")}
             </button>
           </div>
         </div>
@@ -453,7 +453,7 @@ export default function ConnectMarzban({ usi }: Props) {
 
       <div className="actions actions--1" style={{ marginTop: 12 }}>
         <button className="btn" onClick={() => setAdvancedOpen((v) => !v)} type="button">
-          {advancedOpen ? `? ${t("connect.hide_methods")}` : `? ${t("connect.more_methods")}`}
+          {advancedOpen ? t("connect.hide_methods") : t("connect.more_methods")}
         </button>
       </div>
 
@@ -469,28 +469,28 @@ export default function ConnectMarzban({ usi }: Props) {
               {V2RAYTUN_LINKS[platform].direct ? (
                 <div className="actions actions--2 cm__extraSectionActions">
                   <button className="btn btn--primary" type="button" onClick={() => openClientStore("v2ray")}>
-                    ?? {t("connect.open_store")} {t(V2RAYTUN_LINKS[platform].storeLabelKey)}
+                    {t("connect.open_store")} {t(V2RAYTUN_LINKS[platform].storeLabelKey)}
                   </button>
                   <button className="btn" type="button" onClick={() => openClientDirect("v2ray")}>
-                    ?? {platform === "android" ? t("connectAmneziaWG.step1.download_apk") : t("connect.download_direct")}
+                    {platform === "android" ? t("connectAmneziaWG.step1.download_apk") : t("connect.download_direct")}
                   </button>
                 </div>
               ) : (
                 <div className="actions actions--1 cm__extraSectionActions">
                   <button className="btn btn--primary" type="button" onClick={() => openClientStore("v2ray")}>
-                    ?? {t("connect.open_store")} {t(V2RAYTUN_LINKS[platform].storeLabelKey)}
+                    {t("connect.open_store")} {t(V2RAYTUN_LINKS[platform].storeLabelKey)}
                   </button>
                 </div>
               )}
               <div className="actions actions--1 cm__extraSectionActions">
                 <button className="btn" type="button" onClick={() => void openImport(false, "v2ray")} disabled={!ready}>
-                  ? {t("connect.add_sub")} {t("connectMarzban.v2ray.to_v2ray")}
+                  {t("connect.add_sub")} {t("connectMarzban.v2ray.to_v2ray")}
                 </button>
               </div>
               {subscriptionUrlMirror && (
                 <div className="actions actions--1 cm__extraSectionActions">
                   <button className="btn" type="button" onClick={() => void openImport(true, "v2ray")} disabled={!ready}>
-                    ?? {t("connectMarzban.v2ray.mirror_cta")}
+                    {t("connectMarzban.v2ray.mirror_cta")}
                   </button>
                 </div>
               )}
@@ -501,16 +501,16 @@ export default function ConnectMarzban({ usi }: Props) {
               <div className="cm__extraSectionSub">{t("connectMarzban.manual.desc")}</div>
               <div className="actions actions--2 cm__extraSectionActions">
                 <button className="btn" type="button" onClick={() => void copySub(false)}>
-                  {copied ? `? ${t("connect.copied")}` : `?? ${t("connect.copy_link")}`}
+                  {copied ? t("connect.copied") : t("connect.copy_link")}
                 </button>
                 <button className="btn" type="button" onClick={() => void openQr()}>
-                  ?? {t("connect.show_qr")}
+                  {t("connect.show_qr")}
                 </button>
               </div>
               {subscriptionUrlMirror && (
                 <div className="actions actions--1 cm__extraSectionActions">
                   <button className="btn" type="button" onClick={() => void copySub(true)}>
-                    {copiedMirror ? `? ${t("connect.copied")}` : `?? ${t("connect.copy_link")} (${t("connectMarzban.mirror.short")})`}
+                    {copiedMirror ? t("connect.copied") : `${t("connect.copy_link")} (${t("connectMarzban.mirror.short")})`}
                   </button>
                 </div>
               )}
@@ -524,7 +524,7 @@ export default function ConnectMarzban({ usi }: Props) {
             <div className="card__body">
               <div className="modal__head">
                 <div className="modal__title">{t("connectAmneziaWG.device.modal_title")}</div>
-                <button className="btn modal__close" type="button" onClick={() => setPlatformPickerOpen(false)} aria-label={t("common.close")}>?</button>
+                <button className="btn modal__close" type="button" onClick={() => setPlatformPickerOpen(false)} aria-label={t("common.close")}>x</button>
               </div>
               <div className="modal__content">
                 <div className="kv">
@@ -555,7 +555,7 @@ export default function ConnectMarzban({ usi }: Props) {
             <div className="card__body">
               <div className="modal__head">
                 <div className="modal__title">QR {t("connect.qr_title")}</div>
-                <button className="btn modal__close" type="button" onClick={() => setQrOpen(false)} aria-label={t("common.close")}>?</button>
+                <button className="btn modal__close" type="button" onClick={() => setQrOpen(false)} aria-label={t("common.close")}>x</button>
               </div>
               <div className="modal__content">
                 <p className="p">{t("connect.qr_text")}</p>
