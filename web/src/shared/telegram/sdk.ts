@@ -123,7 +123,9 @@ export function isTelegramMiniAppEnv(): boolean {
     return false;
   }
 
-  const detected = readTelegramLiveInitData().length > 50 || hasTelegramMiniAppParams();
+  const detected = readTelegramLiveInitData().length > 50
+    || hasTelegramMiniAppParams()
+    || isLikelyTelegramWebView();
   try {
     if (detected) markTelegramMiniAppSession();
     return detected || sessionStorage.getItem(TELEGRAM_MINI_APP_SESSION_KEY) === "1";
