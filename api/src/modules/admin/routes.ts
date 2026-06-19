@@ -61,6 +61,16 @@ function isTrialDeviceMode(v: unknown): v is "off" | "observe" | "enforce" {
   return v === "off" || v === "observe" || v === "enforce";
 }
 
+function boolFromAny(value: unknown, fallback = false): boolean {
+  if (value === undefined || value === null || value === "") return fallback;
+  if (value === true || value === 1) return true;
+  if (value === false || value === 0) return false;
+  const s = String(value).trim().toLowerCase();
+  if (["1", "true", "yes", "on", "enabled"].includes(s)) return true;
+  if (["0", "false", "no", "off", "disabled"].includes(s)) return false;
+  return fallback;
+}
+
 function getSessionUserId(req: any): number | null {
   const s = getSessionFromRequest(req);
   const raw = s?.userId ?? null;
@@ -208,6 +218,11 @@ export async function adminRoutes(app: FastifyInstance) {
         ipPrefixDistinctUsersThreshold = Math.floor(distinctUsersThresholdRaw);
       }
 
+      requireVerifiedEmail = boolFromAny(
+        settings?.trialRequireVerifiedEmail ?? settings?.requireVerifiedEmail,
+        requireVerifiedEmail
+      );
+      setTrialRequireVerifiedEmail(requireVerifiedEmail);
     } catch {
       // fallback to cached/env/default values
     }
@@ -397,6 +412,8 @@ export async function adminRoutes(app: FastifyInstance) {
       trialIpPrefixDistinctDevicesThreshold: Math.floor(ipPrefixDistinctDevicesThreshold),
       trialIpPrefixUserAgentAttemptThreshold: Math.floor(ipPrefixUserAgentAttemptThreshold),
       trialIpPrefixDistinctUsersThreshold: Math.floor(ipPrefixDistinctUsersThreshold),
+      trialRequireVerifiedEmail: requireVerifiedEmail,
+      requireVerifiedEmail,
     });
 
     if (!r.ok) {

@@ -63,6 +63,22 @@
   color: var(--muted);
 }
 
+.toast-action{
+  appearance: none;
+  margin-top: 10px;
+  border: 1px solid rgba(77,215,255,0.36);
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(124,92,255,0.92), rgba(77,215,255,0.92));
+  color: #061018;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.2;
+  padding: 8px 10px;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(77,215,255,0.16);
+}
+.toast-action:hover{ filter: brightness(1.05); }
+
 .toast-close{
   appearance: none;
   border: 0;

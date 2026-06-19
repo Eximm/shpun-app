@@ -4,6 +4,8 @@ export type ToastOptions = {
   description?: string;
   durationMs?: number; // default: 3500
   sound?: boolean; // default: true
+  actionLabel?: string;
+  onAction?: () => void;
 };
 
 export type ToastItem = {
@@ -12,6 +14,8 @@ export type ToastItem = {
   description?: string;
   variant: ToastVariant;
   durationMs: number;
+  actionLabel?: string;
+  onAction?: () => void;
 };
 
 type Listener = (toasts: ToastItem[]) => void;
@@ -113,6 +117,8 @@ export const toast = {
         description: opts.description,
         variant: "success",
         durationMs: opts.durationMs ?? 3500,
+        actionLabel: opts.actionLabel,
+        onAction: opts.onAction,
       },
       { sound: opts.sound !== false }
     );
@@ -125,6 +131,8 @@ export const toast = {
         description: opts.description,
         variant: "error",
         durationMs: opts.durationMs ?? 4500,
+        actionLabel: opts.actionLabel,
+        onAction: opts.onAction,
       },
       { sound: opts.sound !== false }
     );
@@ -137,6 +145,8 @@ export const toast = {
         description: opts.description,
         variant: "info",
         durationMs: opts.durationMs ?? 3500,
+        actionLabel: opts.actionLabel,
+        onAction: opts.onAction,
       },
       { sound: opts.sound !== false }
     );

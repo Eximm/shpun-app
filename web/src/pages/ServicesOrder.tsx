@@ -584,7 +584,17 @@ export function ServicesOrder() {
     } catch (e: any) {
       const info = getOrderError(e, t)
       setErr(info.description)
-      toast.error(info.title, { description: info.description })
+      const code = String(e?.error || e?.code || '').trim()
+      if (code === 'trial_email_verification_required') {
+        toast.error(info.title, {
+          description: info.description,
+          durationMs: 9000,
+          actionLabel: t('servicesOrder.error.trial_email.action'),
+          onAction: () => navigate('/profile'),
+        })
+      } else {
+        toast.error(info.title, { description: info.description })
+      }
     } finally {
       setCreating(false)
     }

@@ -25,6 +25,7 @@ import {
   getRequestUserAgent,
   getTrialDeviceMode,
   getTrialRequireVerifiedEmail,
+  setTrialRequireVerifiedEmail,
   hasDeviceUsedTrialInGroup,
   getTrialRiskProfile,
   rememberTrialUsedInGroup,
@@ -139,27 +140,82 @@ function parseHoursFromHumanPeriod(human: string): number | null {
   return null;
 }
 
+function boolFromAny(value: unknown, fallback = false): boolean {
+  if (value === undefined || value === null || value === "") return fallback;
+  if (value === true || value === 1) return true;
+  if (value === false || value === 0) return false;
+  const s = String(value).trim().toLowerCase();
+  if (["1", "true", "yes", "on", "enabled"].includes(s)) return true;
+  if (["0", "false", "no", "off", "disabled"].includes(s)) return false;
+  return fallback;
+}
+
+function parseConfigObject(value: unknown): Record<string, any> {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, any>;
+  }
+  if (typeof value !== "string") return {};
+  const s = value.trim();
+  if (!s || !s.startsWith("{")) return {};
+  try {
+    const parsed = JSON.parse(s);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function containsTrialMarker(value: unknown): boolean {
+  const s = String(value ?? "").trim().toLowerCase();
+  if (!s) return false;
+  return /\b(test|trial|demo)\b/i.test(s)
+    || s.includes("тест")
+    || s.includes("пробн")
+    || s.includes("триал")
+    || s.includes("демо");
+}
+
 function isTrialServiceCandidate(x: any) {
-  const title = String(x?.name ?? "").toUpperCase();
+  const title = String(x?.name ?? "");
+  const descr = String(x?.descr ?? "");
   const category = String(x?.category ?? "").trim();
+  const config = parseConfigObject(x?.config);
   const periodRaw = pickPeriodRaw(x?.period);
   const parsed = parseShmPeriod(periodRaw);
   const periodHuman = String(parsed?.human ?? "").trim();
-  const periodHours = parseHoursFromHumanPeriod(periodHuman);
+  const periodHours = parsed.months > 0
+    ? parsed.months * 30 * 24 + parsed.days * 24 + parsed.hours
+    : parsed.days * 24 + parsed.hours;
+  const periodHoursFallback = periodHours > 0 ? periodHours : parseHoursFromHumanPeriod(periodHuman);
+  const price = pickPrice(x);
 
-  const hasTestInTitle = title.includes("TEST");
-  const isShortPeriod = periodHours != null ? periodHours <= 24 : false;
+  const hasTrialMarker = containsTrialMarker(title)
+    || containsTrialMarker(descr)
+    || containsTrialMarker(category)
+    || containsTrialMarker((config as any)?.kind)
+    || containsTrialMarker((config as any)?.type)
+    || containsTrialMarker((config as any)?.tag);
+  const hasExplicitTrialFlag = boolFromAny((config as any)?.trial, false)
+    || boolFromAny((config as any)?.is_trial, false)
+    || boolFromAny((config as any)?.isTrial, false)
+    || boolFromAny((config as any)?.test, false)
+    || boolFromAny((config as any)?.is_test, false)
+    || boolFromAny((config as any)?.isTest, false);
+  const isShortPeriod = periodHoursFallback != null ? periodHoursFallback <= 24 : false;
 
   return {
-    isTrialService: hasTestInTitle && isShortPeriod,
+    isTrialService: hasExplicitTrialFlag || hasTrialMarker,
     trialGroup: category || null,
     trialMeta: {
-      title: String(x?.name ?? ""),
+      title,
+      descr,
       category: category || null,
       periodRaw,
       periodHuman,
-      periodHours,
-      hasTestInTitle,
+      periodHours: periodHoursFallback,
+      price,
+      hasTrialMarker,
+      hasExplicitTrialFlag,
       isShortPeriod,
     },
   };
@@ -983,9 +1039,14 @@ export async function servicesRoutes(app: FastifyInstance) {
           trialIpPrefixDistinctUsersThreshold = Math.floor(distinctUsersThreshold);
         }
 
+        trialRequireVerifiedEmail = boolFromAny(
+          settings?.trialRequireVerifiedEmail ?? settings?.requireVerifiedEmail,
+          trialRequireVerifiedEmail
+        );
+        setTrialRequireVerifiedEmail(trialRequireVerifiedEmail);
       }
     } catch {
-      // fail-open
+      // use cached/env/default values
     }
 
     if (isTrialService && trialRequireVerifiedEmail) {
@@ -1322,12 +1383,30 @@ function extractEmailFromPayload(payload: any): string | null {
 function extractEmailVerifiedFromPayload(payload: any): boolean | null {
   const candidates = [
     payload?.email_verified,
+    payload?.emailVerified,
+    payload?.verified,
+    payload?.is_verified,
+    payload?.isVerified,
+    payload?.email_confirmed,
+    payload?.emailConfirmed,
     payload?.data?.email_verified,
+    payload?.data?.emailVerified,
+    payload?.data?.verified,
+    payload?.data?.is_verified,
+    payload?.data?.isVerified,
+    payload?.data?.email_confirmed,
+    payload?.data?.emailConfirmed,
     payload?.data?.[0]?.email_verified,
+    payload?.data?.[0]?.emailVerified,
+    payload?.data?.[0]?.verified,
+    payload?.data?.[0]?.is_verified,
+    payload?.data?.[0]?.isVerified,
+    payload?.data?.[0]?.email_confirmed,
+    payload?.data?.[0]?.emailConfirmed,
   ];
   for (const value of candidates) {
     if (value === undefined || value === null || value === "") continue;
-    return value === 1 || value === "1" || value === true;
+    return boolFromAny(value, false);
   }
   return null;
 }

@@ -100,6 +100,18 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             <div className="toast-body">
               <div className="toast-title">{t.title}</div>
               {t.description ? <div className="toast-desc">{t.description}</div> : null}
+              {t.actionLabel && t.onAction ? (
+                <button
+                  className="toast-action"
+                  type="button"
+                  onClick={() => {
+                    close(t.id);
+                    t.onAction?.();
+                  }}
+                >
+                  {t.actionLabel}
+                </button>
+              ) : null}
             </div>
             <button className="toast-close" onClick={() => close(t.id)} aria-label="Закрыть">
               ×
