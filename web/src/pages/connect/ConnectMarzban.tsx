@@ -1,4 +1,4 @@
-Ôªø// FILE: web/src/pages/connect/ConnectMarzban.tsx
+// FILE: web/src/pages/connect/ConnectMarzban.tsx
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
@@ -49,14 +49,15 @@ const V2RAYTUN_LINKS: ClientLinks = {
   linux: { title: "v2RayTun", market: "https://v2raytun.com/", storeLabelKey: "connectAmneziaWG.store.download_page" },
 };
 
-const HAPP_RU_ROUTING_LINK = "happ://routing/add/eyJOYW1lIjoiU2hwdW5fUlVfUm91dGluZyIsIkdsb2JhbFByb3h5IjoidHJ1ZSIsIlJvdXRlT3JkZXIiOiJibG9jay1kaXJlY3QtcHJveHkiLCJEaXJlY3RTaXRlcyI6WyJnZW9zaXRlOmNhdGVnb3J5LXJ1IiwiZ2Vvc2l0ZTpjYXRlZ29yeS1nb3YtcnUiLCJnZW9zaXRlOm1haWxydSIsImdlb3NpdGU6dmsiLCJnZW9zaXRlOnlhbmRleCIsImtleXdvcmQ6dGlua29mZiIsImtleXdvcmQ6dGJhbmsiLCJrZXl3b3JkOnNiZXIiLCJrZXl3b3JkOnlhbmRleCIsImtleXdvcmQ6dmsiLCJrZXl3b3JkOm96b24iLCJrZXl3b3JkOndpbGRiZXJyaWVzIiwia2V5d29yZDphdml0byIsImtleXdvcmQ6MmdpcyIsImtleXdvcmQ6cnV0dWJlIiwia2V5d29yZDpraW5vcG9pc2siLCJrZXl3b3JkOmdvc3VzbHVnaSIsImtleXdvcmQ6YWxmYWJhbmsiLCJrZXl3b3JkOnZ0YiIsImtleXdvcmQ6YmVlbGluZSIsImtleXdvcmQ6bWVnYWZvbiIsImtleXdvcmQ6dGVsZTIiLCJrZXl3b3JkOm10cyIsImtleXdvcmQ6cnpkIiwia2V5d29yZDphZXJvZmxvdCIsImtleXdvcmQ6cnVzdG9yZSIsImtleXdvcmQ6bWVnYW1hcmtldCIsImtleXdvcmQ6a29udHVyIiwia2V5d29yZDptb2V4Iiwia2V5d29yZDp4NSIsImtleXdvcmQ6a3VwZXIiLCJrZXl3b3JkOnNyYXZuaSIsImtleXdvcmQ6cmJjIiwia2V5d29yZDpsZW50YSIsImtleXdvcmQ6cmFtYmxlciIsImRvbWFpbjp2ay5jb20iLCJkb21haW46dmsucnUiLCJkb21haW46dmtvbnRha3RlLnJ1IiwiZG9tYWluOnZrLm1lIiwiZG9tYWluOnZrLmNjIiwiZG9tYWluOnVzZXJhcGkuY29tIiwiZG9tYWluOnZrLWNkbi5uZXQiLCJkb21haW46dmt1c2VyYXVkaW8ubmV0IiwiZG9tYWluOnZrdmlkZW8ucnUiLCJkb21haW46bXljZG4ubWUiLCJkb21haW46b2sucnUiLCJkb21haW46b2Rub2tsYXNzbmlraS5ydSIsImRvbWFpbjptYXgucnUiLCJkb21haW46YXBpLm9uZW1lLnJ1IiwiZG9tYWluOm1pbmlhcHBzLm1heC5ydSIsImRvbWFpbjpzdC5tYXgucnUiLCJkb21haW46eWFzdGF0aWMubmV0IiwiZG9tYWluOnlhLnJ1IiwiZG9tYWluOmR6ZW4ucnUiLCJkb21haW46Z29zdXNsdWdpLnJ1IiwiZG9tYWluOmhoLnJ1IiwiZG9tYWluOm1haWwucnUiLCJkb21haW46b3pvbi5ydSIsImRvbWFpbjp3Yi5ydSIsImRvbWFpbjp0Mi5ydSIsImRvbWFpbjpydXR1YmUucnUiLCJkb21haW46Mmdpcy5ydSIsImRvbWFpbjoyZ2lzLmNvbSIsImRvbWFpbjpraW5vcG9pc2sucnUiLCJkb21haW46YXZhdGFycy5tZHMueWFuZGV4Lm5ldCJdLCJEaXJlY3RJcCI6WyJnZW9pcDpwcml2YXRlIiwiZ2VvaXA6cnUiLCI5MS4xOTQuMjI2LjAvMjMiLCIxODUuMTUxLjExNi4wLzIyIiwiOTUuMTYxLjIyNC4wLzIwIiwiOTUuMTQyLjE5Mi4wLzE4IiwiODcuMjQwLjEyOC4wLzE4IiwiMTg1LjExLjE0NC4wLzIyIiwiMTg1LjM5LjExMi4wLzIyIiwiMTg1LjE0OC4xMTIuMC8yMiIsIjJhMDA6YmRjMDo6LzMyIiwiMjEzLjI0LjY0LjAvMjQiXSwiUHJveHlTaXRlcyI6W10sIlByb3h5SXAiOltdLCJCbG9ja1NpdGVzIjpbXSwiQmxvY2tJcCI6W10sIkRvbWFpblN0cmF0ZWd5IjoiSVBJZk5vbk1hdGNoIiwiRmFrZUROUyI6ImZhbHNlIn0=";
+const HAPP_RU_ROUTING_LINK = "happ://routing/onadd/eyJOYW1lIjoiU2hwdW5fUlVfUm91dGluZyIsIkdsb2JhbFByb3h5IjoidHJ1ZSIsIlVzZUNodW5rRmlsZXMiOiJ0cnVlIiwiUmVtb3RlRG5zIjoiOC44LjguOCIsIkRvbWVzdGljRG5zIjoiNzcuODguOC44IiwiUmVtb3RlRE5TVHlwZSI6IkRvSCIsIlJlbW90ZUROU0RvbWFpbiI6Imh0dHBzOi8vOC44LjguOC9kbnMtcXVlcnkiLCJSZW1vdGVETlNJUCI6IjguOC44LjgiLCJEb21lc3RpY0ROU1R5cGUiOiJEb0giLCJEb21lc3RpY0ROU0RvbWFpbiI6Imh0dHBzOi8vNzcuODguOC44L2Rucy1xdWVyeSIsIkRvbWVzdGljRE5TSVAiOiI3Ny44OC44LjgiLCJHZW9pcHVybCI6Imh0dHBzOi8vY2RuLmpzZGVsaXZyLm5ldC9naC9oeWRyYXBvbmlxdWUvcm9zY29tdnBuLWdlb2lwQDIwMjYwNjE5MDgzOC9yZWxlYXNlL2dlb2lwLmRhdCIsIkdlb3NpdGV1cmwiOiJodHRwczovL2Nkbi5qc2RlbGl2ci5uZXQvZ2gvaHlkcmFwb25pcXVlL3Jvc2NvbXZwbi1nZW9zaXRlQDIwMjYwNDE1MjIzNS9yZWxlYXNlL2dlb3NpdGUuZGF0IiwiTGFzdFVwZGF0ZWQiOiIxNzgxODU4Mzc2IiwiRG5zSG9zdHMiOnsibGtmbDIubmFsb2cucnUiOiIyMTMuMjQuNjQuMTc1IiwibGtucGQubmFsb2cucnUiOiIyMTMuMjQuNjQuMTgxIn0sIlJvdXRlT3JkZXIiOiJibG9jay1wcm94eS1kaXJlY3QiLCJEaXJlY3RTaXRlcyI6WyJnZW9zaXRlOnByaXZhdGUiLCJnZW9zaXRlOndoaXRlbGlzdCJdLCJEaXJlY3RJcCI6WyJnZW9pcDpwcml2YXRlIiwiZ2VvaXA6d2hpdGVsaXN0Il0sIlByb3h5U2l0ZXMiOltdLCJQcm94eUlwIjpbXSwiQmxvY2tTaXRlcyI6WyJnZW9zaXRlOndpbi1zcHkiLCJnZW9zaXRlOnRvcnJlbnQiLCJnZW9zaXRlOmNhdGVnb3J5LWFkcyJdLCJCbG9ja0lwIjpbXSwiRG9tYWluU3RyYXRlZ3kiOiJJUElmTm9uTWF0Y2giLCJGYWtlRE5TIjoiZmFsc2UifQ==";
+const HAPP_RU_ROUTING_QR_LINK = HAPP_RU_ROUTING_LINK;
 
 const PLATFORM_ICONS: Record<Platform, string> = {
-  android: "ü§ñ",
-  ios: "üçé",
-  windows: "ü™ü",
-  mac: "üçè",
-  linux: "üêß",
+  android: "??",
+  ios: "??",
+  windows: "??",
+  mac: "??",
+  linux: "??",
 };
 
 function detectOS(): Platform {
@@ -301,7 +302,7 @@ export default function ConnectMarzban({ usi }: Props) {
   }
 
   async function openQr(kind: QrKind = "subscription") {
-    const target = kind === "routing" ? HAPP_RU_ROUTING_LINK : subscriptionUrl;
+    const target = kind === "routing" ? HAPP_RU_ROUTING_QR_LINK : subscriptionUrl;
     if (!target) return;
     const title = kind === "routing" ? t("connectMarzban.routing.qr_title") : t("connect.qr_title");
     const text = kind === "routing" ? t("connectMarzban.routing.qr_text") : t("connect.qr_text");
@@ -368,11 +369,11 @@ export default function ConnectMarzban({ usi }: Props) {
         <div className="card">
           <div className="card__body">
             <div className="pre" style={{ borderColor: "rgba(77,215,255,0.22)", background: "rgba(77,215,255,0.05)" }}>
-              <b>–û—Ç–∫—Ä—ã–≤–∞–µ–º Happ.</b> –ï—Å–ª–∏ –ø—Ä–∏–ª–æ–∂–µ–Ω–∏–µ –Ω–µ –æ—Ç–∫—Ä—ã–ª–æ—Å—å –∞–≤—Ç–æ–º–∞—Ç–∏—á–µ—Å–∫–∏, –Ω–∞–∂–º–∏—Ç–µ –∫–Ω–æ–ø–∫—É –Ω–∏–∂–µ.
+              <b>ŒÚÍ˚‚‡ÂÏ Happ.</b> ≈ÒÎË ÔËÎÓÊÂÌËÂ ÌÂ ÓÚÍ˚ÎÓÒ¸ ‡‚ÚÓÏ‡ÚË˜ÂÒÍË, Ì‡ÊÏËÚÂ ÍÌÓÔÍÛ ÌËÊÂ.
             </div>
             <div className="actions actions--1" style={{ marginTop: 12 }}>
               <a className="btn btn--primary" href={bridgeDeepLink}>
-                –û—Ç–∫—Ä—ã—Ç—å Happ
+                ŒÚÍ˚Ú¸ Happ
               </a>
               <button className="btn" type="button" onClick={() => void copyToClipboard(bridgeDeepLink).then((ok) => {
                 ok
@@ -395,14 +396,14 @@ export default function ConnectMarzban({ usi }: Props) {
         background: ready ? "rgba(43,227,143,0.06)" : error ? "rgba(255,77,109,0.06)" : "rgba(77,215,255,0.05)",
         display: "flex", alignItems: "center", gap: 8,
       }}>
-        <span>{loading ? "‚è≥" : error ? "‚ö†Ô∏è" : "‚úÖ"}</span>
+        <span>{loading ? "?" : error ? "??" : "?"}</span>
         <span>{loading ? t("connect.loading") : error ? t("connect.error") : t("connect.ready")}</span>
       </div>
 
       {!loading && error && (
         <div className="actions actions--1" style={{ marginTop: 8 }}>
           <button className="btn btn--primary" onClick={() => void load()} type="button">
-            üîÑ {t("connectAmneziaWG.retry")}
+            ?? {t("connectAmneziaWG.retry")}
           </button>
         </div>
       )}
@@ -442,7 +443,7 @@ export default function ConnectMarzban({ usi }: Props) {
           {chip === "auto"
             ? t("connectAmneziaWG.device.current").replace("{platform}", platformLabel(autoPlatform))
             : platformLabel(platform)}
-          {" "}‚ñæ
+          {" "}?
         </button>
       </div>
 
@@ -454,16 +455,16 @@ export default function ConnectMarzban({ usi }: Props) {
           {HAPP_LINKS[platform].direct ? (
             <div className="actions actions--2">
               <button className="btn btn--primary" type="button" onClick={() => openClientStore("happ")}>
-                üì≤ {t("connect.open_store")} {t(HAPP_LINKS[platform].storeLabelKey)}
+                ?? {t("connect.open_store")} {t(HAPP_LINKS[platform].storeLabelKey)}
               </button>
               <button className="btn" type="button" onClick={() => openClientDirect("happ")}>
-                ‚¨áÔ∏è {platform === "android" ? t("connectAmneziaWG.step1.download_apk") : t("connect.download_direct")}
+                ?? {platform === "android" ? t("connectAmneziaWG.step1.download_apk") : t("connect.download_direct")}
               </button>
             </div>
           ) : (
             <div className="actions actions--1">
               <button className="btn btn--primary" type="button" onClick={() => openClientStore("happ")}>
-                üì≤ {t("connect.open_store")} {t(HAPP_LINKS[platform].storeLabelKey)}
+                ?? {t("connect.open_store")} {t(HAPP_LINKS[platform].storeLabelKey)}
               </button>
             </div>
           )}
@@ -473,7 +474,7 @@ export default function ConnectMarzban({ usi }: Props) {
           </div>
           <div className="actions actions--1">
             <button className="btn btn--primary" onClick={() => void openImport(false, "happ")} disabled={!ready} type="button">
-              {loading ? `‚è≥ ${t("connect.wait")}` : `‚ö° ${t("connectMarzban.happ.add_cta")}`}
+              {loading ? `? ${t("connect.wait")}` : `? ${t("connectMarzban.happ.add_cta")}`}
             </button>
           </div>
         </div>
@@ -482,7 +483,7 @@ export default function ConnectMarzban({ usi }: Props) {
       {subscriptionUrlMirror && ready && (
         <div className="cm__priorityCard cm__priorityCard--mirror">
           <div className="cm__priorityHead">
-            <span className="cm__priorityIcon">‚Üî</span>
+            <span className="cm__priorityIcon">-</span>
             <div>
               <div className="cm__priorityTitle">{t("connectMarzban.mirror.title")}</div>
               <div className="cm__prioritySub">{t("connectMarzban.mirror.sub")}</div>
@@ -490,7 +491,7 @@ export default function ConnectMarzban({ usi }: Props) {
           </div>
           <div className="actions actions--1 cm__priorityActions">
             <button className="btn btn--primary" onClick={() => void openImport(true, "happ")} type="button">
-              üîÑ {t("connectMarzban.mirror.cta")}
+              ?? {t("connectMarzban.mirror.cta")}
             </button>
           </div>
         </div>
@@ -498,7 +499,7 @@ export default function ConnectMarzban({ usi }: Props) {
 
       <div className="actions actions--1" style={{ marginTop: 12 }}>
         <button className="btn" onClick={() => setAdvancedOpen((v) => !v)} type="button">
-          {advancedOpen ? `‚ñ¥ ${t("connect.hide_methods")}` : `‚ñæ ${t("connect.more_methods")}`}
+          {advancedOpen ? `? ${t("connect.hide_methods")}` : `? ${t("connect.more_methods")}`}
         </button>
       </div>
 
@@ -516,7 +517,7 @@ export default function ConnectMarzban({ usi }: Props) {
                   {t("connectMarzban.routing.cta")}
                 </button>
                 <button className="btn cm__extraSectionButton" type="button" onClick={() => void openQr("routing")}>
-                  üì± {t("connectMarzban.routing.qr_cta")}
+                  ?? {t("connectMarzban.routing.qr_cta")}
                 </button>
               </div>
             </div>
@@ -527,28 +528,28 @@ export default function ConnectMarzban({ usi }: Props) {
               {V2RAYTUN_LINKS[platform].direct ? (
                 <div className="actions actions--2 cm__extraSectionActions">
                   <button className="btn btn--primary" type="button" onClick={() => openClientStore("v2ray")}>
-                    üì≤ {t("connect.open_store")} {t(V2RAYTUN_LINKS[platform].storeLabelKey)}
+                    ?? {t("connect.open_store")} {t(V2RAYTUN_LINKS[platform].storeLabelKey)}
                   </button>
                   <button className="btn" type="button" onClick={() => openClientDirect("v2ray")}>
-                    ‚¨áÔ∏è {platform === "android" ? t("connectAmneziaWG.step1.download_apk") : t("connect.download_direct")}
+                    ?? {platform === "android" ? t("connectAmneziaWG.step1.download_apk") : t("connect.download_direct")}
                   </button>
                 </div>
               ) : (
                 <div className="actions actions--1 cm__extraSectionActions">
                   <button className="btn btn--primary" type="button" onClick={() => openClientStore("v2ray")}>
-                    üì≤ {t("connect.open_store")} {t(V2RAYTUN_LINKS[platform].storeLabelKey)}
+                    ?? {t("connect.open_store")} {t(V2RAYTUN_LINKS[platform].storeLabelKey)}
                   </button>
                 </div>
               )}
               <div className="actions actions--1 cm__extraSectionActions">
                 <button className="btn" type="button" onClick={() => void openImport(false, "v2ray")} disabled={!ready}>
-                  ‚ö° {t("connect.add_sub")} {t("connectMarzban.v2ray.to_v2ray")}
+                  ? {t("connect.add_sub")} {t("connectMarzban.v2ray.to_v2ray")}
                 </button>
               </div>
               {subscriptionUrlMirror && (
                 <div className="actions actions--1 cm__extraSectionActions">
                   <button className="btn" type="button" onClick={() => void openImport(true, "v2ray")} disabled={!ready}>
-                    üîÑ {t("connectMarzban.v2ray.mirror_cta")}
+                    ?? {t("connectMarzban.v2ray.mirror_cta")}
                   </button>
                 </div>
               )}
@@ -559,16 +560,16 @@ export default function ConnectMarzban({ usi }: Props) {
               <div className="cm__extraSectionSub">{t("connectMarzban.manual.desc")}</div>
               <div className="actions actions--2 cm__extraSectionActions">
                 <button className="btn" type="button" onClick={() => void copySub(false)}>
-                  {copied ? `‚úÖ ${t("connect.copied")}` : `üìã ${t("connect.copy_link")}`}
+                  {copied ? `? ${t("connect.copied")}` : `?? ${t("connect.copy_link")}`}
                 </button>
                 <button className="btn" type="button" onClick={() => void openQr("subscription")}>
-                  üì± {t("connect.show_qr")}
+                  ?? {t("connect.show_qr")}
                 </button>
               </div>
               {subscriptionUrlMirror && (
                 <div className="actions actions--1 cm__extraSectionActions">
                   <button className="btn" type="button" onClick={() => void copySub(true)}>
-                    {copiedMirror ? `‚úÖ ${t("connect.copied")}` : `üìã ${t("connect.copy_link")} (${t("connectMarzban.mirror.short")})`}
+                    {copiedMirror ? `? ${t("connect.copied")}` : `?? ${t("connect.copy_link")} (${t("connectMarzban.mirror.short")})`}
                   </button>
                 </div>
               )}
@@ -582,7 +583,7 @@ export default function ConnectMarzban({ usi }: Props) {
             <div className="card__body">
               <div className="modal__head">
                 <div className="modal__title">{t("connectAmneziaWG.device.modal_title")}</div>
-                <button className="btn modal__close" type="button" onClick={() => setPlatformPickerOpen(false)} aria-label={t("common.close")}>‚úï</button>
+                <button className="btn modal__close" type="button" onClick={() => setPlatformPickerOpen(false)} aria-label={t("common.close")}>?</button>
               </div>
               <div className="modal__content">
                 <div className="kv">
@@ -612,8 +613,8 @@ export default function ConnectMarzban({ usi }: Props) {
           <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()}>
             <div className="card__body">
               <div className="modal__head">
-                <div className="modal__title">üì± {qrKind === "routing" ? t("connectMarzban.routing.qr_title") : t("connect.qr_title")}</div>
-                <button className="btn modal__close" type="button" onClick={() => setQrOpen(false)} aria-label={t("common.close")}>‚úï</button>
+                <div className="modal__title">?? {qrKind === "routing" ? t("connectMarzban.routing.qr_title") : t("connect.qr_title")}</div>
+                <button className="btn modal__close" type="button" onClick={() => setQrOpen(false)} aria-label={t("common.close")}>?</button>
               </div>
               <div className="modal__content">
                 <p className="p">{qrKind === "routing" ? t("connectMarzban.routing.qr_text") : t("connect.qr_text")}</p>
