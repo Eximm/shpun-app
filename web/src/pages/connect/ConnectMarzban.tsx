@@ -18,7 +18,6 @@ type Platform = "android" | "ios" | "windows" | "mac" | "linux";
 type Chip = "auto" | Platform;
 type RuntimeMode = "telegram-miniapp" | "browser" | "standalone-app";
 type ClientKind = "happ" | "v2ray";
-type QrKind = "subscription" | "routing";
 type DeepLinkFallback = {
   title: string;
   desc: string;
@@ -48,9 +47,6 @@ const V2RAYTUN_LINKS: ClientLinks = {
   mac: { title: "v2RayTun", market: "https://apps.apple.com/us/app/v2raytun/id6476628951", storeLabelKey: "connectAmneziaWG.store.app_store" },
   linux: { title: "v2RayTun", market: "https://v2raytun.com/", storeLabelKey: "connectAmneziaWG.store.download_page" },
 };
-
-const HAPP_RU_ROUTING_LINK = "happ://routing/onadd/eyJOYW1lIjoiU2hwdW5fUlVfUm91dGluZyIsIkdsb2JhbFByb3h5IjoidHJ1ZSIsIlVzZUNodW5rRmlsZXMiOiJ0cnVlIiwiUmVtb3RlRG5zIjoiOC44LjguOCIsIkRvbWVzdGljRG5zIjoiNzcuODguOC44IiwiUmVtb3RlRE5TVHlwZSI6IkRvSCIsIlJlbW90ZUROU0RvbWFpbiI6Imh0dHBzOi8vOC44LjguOC9kbnMtcXVlcnkiLCJSZW1vdGVETlNJUCI6IjguOC44LjgiLCJEb21lc3RpY0ROU1R5cGUiOiJEb0giLCJEb21lc3RpY0ROU0RvbWFpbiI6Imh0dHBzOi8vNzcuODguOC44L2Rucy1xdWVyeSIsIkRvbWVzdGljRE5TSVAiOiI3Ny44OC44LjgiLCJHZW9pcHVybCI6Imh0dHBzOi8vY2RuLmpzZGVsaXZyLm5ldC9naC9oeWRyYXBvbmlxdWUvcm9zY29tdnBuLWdlb2lwQDIwMjYwNjE5MDgzOC9yZWxlYXNlL2dlb2lwLmRhdCIsIkdlb3NpdGV1cmwiOiJodHRwczovL2Nkbi5qc2RlbGl2ci5uZXQvZ2gvaHlkcmFwb25pcXVlL3Jvc2NvbXZwbi1nZW9zaXRlQDIwMjYwNDE1MjIzNS9yZWxlYXNlL2dlb3NpdGUuZGF0IiwiTGFzdFVwZGF0ZWQiOiIxNzgxODU4Mzc2IiwiRG5zSG9zdHMiOnsibGtmbDIubmFsb2cucnUiOiIyMTMuMjQuNjQuMTc1IiwibGtucGQubmFsb2cucnUiOiIyMTMuMjQuNjQuMTgxIn0sIlJvdXRlT3JkZXIiOiJibG9jay1wcm94eS1kaXJlY3QiLCJEaXJlY3RTaXRlcyI6WyJnZW9zaXRlOnByaXZhdGUiLCJnZW9zaXRlOndoaXRlbGlzdCJdLCJEaXJlY3RJcCI6WyJnZW9pcDpwcml2YXRlIiwiZ2VvaXA6d2hpdGVsaXN0Il0sIlByb3h5U2l0ZXMiOltdLCJQcm94eUlwIjpbXSwiQmxvY2tTaXRlcyI6WyJnZW9zaXRlOndpbi1zcHkiLCJnZW9zaXRlOnRvcnJlbnQiLCJnZW9zaXRlOmNhdGVnb3J5LWFkcyJdLCJCbG9ja0lwIjpbXSwiRG9tYWluU3RyYXRlZ3kiOiJJUElmTm9uTWF0Y2giLCJGYWtlRE5TIjoiZmFsc2UifQ==";
-const HAPP_RU_ROUTING_QR_LINK = HAPP_RU_ROUTING_LINK;
 
 const PLATFORM_ICONS: Record<Platform, string> = {
   android: "??",
@@ -146,13 +142,6 @@ function buildHappBridgeLink(url: string) {
   return bridgeUrl.toString();
 }
 
-function buildHappDeepLinkBridge(deepLink: string) {
-  if (!/^https?:$/.test(window.location.protocol)) return "";
-  const bridgeUrl = new URL(window.location.href);
-  bridgeUrl.searchParams.set("happ_link", deepLink.trim());
-  return bridgeUrl.toString();
-}
-
 function getHappBridgeDeepLink() {
   const params = new URLSearchParams(window.location.search);
   const directLink = params.get("happ_link")?.trim();
@@ -163,19 +152,6 @@ function getHappBridgeDeepLink() {
 
 function openViaTelegramBridge(url: string) {
   const bridge = buildHappBridgeLink(url);
-  if (!bridge) return false;
-  try {
-    const tg = (window as any).Telegram?.WebApp;
-    if (tg && typeof tg.openLink === "function") {
-      tg.openLink(bridge, { try_instant_view: false });
-      return true;
-    }
-  } catch { /* ignore */ }
-  return false;
-}
-
-function openDeepLinkViaTelegramBridge(deepLink: string) {
-  const bridge = buildHappDeepLinkBridge(deepLink);
   if (!bridge) return false;
   try {
     const tg = (window as any).Telegram?.WebApp;
@@ -216,7 +192,6 @@ export default function ConnectMarzban({ usi }: Props) {
   const [copied, setCopied] = useState(false);
   const [copiedMirror, setCopiedMirror] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
-  const [qrKind, setQrKind] = useState<QrKind>("subscription");
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [deepLinkFallback, setDeepLinkFallback] = useState<DeepLinkFallback | null>(null);
 
@@ -301,11 +276,11 @@ export default function ConnectMarzban({ usi }: Props) {
     if (opened && platform !== "ios") toast.info(t("connect.open_client"), { description: t("connectMarzban.v2ray.import_text") });
   }
 
-  async function openQr(kind: QrKind = "subscription") {
-    const target = kind === "routing" ? HAPP_RU_ROUTING_QR_LINK : subscriptionUrl;
+  async function openQr() {
+    const target = subscriptionUrl;
     if (!target) return;
-    const title = kind === "routing" ? t("connectMarzban.routing.qr_title") : t("connect.qr_title");
-    const text = kind === "routing" ? t("connectMarzban.routing.qr_text") : t("connect.qr_text");
+    const title = t("connect.qr_title");
+    const text = t("connect.qr_text");
     try {
       const dataUrl = await QRCode.toDataURL(target, {
         errorCorrectionLevel: "L",
@@ -313,7 +288,6 @@ export default function ConnectMarzban({ usi }: Props) {
         width: 420,
         color: { dark: "#000000", light: "#ffffff" },
       });
-      setQrKind(kind);
       setQrDataUrl(dataUrl);
       setQrOpen(true);
       toast.info(title, { description: text });
@@ -343,37 +317,17 @@ export default function ConnectMarzban({ usi }: Props) {
     openLinkSafe(links.direct);
   }
 
-  function openRuRouting() {
-    if (platform === "ios") {
-      openWithVisibleFallback({
-        title: t("connectMarzban.fallback.routing_title"),
-        desc: t("connectMarzban.fallback.routing_desc"),
-        href: HAPP_RU_ROUTING_LINK,
-        copyText: HAPP_RU_ROUTING_LINK,
-      });
-      return;
-    }
-    if (runtime === "telegram-miniapp" && openDeepLinkViaTelegramBridge(HAPP_RU_ROUTING_LINK)) {
-      toast.info(t("connectMarzban.routing.open_title"), { description: t("connectMarzban.routing.open_desc") });
-      return;
-    }
-    const opened = tryOpenScheme(HAPP_RU_ROUTING_LINK, runtime, () => {
-      toast.info(t("connect.open_client"), { description: t("connect.more_methods") });
-    });
-    if (opened) toast.info(t("connectMarzban.routing.open_title"), { description: t("connectMarzban.routing.open_desc") });
-  }
-
   if (bridgeDeepLink) {
     return (
       <div className="cm">
         <div className="card">
           <div className="card__body">
             <div className="pre" style={{ borderColor: "rgba(77,215,255,0.22)", background: "rgba(77,215,255,0.05)" }}>
-              <b>Открываем Happ.</b> Если приложение не открылось автоматически, нажмите кнопку ниже.
+              <b>РћС‚РєСЂС‹РІР°РµРј Happ.</b> Р•СЃР»Рё РїСЂРёР»РѕР¶РµРЅРёРµ РЅРµ РѕС‚РєСЂС‹Р»РѕСЃСЊ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё, РЅР°Р¶РјРёС‚Рµ РєРЅРѕРїРєСѓ РЅРёР¶Рµ.
             </div>
             <div className="actions actions--1" style={{ marginTop: 12 }}>
               <a className="btn btn--primary" href={bridgeDeepLink}>
-                Открыть Happ
+                РћС‚РєСЂС‹С‚СЊ Happ
               </a>
               <button className="btn" type="button" onClick={() => void copyToClipboard(bridgeDeepLink).then((ok) => {
                 ok
@@ -509,19 +463,6 @@ export default function ConnectMarzban({ usi }: Props) {
             <div className="cm__extraTitle">{t("connect.extra.title")}</div>
             <div className="cm__extraSub">{t("connectMarzban.extra.sub")}</div>
 
-            <div className="cm__extraSection cm__extraSection--routing">
-              <div className="cm__extraSectionTitle">{t("connectMarzban.routing.title")}</div>
-              <div className="cm__extraSectionSub">{t("connectMarzban.routing.desc")}</div>
-              <div className="actions actions--2 cm__extraSectionActions">
-                <button className="btn btn--primary cm__extraSectionButton" type="button" onClick={() => openRuRouting()}>
-                  {t("connectMarzban.routing.cta")}
-                </button>
-                <button className="btn cm__extraSectionButton" type="button" onClick={() => void openQr("routing")}>
-                  ?? {t("connectMarzban.routing.qr_cta")}
-                </button>
-              </div>
-            </div>
-
             <div className="cm__extraSection">
               <div className="cm__extraSectionTitle">v2RayTun</div>
               <div className="cm__extraSectionSub">{t("connectMarzban.v2ray.alt_client")}</div>
@@ -562,7 +503,7 @@ export default function ConnectMarzban({ usi }: Props) {
                 <button className="btn" type="button" onClick={() => void copySub(false)}>
                   {copied ? `? ${t("connect.copied")}` : `?? ${t("connect.copy_link")}`}
                 </button>
-                <button className="btn" type="button" onClick={() => void openQr("subscription")}>
+                <button className="btn" type="button" onClick={() => void openQr()}>
                   ?? {t("connect.show_qr")}
                 </button>
               </div>
@@ -613,11 +554,11 @@ export default function ConnectMarzban({ usi }: Props) {
           <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()}>
             <div className="card__body">
               <div className="modal__head">
-                <div className="modal__title">?? {qrKind === "routing" ? t("connectMarzban.routing.qr_title") : t("connect.qr_title")}</div>
+                <div className="modal__title">QR {t("connect.qr_title")}</div>
                 <button className="btn modal__close" type="button" onClick={() => setQrOpen(false)} aria-label={t("common.close")}>?</button>
               </div>
               <div className="modal__content">
-                <p className="p">{qrKind === "routing" ? t("connectMarzban.routing.qr_text") : t("connect.qr_text")}</p>
+                <p className="p">{t("connect.qr_text")}</p>
                 <div className="helperMedia helperMedia--qr">
                   {qrDataUrl && <img className="helperMedia__img" src={qrDataUrl} alt={t("connectAmneziaWG.qr.alt")} loading="lazy" width={320} />}
                 </div>
