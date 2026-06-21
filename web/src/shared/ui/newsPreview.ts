@@ -7,13 +7,6 @@ function normalizeType(t: any) {
   return String(t ?? "").trim().toLowerCase();
 }
 
-function splitSentences(text: string) {
-  return text
-    .split(/(?<=[.!?])\s+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
 function smartTrim(text: string, limit: number) {
   const s = String(text || "").trim();
   if (!s) return "";
@@ -26,16 +19,16 @@ function smartTrim(text: string, limit: number) {
   return safe.trim().replace(/[.,;:!?-]+$/g, "").trim() + "…";
 }
 
-function normalizeNewsText(text: string | null | undefined) {
-  return String(text || "")
+function normalizeNewsFirstLine(text: string | null | undefined) {
+  const line = String(text || "")
     .replace(/\r/g, "\n")
-    .replace(/[•●▪◦]/g, "•")
-    .replace(/^\s*[-–—*•]\s*/gm, "")
-    .replace(/\n{2,}/g, "\n")
     .split("\n")
     .map((s) => s.trim())
     .filter(Boolean)
-    .join(" ")
+    .find(Boolean) || "";
+
+  return line
+    .replace(/^\s*[-*>\u2022\u25cf\u25aa\u25e6\u2013\u2014]\s*/u, "")
     .replace(/\s{2,}/g, " ")
     .trim();
 }
@@ -53,15 +46,8 @@ function cleanInlineText(text: string | null | undefined) {
 }
 
 function buildNewsPreviewText(message: string | null | undefined, limit: number) {
-  const cleaned = normalizeNewsText(message);
+  const cleaned = normalizeNewsFirstLine(message);
   if (!cleaned) return "";
-
-  const sentences = splitSentences(cleaned);
-
-  if (sentences.length >= 2) {
-    return smartTrim(`${sentences[0]} ${sentences[1]}`.trim(), limit);
-  }
-
   return smartTrim(cleaned, limit);
 }
 

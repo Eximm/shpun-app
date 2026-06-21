@@ -5,6 +5,7 @@ import {
   getIpPrefix,
   getRecentTrialUsageByIpAndGroup,
   getTrialUsageByDeviceAndGroup,
+  getTrialUsageByUserAndGroup,
   insertTrialProtectionEvent,
   markDeviceTrialUsed,
   resetDeviceTrialUsage,
@@ -152,6 +153,15 @@ export function hasDeviceUsedTrialInGroup(deviceToken: string, trialGroup: strin
   cleanupExpiredTrialUsage();
 
   const row = getTrialUsageByDeviceAndGroup(deviceToken, trialGroup);
+  return !!row;
+}
+
+export function hasUserUsedTrialInGroup(userId: number | null | undefined, trialGroup: string): boolean {
+  if (!userId || !trialGroup) return false;
+
+  cleanupExpiredTrialUsage();
+
+  const row = getTrialUsageByUserAndGroup(userId, trialGroup);
   return !!row;
 }
 

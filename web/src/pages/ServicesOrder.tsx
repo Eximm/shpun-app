@@ -277,6 +277,16 @@ function getOrderError(e: any, t: (key: string) => string): { title: string; des
     }
   }
 
+  if (code === 'trial_already_used') {
+    return {
+      title: t('servicesOrder.error.trial_used.title'),
+      description: label
+        ? t('servicesOrder.error.trial_used.desc_named').replace('{service}', label)
+        : t('servicesOrder.error.trial_used.desc'),
+      conflict,
+    }
+  }
+
   return {
     title: t('servicesOrder.error.create_failed'),
     description: msg || t('servicesOrder.error.try_again'),

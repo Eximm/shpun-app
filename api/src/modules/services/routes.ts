@@ -27,6 +27,7 @@ import {
   getTrialRequireVerifiedEmail,
   setTrialRequireVerifiedEmail,
   hasDeviceUsedTrialInGroup,
+  hasUserUsedTrialInGroup,
   getTrialRiskProfile,
   rememberTrialUsedInGroup,
   logTrialEvent,
@@ -202,14 +203,19 @@ function isTrialServiceCandidate(x: any) {
     || boolFromAny((config as any)?.is_test, false)
     || boolFromAny((config as any)?.isTest, false);
   const isShortPeriod = periodHoursFallback != null ? periodHoursFallback <= 24 : false;
+  const explicitTrialGroup = String(
+    (config as any)?.trial_group ?? (config as any)?.trialGroup ?? ""
+  ).trim();
+  const trialGroup = category || explicitTrialGroup || "trial";
 
   return {
     isTrialService: hasExplicitTrialFlag || hasTrialMarker,
-    trialGroup: category || null,
+    trialGroup,
     trialMeta: {
       title,
       descr,
       category: category || null,
+      trialGroup,
       periodRaw,
       periodHuman,
       periodHours: periodHoursFallback,
@@ -219,6 +225,39 @@ function isTrialServiceCandidate(x: any) {
       isShortPeriod,
     },
   };
+}
+
+function candidateFromUserService(x: any) {
+  const service = x?.service && typeof x.service === "object" ? x.service : {};
+  return {
+    ...service,
+    name: service?.name ?? x?.name ?? x?.title,
+    descr: service?.descr ?? service?.description ?? x?.descr ?? x?.description,
+    category: service?.category ?? x?.category,
+    config: service?.config ?? x?.config,
+    period: service?.period ?? x?.period,
+    cost: service?.cost ?? x?.cost,
+  };
+}
+
+function isRemovedUserService(x: any) {
+  const status = String(x?.status ?? "").trim().toUpperCase();
+  return status === "REMOVED" || status === "DELETE" || status === "DELETED";
+}
+
+function findExistingTrialUserService(userServices: any[], trialGroup: string | null) {
+  for (const item of userServices) {
+    if (!item || isRemovedUserService(item)) continue;
+
+    const trialInfo = isTrialServiceCandidate(candidateFromUserService(item));
+    if (!trialInfo.isTrialService) continue;
+
+    if (!trialGroup || !trialInfo.trialGroup || trialInfo.trialGroup === trialGroup) {
+      return item;
+    }
+  }
+
+  return null;
 }
 
 function serviceConflictPayload(x: any) {
@@ -990,6 +1029,29 @@ export async function servicesRoutes(app: FastifyInstance) {
     let isTrialService = false;
     let trialGroup: string | null = null;
     let trialMeta: Record<string, any> | null = null;
+    let userServicesForOrder: any[] | null = null;
+
+    async function loadUserServicesForOrderCheck(): Promise<
+      | { ok: true; items: any[] }
+      | { ok: false; status: number; json?: any; text?: string }
+    > {
+      if (userServicesForOrder) return { ok: true as const, items: userServicesForOrder };
+
+      const servicesRes = await shmGetUserServices(shmSessionId as string, { limit: 200, offset: 0, filter: {} });
+
+      if (!servicesRes.ok) {
+        return {
+          ok: false as const,
+          status: servicesRes.status,
+          json: servicesRes.json,
+          text: servicesRes.text,
+        };
+      }
+
+      const rawServices = (servicesRes.json as any)?.data ?? [];
+      userServicesForOrder = Array.isArray(rawServices) ? rawServices : [];
+      return { ok: true as const, items: userServicesForOrder };
+    }
 
     try {
       const orderListRes = await shmGetServiceOrder(shmSessionId);
@@ -1112,6 +1174,62 @@ export async function servicesRoutes(app: FastifyInstance) {
       }
     }
 
+    if (isTrialService && trialGroup && userId && hasUserUsedTrialInGroup(userId, trialGroup)) {
+      logTrialEvent({
+        deviceToken,
+        userId,
+        ip,
+        userAgent,
+        eventType: "trial_group_block",
+        decision: "block",
+        reason: "trial_already_used_in_group_on_user",
+        meta: { serviceId, trialGroup, isTrialService, ...trialMeta },
+      });
+
+      return reply.code(409).send({
+        ok: false,
+        error: "trial_already_used",
+        message: "Тестовый ключ для этого аккаунта уже выдавался.",
+      });
+    }
+
+    if (isTrialService) {
+      const servicesCheck = await loadUserServicesForOrderCheck();
+
+      if (!servicesCheck.ok) {
+        if (servicesCheck.status === 401 || servicesCheck.status === 403) return sendNotAuthenticated(reply);
+        return sendShmError(reply, {
+          status: servicesCheck.status,
+          details: servicesCheck.json ?? servicesCheck.text,
+          debug,
+          message: "Не удалось проверить существующие ключи. Попробуйте ещё раз чуть позже.",
+        });
+      }
+
+      const existingTrial = findExistingTrialUserService(servicesCheck.items, trialGroup);
+
+      if (existingTrial) {
+        const conflict = serviceConflictPayload(existingTrial);
+        logTrialEvent({
+          deviceToken,
+          userId,
+          ip,
+          userAgent,
+          eventType: "trial_group_block",
+          decision: "block",
+          reason: "trial_existing_user_service",
+          meta: { serviceId, trialGroup, isTrialService, conflict, ...trialMeta },
+        });
+
+        return reply.code(409).send({
+          ok: false,
+          error: "trial_already_used",
+          message: "У этого аккаунта уже есть тестовый ключ.",
+          conflict,
+        });
+      }
+    }
+
     if (deviceToken && isTrialService && isDeviceManuallyBlocked(deviceToken)) {
       logTrialEvent({
         deviceToken,
@@ -1132,7 +1250,7 @@ export async function servicesRoutes(app: FastifyInstance) {
     }
 
     if (orderBlockMode !== "off") {
-      const servicesRes = await shmGetUserServices(shmSessionId, { limit: 50, offset: 0, filter: {} });
+      const servicesRes = await loadUserServicesForOrderCheck();
 
       if (!servicesRes.ok) {
         if (servicesRes.status === 401 || servicesRes.status === 403) return sendNotAuthenticated(reply);
@@ -1144,8 +1262,7 @@ export async function servicesRoutes(app: FastifyInstance) {
         });
       }
 
-      const rawServices = (servicesRes.json as any)?.data ?? [];
-      const userServices = Array.isArray(rawServices) ? rawServices : [];
+      const userServices = servicesRes.items;
 
       const unpaidServices = userServices.filter((x: any) => {
         const status = String(x?.status ?? "").trim().toUpperCase();

@@ -304,6 +304,28 @@ export function getTrialUsageByDeviceAndGroup(
   return row ?? null;
 }
 
+export function getTrialUsageByUserAndGroup(
+  userId: number,
+  trialGroup: string,
+): TrialDeviceUsageRow | null {
+  ensureDeviceTables();
+
+  if (!userId || !trialGroup) return null;
+
+  const row = linkDb
+    .prepare(`
+      SELECT *
+      FROM trial_device_usage
+      WHERE user_id = ?
+        AND trial_group = ?
+      ORDER BY used_at DESC
+      LIMIT 1
+    `)
+    .get(userId, trialGroup) as TrialDeviceUsageRow | undefined;
+
+  return row ?? null;
+}
+
 export function upsertTrialUsage(input: {
   deviceToken: string;
   trialGroup: string;

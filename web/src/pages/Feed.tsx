@@ -264,6 +264,7 @@ export function Feed() {
                         <span className={`chip chip--${chipKind(e.level)}`}>{chipText(e, t)}</span>
                       </div>
                       <div className="feed-newsCard__title">{renderNewsText(title)}</div>
+                      {preview && <div className="list__sub feed-news__preview">{renderNewsText(preview)}</div>}
                       {hasDetails && (
                         <div className="feed__more">
                           <button type="button" className="btn btn--accent" onClick={openDetail}>

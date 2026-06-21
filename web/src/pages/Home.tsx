@@ -6,6 +6,7 @@ import { useMe } from "../app/auth/useMe";
 import { useI18n } from "../shared/i18n";
 import { apiFetch } from "../shared/api/client";
 import { toast } from "../shared/ui/toast";
+import { buildHomeNewsPreview } from "../shared/ui/newsPreview";
 import { renderNewsText } from "../shared/ui/newsRichText";
 import { PromoModal } from "./PromoModal";
 import { getTelegramWebApp, isTelegramMiniAppEnv } from "../shared/telegram/sdk";
@@ -452,6 +453,7 @@ export function Home() {
                 <><div className="skeleton h1" /><div className="skeleton p" /></>
               ) : newsItems.length ? (
                 newsItems.map((n) => {
+                  const preview = buildHomeNewsPreview(n);
                   return (
                     <Link key={n.event_id} to="/feed" className="home-link">
                       <div className="list__item home-newsCard">
@@ -459,6 +461,7 @@ export function Home() {
                           <div className="home-newsCard__title">{renderNewsText(n.title || t("home.news.item.fallback"))}</div>
                           <span className="chip chip--soft home-newsCard__date">{fmtFeedDate(n.ts, t("home.news.today"))}</span>
                         </div>
+                        {preview && <div className="list__sub home-news__preview home-newsCard__preview">{renderNewsText(preview)}</div>}
                       </div>
                     </Link>
                   );
