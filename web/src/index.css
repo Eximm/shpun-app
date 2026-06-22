@@ -1743,22 +1743,6 @@ button, a { -webkit-tap-highlight-color: transparent; }
   display: block;
   text-align: left;
 }
-.cm__manualToggle {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.cm__manualToggle:active {
-  transform: none;
-}
 .cm__clientPick > div {
   min-width: 0;
   flex: 1 1 auto;
@@ -1774,6 +1758,11 @@ button, a { -webkit-tap-highlight-color: transparent; }
   flex: 0 0 auto;
   align-self: flex-start;
   margin-top: 1px;
+}
+.cm__modalManual {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.08);
 }
 @media (max-width: 560px) {
   .cm__selectorGrid {

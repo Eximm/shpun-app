@@ -239,7 +239,6 @@ export default function ConnectMarzban({ usi }: Props) {
   const [platformPickerOpen, setPlatformPickerOpen] = useState(false);
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const [client, setClient] = useState<ClientKind>("happ");
-  const [manualOpen, setManualOpen] = useState(false);
 
   const [subscriptionUrl, setSubscriptionUrl] = useState("");
   const [subscriptionUrlMirror, setSubscriptionUrlMirror] = useState<string | null>(null);
@@ -520,39 +519,6 @@ export default function ConnectMarzban({ usi }: Props) {
         </div>
       )}
 
-      {ready && (
-        <div className="card cm__extraCard">
-          <div className="card__body">
-            <button className="cm__manualToggle" type="button" onClick={() => setManualOpen((v) => !v)}>
-              <span>
-                <span className="cm__extraTitle">{t("connect.more_methods")}</span>
-                <span className="cm__extraSub">{t("connectMarzban.manual.desc")}</span>
-              </span>
-              <span aria-hidden="true">{manualOpen ? "\u25B4" : "\u25BE"}</span>
-            </button>
-
-            {manualOpen && (
-              <div className="cm__extraSection cm__extraSection--manual">
-                <div className="actions actions--2 cm__extraSectionActions">
-                  <button className="btn" type="button" onClick={() => void copySub(false)}>
-                    {copied ? `\u2705 ${t("connect.copied")}` : `\u{1F4CB} ${t("connect.copy_link")}`}
-                  </button>
-                  <button className="btn" type="button" onClick={() => void openQr()}>
-                    {"\u{1F4F1}"} {t("connect.show_qr")}
-                  </button>
-                </div>
-                {subscriptionUrlMirror && (
-                  <div className="actions actions--1 cm__extraSectionActions">
-                    <button className="btn" type="button" onClick={() => void copySub(true)}>
-                      {copiedMirror ? `\u2705 ${t("connect.copied")}` : `\u{1F4CB} ${t("connect.copy_link")} (${t("connectMarzban.mirror.short")})`}
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
       {platformPickerOpen && createPortal(
         <div className="modal" role="dialog" aria-modal="true" onMouseDown={() => setPlatformPickerOpen(false)}>
           <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()}>
@@ -610,6 +576,27 @@ export default function ConnectMarzban({ usi }: Props) {
                     );
                   })}
                 </div>
+                {ready && (
+                  <div className="cm__modalManual">
+                    <div className="cm__extraTitle">{t("connect.more_methods")}</div>
+                    <div className="cm__extraSub">{t("connectMarzban.manual.desc")}</div>
+                    <div className="actions actions--2 cm__extraSectionActions">
+                      <button className="btn" type="button" onClick={() => void copySub(false)}>
+                        {copied ? `\u2705 ${t("connect.copied")}` : `\u{1F4CB} ${t("connect.copy_link")}`}
+                      </button>
+                      <button className="btn" type="button" onClick={() => void openQr()}>
+                        {"\u{1F4F1}"} {t("connect.show_qr")}
+                      </button>
+                    </div>
+                    {subscriptionUrlMirror && (
+                      <div className="actions actions--1 cm__extraSectionActions">
+                        <button className="btn" type="button" onClick={() => void copySub(true)}>
+                          {copiedMirror ? `\u2705 ${t("connect.copied")}` : `\u{1F4CB} ${t("connect.copy_link")} (${t("connectMarzban.mirror.short")})`}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
