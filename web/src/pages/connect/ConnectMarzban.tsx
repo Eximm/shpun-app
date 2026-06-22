@@ -239,6 +239,7 @@ export default function ConnectMarzban({ usi }: Props) {
   const [platformPickerOpen, setPlatformPickerOpen] = useState(false);
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const [client, setClient] = useState<ClientKind>("happ");
+  const [manualOpen, setManualOpen] = useState(false);
 
   const [subscriptionUrl, setSubscriptionUrl] = useState("");
   const [subscriptionUrlMirror, setSubscriptionUrlMirror] = useState<string | null>(null);
@@ -442,24 +443,26 @@ export default function ConnectMarzban({ usi }: Props) {
         </div>
       )}
 
-      <div className="row cawg__rowTop">
-        <span className="p cawg__label">{t("connectAmneziaWG.device.label")}</span>
-        <button className="btn cawg__deviceBtn" type="button" onClick={() => setPlatformPickerOpen(true)} disabled={loading}>
-          {PLATFORM_ICONS[platform]}{" "}
-          {chip === "auto"
-            ? t("connectAmneziaWG.device.current").replace("{platform}", platformLabel(autoPlatform))
-            : platformLabel(platform)}
-          {" "}<span aria-hidden="true">{"\u25BE"}</span>
-        </button>
-      </div>
+      <div className="cm__selectorGrid">
+        <div className="cm__selectorItem">
+          <span className="p cawg__label">{t("connectAmneziaWG.device.label")}</span>
+          <button className="btn cawg__deviceBtn cm__selectorBtn" type="button" onClick={() => setPlatformPickerOpen(true)} disabled={loading}>
+            {PLATFORM_ICONS[platform]}{" "}
+            {chip === "auto"
+              ? t("connectAmneziaWG.device.current").replace("{platform}", platformLabel(autoPlatform))
+              : platformLabel(platform)}
+            {" "}<span aria-hidden="true">{"\u25BE"}</span>
+          </button>
+        </div>
 
-      <div className="row cawg__rowTop">
-        <span className="p cawg__label">{t("connectMarzban.client.label")}</span>
-        <button className="btn cawg__deviceBtn" type="button" onClick={() => setClientPickerOpen(true)} disabled={loading}>
-          {selectedClient.icon} {selectedClient.title}
-          {client === "happ" && <span className="chip chip--ok">{t("connectMarzban.client.recommended")}</span>}
-          {" "}<span aria-hidden="true">{"\u25BE"}</span>
-        </button>
+        <div className="cm__selectorItem">
+          <span className="p cawg__label">{t("connectMarzban.client.label")}</span>
+          <button className="btn cawg__deviceBtn cm__selectorBtn" type="button" onClick={() => setClientPickerOpen(true)} disabled={loading}>
+            {selectedClient.icon} {selectedClient.title}
+            {client === "happ" && <span className="chip chip--ok">{t("connectMarzban.client.recommended")}</span>}
+            {" "}<span aria-hidden="true">{"\u25BE"}</span>
+          </button>
+        </div>
       </div>
 
       <div className="card" style={{ marginTop: 12 }}>
@@ -520,21 +523,31 @@ export default function ConnectMarzban({ usi }: Props) {
       {ready && (
         <div className="card cm__extraCard">
           <div className="card__body">
-            <div className="cm__extraTitle">{t("connectMarzban.manual.title")}</div>
-            <div className="cm__extraSub">{t("connectMarzban.manual.desc")}</div>
-            <div className="actions actions--2 cm__extraSectionActions">
-              <button className="btn" type="button" onClick={() => void copySub(false)}>
-                {copied ? `\u2705 ${t("connect.copied")}` : `\u{1F4CB} ${t("connect.copy_link")}`}
-              </button>
-              <button className="btn" type="button" onClick={() => void openQr()}>
-                {"\u{1F4F1}"} {t("connect.show_qr")}
-              </button>
-            </div>
-            {subscriptionUrlMirror && (
-              <div className="actions actions--1 cm__extraSectionActions">
-                <button className="btn" type="button" onClick={() => void copySub(true)}>
-                  {copiedMirror ? `\u2705 ${t("connect.copied")}` : `\u{1F4CB} ${t("connect.copy_link")} (${t("connectMarzban.mirror.short")})`}
-                </button>
+            <button className="cm__manualToggle" type="button" onClick={() => setManualOpen((v) => !v)}>
+              <span>
+                <span className="cm__extraTitle">{t("connect.more_methods")}</span>
+                <span className="cm__extraSub">{t("connectMarzban.manual.desc")}</span>
+              </span>
+              <span aria-hidden="true">{manualOpen ? "\u25B4" : "\u25BE"}</span>
+            </button>
+
+            {manualOpen && (
+              <div className="cm__extraSection cm__extraSection--manual">
+                <div className="actions actions--2 cm__extraSectionActions">
+                  <button className="btn" type="button" onClick={() => void copySub(false)}>
+                    {copied ? `\u2705 ${t("connect.copied")}` : `\u{1F4CB} ${t("connect.copy_link")}`}
+                  </button>
+                  <button className="btn" type="button" onClick={() => void openQr()}>
+                    {"\u{1F4F1}"} {t("connect.show_qr")}
+                  </button>
+                </div>
+                {subscriptionUrlMirror && (
+                  <div className="actions actions--1 cm__extraSectionActions">
+                    <button className="btn" type="button" onClick={() => void copySub(true)}>
+                      {copiedMirror ? `\u2705 ${t("connect.copied")}` : `\u{1F4CB} ${t("connect.copy_link")} (${t("connectMarzban.mirror.short")})`}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -584,7 +597,7 @@ export default function ConnectMarzban({ usi }: Props) {
                   {(["happ", "v2ray", "hiddify"] as ClientKind[]).map((kind) => {
                     const item = CLIENTS[kind];
                     return (
-                      <button key={kind} className={`kv__item cawg__pickItem${client === kind ? " is-active" : ""}`} type="button"
+                      <button key={kind} className={`kv__item cawg__pickItem cm__clientPickItem${client === kind ? " is-active" : ""}`} type="button"
                         onClick={() => { setClient(kind); setClientPickerOpen(false); }}>
                         <div className="cm__clientPick">
                           <div>
