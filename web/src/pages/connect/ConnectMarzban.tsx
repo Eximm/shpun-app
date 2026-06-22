@@ -332,7 +332,7 @@ export default function ConnectMarzban({ usi }: Props) {
     const target = subscriptionUrl;
     if (!target) return;
     const title = t("connect.qr_title");
-    const text = t("connect.qr_text");
+    const text = t("connectMarzban.manual.qr_text");
     try {
       const dataUrl = await QRCode.toDataURL(target, {
         errorCorrectionLevel: "L",
@@ -355,7 +355,7 @@ export default function ConnectMarzban({ usi }: Props) {
     if (useMirror) { setCopiedMirror(ok); if (ok) setTimeout(() => setCopiedMirror(false), 1500); }
     else { setCopied(ok); if (ok) setTimeout(() => setCopied(false), 1500); }
     ok
-      ? toast.success(t("connect.copied"), { description: t("connect.import_text") })
+      ? toast.success(t("connect.copied"), { description: t("connectMarzban.manual.copy_ok_desc") })
       : toast.error(t("connect.copy_link"), { description: t("connect.sub_prepare_error_desc") });
   }
 
@@ -613,7 +613,7 @@ export default function ConnectMarzban({ usi }: Props) {
                 <button className="btn modal__close" type="button" onClick={() => setQrOpen(false)} aria-label={t("common.close")}>{"\u00D7"}</button>
               </div>
               <div className="modal__content">
-                <p className="p">{t("connect.qr_text")}</p>
+                <p className="p">{t("connectMarzban.manual.qr_text")}</p>
                 <div className="helperMedia helperMedia--qr">
                   {qrDataUrl && <img className="helperMedia__img" src={qrDataUrl} alt={t("connectAmneziaWG.qr.alt")} loading="lazy" width={320} />}
                 </div>
