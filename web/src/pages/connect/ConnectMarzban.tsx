@@ -17,7 +17,7 @@ type Props = {
 type Platform = "android" | "ios" | "windows" | "mac" | "linux";
 type Chip = "auto" | Platform;
 type RuntimeMode = "telegram-miniapp" | "browser" | "standalone-app";
-type ClientKind = "happ" | "v2ray";
+type ClientKind = "happ" | "v2ray" | "hiddify";
 type DeepLinkFallback = {
   title: string;
   desc: string;
@@ -46,6 +46,44 @@ const V2RAYTUN_LINKS: ClientLinks = {
   windows: { title: "v2RayTun", market: "https://v2raytun.com/", direct: "https://github.com/DigneZzZ/v2raytun/releases/download/5.21.68/v2RayTun_Setup.exe", storeLabelKey: "connectAmneziaWG.store.download_page" },
   mac: { title: "v2RayTun", market: "https://apps.apple.com/us/app/v2raytun/id6476628951", storeLabelKey: "connectAmneziaWG.store.app_store" },
   linux: { title: "v2RayTun", market: "https://v2raytun.com/", storeLabelKey: "connectAmneziaWG.store.download_page" },
+};
+
+const HIDDIFY_LINKS: ClientLinks = {
+  android: { title: "Hiddify", market: "https://play.google.com/store/apps/details?id=app.hiddify.com", direct: "https://github.com/hiddify/hiddify-next/releases/latest", storeLabelKey: "connectAmneziaWG.store.google_play" },
+  ios: { title: "Hiddify", market: "https://apps.apple.com/app/hiddify-proxy-vpn/id6596777532", storeLabelKey: "connectAmneziaWG.store.app_store" },
+  windows: { title: "Hiddify", market: "https://github.com/hiddify/hiddify-next/releases/latest", direct: "https://github.com/hiddify/hiddify-next/releases/latest", storeLabelKey: "connectAmneziaWG.store.download_page" },
+  mac: { title: "Hiddify", market: "https://apps.apple.com/app/hiddify-proxy-vpn/id6596777532", direct: "https://github.com/hiddify/hiddify-next/releases/latest", storeLabelKey: "connectAmneziaWG.store.app_store" },
+  linux: { title: "Hiddify", market: "https://github.com/hiddify/hiddify-next/releases/latest", direct: "https://github.com/hiddify/hiddify-next/releases/latest", storeLabelKey: "connectAmneziaWG.store.download_page" },
+};
+
+const CLIENTS: Record<ClientKind, {
+  title: string;
+  icon: string;
+  noteKey: string;
+  importTextKey: string;
+  links: ClientLinks;
+}> = {
+  happ: {
+    title: "Happ",
+    icon: "\u2B50",
+    noteKey: "connectMarzban.client.happ_note",
+    importTextKey: "connectMarzban.happ.import_text",
+    links: HAPP_LINKS,
+  },
+  v2ray: {
+    title: "v2RayTun",
+    icon: "\u{1F501}",
+    noteKey: "connectMarzban.client.v2ray_note",
+    importTextKey: "connectMarzban.v2ray.import_text",
+    links: V2RAYTUN_LINKS,
+  },
+  hiddify: {
+    title: "Hiddify",
+    icon: "\u{1F9E9}",
+    noteKey: "connectMarzban.client.hiddify_note",
+    importTextKey: "connectMarzban.hiddify.import_text",
+    links: HIDDIFY_LINKS,
+  },
 };
 
 const PLATFORM_ICONS: Record<Platform, string> = {
@@ -170,6 +208,20 @@ function buildV2RayTunImportLink(url: string, platform: Platform, runtime: Runti
     : `v2raytun://import/${url}`;
 }
 
+function buildHiddifyImportLink(url: string, platform: Platform, runtime: RuntimeMode) {
+  const encodedUrl = encodeURIComponent(url);
+  const native = `hiddify://install-config?url=${encodedUrl}`;
+  return platform === "android" && runtime !== "telegram-miniapp"
+    ? `intent://install-config?url=${encodedUrl}#Intent;scheme=hiddify;package=app.hiddify.com;end`
+    : native;
+}
+
+function buildClientImportLink(client: ClientKind, url: string, platform: Platform, runtime: RuntimeMode) {
+  if (client === "happ") return buildHappImportLink(url, platform, runtime);
+  if (client === "v2ray") return buildV2RayTunImportLink(url, platform, runtime);
+  return buildHiddifyImportLink(url, platform, runtime);
+}
+
 export default function ConnectMarzban({ usi }: Props) {
   const { t } = useI18n();
 
@@ -185,7 +237,8 @@ export default function ConnectMarzban({ usi }: Props) {
   const platform: Platform = chip === "auto" ? autoPlatform : chip;
 
   const [platformPickerOpen, setPlatformPickerOpen] = useState(false);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [clientPickerOpen, setClientPickerOpen] = useState(false);
+  const [client, setClient] = useState<ClientKind>("happ");
 
   const [subscriptionUrl, setSubscriptionUrl] = useState("");
   const [subscriptionUrlMirror, setSubscriptionUrlMirror] = useState<string | null>(null);
@@ -194,6 +247,9 @@ export default function ConnectMarzban({ usi }: Props) {
   const [qrOpen, setQrOpen] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [deepLinkFallback, setDeepLinkFallback] = useState<DeepLinkFallback | null>(null);
+
+  const selectedClient = CLIENTS[client];
+  const selectedLinks = selectedClient.links[platform];
 
   async function load() {
     setLoading(true);
@@ -232,9 +288,6 @@ export default function ConnectMarzban({ usi }: Props) {
 
   const ready = !loading && !error && !!subscriptionUrl;
 
-  const v2rayImportHref = ready ? buildV2RayTunImportLink(subscriptionUrl, platform, runtime) : "";
-  const v2rayMirrorImportHref = ready && subscriptionUrlMirror ? buildV2RayTunImportLink(subscriptionUrlMirror, platform, runtime) : "";
-
   function openWithVisibleFallback(fallback: DeepLinkFallback) {
     setDeepLinkFallback(fallback);
     window.setTimeout(() => {
@@ -268,12 +321,11 @@ export default function ConnectMarzban({ usi }: Props) {
       return;
     }
 
-    const href = useMirror ? v2rayMirrorImportHref : v2rayImportHref;
-    if (!href) return;
+    const href = buildClientImportLink(client, target, platform, runtime);
     const opened = tryOpenScheme(href, runtime, () => {
       toast.info(t("connect.open_client"), { description: t("connect.more_methods") });
     });
-    if (opened && platform !== "ios") toast.info(t("connect.open_client"), { description: t("connectMarzban.v2ray.import_text") });
+    if (opened && platform !== "ios") toast.info(t("connect.open_client"), { description: t(CLIENTS[client].importTextKey) });
   }
 
   async function openQr() {
@@ -308,11 +360,11 @@ export default function ConnectMarzban({ usi }: Props) {
   }
 
   function openClientStore(client: ClientKind) {
-    openLinkSafe(client === "happ" ? HAPP_LINKS[platform].market : V2RAYTUN_LINKS[platform].market);
+    openLinkSafe(CLIENTS[client].links[platform].market);
   }
 
   function openClientDirect(client: ClientKind) {
-    const links = client === "happ" ? HAPP_LINKS[platform] : V2RAYTUN_LINKS[platform];
+    const links = CLIENTS[client].links[platform];
     if (!links.direct) return;
     openLinkSafe(links.direct);
   }
@@ -401,34 +453,48 @@ export default function ConnectMarzban({ usi }: Props) {
         </button>
       </div>
 
+      <div className="row cawg__rowTop">
+        <span className="p cawg__label">{t("connectMarzban.client.label")}</span>
+        <button className="btn cawg__deviceBtn" type="button" onClick={() => setClientPickerOpen(true)} disabled={loading}>
+          {selectedClient.icon} {selectedClient.title}
+          {client === "happ" && <span className="chip chip--ok">{t("connectMarzban.client.recommended")}</span>}
+          {" "}<span aria-hidden="true">{"\u25BE"}</span>
+        </button>
+      </div>
+
       <div className="card" style={{ marginTop: 12 }}>
         <div className="card__body">
           <div className="pre" style={{ borderColor: "rgba(124,92,255,0.22)", background: "rgba(124,92,255,0.05)" }}>
-            <b>{t("connect.step1.label")}</b> {t("connect.step_install_desc").replace("{client}", HAPP_LINKS[platform].title).replace("{platform}", platformLabel(platform))}
+            <b>{t("connect.step1.label")}</b> {t("connect.step_install_desc").replace("{client}", selectedLinks.title).replace("{platform}", platformLabel(platform))}
           </div>
-          {HAPP_LINKS[platform].direct ? (
+          {selectedLinks.direct ? (
             <div className="actions actions--2">
-              <button className="btn btn--primary" type="button" onClick={() => openClientStore("happ")}>
-                {"\u{1F4F2}"} {t("connect.open_store")} {t(HAPP_LINKS[platform].storeLabelKey)}
+              <button className="btn btn--primary" type="button" onClick={() => openClientStore(client)}>
+                {"\u{1F4F2}"} {t("connect.open_store")} {t(selectedLinks.storeLabelKey)}
               </button>
-              <button className="btn" type="button" onClick={() => openClientDirect("happ")}>
+              <button className="btn" type="button" onClick={() => openClientDirect(client)}>
                 {"\u2B07\uFE0F"} {platform === "android" ? t("connectAmneziaWG.step1.download_apk") : t("connect.download_direct")}
               </button>
             </div>
           ) : (
             <div className="actions actions--1">
-              <button className="btn btn--primary" type="button" onClick={() => openClientStore("happ")}>
-                {"\u{1F4F2}"} {t("connect.open_store")} {t(HAPP_LINKS[platform].storeLabelKey)}
+              <button className="btn btn--primary" type="button" onClick={() => openClientStore(client)}>
+                {"\u{1F4F2}"} {t("connect.open_store")} {t(selectedLinks.storeLabelKey)}
               </button>
             </div>
           )}
+
+          <div className="cm__clientNote">
+            <span>{selectedClient.icon}</span>
+            <span>{t(selectedClient.noteKey)}</span>
+          </div>
 
           <div className="pre" style={{ marginTop: 12, borderColor: "rgba(77,215,255,0.22)", background: "rgba(77,215,255,0.05)" }}>
             <b>{t("connect.step2.label")}</b> {t("connect.step_import_desc")}
           </div>
           <div className="actions actions--1">
-            <button className="btn btn--primary" onClick={() => void openImport(false, "happ")} disabled={!ready} type="button">
-              {loading ? `\u23F3 ${t("connect.wait")}` : `\u26A1 ${t("connectMarzban.happ.add_cta")}`}
+            <button className="btn btn--primary" onClick={() => void openImport(false, client)} disabled={!ready} type="button">
+              {loading ? `\u23F3 ${t("connect.wait")}` : `\u26A1 ${t("connect.add_sub")} ${selectedLinks.title}`}
             </button>
           </div>
         </div>
@@ -444,77 +510,33 @@ export default function ConnectMarzban({ usi }: Props) {
             </div>
           </div>
           <div className="actions actions--1 cm__priorityActions">
-            <button className="btn btn--primary" onClick={() => void openImport(true, "happ")} type="button">
-              {"\u{1F504}"} {t("connectMarzban.mirror.cta")}
+            <button className="btn btn--primary" onClick={() => void openImport(true, client)} type="button">
+              {"\u{1F504}"} {t("connectMarzban.mirror.cta")} {selectedLinks.title}
             </button>
           </div>
         </div>
       )}
 
-      <div className="actions actions--1" style={{ marginTop: 12 }}>
-        <button className="btn" onClick={() => setAdvancedOpen((v) => !v)} type="button">
-          {advancedOpen ? `\u25B4 ${t("connect.hide_methods")}` : `\u25BE ${t("connect.more_methods")}`}
-        </button>
-      </div>
-
-      {advancedOpen && ready && (
+      {ready && (
         <div className="card cm__extraCard">
           <div className="card__body">
-            <div className="cm__extraTitle">{t("connect.extra.title")}</div>
-            <div className="cm__extraSub">{t("connectMarzban.extra.sub")}</div>
-
-            <div className="cm__extraSection">
-              <div className="cm__extraSectionTitle">v2RayTun</div>
-              <div className="cm__extraSectionSub">{t("connectMarzban.v2ray.alt_client")}</div>
-              {V2RAYTUN_LINKS[platform].direct ? (
-                <div className="actions actions--2 cm__extraSectionActions">
-                  <button className="btn btn--primary" type="button" onClick={() => openClientStore("v2ray")}>
-                    {"\u{1F4F2}"} {t("connect.open_store")} {t(V2RAYTUN_LINKS[platform].storeLabelKey)}
-                  </button>
-                  <button className="btn" type="button" onClick={() => openClientDirect("v2ray")}>
-                    {"\u2B07\uFE0F"} {platform === "android" ? t("connectAmneziaWG.step1.download_apk") : t("connect.download_direct")}
-                  </button>
-                </div>
-              ) : (
-                <div className="actions actions--1 cm__extraSectionActions">
-                  <button className="btn btn--primary" type="button" onClick={() => openClientStore("v2ray")}>
-                    {"\u{1F4F2}"} {t("connect.open_store")} {t(V2RAYTUN_LINKS[platform].storeLabelKey)}
-                  </button>
-                </div>
-              )}
+            <div className="cm__extraTitle">{t("connectMarzban.manual.title")}</div>
+            <div className="cm__extraSub">{t("connectMarzban.manual.desc")}</div>
+            <div className="actions actions--2 cm__extraSectionActions">
+              <button className="btn" type="button" onClick={() => void copySub(false)}>
+                {copied ? `\u2705 ${t("connect.copied")}` : `\u{1F4CB} ${t("connect.copy_link")}`}
+              </button>
+              <button className="btn" type="button" onClick={() => void openQr()}>
+                {"\u{1F4F1}"} {t("connect.show_qr")}
+              </button>
+            </div>
+            {subscriptionUrlMirror && (
               <div className="actions actions--1 cm__extraSectionActions">
-                <button className="btn" type="button" onClick={() => void openImport(false, "v2ray")} disabled={!ready}>
-                  {"\u26A1"} {t("connect.add_sub")} {t("connectMarzban.v2ray.to_v2ray")}
+                <button className="btn" type="button" onClick={() => void copySub(true)}>
+                  {copiedMirror ? `\u2705 ${t("connect.copied")}` : `\u{1F4CB} ${t("connect.copy_link")} (${t("connectMarzban.mirror.short")})`}
                 </button>
               </div>
-              {subscriptionUrlMirror && (
-                <div className="actions actions--1 cm__extraSectionActions">
-                  <button className="btn" type="button" onClick={() => void openImport(true, "v2ray")} disabled={!ready}>
-                    {"\u{1F504}"} {t("connectMarzban.v2ray.mirror_cta")}
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <div className="cm__extraSection cm__extraSection--manual">
-              <div className="cm__extraSectionTitle">{t("connectMarzban.manual.title")}</div>
-              <div className="cm__extraSectionSub">{t("connectMarzban.manual.desc")}</div>
-              <div className="actions actions--2 cm__extraSectionActions">
-                <button className="btn" type="button" onClick={() => void copySub(false)}>
-                  {copied ? `\u2705 ${t("connect.copied")}` : `\u{1F4CB} ${t("connect.copy_link")}`}
-                </button>
-                <button className="btn" type="button" onClick={() => void openQr()}>
-                  {"\u{1F4F1}"} {t("connect.show_qr")}
-                </button>
-              </div>
-              {subscriptionUrlMirror && (
-                <div className="actions actions--1 cm__extraSectionActions">
-                  <button className="btn" type="button" onClick={() => void copySub(true)}>
-                    {copiedMirror ? `\u2705 ${t("connect.copied")}` : `\u{1F4CB} ${t("connect.copy_link")} (${t("connectMarzban.mirror.short")})`}
-                  </button>
-                </div>
-              )}
-            </div>
+            )}
           </div>
         </div>
       )}
@@ -549,6 +571,39 @@ export default function ConnectMarzban({ usi }: Props) {
         document.body
       )}
 
+      {clientPickerOpen && createPortal(
+        <div className="modal" role="dialog" aria-modal="true" onMouseDown={() => setClientPickerOpen(false)}>
+          <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="card__body">
+              <div className="modal__head">
+                <div className="modal__title">{t("connectMarzban.client.modal_title")}</div>
+                <button className="btn modal__close" type="button" onClick={() => setClientPickerOpen(false)} aria-label={t("common.close")}>{"\u00D7"}</button>
+              </div>
+              <div className="modal__content">
+                <div className="kv">
+                  {(["happ", "v2ray", "hiddify"] as ClientKind[]).map((kind) => {
+                    const item = CLIENTS[kind];
+                    return (
+                      <button key={kind} className={`kv__item cawg__pickItem${client === kind ? " is-active" : ""}`} type="button"
+                        onClick={() => { setClient(kind); setClientPickerOpen(false); }}>
+                        <div className="cm__clientPick">
+                          <div>
+                            <div className="kv__k">{item.icon} {item.title}</div>
+                            <div className="kv__v">{t(item.noteKey)}</div>
+                          </div>
+                          {kind === "happ" && <span className="chip chip--ok">{t("connectMarzban.client.recommended")}</span>}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {qrOpen && createPortal(
         <div className="modal" role="dialog" aria-modal="true" onMouseDown={() => setQrOpen(false)}>
           <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()}>
@@ -574,7 +629,3 @@ export default function ConnectMarzban({ usi }: Props) {
     </div>
   );
 }
-
-
-
-

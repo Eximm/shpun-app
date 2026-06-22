@@ -1696,6 +1696,34 @@ button, a { -webkit-tap-highlight-color: transparent; }
   flex-direction: column;
   gap: 12px;
 }
+.cm__clientNote {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.035);
+  color: rgba(255,255,255,0.70);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.cm__clientPick {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+.cm__clientPick .kv__v {
+  margin-top: 4px;
+  color: rgba(255,255,255,0.58);
+  font-size: 12px;
+  line-height: 1.3;
+  white-space: normal;
+}
 .cm__extraTitle {
   font-size: 13px;
   font-weight: 900;
