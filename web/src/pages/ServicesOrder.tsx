@@ -117,6 +117,13 @@ function resolveCategoryKey(billingCategory: string, categories: ServiceCategory
   return null
 }
 
+function normalizeConnectKind(kind: string): string {
+  const k = String(kind || '').trim().toLowerCase()
+  if (k === 'marzban-wl') return 'marzban'
+  if (k === 'marzban-r') return 'marzban_router'
+  return k
+}
+
 function buildPayUrl(base: string, amount: number) {
   const a = Math.max(1, Math.ceil(nnum(amount, 1)))
   return base.includes('{amount}') ? base.replace('{amount}', String(a)) : `${base}${a}`
@@ -579,7 +586,8 @@ export function ServicesOrder() {
       if (k) {
         const timer = setTimeout(() => {
           setCategories((cats) => {
-            const found = cats.find((c) => c.connect_kind === k)
+            const targetKind = normalizeConnectKind(k)
+            const found = cats.find((c) => normalizeConnectKind(c.connect_kind) === targetKind)
             if (found) setSelectedCat(found)
             return cats
           })

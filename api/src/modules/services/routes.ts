@@ -72,6 +72,11 @@ function pickPeriodRaw(p: any) {
   return raw.trim();
 }
 
+function isRouterSubscriptionCategory(category: string) {
+  const c = String(category || "").trim().toLowerCase();
+  return c === "marzban-r" || c === "remnawave-r";
+}
+
 function unwrapUsObject(json: any): any | null {
   const data = json?.data ?? json;
   if (Array.isArray(data)) return data[0] ?? null;
@@ -663,7 +668,7 @@ export async function servicesRoutes(app: FastifyInstance) {
     const statusRaw = String(svc.item?.status ?? "");
     const category = String(svc.item?.service?.category ?? svc.item?.category ?? "");
 
-    if (category !== "marzban-r") {
+    if (!isRouterSubscriptionCategory(category)) {
       return reply.code(400).send({
         ok: false,
         error: "not_router_service",
@@ -729,7 +734,7 @@ export async function servicesRoutes(app: FastifyInstance) {
     const statusRaw = String(svc.item?.status ?? "");
     const category = String(svc.item?.service?.category ?? svc.item?.category ?? "");
 
-    if (category !== "marzban-r") return reply.code(400).send({ ok: false, error: "not_router_service", message: "Эта услуга не поддерживает привязку роутера." });
+    if (!isRouterSubscriptionCategory(category)) return reply.code(400).send({ ok: false, error: "not_router_service", message: "Эта услуга не поддерживает привязку роутера." });
     if (String(statusRaw).toUpperCase() !== "ACTIVE") return reply.code(409).send({ ok: false, error: "service_not_ready", status: statusRaw, message: "Услуга ещё не готова." });
 
     const r = await shmShpunAppRouterBind(shmSessionId, usi, code);
@@ -772,7 +777,7 @@ export async function servicesRoutes(app: FastifyInstance) {
     const statusRaw = String(svc.item?.status ?? "");
     const category = String(svc.item?.service?.category ?? svc.item?.category ?? "");
 
-    if (category !== "marzban-r") return reply.code(400).send({ ok: false, error: "not_router_service", message: "Эта услуга не поддерживает отвязку роутера." });
+    if (!isRouterSubscriptionCategory(category)) return reply.code(400).send({ ok: false, error: "not_router_service", message: "Эта услуга не поддерживает отвязку роутера." });
     if (String(statusRaw).toUpperCase() !== "ACTIVE") return reply.code(409).send({ ok: false, error: "service_not_ready", status: statusRaw, message: "Услуга ещё не готова." });
 
     const r = await shmShpunAppRouterUnbind(shmSessionId, usi, code);
@@ -829,7 +834,7 @@ export async function servicesRoutes(app: FastifyInstance) {
     const statusRaw = String(svc.item?.status ?? "");
     const category = String(svc.item?.service?.category ?? svc.item?.category ?? "");
 
-    if (category !== "marzban-r") {
+    if (!isRouterSubscriptionCategory(category)) {
       return reply.code(400).send({
         ok: false,
         error: "not_router_service",
@@ -905,7 +910,7 @@ export async function servicesRoutes(app: FastifyInstance) {
     const statusRaw = String(svc.item?.status ?? "");
     const category = String(svc.item?.service?.category ?? svc.item?.category ?? "");
 
-    if (category !== "marzban-r") {
+    if (!isRouterSubscriptionCategory(category)) {
       return reply.code(400).send({
         ok: false,
         error: "not_router_service",

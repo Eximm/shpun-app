@@ -52,6 +52,9 @@ const PRESETS = [
 ];
 
 const CONNECT_KINDS = [
+  { value: "remnawave",      label: "Nova" },
+  { value: "remnawave-wl",   label: "Nova Plus" },
+  { value: "remnawave-r",    label: "Nova Router" },
   { value: "marzban",        label: "Marzban" },
   { value: "marzban_router", label: "Router VPN" },
   { value: "amneziawg",      label: "AmneziaWG" },

@@ -10,7 +10,7 @@ import { useI18n } from "../../shared/i18n";
 
 type Props = {
   usi: number;
-  service: { title: string; status: string; statusRaw: string };
+  service: { title: string; status: string; statusRaw: string; category?: string };
   onDone?: () => void;
 };
 
@@ -222,10 +222,18 @@ function buildClientImportLink(client: ClientKind, url: string, platform: Platfo
   return buildHiddifyImportLink(url, platform, runtime);
 }
 
-export default function ConnectMarzban({ usi }: Props) {
+function serviceVariant(category?: string): "nova" | "nova_plus" | "marzban" {
+  const c = String(category || "").trim().toLowerCase();
+  if (c === "remnawave-wl") return "nova_plus";
+  if (c === "remnawave") return "nova";
+  return "marzban";
+}
+
+export default function ConnectMarzban({ usi, service }: Props) {
   const { t } = useI18n();
 
   const bridgeDeepLink = useMemo(() => getHappBridgeDeepLink(), []);
+  const variant = serviceVariant(service?.category);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -262,7 +270,11 @@ export default function ConnectMarzban({ usi }: Props) {
       setSubscriptionUrl(url);
       const mirror = String(r?.subscription_url_mirror ?? r?.subscriptionUrlMirror ?? "").trim();
       setSubscriptionUrlMirror(mirror || null);
-      toast.success(t("connect.ready"), { description: getMood("subscription_ready") ?? t("connect.sub_ready_desc") });
+      const readyDesc =
+        variant === "nova_plus" ? t("connectNovaPlus.ready_desc")
+        : variant === "nova" ? t("connectNova.ready_desc")
+        : getMood("subscription_ready") ?? t("connect.sub_ready_desc");
+      toast.success(t("connect.ready"), { description: readyDesc });
     } catch (e: any) {
       setSubscriptionUrl("");
       setSubscriptionUrlMirror(null);
