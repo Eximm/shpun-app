@@ -1,48 +1,133 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { useEffect, useMemo, useRef } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useMe } from "../auth/useMe";
 import { useI18n } from "../../shared/i18n";
+import { toast } from "../../shared/ui/toast";
 
-const MIN_DELAY_MS = 20_000;
-const MAX_DELAY_MS = 75_000;
-const RETRY_DELAY_MS = 30_000;
-const QUIET_MS = 12 * 60 * 60 * 1000;
-const SHOW_MS = 14_000;
+type ReferralToastPlan = {
+  day: string;
+  scheduledAt: number;
+  shownAt?: number;
+  titleIndex: number;
+  descIndex: number;
+  actionIndex: number;
+};
 
+const ACTIVE_MIN_DELAY_MS = 60 * 1000;
+const ACTIVE_MAX_DELAY_MS = 4 * 60 * 1000;
+const RETRY_DELAY_MS = 5 * 60 * 1000;
+const DUE_JITTER_MS = 45_000;
+const TOAST_DURATION_MS = 12_000;
+const STORAGE_PREFIX = "referral:daily-toast:v1:u:";
 const HIDDEN_ROUTES = ["/login", "/legal", "/referrals"];
 
-function randomDelay() {
-  return MIN_DELAY_MS + Math.floor(Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS));
+const TITLE_KEYS = [
+  "referralNudge.toast.title.1",
+  "referralNudge.toast.title.2",
+  "referralNudge.toast.title.3",
+  "referralNudge.toast.title.4",
+  "referralNudge.toast.title.5",
+  "referralNudge.toast.title.6",
+] as const;
+
+const DESC_KEYS = [
+  "referralNudge.toast.desc.1",
+  "referralNudge.toast.desc.2",
+  "referralNudge.toast.desc.3",
+  "referralNudge.toast.desc.4",
+  "referralNudge.toast.desc.5",
+  "referralNudge.toast.desc.6",
+  "referralNudge.toast.desc.7",
+  "referralNudge.toast.desc.8",
+] as const;
+
+const ACTION_KEYS = [
+  "referralNudge.toast.action.1",
+  "referralNudge.toast.action.2",
+  "referralNudge.toast.action.3",
+] as const;
+
+function localDayKey(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function endOfLocalDayMs(now = new Date()) {
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime() - 1;
+}
+
+function msUntilNextLocalDay(nowMs = Date.now()) {
+  return Math.max(1000, endOfLocalDayMs(new Date(nowMs)) - nowMs + 1500);
+}
+
+function randomIndex(length: number) {
+  return Math.max(0, Math.floor(Math.random() * Math.max(1, length)));
 }
 
 function storageKey(uid: number) {
-  return `referral:nudge:v1:u:${uid}`;
+  return `${STORAGE_PREFIX}${uid}`;
 }
 
-function canShowForUser(uid: number) {
+function createPlan(day: string, nowMs: number): ReferralToastPlan {
+  const activeDelay = ACTIVE_MIN_DELAY_MS + Math.floor(Math.random() * (ACTIVE_MAX_DELAY_MS - ACTIVE_MIN_DELAY_MS));
+  return {
+    day,
+    scheduledAt: nowMs + activeDelay,
+    titleIndex: randomIndex(TITLE_KEYS.length),
+    descIndex: randomIndex(DESC_KEYS.length),
+    actionIndex: randomIndex(ACTION_KEYS.length),
+  };
+}
+
+function readPlan(uid: number): ReferralToastPlan | null {
   try {
-    const last = Number(localStorage.getItem(storageKey(uid)) || "0");
-    return !last || Date.now() - last > QUIET_MS;
+    const raw = localStorage.getItem(storageKey(uid));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as ReferralToastPlan;
+    if (!parsed || typeof parsed !== "object") return null;
+    if (!parsed.day || !Number.isFinite(Number(parsed.scheduledAt))) return null;
+    return {
+      day: String(parsed.day),
+      scheduledAt: Number(parsed.scheduledAt),
+      shownAt: Number.isFinite(Number(parsed.shownAt)) ? Number(parsed.shownAt) : undefined,
+      titleIndex: Number.isFinite(Number(parsed.titleIndex)) ? Number(parsed.titleIndex) : 0,
+      descIndex: Number.isFinite(Number(parsed.descIndex)) ? Number(parsed.descIndex) : 0,
+      actionIndex: Number.isFinite(Number(parsed.actionIndex)) ? Number(parsed.actionIndex) : 0,
+    };
   } catch {
-    return true;
+    return null;
   }
 }
 
-function markShown(uid: number) {
-  try { localStorage.setItem(storageKey(uid), String(Date.now())); } catch { /* ignore */ }
+function savePlan(uid: number, plan: ReferralToastPlan) {
+  try { localStorage.setItem(storageKey(uid), JSON.stringify(plan)); } catch { /* ignore */ }
+}
+
+function getTodayPlan(uid: number, nowMs = Date.now()) {
+  const day = localDayKey(new Date(nowMs));
+  const saved = readPlan(uid);
+  if (saved?.day === day) return saved;
+  const next = createPlan(day, nowMs);
+  savePlan(uid, next);
+  return next;
 }
 
 function isHiddenRoute(pathname: string) {
   return HIDDEN_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 }
 
+function keyAt<T extends readonly string[]>(keys: T, index: number) {
+  return keys[Math.abs(index) % keys.length] ?? keys[0];
+}
+
 export function ReferralNudge({ enabled = true }: { enabled?: boolean }) {
   const { t } = useI18n();
   const loc = useLocation();
+  const nav = useNavigate();
   const { me } = useMe() as any;
-  const [visible, setVisible] = useState(false);
   const timerRef = useRef<number | null>(null);
-  const hideTimerRef = useRef<number | null>(null);
   const pathRef = useRef(loc.pathname);
 
   const uid = useMemo(() => {
@@ -50,80 +135,66 @@ export function ReferralNudge({ enabled = true }: { enabled?: boolean }) {
     return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
   }, [me?.profile?.id, me?.profile?.user_id, me?.id]);
 
-  const messageKey = useMemo(() => {
-    const keys = [
-      "referralNudge.message.1",
-      "referralNudge.message.2",
-      "referralNudge.message.3",
-      "referralNudge.message.4",
-    ];
-    return keys[Math.floor(Math.random() * keys.length)] ?? keys[0];
-  }, [visible]);
-
-  function clearTimers() {
+  function clearTimer() {
     if (timerRef.current != null) window.clearTimeout(timerRef.current);
-    if (hideTimerRef.current != null) window.clearTimeout(hideTimerRef.current);
     timerRef.current = null;
-    hideTimerRef.current = null;
-  }
-
-  function dismiss() {
-    setVisible(false);
-    if (uid) markShown(uid);
   }
 
   useEffect(() => {
     pathRef.current = loc.pathname;
-    if (isHiddenRoute(loc.pathname)) setVisible(false);
   }, [loc.pathname]);
 
   useEffect(() => {
-    clearTimers();
-    setVisible(false);
+    clearTimer();
+    if (!enabled || !uid) return;
 
-    if (!enabled || !uid || !canShowForUser(uid)) return;
-
-    function schedule(delay: number) {
+    const schedule = (delayMs: number) => {
+      clearTimer();
       timerRef.current = window.setTimeout(() => {
         timerRef.current = null;
-        if (!canShowForUser(uid)) return;
+        const plan = getTodayPlan(uid);
+        const now = Date.now();
+        if (plan.shownAt) {
+          schedule(msUntilNextLocalDay());
+          return;
+        }
+
+        if (plan.scheduledAt > now) {
+          schedule(plan.scheduledAt - now);
+          return;
+        }
+
         if (document.visibilityState !== "visible" || isHiddenRoute(pathRef.current)) {
           schedule(RETRY_DELAY_MS);
           return;
         }
-        markShown(uid);
-        setVisible(true);
-        hideTimerRef.current = window.setTimeout(() => setVisible(false), SHOW_MS);
-      }, delay);
+
+        const shownPlan = { ...plan, shownAt: Date.now() };
+        savePlan(uid, shownPlan);
+        toast.info(t(keyAt(TITLE_KEYS, plan.titleIndex)), {
+          description: t(keyAt(DESC_KEYS, plan.descIndex)),
+          actionLabel: t(keyAt(ACTION_KEYS, plan.actionIndex)),
+          durationMs: TOAST_DURATION_MS,
+          onAction: () => nav("/referrals"),
+        });
+        schedule(msUntilNextLocalDay());
+      }, delayMs);
+    };
+
+    const plan = getTodayPlan(uid);
+    if (plan.shownAt) {
+      schedule(msUntilNextLocalDay());
+      return clearTimer;
     }
 
-    schedule(randomDelay());
-    return clearTimers;
-  }, [enabled, uid]);
+    const now = Date.now();
+    const delay = plan.scheduledAt <= now
+      ? ACTIVE_MIN_DELAY_MS + Math.floor(Math.random() * DUE_JITTER_MS)
+      : Math.max(0, plan.scheduledAt - now);
+    schedule(delay);
 
-  useEffect(() => {
-    const onVisibility = () => {
-      if (document.visibilityState !== "visible") setVisible(false);
-    };
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => document.removeEventListener("visibilitychange", onVisibility);
-  }, []);
+    return clearTimer;
+  }, [enabled, uid, nav, t]);
 
-  if (!enabled || !uid || !visible || isHiddenRoute(loc.pathname)) return null;
-
-  return (
-    <div className="referralNudge" role="status" aria-live="polite">
-      <button className="referralNudge__close" type="button" onClick={dismiss} aria-label={t("common.close")}>
-        x
-      </button>
-      <div className="referralNudge__eyebrow">{t("referralNudge.eyebrow")}</div>
-      <div className="referralNudge__text">{t(messageKey)}</div>
-      <div className="referralNudge__actions">
-        <Link className="btn btn--primary referralNudge__cta" to="/referrals" onClick={dismiss}>
-          {t("referralNudge.cta")}
-        </Link>
-      </div>
-    </div>
-  );
+  return null;
 }
-
