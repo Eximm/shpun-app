@@ -222,10 +222,10 @@ function buildClientImportLink(client: ClientKind, url: string, platform: Platfo
   return buildHiddifyImportLink(url, platform, runtime);
 }
 
-function serviceVariant(category?: string): "nova" | "nova_plus" | "marzban" {
+function serviceVariant(category?: string): "flex" | "flex_plus" | "marzban" {
   const c = String(category || "").trim().toLowerCase();
-  if (c === "remnawave-wl") return "nova_plus";
-  if (c === "remnawave") return "nova";
+  if (c === "remnawave-wl") return "flex_plus";
+  if (c === "remnawave") return "flex";
   return "marzban";
 }
 
@@ -271,8 +271,8 @@ export default function ConnectMarzban({ usi, service }: Props) {
       const mirror = String(r?.subscription_url_mirror ?? r?.subscriptionUrlMirror ?? "").trim();
       setSubscriptionUrlMirror(mirror || null);
       const readyDesc =
-        variant === "nova_plus" ? t("connectNovaPlus.ready_desc")
-        : variant === "nova" ? t("connectNova.ready_desc")
+        variant === "flex_plus" ? t("connectFlexPlus.ready_desc")
+        : variant === "flex" ? t("connectFlex.ready_desc")
         : getMood("subscription_ready") ?? t("connect.sub_ready_desc");
       toast.success(t("connect.ready"), { description: readyDesc });
     } catch (e: any) {

@@ -38,7 +38,7 @@ type ApiSummary = {
 };
 
 type ApiServicesResponse = { ok: true; items: ApiServiceItem[]; summary: ApiSummary };
-type ServiceKind = "amneziawg" | "marzban" | "nova" | "marzban_router" | "unknown";
+type ServiceKind = "amneziawg" | "marzban" | "flex" | "marzban_router" | "unknown";
 
 /* ─── Utils ─────────────────────────────────────────────────────────────── */
 
@@ -50,7 +50,7 @@ function detectKind(category?: string): ServiceKind {
   const c = String(category || "").trim().toLowerCase();
   if (!c) return "unknown";
   if (c.startsWith("vpn-")) return "amneziawg";
-  if (c === "remnawave" || c === "remnawave-wl") return "nova";
+  if (c === "remnawave" || c === "remnawave-wl") return "flex";
   if (c === "remnawave-r") return "marzban_router";
   if (c === "marzban" || c.startsWith("marzban-")) {
     return c === "marzban-r" ? "marzban_router" : "marzban";
@@ -58,7 +58,7 @@ function detectKind(category?: string): ServiceKind {
   return "unknown";
 }
 
-function isNovaPlus(category?: string) {
+function isFlexPlus(category?: string) {
   return String(category || "").trim().toLowerCase() === "remnawave-wl";
 }
 
@@ -66,7 +66,7 @@ function kindTitle(k: ServiceKind, t: T) {
   switch (k) {
     case "amneziawg":      return t("services.kind.amneziawg");
     case "marzban":        return t("services.kind.marzban");
-    case "nova":           return t("services.kind.nova");
+    case "flex":           return t("services.kind.flex");
     case "marzban_router": return t("services.kind.marzban_router");
     default:               return t("services.kind.unknown");
   }
@@ -75,7 +75,7 @@ function kindTitle(k: ServiceKind, t: T) {
 function kindDescr(k: ServiceKind, t: T) {
   switch (k) {
     case "marzban":        return t("services.kind_descr.marzban");
-    case "nova":           return t("services.kind_descr.nova");
+    case "flex":           return t("services.kind_descr.flex");
     case "marzban_router": return t("services.kind_descr.marzban_router");
     case "amneziawg":      return t("services.kind_descr.amneziawg");
     default:               return t("services.kind_descr.unknown");
@@ -83,7 +83,7 @@ function kindDescr(k: ServiceKind, t: T) {
 }
 
 function kindIcon(k: ServiceKind): string {
-  if (k === "nova") return "✨";
+  if (k === "flex") return "✨";
   switch (k) {
     case "marzban":        return "🛰️";
     case "marzban_router": return "📡";
@@ -274,7 +274,7 @@ function ConnectInline({ kind, service, onDone, t }: { kind: ServiceKind; servic
       <div className="svc__connectBody">
         <Suspense fallback={<p className="p">{t("services.loading_short")}</p>}>
           {kind === "amneziawg"      ? <ConnectAmneziaWG usi={service.userServiceId} service={service} onDone={onDone} /> : null}
-          {(kind === "marzban" || kind === "nova") ? <ConnectMarzban usi={service.userServiceId} service={service} onDone={onDone} /> : null}
+          {(kind === "marzban" || kind === "flex") ? <ConnectMarzban usi={service.userServiceId} service={service} onDone={onDone} /> : null}
           {kind === "marzban_router" ? <ConnectRouter    usi={service.userServiceId} service={service} onDone={onDone} /> : null}
           {kind === "unknown" ? <div className="pre">{t("services.connect.unavailable")}</div> : null}
         </Suspense>
@@ -354,7 +354,7 @@ function ServiceRow({ s, expanded, connectOpen, onToggle, onToggleConnect, onRef
             }}>
               <span style={{ fontSize: 14, flexShrink: 0, lineHeight: 1.4 }}>🔁</span>
               <div style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", lineHeight: 1.45 }}>
-                <b style={{ color: "rgba(147,197,253,0.90)" }}>{isNovaPlus(s.category) ? t("services.nova_plus.child_title") : t("services.wl.child_title")}</b> — {isNovaPlus(s.category) ? t("services.nova_plus.child_text") : t("services.wl.child_text")}
+                <b style={{ color: "rgba(147,197,253,0.90)" }}>{isFlexPlus(s.category) ? t("services.flex_plus.child_title") : t("services.wl.child_title")}</b> — {isFlexPlus(s.category) ? t("services.flex_plus.child_text") : t("services.wl.child_text")}
               </div>
             </div>
           )}
@@ -452,7 +452,7 @@ function ServiceCard({ main, children, expandedId, connectOpenId, onToggle, onTo
             <div style={{ flex: 1, height: ".5px", background: "rgba(96,165,250,.20)" }} />
             <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, fontWeight: 800, color: "rgba(96,165,250,.65)", textTransform: "uppercase", letterSpacing: ".08em" }}>
               <span>🔁</span>
-              <span>{isNovaPlus(child.category) ? t("services.nova_plus.separator") : t("services.wl.separator")}</span>
+              <span>{isFlexPlus(child.category) ? t("services.flex_plus.separator") : t("services.wl.separator")}</span>
             </div>
             <div style={{ flex: 1, height: ".5px", background: "rgba(96,165,250,.20)" }} />
           </div>
@@ -487,7 +487,7 @@ function readGroupsState(): Record<ServiceKind, boolean> | null {
     const obj = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
     if (!obj || typeof obj !== "object") return null;
     const pick = (k: ServiceKind, def: boolean) => typeof obj[k] === "boolean" ? obj[k] : def;
-    return { amneziawg: pick("amneziawg", false), marzban: pick("marzban", true), nova: pick("nova", true), marzban_router: pick("marzban_router", false), unknown: pick("unknown", false) };
+    return { amneziawg: pick("amneziawg", false), marzban: pick("marzban", true), flex: pick("flex", true), marzban_router: pick("marzban_router", false), unknown: pick("unknown", false) };
   } catch { return null; }
 }
 
@@ -520,7 +520,7 @@ export function Services() {
   const [stopError,  setStopError]  = useState<unknown>(null);
 
   const [openGroups, setOpenGroups] = useState<Record<ServiceKind, boolean>>(
-    () => readGroupsState() ?? { amneziawg: false, marzban: true, nova: true, marzban_router: false, unknown: false }
+    () => readGroupsState() ?? { amneziawg: false, marzban: true, flex: true, marzban_router: false, unknown: false }
   );
 
   const [paySuccessOpen, setPaySuccessOpen] = useState<boolean>(() => {
@@ -642,7 +642,7 @@ export function Services() {
   /* ── Группировка: по kind, внутри — основные + WL привязаны по parent ── */
   const groups = useMemo(() => {
     const byKind: Record<ServiceKind, { main: ApiServiceItem; children: ApiServiceItem[] }[]> = {
-      amneziawg: [], marzban: [], nova: [], marzban_router: [], unknown: [],
+      amneziawg: [], marzban: [], flex: [], marzban_router: [], unknown: [],
     };
 
     // Разделяем на основные (parent=null/undefined) и дочерние WL (parent — число)
@@ -796,7 +796,7 @@ export function Services() {
       )}
 
       {/* ── Группы услуг ── */}
-      {hasServices && (["nova", "marzban", "marzban_router", "amneziawg", "unknown"] as ServiceKind[]).map((kind) => {
+      {hasServices && (["flex", "marzban", "marzban_router", "amneziawg", "unknown"] as ServiceKind[]).map((kind) => {
         const arr = groups[kind];
         if (!arr?.length) return null;
         const open = !!openGroups[kind];
