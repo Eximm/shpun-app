@@ -16,7 +16,7 @@ type Block = {
   tone?: BlockTone;
 };
 
-const ROUTER_PACKAGE_URL = "https://spb.shpyn.online/files/ipk/shpun-router_1.1.0_all.ipk";
+const ROUTER_PACKAGE_URL = "https://spb.shpyn.online/files/ipk/shpun-router_1.1.2_all.ipk";
 
 export function ServicesRouter() {
   const { t } = useI18n();
@@ -27,10 +27,10 @@ export function ServicesRouter() {
       icon: "🌐",
       title: t("servicesRouter.what.title", "Что это"),
       body: t("servicesRouter.what.body", "Shpun Router подключает OpenWrt-роутер к Shpun SDN System. Весь домашний трафик идёт через защищённый VPN-туннель."),
-      note: t("servicesRouter.what.note", "Никаких SSH, терминала и ручной настройки конфигов — всё делается через LuCI и Telegram-бота."),
+      note: t("servicesRouter.what.note", "Никаких SSH, терминала и ручной настройки конфигов — всё делается через LuCI и помощник подключения."),
       bullets: [
         t("servicesRouter.what.bullet_1", "VPN сразу для всех устройств дома"),
-        t("servicesRouter.what.bullet_2", "Привязка роутера через бота"),
+        t("servicesRouter.what.bullet_2", "Привязка роутера по коду"),
         t("servicesRouter.what.bullet_3", "Виджет статуса прямо в OpenWrt"),
       ],
     },
@@ -69,23 +69,22 @@ export function ServicesRouter() {
     {
       icon: "⚡",
       title: t("servicesRouter.quick_start.title", "Быстрый старт"),
-      note: t("servicesRouter.quick_start.note", "Если OpenWrt 24.10.x уже установлена, вся настройка обычно занимает несколько минут."),
+      note: t("servicesRouter.quick_start.note", "Перед установкой роутер должен иметь доступ в интернет. Для первой настройки удобнее подключить его WAN-порт к LAN-порту основного роутера, чтобы он сразу получал готовый интернет."),
       steps: [
-        t("servicesRouter.quick_start.step_1", "Подготовьте роутер с OpenWrt 24.10.x"),
-        t("servicesRouter.quick_start.step_2", "Установите пакет shpun-router_1.1.0_all.ipk"),
-        t("servicesRouter.quick_start.step_3", "Откройте LuCI и перейдите на главную страницу"),
-        t("servicesRouter.quick_start.step_4", "Найдите виджет Shpun Router / SDN System"),
-        t("servicesRouter.quick_start.step_5", "Сканируйте QR-код и привяжите роутер в боте"),
+        t("servicesRouter.quick_start.step_1", "Запустите роутер с OpenWrt 24.10.x и откройте LuCI"),
+        t("servicesRouter.quick_start.step_2", "Скачайте и установите пакет shpun-router_1.1.2_all.ipk"),
+        t("servicesRouter.quick_start.step_3", "Закажите отдельную услугу Shpun Router"),
+        t("servicesRouter.quick_start.step_4", "Введите код из виджета роутера в помощнике подключения"),
       ],
     },
     {
       icon: "🔧",
       title: t("servicesRouter.setup.title", "Пошаговая настройка"),
       bullets: [
-        t("servicesRouter.setup.bullet_1", "Проверьте, что интернет работает без VPN, а доступ в LuCI открыт"),
-        t("servicesRouter.setup.bullet_2", "Установите пакет через LuCI: System → Software → Upload → install ipk"),
-        t("servicesRouter.setup.bullet_3", "Откройте LuCI → главная страница → Shpun Router / SDN System"),
-        t("servicesRouter.setup.bullet_4", "Сканируйте QR-код, откройте бота, выберите услугу Router VPN и завершите привязку"),
+        t("servicesRouter.setup.bullet_1", "Убедитесь, что интернет на роутере уже работает. Для первой настройки лучше подключить его WAN-порт к LAN-порту основного роутера"),
+        t("servicesRouter.setup.bullet_2", "Установите пакет через LuCI: System → Software → Upload package"),
+        t("servicesRouter.setup.bullet_3", "Закажите услугу Shpun Router в миниаппе или приложении"),
+        t("servicesRouter.setup.bullet_4", "На главной странице LuCI найдите виджет Shpun Router и введите его код в помощнике подключения — остальные настройки загрузятся автоматически"),
       ],
     },
     {
@@ -135,7 +134,7 @@ export function ServicesRouter() {
               onClick={() => window.location.assign("/services/order?kind=marzban_router")}
               type="button"
             >
-              🚀 {t("servicesRouter.page.order", "Заказать Router VPN")}
+              🚀 {t("servicesRouter.page.order", "Заказать Shpun Router")}
             </button>
             <button
               className="btn"

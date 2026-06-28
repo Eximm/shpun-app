@@ -77,6 +77,60 @@ function isRouterSubscriptionCategory(category: string) {
   return c === "marzban-r" || c === "remnawave-r";
 }
 
+const MARZBAN_MIRROR_BASE = "https://mirepo.space/";
+
+function safeDecodeUriPart(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function cleanSubscriptionToken(value: unknown) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  return safeDecodeUriPart(raw)
+    .split("#")[0]
+    .split("?")[0]
+    .replace(/^\/+|\/+$/g, "")
+    .trim();
+}
+
+function mirrorUrlFromSubscription(subscriptionUrl: string) {
+  const raw = String(subscriptionUrl || "").trim();
+  if (!raw) return null;
+
+  let token = "";
+
+  try {
+    const url = new URL(raw);
+    const segments = url.pathname.split("/").filter(Boolean);
+    const subIdx = segments.findIndex((part) => part.toLowerCase() === "sub");
+
+    if (subIdx >= 0) token = segments[subIdx + 1] ?? "";
+    if (!token) {
+      token = url.searchParams.get("token")
+        ?? url.searchParams.get("key")
+        ?? url.searchParams.get("id")
+        ?? "";
+    }
+    if (!token && /sub|subscribe|subscription/i.test(url.pathname)) {
+      token = segments[segments.length - 1] ?? "";
+    }
+  } catch {
+    const m = raw.match(/\/sub\/([^?#/]+)/i);
+    token = m?.[1] ?? "";
+  }
+
+  const cleanToken = cleanSubscriptionToken(token);
+  if (!cleanToken) return null;
+
+  const mirror = new URL(MARZBAN_MIRROR_BASE);
+  mirror.pathname = `/${encodeURIComponent(cleanToken)}`;
+  return mirror.toString();
+}
+
 function unwrapUsObject(json: any): any | null {
   const data = json?.data ?? json;
   if (Array.isArray(data)) return data[0] ?? null;
@@ -579,12 +633,7 @@ export async function servicesRoutes(app: FastifyInstance) {
         });
       }
 
-      // Зеркало: берём токен после /sub/ и строим ссылку на mirepo.space
-      const MIRROR_BASE = "https://mirepo.space/";
-      const subIdx = subscriptionUrl.indexOf("/sub/");
-      const subscriptionUrlMirror = subIdx !== -1
-        ? MIRROR_BASE + subscriptionUrl.slice(subIdx + 5)
-        : null;
+      const subscriptionUrlMirror = mirrorUrlFromSubscription(subscriptionUrl);
 
       if (debug) {
         return reply.send({

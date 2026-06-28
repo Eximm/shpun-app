@@ -268,7 +268,7 @@ export default function ConnectRouter({ usi, onDone }: Props) {
                 onChange={(e) => { setError(null); setCode(e.target.value) }}
                 onBlur={() => setCode((cur) => toPretty9(cur))}
                 placeholder={t('router.input_placeholder')}
-                className="input"
+                className="input cr__input"
                 disabled={busy}
                 inputMode="text"
                 lang="en"
@@ -290,6 +290,14 @@ export default function ConnectRouter({ usi, onDone }: Props) {
           )}
         </>
       )}
+
+      <button
+        className="btn cr__btnFull cr__guide"
+        onClick={() => window.location.assign('/help/router')}
+        type="button"
+      >
+        📖 {t('router.instruction')}
+      </button>
     </div>
   )
 }

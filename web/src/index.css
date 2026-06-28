@@ -1521,6 +1521,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .cr__input     { width: 100%; letter-spacing: 1px; margin-bottom: 8px; }
 .cr__note      { opacity: 0.75; font-size: 12px; line-height: 1.35; }
 .cr__btnFull   { width: 100%; }
+.cr__guide     { margin-top: 10px; }
 .cr__loading {
   font-size: 12px;
   color: rgba(255,255,255,0.45);
