@@ -36,6 +36,10 @@ import {
 } from "../device/deviceService.js";
 
 import { listServiceCategories } from "../../shared/linkdb/serviceCategoriesRepo.js";
+import {
+  remnawaveDeleteUserHwidDevice,
+  remnawaveGetUserHwidDevices,
+} from "../../shared/remnawave/remnawaveClient.js";
 
 function mapStatus(raw?: string) {
   const s = String(raw || "").toUpperCase();
@@ -75,6 +79,24 @@ function pickPeriodRaw(p: any) {
 function isRouterSubscriptionCategory(category: string) {
   const c = String(category || "").trim().toLowerCase();
   return c === "marzban-r" || c === "remnawave-r";
+}
+
+function remnawaveUsernameForService(category: string, usi: number) {
+  const normalized = String(category || "").trim().toLowerCase();
+  if (isRouterSubscriptionCategory(normalized)) return null;
+  return `${normalized.includes("wl") ? "uswl" : "us"}_${usi}`;
+}
+
+async function resolveOwnedRemnawaveUser(shmSessionId: string, usi: number) {
+  const service = await loadUserServiceByUsi(shmSessionId, usi);
+  if (!service.ok) return { ok: false as const, status: service.status, error: "service_lookup_failed" };
+  if (!service.item) return { ok: false as const, status: 404, error: "service_not_found" };
+
+  const category = String(service.item?.service?.category ?? service.item?.category ?? "");
+  const username = remnawaveUsernameForService(category, usi);
+  if (!username) return { ok: false as const, status: 400, error: "hwid_not_available" };
+
+  return { ok: true as const, username };
 }
 
 const MARZBAN_MIRROR_BASE = "https://mirepo.space/";
@@ -695,6 +717,97 @@ export async function servicesRoutes(app: FastifyInstance) {
     }
 
     return reply.code(400).send({ ok: false, error: "unknown_kind", details: kind, message: "Неизвестный тип подключения." });
+  });
+
+  app.get("/services/:usi/devices", async (req, reply) => {
+    const shmSessionId = ensureAuthed(req, reply);
+    if (!shmSessionId) return;
+
+    const usi = Number((req.params as any)?.usi ?? 0);
+    if (!usi || !Number.isFinite(usi)) {
+      return reply.code(400).send({ ok: false, error: "bad_request" });
+    }
+
+    try {
+      const ownedUser = await resolveOwnedRemnawaveUser(shmSessionId, usi);
+      if (!ownedUser.ok) {
+        return reply.code(ownedUser.status).send({
+          ok: false,
+          error: ownedUser.error,
+          message: ownedUser.error === "hwid_not_available"
+            ? "Управление устройствами для этой услуги не требуется."
+            : "Не удалось получить список устройств. Попробуйте ещё раз.",
+        });
+      }
+
+      const result = await remnawaveGetUserHwidDevices(ownedUser.username);
+      if (!result.ok) {
+        return reply.code(result.error === "user_not_found" ? 404 : 502).send({
+          ok: false,
+          error: result.error || "devices_load_failed",
+          message: "Не удалось получить список устройств. Попробуйте ещё раз.",
+        });
+      }
+
+      const devices = Array.isArray(result.devices) ? result.devices : [];
+      return reply.send({
+        ok: true,
+        limit: typeof result.limit === "number" ? result.limit : null,
+        total: devices.length,
+        devices,
+      });
+    } catch (error: any) {
+      req.log.error({ err: error, usi }, "Failed to load Remnawave devices");
+      return reply.code(502).send({
+        ok: false,
+        error: String(error?.message || "") === "remnawave_hwid_ssh_not_configured"
+          ? "remnawave_hwid_ssh_not_configured"
+          : "devices_load_failed",
+        message: "Не удалось получить список устройств. Попробуйте ещё раз.",
+      });
+    }
+  });
+
+  app.delete("/services/:usi/devices", async (req, reply) => {
+    const shmSessionId = ensureAuthed(req, reply);
+    if (!shmSessionId) return;
+
+    const usi = Number((req.params as any)?.usi ?? 0);
+    const hwid = String((req.body as any)?.hwid ?? "").trim();
+    if (!usi || !Number.isFinite(usi) || !hwid || hwid.length > 512) {
+      return reply.code(400).send({ ok: false, error: "bad_request" });
+    }
+
+    try {
+      const ownedUser = await resolveOwnedRemnawaveUser(shmSessionId, usi);
+      if (!ownedUser.ok) {
+        return reply.code(ownedUser.status).send({
+          ok: false,
+          error: ownedUser.error,
+          message: "Не удалось удалить устройство. Попробуйте ещё раз.",
+        });
+      }
+
+      const result = await remnawaveDeleteUserHwidDevice(ownedUser.username, hwid);
+      if (!result.ok || !result.removed) {
+        return reply.code(result.error === "device_not_found" ? 404 : 502).send({
+          ok: false,
+          error: result.error || "device_delete_failed",
+          message: result.error === "device_not_found"
+            ? "Устройство уже удалено или не найдено."
+            : "Не удалось удалить устройство. Попробуйте ещё раз.",
+        });
+      }
+
+      return reply.send({ ok: true, removed: true });
+    } catch (error: any) {
+      req.log.error({ err: error, usi }, "Failed to delete Remnawave device");
+      return reply.code(502).send({
+        ok: false,
+        error: "device_delete_failed",
+        message: "Не удалось удалить устройство. Попробуйте ещё раз.",
+      });
+    }
   });
 
   app.get("/services/:usi/router", async (req, reply) => {

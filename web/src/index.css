@@ -1812,6 +1812,94 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .cm__extraSectionButton {
   min-height: 44px;
 }
+.cm__devicesCard {
+  margin-top: 12px;
+}
+.cm__devicesCardBody {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+.cm__devicesIntro {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.cm__devicesIntroIcon,
+.cm__deviceIcon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  border: 1px solid rgba(77,215,255,0.28);
+  border-radius: 8px;
+  background: rgba(77,215,255,0.08);
+}
+.cm__devicesModal {
+  width: min(620px, 100%);
+}
+.cm__deviceList {
+  display: grid;
+  gap: 8px;
+}
+.cm__deviceItem {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 42px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.02);
+}
+.cm__deviceInfo {
+  min-width: 0;
+}
+.cm__deviceTitle {
+  font-weight: 850;
+  overflow-wrap: anywhere;
+}
+.cm__deviceMeta {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.cm__deviceDelete {
+  width: 42px;
+  min-width: 42px;
+  padding: 0;
+  color: var(--bad);
+}
+.cm__deviceConfirm,
+.cm__devicesError {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid rgba(255,77,109,0.28);
+  border-radius: 8px;
+  background: rgba(255,77,109,0.06);
+}
+.cm__deviceConfirmTitle {
+  font-weight: 900;
+}
+.cm__devicesError {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+@media (max-width: 620px) {
+  .cm__devicesCardBody {
+    grid-template-columns: 1fr;
+  }
+  .cm__devicesCardBody > .btn {
+    width: 100%;
+  }
+}
 @keyframes cmPrioritySweep {
   0%, 48% { transform: translateX(-130%) rotate(12deg); opacity: 0; }
   58% { opacity: 1; }

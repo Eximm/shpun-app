@@ -25,6 +25,15 @@ type DeepLinkFallback = {
   copyText: string;
 };
 
+type SubscriptionDevice = {
+  id: string;
+  platform: string | null;
+  osVersion: string | null;
+  deviceModel: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 type ClientLinks = Record<Platform, {
   title: string;
   market: string;
@@ -229,6 +238,20 @@ function serviceVariant(category?: string): "flex" | "flex_plus" | "marzban" {
   return "marzban";
 }
 
+function deviceTitle(device: SubscriptionDevice) {
+  return device.deviceModel?.trim() || device.platform?.trim() || "Device";
+}
+
+function deviceDetails(device: SubscriptionDevice) {
+  return [device.platform, device.osVersion].map((value) => value?.trim()).filter(Boolean).join(" \u2022 ");
+}
+
+function shortHwid(hwid: string) {
+  const clean = String(hwid || "").trim();
+  if (clean.length <= 14) return clean;
+  return `${clean.slice(0, 7)}\u2026${clean.slice(-5)}`;
+}
+
 export default function ConnectMarzban({ usi, service }: Props) {
   const { t } = useI18n();
 
@@ -255,6 +278,13 @@ export default function ConnectMarzban({ usi, service }: Props) {
   const [qrOpen, setQrOpen] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [deepLinkFallback, setDeepLinkFallback] = useState<DeepLinkFallback | null>(null);
+  const [devicesOpen, setDevicesOpen] = useState(false);
+  const [devicesLoading, setDevicesLoading] = useState(false);
+  const [devicesError, setDevicesError] = useState("");
+  const [devices, setDevices] = useState<SubscriptionDevice[]>([]);
+  const [deviceLimit, setDeviceLimit] = useState<number | null>(null);
+  const [deletingDevice, setDeletingDevice] = useState<SubscriptionDevice | null>(null);
+  const [deletePending, setDeletePending] = useState(false);
 
   const selectedClient = CLIENTS[client];
   const selectedLinks = selectedClient.links[platform];
@@ -379,6 +409,52 @@ export default function ConnectMarzban({ usi, service }: Props) {
     const links = CLIENTS[client].links[platform];
     if (!links.direct) return;
     openLinkSafe(links.direct);
+  }
+
+  async function loadDevices() {
+    setDevicesLoading(true);
+    setDevicesError("");
+    try {
+      const response = await apiFetch<{
+        devices?: SubscriptionDevice[];
+        limit?: number | null;
+      }>(`/services/${encodeURIComponent(String(usi))}/devices`);
+      setDevices(Array.isArray(response?.devices) ? response.devices : []);
+      setDeviceLimit(typeof response?.limit === "number" ? response.limit : null);
+    } catch (error: any) {
+      setDevicesError(String(error?.message || t("connectMarzban.devices.load_error")));
+    } finally {
+      setDevicesLoading(false);
+    }
+  }
+
+  function openDevices() {
+    setDevicesOpen(true);
+    setDeletingDevice(null);
+    void loadDevices();
+  }
+
+  async function deleteDevice() {
+    if (!deletingDevice || deletePending) return;
+    setDeletePending(true);
+    try {
+      await apiFetch(`/services/${encodeURIComponent(String(usi))}/devices`, {
+        method: "DELETE",
+        body: { hwid: deletingDevice.id },
+      });
+      const removedId = deletingDevice.id;
+      setDevices((current) => current.filter((device) => device.id !== removedId));
+      setDeletingDevice(null);
+      toast.success(t("connectMarzban.devices.deleted"), {
+        description: t("connectMarzban.devices.deleted_desc"),
+      });
+    } catch (error: any) {
+      toast.error(t("connectMarzban.devices.delete_error"), {
+        description: String(error?.message || t("connectMarzban.devices.try_again")),
+      });
+    } finally {
+      setDeletePending(false);
+    }
   }
 
   if (bridgeDeepLink) {
@@ -531,6 +607,23 @@ export default function ConnectMarzban({ usi, service }: Props) {
         </div>
       )}
 
+      {ready && (
+        <div className="card cm__devicesCard">
+          <div className="card__body cm__devicesCardBody">
+            <div className="cm__devicesIntro">
+              <span className="cm__devicesIntroIcon" aria-hidden="true">{"\u{1F4F1}"}</span>
+              <div>
+                <div className="cm__extraTitle">{t("connectMarzban.devices.title")}</div>
+                <div className="cm__extraSub">{t("connectMarzban.devices.desc")}</div>
+              </div>
+            </div>
+            <button className="btn" type="button" onClick={openDevices}>
+              {t("connectMarzban.devices.manage")}
+            </button>
+          </div>
+        </div>
+      )}
+
       {platformPickerOpen && createPortal(
         <div className="modal" role="dialog" aria-modal="true" onMouseDown={() => setPlatformPickerOpen(false)}>
           <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()}>
@@ -607,6 +700,86 @@ export default function ConnectMarzban({ usi, service }: Props) {
                         </button>
                       </div>
                     )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {devicesOpen && createPortal(
+        <div className="modal" role="dialog" aria-modal="true" onMouseDown={() => !deletePending && setDevicesOpen(false)}>
+          <div className="card modal__card cm__devicesModal" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="card__body">
+              <div className="modal__head">
+                <div>
+                  <div className="modal__title">{t("connectMarzban.devices.modal_title")}</div>
+                  <div className="cm__extraSub">
+                    {deviceLimit
+                      ? t("connectMarzban.devices.counter").replace("{count}", String(devices.length)).replace("{limit}", String(deviceLimit))
+                      : t("connectMarzban.devices.counter_no_limit").replace("{count}", String(devices.length))}
+                  </div>
+                </div>
+                <button className="btn modal__close" type="button" onClick={() => setDevicesOpen(false)}
+                  disabled={deletePending} aria-label={t("common.close")}>{"\u00D7"}</button>
+              </div>
+
+              <div className="modal__content">
+                {devicesLoading && <div className="pre">{"\u23F3"} {t("connect.loading")}</div>}
+
+                {!devicesLoading && devicesError && (
+                  <div className="cm__devicesError">
+                    <div>{devicesError}</div>
+                    <button className="btn" type="button" onClick={() => void loadDevices()}>
+                      {"\u21BB"} {t("connectAmneziaWG.retry")}
+                    </button>
+                  </div>
+                )}
+
+                {!devicesLoading && !devicesError && devices.length === 0 && (
+                  <div className="pre">{t("connectMarzban.devices.empty")}</div>
+                )}
+
+                {!devicesLoading && !devicesError && devices.length > 0 && (
+                  <div className="cm__deviceList">
+                    {devices.map((device) => (
+                      <div className="cm__deviceItem" key={device.id}>
+                        <div className="cm__deviceIcon" aria-hidden="true">{"\u{1F4F1}"}</div>
+                        <div className="cm__deviceInfo">
+                          <div className="cm__deviceTitle">{deviceTitle(device)}</div>
+                          {deviceDetails(device) && <div className="cm__deviceMeta">{deviceDetails(device)}</div>}
+                          <div className="cm__deviceMeta">
+                            {t("connectMarzban.devices.last_seen")}{" "}
+                            {new Date(device.updatedAt).toLocaleString()}
+                            {" \u2022 "}{shortHwid(device.id)}
+                          </div>
+                        </div>
+                        <button className="btn cm__deviceDelete" type="button"
+                          onClick={() => setDeletingDevice(device)}
+                          aria-label={t("connectMarzban.devices.remove")}>
+                          {"\u{1F5D1}"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {deletingDevice && (
+                  <div className="cm__deviceConfirm">
+                    <div className="cm__deviceConfirmTitle">{t("connectMarzban.devices.confirm_title")}</div>
+                    <div className="cm__extraSub">
+                      {t("connectMarzban.devices.confirm_desc").replace("{device}", deviceTitle(deletingDevice))}
+                    </div>
+                    <div className="actions actions--2 cm__extraSectionActions">
+                      <button className="btn" type="button" onClick={() => setDeletingDevice(null)} disabled={deletePending}>
+                        {t("common.cancel")}
+                      </button>
+                      <button className="btn btn--danger" type="button" onClick={() => void deleteDevice()} disabled={deletePending}>
+                        {deletePending ? t("connect.wait") : t("connectMarzban.devices.remove")}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
