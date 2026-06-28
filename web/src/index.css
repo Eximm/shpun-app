@@ -1838,6 +1838,10 @@ button, a { -webkit-tap-highlight-color: transparent; }
   border-radius: 8px;
   background: rgba(77,215,255,0.08);
 }
+.cm__devicesManage {
+  min-width: 210px;
+  box-shadow: 0 8px 22px rgba(77,215,255,0.16);
+}
 .cm__devicesModal {
   width: min(620px, 100%);
 }
@@ -1873,7 +1877,15 @@ button, a { -webkit-tap-highlight-color: transparent; }
   width: 42px;
   min-width: 42px;
   padding: 0;
-  color: var(--bad);
+  color: #ff6b85;
+  border-color: rgba(255,77,109,0.52);
+  background: rgba(255,77,109,0.16);
+  box-shadow: 0 0 0 1px rgba(255,77,109,0.08), 0 6px 18px rgba(255,77,109,0.12);
+}
+.cm__deviceDelete:hover {
+  color: #ffffff;
+  border-color: rgba(255,77,109,0.82);
+  background: rgba(255,77,109,0.34);
 }
 .cm__deviceConfirm,
 .cm__devicesError {

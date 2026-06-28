@@ -238,18 +238,33 @@ function serviceVariant(category?: string): "flex" | "flex_plus" | "marzban" {
   return "marzban";
 }
 
-function deviceTitle(device: SubscriptionDevice) {
-  return device.deviceModel?.trim() || device.platform?.trim() || "Device";
+function deviceTitle(device: SubscriptionDevice, fallback: string) {
+  return device.deviceModel?.trim() || device.platform?.trim() || fallback;
 }
 
 function deviceDetails(device: SubscriptionDevice) {
-  return [device.platform, device.osVersion].map((value) => value?.trim()).filter(Boolean).join(" \u2022 ");
+  const platform = device.platform?.trim() || "";
+  const version = device.osVersion?.trim() || "";
+  if (!platform) return version;
+  if (!version) return platform;
+  if (version.toLowerCase().startsWith(platform.toLowerCase())) return version;
+
+  if (platform.toLowerCase() === "windows") {
+    const major = version.match(/^(\d+)/)?.[1];
+    return major ? `Windows ${major}` : "Windows";
+  }
+
+  return `${platform} ${version}`;
 }
 
-function shortHwid(hwid: string) {
-  const clean = String(hwid || "").trim();
-  if (clean.length <= 14) return clean;
-  return `${clean.slice(0, 7)}\u2026${clean.slice(-5)}`;
+function deviceUpdatedDate(value: string) {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "";
+  return date.toLocaleDateString(undefined, {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
 }
 
 export default function ConnectMarzban({ usi, service }: Props) {
@@ -617,7 +632,7 @@ export default function ConnectMarzban({ usi, service }: Props) {
                 <div className="cm__extraSub">{t("connectMarzban.devices.desc")}</div>
               </div>
             </div>
-            <button className="btn" type="button" onClick={openDevices}>
+            <button className="btn btn--primary cm__devicesManage" type="button" onClick={openDevices}>
               {t("connectMarzban.devices.manage")}
             </button>
           </div>
@@ -748,12 +763,11 @@ export default function ConnectMarzban({ usi, service }: Props) {
                       <div className="cm__deviceItem" key={device.id}>
                         <div className="cm__deviceIcon" aria-hidden="true">{"\u{1F4F1}"}</div>
                         <div className="cm__deviceInfo">
-                          <div className="cm__deviceTitle">{deviceTitle(device)}</div>
+                          <div className="cm__deviceTitle">{deviceTitle(device, t("connectMarzban.devices.unknown"))}</div>
                           {deviceDetails(device) && <div className="cm__deviceMeta">{deviceDetails(device)}</div>}
                           <div className="cm__deviceMeta">
                             {t("connectMarzban.devices.last_seen")}{" "}
-                            {new Date(device.updatedAt).toLocaleString()}
-                            {" \u2022 "}{shortHwid(device.id)}
+                            {deviceUpdatedDate(device.updatedAt)}
                           </div>
                         </div>
                         <button className="btn cm__deviceDelete" type="button"
@@ -770,7 +784,7 @@ export default function ConnectMarzban({ usi, service }: Props) {
                   <div className="cm__deviceConfirm">
                     <div className="cm__deviceConfirmTitle">{t("connectMarzban.devices.confirm_title")}</div>
                     <div className="cm__extraSub">
-                      {t("connectMarzban.devices.confirm_desc").replace("{device}", deviceTitle(deletingDevice))}
+                      {t("connectMarzban.devices.confirm_desc").replace("{device}", deviceTitle(deletingDevice, t("connectMarzban.devices.unknown")))}
                     </div>
                     <div className="actions actions--2 cm__extraSectionActions">
                       <button className="btn" type="button" onClick={() => setDeletingDevice(null)} disabled={deletePending}>
