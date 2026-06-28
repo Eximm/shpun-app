@@ -135,6 +135,7 @@ export const RU: Dict = {
 
   // common
   "common.close": "Закрыть",
+  "common.cancel": "Отмена",
   "common.ok": "ОК",
 
   // onboarding
@@ -1266,6 +1267,7 @@ export const EN: Dict = {
 
   // common
   "common.close": "Close",
+  "common.cancel": "Cancel",
   "common.ok": "OK",
 
   // onboarding
