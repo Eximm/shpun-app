@@ -5,6 +5,7 @@ import {
   shmShpunAppAdminSettingsGet,
   shmShpunAppAdminSettingsSet,
   shmShpunAppAdminStatus,
+  shmShpunAppAdminPartnerPercentSet,
 } from "../../shared/shm/shmClient.js";
 import { linkDb } from "../../shared/linkdb/db.js";
 import {
@@ -40,6 +41,7 @@ import {
 } from "../../shared/linkdb/serviceCategoriesRepo.js";
 import {
   deleteReferralAlias,
+  isValidReferralAlias,
   listReferralAliases,
   saveReferralAlias,
 } from "../../shared/linkdb/referralAliasesRepo.js";
@@ -138,7 +140,28 @@ export async function adminRoutes(app: FastifyInstance) {
     if (!s?.shmSessionId) return reply.code(401).send({ ok: false });
     if (!(await ensureAdmin(s.shmSessionId))) return reply.code(403).send({ ok: false, error: "not_admin" });
     try {
-      return reply.send({ ok: true, item: saveReferralAlias(req.body as any) });
+      const body = (req.body ?? {}) as any;
+      const partnerId = Math.trunc(Number(body.partnerId));
+      const incomePercent = Math.trunc(Number(body.partnerRewardPercent ?? 0));
+      if (!isValidReferralAlias(body.alias)) throw new Error("invalid_alias");
+      if (!Number.isFinite(partnerId) || partnerId <= 0) throw new Error("invalid_partner_id");
+      if (!Number.isFinite(incomePercent) || incomePercent < 0 || incomePercent > 100) {
+        throw new Error("invalid_reward_percent");
+      }
+
+      const shmResult = await shmShpunAppAdminPartnerPercentSet(
+        s.shmSessionId,
+        partnerId,
+        incomePercent
+      );
+      if (!shmResult.ok || !(shmResult.json as any)?.ok) {
+        return reply.code(502).send({
+          ok: false,
+          error: (shmResult.json as any)?.error || "partner_percent_not_saved",
+        });
+      }
+
+      return reply.send({ ok: true, item: saveReferralAlias(body) });
     } catch (error: any) {
       const code = String(error?.message ?? "invalid_referral_alias");
       return reply.code(code.includes("UNIQUE") ? 409 : 400).send({ ok: false, error: code });

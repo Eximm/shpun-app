@@ -246,7 +246,6 @@ async function tryAttachPartner(
         referral_alias: campaign.alias,
         first_pay: campaign.first_payment_bonus_percent,
         first_pay_campaign: campaign.campaign_code ?? campaign.alias,
-        partner_income_percent: campaign.partner_reward_percent,
         referral_secret: String(process.env.SHM_REFERRAL_SECRET ?? ""),
       } : {}),
     });

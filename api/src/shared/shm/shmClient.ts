@@ -488,6 +488,17 @@ export async function shmShpunAppAdminSettingsSet(
   return await shmShpunAppTemplate<any>(shmSessionId, 'admin.settings.set', payload)
 }
 
+export async function shmShpunAppAdminPartnerPercentSet(
+  shmSessionId: string,
+  partnerId: number,
+  incomePercent: number
+) {
+  return await shmShpunAppTemplate<any>(shmSessionId, 'admin.partner.percent.set', {
+    partner_id: partnerId,
+    income_percent: incomePercent,
+  })
+}
+
 // =====================
 // PUBLIC ORDER RULES
 // =====================
