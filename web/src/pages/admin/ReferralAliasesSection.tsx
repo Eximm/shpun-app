@@ -153,11 +153,11 @@ export function ReferralAliasesSection() {
         </label>
 
         <label className="field">
-          <span className="field__label">Название кампании</span>
+          <span className="field__label">Имя партнёра или кампании</span>
           <input
             className="input"
             value={form.campaignCode}
-            placeholder="необязательно"
+            placeholder="например: канал или имя блогера"
             onChange={(event) => setForm({ ...form, campaignCode: event.target.value })}
           />
         </label>
