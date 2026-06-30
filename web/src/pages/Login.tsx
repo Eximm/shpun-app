@@ -206,6 +206,7 @@ function mapAuthError(raw: string, t: (k: string, fb?: string) => string): strin
     case "password_too_short_or_weak":  return t("login.err.password_too_short");
     case "login_taken":
     case "user_exists":                 return t("login.err.login_taken");
+    case "registration_limited":        return t("login.err.registration_limited");
     case "not_authenticated":           return t("login.err.not_authenticated");
     case "no_shm_session":              return t("login.err.no_shm_session");
     case "init_data_required":          return t("login.err.init_data_required");

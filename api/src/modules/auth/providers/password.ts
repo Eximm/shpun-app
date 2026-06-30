@@ -320,7 +320,12 @@ export async function passwordAuth(body: any): Promise<AuthResult> {
           return {
             ok: false,
             status: reg.status,
-            error: "shm_register_failed",
+            error:
+              reg.status === 409
+                ? "login_taken"
+                : reg.status === 429
+                  ? "registration_limited"
+                  : "shm_register_failed",
             detail: reg.detail,
           };
         }
@@ -357,7 +362,12 @@ export async function passwordAuth(body: any): Promise<AuthResult> {
           return {
             ok: false,
             status: reg.status,
-            error: "shm_register_failed",
+            error:
+              reg.status === 409
+                ? "login_taken"
+                : reg.status === 429
+                  ? "registration_limited"
+                  : "shm_register_failed",
             detail: reg.detail,
           };
         }
