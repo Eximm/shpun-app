@@ -29,6 +29,11 @@ export function FirstPayBonusModal({
     <div className="modal firstPayBonusModal" role="dialog" aria-modal="true">
       <div className="firstPayBonusModal__card">
         <div className="firstPayBonusModal__glow" />
+        <div className="firstPayBonusModal__fireworks" aria-hidden="true">
+          {Array.from({ length: 18 }, (_, index) => (
+            <i key={index} style={{ "--particle": index } as React.CSSProperties} />
+          ))}
+        </div>
         <div className="firstPayBonusModal__icon" aria-hidden="true">🎁</div>
         <div className="firstPayBonusModal__eyebrow">Бонус уже доступен</div>
         <div className="firstPayBonusModal__percent">+{percent}%</div>

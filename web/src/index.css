@@ -3279,7 +3279,37 @@ button, a { -webkit-tap-highlight-color: transparent; }
   filter: blur(48px);
   pointer-events: none;
 }
-.firstPayBonusModal__icon { position: relative; font-size: 38px; line-height: 1; }
+.firstPayBonusModal__fireworks {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.firstPayBonusModal__fireworks i {
+  --angle: calc(var(--particle) * 20deg);
+  --distance: 92px;
+  position: absolute;
+  top: 28%;
+  left: 50%;
+  width: 6px;
+  height: 11px;
+  border-radius: 999px;
+  background: hsl(calc(var(--particle) * 31deg) 92% 68%);
+  box-shadow: 0 0 9px currentColor;
+  opacity: 0;
+  transform: translate(-50%,-50%) rotate(var(--angle)) translateY(0) scale(.3);
+  animation: firstPayFirework 900ms cubic-bezier(.16,.72,.25,1) calc(100ms + (var(--particle) % 3) * 65ms) both;
+}
+.firstPayBonusModal__fireworks i:nth-child(3n) { width: 5px; height: 5px; }
+.firstPayBonusModal__fireworks i:nth-child(4n) { border-radius: 2px; }
+.firstPayBonusModal__fireworks i:nth-child(3n+1) { --distance: 72px; }
+.firstPayBonusModal__fireworks i:nth-child(3n+2) { --distance: 112px; }
+.firstPayBonusModal__icon {
+  position: relative;
+  font-size: 38px;
+  line-height: 1;
+  animation: firstPayGiftPop 720ms cubic-bezier(.2,1.4,.35,1) both;
+}
 .firstPayBonusModal__eyebrow {
   position: relative;
   margin-top: 13px;
@@ -3305,6 +3335,23 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .firstPayBonusModal__text { position: relative; margin: 13px auto 0; max-width: 340px; color: rgba(255,255,255,0.68); font-size: 14px; line-height: 1.55; }
 .firstPayBonusModal__example { position: relative; margin-top: 16px; padding: 11px 13px; border: 1px solid rgba(77,215,255,0.12); border-radius: 13px; background: rgba(77,215,255,0.055); color: rgba(218,248,255,0.78); font-size: 12px; line-height: 1.4; }
 .firstPayBonusModal__button { position: relative; width: 100%; margin-top: 18px; }
+@keyframes firstPayFirework {
+  0% { opacity: 0; transform: translate(-50%,-50%) rotate(var(--angle)) translateY(0) scale(.25); }
+  18% { opacity: 1; }
+  72% { opacity: .92; }
+  100% { opacity: 0; transform: translate(-50%,-50%) rotate(var(--angle)) translateY(calc(-1 * var(--distance))) scale(.85); }
+}
+@keyframes firstPayGiftPop {
+  0% { opacity: 0; transform: translateY(12px) scale(.55) rotate(-8deg); }
+  58% { opacity: 1; transform: translateY(-3px) scale(1.14) rotate(5deg); }
+  100% { opacity: 1; transform: translateY(0) scale(1) rotate(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .firstPayBonusModal__fireworks i,
+  .firstPayBonusModal__icon {
+    animation: none !important;
+  }
+}
 
 @media (max-width: 900px) { .admin-metricsGrid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
 @media (max-width: 720px) {

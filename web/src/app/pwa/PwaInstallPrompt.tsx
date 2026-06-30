@@ -11,6 +11,7 @@ import {
 import { toast } from "../../shared/ui/toast";
 import { isTelegramMiniAppEnv } from "../../shared/telegram/sdk";
 import { hasSeenOnboardingPrompt, markOnboardingPromptSeen } from "../../shared/onboardingPromptSession";
+import { useOnboardingPromptSlot } from "../../shared/onboardingPromptCoordinator";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -42,10 +43,11 @@ export function PwaInstallPrompt({ enabled = true }: PwaInstallPromptProps) {
   const loc = useLocation();
   const guide = useMemo(() => pwaGuideKey(detectPwaInstallPlatform()), []);
 
-  const [open, setOpen] = useState(false);
+  const [wantsOpen, setWantsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
   const [prompt, setPrompt] = useState<BeforeInstallPromptEvent | null>(() => getPwaInstallPrompt());
+  const open = useOnboardingPromptSlot("pwa_install", enabled && wantsOpen);
 
   useEffect(() => {
     const onInstallAvailable = () => {
@@ -57,13 +59,13 @@ export function PwaInstallPrompt({ enabled = true }: PwaInstallPromptProps) {
       if (shouldTreatPwaAsInstalled() || isTelegramMiniAppEnv() || hasShownThisSession()) return;
       markShownThisSession();
       setShowGuide(false);
-      setOpen(true);
+      setWantsOpen(true);
     };
 
     const onInstalled = () => {
       markPwaInstalled();
       setPrompt(null);
-      setOpen(false);
+      setWantsOpen(false);
       toast.success(t("pwa.onboarding.install.accepted.title"), {
         description: t("pwa.onboarding.install.accepted.text"),
         durationMs: 3500,
@@ -80,7 +82,7 @@ export function PwaInstallPrompt({ enabled = true }: PwaInstallPromptProps) {
       setPrompt(next);
       markShownThisSession();
       setShowGuide(false);
-      setOpen(true);
+      setWantsOpen(true);
     }, 1200);
 
     return () => {
@@ -91,7 +93,7 @@ export function PwaInstallPrompt({ enabled = true }: PwaInstallPromptProps) {
   }, [enabled, t]);
 
   useEffect(() => {
-    if (!enabled || shouldTreatPwaAsInstalled() || isTelegramMiniAppEnv()) setOpen(false);
+    if (!enabled || shouldTreatPwaAsInstalled() || isTelegramMiniAppEnv()) setWantsOpen(false);
   }, [enabled, loc.pathname]);
 
   async function install() {
@@ -109,13 +111,13 @@ export function PwaInstallPrompt({ enabled = true }: PwaInstallPromptProps) {
 
       if (choice?.outcome === "accepted") {
         markPwaInstalled();
-        setOpen(false);
+        setWantsOpen(false);
       } else {
         toast.info(t("pwa.onboarding.install.dismissed.title"), {
           description: t("pwa.onboarding.install.dismissed.text"),
           durationMs: 3000,
         });
-        setOpen(false);
+        setWantsOpen(false);
       }
     } catch {
       setShowGuide(true);
@@ -125,7 +127,7 @@ export function PwaInstallPrompt({ enabled = true }: PwaInstallPromptProps) {
   }
 
   function close() {
-    setOpen(false);
+    setWantsOpen(false);
     setShowGuide(false);
   }
 

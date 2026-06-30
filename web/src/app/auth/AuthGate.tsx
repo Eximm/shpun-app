@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMe, refetchMe } from "./useMe";
 import { FirstLoginOnboardingModal } from "./FirstLoginOnboardingModal";
 import { FirstPayBonusModal } from "./FirstPayBonusModal";
+import { useOnboardingPromptSlot } from "../../shared/onboardingPromptCoordinator";
 import {
   enablePushByUserGesture,
   ensurePushSubscribed,
@@ -24,6 +25,23 @@ const AUTH_PENDING_AT_KEY = "auth:pending_at";
 const AUTH_SESSION_ID_PREFIX = "auth.session.id:u:";
 const AUTH_EVER_KEY = "auth:ever_succeeded";
 const ONBOARDING_DISMISSED_PREFIX = "onboarding.dismissed:";
+const FIRST_PAY_BONUS_DISMISSED_PREFIX = "first-pay-bonus.dismissed:";
+
+function readFirstPayBonusDismissed(userId: number): boolean {
+  try {
+    return sessionStorage.getItem(`${FIRST_PAY_BONUS_DISMISSED_PREFIX}${userId}`) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeFirstPayBonusDismissed(userId: number) {
+  try {
+    sessionStorage.setItem(`${FIRST_PAY_BONUS_DISMISSED_PREFIX}${userId}`, "1");
+  } catch {
+    // ignore
+  }
+}
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -337,6 +355,15 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     Number(firstPayBonus?.percent ?? 0) > 0 &&
     !Boolean(firstPayBonus?.bannerSeen) &&
     !firstPayBonusDismissed;
+  const profilePromptGranted = useOnboardingPromptSlot("profile", needsFirstLoginOnboarding);
+  const bonusPromptGranted = useOnboardingPromptSlot(
+    "first_pay_bonus",
+    !needsFirstLoginOnboarding && showFirstPayBonus
+  );
+  const pushPromptGranted = useOnboardingPromptSlot(
+    "push",
+    !needsFirstLoginOnboarding && !showFirstPayBonus && pushPromptOpen
+  );
 
   const authInProgress = hasFreshAuthPending();
 
@@ -414,9 +441,11 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!uid || !currentAuthSessionId) {
       setOnboardingDismissed(false);
+      setFirstPayBonusDismissed(false);
       return;
     }
     setOnboardingDismissed(readDismissed(uid, currentAuthSessionId));
+    setFirstPayBonusDismissed(readFirstPayBonusDismissed(uid));
   }, [uid, currentAuthSessionId]);
 
   useEffect(() => {
@@ -600,19 +629,22 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       {children}
 
       <FirstLoginOnboardingModal
-        open={needsFirstLoginOnboarding}
+        open={profilePromptGranted}
         me={me}
         onSkip={onSkipOnboarding}
       />
 
       <FirstPayBonusModal
-        open={!needsFirstLoginOnboarding && showFirstPayBonus}
+        open={bonusPromptGranted}
         percent={Number(firstPayBonus?.percent ?? 0)}
-        onClose={() => setFirstPayBonusDismissed(true)}
+        onClose={() => {
+          if (uid) writeFirstPayBonusDismissed(uid);
+          setFirstPayBonusDismissed(true);
+        }}
       />
 
       <PushOnboardingModal
-        open={!needsFirstLoginOnboarding && !showFirstPayBonus && pushPromptOpen}
+        open={pushPromptGranted}
         busy={pushPromptBusy}
         permission={String(pushState.permission)}
         guide={pushGuideOpen}
