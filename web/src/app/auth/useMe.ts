@@ -40,6 +40,12 @@ export type MeResponse = {
   bonus: number;
   discount: number;
   referralsCount?: number;
+  referralBonus?: {
+    pending: boolean;
+    percent: number;
+    campaign?: string;
+    bannerSeen: boolean;
+  };
   shm?: { status?: number };
   meRaw?: any;
 };

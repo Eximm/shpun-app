@@ -3255,6 +3255,57 @@ button, a { -webkit-tap-highlight-color: transparent; }
   font-weight: 900;
 }
 
+.firstPayBonusModal { z-index: 10002; padding: 18px; }
+.firstPayBonusModal__card {
+  position: relative;
+  overflow: hidden;
+  width: min(420px,100%);
+  padding: 26px 24px 22px;
+  border: 1px solid rgba(124,92,255,0.34);
+  border-radius: 24px;
+  background: linear-gradient(155deg, rgba(30,25,58,0.98), rgba(12,18,30,0.99));
+  box-shadow: 0 28px 80px rgba(0,0,0,0.52), 0 12px 42px rgba(124,92,255,0.18);
+  text-align: center;
+}
+.firstPayBonusModal__glow {
+  position: absolute;
+  width: 240px;
+  height: 240px;
+  top: -150px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: rgba(124,92,255,0.34);
+  filter: blur(48px);
+  pointer-events: none;
+}
+.firstPayBonusModal__icon { position: relative; font-size: 38px; line-height: 1; }
+.firstPayBonusModal__eyebrow {
+  position: relative;
+  margin-top: 13px;
+  color: rgba(183,172,255,0.86);
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.firstPayBonusModal__percent {
+  position: relative;
+  margin-top: 8px;
+  background: linear-gradient(135deg,#a892ff,#55dcff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-size: 56px;
+  font-weight: 1000;
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+.firstPayBonusModal__title { position: relative; margin: 7px 0 0; font-size: 21px; line-height: 1.2; }
+.firstPayBonusModal__text { position: relative; margin: 13px auto 0; max-width: 340px; color: rgba(255,255,255,0.68); font-size: 14px; line-height: 1.55; }
+.firstPayBonusModal__example { position: relative; margin-top: 16px; padding: 11px 13px; border: 1px solid rgba(77,215,255,0.12); border-radius: 13px; background: rgba(77,215,255,0.055); color: rgba(218,248,255,0.78); font-size: 12px; line-height: 1.4; }
+.firstPayBonusModal__button { position: relative; width: 100%; margin-top: 18px; }
+
 @media (max-width: 900px) { .admin-metricsGrid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
 @media (max-width: 720px) {
   .admin-sectionHead, .admin-overviewGrid, .admin-compactGrid, .admin-tabsGrid, .admin-metricsGrid { grid-template-columns: 1fr; }

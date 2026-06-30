@@ -4,6 +4,7 @@ import { Navigate, useLocation } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMe, refetchMe } from "./useMe";
 import { FirstLoginOnboardingModal } from "./FirstLoginOnboardingModal";
+import { FirstPayBonusModal } from "./FirstPayBonusModal";
 import {
   enablePushByUserGesture,
   ensurePushSubscribed,
@@ -306,6 +307,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     disabledByUser: false,
   });
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
+  const [firstPayBonusDismissed, setFirstPayBonusDismissed] = useState(false);
   const telegramMiniApp = useMemo(() => isTelegramMiniAppEnv(), []);
 
   const uid = useMemo(() => {
@@ -329,6 +331,12 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   const needsFirstLoginOnboarding =
     needsFirstLoginOnboardingRaw && !onboardingDismissed;
+  const firstPayBonus = (me as any)?.referralBonus;
+  const showFirstPayBonus =
+    Boolean(firstPayBonus?.pending) &&
+    Number(firstPayBonus?.percent ?? 0) > 0 &&
+    !Boolean(firstPayBonus?.bannerSeen) &&
+    !firstPayBonusDismissed;
 
   const authInProgress = hasFreshAuthPending();
 
@@ -597,8 +605,14 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         onSkip={onSkipOnboarding}
       />
 
+      <FirstPayBonusModal
+        open={!needsFirstLoginOnboarding && showFirstPayBonus}
+        percent={Number(firstPayBonus?.percent ?? 0)}
+        onClose={() => setFirstPayBonusDismissed(true)}
+      />
+
       <PushOnboardingModal
-        open={!needsFirstLoginOnboarding && pushPromptOpen}
+        open={!needsFirstLoginOnboarding && !showFirstPayBonus && pushPromptOpen}
         busy={pushPromptBusy}
         permission={String(pushState.permission)}
         guide={pushGuideOpen}

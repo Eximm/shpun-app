@@ -9,6 +9,8 @@ import {
   shmRequestUserEmailVerify,
   shmSetUserEmail,
   shmShpunAppAdminStatus,
+  shmShpunAppReferralBonusDismiss,
+  shmShpunAppReferralBonusStatus,
   toFormUrlEncoded,
 } from "../../shared/shm/shmClient.js";
 
@@ -128,11 +130,12 @@ export async function userRoutes(app: FastifyInstance) {
       return reply.code(401).send({ ok: false, error: "not_authenticated" });
     }
 
-    const [meRes, emailRes, tgRes, adminRes] = await Promise.allSettled([
+    const [meRes, emailRes, tgRes, adminRes, referralBonusRes] = await Promise.allSettled([
       fetchMe(s.shmSessionId),
       readCurrentEmail(s.shmSessionId).catch(() => ({ email: null, emailVerified: null })),
       fetchTelegramUser(s.shmSessionId),
       shmShpunAppAdminStatus(s.shmSessionId),
+      shmShpunAppReferralBonusStatus(s.shmSessionId),
     ]);
 
     const meResult = meRes.status === "fulfilled" ? meRes.value : null;
@@ -149,6 +152,9 @@ export async function userRoutes(app: FastifyInstance) {
     const tg        = tgRes.status === "fulfilled" ? tgRes.value : null;
     const adminRaw  = adminRes.status === "fulfilled" ? adminRes.value : null;
     const admin     = adminRaw?.ok ? parseAdminStatus(adminRaw) : { role: null as string | null, isAdmin: false };
+    const referralBonusRaw = referralBonusRes.status === "fulfilled"
+      ? (referralBonusRes.value as any)?.json
+      : null;
 
     const telegram = tg ? {
       login:    tg.login    ?? null,
@@ -181,6 +187,12 @@ export async function userRoutes(app: FastifyInstance) {
       bonus:         toNum(meRaw.bonus, 0),
       discount:      toNum(meRaw.discount, 0),
       referralsCount: toNum(meRaw.referrals_count, 0),
+      referralBonus: {
+        pending: Boolean(referralBonusRaw?.pending),
+        percent: toNum(referralBonusRaw?.percent, 0),
+        campaign: String(referralBonusRaw?.campaign ?? ""),
+        bannerSeen: Boolean(referralBonusRaw?.banner_seen),
+      },
       shm: { status: 200 },
     };
 
@@ -189,6 +201,18 @@ export async function userRoutes(app: FastifyInstance) {
     }
 
     return reply.send(payload);
+  });
+
+  app.post("/user/referral-bonus/dismiss", async (req, reply) => {
+    const s = getSessionFromRequest(req);
+    if (!s?.shmSessionId) {
+      return reply.code(401).send({ ok: false, error: "not_authenticated" });
+    }
+    const result = await shmShpunAppReferralBonusDismiss(s.shmSessionId);
+    if (!result.ok || !(result.json as any)?.ok) {
+      return reply.code(502).send({ ok: false, error: "bonus_banner_not_saved" });
+    }
+    return reply.send({ ok: true });
   });
 
   // POST /user/profile

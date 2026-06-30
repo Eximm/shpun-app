@@ -529,6 +529,14 @@ export async function shmShpunAppReferralsLink(shmSessionId: string) {
   return await shmShpunAppTemplate<any>(shmSessionId, 'referrals.link')
 }
 
+export async function shmShpunAppReferralBonusStatus(shmSessionId: string) {
+  return await shmShpunAppTemplate<any>(shmSessionId, 'referrals.bonus.status')
+}
+
+export async function shmShpunAppReferralBonusDismiss(shmSessionId: string) {
+  return await shmShpunAppTemplate<any>(shmSessionId, 'referrals.bonus.dismiss')
+}
+
 export async function shmShpunAppPaymentsRequisites(shmSessionId: string) {
   return await shmShpunAppTemplate<any>(shmSessionId, 'payments.requisites')
 }
