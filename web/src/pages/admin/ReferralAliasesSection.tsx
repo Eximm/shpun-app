@@ -35,6 +35,7 @@ export function ReferralAliasesSection() {
   const [items, setItems] = useState<AliasItem[]>([]);
   const [form, setForm] = useState<PartnerForm>(createEmptyForm);
   const [editingAlias, setEditingAlias] = useState("");
+  const [creating, setCreating] = useState(false);
   const [message, setMessage] = useState("");
 
   async function load() {
@@ -50,10 +51,19 @@ export function ReferralAliasesSection() {
   function clearForm() {
     setForm(createEmptyForm());
     setEditingAlias("");
+    setCreating(false);
+    setMessage("");
+  }
+
+  function createPartner() {
+    setForm(createEmptyForm());
+    setEditingAlias("");
+    setCreating(true);
     setMessage("");
   }
 
   function edit(item: AliasItem) {
+    setCreating(false);
     setEditingAlias(item.alias);
     setForm({
       alias: item.alias,
@@ -99,10 +109,22 @@ export function ReferralAliasesSection() {
   return (
     <div className="card"><div className="card__body">
       <div className="kicker">Партнёрские кампании</div>
-      <h2 className="h1">{editingAlias ? "Редактирование партнёра" : "Новый партнёр"}</h2>
+      <h2 className="h1">Партнёры</h2>
       <p className="p">
-        Создайте произвольную ссылку и задайте индивидуальные условия. Пустой процент означает 0%.
+        У каждого партнёра своя ссылка, условия первого пополнения и размер вознаграждения.
       </p>
+
+      {!creating && !editingAlias && (
+        <button className="btn btn--primary admin-gap-top-md" type="button" onClick={createPartner}>
+          Новый партнёр
+        </button>
+      )}
+
+      {(creating || editingAlias) && <>
+      <h3 className="h2 admin-gap-top-md">
+        {editingAlias ? `Редактирование: ${editingAlias}` : "Создание партнёра"}
+      </h3>
+      <p className="p">Заполните условия вручную. Пустой процент означает 0%.</p>
 
       <div className="grid admin-gap-top-md">
         <label className="field">
@@ -185,13 +207,13 @@ export function ReferralAliasesSection() {
         <button className="btn btn--primary" type="button" onClick={() => void save()}>
           {editingAlias ? "Сохранить изменения" : "Добавить партнёра"}
         </button>
-        {editingAlias && (
-          <button className="btn btn--soft" type="button" onClick={clearForm}>Отмена</button>
-        )}
+        <button className="btn btn--soft" type="button" onClick={clearForm}>Отмена</button>
       </div>
+      </>}
       {message && <p className="p">{message}</p>}
 
       <div className="admin-gap-top-md">
+        <h3 className="h2">Созданные партнёры</h3>
         {items.length === 0 && <p className="p">Партнёры пока не добавлены.</p>}
         {items.map((item) => (
           <div className="card" key={item.id}><div className="card__body">
