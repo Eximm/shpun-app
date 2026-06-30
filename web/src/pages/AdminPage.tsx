@@ -11,6 +11,7 @@ import { BroadcastsSection } from "./admin/BroadcastsSection";
 import { OrderRulesSection } from "./admin/OrderRulesSection";
 import { TrialProtectionSection } from "./admin/TrialProtectionSection";
 import { ServiceCategoriesSection } from "./admin/ServiceCategoriesSection";
+import { ReferralAliasesSection } from "./admin/ReferralAliasesSection";
 import type { AdminTab } from "./admin/types";
 
 export function AdminPage() {
@@ -50,6 +51,7 @@ export function AdminPage() {
             <AdminTabButton active={tab === "orderRules"}      onClick={() => setTab("orderRules")}      title={t("admin.tab.orders")}     subtitle={t("admin.tab.orders.sub")} />
             <AdminTabButton active={tab === "trialProtection"} onClick={() => setTab("trialProtection")} title={t("admin.tab.trial")}      subtitle={t("admin.tab.trial.sub")} />
             <AdminTabButton active={tab === "serviceCategories"} onClick={() => setTab("serviceCategories")} title={t("admin.tab.categories")} subtitle={t("admin.tab.categories.sub")} />
+            <AdminTabButton active={tab === "referralAliases"} onClick={() => setTab("referralAliases")} title="Реферальные ссылки" subtitle="Блогеры" />
           </div>
         </div>
       </div>
@@ -60,6 +62,7 @@ export function AdminPage() {
         {tab === "orderRules"      && <OrderRulesSection />}
         {tab === "trialProtection" && <TrialProtectionSection />}
         {tab === "serviceCategories" && <ServiceCategoriesSection />}
+        {tab === "referralAliases" && <ReferralAliasesSection />}
       </div>
     </div>
   );

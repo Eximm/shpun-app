@@ -38,6 +38,11 @@ import {
   updateServiceCategory,
   deleteServiceCategory,
 } from "../../shared/linkdb/serviceCategoriesRepo.js";
+import {
+  deleteReferralAlias,
+  listReferralAliases,
+  saveReferralAlias,
+} from "../../shared/linkdb/referralAliasesRepo.js";
 
 async function ensureAdmin(shmSessionId: string) {
   const r = await shmShpunAppAdminStatus(shmSessionId);
@@ -121,6 +126,35 @@ function tryParseMeta(metaJson: unknown) {
 }
 
 export async function adminRoutes(app: FastifyInstance) {
+  app.get("/admin/referral-aliases", async (req, reply) => {
+    const s = getSessionFromRequest(req);
+    if (!s?.shmSessionId) return reply.code(401).send({ ok: false });
+    if (!(await ensureAdmin(s.shmSessionId))) return reply.code(403).send({ ok: false, error: "not_admin" });
+    return reply.send({ ok: true, items: listReferralAliases() });
+  });
+
+  app.put("/admin/referral-aliases", async (req, reply) => {
+    const s = getSessionFromRequest(req);
+    if (!s?.shmSessionId) return reply.code(401).send({ ok: false });
+    if (!(await ensureAdmin(s.shmSessionId))) return reply.code(403).send({ ok: false, error: "not_admin" });
+    try {
+      return reply.send({ ok: true, item: saveReferralAlias(req.body as any) });
+    } catch (error: any) {
+      const code = String(error?.message ?? "invalid_referral_alias");
+      return reply.code(code.includes("UNIQUE") ? 409 : 400).send({ ok: false, error: code });
+    }
+  });
+
+  app.delete("/admin/referral-aliases/:id", async (req, reply) => {
+    const s = getSessionFromRequest(req);
+    if (!s?.shmSessionId) return reply.code(401).send({ ok: false });
+    if (!(await ensureAdmin(s.shmSessionId))) return reply.code(403).send({ ok: false, error: "not_admin" });
+    const deleted = deleteReferralAlias((req.params as any)?.id);
+    return deleted
+      ? reply.send({ ok: true })
+      : reply.code(404).send({ ok: false, error: "alias_not_found" });
+  });
+
   app.get("/admin/settings", async (req, reply) => {
     const s = getSessionFromRequest(req);
     if (!s?.shmSessionId) return reply.code(401).send({ ok: false });

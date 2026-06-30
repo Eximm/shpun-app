@@ -53,3 +53,6 @@ api/data/*.db-*
 docker-data/
 web/referral-nudge-preview.svg
 telegram-marzban-happ-miniapp.html
+
+# Local SHM billing templates (contain deployment-specific logic/secrets)
+local-billing/

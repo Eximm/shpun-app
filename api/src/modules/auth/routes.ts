@@ -16,6 +16,10 @@ import {
   shmTelegramWebAuth,
   toFormUrlEncoded,
 } from "../../shared/shm/shmClient.js";
+import {
+  findReferralAlias,
+  recordReferralAliasRegistration,
+} from "../../shared/linkdb/referralAliasesRepo.js";
 
 /* ============================================================
    Helpers
@@ -224,14 +228,29 @@ async function callShmTemplate(
 
 async function tryAttachPartner(
   shmSessionId: string,
-  partnerIdRaw: any
+  partnerIdRaw: any,
+  referralAliasRaw?: any
 ): Promise<void> {
-  const partnerId = Number(partnerIdRaw ?? 0);
+  const referralAlias = String(referralAliasRaw ?? "").trim().toLowerCase();
+  const campaign = referralAlias ? findReferralAlias(referralAlias) : null;
+  // If an alias was supplied but is unknown/disabled, do not trust a numeric ID
+  // supplied alongside it. The user must be registered without a partner.
+  const partnerId = referralAlias
+    ? Number(campaign?.partner_id ?? 0)
+    : Number(partnerIdRaw ?? 0);
   if (!Number.isFinite(partnerId) || partnerId <= 0) return;
   try {
     await callShmTemplate(shmSessionId, "referrals.claim", {
       partner_id: Math.trunc(partnerId),
+      ...(campaign ? {
+        referral_alias: campaign.alias,
+        first_pay: campaign.first_payment_bonus_percent,
+        first_pay_campaign: campaign.campaign_code ?? campaign.alias,
+        partner_income_percent: campaign.partner_reward_percent,
+        referral_secret: String(process.env.SHM_REFERRAL_SECRET ?? ""),
+      } : {}),
     });
+    if (campaign) recordReferralAliasRegistration(campaign.alias);
   } catch {
     // ignore
   }
@@ -746,7 +765,7 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     try {
-      await tryAttachPartner(shmSessionId, body?.partner_id);
+      await tryAttachPartner(shmSessionId, body?.partner_id, body?.referral_alias);
     } catch {}
 
     const localSid = reuseOrCreateSid(req);
@@ -813,7 +832,7 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     try {
-      await tryAttachPartner(shmSessionId, body?.partner_id);
+      await tryAttachPartner(shmSessionId, body?.partner_id, body?.referral_alias);
     } catch {}
 
     const localSid = reuseOrCreateSid(req);
@@ -871,7 +890,7 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     try {
-      await tryAttachPartner(shmSessionId, payload?.partner_id);
+      await tryAttachPartner(shmSessionId, payload?.partner_id, payload?.referral_alias);
     } catch {}
 
     const localSid = reuseOrCreateSid(req);
@@ -933,6 +952,10 @@ export async function authRoutes(app: FastifyInstance) {
 
     if (!shmUserId) {
       return reply.code(502).send({ ok: false, error: "shm_user_lookup_failed" });
+    }
+
+    if (mode === "register") {
+      await tryAttachPartner(shmSessionId, body?.partner_id, body?.referral_alias);
     }
 
     const localSid = reuseOrCreateSid(req);

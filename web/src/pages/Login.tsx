@@ -28,6 +28,7 @@ type RegisterEmailClientCode = "email_required" | "email_invalid_format" | "emai
 /* ─── Constants ─────────────────────────────────────────────────────────── */
 
 const PARTNER_LS_KEY     = "partner_id_pending";
+const REFERRAL_ALIAS_LS_KEY = "referral_alias_pending";
 const AUTH_PENDING_KEY   = "auth:pending";
 const AUTH_PENDING_AT_KEY= "auth:pending_at";
 const AUTH_EVER_KEY      = "auth:ever_succeeded";
@@ -65,6 +66,13 @@ function readPendingPartnerId(): number {
 }
 function savePendingPartnerId(id: number) { try { if (id > 0) localStorage.setItem(PARTNER_LS_KEY, String(id)); } catch { /* ignore */ } }
 function clearPendingPartnerId() { try { localStorage.removeItem(PARTNER_LS_KEY); } catch { /* ignore */ } }
+function readPendingReferralAlias(): string {
+  try { return String(localStorage.getItem(REFERRAL_ALIAS_LS_KEY) ?? "").trim().toLowerCase(); } catch { return ""; }
+}
+function savePendingReferralAlias(alias: string) {
+  try { if (alias) localStorage.setItem(REFERRAL_ALIAS_LS_KEY, alias); } catch { /* ignore */ }
+}
+function clearPendingReferralAlias() { try { localStorage.removeItem(REFERRAL_ALIAS_LS_KEY); } catch { /* ignore */ } }
 
 /* ─── Utils ──────────────────────────────────────────────────────────────── */
 
@@ -120,6 +128,22 @@ function getPartnerIdFromLocation(): number {
     }
   } catch { /* ignore */ }
   return 0;
+}
+
+function getReferralAliasFromLocation(): string {
+  try {
+    const search = new URLSearchParams(window.location.search);
+    const explicit = String(search.get("ref") ?? search.get("referral") ?? "").trim().toLowerCase();
+    if (/^[a-z0-9][a-z0-9_-]{1,31}$/.test(explicit)) return explicit;
+
+    // Also support the compact campaign format: https://app.shpun.net/?druni4
+    for (const [key, value] of search.entries()) {
+      if (!value && /^[a-z][a-z0-9_-]{1,31}$/i.test(key) && key !== "partner_id") {
+        return key.toLowerCase();
+      }
+    }
+  } catch { /* ignore */ }
+  return "";
 }
 
 function looksLikeCode(s: string) {
@@ -295,6 +319,7 @@ export function Login() {
 
   // ── Partner / widget ──────────────────────────────────────────────────────
   const [partnerId,      setPartnerId]      = useState<number>(() => readPendingPartnerId());
+  const [referralAlias, setReferralAlias] = useState<string>(() => readPendingReferralAlias());
   const [partnerIdInput, setPartnerIdInput] = useState<string>(() => {
     const p = readPendingPartnerId(); return p > 0 ? String(p) : "";
   });
@@ -452,6 +477,7 @@ export function Login() {
     resetOnboardingPromptSession();
     setAuthPending(provider || "auth");
     clearPendingPartnerId();
+    clearPendingReferralAlias();
     setPartnerId(0); setPartnerIdInput(""); setClientName("");
     const nextRaw = String((r as any).next ?? "home").trim();
     if (nextRaw === "set_password") {
@@ -477,7 +503,7 @@ export function Login() {
       if (!initData) { toastTelegramError("init_data_required"); return; }
       const r = await apiFetch<AuthResponse>("/auth/telegram", {
         method: "POST",
-        body: { initData, ...(partnerId > 0 ? { partner_id: partnerId } : {}) },
+        body: { initData, ...(partnerId > 0 ? { partner_id: partnerId } : {}), ...(referralAlias ? { referral_alias: referralAlias } : {}) },
       });
       await goAfterAuth(r, "telegram");
     } catch (e: unknown) { clearAuthPending(); toastTelegramError(errorToAuthRaw(e, t("error.telegram_login_failed")));
@@ -514,6 +540,7 @@ export function Login() {
           login: normalizeEmailInput(login), password, mode: "register",
           client: clientName.trim() || normalizeEmailInput(login),
           ...(finalPartnerId > 0 ? { partner_id: finalPartnerId } : {}),
+          ...(referralAlias ? { referral_alias: referralAlias } : {}),
         },
       });
       await goAfterAuth(r, "password");
@@ -527,7 +554,7 @@ export function Login() {
     try {
       const r = await apiFetch<AuthResponse>("/auth/telegram_widget", {
         method: "POST",
-        body: { ...widgetUser, ...(partnerId > 0 ? { partner_id: partnerId } : {}) },
+        body: { ...widgetUser, ...(partnerId > 0 ? { partner_id: partnerId } : {}), ...(referralAlias ? { referral_alias: referralAlias } : {}) },
       });
       await goAfterAuth(r, "telegram");
     } catch (e: unknown) { clearAuthPending(); toastTelegramError(errorToAuthRaw(e, t("error.telegram_login_failed")));
@@ -655,15 +682,29 @@ export function Login() {
     if (referralHandledRef.current) return;
     if (mode === "detecting") return;
     referralHandledRef.current = true;
-    const fromUrl = getPartnerIdFromLocation();
-    const pending = readPendingPartnerId();
-    const finalId = fromUrl > 0 ? fromUrl : pending;
-    if (finalId > 0) {
-      savePendingPartnerId(finalId);
-      setPartnerId(finalId);
-      setPartnerIdInput(String(finalId));
-      if (mode === "web") openModal("register");
-    }
+    void (async () => {
+      let fromUrl = getPartnerIdFromLocation();
+      const alias = getReferralAliasFromLocation();
+      if (fromUrl <= 0 && alias) {
+        try {
+          const resolved = await apiFetch<{ ok: true; partnerId: number }>(
+            `/referrals/resolve?alias=${encodeURIComponent(alias)}`,
+            { method: "GET" }
+          );
+          fromUrl = normalizePartnerId(resolved.partnerId);
+          savePendingReferralAlias(alias);
+          setReferralAlias(alias);
+        } catch { /* Unknown/disabled aliases behave like an ordinary visit. */ }
+      }
+      const pending = readPendingPartnerId();
+      const finalId = fromUrl > 0 ? fromUrl : pending;
+      if (finalId > 0) {
+        savePendingPartnerId(finalId);
+        setPartnerId(finalId);
+        setPartnerIdInput(String(finalId));
+        if (mode === "web") openModal("register");
+      }
+    })();
   }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Forgot cooldown timer on mount

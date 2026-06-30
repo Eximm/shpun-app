@@ -7,6 +7,11 @@ import {
   shmShpunAppReferralsStatus,
   shmShpunAppReferralsLink,
 } from "../../shared/shm/shmClient.js";
+import {
+  findReferralAlias,
+  isValidReferralAlias,
+  recordReferralAliasVisit,
+} from "../../shared/linkdb/referralAliasesRepo.js";
 
 function toInt(v: any, def: number) {
   const n = Number(v);
@@ -15,6 +20,19 @@ function toInt(v: any, def: number) {
 }
 
 export async function referralsRoutes(app: FastifyInstance) {
+  app.get("/referrals/resolve", async (req, reply) => {
+    const alias = String((req.query as any)?.alias ?? "").trim().toLowerCase();
+    if (!isValidReferralAlias(alias)) {
+      return reply.code(400).send({ ok: false, error: "invalid_alias" });
+    }
+    const item = findReferralAlias(alias);
+    if (!item) return reply.code(404).send({ ok: false, error: "alias_not_found" });
+    recordReferralAliasVisit(alias);
+
+    // Public response deliberately exposes only data needed before registration.
+    return reply.send({ ok: true, alias: item.alias, partnerId: item.partner_id });
+  });
+
   /**
    * GET /referrals/status
    * Итоговый путь с учетом prefix '/api' => /api/referrals/status
