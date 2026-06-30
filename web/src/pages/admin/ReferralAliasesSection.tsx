@@ -210,27 +210,55 @@ export function ReferralAliasesSection() {
         <button className="btn btn--soft" type="button" onClick={clearForm}>Отмена</button>
       </div>
       </>}
-      {message && <p className="p">{message}</p>}
+      {message && <div className="refPartnerNotice">{message}</div>}
 
-      <div className="admin-gap-top-md">
-        <h3 className="h2">Созданные партнёры</h3>
+      <div className="refPartnerList admin-gap-top-md">
+        <div className="refPartnerList__head">
+          <h3 className="h2">Созданные партнёры</h3>
+          {items.length > 0 && <span className="chip chip--soft">{items.length}</span>}
+        </div>
         {items.length === 0 && <p className="p">Партнёры пока не добавлены.</p>}
         {items.map((item) => (
-          <div className="card" key={item.id}><div className="card__body">
-            <b>app.shpun.net/?{item.alias}</b>
-            <p className="p">
-              Партнёр #{item.partner_id} · первый платёж +{item.first_payment_bonus_percent}%
-              {" · "}партнёру {item.partner_reward_percent}% · {item.campaign_code || "без названия кампании"}
-            </p>
-            <p className="p">
-              {item.enabled ? "Активна" : "Выключена"} · переходов: {item.visits_count || 0}
-              {" · "}регистраций: {item.registrations_count || 0}
-            </p>
-            <div className="row">
-              <button className="btn btn--soft" type="button" onClick={() => edit(item)}>Изменить</button>
-              <button className="btn btn--soft" type="button" onClick={() => void remove(item.id)}>Удалить</button>
+          <article className="refPartnerCard" key={item.id}>
+            <div className="refPartnerCard__head">
+              <div className="refPartnerCard__identity">
+                <span className="refPartnerCard__eyebrow">Партнёр #{item.partner_id}</span>
+                <a className="refPartnerCard__link" href={`/?${item.alias}`} target="_blank" rel="noreferrer">
+                  app.shpun.net/?{item.alias}
+                </a>
+                {item.campaign_code && (
+                  <span className="refPartnerCard__campaign">{item.campaign_code}</span>
+                )}
+              </div>
+              <span className={`chip ${item.enabled ? "chip--ok" : "chip--soft"}`}>
+                {item.enabled ? "Активна" : "Выключена"}
+              </span>
             </div>
-          </div></div>
+
+            <div className="refPartnerCard__metrics">
+              <div className="refPartnerCard__metric">
+                <span>Первое пополнение</span>
+                <strong>+{item.first_payment_bonus_percent}%</strong>
+              </div>
+              <div className="refPartnerCard__metric">
+                <span>Партнёру</span>
+                <strong>{item.partner_reward_percent}%</strong>
+              </div>
+              <div className="refPartnerCard__metric">
+                <span>Переходы</span>
+                <strong>{item.visits_count || 0}</strong>
+              </div>
+              <div className="refPartnerCard__metric">
+                <span>Регистрации</span>
+                <strong>{item.registrations_count || 0}</strong>
+              </div>
+            </div>
+
+            <div className="refPartnerCard__actions">
+              <button className="btn btn--soft" type="button" onClick={() => edit(item)}>Изменить</button>
+              <button className="btn refPartnerCard__delete" type="button" onClick={() => void remove(item.id)}>Удалить</button>
+            </div>
+          </article>
         ))}
       </div>
     </div></div>

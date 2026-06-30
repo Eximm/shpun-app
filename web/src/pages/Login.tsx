@@ -685,6 +685,10 @@ export function Login() {
     void (async () => {
       let fromUrl = getPartnerIdFromLocation();
       const alias = getReferralAliasFromLocation();
+      if (fromUrl > 0 && !alias) {
+        clearPendingReferralAlias();
+        setReferralAlias("");
+      }
       if (fromUrl <= 0 && alias) {
         try {
           const resolved = await apiFetch<{ ok: true; partnerId: number }>(
@@ -944,10 +948,12 @@ export function Login() {
           </div>
           <div className="modal__content">
             {authModal === "register" && normalizePartnerId(partnerIdInput) > 0 && (
-              <div className="pre" style={{ borderColor: "rgba(124,92,255,.35)", background: "rgba(124,92,255,.08)", marginBottom: 16 }}>
-                <div style={{ fontWeight: 700, marginBottom: 2 }}>🎉 {t("login.partner.notice")}</div>
-                <div style={{ opacity: 0.65, fontSize: 13, marginTop: 4 }}>
-                  {t("login.partner.code")}: <b>{partnerIdInput}</b>
+              <div className="login__partnerInvite">
+                <div className="login__partnerInviteTitle">🎉 {t("login.partner.notice")}</div>
+                <div className="login__partnerInviteMeta">
+                  {referralAlias
+                    ? <>{t("login.partner.name")}: <b>{referralAlias}</b></>
+                    : <>{t("login.partner.id")}: <b>{partnerIdInput}</b></>}
                 </div>
               </div>
             )}

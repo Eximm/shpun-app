@@ -3136,6 +3136,125 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .admin-details__summary::-webkit-details-marker { display: none; }
 .admin-details__summary::after { content: "▾"; opacity: 0.60; font-weight: 900; transition: transform 120ms ease, opacity 120ms ease; }
 .admin-details[open] .admin-details__summary::after { transform: rotate(180deg); opacity: 0.90; }
+
+.refPartnerNotice {
+  width: fit-content;
+  margin-top: 12px;
+  padding: 8px 11px;
+  border: 1px solid rgba(34,197,94,0.26);
+  border-radius: 12px;
+  background: rgba(34,197,94,0.08);
+  color: rgba(190,255,211,0.92);
+  font-size: 12px;
+  font-weight: 800;
+}
+.refPartnerList { display: flex; flex-direction: column; gap: 10px; }
+.refPartnerList__head { display: flex; align-items: center; gap: 8px; }
+.refPartnerList__head .h2 { margin: 0; }
+.refPartnerCard {
+  position: relative;
+  overflow: hidden;
+  padding: 16px;
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(77,215,255,0.07), transparent 36%),
+    linear-gradient(145deg, rgba(255,255,255,0.055), rgba(255,255,255,0.025));
+}
+.refPartnerCard__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.refPartnerCard__identity { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.refPartnerCard__eyebrow {
+  color: rgba(255,255,255,0.48);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.refPartnerCard__link {
+  max-width: 100%;
+  color: rgba(255,255,255,0.96);
+  font-size: 16px;
+  font-weight: 950;
+  line-height: 1.25;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.refPartnerCard__link:hover { color: #75e4ff; }
+.refPartnerCard__campaign {
+  color: rgba(255,255,255,0.55);
+  font-size: 12px;
+  line-height: 1.3;
+}
+.refPartnerCard__metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0,1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+.refPartnerCard__metric {
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid rgba(255,255,255,0.065);
+  border-radius: 13px;
+  background: rgba(8,12,20,0.24);
+}
+.refPartnerCard__metric span {
+  display: block;
+  color: rgba(255,255,255,0.46);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+.refPartnerCard__metric strong {
+  display: block;
+  margin-top: 5px;
+  color: rgba(255,255,255,0.94);
+  font-size: 16px;
+  font-weight: 950;
+}
+.refPartnerCard__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+.refPartnerCard__actions .btn { min-height: 38px; padding: 8px 12px; }
+.refPartnerCard__delete {
+  border-color: rgba(255,77,109,0.18);
+  background: rgba(255,77,109,0.07);
+  color: rgba(255,181,195,0.86);
+}
+.refPartnerCard__delete:hover { border-color: rgba(255,77,109,0.34); background: rgba(255,77,109,0.12); }
+
+.login__partnerInvite {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px solid rgba(124,92,255,0.36);
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(124,92,255,0.11), rgba(77,215,255,0.045));
+}
+.login__partnerInviteTitle {
+  color: rgba(255,255,255,0.94);
+  font-size: 13px;
+  font-weight: 850;
+  line-height: 1.35;
+}
+.login__partnerInviteMeta {
+  margin-top: 5px;
+  color: rgba(255,255,255,0.58);
+  font-size: 12px;
+  line-height: 1.35;
+}
+.login__partnerInviteMeta b {
+  color: rgba(255,255,255,0.88);
+  font-weight: 900;
+}
+
 @media (max-width: 900px) { .admin-metricsGrid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
 @media (max-width: 720px) {
   .admin-sectionHead, .admin-overviewGrid, .admin-compactGrid, .admin-tabsGrid, .admin-metricsGrid { grid-template-columns: 1fr; }
@@ -3147,6 +3266,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .admin-numberInput { max-width: 100%; }
   .admin-modal__card { width: 100%; max-height: 88dvh; }
   .admin-modal__body { padding: 12px; }
+  .refPartnerCard__metrics { grid-template-columns: repeat(2, minmax(0,1fr)); }
 }
 @media (max-width: 420px) {
   .admin-page .card__body { padding: 14px; }
@@ -3160,6 +3280,10 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .admin-compactItem { padding: 9px 10px; }
   .admin-dateTitle   { font-size: 10px; padding: 5px 9px; }
   .admin-modal__content { padding-right: 0; }
+  .refPartnerCard { padding: 13px; border-radius: 16px; }
+  .refPartnerCard__link { font-size: 14px; }
+  .refPartnerCard__actions { justify-content: stretch; }
+  .refPartnerCard__actions .btn { flex: 1 1 0; }
 }
 
 
