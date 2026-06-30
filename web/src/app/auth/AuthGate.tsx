@@ -27,17 +27,21 @@ const AUTH_EVER_KEY = "auth:ever_succeeded";
 const ONBOARDING_DISMISSED_PREFIX = "onboarding.dismissed:";
 const FIRST_PAY_BONUS_DISMISSED_PREFIX = "first-pay-bonus.dismissed:";
 
-function readFirstPayBonusDismissed(userId: number): boolean {
+function firstPayBonusDismissedKey(userId: number, authSessionId: string): string {
+  return `${FIRST_PAY_BONUS_DISMISSED_PREFIX}${userId}:${authSessionId || "current"}`;
+}
+
+function readFirstPayBonusDismissed(userId: number, authSessionId: string): boolean {
   try {
-    return sessionStorage.getItem(`${FIRST_PAY_BONUS_DISMISSED_PREFIX}${userId}`) === "1";
+    return sessionStorage.getItem(firstPayBonusDismissedKey(userId, authSessionId)) === "1";
   } catch {
     return false;
   }
 }
 
-function writeFirstPayBonusDismissed(userId: number) {
+function writeFirstPayBonusDismissed(userId: number, authSessionId: string) {
   try {
-    sessionStorage.setItem(`${FIRST_PAY_BONUS_DISMISSED_PREFIX}${userId}`, "1");
+    sessionStorage.setItem(firstPayBonusDismissedKey(userId, authSessionId), "1");
   } catch {
     // ignore
   }
@@ -337,6 +341,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     () => (uid ? ensureAuthSessionId(uid) : ""),
     [uid]
   );
+  const serverAuthSessionId = String((me as any)?.authSessionId ?? currentAuthSessionId);
   const onboardingCheckedForUidRef = useRef<number>(0);
 
   const login = String((me as any)?.profile?.login ?? "").trim();
@@ -353,7 +358,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const showFirstPayBonus =
     Boolean(firstPayBonus?.pending) &&
     Number(firstPayBonus?.percent ?? 0) > 0 &&
-    !Boolean(firstPayBonus?.bannerSeen) &&
     !firstPayBonusDismissed;
   const profilePromptGranted = useOnboardingPromptSlot("profile", needsFirstLoginOnboarding);
   const bonusPromptGranted = useOnboardingPromptSlot(
@@ -445,8 +449,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       return;
     }
     setOnboardingDismissed(readDismissed(uid, currentAuthSessionId));
-    setFirstPayBonusDismissed(readFirstPayBonusDismissed(uid));
-  }, [uid, currentAuthSessionId]);
+    setFirstPayBonusDismissed(readFirstPayBonusDismissed(uid, serverAuthSessionId));
+  }, [uid, currentAuthSessionId, serverAuthSessionId]);
 
   useEffect(() => {
     if (!uid || !currentAuthSessionId) return;
@@ -638,7 +642,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         open={bonusPromptGranted}
         percent={Number(firstPayBonus?.percent ?? 0)}
         onClose={() => {
-          if (uid) writeFirstPayBonusDismissed(uid);
+          if (uid) writeFirstPayBonusDismissed(uid, serverAuthSessionId);
           setFirstPayBonusDismissed(true);
         }}
       />

@@ -165,6 +165,7 @@ export async function userRoutes(app: FastifyInstance) {
 
     const payload: any = {
       ok: true,
+      authSessionId: String((s as any)?.createdAt ?? ""),
       profile: {
         id:          toNum(meRaw.user_id, 0),
         displayName: toDisplayName(meRaw),

@@ -5,6 +5,7 @@ import { apiFetch, isNotAuthenticated } from "../../shared/api/client";
 
 export type MeResponse = {
   ok: true;
+  authSessionId?: string;
   profile: {
     id: number;
     displayName: string;

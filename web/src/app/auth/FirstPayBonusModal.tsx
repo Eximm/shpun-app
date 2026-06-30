@@ -1,6 +1,4 @@
 import { createPortal } from "react-dom";
-import { useState } from "react";
-import { apiFetch } from "../../shared/api/client";
 
 export function FirstPayBonusModal({
   open,
@@ -11,19 +9,7 @@ export function FirstPayBonusModal({
   percent: number;
   onClose: () => void;
 }) {
-  const [busy, setBusy] = useState(false);
   if (!open || percent <= 0) return null;
-
-  async function close() {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await apiFetch("/user/referral-bonus/dismiss", { method: "POST" });
-    } finally {
-      setBusy(false);
-      onClose();
-    }
-  }
 
   return createPortal(
     <div className="modal firstPayBonusModal" role="dialog" aria-modal="true">
@@ -44,8 +30,8 @@ export function FirstPayBonusModal({
         <div className="firstPayBonusModal__example">
           Например, при пополнении на 1 000 ₽ вы получите ещё {Math.round(1000 * percent / 100)} бонусов.
         </div>
-        <button className="btn btn--primary firstPayBonusModal__button" type="button" onClick={() => void close()} disabled={busy}>
-          {busy ? "Сохраняем…" : "Понятно"}
+        <button className="btn btn--primary firstPayBonusModal__button" type="button" onClick={onClose}>
+          Понятно
         </button>
       </div>
     </div>,
