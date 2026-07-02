@@ -145,6 +145,21 @@ function getVapidPublicKeyFromEnv(): string | null {
   return s ? s : null;
 }
 
+async function getVapidPublicKey(): Promise<string | null> {
+  const bundled = getVapidPublicKeyFromEnv();
+  if (bundled) return bundled;
+
+  try {
+    const response = await apiFetch<{ ok: true; publicKey?: string }>(
+      "/notifications/push/public-key"
+    );
+    const runtime = String(response?.publicKey ?? "").trim();
+    return runtime || null;
+  } catch {
+    return null;
+  }
+}
+
 async function subscribeAndSync(reg: ServiceWorkerRegistration): Promise<boolean> {
   // 1) если подписка уже есть — просто синхронизируем на сервер
   const existing = await reg.pushManager.getSubscription();
@@ -154,7 +169,7 @@ async function subscribeAndSync(reg: ServiceWorkerRegistration): Promise<boolean
   }
 
   // 2) новая подписка
-  const vapidPublicKey = getVapidPublicKeyFromEnv();
+  const vapidPublicKey = await getVapidPublicKey();
   if (!vapidPublicKey) return false;
 
   const sub = await reg.pushManager.subscribe({

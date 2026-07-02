@@ -521,6 +521,19 @@ export async function pushRoutes(app: FastifyInstance) {
     return reply.send({ ok: true });
   });
 
+  app.get("/notifications/push/public-key", async (req, reply) => {
+    const s = getSessionFromRequest(req);
+    const uid = s?.userId ? Number(s.userId) : 0;
+    if (!uid) return reply.code(401).send({ ok: false, error: "unauthorized" });
+
+    const publicKey = envStr("VAPID_PUBLIC_KEY", "");
+    if (!publicKey) {
+      return reply.code(503).send({ ok: false, error: "vapid_missing" });
+    }
+
+    return reply.send({ ok: true, publicKey });
+  });
+
   app.post("/notifications/push/subscribe", async (req, reply) => {
     const s = getSessionFromRequest(req);
     const uid = s?.userId ? Number(s.userId) : 0;
