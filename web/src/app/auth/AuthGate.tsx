@@ -563,6 +563,11 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   async function onPushPromptAccept() {
     if (!uid || pushPromptBusy) return;
     setPushPromptBusy(true);
+    // Close our modal before opening the browser permission surface. Keeping
+    // both stacked made the last onboarding window look stuck, especially
+    // when subscription sync failed after permission had already been granted.
+    setPushPromptOpen(false);
+    setPushGuideOpen(false);
 
     try {
       const ok = await enablePushByUserGesture();
@@ -573,12 +578,17 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         toast.success(t("pwa.onboarding.push.enabled.title"), {
           description: t("pwa.onboarding.push.enabled.text"),
         });
-        setPushGuideOpen(false);
-        setPushPromptOpen(false);
       } else {
-        setPushGuideOpen(true);
-        setPushPromptOpen(true);
+        toast.info(t("pwa.onboarding.push.guide.title"), {
+          description: t("pwa.onboarding.push.guide.text"),
+          durationMs: 4500,
+        });
       }
+    } catch {
+      toast.error(t("pwa.onboarding.push.guide.title"), {
+        description: t("pwa.onboarding.push.guide.text"),
+        durationMs: 4500,
+      });
     } finally {
       setPushPromptBusy(false);
     }

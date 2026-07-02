@@ -53,7 +53,20 @@ self.addEventListener("push", (event) => {
     data: payload.data || {},
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((windowClients) => {
+        // The foreground app presents the same event as an in-app toast.
+        // Suppress the system notification to avoid a duplicate during the
+        // short race before the activity ping reaches the API.
+        const hasVisibleClient = windowClients.some(
+          (client) => (client as WindowClient).visibilityState === "visible"
+        );
+        if (hasVisibleClient) return;
+        return self.registration.showNotification(title, options);
+      })
+  );
 });
 
 /* ===============================

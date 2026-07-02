@@ -118,6 +118,10 @@ function isHiddenRoute(pathname: string) {
   return HIDDEN_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 }
 
+function hasOpenModal() {
+  return Boolean(document.querySelector('[role="dialog"][aria-modal="true"]'));
+}
+
 function keyAt<T extends readonly string[]>(keys: T, index: number) {
   return keys[Math.abs(index) % keys.length] ?? keys[0];
 }
@@ -164,7 +168,11 @@ export function ReferralNudge({ enabled = true }: { enabled?: boolean }) {
           return;
         }
 
-        if (document.visibilityState !== "visible" || isHiddenRoute(pathRef.current)) {
+        if (
+          document.visibilityState !== "visible" ||
+          isHiddenRoute(pathRef.current) ||
+          hasOpenModal()
+        ) {
           schedule(RETRY_DELAY_MS);
           return;
         }

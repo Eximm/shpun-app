@@ -29,10 +29,15 @@ const ACTIVITY_PING_MS = 15000;
 
 const SHOWN_TTL_DAYS = 7;
 const SHOWN_TTL_MS = SHOWN_TTL_DAYS * 24 * 60 * 60 * 1000;
+const SEMANTIC_SHOWN_TTL_MS = 10 * 60 * 1000;
 const SHOWN_CLEANUP_LIMIT = 300;
 
 function nowUnix(): number {
   return Math.floor(Date.now() / 1000);
+}
+
+function hasOpenModal(): boolean {
+  return Boolean(document.querySelector('[role="dialog"][aria-modal="true"]'));
 }
 
 /* =========================================================
@@ -86,17 +91,21 @@ function normalize(s: string) {
   return String(s ?? "").trim().replace(/\s+/g, " ");
 }
 
-function makeShownKey(ev: BillingPushEvent): string | null {
+function makeShownKeys(ev: BillingPushEvent): string[] {
   const eventId = normalize(ev.event_id);
   const lvl = normalize(ev.level || "info");
   const title = normalize(ev.meta?.short?.title || ev.title || "");
   const msg = normalize(ev.meta?.short?.message || ev.message || "");
+  const keys: string[] = [];
 
-  if (eventId) return `id:${eventId}`;
+  if (eventId) keys.push(`id:${eventId}`);
 
-  if (!title && !msg) return null;
-  const semantic = `${lvl}|${title}|${msg}`;
-  return `sem:${hashDjb2(semantic)}`;
+  if (title || msg) {
+    const semantic = `${lvl}|${title}|${msg}`;
+    keys.push(`sem:${hashDjb2(semantic)}`);
+  }
+
+  return keys;
 }
 
 function getShownStorageKey(uid: number, shownKey: string) {
@@ -113,7 +122,8 @@ function hasShownToast(uid: number, shownKey: string): boolean {
     const shownAt = Number(v?.shownAt ?? 0);
     if (!Number.isFinite(shownAt) || shownAt <= 0) return false;
 
-    if (Date.now() - shownAt > SHOWN_TTL_MS) {
+    const ttl = shownKey.startsWith("sem:") ? SEMANTIC_SHOWN_TTL_MS : SHOWN_TTL_MS;
+    if (Date.now() - shownAt > ttl) {
       localStorage.removeItem(getShownStorageKey(uid, shownKey));
       return false;
     }
@@ -153,7 +163,9 @@ function cleanupShownKeys(uid: number) {
       try {
         const v = JSON.parse(raw) as { shownAt?: number };
         const shownAt = Number(v?.shownAt ?? 0);
-        if (!Number.isFinite(shownAt) || shownAt <= 0 || now - shownAt > SHOWN_TTL_MS) {
+        const shownKey = k.slice(prefix.length);
+        const ttl = shownKey.startsWith("sem:") ? SEMANTIC_SHOWN_TTL_MS : SHOWN_TTL_MS;
+        if (!Number.isFinite(shownAt) || shownAt <= 0 || now - shownAt > ttl) {
           localStorage.removeItem(k);
         }
       } catch {
@@ -261,6 +273,23 @@ export function useBillingNotifications(enabled: boolean) {
       const hidden = document.visibilityState === "hidden";
       const nextDelay = hidden ? HIDDEN_POLL_MS : POLL_MS;
 
+      // A hidden tab is not an active client. Do not keep the server-side
+      // activity lease alive and do not consume events that must become
+      // toasts when the user returns. Background delivery is handled by push.
+      if (hidden) {
+        scheduleNext(nextDelay, () => void tick());
+        return;
+      }
+
+      // Keep notification toasts behind onboarding/bonus/install dialogs.
+      // Do not advance the cursor: the event will be presented after the
+      // current modal releases the screen.
+      if (hasOpenModal()) {
+        await pingActivity();
+        scheduleNext(1000, () => void tick());
+        return;
+      }
+
       if (inFlightRef.current) {
         scheduleNext(nextDelay, () => void tick());
         return;
@@ -279,22 +308,27 @@ export function useBillingNotifications(enabled: boolean) {
         const r = await apiFetch<Resp>(`/notifications?${qs}`);
         const items = Array.isArray((r as any)?.items) ? (r as any).items : [];
 
-        const allowFromTs = warmupRef.current ? enabledAtTsRef.current : 0;
+        // The first response only establishes the user's cursor. Everything
+        // already waiting at login belongs to history/feed and must not burst
+        // into a stack of old toasts.
+        const warmingUp = warmupRef.current;
+        const allowFromTs = warmingUp ? enabledAtTsRef.current : 0;
 
         for (const ev of items as BillingPushEvent[]) {
           if (!ev) continue;
           if (ev.toast === false) continue;
+          if (warmingUp) continue;
 
           const evTs = Number((ev as any).ts ?? 0);
           if (allowFromTs && Number.isFinite(evTs) && evTs < allowFromTs) continue;
 
-          const shownKey = makeShownKey(ev);
-          if (!shownKey) continue;
-          if (hasShownToast(uid, shownKey)) continue;
+          const shownKeys = makeShownKeys(ev);
+          if (!shownKeys.length) continue;
+          if (shownKeys.some((key) => hasShownToast(uid, key))) continue;
 
           const view = getToastView(ev);
 
-          markToastShown(uid, shownKey);
+          shownKeys.forEach((key) => markToastShown(uid, key));
 
           if (view.level === "success") {
             toast.success(view.title, { description: view.description });
