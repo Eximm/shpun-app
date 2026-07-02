@@ -379,7 +379,14 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         if (!uid || telegramMiniApp || needsFirstLoginOnboarding) return;
         void getPushState().then((s) => {
           setPushState(s);
-          if (s.standalone && !isPushActive(s)) setPushPromptOpen(true);
+          if (
+            s.standalone &&
+            s.permission !== "granted" &&
+            !s.disabledByUser &&
+            !isPushActive(s)
+          ) {
+            setPushPromptOpen(true);
+          }
         }).catch(() => {});
       }, 450);
     };
@@ -538,6 +545,13 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         // Если пуши уже активны — ничего не показываем
         if (isPushActive(s)) return;
 
+        // Явное отключение в профиле всегда уважаем.
+        if (s.disabledByUser) return;
+
+        // Разрешение браузера уже выдано. Повторное окно с запросом permission
+        // здесь не поможет: восстановление подписки выше выполняется тихо.
+        if (s.permission === "granted") return;
+
         // Если промпт уже показывали в этой сессии — не спамим
         if (isPushPromptShownThisSession()) return;
 
@@ -570,13 +584,18 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     setPushGuideOpen(false);
 
     try {
-      const ok = await enablePushByUserGesture();
+      await enablePushByUserGesture().catch(() => false);
       const s = await getPushState().catch(() => null);
       if (s) setPushState(s);
 
-      if (ok) {
+      if (s?.permission === "granted" && s.hasSubscription) {
         toast.success(t("pwa.onboarding.push.enabled.title"), {
           description: t("pwa.onboarding.push.enabled.text"),
+        });
+      } else if (s?.permission === "granted") {
+        toast.error(t("pwa.onboarding.push.setup_failed.title"), {
+          description: t("pwa.onboarding.push.setup_failed.text"),
+          durationMs: 4500,
         });
       } else {
         toast.info(t("pwa.onboarding.push.guide.title"), {
@@ -584,11 +603,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
           durationMs: 4500,
         });
       }
-    } catch {
-      toast.error(t("pwa.onboarding.push.guide.title"), {
-        description: t("pwa.onboarding.push.guide.text"),
-        durationMs: 4500,
-      });
     } finally {
       setPushPromptBusy(false);
     }
