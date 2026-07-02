@@ -576,8 +576,16 @@ export function Profile() {
       if (enabled) { await disablePush(); showToast("🔕 " + t("profile.push.toast.disabled")); }
       else {
         if (isIOSPwaInstallPlatform(pwaPlatform) && !standalone) { showToast("📲 " + t("profile.push.toast.install_ios")); setPwaGuideOpen(true); return; }
-        const ok = await enablePushByUserGesture();
-        showToast(ok ? "🔔 " + t("profile.push.toast.enabled") : pushState.permission === "denied" ? "🚫 " + t("profile.push.toast.denied") : "😬 " + t("profile.push.toast.failed"));
+        const ok = await enablePushByUserGesture().catch(() => false);
+        const actual = await getPushState().catch(() => null);
+        if (actual) setPushState({ ...actual, disabledByUser: isPushDisabledByUser() });
+        showToast(
+          ok || actual?.permission === "granted"
+            ? "🔔 " + t("profile.push.toast.enabled")
+            : actual?.permission === "denied"
+              ? "🚫 " + t("profile.push.toast.denied")
+              : "😬 " + t("profile.push.toast.failed")
+        );
       }
     } finally { setPushLoading(false); await refreshPush(); }
   }

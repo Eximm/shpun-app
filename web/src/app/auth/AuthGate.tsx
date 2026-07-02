@@ -588,14 +588,11 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       const s = await getPushState().catch(() => null);
       if (s) setPushState(s);
 
-      if (s?.permission === "granted" && s.hasSubscription) {
+      if (s?.permission === "granted") {
         toast.success(t("pwa.onboarding.push.enabled.title"), {
-          description: t("pwa.onboarding.push.enabled.text"),
-        });
-      } else if (s?.permission === "granted") {
-        toast.error(t("pwa.onboarding.push.setup_failed.title"), {
-          description: t("pwa.onboarding.push.setup_failed.text"),
-          durationMs: 4500,
+          description: s.hasSubscription
+            ? t("pwa.onboarding.push.enabled.text")
+            : t("pwa.onboarding.push.sync_pending.text"),
         });
       } else {
         toast.info(t("pwa.onboarding.push.guide.title"), {
