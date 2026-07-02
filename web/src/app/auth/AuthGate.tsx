@@ -382,7 +382,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
           if (
             s.standalone &&
             s.permission !== "granted" &&
-            !s.disabledByUser &&
             !isPushActive(s)
           ) {
             setPushPromptOpen(true);
@@ -545,12 +544,9 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         // Если пуши уже активны — ничего не показываем
         if (isPushActive(s)) return;
 
-        // Явное отключение в профиле всегда уважаем.
-        if (s.disabledByUser) return;
-
         // Разрешение браузера уже выдано. Повторное окно с запросом permission
         // здесь не поможет: восстановление подписки выше выполняется тихо.
-        if (s.permission === "granted") return;
+        if (s.permission === "granted" && !s.disabledByUser) return;
 
         // Если промпт уже показывали в этой сессии — не спамим
         if (isPushPromptShownThisSession()) return;
