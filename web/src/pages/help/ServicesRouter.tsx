@@ -16,7 +16,7 @@ type Block = {
   tone?: BlockTone;
 };
 
-const ROUTER_PACKAGE_URL = "https://spb.shpyn.online/files/ipk/shpun-router_1.1.2_all.ipk";
+const ROUTER_PACKAGE_URL = "https://spb.shpyn.online/files/ipk/shpun-router_1.1.5_all.ipk";
 
 export function ServicesRouter() {
   const { t } = useI18n();
@@ -72,7 +72,7 @@ export function ServicesRouter() {
       note: t("servicesRouter.quick_start.note", "Перед установкой роутер должен иметь доступ в интернет. Для первой настройки удобнее подключить его WAN-порт к LAN-порту основного роутера, чтобы он сразу получал готовый интернет."),
       steps: [
         t("servicesRouter.quick_start.step_1", "Запустите роутер с OpenWrt 24.10.x и откройте LuCI"),
-        t("servicesRouter.quick_start.step_2", "Скачайте и установите пакет shpun-router_1.1.2_all.ipk"),
+        t("servicesRouter.quick_start.step_2", "Скачайте и установите пакет shpun-router_1.1.5_all.ipk"),
         t("servicesRouter.quick_start.step_3", "Закажите отдельную услугу Shpun Router"),
         t("servicesRouter.quick_start.step_4", "Введите код из виджета роутера в помощнике подключения"),
       ],
