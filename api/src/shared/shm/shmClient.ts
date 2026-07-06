@@ -499,6 +499,15 @@ export async function shmShpunAppAdminPartnerPercentSet(
   })
 }
 
+export async function shmShpunAppAdminPartnerStats(
+  shmSessionId: string,
+  partnerId: number
+) {
+  return await shmShpunAppTemplate<any>(shmSessionId, 'admin.partner.stats', {
+    partner_id: partnerId,
+  })
+}
+
 // =====================
 // PUBLIC ORDER RULES
 // =====================

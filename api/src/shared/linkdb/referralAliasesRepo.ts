@@ -55,6 +55,13 @@ export function listReferralAliases(): ReferralAlias[] {
   `).all() as any[]).map(mapRow);
 }
 
+export function getReferralAliasById(id: unknown): ReferralAlias | null {
+  const n = Math.trunc(Number(id));
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const row = linkDb.prepare(`SELECT * FROM referral_aliases WHERE id = ?`).get(n);
+  return row ? mapRow(row) : null;
+}
+
 export function findReferralAlias(value: unknown): ReferralAlias | null {
   const row = linkDb.prepare(`
     SELECT * FROM referral_aliases WHERE alias = ? COLLATE NOCASE AND enabled = 1

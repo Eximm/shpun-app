@@ -6,6 +6,7 @@ import {
   shmShpunAppAdminSettingsSet,
   shmShpunAppAdminStatus,
   shmShpunAppAdminPartnerPercentSet,
+  shmShpunAppAdminPartnerStats,
 } from "../../shared/shm/shmClient.js";
 import { linkDb } from "../../shared/linkdb/db.js";
 import {
@@ -41,6 +42,7 @@ import {
 } from "../../shared/linkdb/serviceCategoriesRepo.js";
 import {
   deleteReferralAlias,
+  getReferralAliasById,
   isValidReferralAlias,
   listReferralAliases,
   saveReferralAlias,
@@ -133,6 +135,34 @@ export async function adminRoutes(app: FastifyInstance) {
     if (!s?.shmSessionId) return reply.code(401).send({ ok: false });
     if (!(await ensureAdmin(s.shmSessionId))) return reply.code(403).send({ ok: false, error: "not_admin" });
     return reply.send({ ok: true, items: listReferralAliases() });
+  });
+
+  app.get("/admin/referral-aliases/:id/stats", async (req, reply) => {
+    const s = getSessionFromRequest(req);
+    if (!s?.shmSessionId) return reply.code(401).send({ ok: false });
+    if (!(await ensureAdmin(s.shmSessionId))) {
+      return reply.code(403).send({ ok: false, error: "not_admin" });
+    }
+
+    const item = getReferralAliasById((req.params as any)?.id);
+    if (!item) return reply.code(404).send({ ok: false, error: "alias_not_found" });
+
+    const result = await shmShpunAppAdminPartnerStats(s.shmSessionId, item.partner_id);
+    if (!result.ok || !(result.json as any)?.ok) {
+      return reply.code(502).send({
+        ok: false,
+        error: (result.json as any)?.error || "partner_stats_failed",
+      });
+    }
+
+    return reply.send({
+      ok: true,
+      partnerId: item.partner_id,
+      totalUsers: Number((result.json as any)?.total_users ?? 0),
+      activeUsers: Number((result.json as any)?.active_users ?? 0),
+      scannedUsers: Number((result.json as any)?.scanned_users ?? 0),
+      truncated: Boolean((result.json as any)?.truncated),
+    });
   });
 
   app.put("/admin/referral-aliases", async (req, reply) => {

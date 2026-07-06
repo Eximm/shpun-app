@@ -22,6 +22,13 @@ type PartnerForm = {
   enabled: boolean;
 };
 
+type PartnerStats = {
+  totalUsers: number;
+  activeUsers: number;
+  scannedUsers: number;
+  truncated: boolean;
+};
+
 const createEmptyForm = (): PartnerForm => ({
   alias: "",
   partnerId: "",
@@ -37,6 +44,23 @@ export function ReferralAliasesSection() {
   const [editingAlias, setEditingAlias] = useState("");
   const [creating, setCreating] = useState(false);
   const [message, setMessage] = useState("");
+  const [stats, setStats] = useState<Record<number, PartnerStats>>({});
+  const [statsLoading, setStatsLoading] = useState<Record<number, boolean>>({});
+
+  async function loadStats(item: AliasItem) {
+    setStatsLoading((current) => ({ ...current, [item.id]: true }));
+    try {
+      const response = await apiFetch<{ ok: true } & PartnerStats>(
+        `/admin/referral-aliases/${item.id}/stats`,
+        { method: "GET" }
+      );
+      setStats((current) => ({ ...current, [item.id]: response }));
+    } catch {
+      // Keep the card usable if billing statistics are temporarily unavailable.
+    } finally {
+      setStatsLoading((current) => ({ ...current, [item.id]: false }));
+    }
+  }
 
   async function load() {
     const response = await apiFetch<{ ok: true; items: AliasItem[] }>(
@@ -44,6 +68,7 @@ export function ReferralAliasesSection() {
       { method: "GET" }
     );
     setItems(response.items);
+    void Promise.allSettled(response.items.map((item) => loadStats(item)));
   }
 
   useEffect(() => { void load(); }, []);
@@ -252,9 +277,27 @@ export function ReferralAliasesSection() {
                 <span>Регистрации</span>
                 <strong>{item.registrations_count || 0}</strong>
               </div>
+              <div className="refPartnerCard__metric refPartnerCard__metric--active">
+                <span>Активные клиенты</span>
+                <strong>
+                  {statsLoading[item.id]
+                    ? "…"
+                    : stats[item.id]
+                      ? `${stats[item.id].activeUsers} из ${stats[item.id].totalUsers}`
+                      : "—"}
+                </strong>
+              </div>
             </div>
 
             <div className="refPartnerCard__actions">
+              <button
+                className="btn btn--soft"
+                type="button"
+                disabled={Boolean(statsLoading[item.id])}
+                onClick={() => void loadStats(item)}
+              >
+                Обновить
+              </button>
               <button className="btn btn--soft" type="button" onClick={() => edit(item)}>Изменить</button>
               <button className="btn refPartnerCard__delete" type="button" onClick={() => void remove(item.id)}>Удалить</button>
             </div>
