@@ -255,6 +255,20 @@ async function tryAttachPartner(
   }
 }
 
+function resolvePartnerIdForInitialRegistration(
+  partnerIdRaw: any,
+  referralAliasRaw?: any
+): number {
+  const referralAlias = String(referralAliasRaw ?? "").trim().toLowerCase();
+  if (referralAlias) {
+    const campaign = findReferralAlias(referralAlias);
+    const partnerId = Number(campaign?.partner_id ?? 0);
+    return Number.isFinite(partnerId) && partnerId > 0 ? Math.trunc(partnerId) : 0;
+  }
+  const partnerId = Number(partnerIdRaw ?? 0);
+  return Number.isFinite(partnerId) && partnerId > 0 ? Math.trunc(partnerId) : 0;
+}
+
 async function getPasswordSetFlag(shmSessionId: string): Promise<0 | 1> {
   try {
     const r = await shmFetch<any>(null, "v1/template/shpun_app", {
@@ -455,15 +469,17 @@ async function tryPasswordLoginByTelegram(
 async function ensureTelegramUserByPasswordRegister(
   req: any,
   partnerId: any,
+  referralAlias: any,
   creds: TgCredentialBundle
 ): Promise<{ ok: true } | { ok: false; status: number; error: string; detail?: unknown }> {
+  const initialPartnerId = resolvePartnerIdForInitialRegistration(partnerId, referralAlias);
   const reg = await handleAuth("password", {
     mode: "telegram_register",
     login: creds.login,
     password: creds.password,
     client: creds.tgLogin || creds.login,
     client_ip: getClientIp(req),
-    partner_id: partnerId,
+    partner_id: initialPartnerId,
   });
 
   if (reg.ok) {
@@ -570,7 +586,7 @@ async function resolveTelegramMiniAppSession(
     };
   }
 
-  const reg = await ensureTelegramUserByPasswordRegister(req, body?.partner_id, creds);
+  const reg = await ensureTelegramUserByPasswordRegister(req, body?.partner_id, body?.referral_alias, creds);
   if (!reg.ok) {
     return reg;
   }
@@ -655,7 +671,7 @@ async function resolveTelegramWidgetSession(
     };
   }
 
-  const reg = await ensureTelegramUserByPasswordRegister(req, payload?.partner_id, creds);
+  const reg = await ensureTelegramUserByPasswordRegister(req, payload?.partner_id, payload?.referral_alias, creds);
   if (!reg.ok) {
     return reg;
   }

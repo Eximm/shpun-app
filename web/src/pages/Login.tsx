@@ -366,6 +366,43 @@ export function Login() {
     toast.error(t("login.toast.error_title"), { description: msg });
   }
 
+  async function buildReferralAuthPayload(): Promise<Record<string, any>> {
+    let id = getPartnerIdFromLocation() || readPendingPartnerId() || partnerId;
+    let alias = getReferralAliasFromLocation() || readPendingReferralAlias() || referralAlias;
+
+    if (id > 0 && !alias) {
+      clearPendingReferralAlias();
+      setReferralAlias("");
+    }
+
+    if (id <= 0 && alias) {
+      try {
+        const resolved = await apiFetch<{ ok: true; partnerId: number }>(
+          `/referrals/resolve?alias=${encodeURIComponent(alias)}`,
+          { method: "GET" }
+        );
+        id = normalizePartnerId(resolved.partnerId);
+      } catch {
+        alias = "";
+      }
+    }
+
+    if (id > 0) {
+      savePendingPartnerId(id);
+      setPartnerId(id);
+      setPartnerIdInput(String(id));
+    }
+    if (alias) {
+      savePendingReferralAlias(alias);
+      setReferralAlias(alias);
+    }
+
+    return {
+      ...(id > 0 ? { partner_id: id } : {}),
+      ...(alias ? { referral_alias: alias } : {}),
+    };
+  }
+
   // ── Modal controls ────────────────────────────────────────────────────────
   function openModal(next: AuthModal) {
     setAuthModal(next);
@@ -502,9 +539,10 @@ export function Login() {
       let initData = getTelegramInitData();
       if (!initData) initData = await waitTelegramInitData(3000);
       if (!initData) { toastTelegramError("init_data_required"); return; }
+      const referralPayload = await buildReferralAuthPayload();
       const r = await apiFetch<AuthResponse>("/auth/telegram", {
         method: "POST",
-        body: { initData, ...(partnerId > 0 ? { partner_id: partnerId } : {}), ...(referralAlias ? { referral_alias: referralAlias } : {}) },
+        body: { initData, ...referralPayload },
       });
       await goAfterAuth(r, "telegram");
     } catch (e: unknown) { clearAuthPending(); toastTelegramError(errorToAuthRaw(e, t("error.telegram_login_failed")));
@@ -553,9 +591,10 @@ export function Login() {
     if (authInProgressRef.current) return;
     authInProgressRef.current = true; setLoading(true);
     try {
+      const referralPayload = await buildReferralAuthPayload();
       const r = await apiFetch<AuthResponse>("/auth/telegram_widget", {
         method: "POST",
-        body: { ...widgetUser, ...(partnerId > 0 ? { partner_id: partnerId } : {}), ...(referralAlias ? { referral_alias: referralAlias } : {}) },
+        body: { ...widgetUser, ...referralPayload },
       });
       await goAfterAuth(r, "telegram");
     } catch (e: unknown) { clearAuthPending(); toastTelegramError(errorToAuthRaw(e, t("error.telegram_login_failed")));
@@ -620,9 +659,10 @@ export function Login() {
       setMode("telegram");
       authInProgressRef.current = true; setLoading(true);
       try {
+        const referralPayload = await buildReferralAuthPayload();
         const r = await apiFetch<AuthResponse>("/auth/telegram", {
           method: "POST",
-          body: { initData, ...(readPendingPartnerId() > 0 ? { partner_id: readPendingPartnerId() } : {}) },
+          body: { initData, ...referralPayload },
         });
         if (!cancelled) await goAfterAuth(r, "telegram");
       } catch { if (!cancelled) clearAuthPending(); }
