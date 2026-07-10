@@ -2,6 +2,7 @@
 import type { FastifyInstance } from "fastify";
 import { getSessionFromRequest } from "../../shared/session/sessionStore.js";
 import {
+  shmFetch,
   shmShpunAppAdminSettingsGet,
   shmShpunAppAdminSettingsSet,
   shmShpunAppAdminStatus,
@@ -129,6 +130,74 @@ function tryParseMeta(metaJson: unknown) {
   }
 }
 
+function normalizeIdList(value: unknown, max = 1000): number[] {
+  const arr = Array.isArray(value) ? value : [];
+  const out: number[] = [];
+  const seen = new Set<number>();
+  for (const raw of arr) {
+    const n = Math.trunc(Number(raw));
+    if (!Number.isFinite(n) || n <= 0 || seen.has(n)) continue;
+    seen.add(n);
+    out.push(n);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+function extractRows(json: any): any[] {
+  const data = json?.data ?? json?.items ?? json?.rows ?? [];
+  if (Array.isArray(data)) return data;
+  if (data && typeof data === "object") return Object.values(data);
+  return [];
+}
+
+function isActiveService(row: any): boolean {
+  const raw = String(
+    row?.status ??
+    row?.state ??
+    row?.user_service_status ??
+    row?.service_status ??
+    ""
+  ).trim().toUpperCase();
+  return raw === "ACTIVE";
+}
+
+async function hasActiveService(shmSessionId: string, userId: number): Promise<boolean | null> {
+  const filter = JSON.stringify({ user_id: userId });
+  const r = await shmFetch<any>(shmSessionId, "v1/user/service", {
+    method: "GET",
+    query: { limit: 100, offset: 0, filter },
+  });
+  if (!r.ok) return null;
+  return extractRows(r.json).some(isActiveService);
+}
+
+async function countActivePartnerUsersByServices(shmSessionId: string, userIds: number[]) {
+  const ids = normalizeIdList(userIds, 1000);
+  let activeUsers = 0;
+  let checkedUsers = 0;
+  let failedUsers = 0;
+  const concurrency = 8;
+  let cursor = 0;
+
+  async function worker() {
+    for (;;) {
+      const index = cursor++;
+      if (index >= ids.length) return;
+      const active = await hasActiveService(shmSessionId, ids[index]);
+      if (active === null) {
+        failedUsers += 1;
+        continue;
+      }
+      checkedUsers += 1;
+      if (active) activeUsers += 1;
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, ids.length) }, () => worker()));
+  return { activeUsers, checkedUsers, failedUsers };
+}
+
 export async function adminRoutes(app: FastifyInstance) {
   app.get("/admin/referral-aliases", async (req, reply) => {
     const s = getSessionFromRequest(req);
@@ -155,13 +224,23 @@ export async function adminRoutes(app: FastifyInstance) {
       });
     }
 
+    const referralUserIds = normalizeIdList((result.json as any)?.referral_user_ids);
+    const serviceStats = referralUserIds.length > 0
+      ? await countActivePartnerUsersByServices(s.shmSessionId, referralUserIds)
+      : null;
+
     return reply.send({
       ok: true,
       partnerId: item.partner_id,
       totalUsers: Number((result.json as any)?.total_users ?? 0),
-      activeUsers: Number((result.json as any)?.active_users ?? 0),
+      activeUsers: serviceStats
+        ? serviceStats.activeUsers
+        : Number((result.json as any)?.active_users ?? 0),
       scannedUsers: Number((result.json as any)?.scanned_users ?? 0),
       truncated: Boolean((result.json as any)?.truncated),
+      serviceCheckedUsers: serviceStats?.checkedUsers ?? 0,
+      serviceCheckFailedUsers: serviceStats?.failedUsers ?? 0,
+      activeSource: serviceStats ? "services" : "template",
     });
   });
 

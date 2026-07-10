@@ -27,6 +27,9 @@ type PartnerStats = {
   activeUsers: number;
   scannedUsers: number;
   truncated: boolean;
+  serviceCheckedUsers?: number;
+  serviceCheckFailedUsers?: number;
+  activeSource?: "services" | "template";
 };
 
 const createEmptyForm = (): PartnerForm => ({
@@ -274,18 +277,34 @@ export function ReferralAliasesSection() {
                 <strong>{item.visits_count || 0}</strong>
               </div>
               <div className="refPartnerCard__metric">
-                <span>Регистрации</span>
+                <span>Регистрации по ссылке</span>
                 <strong>{item.registrations_count || 0}</strong>
               </div>
-              <div className="refPartnerCard__metric refPartnerCard__metric--active">
-                <span>Активные клиенты</span>
+              <div className="refPartnerCard__metric">
+                <span>Клиенты в биллинге</span>
                 <strong>
                   {statsLoading[item.id]
                     ? "…"
                     : stats[item.id]
-                      ? `${stats[item.id].activeUsers} из ${stats[item.id].totalUsers}`
+                      ? stats[item.id].totalUsers
                       : "—"}
                 </strong>
+              </div>
+              <div className="refPartnerCard__metric refPartnerCard__metric--active">
+                <span>Активные по услугам</span>
+                <strong>
+                  {statsLoading[item.id]
+                    ? "…"
+                    : stats[item.id]
+                      ? stats[item.id].activeUsers
+                      : "—"}
+                </strong>
+                {stats[item.id]?.serviceCheckFailedUsers ? (
+                  <small>не проверено: {stats[item.id].serviceCheckFailedUsers}</small>
+                ) : null}
+                {stats[item.id]?.activeSource === "template" ? (
+                  <small>нужен шаблон v14</small>
+                ) : null}
               </div>
             </div>
 
