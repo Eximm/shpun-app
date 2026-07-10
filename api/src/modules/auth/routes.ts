@@ -217,13 +217,14 @@ async function callShmTemplate(
   sessionId: string,
   action: string,
   extraParams?: Record<string, any>
-): Promise<void> {
+): Promise<any> {
   const r = await shmFetch<any>(null, "v1/template/shpun_app", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: toFormUrlEncoded({ session_id: sessionId, action, ...(extraParams ?? {}) }),
   });
   if (!r.ok) throw new Error(`shm_template_failed:${r.status}`);
+  return r.json ?? {};
 }
 
 async function tryAttachPartner(
@@ -240,7 +241,7 @@ async function tryAttachPartner(
     : Number(partnerIdRaw ?? 0);
   if (!Number.isFinite(partnerId) || partnerId <= 0) return;
   try {
-    await callShmTemplate(shmSessionId, "referrals.claim", {
+    const claimResult = await callShmTemplate(shmSessionId, "referrals.claim", {
       partner_id: Math.trunc(partnerId),
       ...(campaign ? {
         referral_alias: campaign.alias,
@@ -249,7 +250,12 @@ async function tryAttachPartner(
         referral_secret: String(process.env.SHM_REFERRAL_SECRET ?? ""),
       } : {}),
     });
-    if (campaign) recordReferralAliasRegistration(campaign.alias);
+    const claimData = (claimResult as any)?.data && typeof (claimResult as any).data === "object"
+      ? (claimResult as any).data
+      : claimResult;
+    if (campaign && Number((claimData as any)?.campaign_initialized ?? 0) === 1) {
+      recordReferralAliasRegistration(campaign.alias);
+    }
   } catch {
     // ignore
   }

@@ -144,6 +144,11 @@ function normalizeIdList(value: unknown, max = 1000): number[] {
   return out;
 }
 
+function unwrapTemplateJson(json: any): any {
+  const data = json?.data;
+  return data && typeof data === "object" && !Array.isArray(data) ? data : json;
+}
+
 function extractRows(json: any): any[] {
   const data = json?.data ?? json?.items ?? json?.rows ?? [];
   if (Array.isArray(data)) return data;
@@ -217,14 +222,15 @@ export async function adminRoutes(app: FastifyInstance) {
     if (!item) return reply.code(404).send({ ok: false, error: "alias_not_found" });
 
     const result = await shmShpunAppAdminPartnerStats(s.shmSessionId, item.partner_id);
-    if (!result.ok || !(result.json as any)?.ok) {
+    const statsJson = unwrapTemplateJson(result.json as any);
+    if (!result.ok || !statsJson?.ok) {
       return reply.code(502).send({
         ok: false,
-        error: (result.json as any)?.error || "partner_stats_failed",
+        error: statsJson?.error || "partner_stats_failed",
       });
     }
 
-    const referralUserIds = normalizeIdList((result.json as any)?.referral_user_ids);
+    const referralUserIds = normalizeIdList(statsJson?.referral_user_ids);
     const serviceStats = referralUserIds.length > 0
       ? await countActivePartnerUsersByServices(s.shmSessionId, referralUserIds)
       : null;
@@ -232,14 +238,16 @@ export async function adminRoutes(app: FastifyInstance) {
     return reply.send({
       ok: true,
       partnerId: item.partner_id,
-      totalUsers: Number((result.json as any)?.total_users ?? 0),
+      totalUsers: Number(statsJson?.total_users ?? 0),
       activeUsers: serviceStats
         ? serviceStats.activeUsers
-        : Number((result.json as any)?.active_users ?? 0),
-      scannedUsers: Number((result.json as any)?.scanned_users ?? 0),
-      truncated: Boolean((result.json as any)?.truncated),
+        : Number(statsJson?.active_users ?? 0),
+      scannedUsers: Number(statsJson?.scanned_users ?? 0),
+      truncated: Boolean(statsJson?.truncated),
       serviceCheckedUsers: serviceStats?.checkedUsers ?? 0,
       serviceCheckFailedUsers: serviceStats?.failedUsers ?? 0,
+      referralUserIdsCount: referralUserIds.length,
+      templateVersion: String(statsJson?.ver ?? ""),
       activeSource: serviceStats ? "services" : "template",
     });
   });

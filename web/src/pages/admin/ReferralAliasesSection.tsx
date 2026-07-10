@@ -29,6 +29,8 @@ type PartnerStats = {
   truncated: boolean;
   serviceCheckedUsers?: number;
   serviceCheckFailedUsers?: number;
+  referralUserIdsCount?: number;
+  templateVersion?: string;
   activeSource?: "services" | "template";
 };
 
@@ -277,8 +279,9 @@ export function ReferralAliasesSection() {
                 <strong>{item.visits_count || 0}</strong>
               </div>
               <div className="refPartnerCard__metric">
-                <span>Регистрации по ссылке</span>
+                <span>Локально учтено</span>
                 <strong>{item.registrations_count || 0}</strong>
+                <small>старый счётчик claim</small>
               </div>
               <div className="refPartnerCard__metric">
                 <span>Клиенты в биллинге</span>
@@ -303,7 +306,10 @@ export function ReferralAliasesSection() {
                   <small>не проверено: {stats[item.id].serviceCheckFailedUsers}</small>
                 ) : null}
                 {stats[item.id]?.activeSource === "template" ? (
-                  <small>нужен шаблон v14</small>
+                  <small>
+                    нет списка ID из шаблона
+                    {stats[item.id]?.templateVersion ? ` (${stats[item.id].templateVersion})` : ""}
+                  </small>
                 ) : null}
               </div>
             </div>
