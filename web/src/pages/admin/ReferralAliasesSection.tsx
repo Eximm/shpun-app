@@ -307,7 +307,7 @@ export function ReferralAliasesSection() {
                       ? stats[item.id].activeUsers
                       : "—"}
                 </strong>
-                {stats[item.id]?.serviceCheckFailedUsers ? (
+                {stats[item.id]?.activeSource === "services" && stats[item.id]?.serviceCheckFailedUsers ? (
                   <small>не проверено: {stats[item.id].serviceCheckFailedUsers}</small>
                 ) : null}
                 {stats[item.id]?.activeSource === "services" ? (
