@@ -171,17 +171,74 @@ function isActiveService(row: any): boolean {
   return raw === "ACTIVE";
 }
 
-async function hasActiveService(shmSessionId: string, userId: number): Promise<boolean | null> {
-  const filter = JSON.stringify({ user_id: userId });
-  const r = await shmFetch<any>(shmSessionId, "v1/user/service", {
-    method: "GET",
-    query: { limit: 100, offset: 0, filter },
-  });
-  if (!r.ok) return null;
-  return extractRows(r.json).some(isActiveService);
+function extractServiceOwnerId(row: any): number {
+  const nestedUser = row?.user && typeof row.user === "object" ? row.user : {};
+  const nestedClient = row?.client && typeof row.client === "object" ? row.client : {};
+  const n = Math.trunc(Number(
+    row?.user_id ??
+    row?.uid ??
+    row?.account_id ??
+    row?.client_id ??
+    row?.customer_id ??
+    nestedUser?.user_id ??
+    nestedUser?.id ??
+    nestedClient?.user_id ??
+    nestedClient?.id ??
+    0
+  ));
+  return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
-async function countActivePartnerUsersByServices(shmSessionId: string, userIds: number[]) {
+async function loadAdminUserServices(shmSessionId: string, limit = 1000, maxRows = 10000) {
+  const rows: any[] = [];
+  let offset = 0;
+  let failed = false;
+
+  for (;;) {
+    const r = await shmFetch<any>(shmSessionId, "v1/user/service", {
+      method: "GET",
+      query: { limit, offset, filter: "{}" },
+    });
+    if (!r.ok) {
+      failed = true;
+      break;
+    }
+
+    const page = extractRows(r.json);
+    rows.push(...page);
+    if (page.length < limit || rows.length >= maxRows) break;
+    offset += limit;
+  }
+
+  return {
+    ok: !failed,
+    rows: rows.slice(0, maxRows),
+    truncated: rows.length >= maxRows,
+  };
+}
+
+async function hasActiveServiceByUserFilter(shmSessionId: string, userId: number): Promise<boolean | null> {
+  const filterVariants = [
+    { user_id: userId },
+    { uid: userId },
+    { id: userId },
+  ];
+
+  for (const filterObj of filterVariants) {
+    const filter = JSON.stringify(filterObj);
+    const r = await shmFetch<any>(shmSessionId, "v1/user/service", {
+      method: "GET",
+      query: { limit: 100, offset: 0, filter },
+    });
+    if (!r.ok) continue;
+    const rows = extractRows(r.json);
+    if (rows.length > 0) return rows.some(isActiveService);
+  }
+
+  return null;
+}
+
+async function countActivePartnerUsersByUserFilter(shmSessionId: string, userIds: number[]) {
   const ids = normalizeIdList(userIds, 1000);
   let activeUsers = 0;
   let checkedUsers = 0;
@@ -193,7 +250,7 @@ async function countActivePartnerUsersByServices(shmSessionId: string, userIds: 
     for (;;) {
       const index = cursor++;
       if (index >= ids.length) return;
-      const active = await hasActiveService(shmSessionId, ids[index]);
+      const active = await hasActiveServiceByUserFilter(shmSessionId, ids[index]);
       if (active === null) {
         failedUsers += 1;
         continue;
@@ -205,6 +262,70 @@ async function countActivePartnerUsersByServices(shmSessionId: string, userIds: 
 
   await Promise.all(Array.from({ length: Math.min(concurrency, ids.length) }, () => worker()));
   return { activeUsers, checkedUsers, failedUsers };
+}
+
+async function countActivePartnerUsersByAdminServiceList(shmSessionId: string, userIds: number[]) {
+  const ids = normalizeIdList(userIds, 1000);
+  const idSet = new Set(ids);
+  const activeOwnerIds = new Set<number>();
+  const seenOwnerIds = new Set<number>();
+
+  const loaded = await loadAdminUserServices(shmSessionId);
+  if (!loaded.ok) {
+    return {
+      activeUsers: 0,
+      checkedUsers: 0,
+      failedUsers: ids.length,
+      scannedServices: loaded.rows.length,
+      serviceRowsWithOwner: 0,
+      truncated: loaded.truncated,
+    };
+  }
+
+  let serviceRowsWithOwner = 0;
+  for (const row of loaded.rows) {
+    const ownerId = extractServiceOwnerId(row);
+    if (!ownerId) continue;
+    serviceRowsWithOwner += 1;
+    if (!idSet.has(ownerId)) continue;
+    seenOwnerIds.add(ownerId);
+    if (isActiveService(row)) activeOwnerIds.add(ownerId);
+  }
+
+  return {
+    activeUsers: activeOwnerIds.size,
+    checkedUsers: seenOwnerIds.size,
+    failedUsers: Math.max(0, ids.length - seenOwnerIds.size),
+    scannedServices: loaded.rows.length,
+    serviceRowsWithOwner,
+    truncated: loaded.truncated,
+  };
+}
+
+async function hasActiveService(shmSessionId: string, userId: number): Promise<boolean | null> {
+  const filter = JSON.stringify({ user_id: userId });
+  const r = await shmFetch<any>(shmSessionId, "v1/user/service", {
+    method: "GET",
+    query: { limit: 100, offset: 0, filter },
+  });
+  if (!r.ok) return null;
+  return extractRows(r.json).some(isActiveService);
+}
+
+async function countActivePartnerUsersByServices(shmSessionId: string, userIds: number[]) {
+  const byList = await countActivePartnerUsersByAdminServiceList(shmSessionId, userIds);
+  if (byList.serviceRowsWithOwner > 0 && byList.checkedUsers > 0) {
+    return { ...byList, method: "admin_service_list" as const };
+  }
+
+  const byFilter = await countActivePartnerUsersByUserFilter(shmSessionId, userIds);
+  return {
+    ...byFilter,
+    scannedServices: byList.scannedServices,
+    serviceRowsWithOwner: byList.serviceRowsWithOwner,
+    truncated: byList.truncated,
+    method: "user_service_filter" as const,
+  };
 }
 
 export async function adminRoutes(app: FastifyInstance) {
@@ -254,6 +375,10 @@ export async function adminRoutes(app: FastifyInstance) {
       truncated: Boolean(statsJson?.truncated),
       serviceCheckedUsers: serviceStats?.checkedUsers ?? 0,
       serviceCheckFailedUsers: serviceStats?.failedUsers ?? 0,
+      serviceStatsMethod: serviceStats?.method ?? "",
+      scannedServices: serviceStats?.scannedServices ?? 0,
+      serviceRowsWithOwner: serviceStats?.serviceRowsWithOwner ?? 0,
+      serviceStatsTruncated: Boolean(serviceStats?.truncated),
       referralUserIdsCount: referralUserIds.length,
       templateVersion: String(statsJson?.ver ?? ""),
       activeSource: serviceStats ? "services" : "template",

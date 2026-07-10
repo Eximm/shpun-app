@@ -29,6 +29,10 @@ type PartnerStats = {
   truncated: boolean;
   serviceCheckedUsers?: number;
   serviceCheckFailedUsers?: number;
+  serviceStatsMethod?: string;
+  scannedServices?: number;
+  serviceRowsWithOwner?: number;
+  serviceStatsTruncated?: boolean;
   referralUserIdsCount?: number;
   templateVersion?: string;
   activeSource?: "services" | "template";
@@ -304,6 +308,17 @@ export function ReferralAliasesSection() {
                 </strong>
                 {stats[item.id]?.serviceCheckFailedUsers ? (
                   <small>не проверено: {stats[item.id].serviceCheckFailedUsers}</small>
+                ) : null}
+                {stats[item.id]?.activeSource === "services" ? (
+                  <small>
+                    {stats[item.id]?.serviceStatsMethod || "services"}
+                    {typeof stats[item.id]?.scannedServices === "number"
+                      ? ` · услуг: ${stats[item.id].scannedServices}`
+                      : ""}
+                    {typeof stats[item.id]?.serviceRowsWithOwner === "number"
+                      ? ` · с владельцем: ${stats[item.id].serviceRowsWithOwner}`
+                      : ""}
+                  </small>
                 ) : null}
                 {stats[item.id]?.activeSource === "template" ? (
                   <small>
