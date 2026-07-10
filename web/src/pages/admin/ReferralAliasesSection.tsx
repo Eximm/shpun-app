@@ -48,13 +48,6 @@ const createEmptyForm = (): PartnerForm => ({
   enabled: true,
 });
 
-function activeStatsLabel(stats?: PartnerStats): string {
-  if (!stats) return "";
-  if (stats.activeSource === "template") return "из SHM";
-  if (stats.activeSource === "services") return "по услугам";
-  return "";
-}
-
 function activeStatsTitle(stats?: PartnerStats): string {
   if (!stats) return "";
   if (stats.activeSource === "template") {
@@ -278,7 +271,6 @@ export function ReferralAliasesSection() {
         {items.length === 0 && <p className="p">Партнёры пока не добавлены.</p>}
         {items.map((item) => {
           const itemStats = stats[item.id];
-          const activeLabel = activeStatsLabel(itemStats);
           const activeTitle = activeStatsTitle(itemStats);
           return (
           <article className="refPartnerCard" key={item.id}>
@@ -313,7 +305,6 @@ export function ReferralAliasesSection() {
               <div className="refPartnerCard__metric">
                 <span>Регистрации в приложении</span>
                 <strong>{item.registrations_count || 0}</strong>
-                <small>по этой ссылке</small>
               </div>
               <div className="refPartnerCard__metric">
                 <span>Клиенты в биллинге</span>
@@ -325,7 +316,7 @@ export function ReferralAliasesSection() {
                       : "—"}
                 </strong>
               </div>
-              <div className="refPartnerCard__metric refPartnerCard__metric--active">
+              <div className="refPartnerCard__metric refPartnerCard__metric--active" title={activeTitle || undefined}>
                 <span>Активные по услугам</span>
                 <strong>
                   {statsLoading[item.id]
@@ -334,7 +325,6 @@ export function ReferralAliasesSection() {
                       ? itemStats.activeUsers
                       : "—"}
                 </strong>
-                {activeLabel ? <small title={activeTitle}>{activeLabel}</small> : null}
               </div>
             </div>
 
