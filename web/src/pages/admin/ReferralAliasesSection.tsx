@@ -35,6 +35,7 @@ type PartnerStats = {
   serviceStatsTruncated?: boolean;
   referralUserIdsCount?: number;
   templateVersion?: string;
+  templateActiveUsers?: number;
   activeSource?: "services" | "template";
 };
 
@@ -322,7 +323,7 @@ export function ReferralAliasesSection() {
                 ) : null}
                 {stats[item.id]?.activeSource === "template" ? (
                   <small>
-                    нет списка ID из шаблона
+                    подсчёт из шаблона
                     {stats[item.id]?.templateVersion ? ` (${stats[item.id].templateVersion})` : ""}
                   </small>
                 ) : null}

@@ -364,14 +364,23 @@ export async function adminRoutes(app: FastifyInstance) {
     const serviceStats = referralUserIds.length > 0
       ? await countActivePartnerUsersByServices(s.shmSessionId, referralUserIds)
       : null;
+    const templateActiveUsers = Number(statsJson?.active_users ?? 0);
+    const serviceStatsUsable = Boolean(
+      serviceStats &&
+      serviceStats.method !== "owner_not_available" &&
+      serviceStats.checkedUsers > 0
+    );
+    const activeSource = serviceStatsUsable
+      ? "services"
+      : "template";
 
     return reply.send({
       ok: true,
       partnerId: item.partner_id,
       totalUsers: Number(statsJson?.total_users ?? 0),
-      activeUsers: serviceStats
-        ? serviceStats.activeUsers
-        : Number(statsJson?.active_users ?? 0),
+      activeUsers: serviceStatsUsable
+        ? serviceStats!.activeUsers
+        : templateActiveUsers,
       scannedUsers: Number(statsJson?.scanned_users ?? 0),
       truncated: Boolean(statsJson?.truncated),
       serviceCheckedUsers: serviceStats?.checkedUsers ?? 0,
@@ -382,7 +391,8 @@ export async function adminRoutes(app: FastifyInstance) {
       serviceStatsTruncated: Boolean(serviceStats?.truncated),
       referralUserIdsCount: referralUserIds.length,
       templateVersion: String(statsJson?.ver ?? ""),
-      activeSource: serviceStats ? "services" : "template",
+      templateActiveUsers,
+      activeSource,
     });
   });
 
