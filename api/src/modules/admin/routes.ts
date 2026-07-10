@@ -318,13 +318,14 @@ async function countActivePartnerUsersByServices(shmSessionId: string, userIds: 
     return { ...byList, method: "admin_service_list" as const };
   }
 
-  const byFilter = await countActivePartnerUsersByUserFilter(shmSessionId, userIds);
   return {
-    ...byFilter,
+    activeUsers: 0,
+    checkedUsers: 0,
+    failedUsers: normalizeIdList(userIds, 1000).length,
     scannedServices: byList.scannedServices,
     serviceRowsWithOwner: byList.serviceRowsWithOwner,
     truncated: byList.truncated,
-    method: "user_service_filter" as const,
+    method: "owner_not_available" as const,
   };
 }
 
