@@ -284,9 +284,9 @@ export function ReferralAliasesSection() {
                 <strong>{item.visits_count || 0}</strong>
               </div>
               <div className="refPartnerCard__metric">
-                <span>Локально учтено</span>
+                <span>Регистрации в приложении</span>
                 <strong>{item.registrations_count || 0}</strong>
-                <small>старый счётчик claim</small>
+                <small>по этой ссылке</small>
               </div>
               <div className="refPartnerCard__metric">
                 <span>Клиенты в биллинге</span>
