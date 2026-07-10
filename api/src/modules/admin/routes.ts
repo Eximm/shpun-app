@@ -135,7 +135,11 @@ function normalizeIdList(value: unknown, max = 1000): number[] {
   const out: number[] = [];
   const seen = new Set<number>();
   for (const raw of arr) {
-    const n = Math.trunc(Number(raw));
+    const n = Math.trunc(Number(
+      raw && typeof raw === "object"
+        ? (raw as any).user_id ?? (raw as any).id
+        : raw
+    ));
     if (!Number.isFinite(n) || n <= 0 || seen.has(n)) continue;
     seen.add(n);
     out.push(n);
@@ -230,7 +234,11 @@ export async function adminRoutes(app: FastifyInstance) {
       });
     }
 
-    const referralUserIds = normalizeIdList(statsJson?.referral_user_ids);
+    const referralUserIds = normalizeIdList(
+      Array.isArray(statsJson?.referral_users) && statsJson.referral_users.length > 0
+        ? statsJson.referral_users
+        : statsJson?.referral_user_ids
+    );
     const serviceStats = referralUserIds.length > 0
       ? await countActivePartnerUsersByServices(s.shmSessionId, referralUserIds)
       : null;
