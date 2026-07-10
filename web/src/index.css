@@ -3192,12 +3192,16 @@ button, a { -webkit-tap-highlight-color: transparent; }
 }
 .refPartnerCard__metrics {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0,1fr));
+  grid-template-columns: repeat(6, minmax(108px,1fr));
   gap: 8px;
   margin-top: 14px;
 }
 .refPartnerCard__metric {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
   min-width: 0;
+  min-height: 76px;
   padding: 10px 11px;
   border: 1px solid rgba(255,255,255,0.065);
   border-radius: 13px;
@@ -3209,6 +3213,18 @@ button, a { -webkit-tap-highlight-color: transparent; }
   font-size: 10px;
   font-weight: 800;
   line-height: 1.25;
+}
+.refPartnerCard__metric small {
+  display: block;
+  margin-top: 7px;
+  max-width: 100%;
+  color: rgba(255,255,255,0.58);
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .refPartnerCard__metric strong {
   display: block;

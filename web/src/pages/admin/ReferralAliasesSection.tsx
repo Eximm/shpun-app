@@ -48,6 +48,29 @@ const createEmptyForm = (): PartnerForm => ({
   enabled: true,
 });
 
+function activeStatsLabel(stats?: PartnerStats): string {
+  if (!stats) return "";
+  if (stats.activeSource === "template") return "из SHM";
+  if (stats.activeSource === "services") return "по услугам";
+  return "";
+}
+
+function activeStatsTitle(stats?: PartnerStats): string {
+  if (!stats) return "";
+  if (stats.activeSource === "template") {
+    return `Активные клиенты посчитаны шаблоном биллинга${stats.templateVersion ? `: ${stats.templateVersion}` : ""}`;
+  }
+  if (stats.activeSource === "services") {
+    const parts = [
+      stats.serviceStatsMethod || "services",
+      typeof stats.scannedServices === "number" ? `услуг: ${stats.scannedServices}` : "",
+      typeof stats.serviceRowsWithOwner === "number" ? `с владельцем: ${stats.serviceRowsWithOwner}` : "",
+    ].filter(Boolean);
+    return parts.join(" · ");
+  }
+  return "";
+}
+
 export function ReferralAliasesSection() {
   const [items, setItems] = useState<AliasItem[]>([]);
   const [form, setForm] = useState<PartnerForm>(createEmptyForm);
@@ -253,7 +276,11 @@ export function ReferralAliasesSection() {
           {items.length > 0 && <span className="chip chip--soft">{items.length}</span>}
         </div>
         {items.length === 0 && <p className="p">Партнёры пока не добавлены.</p>}
-        {items.map((item) => (
+        {items.map((item) => {
+          const itemStats = stats[item.id];
+          const activeLabel = activeStatsLabel(itemStats);
+          const activeTitle = activeStatsTitle(itemStats);
+          return (
           <article className="refPartnerCard" key={item.id}>
             <div className="refPartnerCard__head">
               <div className="refPartnerCard__identity">
@@ -293,8 +320,8 @@ export function ReferralAliasesSection() {
                 <strong>
                   {statsLoading[item.id]
                     ? "…"
-                    : stats[item.id]
-                      ? stats[item.id].totalUsers
+                    : itemStats
+                      ? itemStats.totalUsers
                       : "—"}
                 </strong>
               </div>
@@ -303,30 +330,11 @@ export function ReferralAliasesSection() {
                 <strong>
                   {statsLoading[item.id]
                     ? "…"
-                    : stats[item.id]
-                      ? stats[item.id].activeUsers
+                    : itemStats
+                      ? itemStats.activeUsers
                       : "—"}
                 </strong>
-                {stats[item.id]?.activeSource === "services" && stats[item.id]?.serviceCheckFailedUsers ? (
-                  <small>не проверено: {stats[item.id].serviceCheckFailedUsers}</small>
-                ) : null}
-                {stats[item.id]?.activeSource === "services" ? (
-                  <small>
-                    {stats[item.id]?.serviceStatsMethod || "services"}
-                    {typeof stats[item.id]?.scannedServices === "number"
-                      ? ` · услуг: ${stats[item.id].scannedServices}`
-                      : ""}
-                    {typeof stats[item.id]?.serviceRowsWithOwner === "number"
-                      ? ` · с владельцем: ${stats[item.id].serviceRowsWithOwner}`
-                      : ""}
-                  </small>
-                ) : null}
-                {stats[item.id]?.activeSource === "template" ? (
-                  <small>
-                    подсчёт из шаблона
-                    {stats[item.id]?.templateVersion ? ` (${stats[item.id].templateVersion})` : ""}
-                  </small>
-                ) : null}
+                {activeLabel ? <small title={activeTitle}>{activeLabel}</small> : null}
               </div>
             </div>
 
@@ -343,7 +351,7 @@ export function ReferralAliasesSection() {
               <button className="btn refPartnerCard__delete" type="button" onClick={() => void remove(item.id)}>Удалить</button>
             </div>
           </article>
-        ))}
+        )})}
       </div>
     </div></div>
   );
