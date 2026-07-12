@@ -3192,7 +3192,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 }
 .refPartnerCard__metrics {
   display: grid;
-  grid-template-columns: repeat(6, minmax(108px,1fr));
+  grid-template-columns: repeat(5, minmax(118px,1fr));
   gap: 8px;
   margin-top: 14px;
 }

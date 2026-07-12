@@ -303,10 +303,6 @@ export function ReferralAliasesSection() {
                 <strong>{item.visits_count || 0}</strong>
               </div>
               <div className="refPartnerCard__metric">
-                <span>Регистрации в приложении</span>
-                <strong>{item.registrations_count || 0}</strong>
-              </div>
-              <div className="refPartnerCard__metric">
                 <span>Клиенты в биллинге</span>
                 <strong>
                   {statsLoading[item.id]

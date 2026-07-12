@@ -253,7 +253,11 @@ async function tryAttachPartner(
     const claimData = (claimResult as any)?.data && typeof (claimResult as any).data === "object"
       ? (claimResult as any).data
       : claimResult;
-    if (campaign && Number((claimData as any)?.campaign_initialized ?? 0) === 1) {
+    if (
+      campaign &&
+      Number((claimData as any)?.campaign_initialized ?? 0) === 1 &&
+      Number((claimData as any)?.partner_confirmed ?? 0) === 1
+    ) {
       recordReferralAliasRegistration(campaign.alias);
     }
   } catch {
