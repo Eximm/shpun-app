@@ -10,7 +10,7 @@ import { useI18n } from "../../shared/i18n";
 
 type Props = {
   usi: number;
-  service: { title: string; status: string; statusRaw: string; category?: string };
+  service: { title: string; status: string; statusRaw: string; category?: string; parent?: number | null };
   onDone?: () => void;
 };
 
@@ -238,6 +238,10 @@ function serviceVariant(category?: string): "flex" | "flex_plus" | "marzban" {
   return "marzban";
 }
 
+function isHappOnlyService(service: Props["service"], variant: ReturnType<typeof serviceVariant>) {
+  return variant === "flex_plus" || service?.parent != null;
+}
+
 function deviceTitle(device: SubscriptionDevice, fallback: string) {
   return device.deviceModel?.trim() || device.platform?.trim() || fallback;
 }
@@ -272,6 +276,7 @@ export default function ConnectMarzban({ usi, service }: Props) {
 
   const bridgeDeepLink = useMemo(() => getHappBridgeDeepLink(), []);
   const variant = serviceVariant(service?.category);
+  const happOnly = isHappOnlyService(service, variant);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -301,8 +306,15 @@ export default function ConnectMarzban({ usi, service }: Props) {
   const [deletingDevice, setDeletingDevice] = useState<SubscriptionDevice | null>(null);
   const [deletePending, setDeletePending] = useState(false);
 
-  const selectedClient = CLIENTS[client];
+  const effectiveClient: ClientKind = happOnly ? "happ" : client;
+  const selectedClient = CLIENTS[effectiveClient];
   const selectedLinks = selectedClient.links[platform];
+
+  useEffect(() => {
+    if (!happOnly) return;
+    setClient("happ");
+    setClientPickerOpen(false);
+  }, [happOnly]);
 
   async function load() {
     setLoading(true);
@@ -355,8 +367,9 @@ export default function ConnectMarzban({ usi, service }: Props) {
   async function openImport(useMirror = false, client: ClientKind = "happ") {
     const target = useMirror ? (subscriptionUrlMirror ?? "") : subscriptionUrl;
     if (!ready || !target) return;
+    const targetClient: ClientKind = happOnly ? "happ" : client;
 
-    if (client === "happ") {
+    if (targetClient === "happ") {
       const href = buildHappImportLink(target, platform, runtime);
       if (platform === "ios") {
         openWithVisibleFallback({
@@ -378,18 +391,18 @@ export default function ConnectMarzban({ usi, service }: Props) {
       return;
     }
 
-    const href = buildClientImportLink(client, target, platform, runtime);
+    const href = buildClientImportLink(targetClient, target, platform, runtime);
     const opened = tryOpenScheme(href, runtime, () => {
       toast.info(t("connect.open_client"), { description: t("connect.more_methods") });
     });
-    if (opened && platform !== "ios") toast.info(t("connect.open_client"), { description: t(CLIENTS[client].importTextKey) });
+    if (opened && platform !== "ios") toast.info(t("connect.open_client"), { description: t(CLIENTS[targetClient].importTextKey) });
   }
 
   async function openQr() {
     const target = subscriptionUrl;
     if (!target) return;
     const title = t("connect.qr_title");
-    const text = t("connectMarzban.manual.qr_text");
+    const text = happOnly ? t("connectMarzban.manual.happ_only_qr_text") : t("connectMarzban.manual.qr_text");
     try {
       const dataUrl = await QRCode.toDataURL(target, {
         errorCorrectionLevel: "L",
@@ -412,16 +425,18 @@ export default function ConnectMarzban({ usi, service }: Props) {
     if (useMirror) { setCopiedMirror(ok); if (ok) setTimeout(() => setCopiedMirror(false), 1500); }
     else { setCopied(ok); if (ok) setTimeout(() => setCopied(false), 1500); }
     ok
-      ? toast.success(t("connect.copied"), { description: t("connectMarzban.manual.copy_ok_desc") })
+      ? toast.success(t("connect.copied"), { description: happOnly ? t("connectMarzban.manual.happ_only_copy_ok_desc") : t("connectMarzban.manual.copy_ok_desc") })
       : toast.error(t("connect.copy_link"), { description: t("connect.sub_prepare_error_desc") });
   }
 
   function openClientStore(client: ClientKind) {
-    openLinkSafe(CLIENTS[client].links[platform].market);
+    const targetClient: ClientKind = happOnly ? "happ" : client;
+    openLinkSafe(CLIENTS[targetClient].links[platform].market);
   }
 
   function openClientDirect(client: ClientKind) {
-    const links = CLIENTS[client].links[platform];
+    const targetClient: ClientKind = happOnly ? "happ" : client;
+    const links = CLIENTS[targetClient].links[platform];
     if (!links.direct) return;
     openLinkSafe(links.direct);
   }
@@ -557,14 +572,16 @@ export default function ConnectMarzban({ usi, service }: Props) {
           </button>
         </div>
 
-        <div className="cm__selectorItem">
-          <span className="p cawg__label">{t("connectMarzban.client.label")}</span>
-          <button className="btn cawg__deviceBtn cm__selectorBtn" type="button" onClick={() => setClientPickerOpen(true)} disabled={loading}>
-            {selectedClient.icon} {selectedClient.title}
-            {client === "happ" && <span className="chip chip--ok">{t("connectMarzban.client.recommended")}</span>}
-            {" "}<span aria-hidden="true">{"\u25BE"}</span>
-          </button>
-        </div>
+        {!happOnly && (
+          <div className="cm__selectorItem">
+            <span className="p cawg__label">{t("connectMarzban.client.label")}</span>
+            <button className="btn cawg__deviceBtn cm__selectorBtn" type="button" onClick={() => setClientPickerOpen(true)} disabled={loading}>
+              {selectedClient.icon} {selectedClient.title}
+              {effectiveClient === "happ" && <span className="chip chip--ok">{t("connectMarzban.client.recommended")}</span>}
+              {" "}<span aria-hidden="true">{"\u25BE"}</span>
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="card" style={{ marginTop: 12 }}>
@@ -598,7 +615,7 @@ export default function ConnectMarzban({ usi, service }: Props) {
             <b>{t("connect.step2.label")}</b> {t("connect.step_import_desc")}
           </div>
           <div className="actions actions--1">
-            <button className="btn btn--primary" onClick={() => void openImport(false, client)} disabled={!ready} type="button">
+            <button className="btn btn--primary" onClick={() => void openImport(false, effectiveClient)} disabled={!ready} type="button">
               {loading ? `\u23F3 ${t("connect.wait")}` : `\u26A1 ${t("connect.add_sub")} ${selectedLinks.title}`}
             </button>
           </div>
@@ -615,9 +632,33 @@ export default function ConnectMarzban({ usi, service }: Props) {
             </div>
           </div>
           <div className="actions actions--1 cm__priorityActions">
-            <button className="btn btn--primary" onClick={() => void openImport(true, client)} type="button">
+            <button className="btn btn--primary" onClick={() => void openImport(true, effectiveClient)} type="button">
               {"\u{1F504}"} {t("connectMarzban.mirror.cta")} {selectedLinks.title}
             </button>
+          </div>
+        </div>
+      )}
+
+      {happOnly && ready && (
+        <div className="card cm__devicesCard">
+          <div className="card__body">
+            <div className="cm__extraTitle">{t("connect.more_methods")}</div>
+            <div className="cm__extraSub">{t("connectMarzban.manual.happ_only_desc")}</div>
+            <div className="actions actions--2 cm__extraSectionActions">
+              <button className="btn" type="button" onClick={() => void copySub(false)}>
+                {copied ? `\u2705 ${t("connect.copied")}` : `\u{1F4CB} ${t("connect.copy_link")}`}
+              </button>
+              <button className="btn" type="button" onClick={() => void openQr()}>
+                {"\u{1F4F1}"} {t("connect.show_qr")}
+              </button>
+            </div>
+            {subscriptionUrlMirror && (
+              <div className="actions actions--1 cm__extraSectionActions">
+                <button className="btn" type="button" onClick={() => void copySub(true)}>
+                  {copiedMirror ? `\u2705 ${t("connect.copied")}` : `\u{1F4CB} ${t("connect.copy_link")} (${t("connectMarzban.mirror.short")})`}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -670,7 +711,7 @@ export default function ConnectMarzban({ usi, service }: Props) {
         document.body
       )}
 
-      {clientPickerOpen && createPortal(
+      {!happOnly && clientPickerOpen && createPortal(
         <div className="modal" role="dialog" aria-modal="true" onMouseDown={() => setClientPickerOpen(false)}>
           <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()}>
             <div className="card__body">
@@ -812,7 +853,7 @@ export default function ConnectMarzban({ usi, service }: Props) {
                 <button className="btn modal__close" type="button" onClick={() => setQrOpen(false)} aria-label={t("common.close")}>{"\u00D7"}</button>
               </div>
               <div className="modal__content">
-                <p className="p">{t("connectMarzban.manual.qr_text")}</p>
+                <p className="p">{happOnly ? t("connectMarzban.manual.happ_only_qr_text") : t("connectMarzban.manual.qr_text")}</p>
                 <div className="helperMedia helperMedia--qr">
                   {qrDataUrl && <img className="helperMedia__img" src={qrDataUrl} alt={t("connectAmneziaWG.qr.alt")} loading="lazy" width={320} />}
                 </div>
