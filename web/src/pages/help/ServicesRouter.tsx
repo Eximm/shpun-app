@@ -16,7 +16,8 @@ type Block = {
   tone?: BlockTone;
 };
 
-const ROUTER_PACKAGE_URL = "https://spb.shpyn.online/files/ipk/shpun-router_1.1.5_all.ipk";
+const ROUTER_PACKAGE_24_URL = "https://spb.shpyn.online/files/ipk/shpun-router_1.1.6_all.ipk";
+const ROUTER_PACKAGE_25_URL = "https://spb.shpyn.online/files/apk/shpun-router_2.0.0_all.apk";
 
 export function ServicesRouter() {
   const { t } = useI18n();
@@ -37,12 +38,12 @@ export function ServicesRouter() {
     {
       icon: "📶",
       title: t("servicesRouter.hardware.title", "Какой роутер выбрать"),
-      body: t("servicesRouter.hardware.body", "Лучший вариант — роутер класса AX3000 или его аналоги с Wi‑Fi 6 и предустановленной OpenWrt 24.10.x. Подойдёт сопоставимая модель с нормальным CPU, достаточной памятью и свежей OpenWrt — без привязки к конкретному магазину или бренду."),
-      note: t("servicesRouter.hardware.note", "Идеально, если продавец уже поставил OpenWrt 24.10.x и проверил LuCI. Тогда установка Shpun Router обычно занимает пару минут."),
+      body: t("servicesRouter.hardware.body", "Лучший вариант — роутер класса AX3000 или его аналоги с Wi‑Fi 6 и предустановленной OpenWrt 24.x или 25.x. Подойдёт сопоставимая модель с нормальным CPU, достаточной памятью и свежей OpenWrt — без привязки к конкретному магазину или бренду."),
+      note: t("servicesRouter.hardware.note", "Идеально, если продавец уже поставил OpenWrt 24.x или 25.x и проверил LuCI. Тогда установка Shpun Router обычно занимает пару минут."),
       bullets: [
         t("servicesRouter.hardware.bullet_1", "Рекомендуемый класс: AX3000 / Wi‑Fi 6 / современный двухъядерный или лучше CPU"),
         t("servicesRouter.hardware.bullet_2", "Желательно: 256 МБ RAM или больше, 128 МБ flash или больше"),
-        t("servicesRouter.hardware.bullet_3", "Обязательно: поддержка OpenWrt 24.10.x и доступ в LuCI"),
+        t("servicesRouter.hardware.bullet_3", "Обязательно: поддержка OpenWrt 24.x или 25.x и доступ в LuCI"),
       ],
       tone: "good",
     },
@@ -71,8 +72,8 @@ export function ServicesRouter() {
       title: t("servicesRouter.quick_start.title", "Быстрый старт"),
       note: t("servicesRouter.quick_start.note", "Перед установкой роутер должен иметь доступ в интернет. Для первой настройки удобнее подключить его WAN-порт к LAN-порту основного роутера, чтобы он сразу получал готовый интернет."),
       steps: [
-        t("servicesRouter.quick_start.step_1", "Запустите роутер с OpenWrt 24.10.x и откройте LuCI"),
-        t("servicesRouter.quick_start.step_2", "Скачайте и установите пакет shpun-router_1.1.5_all.ipk"),
+        t("servicesRouter.quick_start.step_1", "Запустите роутер с OpenWrt 24.x или 25.x и откройте LuCI"),
+        t("servicesRouter.quick_start.step_2", "Скачайте пакет под вашу версию OpenWrt: 24.x — shpun-router_1.1.6_all.ipk, 25.x — shpun-router_2.0.0_all.apk"),
         t("servicesRouter.quick_start.step_3", "Закажите отдельную услугу Shpun Router"),
         t("servicesRouter.quick_start.step_4", "Введите код из виджета роутера в помощнике подключения"),
       ],
@@ -102,6 +103,7 @@ export function ServicesRouter() {
       bullets: [
         t("servicesRouter.updates.bullet_1", "«Проверить/обновить прошивку» ищет и ставит OTA-обновления Shpun Router"),
         t("servicesRouter.updates.bullet_2", "«Сбросить VPN и настройки» удаляет привязку и параметры VPN, пакет остаётся установленным"),
+        t("servicesRouter.updates.bullet_3", "Ветка 1.x поддерживает OpenWrt 24.x, ветка 2.x — OpenWrt 25.x"),
       ],
     },
   ], [t]);
@@ -114,7 +116,7 @@ export function ServicesRouter() {
             <div>
               <h1 className="h1">📡 {t("servicesRouter.page.title", "Shpun Router")}</h1>
               <p className="p miniPage__subtitle">
-                {t("servicesRouter.page.sub", "Router VPN для всей домашней сети на OpenWrt 24.10.x. Главное — выбрать роутер, который не будет слабым местом.")}
+                {t("servicesRouter.page.sub", "Router VPN для всей домашней сети на OpenWrt 24.x и 25.x. Главное — выбрать роутер, который не будет слабым местом.")}
               </p>
             </div>
             <button className="btn miniPage__back" onClick={() => nav(-1)} type="button">
@@ -123,7 +125,8 @@ export function ServicesRouter() {
           </div>
 
           <div className="router-help-tags">
-            <span className="chip chip--ok">OpenWrt 24.10.x</span>
+            <span className="chip chip--ok">OpenWrt 24.x</span>
+            <span className="chip chip--ok">OpenWrt 25.x</span>
             <span className="chip chip--accent">AX3000 class</span>
             <span className="chip">LuCI</span>
           </div>
@@ -138,10 +141,17 @@ export function ServicesRouter() {
             </button>
             <button
               className="btn"
-              onClick={() => window.open(ROUTER_PACKAGE_URL, "_blank", "noopener,noreferrer")}
+              onClick={() => window.open(ROUTER_PACKAGE_24_URL, "_blank", "noopener,noreferrer")}
               type="button"
             >
-              ⬇️ {t("servicesRouter.page.download", "Скачать пакет")}
+              ⬇️ {t("servicesRouter.page.download_24", "OpenWrt 24.x — пакет 1.1.6")}
+            </button>
+            <button
+              className="btn"
+              onClick={() => window.open(ROUTER_PACKAGE_25_URL, "_blank", "noopener,noreferrer")}
+              type="button"
+            >
+              ⬇️ {t("servicesRouter.page.download_25", "OpenWrt 25.x — пакет 2.0")}
             </button>
           </div>
         </div>
@@ -195,7 +205,7 @@ export function ServicesRouter() {
       <div className="card miniPage__panel router-help-footer">
         <div className="card__body">
           <p className="p">
-            {t("servicesRouter.footer.text", "Если сомневаетесь в модели роутера, лучше выбрать класс AX3000 или аналог с предустановленной OpenWrt 24.10.x. Слабые устройства оставьте только для экспериментов.")}
+            {t("servicesRouter.footer.text", "Если сомневаетесь в модели роутера, лучше выбрать класс AX3000 или аналог с предустановленной OpenWrt 24.x или 25.x. Слабые устройства оставьте только для экспериментов.")}
           </p>
           <div className="actions actions--2 miniPage__actions">
             <button

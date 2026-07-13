@@ -280,14 +280,15 @@
           <div class="brand__icon" aria-hidden="true">📡</div>
           <div>
             <h1>Shpun Router</h1>
-            <div class="version">Пакет 1.1.2 для OpenWrt 24.10.x</div>
+            <div class="version">Пакеты для OpenWrt 24.x и 25.x</div>
           </div>
         </div>
         <span class="status">Готов к работе</span>
       </div>
       <p class="hero__text">VPN для всей домашней сети. После привязки роутер сам получит настройки и подключится к Shpun SDN System.</p>
       <div class="tags">
-        <span class="tag">OpenWrt 24.10.x</span>
+        <span class="tag">OpenWrt 24.x</span>
+        <span class="tag">OpenWrt 25.x</span>
         <span class="tag">Настройка без терминала</span>
         <span class="tag">Обновления из виджета</span>
       </div>
@@ -302,7 +303,7 @@
     <section class="page active" id="page-start">
       <div class="section section--accent">
         <h2>Подключение за четыре шага</h2>
-        <p class="section__lead">Понадобится роутер с OpenWrt 24.10.x, доступ к его панели LuCI и работающее подключение к интернету.</p>
+        <p class="section__lead">Понадобится роутер с OpenWrt 24.x или 25.x, доступ к его панели LuCI и работающее подключение к интернету.</p>
         <div class="notice"><strong>Важно перед установкой.</strong> Роутер, на который вы устанавливаете Shpun Router, должен уже иметь доступ в интернет. Для первой настройки удобнее поставить его за основным роутером: соединить LAN-порт основного роутера с WAN-портом настраиваемого. Так он сразу получит готовый интернет.</div>
 
         <ol class="steps">
@@ -336,7 +337,8 @@
           </li>
         </ol>
 
-        <button class="button" type="button" onclick="ShpunRouterApp.openDownload()">⬇️ Скачать Shpun Router 1.1.2</button>
+        <button class="button" type="button" onclick="ShpunRouterApp.openDownload('24')">⬇️ OpenWrt 24.x — скачать Shpun Router 1.1.6</button>
+        <button class="button" type="button" onclick="ShpunRouterApp.openDownload('25')">⬇️ OpenWrt 25.x — скачать Shpun Router 2.0</button>
         <div class="notice"><strong>Готово.</strong> После привязки настройки загрузятся автоматически. Вручную добавлять серверы или конфиги не нужно.</div>
       </div>
 
@@ -349,7 +351,7 @@
     <section class="page" id="page-router">
       <div class="section">
         <h2>Какой роутер подойдёт</h2>
-        <p class="section__lead">Главное требование — стабильная поддержка OpenWrt 24.10.x. Для комфортной скорости рекомендуем современный роутер класса AX3000 или сопоставимую модель.</p>
+        <p class="section__lead">Главное требование — стабильная поддержка OpenWrt 24.x или 25.x. Для комфортной скорости рекомендуем современный роутер класса AX3000 или сопоставимую модель.</p>
         <ul class="list">
           <li><strong>Рекомендуем</strong><span>Wi-Fi 6, 256 МБ RAM или больше, современный двухъядерный процессор.</span></li>
           <li><strong>Допустимо</strong><span>Более старые совместимые модели, если высокая скорость VPN не критична.</span></li>
@@ -373,7 +375,8 @@
 
   <script>
     const ShpunRouterApp = {
-      packageUrl: "https://spb.shpyn.online/files/ipk/shpun-router_1.1.2_all.ipk",
+      packageUrl24: "https://spb.shpyn.online/files/ipk/shpun-router_1.1.6_all.ipk",
+      packageUrl25: "https://spb.shpyn.online/files/apk/shpun-router_2.0.0_all.apk",
       tg: window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null,
 
       init() {
@@ -398,12 +401,13 @@
         window.scrollTo({ top: 0, behavior: "smooth" });
       },
 
-      openDownload() {
+      openDownload(branch = "24") {
+        const url = branch === "25" ? this.packageUrl25 : this.packageUrl24;
         if (this.tg) {
-          this.tg.openLink(this.packageUrl, { try_instant_view: false });
+          this.tg.openLink(url, { try_instant_view: false });
           return;
         }
-        window.open(this.packageUrl, "_blank", "noopener,noreferrer");
+        window.open(url, "_blank", "noopener,noreferrer");
       }
     };
 
