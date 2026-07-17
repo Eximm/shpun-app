@@ -28,6 +28,8 @@ const TITLE_KEYS = [
   "referralNudge.toast.title.4",
   "referralNudge.toast.title.5",
   "referralNudge.toast.title.6",
+  "referralNudge.toast.title.7",
+  "referralNudge.toast.title.8",
 ] as const;
 
 const DESC_KEYS = [
@@ -39,12 +41,15 @@ const DESC_KEYS = [
   "referralNudge.toast.desc.6",
   "referralNudge.toast.desc.7",
   "referralNudge.toast.desc.8",
+  "referralNudge.toast.desc.9",
+  "referralNudge.toast.desc.10",
 ] as const;
 
 const ACTION_KEYS = [
   "referralNudge.toast.action.1",
   "referralNudge.toast.action.2",
   "referralNudge.toast.action.3",
+  "referralNudge.toast.action.4",
 ] as const;
 
 function localDayKey(d = new Date()) {
