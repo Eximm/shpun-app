@@ -32,7 +32,7 @@ function telegramProfile(): string | undefined {
     process.env.SHM_TELEGRAM_PROFILE ||
       process.env.TELEGRAM_PROFILE ||
       process.env.TG_PROFILE ||
-      ''
+      'telegram_bot'
   ).trim()
   return profile || undefined
 }
