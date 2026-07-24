@@ -675,6 +675,8 @@ async function resolveTelegramWidgetSession(
     }
 > {
   const clientIp = getClientIp(req);
+  const allowRegistration =
+    String(payload?.mode ?? "").trim().toLowerCase() === "register";
 
   let rr = await singleFlightTelegramWidgetAuth(payload, clientIp);
   if (rr.ok && hasShmSession(rr)) {
@@ -715,6 +717,15 @@ async function resolveTelegramWidgetSession(
       ok: true,
       shmSessionId: existing.shmSessionId,
       source: "widget_password_existing",
+    };
+  }
+
+  if (!allowRegistration) {
+    return {
+      ok: false,
+      status: 404,
+      error: "telegram_account_not_found",
+      detail: rr.json ?? rr.text,
     };
   }
 
@@ -851,13 +862,14 @@ async function singleFlightTelegramWidgetAuth(
   payload: Record<string, any>,
   clientIp?: string
 ) {
-  const key = JSON.stringify(pickTelegramWidgetPayload(payload) ?? {});
-  if (!key || key === "{}") return await shmTelegramWebAuth(payload, clientIp);
+  const telegramPayload = pickTelegramWidgetPayload(payload);
+  const key = JSON.stringify(telegramPayload ?? {});
+  if (!key || key === "{}") return await shmTelegramWebAuth(telegramPayload, clientIp);
 
   const existing = tgWidgetAuthInFlight.get(key);
   if (existing) return await existing;
 
-  const p = shmTelegramWebAuth(payload, clientIp).finally(() => {
+  const p = shmTelegramWebAuth(telegramPayload, clientIp).finally(() => {
     setTimeout(() => tgWidgetAuthInFlight.delete(key), 1000);
   });
 

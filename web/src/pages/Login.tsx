@@ -254,6 +254,7 @@ function mapRedirectError(e: string, t: (k: string, fb?: string) => string): str
   switch (String(e || "").trim()) {
     case "missing_telegram_payload": return t("login.err.missing_payload");
     case "tg_widget_failed":         return t("login.err.tg_widget_failed");
+    case "telegram_account_not_found": return t("login.err.telegram_account_not_found");
     case "no_shm_session":           return t("login.err.no_shm_session");
     case "user_lookup_failed":       return t("login.err.user_lookup_failed");
     case "not_authenticated":
@@ -306,6 +307,8 @@ function mapTelegramAuthError(raw: string, t: (k: string, fb?: string) => string
       return t("login.err.telegram_session");
     case "telegram_auth_limited":
       return t("login.err.telegram_auth_limited");
+    case "telegram_account_not_found":
+      return t("login.err.telegram_account_not_found");
     case "invalid_credentials":
     case "shm_auth_unavailable":
     case "shm_telegram_auth_failed":
@@ -685,7 +688,11 @@ export function Login() {
       const referralPayload = await buildReferralAuthPayload();
       const r = await apiFetch<AuthResponse>("/auth/telegram_widget", {
         method: "POST",
-        body: { ...widgetUser, ...referralPayload },
+        body: {
+          ...widgetUser,
+          ...referralPayload,
+          mode: authModal === "register" ? "register" : "login",
+        },
       });
       await goAfterAuth(r, "telegram");
     } catch (e: unknown) { clearAuthPending(); toastTelegramError(errorToAuthRaw(e, t("error.telegram_login_failed")));
