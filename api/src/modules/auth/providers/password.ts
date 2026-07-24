@@ -199,18 +199,6 @@ async function shmSetClientName(
   });
 }
 
-async function shmSetLogin2(
-  sessionId: string,
-  email: string,
-  signal: AbortSignal
-) {
-  await shmFetch(sessionId, "v1/user", {
-    method: "POST",
-    body: { login2: email },
-    signal,
-  });
-}
-
 async function shmSetEmail(
   sessionId: string,
   email: string,
@@ -337,7 +325,6 @@ export async function passwordAuth(body: any): Promise<AuthResult> {
 
         await Promise.allSettled([
           client ? shmSetClientName(sessionId, client, signal) : Promise.resolve(),
-          shmSetLogin2(sessionId, login, signal),
           shmSetEmail(sessionId, login, signal),
         ]);
 

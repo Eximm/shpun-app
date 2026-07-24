@@ -77,6 +77,9 @@ function extractShmMessage(payload: any): string {
   return "";
 }
 
+const TELEGRAM_ALREADY_USED_MESSAGE =
+  "Этот Telegram уже привязан к другому аккаунту. Если это ваш аккаунт и вы хотите объединить или перенести привязку, обратитесь в поддержку — поможем аккуратно связать всё в один кабинет.";
+
 function getClientIp(req: any): string {
   return (
     String(req.headers["x-forwarded-for"] ?? "").split(",")[0].trim() ||
@@ -125,6 +128,23 @@ function parseAdminStatus(v: any) {
 async function fetchTelegramUser(sessionId: string) {
   const r = await shmFetch<any>(sessionId, "v1/telegram/user", { method: "GET" });
   if (!r.ok) return null;
+  return r.json ?? null;
+}
+
+async function setTelegramLogin2(sessionId: string, tgId: string) {
+  const clean = String(tgId ?? "").trim();
+  if (!/^\d+$/.test(clean)) throw new Error("telegram_id_invalid");
+  const r = await shmFetch<any>(sessionId, "v1/user", {
+    method: "POST",
+    body: { login2: `@${clean}` },
+  });
+  if (!r.ok) {
+    const msg = extractShmMessage(r.json) || r.text || "";
+    const err = new Error(msg || `shm_login2_failed:${r.status}`) as Error & { status?: number; shm?: any };
+    err.status = r.status;
+    err.shm = r.json ?? r.text;
+    throw err;
+  }
   return r.json ?? null;
 }
 
@@ -538,6 +558,18 @@ export async function userRoutes(app: FastifyInstance) {
         error: apiError || msg || "shm_telegram_bind_failed",
         message: msg || null,
         shm: { status: r.status },
+      });
+    }
+
+    try {
+      await setTelegramLogin2(s.shmSessionId, String(body.id));
+    } catch (e: any) {
+      const raw = String(e?.message ?? "").trim();
+      const isAlreadyUsed = raw.toLowerCase().includes("already in use") || Number(e?.status ?? 0) === 409;
+      return reply.code(isAlreadyUsed ? 409 : 502).send({
+        ok: false,
+        error: isAlreadyUsed ? "telegram_login_already_used" : "shm_telegram_login2_failed",
+        message: isAlreadyUsed ? TELEGRAM_ALREADY_USED_MESSAGE : raw || null,
       });
     }
 

@@ -437,8 +437,14 @@ export function Profile() {
   void saveTelegramLogin;
 
   function mapTelegramBindError(e: unknown): string {
+    const mergeHint = t(
+      "profile.telegram.error.already_bound",
+      "Этот Telegram уже привязан к другому аккаунту. Если это ваш аккаунт и вы хотите объединить или перенести привязку, обратитесь в поддержку — поможем аккуратно связать всё в один кабинет."
+    );
     const raw = String((e as any)?.message || "").toLowerCase();
-    if (raw.includes("telegram account already exists")) return t("profile.telegram.error.already_bound", "Этот Telegram уже привязан к другому аккаунту.");
+    const code = String((e as any)?.code || (e as any)?.data?.error || "").toLowerCase();
+    if (raw.includes("telegram account already exists")) return mergeHint;
+    if (raw.includes("telegram_login_already_used") || code.includes("telegram_login_already_used")) return mergeHint;
     if (raw.includes("missing_telegram_payload")) return t("profile.telegram.error.widget_payload", "Telegram не передал данные. Попробуйте открыть кнопку ещё раз.");
     return t("profile.telegram.error.bind", "Не удалось привязать Telegram.");
   }
