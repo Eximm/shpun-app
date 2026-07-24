@@ -281,7 +281,6 @@ export async function shmTelegramWebAuthBind(
       ...(widgetPayload ?? {}),
       uid,
       bind_to_profile: 1,
-      bind_only_if_new: 1,
     },
   })
 }
