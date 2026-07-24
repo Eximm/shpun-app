@@ -115,6 +115,31 @@ function isAlreadyInUseMessage(msg: string): boolean {
   return String(msg || "").trim().toLowerCase().includes("already in use");
 }
 
+function buildTelegramLogin(tgId: string): string {
+  return `@${String(tgId ?? "").trim()}`;
+}
+
+function isTelegramNumericLogin(v: unknown): boolean {
+  return /^@\d+$/.test(String(v ?? "").trim());
+}
+
+async function setUserLogin2(sessionId: string, login2: string) {
+  const clean = String(login2 ?? "").trim();
+  if (!clean) throw new Error("login2_empty");
+  const r = await shmFetch<any>(sessionId, "v1/user", {
+    method: "POST",
+    body: { login2: clean },
+  });
+  if (!r.ok) {
+    const msg = extractShmMessage(r.json) || r.text || "";
+    const err = new Error(msg || `shm_login2_failed:${r.status}`) as Error & { status?: number; shm?: any };
+    err.status = r.status;
+    err.shm = r.json ?? r.text;
+    throw err;
+  }
+  return r.json ?? null;
+}
+
 function parseAdminStatus(v: any) {
   const json = v?.json ?? {};
   const role = String(json?.role ?? "").trim();
@@ -134,18 +159,7 @@ async function fetchTelegramUser(sessionId: string) {
 async function setTelegramLogin2(sessionId: string, tgId: string) {
   const clean = String(tgId ?? "").trim();
   if (!/^\d+$/.test(clean)) throw new Error("telegram_id_invalid");
-  const r = await shmFetch<any>(sessionId, "v1/user", {
-    method: "POST",
-    body: { login2: `@${clean}` },
-  });
-  if (!r.ok) {
-    const msg = extractShmMessage(r.json) || r.text || "";
-    const err = new Error(msg || `shm_login2_failed:${r.status}`) as Error & { status?: number; shm?: any };
-    err.status = r.status;
-    err.shm = r.json ?? r.text;
-    throw err;
-  }
-  return r.json ?? null;
+  return await setUserLogin2(sessionId, buildTelegramLogin(clean));
 }
 
 async function readCurrentEmail(sessionId: string): Promise<{
@@ -349,6 +363,32 @@ export async function userRoutes(app: FastifyInstance) {
     }
 
     try {
+      let shouldMirrorEmailToLogin2 = false;
+      try {
+        const me = await fetchMe(s.shmSessionId);
+        const currentLogin = String((me as any)?.meRaw?.login ?? "").trim();
+        const currentLogin2 = String((me as any)?.meRaw?.login2 ?? "").trim().toLowerCase();
+        shouldMirrorEmailToLogin2 =
+          isTelegramNumericLogin(currentLogin) &&
+          (!currentLogin2 || currentLogin2 === email);
+      } catch {
+        shouldMirrorEmailToLogin2 = false;
+      }
+
+      if (shouldMirrorEmailToLogin2) {
+        try {
+          await setUserLogin2(s.shmSessionId, email);
+        } catch (e: any) {
+          const raw = String(e?.message ?? "").trim();
+          const isAlreadyUsed = raw.toLowerCase().includes("already in use") || Number(e?.status ?? 0) === 409;
+          return reply.code(isAlreadyUsed ? 409 : 502).send({
+            ok: false,
+            error: isAlreadyUsed ? "email_already_used" : "shm_login2_email_failed",
+            message: isAlreadyUsed ? "Этот e-mail уже используется другим аккаунтом." : raw || null,
+          });
+        }
+      }
+
       const current = await readCurrentEmail(s.shmSessionId);
 
       if (current.email !== email) {
@@ -531,12 +571,22 @@ export async function userRoutes(app: FastifyInstance) {
     }
 
     let uid = Number((s as any)?.shmUserId ?? 0) || 0;
+    let currentLogin = "";
     if (!uid) {
       try {
         const me = await fetchMe(s.shmSessionId);
         uid = Number((me as any)?.meRaw?.user_id ?? 0) || 0;
+        currentLogin = String((me as any)?.meRaw?.login ?? "").trim();
       } catch {
         uid = 0;
+      }
+    }
+    if (!currentLogin) {
+      try {
+        const me = await fetchMe(s.shmSessionId);
+        currentLogin = String((me as any)?.meRaw?.login ?? "").trim();
+      } catch {
+        currentLogin = "";
       }
     }
     if (!uid) {
@@ -561,16 +611,19 @@ export async function userRoutes(app: FastifyInstance) {
       });
     }
 
-    try {
-      await setTelegramLogin2(s.shmSessionId, String(body.id));
-    } catch (e: any) {
-      const raw = String(e?.message ?? "").trim();
-      const isAlreadyUsed = raw.toLowerCase().includes("already in use") || Number(e?.status ?? 0) === 409;
-      return reply.code(isAlreadyUsed ? 409 : 502).send({
-        ok: false,
-        error: isAlreadyUsed ? "telegram_login_already_used" : "shm_telegram_login2_failed",
-        message: isAlreadyUsed ? TELEGRAM_ALREADY_USED_MESSAGE : raw || null,
-      });
+    const telegramLogin = buildTelegramLogin(String(body.id));
+    if (currentLogin !== telegramLogin) {
+      try {
+        await setTelegramLogin2(s.shmSessionId, String(body.id));
+      } catch (e: any) {
+        const raw = String(e?.message ?? "").trim();
+        const isAlreadyUsed = raw.toLowerCase().includes("already in use") || Number(e?.status ?? 0) === 409;
+        return reply.code(isAlreadyUsed ? 409 : 502).send({
+          ok: false,
+          error: isAlreadyUsed ? "telegram_login_already_used" : "shm_telegram_login2_failed",
+          message: isAlreadyUsed ? TELEGRAM_ALREADY_USED_MESSAGE : raw || null,
+        });
+      }
     }
 
     const tg = await fetchTelegramUser(s.shmSessionId);
