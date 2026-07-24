@@ -16,6 +16,12 @@ import {
   readTelegramInitData,
 } from "../shared/telegram/sdk";
 import { resetOnboardingPromptSession } from "../shared/onboardingPromptSession";
+import controlsIconUrl from "../assets/brand-icons/controls.svg";
+import routerIconUrl from "../assets/brand-icons/router.svg";
+import shieldIconUrl from "../assets/brand-icons/shield.svg";
+import signalIconUrl from "../assets/brand-icons/signal-bars.svg";
+import telegramIconUrl from "../assets/brand-icons/telegram.svg";
+import youtubeIconUrl from "../assets/brand-icons/youtube.svg";
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 
@@ -34,6 +40,24 @@ const AUTH_PENDING_AT_KEY= "auth:pending_at";
 const AUTH_EVER_KEY      = "auth:ever_succeeded";
 const FORGOT_SENT_KEY    = "forgot_pwd:sent_at";
 const FORGOT_COOLDOWN_MS = 60_000;
+const ORBIT_RESOURCE_POOL = [
+  "Instagram",
+  "Facebook",
+  "X",
+  "YouTube",
+  "WhatsApp",
+  "Telegram",
+  "Discord",
+  "LinkedIn",
+  "Signal",
+  "Viber",
+  "FaceTime",
+  "Google Meet",
+  "Roblox",
+  "Bluesky",
+  "TikTok",
+] as const;
+const ORBIT_RESOURCE_COUNT = 5;
 
 /* ─── Forgot helpers ─────────────────────────────────────────────────────── */
 
@@ -171,6 +195,21 @@ function pwdScore(p: string): number {
   return Math.min(s, 5);
 }
 
+function LoginIcon({ src, className = "loginHero__svgIcon" }: { src: string; className?: string }) {
+  return <img className={className} src={src} alt="" aria-hidden="true" draggable={false} />;
+}
+
+function IconBonus() {
+  return (
+    <svg className="loginHero__svgIcon loginHero__svgIcon--bonus" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M5 10h14v8.2A1.8 1.8 0 0 1 17.2 20H6.8A1.8 1.8 0 0 1 5 18.2V10Z" />
+      <path d="M4.4 6.8A1.8 1.8 0 0 1 6.2 5h11.6a1.8 1.8 0 0 1 1.8 1.8V10H4.4V6.8Z" />
+      <path className="loginHero__bonusRibbon" d="M11 5h2v15h-2V5Z" />
+      <path className="loginHero__bonusSpark" d="M8.4 3.3c1.8 0 3.1 1.7 3.6 2.7-1.7.2-5 .1-5.7-1.3-.4-.8.6-1.4 2.1-1.4Zm7.2 0c-1.8 0-3.1 1.7-3.6 2.7 1.7.2 5 .1 5.7-1.3.4-.8-.6-1.4-2.1-1.4Z" />
+    </svg>
+  );
+}
+
 async function ensureAuthorizedAfterAuth(attempts = 12, delayMs = 250) {
   for (let i = 0; i < attempts; i++) {
     const me = await refetchMe().catch(() => null);
@@ -279,6 +318,14 @@ export function Login() {
   const { t, lang, setLang } = useI18n();
   const nav = useNavigate();
   const loc: any = useLocation();
+  const orbitResources = useMemo(() => {
+    const pool = [...ORBIT_RESOURCE_POOL];
+    for (let i = pool.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    return pool.slice(0, ORBIT_RESOURCE_COUNT);
+  }, []);
 
   const [mode,    setMode]    = useState<Mode>("detecting");
   const [loading, setLoading] = useState(false);
@@ -404,7 +451,15 @@ export function Login() {
   }
 
   // ── Modal controls ────────────────────────────────────────────────────────
+  function resetTelegramWidgetUi() {
+    const container = document.getElementById("tg-widget-container");
+    if (container) container.innerHTML = "";
+    setTgWidgetState("idle");
+    try { delete (window as any).__shpunTelegramWidgetAuth; } catch { /* ignore */ }
+  }
+
   function openModal(next: AuthModal) {
+    resetTelegramWidgetUi();
     setAuthModal(next);
     setPassword(""); setPassword2(""); setShowPassword(false); setShowPassword2(false); setEmailTouched(false);
     if (next !== "register") setClientName("");
@@ -421,6 +476,7 @@ export function Login() {
   }
 
   function closeModal() {
+    resetTelegramWidgetUi();
     setAuthModal("none");
     setPassword(""); setPassword2(""); setShowPassword(false); setShowPassword2(false);
     setClientName(""); setEmailTouched(false); setForgotLoading(false);
@@ -976,13 +1032,6 @@ export function Login() {
                   ? t("login.password.form_title_login")
                   : t("login.password.form_title_register")}
               </div>
-              <p className="p">
-                {authModal === "login"
-                  ? t("login.password.tip")
-                  : normalizePartnerId(partnerIdInput) > 0
-                    ? t("login.desc.web.partner")
-                    : t("login.password.register_tip")}
-              </p>
             </div>
             <button type="button" className="btn modal__close" onClick={closeModal}
               disabled={loading} aria-label={t("common.close")}>×</button>
@@ -990,13 +1039,48 @@ export function Login() {
           <div className="modal__content">
             {authModal === "register" && normalizePartnerId(partnerIdInput) > 0 && (
               <div className="login__partnerInvite">
-                <div className="login__partnerInviteTitle">🎉 {t("login.partner.notice")}</div>
+                <div className="login__partnerInviteTitle">{t("login.partner.notice")}</div>
                 <div className="login__partnerInviteMeta">
                   {referralAlias
                     ? <>{t("login.partner.name")}: <b>{referralAlias}</b></>
                     : <>{t("login.partner.id")}: <b>{partnerIdInput}</b></>}
                 </div>
               </div>
+            )}
+            {mode !== "telegram" && (
+              <div ref={widgetWrapRef} className="loginRegisterChoice">
+                <div className="loginRegisterChoice__icon">
+                  <LoginIcon src={telegramIconUrl} className="loginHero__svgIcon loginHero__svgIcon--telegram" />
+                </div>
+                <div className="loginRegisterChoice__body">
+                  <div className="loginRegisterChoice__title">
+                    {authModal === "login" ? t("login.telegram.login_choice_title") : t("login.telegram.register_choice_title")}
+                  </div>
+                  <div className="loginRegisterChoice__text">
+                    {authModal === "login" ? t("login.telegram.login_choice_text") : t("login.telegram.register_choice_text")}
+                  </div>
+                  {botUsername ? (
+                    <>
+                      <div id="tg-widget-container" className="login__widgetBox login__widgetBox--modal" />
+                      {(tgWidgetState === "idle" || tgWidgetState === "failed") && (
+                        <button type="button" className="btn loginRegisterChoice__btn"
+                          onClick={() => void mountTelegramWidget(true)} disabled={loading}>
+                          {tgWidgetState === "failed"
+                            ? t("login.widget.retry.alt")
+                            : authModal === "login"
+                              ? t("login.telegram.login_choice_cta")
+                              : t("login.telegram.register_choice_cta")}
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <div className="loginRegisterChoice__fallback">{t("login.widget.unavailable.alt")}</div>
+                  )}
+                </div>
+              </div>
+            )}
+            {mode !== "telegram" && (
+              <div className="loginModalDivider"><span>{t("login.modal.email_divider")}</span></div>
             )}
             <form className="auth__form" onSubmit={(e) => { e.preventDefault(); void (authModal === "login" ? passwordLogin() : passwordRegister()); }}>
               <div className="field">
@@ -1180,90 +1264,165 @@ export function Login() {
   // ── Web UI ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="section">
-      <div className="card">
-        <div className="card__body">
-          <div className="auth__head">
-            <div>
-              <h1 className="h1">{t("login.title")}</h1>
-              <p className="p">{partnerId > 0 ? t("login.desc.web.partner") : t("login.desc.web.short")}</p>
-            </div>
-            <LangSwitch lang={(lang as "ru" | "en") === "en" ? "en" : "ru"}
-              setLang={setLang as (v: "ru" | "en") => void} ariaLabel={t("login.lang.aria")} />
+    <div className="section loginPage">
+      <div className="loginPage__ambient loginPage__ambient--one" />
+      <div className="loginPage__ambient loginPage__ambient--two" />
+
+      <div className="loginHero">
+        <section className="loginHero__story" aria-labelledby="login-title">
+          <div className="loginHero__topline">
+            <span className="loginHero__spark" />
+            <span>{t("login.hero.eyebrow")}</span>
           </div>
+          <h1 id="login-title" className="loginHero__title">{t("login.title")}</h1>
+          <p className="loginHero__lead">{partnerId > 0 ? t("login.desc.web.partner") : t("login.desc.web.short")}</p>
 
-          <div className="pre login__headerCard">
-            <div className="login__whatTitle">{t("login.what.title")}</div>
-            <div className="login__whatList">
-              <div>✅ {t("login.what.1.short")}</div>
-              <div>💳 {t("login.what.2.short")}</div>
-              <div>⚙️ {t("login.what.3.short")}</div>
-            </div>
-          </div>
-
-          {partnerId > 0 && <div className="pre login__preMt12">{t("login.partner.banner")}</div>}
-
-          <div className="auth__divider login__dividerMt14"><span>{t("login.divider.password")}</span></div>
-          <div className="auth__actions">
-            <button type="button" className="btn login__btnFull" onClick={() => openModal("login")} disabled={loading}>
-              {t("login.password.open_login")}
-            </button>
-            <button type="button" className="btn btn--primary login__btnFull" onClick={() => openModal("register")} disabled={loading}>
-              {partnerId > 0 ? t("login.password.open_register_partner") : t("login.password.open_register")}
-            </button>
-          </div>
-
-          <div className="auth__divider login__dividerMt14"><span>{t("login.divider.telegram")}</span></div>
-          <div ref={widgetWrapRef} className="login__dividerMt14">
-            <div className="pre login__preMb10">
-              {tgWidgetState === "failed"  ? t("login.widget.failed.soft")
-                : tgWidgetState === "loading" ? t("login.widget.loading")
-                : t("login.widget.tip.secondary")}
-            </div>
-            {!botUsername ? (
-              <div className="pre">{t("login.widget.unavailable.alt")}</div>
-            ) : (
-              <>
-                <div id="tg-widget-container" className="login__widgetBox" />
-                {(tgWidgetState === "idle" || tgWidgetState === "failed") && (
-                  <div className="auth__actions">
-                    <button type="button" className="btn login__btnFull"
-                      onClick={() => void mountTelegramWidget(true)} disabled={loading}>
-                      {tgWidgetState === "failed" ? t("login.widget.retry.alt") : t("login.widget.open.alt")}
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-
-          <div className="auth__divider login__dividerMt14"><span>{t("login.divider.providers")}</span></div>
-          <div className="auth__providers">
-            <button className="btn auth__provider login__providerBtn" type="button" disabled={loading}
-              onClick={() => {
-                if (tgWidgetState === "idle" || tgWidgetState === "failed") void mountTelegramWidget(true);
-                widgetWrapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-              }}>
-              <span className="auth__providerIcon">✈️</span>
-              <span className="auth__providerText">Telegram
-                <span className="auth__providerHint">
-                  {tgWidgetState === "loading" ? t("login.providers.telegram.hint.loading") : t("login.providers.telegram.hint.web")}
-                </span>
+          <div className="loginHero__benefits" aria-label={t("login.what.title")}>
+            <div className="loginHero__benefit loginHero__benefit--hot">
+              <span className="loginHero__benefitIcon loginHero__benefitIcon--youtube">
+                <LoginIcon src={youtubeIconUrl} className="loginHero__svgIcon loginHero__svgIcon--youtube" />
               </span>
-              <span className="auth__providerRight">→</span>
-            </button>
-            <button className="btn auth__provider login__providerBtn" disabled type="button" title={t("login.providers.soon")}>
-              <span className="auth__providerIcon">🟦</span>
-              <span className="auth__providerText">Google<span className="auth__providerHint">{t("login.providers.google.hint")}</span></span>
-              <span className="auth__providerRight">🔒</span>
-            </button>
-            <button className="btn auth__provider login__providerBtn" disabled type="button" title={t("login.providers.soon")}>
-              <span className="auth__providerIcon">🟨</span>
-              <span className="auth__providerText">Yandex<span className="auth__providerHint">{t("login.providers.yandex.hint")}</span></span>
-              <span className="auth__providerRight">🔒</span>
-            </button>
+              <div>
+                <strong>{t("login.hero.benefit.1.title")}</strong>
+                <em>{t("login.hero.benefit.1.text")}</em>
+              </div>
+            </div>
+            <div className="loginHero__benefit">
+              <span className="loginHero__benefitIcon">
+                <LoginIcon src={signalIconUrl} />
+              </span>
+              <div>
+                <strong>{t("login.hero.benefit.2.title")}</strong>
+                <em>{t("login.hero.benefit.2.text")}</em>
+              </div>
+            </div>
+            <div className="loginHero__benefit">
+              <span className="loginHero__benefitIcon loginHero__benefitIcon--shield">
+                <LoginIcon src={shieldIconUrl} className="loginHero__svgIcon loginHero__svgIcon--shield" />
+              </span>
+              <div>
+                <strong>{t("login.hero.benefit.3.title")}</strong>
+                <em>{t("login.hero.benefit.3.text")}</em>
+              </div>
+            </div>
+            <div className="loginHero__benefit">
+              <span className="loginHero__benefitIcon">
+                <LoginIcon src={routerIconUrl} />
+              </span>
+              <div>
+                <strong>{t("login.hero.benefit.4.title")}</strong>
+                <em>{t("login.hero.benefit.4.text")}</em>
+              </div>
+            </div>
           </div>
-        </div>
+
+          <div className="loginHero__orbit" aria-hidden="true">
+            <div className="loginHero__planet">
+              <div className="loginHero__brandMark">
+                <span className="loginHero__brandAura" />
+                <svg className="loginHero__brandSvg" viewBox="0 0 120 120" focusable="false" aria-hidden="true">
+                  <path
+                    className="loginHero__brandShield"
+                    fillRule="evenodd"
+                    d="M60 7C73.8 17.3 88.9 23.2 106 25.8C105 67.4 88.5 95.8 60 113C31.5 95.8 15 67.4 14 25.8C31.1 23.2 46.2 17.3 60 7ZM60 26C49.9 32.1 39 36.4 27.1 38.8C30.2 66.9 41.4 86.5 60 99C78.6 86.5 89.8 66.9 92.9 38.8C81 36.4 70.1 32.1 60 26Z"
+                  />
+                  <path
+                    className="loginHero__brandBolt"
+                    d="M76 28L37 69H58L47 95L85 50H66L76 28Z"
+                  />
+                </svg>
+                <i className="loginHero__brandSpark loginHero__brandSpark--one" />
+                <i className="loginHero__brandSpark loginHero__brandSpark--two" />
+                <i className="loginHero__brandSpark loginHero__brandSpark--three" />
+              </div>
+            </div>
+            {orbitResources.map((name, idx) => (
+              <span
+                key={name}
+                className={`loginHero__resourceTrack loginHero__resourceTrack--${idx + 1}`}
+              >
+                <b>{name}</b>
+              </span>
+            ))}
+          </div>
+        </section>
+
+        <section className="loginPanel card" aria-label={t("login.title")}>
+          <div className="loginPanel__shine" />
+          <div className="card__body loginPanel__body">
+            <div className="auth__head loginPanel__head">
+              <div>
+                <div className="loginPanel__badge">{partnerId > 0 ? t("login.partner.notice") : t("login.hero.badge")}</div>
+                <h2 className="loginPanel__title">{t("login.hero.panel_title")}</h2>
+                <p className="p">{t("login.hero.panel_text")}</p>
+              </div>
+              <LangSwitch lang={(lang as "ru" | "en") === "en" ? "en" : "ru"}
+                setLang={setLang as (v: "ru" | "en") => void} ariaLabel={t("login.lang.aria")} />
+            </div>
+
+            {partnerId > 0 && (
+              <div className="loginInviteStrip">
+                <div className="loginInviteStrip__icon"><IconBonus /></div>
+                <div>
+                  <div className="loginInviteStrip__title">{t("login.partner.banner")}</div>
+                  <div className="loginInviteStrip__meta">
+                    {referralAlias
+                      ? <>{t("login.partner.name")}: <b>{referralAlias}</b></>
+                      : <>{t("login.partner.id")}: <b>{partnerId}</b></>}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="loginEmailBox">
+              <div className="loginEmailBox__head">
+                <div>
+                  <div className="loginEmailBox__title">{t("login.email.card_title")}</div>
+                </div>
+              </div>
+              <div className="loginPanel__quick">
+                <button type="button" className="btn loginPanel__primaryAction" onClick={() => openModal("login")} disabled={loading}>
+                  <span>{t("login.password.open_login")}</span>
+                  <b>→</b>
+                </button>
+                <button type="button" className="btn loginPanel__secondaryAction" onClick={() => openModal("register")} disabled={loading}>
+                  <span>{partnerId > 0 ? t("login.password.open_register_partner") : t("login.password.open_register")}</span>
+                  <b>→</b>
+                </button>
+              </div>
+            </div>
+
+            <div className="loginPanel__tiles" aria-label={t("login.what.title")}>
+              <div className="loginPanel__tile">
+                <span className="loginPanel__tileIcon loginHero__featureIcon--youtube">
+                  <LoginIcon src={youtubeIconUrl} className="loginHero__svgIcon loginHero__svgIcon--youtube" />
+                </span>
+                <div>
+                  <strong>{t("login.hero.feature.1.title")}</strong>
+                  <em>{t("login.what.1.short")}</em>
+                </div>
+              </div>
+              <div className="loginPanel__tile">
+                <span className="loginPanel__tileIcon loginHero__featureIcon--telegram">
+                  <LoginIcon src={telegramIconUrl} className="loginHero__svgIcon loginHero__svgIcon--telegram" />
+                </span>
+                <div>
+                  <strong>{t("login.hero.feature.2.title")}</strong>
+                  <em>{t("login.what.2.short")}</em>
+                </div>
+              </div>
+              <div className="loginPanel__tile loginPanel__tile--wide">
+                <span className="loginPanel__tileIcon">
+                  <LoginIcon src={controlsIconUrl} />
+                </span>
+                <div>
+                  <strong>{t("login.hero.feature.3.title")}</strong>
+                  <em>{t("login.what.3.short")}</em>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
 
       {resetModal}
