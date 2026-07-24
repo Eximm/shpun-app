@@ -38,6 +38,9 @@ const REFERRAL_ALIAS_LS_KEY = "referral_alias_pending";
 const AUTH_PENDING_KEY   = "auth:pending";
 const AUTH_PENDING_AT_KEY= "auth:pending_at";
 const AUTH_EVER_KEY      = "auth:ever_succeeded";
+const TG_MINI_AUTH_ATTEMPT_KEY = "tg_mini_auth:last_attempt";
+const TG_MINI_AUTH_AUTO_COOLDOWN_MS = 20_000;
+const TG_MINI_AUTH_MANUAL_COOLDOWN_MS = 6_000;
 const FORGOT_SENT_KEY    = "forgot_pwd:sent_at";
 const FORGOT_COOLDOWN_MS = 60_000;
 const ORBIT_RESOURCE_POOL = [
@@ -115,6 +118,34 @@ function getTelegramBotUsername(): string {
 function getTelegramInitData(): string | null {
   const d = readTelegramInitData();
   return d && d.length > 0 ? d : null;
+}
+
+function fingerprintTelegramInitData(initData: string): string {
+  const s = String(initData ?? "");
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(36);
+}
+
+function canStartTelegramMiniAuth(initData: string, manual = false): boolean {
+  const key = fingerprintTelegramInitData(initData);
+  const now = Date.now();
+  const cooldown = manual ? TG_MINI_AUTH_MANUAL_COOLDOWN_MS : TG_MINI_AUTH_AUTO_COOLDOWN_MS;
+  try {
+    const raw = sessionStorage.getItem(TG_MINI_AUTH_ATTEMPT_KEY);
+    if (raw) {
+      const rec = JSON.parse(raw) as { key?: string; at?: number };
+      const at = Number(rec?.at ?? 0) || 0;
+      if (rec?.key === key && at > 0 && now - at < cooldown) return false;
+    }
+    sessionStorage.setItem(TG_MINI_AUTH_ATTEMPT_KEY, JSON.stringify({ key, at: now }));
+  } catch {
+    // If sessionStorage is unavailable, do not block auth.
+  }
+  return true;
 }
 
 async function waitTelegramInitData(timeoutMs = 1500): Promise<string | null> {
@@ -595,6 +626,10 @@ export function Login() {
       let initData = getTelegramInitData();
       if (!initData) initData = await waitTelegramInitData(3000);
       if (!initData) { toastTelegramError("init_data_required"); return; }
+      if (!canStartTelegramMiniAuth(initData, true)) {
+        toastTelegramError("telegram_auth_limited");
+        return;
+      }
       const referralPayload = await buildReferralAuthPayload();
       const r = await apiFetch<AuthResponse>("/auth/telegram", {
         method: "POST",
@@ -713,6 +748,7 @@ export function Login() {
       if (cancelled) return;
       if (!initData) { setMode(telegramSignal || hasTelegramMiniAppParams() ? "telegram" : "web"); return; }
       setMode("telegram");
+      if (!canStartTelegramMiniAuth(initData, false)) return;
       authInProgressRef.current = true; setLoading(true);
       try {
         const referralPayload = await buildReferralAuthPayload();
