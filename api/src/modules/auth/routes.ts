@@ -20,12 +20,6 @@ import {
   findReferralAlias,
   recordReferralAliasRegistration,
 } from "../../shared/linkdb/referralAliasesRepo.js";
-import {
-  getLink,
-  insertLink,
-  touchLink,
-} from "../../shared/linkdb/linkRepo.js";
-import { verifyTelegramInitData } from "../../shared/telegram/verifyInitData.js";
 
 /* ============================================================
    Helpers
@@ -427,122 +421,6 @@ type TgCredentialBundle = {
   password: string;
 };
 
-function getTelegramBotToken(): string {
-  return String(process.env.TG_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || "").trim();
-}
-
-function getVerifiedMiniAppTelegramUser(
-  initData: string
-): { tgId: string; tgLogin?: string } | null {
-  const verified = verifyTelegramInitData(initData, getTelegramBotToken());
-  if (!verified.ok || !verified.user?.id) return null;
-  return {
-    tgId: String(verified.user.id).trim(),
-    tgLogin:
-      verified.user.username != null
-        ? String(verified.user.username).trim()
-        : verified.user.first_name != null
-          ? String(verified.user.first_name).trim()
-          : undefined,
-  };
-}
-
-function parseTelegramLinkMeta(metaJson?: string | null): { shmSessionId?: string; login?: string } {
-  if (!metaJson) return {};
-  try {
-    const j = JSON.parse(String(metaJson));
-    return {
-      shmSessionId: String(j?.shmSessionId ?? "").trim() || undefined,
-      login: String(j?.login ?? "").trim() || undefined,
-    };
-  } catch {
-    return {};
-  }
-}
-
-async function tryResolveTelegramMiniAppFromLocalLink(
-  req: any,
-  initData: string
-): Promise<
-  | { ok: true; shmSessionId: string; tgId: string; tgLogin?: string }
-  | { ok: false }
-> {
-  const verified = getVerifiedMiniAppTelegramUser(initData);
-  if (!verified?.tgId) return { ok: false };
-
-  const link = getLink("telegram", "miniapp", verified.tgId);
-  const meta = parseTelegramLinkMeta(link?.meta_json);
-  const shmSessionId = String(meta.shmSessionId ?? "").trim();
-  if (!link || !shmSessionId) return { ok: false };
-
-  try {
-    const ident = await shmGetUserIdentity(shmSessionId);
-    const linkedUid = Number(link.shm_user_id ?? 0) || 0;
-    if (linkedUid > 0 && ident.userId !== linkedUid) return { ok: false };
-    touchLink(
-      "telegram",
-      "miniapp",
-      verified.tgId,
-      JSON.stringify({
-        shmSessionId,
-        login: ident.login || meta.login || "",
-        tgLogin: verified.tgLogin || "",
-        lastAuthSource: "local_link",
-      })
-    );
-    dbg(req, "telegram_miniapp_local_link_ok", {
-      tgId: verified.tgId,
-      shmSessionId: maskValue(shmSessionId),
-      shmUserId: ident.userId,
-    });
-    return {
-      ok: true,
-      shmSessionId,
-      tgId: verified.tgId,
-      tgLogin: verified.tgLogin,
-    };
-  } catch (e: any) {
-    dbg(req, "telegram_miniapp_local_link_failed", {
-      tgId: verified.tgId,
-      error: String(e?.message ?? e),
-      shmSessionId: maskValue(shmSessionId),
-    });
-    return { ok: false };
-  }
-}
-
-function rememberTelegramMiniAppLink(
-  req: any,
-  initData: string,
-  shmUserId: number,
-  shmSessionId: string,
-  login: string
-): void {
-  const verified = getVerifiedMiniAppTelegramUser(initData);
-  if (!verified?.tgId || !shmUserId || !shmSessionId) return;
-  const meta = JSON.stringify({
-    shmSessionId,
-    login,
-    tgLogin: verified.tgLogin || "",
-    lastAuthSource: "telegram_miniapp",
-  });
-  try {
-    const existing = getLink("telegram", "miniapp", verified.tgId);
-    if (existing) touchLink("telegram", "miniapp", verified.tgId, meta);
-    else insertLink("telegram", "miniapp", verified.tgId, shmUserId, meta);
-    dbg(req, "telegram_miniapp_link_saved", {
-      tgId: verified.tgId,
-      shmUserId,
-      shmSessionId: maskValue(shmSessionId),
-    });
-  } catch (e: any) {
-    dbg(req, "telegram_miniapp_link_save_failed", {
-      tgId: verified.tgId,
-      error: String(e?.message ?? e),
-    });
-  }
-}
-
 function buildMiniAppTelegramCredentials(initData: string): TgCredentialBundle | null {
   const { tgId, tgLogin } = parseTelegramInitDataUser(initData);
   if (!tgId) return null;
@@ -675,7 +553,6 @@ async function resolveTelegramMiniAppSession(
       shmSessionId: string;
       source:
         | "telegram"
-        | "telegram_local_link"
         | "telegram_password_existing"
         | "telegram_password_new";
     }
@@ -687,15 +564,6 @@ async function resolveTelegramMiniAppSession(
     }
 > {
   const clientIp = getClientIp(req);
-
-  const local = await tryResolveTelegramMiniAppFromLocalLink(req, initData);
-  if (local.ok) {
-    return {
-      ok: true,
-      shmSessionId: local.shmSessionId,
-      source: "telegram_local_link",
-    };
-  }
 
   let rr = await singleFlightTelegramWebAppAuth(initData, clientIp);
   if (rr.ok && hasShmSession(rr)) {
@@ -976,8 +844,6 @@ export async function authRoutes(app: FastifyInstance) {
     } catch {
       return reply.code(502).send({ ok: false, error: "shm_user_lookup_failed" });
     }
-
-    rememberTelegramMiniAppLink(req, initData, shmUserId, shmSessionId, login);
 
     try {
       await tryAttachPartner(shmSessionId, body?.partner_id, body?.referral_alias);
