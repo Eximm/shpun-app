@@ -14,6 +14,7 @@ import {
   shmFetch,
   shmTelegramWebAppAuth,
   shmTelegramWebAuth,
+  shmTelegramWebAuthRegister,
   toFormUrlEncoded,
 } from "../../shared/shm/shmClient.js";
 import {
@@ -671,7 +672,11 @@ async function resolveTelegramWidgetSession(
 > {
   const clientIp = getClientIp(req);
 
-  let rr = await singleFlightTelegramWidgetAuth(payload, clientIp);
+  const initialPartnerId = resolvePartnerIdForInitialRegistration(payload?.partner_id, payload?.referral_alias);
+  let rr = await shmTelegramWebAuthRegister(pickTelegramWidgetPayload(payload), {
+    clientIp,
+    partnerId: initialPartnerId,
+  });
   if (rr.ok && hasShmSession(rr)) {
     return {
       ok: true,

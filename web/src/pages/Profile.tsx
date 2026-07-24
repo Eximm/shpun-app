@@ -23,6 +23,16 @@ type VerifyModalState = "idle" | "sent" | "success";
 const EMAIL_CODE_SENT_KEY    = "email_verify:sent_at";
 const EMAIL_CODE_COOLDOWN_MS = 60_000;
 
+function readEnv(key: string): string {
+  const v = (import.meta as any).env?.[key];
+  return typeof v === "string" ? v.trim() : "";
+}
+
+function getTelegramBotUsername(): string {
+  const raw = readEnv("VITE_TG_BOT_USERNAME");
+  return raw.startsWith("@") ? raw.slice(1).trim() : raw.trim();
+}
+
 async function copyToClipboard(text: string) {
   if (!text) return;
   try { await navigator.clipboard?.writeText(text); } catch { /* ignore */ }
@@ -338,6 +348,7 @@ export function Profile() {
   const nav = useNavigate();
   const { me, loading, error, refetch } = useMe() as any;
   const { lang, setLang, t } = useI18n();
+  const botUsername = useMemo(() => getTelegramBotUsername(), []);
 
   const profile = me?.profile;
   const isAdmin = Boolean(profile?.isAdmin || me?.admin?.isAdmin);
@@ -397,13 +408,14 @@ export function Profile() {
   }, [telegramRaw?.login, telegramRaw?.username]);
 
   const [tgModal,      setTgModal]      = useState(false);
-  const [tgLoginDraft, setTgLoginDraft] = useState("");
+  const [tgLoginDraft] = useState("");
   const [savingTg,     setSavingTg]     = useState(false);
   const [tgError,      setTgError]      = useState<string | null>(null);
+  const [tgWidgetState, setTgWidgetState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
 
   useEffect(() => {
-    if (!tgModal) { setTgLoginDraft(telegramLogin.replace(/^@/, "")); setTgError(null); }
-  }, [tgModal, telegramLogin]);
+    if (!tgModal) setTgError(null);
+  }, [tgModal]);
 
   async function saveTelegramLogin() {
     setTgError(null);
@@ -422,6 +434,105 @@ export function Profile() {
     } catch (e: any) { setTgError(e?.message || t("profile.telegram.error.save")); }
     finally { setSavingTg(false); }
   }
+  void saveTelegramLogin;
+
+  function mapTelegramBindError(e: unknown): string {
+    const raw = String((e as any)?.message || "").toLowerCase();
+    if (raw.includes("telegram account already exists")) return t("profile.telegram.error.already_bound", "Этот Telegram уже привязан к другому аккаунту.");
+    if (raw.includes("missing_telegram_payload")) return t("profile.telegram.error.widget_payload", "Telegram не передал данные. Попробуйте открыть кнопку ещё раз.");
+    return t("profile.telegram.error.bind", "Не удалось привязать Telegram.");
+  }
+
+  async function bindTelegramWidget(widgetUser: Record<string, any>) {
+    setTgError(null);
+    setSavingTg(true);
+    try {
+      const resp = await apiFetch<any>("/user/telegram/bind-widget", {
+        method: "POST",
+        body: widgetUser,
+      });
+      const tg = resp?.telegram ?? null;
+      setTelegramLocal(tg
+        ? {
+            login: tg.login ?? tg.username ?? widgetUser?.username ?? null,
+            username: tg.username ?? tg.login ?? widgetUser?.username ?? null,
+            chatId: tg.chat_id ?? tg.chatId ?? widgetUser?.id ?? null,
+            status: tg?.ShpynSDNSystem?.status ?? tg.status ?? "member",
+          }
+        : {
+            ...(telegramRaw ?? {}),
+            login: widgetUser?.username ?? null,
+            username: widgetUser?.username ?? null,
+            chatId: widgetUser?.id ?? null,
+            status: "member",
+          }
+      );
+      setTgModal(false);
+      showToast("✈️ " + t("profile.telegram.toast.linked", "Telegram подключён"));
+      await refetch?.();
+    } catch (e: any) {
+      setTgError(mapTelegramBindError(e));
+      toastApiError(e, { title: t("profile.telegram.error.bind", "Не удалось привязать Telegram") });
+    } finally {
+      setSavingTg(false);
+    }
+  }
+
+  async function mountTelegramBindWidget(force = false) {
+    if (!botUsername) {
+      setTgWidgetState("failed");
+      setTgError(t("profile.telegram.error.no_bot", "Telegram-бот не настроен."));
+      return;
+    }
+    if (!force && (tgWidgetState === "loading" || tgWidgetState === "ready")) return;
+    const container = document.getElementById("profile-tg-widget-container");
+    if (!container) return;
+    container.innerHTML = "";
+    setTgError(null);
+    setTgWidgetState("loading");
+    (window as any).__shpunTelegramBindAuth = (user: Record<string, any>) => { void bindTelegramWidget(user); };
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const script = document.createElement("script");
+        let settled = false;
+        const done = (ok: boolean, error?: Error) => {
+          if (settled) return;
+          settled = true;
+          window.clearTimeout(tid);
+          script.onload = null;
+          script.onerror = null;
+          if (ok) resolve();
+          else reject(error ?? new Error("tg_widget_failed"));
+        };
+        script.async = true;
+        script.src = "https://telegram.org/js/telegram-widget.js?22";
+        script.setAttribute("data-telegram-login", botUsername);
+        script.setAttribute("data-size", "large");
+        script.setAttribute("data-userpic", "true");
+        script.setAttribute("data-request-access", "write");
+        script.setAttribute("data-onauth", "__shpunTelegramBindAuth(user)");
+        const tid = window.setTimeout(() => {
+          script.remove();
+          done(false, new Error("tg_widget_timeout"));
+        }, 2500);
+        script.onload = () => done(true);
+        script.onerror = () => done(false, new Error("tg_widget_failed"));
+        container.appendChild(script);
+      });
+      setTgWidgetState("ready");
+    } catch {
+      container.innerHTML = "";
+      setTgWidgetState("failed");
+      setTgError(t("profile.telegram.error.widget_load", "Telegram сейчас не загрузился. Попробуйте ещё раз."));
+    }
+  }
+
+  useEffect(() => {
+    if (!tgModal) {
+      setTgWidgetState("idle");
+      try { delete (window as any).__shpunTelegramBindAuth; } catch { /* ignore */ }
+    }
+  }, [tgModal]);
 
   // Email
   const [email,         setEmail]         = useState("");
@@ -812,12 +923,19 @@ export function Profile() {
       </Modal>
 
       <Modal open={tgModal} title={telegramLogin ? t("profile.telegram.modal.change_title") : t("profile.telegram.modal.link_title")} onClose={() => setTgModal(false)} closeLabel={t("profile.modal.close")}>
-        <p className="p">{t("profile.telegram.modal.label")}</p>
-        <input className="input" style={{ marginTop: 10 }} value={tgLoginDraft} onChange={(e) => setTgLoginDraft(e.target.value)} placeholder={t("profile.telegram.modal.placeholder")} />
+        <div className="pre" style={{ background: "rgba(14,165,233,.08)", borderColor: "rgba(56,189,248,.24)" }}>
+          <div style={{ fontWeight: 900, marginBottom: 6 }}>{t("profile.telegram.bind.title", "Без ручного ника")}</div>
+          <div style={{ opacity: 0.78, fontSize: 13, lineHeight: 1.45 }}>
+            {t("profile.telegram.bind.text", "Нажмите кнопку Telegram и подтвердите аккаунт. Биллинг сам привяжет его к этому кабинету, а следующий вход через Telegram пройдёт уже без пароля.")}
+          </div>
+        </div>
+        <div id="profile-tg-widget-container" style={{ minHeight: 46, display: "flex", alignItems: "center", justifyContent: "center", marginTop: 12 }} />
         {tgError && <div className="pre" style={{ marginTop: 8 }}>{tgError}</div>}
         <div className="actions actions--2" style={{ marginTop: 12 }}>
           <button className="btn" onClick={() => setTgModal(false)} disabled={savingTg} type="button">{t("profile.personal.cancel")}</button>
-          <button className="btn btn--primary" onClick={() => void saveTelegramLogin()} disabled={savingTg} type="button">{savingTg ? "…" : t("profile.personal.save")}</button>
+          <button className="btn btn--primary" onClick={() => void mountTelegramBindWidget(true)} disabled={savingTg || tgWidgetState === "loading"} type="button">
+            {savingTg ? "…" : tgWidgetState === "loading" ? t("profile.telegram.bind.loading", "Загружаем Telegram…") : t("profile.telegram.bind.cta", "Подключить через Telegram")}
+          </button>
         </div>
       </Modal>
 

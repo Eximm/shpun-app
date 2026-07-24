@@ -11,6 +11,7 @@ import {
   shmShpunAppAdminStatus,
   shmShpunAppReferralBonusDismiss,
   shmShpunAppReferralBonusStatus,
+  shmTelegramWebAuthBind,
   toFormUrlEncoded,
 } from "../../shared/shm/shmClient.js";
 
@@ -74,6 +75,37 @@ function extractShmMessage(payload: any): string {
     if (s) return s;
   }
   return "";
+}
+
+function getClientIp(req: any): string {
+  return (
+    String(req.headers["x-forwarded-for"] ?? "").split(",")[0].trim() ||
+    String(req.headers["x-real-ip"] ?? "").trim() ||
+    String(req.ip ?? "")
+  );
+}
+
+function isProbablyEmptyTelegramWidgetPayload(p: any): boolean {
+  if (!p || typeof p !== "object") return true;
+  if (Object.keys(p).length === 0) return true;
+  const hasHash = typeof p.hash === "string" && p.hash.trim().length > 0;
+  const hasAuthDate =
+    typeof p.auth_date === "string" || typeof p.auth_date === "number";
+  const hasId = typeof p.id === "string" || typeof p.id === "number";
+  return !(hasHash && hasAuthDate && hasId);
+}
+
+function pickTelegramWidgetPayload(p: any): Record<string, any> {
+  const src = p && typeof p === "object" ? p : {};
+  const out: Record<string, any> = {};
+  if (src.id != null) out.id = src.id;
+  if (src.auth_date != null) out.auth_date = src.auth_date;
+  if (src.hash != null) out.hash = src.hash;
+  if (src.username != null) out.username = src.username;
+  if (src.first_name != null) out.first_name = src.first_name;
+  if (src.last_name != null) out.last_name = src.last_name;
+  if (src.photo_url != null) out.photo_url = src.photo_url;
+  return out;
 }
 
 function isAlreadyInUseMessage(msg: string): boolean {
@@ -462,5 +494,54 @@ export async function userRoutes(app: FastifyInstance) {
     }
 
     return reply.send({ ok: true, telegram: r.json ?? null });
+  });
+
+  // POST /user/telegram/bind-widget
+  // Реальная привязка Telegram Login Widget к текущему пользователю SHM.
+  // После неё SHM сможет находить пользователя в /telegram/webapp/auth.
+  app.post("/user/telegram/bind-widget", async (req, reply) => {
+    const s = getSessionFromRequest(req);
+    if (!s?.shmSessionId) {
+      return reply.code(401).send({ ok: false, error: "not_authenticated" });
+    }
+
+    const body = (req.body ?? {}) as any;
+    if (isProbablyEmptyTelegramWidgetPayload(body)) {
+      return reply.code(400).send({ ok: false, error: "missing_telegram_payload" });
+    }
+
+    let uid = Number((s as any)?.shmUserId ?? 0) || 0;
+    if (!uid) {
+      try {
+        const me = await fetchMe(s.shmSessionId);
+        uid = Number((me as any)?.meRaw?.user_id ?? 0) || 0;
+      } catch {
+        uid = 0;
+      }
+    }
+    if (!uid) {
+      return reply.code(502).send({ ok: false, error: "shm_user_lookup_failed" });
+    }
+
+    const r = await shmTelegramWebAuthBind(
+      s.shmSessionId,
+      uid,
+      pickTelegramWidgetPayload(body),
+      getClientIp(req)
+    );
+
+    const msg = extractShmMessage(r.json);
+    const apiError = String((r.json as any)?.error ?? "").trim();
+    if (!r.ok || apiError) {
+      return reply.code(r.status === 400 ? 400 : r.status === 409 ? 409 : r.status || 502).send({
+        ok: false,
+        error: apiError || msg || "shm_telegram_bind_failed",
+        message: msg || null,
+        shm: { status: r.status },
+      });
+    }
+
+    const tg = await fetchTelegramUser(s.shmSessionId);
+    return reply.send({ ok: true, telegram: tg ?? null, result: r.json ?? null });
   });
 }

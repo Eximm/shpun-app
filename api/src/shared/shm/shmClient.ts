@@ -255,6 +255,39 @@ export async function shmTelegramWebAuth(widgetPayload: Record<string, any>, cli
   })
 }
 
+export async function shmTelegramWebAuthBind(
+  sessionId: string,
+  uid: number,
+  widgetPayload: Record<string, any>,
+  clientIp?: string
+) {
+  return await shmFetch<any>(sessionId, 'v1/telegram/web/auth', {
+    method: 'POST',
+    headers: ipHeaders(clientIp),
+    body: {
+      ...(widgetPayload ?? {}),
+      uid,
+      bind_to_profile: 1,
+      bind_only_if_new: 1,
+    },
+  })
+}
+
+export async function shmTelegramWebAuthRegister(
+  widgetPayload: Record<string, any>,
+  opts?: { clientIp?: string; partnerId?: number }
+) {
+  return await shmFetch<{ session_id?: string }>(null, 'v1/telegram/web/auth', {
+    method: 'POST',
+    headers: ipHeaders(opts?.clientIp),
+    body: {
+      ...(widgetPayload ?? {}),
+      register_if_not_exists: 1,
+      ...(opts?.partnerId ? { partner_id: opts.partnerId } : {}),
+    },
+  })
+}
+
 // =====================
 // USER
 // =====================
