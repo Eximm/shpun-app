@@ -506,7 +506,12 @@ async function ensureTelegramUserByPasswordRegister(
       login: creds.login,
       status: reg.status,
     });
-    return { ok: true };
+    return {
+      ok: false,
+      status: 401,
+      error: "telegram_password_login_failed",
+      detail: "telegram_login_exists",
+    };
   }
 
   return {
@@ -573,6 +578,14 @@ async function resolveTelegramMiniAppSession(
       source: "telegram",
     };
   }
+  if (rr.status === 429) {
+    return {
+      ok: false,
+      status: 429,
+      error: "telegram_auth_limited",
+      detail: rr.json ?? rr.text,
+    };
+  }
 
   const creds = buildMiniAppTelegramCredentials(initData);
   if (!creds) {
@@ -622,6 +635,14 @@ async function resolveTelegramMiniAppSession(
       ok: true,
       shmSessionId: String(rr.json?.session_id ?? "").trim(),
       source: "telegram",
+    };
+  }
+  if (rr.status === 429) {
+    return {
+      ok: false,
+      status: 429,
+      error: "telegram_auth_limited",
+      detail: rr.json ?? rr.text,
     };
   }
 
