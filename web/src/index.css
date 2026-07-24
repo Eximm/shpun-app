@@ -4436,7 +4436,8 @@ button, a { -webkit-tap-highlight-color: transparent; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.profile-more-wallet {
+.profile-more-wallet,
+.profile-more-logout {
   min-height: 38px;
   display: inline-flex;
   align-items: center;
@@ -4450,9 +4451,25 @@ button, a { -webkit-tap-highlight-color: transparent; }
   background: rgba(0,0,0,0.25);
   border: 1px solid rgba(255,255,255,0.10);
 }
+.profile-more-logout {
+  color: #ffd3dc;
+  background: linear-gradient(135deg, rgba(255,77,109,0.18), rgba(255,127,80,0.20));
+  border-color: rgba(255,117,140,0.22);
+  cursor: pointer;
+  transition: transform 150ms cubic-bezier(.2,.9,.2,1), filter 150ms ease, box-shadow 150ms ease;
+}
+.profile-more-logout:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+  box-shadow: 0 12px 28px rgba(255,77,109,0.11);
+}
+.profile-more-logout:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
 .profile-more-stats {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0,1fr));
+  grid-template-columns: repeat(2, minmax(0,1fr));
   gap: 9px;
 }
 .profile-more-stat {
@@ -4697,7 +4714,8 @@ button, a { -webkit-tap-highlight-color: transparent; }
     padding: 12px;
     border-radius: 20px;
   }
-  .profile-more-wallet {
+  .profile-more-wallet,
+  .profile-more-logout {
     width: max-content;
     min-height: 32px;
     font-size: 13px;

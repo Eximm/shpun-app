@@ -81,10 +81,6 @@ function permissionLabel(p: string, t: (k: string) => string) {
   return t("profile.push.permission.unsupported");
 }
 
-function fmtMoney(n: number, cur = "RUB") {
-  return new Intl.NumberFormat("ru-RU", { style: "currency", currency: cur, maximumFractionDigits: 0 }).format(Number(n || 0));
-}
-
 function getCodeSentAt(): number {
   try { return Number(localStorage.getItem(EMAIL_CODE_SENT_KEY) ?? 0) || 0; } catch { return 0; }
 }
@@ -800,8 +796,6 @@ export function Profile() {
   );
 
   /* ── Render ── */
-  const balanceText = fmtMoney(Number(me?.balance?.amount ?? 0), String(me?.balance?.currency || "RUB"));
-  const bonusText = fmtMoney(Number(me?.bonus ?? 0), String(me?.balance?.currency || "RUB"));
   const supportUrl = "https://t.me/shpun_staff";
   const channelUrl = "https://t.me/shpunvpn_bot";
 
@@ -824,15 +818,12 @@ export function Profile() {
                 <div className="profile-more-user__meta">ID {profile?.id ?? "—"}{loginText ? ` · ${loginText}` : ""}</div>
               </div>
             </div>
-            <div className="profile-more-wallet" aria-label="Баланс">
-              <span>{balanceText}</span>
-            </div>
+            <button className="profile-more-logout" type="button" onClick={() => void logout()} disabled={loggingOut}>{loggingOut ? "…" : "Выйти"}</button>
           </div>
 
           <div className="profile-more-stats">
             <div className="profile-more-stat"><span>Создан</span><strong>{formatDate(profile?.created)}</strong></div>
             <div className="profile-more-stat"><span>Последний вход</span><strong>{formatDate(profile?.lastLogin)}</strong></div>
-            <div className="profile-more-stat"><span>Бонусы</span><strong>{bonusText}</strong></div>
           </div>
 
           <div className="profile-more-group">
@@ -852,6 +843,7 @@ export function Profile() {
               <ProfileMenuItem icon="🛟" title="Поддержка" subtitle="Telegram чат" external onClick={() => openExternal(supportUrl)} />
               <ProfileMenuItem icon="📣" title="Канал" subtitle="Новости и важные объявления" external onClick={() => openExternal(channelUrl)} />
               {isAdmin && <ProfileMenuItem icon="🛠️" title={t("profile.admin")} subtitle="Пульт для внутренней магии" onClick={() => nav("/admin")} />}
+              <ProfileMenuItem icon="🚪" title="Выйти из аккаунта" subtitle="Закрыть сессию на этом устройстве" danger onClick={() => void logout()} />
             </div>
           </div>
         </div>
@@ -1107,9 +1099,9 @@ export function Profile() {
 
       <Modal open={tgModal} title={telegramLogin ? t("profile.telegram.modal.change_title") : t("profile.telegram.modal.link_title")} onClose={() => setTgModal(false)} closeLabel={t("profile.modal.close")}>
         <div className="pre" style={{ background: "rgba(14,165,233,.08)", borderColor: "rgba(56,189,248,.24)" }}>
-          <div style={{ fontWeight: 900, marginBottom: 6 }}>{t("profile.telegram.bind.title", "Без ручного ника")}</div>
+          <div style={{ fontWeight: 900, marginBottom: 6 }}>{t("profile.telegram.bind.title", "Вход через Telegram")}</div>
           <div style={{ opacity: 0.78, fontSize: 13, lineHeight: 1.45 }}>
-            {t("profile.telegram.bind.text", "Нажмите кнопку Telegram и подтвердите аккаунт. Биллинг сам привяжет его к этому кабинету, а следующий вход через Telegram пройдёт уже без пароля.")}
+            {t("profile.telegram.bind.text", "Подтвердите свой Telegram-аккаунт. После подключения можно будет входить без пароля — удобно, быстро и без лишних ритуалов.")}
           </div>
         </div>
         <div id="profile-tg-widget-container" style={{ minHeight: 46, display: "flex", alignItems: "center", justifyContent: "center", marginTop: 12 }} />
