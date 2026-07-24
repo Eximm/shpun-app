@@ -19,6 +19,7 @@ type BeforeInstallPromptEvent = Event & {
 };
 
 type VerifyModalState = "idle" | "sent" | "success";
+type ProfileScreen = "main" | "settings" | "about" | "reviews";
 
 const EMAIL_CODE_SENT_KEY    = "email_verify:sent_at";
 const EMAIL_CODE_COOLDOWN_MS = 60_000;
@@ -78,6 +79,10 @@ function permissionLabel(p: string, t: (k: string) => string) {
   if (p === "denied")   return t("profile.push.permission.denied");
   if (p === "default")  return t("profile.push.permission.default");
   return t("profile.push.permission.unsupported");
+}
+
+function fmtMoney(n: number, cur = "RUB") {
+  return new Intl.NumberFormat("ru-RU", { style: "currency", currency: cur, maximumFractionDigits: 0 }).format(Number(n || 0));
 }
 
 function getCodeSentAt(): number {
@@ -215,6 +220,46 @@ function SmallBtn({ children, onClick, primary, danger, disabled }: {
   );
 }
 
+function ProfileMenuItem({ icon, title, subtitle, onClick, badge, external, danger }: {
+  icon: string;
+  title: string;
+  subtitle?: React.ReactNode;
+  onClick?: () => void;
+  badge?: React.ReactNode;
+  external?: boolean;
+  danger?: boolean;
+}) {
+  const interactive = Boolean(onClick);
+  function onKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (!interactive) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onClick?.();
+    }
+  }
+  return (
+    <div
+      className={`profile-menu-item${danger ? " profile-menu-item--danger" : ""}${interactive ? " profile-menu-item--interactive" : ""}`}
+      role={interactive ? "button" : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={onKeyDown}
+    >
+      <span className="profile-menu-item__icon" aria-hidden="true">{icon}</span>
+      <span className="profile-menu-item__text">
+        <span className="profile-menu-item__title">{title}</span>
+        {subtitle != null && <span className="profile-menu-item__subtitle">{subtitle}</span>}
+      </span>
+      {badge && <span className="profile-menu-item__badge">{badge}</span>}
+      <span className="profile-menu-item__arrow" aria-hidden="true">{interactive ? (external ? "↗" : "›") : ""}</span>
+    </div>
+  );
+}
+
+function ProfileSwitch({ checked, disabled }: { checked?: boolean; disabled?: boolean }) {
+  return <span className={`profile-switch${checked ? " profile-switch--on" : ""}${disabled ? " profile-switch--disabled" : ""}`} aria-hidden="true" />;
+}
+
 /* ─── Email Verify Modal ─────────────────────────────────────────────────── */
 
 function EmailVerifyModal({ open, email, onClose, onVerified, t }: {
@@ -349,6 +394,7 @@ export function Profile() {
   const { me, loading, error, refetch } = useMe() as any;
   const { lang, setLang, t } = useI18n();
   const botUsername = useMemo(() => getTelegramBotUsername(), []);
+  const [screen, setScreen] = useState<ProfileScreen>("main");
 
   const profile = me?.profile;
   const isAdmin = Boolean(profile?.isAdmin || me?.admin?.isAdmin);
@@ -754,8 +800,121 @@ export function Profile() {
   );
 
   /* ── Render ── */
+  const balanceText = fmtMoney(Number(me?.balance?.amount ?? 0), String(me?.balance?.currency || "RUB"));
+  const bonusText = fmtMoney(Number(me?.bonus ?? 0), String(me?.balance?.currency || "RUB"));
+  const supportUrl = "https://t.me/shpun_staff";
+  const channelUrl = "https://t.me/shpunvpn_bot";
+
+  function openExternal(url: string) {
+    try { window.open(url, "_blank", "noopener,noreferrer"); }
+    catch { window.location.href = url; }
+  }
+
   return (
-    <div className="section profile-page">
+    <div className="section profile-page profile-more-page">
+      {toast && <div className="home-alert home-alert--ok profile-more-toast">{toast}</div>}
+
+      {screen === "main" && (
+        <div className="profile-more-shell">
+          <div className="profile-more-top">
+            <div className="profile-more-user">
+              <div className="profile-more-avatar">{initials}</div>
+              <div className="profile-more-user__text">
+                <div className="profile-more-user__name">{displayName}</div>
+                <div className="profile-more-user__meta">ID {profile?.id ?? "—"}{loginText ? ` · ${loginText}` : ""}</div>
+              </div>
+            </div>
+            <div className="profile-more-wallet" aria-label="Баланс">
+              <span>{balanceText}</span>
+            </div>
+          </div>
+
+          <div className="profile-more-stats">
+            <div className="profile-more-stat"><span>Создан</span><strong>{formatDate(profile?.created)}</strong></div>
+            <div className="profile-more-stat"><span>Последний вход</span><strong>{formatDate(profile?.lastLogin)}</strong></div>
+            <div className="profile-more-stat"><span>Бонусы</span><strong>{bonusText}</strong></div>
+          </div>
+
+          <div className="profile-more-group">
+            <div className="profile-more-group__title">Утилиты</div>
+            <div className="profile-menu-list">
+              <ProfileMenuItem icon="🧪" title="Спидтест" subtitle="Сравнить отклик серверов" onClick={() => showToast("Скоро добавим нормальный спидтест, без гадания на пинге.")} />
+              <ProfileMenuItem icon="🛰️" title="Статус серверов" subtitle="Мониторинг и автообновление" onClick={() => nav("/services")} />
+            </div>
+          </div>
+
+          <div className="profile-more-group">
+            <div className="profile-more-group__title">Меню</div>
+            <div className="profile-menu-list">
+              <ProfileMenuItem icon="⚙️" title="Настройки" subtitle="Тема, язык, уведомления и вход" onClick={() => setScreen("settings")} />
+              <ProfileMenuItem icon="ℹ️" title="О сервисе" subtitle="Кто такой Shpun и зачем он оживляет интернет" onClick={() => setScreen("about")} />
+              <ProfileMenuItem icon="💬" title="Отзывы" subtitle="Будущий уголок пользовательских историй" onClick={() => setScreen("reviews")} />
+              <ProfileMenuItem icon="🛟" title="Поддержка" subtitle="Telegram чат" external onClick={() => openExternal(supportUrl)} />
+              <ProfileMenuItem icon="📣" title="Канал" subtitle="Новости и важные объявления" external onClick={() => openExternal(channelUrl)} />
+              {isAdmin && <ProfileMenuItem icon="🛠️" title={t("profile.admin")} subtitle="Пульт для внутренней магии" onClick={() => nav("/admin")} />}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {screen === "settings" && (
+        <div className="profile-more-shell">
+          <button className="profile-more-back" type="button" onClick={() => setScreen("main")}>← Назад</button>
+          <div className="profile-more-title">Настройки</div>
+
+          <div className="profile-more-group">
+            <div className="profile-more-group__title">Внешний вид</div>
+            <div className="profile-menu-list">
+              <ProfileMenuItem icon="🌙" title="Тема оформления" subtitle="Тёмная, как ночной серверный шкаф" badge={<ProfileSwitch checked disabled />} onClick={() => showToast("Светлую тему пока не заводили — тёмная держит стиль.")} />
+            </div>
+          </div>
+
+          <div className="profile-more-group">
+            <div className="profile-more-group__title">Аккаунт</div>
+            <div className="profile-menu-list">
+              <ProfileMenuItem icon="👤" title={t("profile.personal.title")} subtitle={`${personalNameView !== "—" && personalNameView !== "вЂ”" ? personalNameView : t("profile.email.empty")} · ID ${profile?.id ?? "—"}`} badge={<SmallBtn>{t("profile.personal.edit")}</SmallBtn>} onClick={() => setEditPersonal(true)} />
+              <ProfileMenuItem icon="📧" title={t("profile.email.title")} subtitle={emailLoading ? t("profile.email.loading") : email || t("profile.email.empty")} badge={email ? <SmallBadge text={emailVerified === true ? t("profile.email.badge.verified") : t("profile.email.badge.unverified")} tone={emailVerified === true ? "ok" : "warn"} /> : undefined} onClick={() => setEmailModal(true)} />
+              <ProfileMenuItem icon="✈️" title="Telegram" subtitle={telegramLogin || t("profile.telegram.unlinked")} badge={telegramLogin ? <SmallBadge text={t("profile.telegram.badge.linked")} tone="ok" /> : <SmallBadge text={t("profile.telegram.badge.unlinked")} />} onClick={() => setTgModal(true)} />
+              <ProfileMenuItem icon="🔐" title={t("profile.change_password")} subtitle="Смена пароля и повторный вход" onClick={() => setPwdModal(true)} />
+            </div>
+          </div>
+
+          <div className="profile-more-group">
+            <div className="profile-more-group__title">Основные</div>
+            <div className="profile-menu-list">
+              <ProfileMenuItem icon="🌐" title={t("profile.language.title")} subtitle={lang === "ru" ? t("profile.language.ru") : t("profile.language.en")} badge={<Segmented value={(lang as any) === "en" ? "en" : "ru"} onChange={setLang as any} ariaLabel={t("profile.language.aria")} />} />
+              <ProfileMenuItem icon="📲" title={t("profile.pwa.title")} subtitle={standalone ? t("profile.pwa.installed") : t("profile.pwa.not_installed")} badge={standalone ? <SmallBadge text={t("profile.pwa.installed")} tone="ok" /> : <SmallBtn primary>{deferredPrompt ? t("profile.pwa.button.install") : t("profile.pwa.button.how")}</SmallBtn>} onClick={() => void doInstallPwa()} />
+              <ProfileMenuItem icon="🔔" title={t("profile.push.title")} subtitle={<>{pushEnabled ? t("profile.push.enabled") : t("profile.push.disabled")} · {pushPermText}</>} badge={<ProfileSwitch checked={pushEnabled} disabled={!pushState.supported || pushState.permission === "denied" || pushLoading} />} onClick={() => void togglePush()} />
+              <ProfileMenuItem icon="📄" title={t("profile.legal.title")} subtitle={t("profile.legal.value")} onClick={() => nav("/legal")} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {screen === "about" && (
+        <div className="profile-more-shell">
+          <button className="profile-more-back" type="button" onClick={() => setScreen("main")}>← Назад</button>
+          <div className="profile-more-title">О сервисе</div>
+          <div className="card profile-more-info"><div className="card__body">
+            <div className="profile-more-info__icon">⚡</div>
+            <h2>Shpun App</h2>
+            <p>Личный кабинет для VPN-сервисов Shpun: услуги, оплата, бонусы, уведомления и вход через Telegram или e-mail — всё в одном месте.</p>
+            <button className="btn btn--primary" type="button" onClick={() => nav("/legal")}>Оферта и условия</button>
+          </div></div>
+        </div>
+      )}
+
+      {screen === "reviews" && (
+        <div className="profile-more-shell">
+          <button className="profile-more-back" type="button" onClick={() => setScreen("main")}>← Назад</button>
+          <div className="profile-more-title">Отзывы</div>
+          <div className="profile-reviews-grid">
+            <div className="profile-review-card">“YouTube снова не делает вид, что он телеграф 1897 года.”<span>Пользователь Shpun</span></div>
+            <div className="profile-review-card">“Подключил, оплатил, забыл. Лучший вид настройки.”<span>Пользователь Shpun</span></div>
+            <div className="profile-review-card profile-review-card--soon">Скоро добавим реальные отзывы и форму обратной связи.</div>
+          </div>
+        </div>
+      )}
 
       {/* ── Шапка ── */}
       <div className="card profile-hero-card">
@@ -917,6 +1076,24 @@ export function Profile() {
       </SectionCard>
 
       {/* ── Модалки ── */}
+
+      <Modal open={editPersonal} title={t("profile.personal.title")} onClose={cancelPersonal} closeLabel={t("profile.modal.close")}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {personalError && <div className="pre">{personalError}</div>}
+          <div className="field">
+            <label className="field__label">{t("profile.personal.name")}</label>
+            <input className="input" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder={t("profile.personal.name_ph")} />
+          </div>
+          <div className="field">
+            <label className="field__label">{t("profile.personal.phone")}</label>
+            <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+7…" />
+          </div>
+          <div className="actions actions--2">
+            <button className="btn" onClick={cancelPersonal} disabled={savingPersonal} type="button">{t("profile.personal.cancel")}</button>
+            <button className="btn btn--primary" onClick={() => void savePersonal()} disabled={savingPersonal} type="button">{savingPersonal ? "…" : t("profile.personal.save")}</button>
+          </div>
+        </div>
+      </Modal>
 
       <EmailVerifyModal open={verifyModal} email={email} onClose={() => setVerifyModal(false)} onVerified={() => setEmailVerified(true)} t={t} />
 
