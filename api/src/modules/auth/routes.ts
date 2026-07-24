@@ -549,6 +549,10 @@ async function bindTelegramToSession(
   }
 }
 
+function needsLegacyTelegramBind(source: string): boolean {
+  return source.includes("_password_");
+}
+
 async function resolveTelegramMiniAppSession(
   req: any,
   body: any,
@@ -910,7 +914,7 @@ export async function authRoutes(app: FastifyInstance) {
     });
 
     const parsed = parseTelegramInitDataUser(initData);
-    if (parsed.tgId) {
+    if (parsed.tgId && needsLegacyTelegramBind(resolved.source)) {
       await bindTelegramToSession(req, shmSessionId, parsed.tgId, parsed.tgLogin);
     }
 
@@ -979,7 +983,7 @@ export async function authRoutes(app: FastifyInstance) {
     const tgId = body?.id != null ? String(body.id).trim() : "";
     const tgLogin =
       body?.username != null ? String(body.username).trim() : "";
-    if (tgId) {
+    if (tgId && needsLegacyTelegramBind(resolved.source)) {
       await bindTelegramToSession(req, shmSessionId, tgId, tgLogin);
     }
 
@@ -1037,7 +1041,7 @@ export async function authRoutes(app: FastifyInstance) {
     const tgId = payload?.id != null ? String(payload.id).trim() : "";
     const tgLogin =
       payload?.username != null ? String(payload.username).trim() : "";
-    if (tgId) {
+    if (tgId && needsLegacyTelegramBind(resolved.source)) {
       await bindTelegramToSession(req, shmSessionId, tgId, tgLogin);
     }
 

@@ -27,13 +27,19 @@ function envInt(name: string, def: number): number {
   return Number.isFinite(n) && n > 0 ? Math.trunc(n) : def
 }
 
-function telegramProfile(): string {
-  return String(
+function telegramProfile(): string | undefined {
+  const profile = String(
     process.env.SHM_TELEGRAM_PROFILE ||
       process.env.TELEGRAM_PROFILE ||
       process.env.TG_PROFILE ||
-      'telegram_bot'
-  ).trim() || 'telegram_bot'
+      ''
+  ).trim()
+  return profile || undefined
+}
+
+function withTelegramProfile<T extends Record<string, any>>(payload: T): T {
+  const profile = telegramProfile()
+  return profile ? ({ profile, ...payload } as T) : payload
 }
 
 const SHM_DEBUG = envBool('SHM_DEBUG', false) || envBool('AUTH_DEBUG', false)
@@ -252,7 +258,7 @@ export async function shmTelegramWebAppAuth(initData: string, clientIp?: string)
   return await shmFetch<{ session_id?: string }>(null, 'v1/telegram/webapp/auth', {
     method: 'GET',
     headers: ipHeaders(clientIp),
-    query: { initData: clean, profile: telegramProfile() },
+    query: withTelegramProfile({ initData: clean }),
   })
 }
 
@@ -260,10 +266,7 @@ export async function shmTelegramWebAuth(widgetPayload: Record<string, any>, cli
   return await shmFetch<{ session_id?: string }>(null, 'v1/telegram/web/auth', {
     method: 'POST',
     headers: ipHeaders(clientIp),
-    body: {
-      profile: telegramProfile(),
-      ...(widgetPayload ?? {}),
-    },
+    body: withTelegramProfile({ ...(widgetPayload ?? {}) }),
   })
 }
 
@@ -276,12 +279,11 @@ export async function shmTelegramWebAuthBind(
   return await shmFetch<any>(sessionId, 'v1/telegram/web/auth', {
     method: 'POST',
     headers: ipHeaders(clientIp),
-    body: {
-      profile: telegramProfile(),
+    body: withTelegramProfile({
       ...(widgetPayload ?? {}),
       uid,
       bind_to_profile: 1,
-    },
+    }),
   })
 }
 
@@ -292,12 +294,11 @@ export async function shmTelegramWebAuthRegister(
   return await shmFetch<{ session_id?: string }>(null, 'v1/telegram/web/auth', {
     method: 'POST',
     headers: ipHeaders(opts?.clientIp),
-    body: {
-      profile: telegramProfile(),
+    body: withTelegramProfile({
       ...(widgetPayload ?? {}),
       register_if_not_exists: 1,
       ...(opts?.partnerId ? { partner_id: opts.partnerId } : {}),
-    },
+    }),
   })
 }
 
