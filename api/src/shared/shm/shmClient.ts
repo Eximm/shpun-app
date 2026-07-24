@@ -27,6 +27,15 @@ function envInt(name: string, def: number): number {
   return Number.isFinite(n) && n > 0 ? Math.trunc(n) : def
 }
 
+function telegramProfile(): string {
+  return String(
+    process.env.SHM_TELEGRAM_PROFILE ||
+      process.env.TELEGRAM_PROFILE ||
+      process.env.TG_PROFILE ||
+      'telegram_bot'
+  ).trim() || 'telegram_bot'
+}
+
 const SHM_DEBUG = envBool('SHM_DEBUG', false) || envBool('AUTH_DEBUG', false)
 const SHM_TIMEOUT_MS = envInt('SHM_TIMEOUT_MS', 4500)
 
@@ -243,7 +252,7 @@ export async function shmTelegramWebAppAuth(initData: string, clientIp?: string)
   return await shmFetch<{ session_id?: string }>(null, 'v1/telegram/webapp/auth', {
     method: 'GET',
     headers: ipHeaders(clientIp),
-    query: { initData: clean },
+    query: { initData: clean, profile: telegramProfile() },
   })
 }
 
@@ -251,7 +260,10 @@ export async function shmTelegramWebAuth(widgetPayload: Record<string, any>, cli
   return await shmFetch<{ session_id?: string }>(null, 'v1/telegram/web/auth', {
     method: 'POST',
     headers: ipHeaders(clientIp),
-    body: widgetPayload ?? {},
+    body: {
+      profile: telegramProfile(),
+      ...(widgetPayload ?? {}),
+    },
   })
 }
 
@@ -265,6 +277,7 @@ export async function shmTelegramWebAuthBind(
     method: 'POST',
     headers: ipHeaders(clientIp),
     body: {
+      profile: telegramProfile(),
       ...(widgetPayload ?? {}),
       uid,
       bind_to_profile: 1,
@@ -281,6 +294,7 @@ export async function shmTelegramWebAuthRegister(
     method: 'POST',
     headers: ipHeaders(opts?.clientIp),
     body: {
+      profile: telegramProfile(),
       ...(widgetPayload ?? {}),
       register_if_not_exists: 1,
       ...(opts?.partnerId ? { partner_id: opts.partnerId } : {}),
