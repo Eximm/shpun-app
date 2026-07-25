@@ -5247,7 +5247,7 @@ button.reviews-star:not(:disabled) {
   margin-right: auto;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
 }
 .serverStatus-hero {
   position: relative;
@@ -5285,7 +5285,7 @@ button.reviews-star:not(:disabled) {
   width: 100%;
   min-height: 42px;
 }
-.serverStatus-group { display: grid; gap: 8px; }
+.serverStatus-group { display: grid; gap: 6px; }
 .serverStatus-group__head {
   display: flex;
   align-items: flex-end;
@@ -5295,7 +5295,7 @@ button.reviews-star:not(:disabled) {
 .serverStatus-group__head h2 {
   margin: 0;
   color: rgba(255,255,255,0.94);
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 950;
 }
 .serverStatus-group__head p {
@@ -5305,22 +5305,22 @@ button.reviews-star:not(:disabled) {
   font-weight: 750;
 }
 .serverStatus-group__count {
-  padding: 6px 10px;
+  padding: 4px 8px;
   border-radius: 999px;
   border: 1px solid rgba(255,255,255,0.09);
   background: rgba(255,255,255,0.05);
   color: rgba(255,255,255,0.82);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 950;
 }
 .serverStatus-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 7px;
+  gap: 5px;
 }
 .serverStatus-card {
-  padding: 6px 8px;
-  border-radius: 11px;
+  padding: 5px 7px;
+  border-radius: 10px;
   border: 1px solid rgba(255,255,255,0.08);
   background: linear-gradient(90deg, rgba(255,255,255,0.055), rgba(255,255,255,0.03));
 }
@@ -5339,12 +5339,12 @@ button.reviews-star:not(:disabled) {
 .serverStatus-card__top {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   min-width: 0;
 }
 .serverStatus-dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 999px;
   flex: 0 0 auto;
   background: rgba(255,255,255,0.24);
@@ -5362,41 +5362,33 @@ button.reviews-star:not(:disabled) {
   background: rgba(255,255,255,0.45);
   box-shadow: 0 0 0 4px rgba(255,255,255,0.06);
 }
-.serverStatus-card__flag {
+.serverStatus-card__region {
   flex: 0 0 auto;
-  font-size: 15px;
-  line-height: 1;
+  min-width: 21px;
+  padding: 1px 4px;
+  border-radius: 5px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.86);
+  font-size: 8px;
+  line-height: 1.15;
+  font-weight: 950;
+  text-align: center;
+  letter-spacing: 0.04em;
 }
 .serverStatus-card__title {
   min-width: 0;
   flex: 1;
   color: rgba(255,255,255,0.92);
-  font-size: 12.5px;
-  font-weight: 950;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.serverStatus-card__state {
-  flex: 0 0 auto;
-  color: rgba(255,255,255,0.68);
-  font-size: 10px;
-  font-weight: 950;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-.serverStatus-card__host {
-  margin-top: 5px;
-  color: rgba(255,255,255,0.38);
   font-size: 12px;
-  font-weight: 750;
+  font-weight: 950;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .serverStatus-card__line {
   height: 2px;
-  margin-top: 5px;
+  margin-top: 4px;
   border-radius: 999px;
   background: rgba(255,255,255,0.16);
   overflow: hidden;
@@ -5413,8 +5405,8 @@ button.reviews-star:not(:disabled) {
 .serverStatus-metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0,1fr));
-  gap: 5px;
-  margin-top: 4px;
+  gap: 4px;
+  margin-top: 3px;
 }
 .serverStatus-metrics span {
   min-width: 0;
@@ -5432,13 +5424,13 @@ button.reviews-star:not(:disabled) {
 }
 .serverStatus-metrics b {
   color: rgba(255,255,255,0.90);
-  font-size: 9.5px;
+  font-size: 9px;
   font-weight: 950;
 }
 .serverStatus-metrics small {
   margin: 0 0 1px;
   color: rgba(255,255,255,0.40);
-  font-size: 7.5px;
+  font-size: 7px;
   font-weight: 850;
   text-transform: uppercase;
   letter-spacing: 0.06em;

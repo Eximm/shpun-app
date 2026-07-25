@@ -44,18 +44,18 @@ function statusTone(online: StatusItem["online"]) {
   return online ? "online" : "offline";
 }
 
-function flagForTitle(title: string) {
+function regionForTitle(title: string) {
   const t = title.toLowerCase();
-  if (/\bpl\b|warszawa|poland|польш/.test(t)) return "🇵🇱";
-  if (/\bcz\b|prague|czech|праг|чех/.test(t)) return "🇨🇿";
-  if (/\bru\b|moscow|saint-petersburg|spb|моск|петербург|росс/.test(t)) return "🇷🇺";
-  if (/\bswe\b|stockholm|sweden|швец/.test(t)) return "🇸🇪";
-  if (/\bus\b|fremont|usa|сша/.test(t)) return "🇺🇸";
-  if (/\bfi\b|helsinki|finland|фин/.test(t)) return "🇫🇮";
-  if (/\bnl\b|meppel|netherlands|нидер/.test(t)) return "🇳🇱";
-  if (/\btl\b|tallin|tallinn|estonia|эстон/.test(t)) return "🇪🇪";
-  if (/\bde\b|frankfurt|germany|герман/.test(t)) return "🇩🇪";
-  return "🌐";
+  if (/\bpl\b|warszawa|poland|польш/.test(t)) return "PL";
+  if (/\bcz\b|prague|czech|праг|чех/.test(t)) return "CZ";
+  if (/\bru\b|moscow|saint-petersburg|spb|моск|петербург|росс/.test(t)) return "RU";
+  if (/\bswe\b|stockholm|sweden|швец/.test(t)) return "SE";
+  if (/\bus\b|fremont|usa|сша/.test(t)) return "US";
+  if (/\bfi\b|helsinki|finland|фин/.test(t)) return "FI";
+  if (/\bnl\b|meppel|netherlands|нидер/.test(t)) return "NL";
+  if (/\btl\b|tallin|tallinn|estonia|эстон/.test(t)) return "EE";
+  if (/\bde\b|frankfurt|germany|герман/.test(t)) return "DE";
+  return "VPN";
 }
 
 function ServerCard({ item }: { item: StatusItem }) {
@@ -65,17 +65,17 @@ function ServerCard({ item }: { item: StatusItem }) {
     <div className={`serverStatus-card serverStatus-card--${tone}`}>
       <div className="serverStatus-card__top">
         <span className={`serverStatus-dot serverStatus-dot--${tone}`} />
-        <span className="serverStatus-card__flag" aria-hidden="true">{flagForTitle(item.title || item.host)}</span>
+        <span className="serverStatus-card__region" aria-hidden="true">{regionForTitle(item.title || item.host)}</span>
         <div className="serverStatus-card__title">{item.title || item.host}</div>
       </div>
       <div className="serverStatus-card__line" aria-hidden="true">
         <span style={{ width: `${loadPct}%` }} />
       </div>
       <div className="serverStatus-metrics" aria-label="Показатели сервера">
-        <span><small>аптайм</small><b>{item.uptime || "—"}</b></span>
-        <span><small>отклик</small><b>{item.latencyMs != null ? `${item.latencyMs} мс` : "—"}</b></span>
-        <span className={`serverStatus-load serverStatus-load--${loadTone(item.loadPct)}`}><small>нагрузка</small><b>{item.loadPct != null ? `${item.loadPct}%` : "—"}</b></span>
-        <span className="serverStatus-card__checked"><small>опрос</small><b>{item.checkedAt ? timeAgo(item.checkedAt) : "ещё ждём"}</b></span>
+        <span><small>апт</small><b>{item.uptime || "—"}</b></span>
+        <span><small>пинг</small><b>{item.latencyMs != null ? `${item.latencyMs} мс` : "—"}</b></span>
+        <span className={`serverStatus-load serverStatus-load--${loadTone(item.loadPct)}`}><small>load</small><b>{item.loadPct != null ? `${item.loadPct}%` : "—"}</b></span>
+        <span className="serverStatus-card__checked"><small>опрос</small><b>{item.checkedAt ? timeAgo(item.checkedAt) : "ждём"}</b></span>
       </div>
     </div>
   );
