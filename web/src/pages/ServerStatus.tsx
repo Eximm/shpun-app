@@ -44,11 +44,6 @@ function statusTone(online: StatusItem["online"]) {
   return online ? "online" : "offline";
 }
 
-function statusText(online: StatusItem["online"]) {
-  if (online == null) return "проверяем";
-  return online ? "онлайн" : "оффлайн";
-}
-
 function flagForTitle(title: string) {
   const t = title.toLowerCase();
   if (/\bpl\b|warszawa|poland|польш/.test(t)) return "🇵🇱";
@@ -72,7 +67,6 @@ function ServerCard({ item }: { item: StatusItem }) {
         <span className={`serverStatus-dot serverStatus-dot--${tone}`} />
         <span className="serverStatus-card__flag" aria-hidden="true">{flagForTitle(item.title || item.host)}</span>
         <div className="serverStatus-card__title">{item.title || item.host}</div>
-        <span className="serverStatus-card__state">{statusText(item.online)}</span>
       </div>
       <div className="serverStatus-card__line" aria-hidden="true">
         <span style={{ width: `${loadPct}%` }} />

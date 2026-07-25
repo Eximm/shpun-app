@@ -5319,8 +5319,8 @@ button.reviews-star:not(:disabled) {
   gap: 7px;
 }
 .serverStatus-card {
-  padding: 8px 10px;
-  border-radius: 13px;
+  padding: 6px 8px;
+  border-radius: 11px;
   border: 1px solid rgba(255,255,255,0.08);
   background: linear-gradient(90deg, rgba(255,255,255,0.055), rgba(255,255,255,0.03));
 }
@@ -5339,12 +5339,12 @@ button.reviews-star:not(:disabled) {
 .serverStatus-card__top {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
 }
 .serverStatus-dot {
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
   border-radius: 999px;
   flex: 0 0 auto;
   background: rgba(255,255,255,0.24);
@@ -5364,14 +5364,14 @@ button.reviews-star:not(:disabled) {
 }
 .serverStatus-card__flag {
   flex: 0 0 auto;
-  font-size: 18px;
+  font-size: 15px;
   line-height: 1;
 }
 .serverStatus-card__title {
   min-width: 0;
   flex: 1;
   color: rgba(255,255,255,0.92);
-  font-size: 13.5px;
+  font-size: 12.5px;
   font-weight: 950;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -5396,7 +5396,7 @@ button.reviews-star:not(:disabled) {
 }
 .serverStatus-card__line {
   height: 2px;
-  margin-top: 7px;
+  margin-top: 5px;
   border-radius: 999px;
   background: rgba(255,255,255,0.16);
   overflow: hidden;
@@ -5413,8 +5413,8 @@ button.reviews-star:not(:disabled) {
 .serverStatus-metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0,1fr));
-  gap: 6px;
-  margin-top: 6px;
+  gap: 5px;
+  margin-top: 4px;
 }
 .serverStatus-metrics span {
   min-width: 0;
@@ -5432,13 +5432,13 @@ button.reviews-star:not(:disabled) {
 }
 .serverStatus-metrics b {
   color: rgba(255,255,255,0.90);
-  font-size: 10.5px;
+  font-size: 9.5px;
   font-weight: 950;
 }
 .serverStatus-metrics small {
   margin: 0 0 1px;
   color: rgba(255,255,255,0.40);
-  font-size: 8px;
+  font-size: 7.5px;
   font-weight: 850;
   text-transform: uppercase;
   letter-spacing: 0.06em;
