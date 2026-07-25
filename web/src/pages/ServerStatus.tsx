@@ -7,16 +7,18 @@ type StatusItem = {
   title: string;
   host: string;
   kind: "vpn" | "infra";
-  online: boolean;
+  online: boolean | null;
   latencyMs: number | null;
   uptime: string | null;
   loadPct: number | null;
-  checkedAt: string;
+  checkedAt: string | null;
 };
 
 type StatusResp = {
   ok: true;
-  updatedAt: string;
+  updatedAt: string | null;
+  refreshing?: boolean;
+  refreshIntervalMs?: number;
   vpn: StatusItem[];
   infra: StatusItem[];
 };
@@ -37,28 +39,56 @@ function loadTone(v: number | null) {
   return "ok";
 }
 
+function statusTone(online: StatusItem["online"]) {
+  if (online == null) return "pending";
+  return online ? "online" : "offline";
+}
+
+function statusText(online: StatusItem["online"]) {
+  if (online == null) return "проверяем";
+  return online ? "онлайн" : "оффлайн";
+}
+
+function flagForTitle(title: string) {
+  const t = title.toLowerCase();
+  if (/\bpl\b|warszawa|poland|польш/.test(t)) return "🇵🇱";
+  if (/\bcz\b|prague|czech|праг|чех/.test(t)) return "🇨🇿";
+  if (/\bru\b|moscow|saint-petersburg|spb|моск|петербург|росс/.test(t)) return "🇷🇺";
+  if (/\bswe\b|stockholm|sweden|швец/.test(t)) return "🇸🇪";
+  if (/\bus\b|fremont|usa|сша/.test(t)) return "🇺🇸";
+  if (/\bfi\b|helsinki|finland|фин/.test(t)) return "🇫🇮";
+  if (/\bnl\b|meppel|netherlands|нидер/.test(t)) return "🇳🇱";
+  if (/\btl\b|tallin|tallinn|estonia|эстон/.test(t)) return "🇪🇪";
+  if (/\bde\b|frankfurt|germany|герман/.test(t)) return "🇩🇪";
+  return "🌐";
+}
+
 function ServerCard({ item }: { item: StatusItem }) {
-  const tone = item.online ? "online" : "offline";
+  const tone = statusTone(item.online);
+  const loadPct = Math.max(0, Math.min(100, item.loadPct ?? 0));
   return (
     <div className={`serverStatus-card serverStatus-card--${tone}`}>
       <div className="serverStatus-card__top">
         <span className={`serverStatus-dot serverStatus-dot--${tone}`} />
+        <span className="serverStatus-card__flag" aria-hidden="true">{flagForTitle(item.title || item.host)}</span>
         <div className="serverStatus-card__title">{item.title || item.host}</div>
-        <span className="serverStatus-card__state">{item.online ? "онлайн" : "оффлайн"}</span>
+        <span className="serverStatus-card__state">{statusText(item.online)}</span>
       </div>
-      <div className="serverStatus-card__host">{item.host}</div>
-      <div className="serverStatus-card__checked">Проверен: {timeAgo(item.checkedAt)}</div>
-      <div className="serverStatus-metrics">
-        <span><b>{item.uptime || "—"}</b><small>аптайм</small></span>
-        <span><b>{item.latencyMs != null ? `${item.latencyMs} мс` : "—"}</b><small>отклик</small></span>
-        <span className={`serverStatus-load serverStatus-load--${loadTone(item.loadPct)}`}><b>{item.loadPct != null ? `${item.loadPct}%` : "—"}</b><small>нагрузка</small></span>
+      <div className="serverStatus-card__line" aria-hidden="true">
+        <span style={{ width: `${loadPct}%` }} />
+      </div>
+      <div className="serverStatus-metrics" aria-label="Показатели сервера">
+        <span><small>аптайм</small><b>{item.uptime || "—"}</b></span>
+        <span><small>отклик</small><b>{item.latencyMs != null ? `${item.latencyMs} мс` : "—"}</b></span>
+        <span className={`serverStatus-load serverStatus-load--${loadTone(item.loadPct)}`}><small>нагрузка</small><b>{item.loadPct != null ? `${item.loadPct}%` : "—"}</b></span>
+        <span className="serverStatus-card__checked"><small>опрос</small><b>{item.checkedAt ? timeAgo(item.checkedAt) : "ещё ждём"}</b></span>
       </div>
     </div>
   );
 }
 
 function StatusGroup({ title, sub, items }: { title: string; sub: string; items: StatusItem[] }) {
-  const online = useMemo(() => items.filter((x) => x.online).length, [items]);
+  const online = useMemo(() => items.filter((x) => x.online === true).length, [items]);
   return (
     <section className="serverStatus-group">
       <div className="serverStatus-group__head">
@@ -84,8 +114,8 @@ export function ServerStatus() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  async function load() {
-    setLoading(true);
+  async function load(silent = false) {
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const r = await apiFetch<StatusResp>("/server-status", { method: "GET" });
@@ -93,11 +123,15 @@ export function ServerStatus() {
     } catch (e: any) {
       setError(e?.message || "Не удалось загрузить статус серверов.");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    void load();
+    const timer = window.setInterval(() => void load(true), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   return (
     <div className="section miniPage serverStatus-page">

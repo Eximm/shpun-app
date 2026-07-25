@@ -6,10 +6,31 @@ type NetPoint = {
   tx: number;
 };
 
+export type ServerCheckResult = {
+  id: number;
+  title: string;
+  host: string;
+  kind: MonitoredServerRow["kind"];
+  online: boolean | null;
+  latencyMs: number | null;
+  uptime: string | null;
+  uptimeSeconds: number | null;
+  loadPct: number | null;
+  cpuLoadPct: number | null;
+  uplinkLoadPct: number | null;
+  checkedAt: string | null;
+};
+
 const scrapeCache = new Map<number, { ts: number; value: any }>();
 const netCache = new Map<number, NetPoint>();
+const statusCache = new Map<number, ServerCheckResult>();
 const SCRAPE_CACHE_MS = 25_000;
 const SCRAPE_TIMEOUT_MS = 4_000;
+const STATUS_REFRESH_MS = 60_000;
+
+let refreshInFlight: Promise<void> | null = null;
+let refreshTimer: ReturnType<typeof setInterval> | null = null;
+let lastRefreshAt: string | null = null;
 
 function metricValue(metrics: string, name: string) {
   const re = new RegExp(`^${name}(?:\\{[^\\n]*\\})?\\s+(-?\\d+(?:\\.\\d+)?(?:e[+-]?\\d+)?)$`, "im");
@@ -77,9 +98,36 @@ function parseLoad(metrics: string, uplinkMbps: number | null, id: number, now: 
   return { loadPct, cpuLoadPct, uplinkLoadPct };
 }
 
-export async function checkServer(row: MonitoredServerRow) {
+function normalizeCachedValue(row: MonitoredServerRow, value: ServerCheckResult): ServerCheckResult {
+  return {
+    ...value,
+    id: row.id,
+    title: row.title,
+    host: row.host,
+    kind: row.kind,
+  };
+}
+
+function pendingStatus(row: MonitoredServerRow): ServerCheckResult {
+  return {
+    id: row.id,
+    title: row.title,
+    host: row.host,
+    kind: row.kind,
+    online: null,
+    latencyMs: null,
+    uptime: null,
+    uptimeSeconds: null,
+    loadPct: null,
+    cpuLoadPct: null,
+    uplinkLoadPct: null,
+    checkedAt: null,
+  };
+}
+
+export async function checkServer(row: MonitoredServerRow): Promise<ServerCheckResult> {
   const cached = scrapeCache.get(row.id);
-  if (cached && Date.now() - cached.ts < SCRAPE_CACHE_MS) return cached.value;
+  if (cached && Date.now() - cached.ts < SCRAPE_CACHE_MS) return normalizeCachedValue(row, cached.value);
 
   const started = Date.now();
   const controller = new AbortController();
@@ -112,6 +160,7 @@ export async function checkServer(row: MonitoredServerRow) {
       checkedAt: new Date().toISOString(),
     };
     scrapeCache.set(row.id, { ts: Date.now(), value });
+    statusCache.set(row.id, value);
     return value;
   } catch {
     const value = {
@@ -129,8 +178,62 @@ export async function checkServer(row: MonitoredServerRow) {
       checkedAt: new Date().toISOString(),
     };
     scrapeCache.set(row.id, { ts: Date.now(), value });
+    statusCache.set(row.id, value);
     return value;
   } finally {
     clearTimeout(timer);
   }
+}
+
+export function getServerStatusSnapshot(rows: MonitoredServerRow[]) {
+  const activeIds = new Set(rows.map((row) => row.id));
+  for (const id of statusCache.keys()) {
+    if (!activeIds.has(id)) statusCache.delete(id);
+  }
+
+  return rows.map((row) => {
+    const cached = statusCache.get(row.id);
+    return cached ? normalizeCachedValue(row, cached) : pendingStatus(row);
+  });
+}
+
+export function requestServerStatusRefresh(rows: MonitoredServerRow[], log?: Pick<Console, "warn">) {
+  if (refreshInFlight) return refreshInFlight;
+
+  refreshInFlight = Promise.all(rows.map((row) => checkServer(row)))
+    .then(() => {
+      lastRefreshAt = new Date().toISOString();
+    })
+    .catch((e) => {
+      log?.warn?.({ err: e }, "server status refresh failed");
+    })
+    .finally(() => {
+      refreshInFlight = null;
+    });
+
+  return refreshInFlight;
+}
+
+export function startServerStatusMonitor(loadRows: () => MonitoredServerRow[], log?: Pick<Console, "warn">) {
+  if (refreshTimer) return;
+
+  const tick = () => {
+    try {
+      void requestServerStatusRefresh(loadRows(), log);
+    } catch (e) {
+      log?.warn?.({ err: e }, "server status monitor tick failed");
+    }
+  };
+
+  tick();
+  refreshTimer = setInterval(tick, STATUS_REFRESH_MS);
+  refreshTimer.unref?.();
+}
+
+export function getServerStatusMeta() {
+  return {
+    updatedAt: lastRefreshAt,
+    refreshing: Boolean(refreshInFlight),
+    refreshIntervalMs: STATUS_REFRESH_MS,
+  };
 }
