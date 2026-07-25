@@ -27,10 +27,15 @@ const statusCache = new Map<number, ServerCheckResult>();
 const SCRAPE_CACHE_MS = 25_000;
 const SCRAPE_TIMEOUT_MS = 4_000;
 const STATUS_REFRESH_MS = 60_000;
+const MANUAL_REFRESH_MIN_MS = 20_000;
+const AUTO_REFRESH_MIN_MS = 45_000;
+const CHECK_SPACING_MS = 350;
+const CHECK_JITTER_MS = 650;
 
-let refreshInFlight: Promise<void> | null = null;
+let refreshInFlight: Promise<{ started: boolean; reason: string }> | null = null;
 let refreshTimer: ReturnType<typeof setInterval> | null = null;
 let lastRefreshAt: string | null = null;
+let lastRefreshStartedAt = 0;
 
 function metricValue(metrics: string, name: string) {
   const re = new RegExp(`^${name}(?:\\{[^\\n]*\\})?\\s+(-?\\d+(?:\\.\\d+)?(?:e[+-]?\\d+)?)$`, "im");
@@ -125,6 +130,27 @@ function pendingStatus(row: MonitoredServerRow): ServerCheckResult {
   };
 }
 
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function shuffleRows(rows: MonitoredServerRow[]) {
+  return rows
+    .map((row) => ({ row, rank: Math.random() }))
+    .sort((a, b) => a.rank - b.rank)
+    .map((x) => x.row);
+}
+
+async function checkServersSoftly(rows: MonitoredServerRow[]) {
+  const shuffled = shuffleRows(rows);
+  for (const [i, row] of shuffled.entries()) {
+    if (i > 0) {
+      await delay(CHECK_SPACING_MS + Math.floor(Math.random() * CHECK_JITTER_MS));
+    }
+    await checkServer(row);
+  }
+}
+
 export async function checkServer(row: MonitoredServerRow): Promise<ServerCheckResult> {
   const cached = scrapeCache.get(row.id);
   if (cached && Date.now() - cached.ts < SCRAPE_CACHE_MS) return normalizeCachedValue(row, cached.value);
@@ -197,15 +223,29 @@ export function getServerStatusSnapshot(rows: MonitoredServerRow[]) {
   });
 }
 
-export function requestServerStatusRefresh(rows: MonitoredServerRow[], log?: Pick<Console, "warn">) {
+export function requestServerStatusRefresh(
+  rows: MonitoredServerRow[],
+  log?: Pick<Console, "warn">,
+  options: { minIntervalMs?: number; force?: boolean } = {},
+) {
   if (refreshInFlight) return refreshInFlight;
 
-  refreshInFlight = Promise.all(rows.map((row) => checkServer(row)))
+  const now = Date.now();
+  const minIntervalMs = options.minIntervalMs ?? AUTO_REFRESH_MIN_MS;
+  if (!options.force && lastRefreshStartedAt > 0 && now - lastRefreshStartedAt < minIntervalMs) {
+    return Promise.resolve({ started: false, reason: "cooldown" });
+  }
+
+  lastRefreshStartedAt = now;
+
+  refreshInFlight = checkServersSoftly(rows)
     .then(() => {
       lastRefreshAt = new Date().toISOString();
+      return { started: true, reason: "started" };
     })
     .catch((e) => {
       log?.warn?.({ err: e }, "server status refresh failed");
+      return { started: true, reason: "failed" };
     })
     .finally(() => {
       refreshInFlight = null;
@@ -214,12 +254,16 @@ export function requestServerStatusRefresh(rows: MonitoredServerRow[], log?: Pic
   return refreshInFlight;
 }
 
+export function requestManualServerStatusRefresh(rows: MonitoredServerRow[], log?: Pick<Console, "warn">) {
+  return requestServerStatusRefresh(rows, log, { minIntervalMs: MANUAL_REFRESH_MIN_MS });
+}
+
 export function startServerStatusMonitor(loadRows: () => MonitoredServerRow[], log?: Pick<Console, "warn">) {
   if (refreshTimer) return;
 
   const tick = () => {
     try {
-      void requestServerStatusRefresh(loadRows(), log);
+      void requestServerStatusRefresh(loadRows(), log, { minIntervalMs: AUTO_REFRESH_MIN_MS });
     } catch (e) {
       log?.warn?.({ err: e }, "server status monitor tick failed");
     }
@@ -235,5 +279,7 @@ export function getServerStatusMeta() {
     updatedAt: lastRefreshAt,
     refreshing: Boolean(refreshInFlight),
     refreshIntervalMs: STATUS_REFRESH_MS,
+    manualCooldownMs: MANUAL_REFRESH_MIN_MS,
+    lastRefreshStartedAt: lastRefreshStartedAt ? new Date(lastRefreshStartedAt).toISOString() : null,
   };
 }

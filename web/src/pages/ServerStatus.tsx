@@ -19,9 +19,12 @@ type StatusResp = {
   updatedAt: string | null;
   refreshing?: boolean;
   refreshIntervalMs?: number;
+  manualCooldownMs?: number;
   vpn: StatusItem[];
   infra: StatusItem[];
 };
+
+type SummaryTone = "online" | "warn" | "offline" | "pending";
 
 function timeAgo(iso?: string) {
   const ts = iso ? Date.parse(iso) : 0;
@@ -51,17 +54,24 @@ function summarySeed(total: number, online: number, offline: number, hot: number
 
 function buildSummary(data: StatusResp | null) {
   const items = [...(data?.vpn ?? []), ...(data?.infra ?? [])];
+  const vpn = data?.vpn ?? [];
+  const infra = data?.infra ?? [];
   const total = items.length;
   const checked = items.filter((x) => x.online != null).length;
   const online = items.filter((x) => x.online === true).length;
   const offline = items.filter((x) => x.online === false).length;
+  const infraOffline = infra.filter((x) => x.online === false).length;
+  const vpnOffline = vpn.filter((x) => x.online === false).length;
   const hot = items.filter((x) => (x.loadPct ?? 0) >= 65).length;
   const overloaded = items.filter((x) => (x.loadPct ?? 0) >= 85).length;
+  const maxLoad = Math.max(0, ...items.map((x) => x.loadPct ?? 0));
+  const slow = items.filter((x) => (x.latencyMs ?? 0) >= 500).length;
+  const verySlow = items.filter((x) => (x.latencyMs ?? 0) >= 900).length;
   const seed = summarySeed(total, online, offline, hot);
 
   if (!total) {
     return {
-      tone: "pending" as const,
+      tone: "pending" as SummaryTone,
       title: "Мониторинг готовится",
       text: pickVariant([
         "Серверы ещё не добавлены. Как только появятся узлы — тут будет нормальная живая сводка.",
@@ -74,7 +84,7 @@ function buildSummary(data: StatusResp | null) {
 
   if (!checked) {
     return {
-      tone: "pending" as const,
+      tone: "pending" as SummaryTone,
       title: "Собираем телеметрию",
       text: pickVariant([
         "Первый снимок ещё готовится. Страница не ждёт опрос — данные появятся сами.",
@@ -85,22 +95,36 @@ function buildSummary(data: StatusResp | null) {
     };
   }
 
-  if (offline > 0) {
-    const manyOffline = offline >= Math.ceil(total / 3);
+  if (infraOffline > 0) {
     return {
-      tone: manyOffline ? "offline" as const : "warn" as const,
-      title: manyOffline ? "Есть заметная просадка" : "Есть локальный сбой",
+      tone: "offline" as SummaryTone,
+      title: infraOffline > 1 ? "Служебная часть просела" : "Кабинет требует внимания",
+      text: pickVariant([
+        "Кабинет или подписки отвечают не полностью. Пользовательская часть может вести себя неровно.",
+        "Проблема не в VPN-нодах: один из служебных узлов не ответил на проверку.",
+        "Служебный контур моргнул красным. Лучше проверить кабинет и авторизацию подписок.",
+        "Инфраструктурный узел молчит. Тут уже не про скорость, а про доступность сервиса.",
+      ], seed),
+      stats: `${online}/${total}`,
+    };
+  }
+
+  if (vpnOffline > 0) {
+    const manyOffline = vpnOffline >= Math.ceil(Math.max(1, vpn.length) / 3);
+    return {
+      tone: manyOffline ? "offline" as SummaryTone : "warn" as SummaryTone,
+      title: manyOffline ? "Часть VPN-направлений недоступна" : "Одна из VPN-нод не отвечает",
       text: pickVariant(
         manyOffline
           ? [
-              `${offline} из ${total} узлов сейчас не отвечают. Часть системы требует внимания.`,
-              `Не всё спокойно: ${offline} узлов недоступны. Рабочие узлы продолжают держать сервис.`,
-              `${offline} узлов выпали из мониторинга. Похоже на инфраструктурный вопрос, не на лёгкую икоту.`,
+              `${vpnOffline} VPN-нод сейчас не отвечают. Рабочие направления продолжают держать сервис.`,
+              `Не всё спокойно: несколько VPN-направлений недоступны, но часть сети остаётся в строю.`,
+              `${vpnOffline} VPN-нод выпали из мониторинга. Похоже, пора заглянуть в сеть внимательнее.`,
             ]
           : [
-              `${offline} из ${total} узлов не отвечает. Для пользователя всё может быть нормально, но проверить стоит.`,
-              `Один из участков сети задумался. Остальные узлы на связи и продолжают работать.`,
-              `Есть точечная проблема: ${offline} узлов не ответили на проверку.`,
+              "Одна VPN-нода не отвечает. Для пользователя всё может быть нормально, но проверить стоит.",
+              "Один участок сети задумался. Остальные направления на связи.",
+              "Есть точечная проблема на VPN-ноде. Не пожар, но заметку на полях оставляем.",
             ],
         seed,
       ),
@@ -108,22 +132,49 @@ function buildSummary(data: StatusResp | null) {
     };
   }
 
-  if (overloaded > 0 || hot > 1) {
+  if (overloaded > 0) {
     return {
-      tone: "warn" as const,
-      title: "Система трудится",
+      tone: "warn" as SummaryTone,
+      title: "Есть высокая нагрузка",
+      text: pickVariant([
+        `Все узлы отвечают, но один из серверов дошёл до ${maxLoad}% нагрузки.`,
+        "Связь есть, но часть системы уже работает на повышенных оборотах.",
+        "Сервис доступен, однако нагрузка местами высокая. Наблюдаем внимательнее.",
+        "Серверы держатся, но одному из них явно достался вечерний забег.",
+      ], seed),
+      stats: `${online}/${total}`,
+    };
+  }
+
+  if (verySlow > 0) {
+    return {
+      tone: "warn" as SummaryTone,
+      title: "Есть медленные ответы",
+      text: pickVariant([
+        "Узлы на связи, но часть ответов заметно медленнее обычного.",
+        "Доступность нормальная, а вот отклик местами задумчивый.",
+        "Сервис живой, но несколько проверок вернулись с тяжёлым пингом.",
+      ], seed),
+      stats: `${online}/${total}`,
+    };
+  }
+
+  if (hot > 1 || slow > 1) {
+    return {
+      tone: "warn" as SummaryTone,
+      title: hot > 1 ? "Система трудится" : "Сеть задумалась",
       text: pickVariant([
         "Все узлы на связи, но часть серверов работает плотнее обычного.",
         "Связь есть, сервис живой, просто некоторые узлы сегодня не прохлаждаются.",
         "Всё отвечает, но нагрузка местами подросла. Следим, чтобы не перегрелось.",
-        "Система в строю, но пару серверов уже можно похвалить за усердие.",
+        "Всё в строю, но несколько показателей уже просят присмотра.",
       ], seed),
       stats: `${online}/${total}`,
     };
   }
 
   return {
-    tone: "online" as const,
+    tone: "online" as SummaryTone,
     title: "Система стабильна",
     text: pickVariant([
       "Все узлы на связи, нагрузка спокойная. Можно пользоваться без лишней драматургии.",
@@ -319,6 +370,7 @@ function StatusGroup({ title, sub, items, defaultOpen = false }: { title: string
 export function ServerStatus() {
   const [data, setData] = useState<StatusResp | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function load(silent = false) {
@@ -340,6 +392,22 @@ export function ServerStatus() {
     return () => window.clearInterval(timer);
   }, []);
 
+  async function refreshNow() {
+    if (refreshing) return;
+    setRefreshing(true);
+    setError(null);
+    try {
+      await apiFetch("/server-status/refresh", { method: "POST" });
+      await load(true);
+      window.setTimeout(() => void load(true), 2_500);
+      window.setTimeout(() => void load(true), 6_000);
+    } catch (e: any) {
+      setError(e?.message || "Не удалось обновить статус серверов.");
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   return (
     <div className="section miniPage serverStatus-page">
       <div className="pageBackRow">
@@ -352,8 +420,8 @@ export function ServerStatus() {
             <p className="p miniPage__subtitle">Короткая сводка по кабинету, подпискам и VPN-нодам.</p>
           </div>
           <div className="serverStatus-actions">
-            <button className="btn btn--primary" type="button" onClick={() => void load()} disabled={loading}>
-              {loading ? "Проверяем…" : "Обновить"}
+            <button className="btn btn--primary" type="button" onClick={() => void refreshNow()} disabled={loading || refreshing || data?.refreshing}>
+              {refreshing || data?.refreshing ? "Обновляем…" : "Обновить"}
             </button>
           </div>
           {error && <div className="pre" style={{ marginTop: 12 }}>{error}</div>}

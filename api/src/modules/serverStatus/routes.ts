@@ -11,6 +11,7 @@ import {
 import {
   getServerStatusMeta,
   getServerStatusSnapshot,
+  requestManualServerStatusRefresh,
   requestServerStatusRefresh,
   startServerStatusMonitor,
 } from "./monitor.js";
@@ -40,7 +41,7 @@ export async function serverStatusRoutes(app: FastifyInstance) {
 
     const rows = listMonitoredServers();
     const checks = getServerStatusSnapshot(rows);
-    void requestServerStatusRefresh(rows, app.log);
+    if (!getServerStatusMeta().updatedAt) void requestServerStatusRefresh(rows, app.log);
     const meta = getServerStatusMeta();
     return reply.send({
       ok: true,
@@ -49,6 +50,22 @@ export async function serverStatusRoutes(app: FastifyInstance) {
       refreshIntervalMs: meta.refreshIntervalMs,
       vpn: checks.filter((x) => x.kind === "vpn"),
       infra: checks.filter((x) => x.kind === "infra"),
+    });
+  });
+
+  app.post("/server-status/refresh", async (req, reply) => {
+    const s = getSessionFromRequest(req) as any;
+    if (!s?.shmSessionId) return reply.code(401).send({ ok: false, error: "unauthorized" });
+
+    const result = await requestManualServerStatusRefresh(listMonitoredServers(), app.log);
+    const meta = getServerStatusMeta();
+    return reply.send({
+      ok: true,
+      refresh: result,
+      updatedAt: meta.updatedAt,
+      refreshing: meta.refreshing,
+      refreshIntervalMs: meta.refreshIntervalMs,
+      manualCooldownMs: meta.manualCooldownMs,
     });
   });
 
