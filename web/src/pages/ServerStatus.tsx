@@ -39,6 +39,16 @@ function loadTone(v: number | null) {
   return "ok";
 }
 
+function pickVariant(items: string[], seed: number) {
+  if (!items.length) return "";
+  return items[Math.abs(seed) % items.length];
+}
+
+function summarySeed(total: number, online: number, offline: number, hot: number) {
+  const minute = Math.floor(Date.now() / 60_000);
+  return total * 17 + online * 13 + offline * 7 + hot * 5 + minute;
+}
+
 function buildSummary(data: StatusResp | null) {
   const items = [...(data?.vpn ?? []), ...(data?.infra ?? [])];
   const total = items.length;
@@ -47,12 +57,17 @@ function buildSummary(data: StatusResp | null) {
   const offline = items.filter((x) => x.online === false).length;
   const hot = items.filter((x) => (x.loadPct ?? 0) >= 65).length;
   const overloaded = items.filter((x) => (x.loadPct ?? 0) >= 85).length;
+  const seed = summarySeed(total, online, offline, hot);
 
   if (!total) {
     return {
       tone: "pending" as const,
       title: "Мониторинг готовится",
-      text: "Серверы пока не добавлены, но лампочки уже заняли лучшие места.",
+      text: pickVariant([
+        "Серверы ещё не добавлены. Как только появятся узлы — тут будет нормальная живая сводка.",
+        "Пока список пустой. Добавим серверы — и раздел начнёт показывать реальную картину.",
+        "Мониторинг включён, но смотреть ему пока не на кого. Это легко поправимо.",
+      ], seed),
       stats: "0/0",
     };
   }
@@ -61,16 +76,34 @@ function buildSummary(data: StatusResp | null) {
     return {
       tone: "pending" as const,
       title: "Собираем телеметрию",
-      text: "Первый снимок готовится. Shpun щупает провода и скоро доложит.",
+      text: pickVariant([
+        "Первый снимок ещё готовится. Страница не ждёт опрос — данные появятся сами.",
+        "Даём серверам пару секунд ответить. Обычно это быстрее, чем найти зарядку.",
+        "Мониторинг проснулся и собирает первые ответы. Сейчас всё разложим по полочкам.",
+      ], seed),
       stats: `${checked}/${total}`,
     };
   }
 
   if (offline > 0) {
+    const manyOffline = offline >= Math.ceil(total / 3);
     return {
-      tone: offline >= Math.ceil(total / 3) ? "offline" as const : "warn" as const,
-      title: offline >= Math.ceil(total / 3) ? "Часть системы отдыхает" : "Есть локальные вопросы",
-      text: `${offline} из ${total} узлов молчат. Остальные держат строй без паники.`,
+      tone: manyOffline ? "offline" as const : "warn" as const,
+      title: manyOffline ? "Есть заметная просадка" : "Есть локальный сбой",
+      text: pickVariant(
+        manyOffline
+          ? [
+              `${offline} из ${total} узлов сейчас не отвечают. Часть системы требует внимания.`,
+              `Не всё спокойно: ${offline} узлов недоступны. Рабочие узлы продолжают держать сервис.`,
+              `${offline} узлов выпали из мониторинга. Похоже на инфраструктурный вопрос, не на лёгкую икоту.`,
+            ]
+          : [
+              `${offline} из ${total} узлов не отвечает. Для пользователя всё может быть нормально, но проверить стоит.`,
+              `Один из участков сети задумался. Остальные узлы на связи и продолжают работать.`,
+              `Есть точечная проблема: ${offline} узлов не ответили на проверку.`,
+            ],
+        seed,
+      ),
       stats: `${online}/${total}`,
     };
   }
@@ -79,7 +112,12 @@ function buildSummary(data: StatusResp | null) {
     return {
       tone: "warn" as const,
       title: "Система трудится",
-      text: "Все узлы на связи, но часть серверов уже закатала рукава.",
+      text: pickVariant([
+        "Все узлы на связи, но часть серверов работает плотнее обычного.",
+        "Связь есть, сервис живой, просто некоторые узлы сегодня не прохлаждаются.",
+        "Всё отвечает, но нагрузка местами подросла. Следим, чтобы не перегрелось.",
+        "Система в строю, но пару серверов уже можно похвалить за усердие.",
+      ], seed),
       stats: `${online}/${total}`,
     };
   }
@@ -87,7 +125,12 @@ function buildSummary(data: StatusResp | null) {
   return {
     tone: "online" as const,
     title: "Система стабильна",
-    text: "Все узлы на связи, нагрузка спокойная. Shpun пьёт зелёный чай.",
+    text: pickVariant([
+      "Все узлы на связи, нагрузка спокойная. Можно пользоваться без лишней драматургии.",
+      "Сервис отвечает штатно, серверы не нервничают, всё выглядит ровно.",
+      "Картина хорошая: узлы доступны, нагрузка в норме, поводов для суеты нет.",
+      "Всё зелёное и бодрое. Именно так мы это и любим.",
+    ], seed),
     stats: `${online}/${total}`,
   };
 }
@@ -104,7 +147,7 @@ function buildGroupSummary(items: StatusItem[], emptyTitle: string) {
       tone: "pending" as const,
       title: emptyTitle,
       value: "0/0",
-      sub: "лампочек пока нет",
+      sub: "пока пусто",
       load: null as number | null,
     };
   }
@@ -114,7 +157,7 @@ function buildGroupSummary(items: StatusItem[], emptyTitle: string) {
       tone: "pending" as const,
       title: "Собираем данные",
       value: `${online}/${total}`,
-      sub: "первый обход",
+      sub: "идёт первый опрос",
       load: null as number | null,
     };
   }
@@ -124,7 +167,7 @@ function buildGroupSummary(items: StatusItem[], emptyTitle: string) {
       tone: "offline" as const,
       title: offline === 1 ? "Есть один молчун" : "Есть молчуны",
       value: `${online}/${total}`,
-      sub: `${offline} играет в молчанку`,
+      sub: `${offline} не отвечает`,
       load: maxLoad,
     };
   }
@@ -134,7 +177,7 @@ function buildGroupSummary(items: StatusItem[], emptyTitle: string) {
       tone: "warn" as const,
       title: "Высокая нагрузка",
       value: `${online}/${total}`,
-      sub: `пик ${maxLoad}% — жарко`,
+      sub: `пик ${maxLoad}%`,
       load: maxLoad,
     };
   }
@@ -144,7 +187,7 @@ function buildGroupSummary(items: StatusItem[], emptyTitle: string) {
       tone: "warn" as const,
       title: "Трудится плотнее",
       value: `${online}/${total}`,
-      sub: `пик ${maxLoad}% — пашет`,
+      sub: `пик ${maxLoad}%`,
       load: maxLoad,
     };
   }
@@ -153,7 +196,7 @@ function buildGroupSummary(items: StatusItem[], emptyTitle: string) {
     tone: "online" as const,
     title: "В строю",
     value: `${online}/${total}`,
-    sub: maxLoad > 0 ? `пик ${maxLoad}% — тихо` : "сонная нагрузка",
+    sub: maxLoad > 0 ? `пик ${maxLoad}%` : "нагрузка тихая",
     load: maxLoad,
   };
 }
@@ -306,7 +349,7 @@ export function ServerStatus() {
         <div className="card__body">
           <div className="serverStatus-hero__title">
             <h1 className="h1">Состояние системы</h1>
-            <p className="p miniPage__subtitle">Короткая сводка: кто бодр, кто задумался, где Shpun держит ухо востро.</p>
+            <p className="p miniPage__subtitle">Короткая сводка по кабинету, подпискам и VPN-нодам.</p>
           </div>
           <div className="serverStatus-actions">
             <button className="btn btn--primary" type="button" onClick={() => void load()} disabled={loading}>
