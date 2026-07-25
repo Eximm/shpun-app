@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../../shared/api/client";
 
 type MonitoredServer = {
@@ -22,13 +22,78 @@ const EMPTY = {
   active: true,
 };
 
+const DEFAULT_SERVER_MATRIX = `# Название | домен | тип | uplink Mbps | порядок
+Warszawa PL2 | pl2.shpyn.online | vpn | 1000 | 10
+Prague CZ | cz.shpyn.online | vpn | 1000 | 20
+Moscow RU | msk.shpyn.online | vpn | 1000 | 30
+Moscow2 RU | msk2.shpyn.online | vpn | 1000 | 40
+Stockholm SWE | swe.shpyn.online | vpn | 1000 | 50
+Fremont US | us.shpyn.online | vpn | 1000 | 60
+Helsinki FI | fi.shpyn.online | vpn | 1000 | 70
+Saint-Petersburg RU | spb.shpyn.online | vpn | 1000 | 80
+Meppel NL | nl.shpyn.online | vpn | 1000 | 90
+Tallinn TL | tl.shpyn.online | vpn | 1000 | 100
+Frankfurt DE | de.shpyn.online | vpn | 1000 | 110
+Frankfurt-2 DE | de2.shpyn.online | vpn | 1000 | 120
+Warszawa PL | pl.shpyn.online | vpn | 1000 | 130
+Core · кабинет | core.shpyn.online | infra | 1000 | 1000
+CoreX · авторизация подписок | corex.shpyn.online | infra | 1000 | 1010`;
+
+type MatrixRow = {
+  line: number;
+  title: string;
+  host: string;
+  kind: "vpn" | "infra";
+  uplinkMbps: string;
+  sortOrder: number;
+  exporterUrl: string;
+};
+
+function splitMatrixLine(line: string) {
+  if (line.includes("|")) return line.split("|").map((x) => x.trim());
+  if (line.includes(";")) return line.split(";").map((x) => x.trim());
+  if (line.includes("\t")) return line.split("\t").map((x) => x.trim());
+  return line.split(",").map((x) => x.trim());
+}
+
+function parseServerMatrix(text: string) {
+  const rows: MatrixRow[] = [];
+  const errors: string[] = [];
+  text.split(/\r?\n/).forEach((raw, idx) => {
+    const lineNo = idx + 1;
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) return;
+    const [titleRaw, hostRaw, kindRaw, uplinkRaw, sortRaw, exporterRaw] = splitMatrixLine(line);
+    const host = String(hostRaw ?? "").replace(/^https?:\/\//i, "").replace(/\/.*$/, "").trim();
+    if (!host) {
+      errors.push(`Строка ${lineNo}: нет домена`);
+      return;
+    }
+    const kind = String(kindRaw ?? "").trim().toLowerCase() === "infra" ? "infra" : "vpn";
+    const sortOrder = Number.isFinite(Number(sortRaw)) ? Math.trunc(Number(sortRaw)) : 100 + rows.length * 10;
+    rows.push({
+      line: lineNo,
+      title: String(titleRaw ?? "").trim() || host,
+      host,
+      kind,
+      uplinkMbps: Number.isFinite(Number(uplinkRaw)) && Number(uplinkRaw) > 0 ? String(Number(uplinkRaw)) : "",
+      sortOrder,
+      exporterUrl: String(exporterRaw ?? "").trim(),
+    });
+  });
+  return { rows, errors };
+}
+
 export function ServerStatusSection() {
   const [items, setItems] = useState<MonitoredServer[]>([]);
   const [form, setForm] = useState(EMPTY);
+  const [matrixText, setMatrixText] = useState(DEFAULT_SERVER_MATRIX);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const matrix = useMemo(() => parseServerMatrix(matrixText), [matrixText]);
 
   async function load() {
     setLoading(true);
@@ -67,6 +132,7 @@ export function ServerStatusSection() {
     if (busy) return;
     setBusy(true);
     setError(null);
+    setNotice(null);
     const body = {
       ...form,
       sortOrder: Number(form.sortOrder || 100),
@@ -91,6 +157,47 @@ export function ServerStatusSection() {
     if (!window.confirm("Удалить сервер из мониторинга?")) return;
     await apiFetch(`/admin/monitored-servers/${id}`, { method: "DELETE" });
     await load();
+  }
+
+  async function importMatrix() {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const existingHosts = new Set(items.map((x) => x.host.trim().toLowerCase()).filter(Boolean));
+      const rows = matrix.rows.filter((row) => !existingHosts.has(row.host.toLowerCase()));
+      if (matrix.errors.length) {
+        setError(matrix.errors.join("\n"));
+        return;
+      }
+      if (!rows.length) {
+        setNotice("Новых серверов нет — все домены из матрицы уже добавлены.");
+        return;
+      }
+      let added = 0;
+      for (const row of rows) {
+        await apiFetch("/admin/monitored-servers", {
+          method: "POST",
+          body: {
+            title: row.title,
+            host: row.host,
+            exporterUrl: row.exporterUrl,
+            kind: row.kind,
+            sortOrder: row.sortOrder,
+            uplinkMbps: row.uplinkMbps ? Number(row.uplinkMbps) : null,
+            active: true,
+          },
+        });
+        added += 1;
+      }
+      setNotice(`Добавлено серверов: ${added}. Пропущено дублей: ${matrix.rows.length - rows.length}.`);
+      await load();
+    } catch (e: any) {
+      setError(e?.message || "Не удалось импортировать матрицу серверов.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -148,6 +255,43 @@ export function ServerStatusSection() {
           </div>
 
           {error && <div className="pre admin-gap-top-sm">{error}</div>}
+          {notice && <div className="pre admin-gap-top-sm">{notice}</div>}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card__body">
+          <div className="admin-sectionHead">
+            <div>
+              <div className="kicker">Matrix import</div>
+              <h2 className="h2">Матрица серверов</h2>
+              <p className="p">Быстрое добавление пачки серверов. Формат строки: название | домен | тип | uplink Mbps | порядок | exporter URL. Если exporter URL пустой — соберём автоматически как http://домен:9100/metrics.</p>
+            </div>
+          </div>
+
+          <textarea
+            className="input admin-serverStatus-matrix"
+            value={matrixText}
+            onChange={(e) => setMatrixText(e.target.value)}
+            spellCheck={false}
+          />
+
+          <div className="admin-serverStatus-matrixPreview">
+            <span>Строк к добавлению: <b>{matrix.rows.length}</b></span>
+            <span>Ошибок: <b>{matrix.errors.length}</b></span>
+            <span>Новые: <b>{matrix.rows.filter((row) => !items.some((item) => item.host.toLowerCase() === row.host.toLowerCase())).length}</b></span>
+          </div>
+
+          <div className="actions actions--2 admin-gap-top-sm">
+            <button className="btn btn--primary" type="button" onClick={() => void importMatrix()} disabled={busy || matrix.rows.length === 0}>
+              Добавить матрицу
+            </button>
+            <button className="btn" type="button" onClick={() => setMatrixText(DEFAULT_SERVER_MATRIX)} disabled={busy}>
+              Вернуть шаблон
+            </button>
+          </div>
+
+          {matrix.errors.length > 0 && <div className="pre admin-gap-top-sm">{matrix.errors.join("\n")}</div>}
         </div>
       </div>
 

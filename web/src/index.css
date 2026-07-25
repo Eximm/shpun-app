@@ -5444,6 +5444,38 @@ button.reviews-star:not(:disabled) {
   font-size: 13px;
   font-weight: 850;
 }
+.admin-serverStatus-matrix {
+  width: 100%;
+  min-height: 238px;
+  resize: vertical;
+  margin-top: 12px;
+  padding: 13px 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre;
+  overflow: auto;
+}
+.admin-serverStatus-matrixPreview {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+.admin-serverStatus-matrixPreview span {
+  min-width: 0;
+  padding: 9px 11px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.07);
+  background: rgba(255,255,255,0.035);
+  color: rgba(255,255,255,0.58);
+  font-size: 12px;
+  font-weight: 850;
+}
+.admin-serverStatus-matrixPreview b {
+  color: rgba(255,255,255,0.92);
+  font-weight: 950;
+}
 .admin-serverStatus-list { display: grid; gap: 10px; }
 .admin-serverStatus-item {
   display: grid;
@@ -5492,6 +5524,9 @@ button.reviews-star:not(:disabled) {
   }
   .serverStatus-grid,
   .admin-serverStatus-form {
+    grid-template-columns: 1fr;
+  }
+  .admin-serverStatus-matrixPreview {
     grid-template-columns: 1fr;
   }
   .admin-serverStatus-item {
