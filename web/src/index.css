@@ -5294,8 +5294,8 @@ button.reviews-star:not(:disabled) {
 }
 .serverStatus-summary {
   display: grid;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 9px 11px;
   border-radius: 16px;
   border: 1px solid rgba(255,255,255,0.10);
   background: linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.025));
@@ -5331,15 +5331,15 @@ button.reviews-star:not(:disabled) {
 .serverStatus-summary__title {
   margin-top: 2px;
   color: rgba(255,255,255,0.94);
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 950;
 }
 .serverStatus-summary p {
   margin: 3px 0 0;
   color: rgba(255,255,255,0.62);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 760;
-  line-height: 1.35;
+  line-height: 1.25;
 }
 .serverStatus-summary__stat {
   flex: 0 0 auto;
@@ -5373,8 +5373,8 @@ button.reviews-star:not(:disabled) {
 }
 .serverStatus-summaryTile {
   min-width: 0;
-  padding: 8px 9px;
-  border-radius: 13px;
+  padding: 7px 8px;
+  border-radius: 12px;
   border: 1px solid rgba(255,255,255,0.09);
   background: rgba(0,0,0,0.14);
 }
@@ -5416,20 +5416,20 @@ button.reviews-star:not(:disabled) {
   letter-spacing: 0;
 }
 .serverStatus-summaryTile__title {
-  margin-top: 5px;
+  margin-top: 4px;
   color: rgba(255,255,255,0.92);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 950;
 }
 .serverStatus-summaryTile__sub {
   margin-top: 1px;
   color: rgba(255,255,255,0.46);
-  font-size: 10.5px;
+  font-size: 9.5px;
   font-weight: 780;
 }
 .serverStatus-summaryTile__bar {
   height: 2px;
-  margin-top: 7px;
+  margin-top: 5px;
   overflow: hidden;
   border-radius: 999px;
   background: rgba(255,255,255,0.13);
@@ -5441,7 +5441,16 @@ button.reviews-star:not(:disabled) {
   background: linear-gradient(90deg, #17e3a0, #49c7ff);
   box-shadow: 0 0 12px rgba(23,227,160,0.26);
 }
-.serverStatus-group { display: grid; gap: 6px; }
+.serverStatus-group {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background:
+    radial-gradient(360px 140px at 100% 0%, rgba(77,215,255,0.055), transparent 72%),
+    rgba(255,255,255,0.032);
+}
 .serverStatus-group__head {
   width: 100%;
   display: flex;
@@ -5457,13 +5466,13 @@ button.reviews-star:not(:disabled) {
 .serverStatus-group__head h2 {
   margin: 0;
   color: rgba(255,255,255,0.94);
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 950;
 }
 .serverStatus-group__head p {
   margin: 2px 0 0;
   color: rgba(255,255,255,0.48);
-  font-size: 12px;
+  font-size: 10.5px;
   font-weight: 750;
 }
 .serverStatus-group__count {

@@ -52,7 +52,7 @@ function buildSummary(data: StatusResp | null) {
     return {
       tone: "pending" as const,
       title: "Мониторинг готовится",
-      text: "Серверы пока не добавлены, но место под лампочки уже заняли.",
+      text: "Серверы пока не добавлены, но лампочки уже заняли лучшие места.",
       stats: "0/0",
     };
   }
@@ -61,7 +61,7 @@ function buildSummary(data: StatusResp | null) {
     return {
       tone: "pending" as const,
       title: "Собираем телеметрию",
-      text: "Первый снимок ещё готовится. Страница уже не ждёт — данные подтянутся сами.",
+      text: "Первый снимок готовится. Shpun щупает провода и скоро доложит.",
       stats: `${checked}/${total}`,
     };
   }
@@ -70,7 +70,7 @@ function buildSummary(data: StatusResp | null) {
     return {
       tone: offline >= Math.ceil(total / 3) ? "offline" as const : "warn" as const,
       title: offline >= Math.ceil(total / 3) ? "Часть системы отдыхает" : "Есть локальные вопросы",
-      text: `${offline} из ${total} узлов сейчас не отвечают. Остальные продолжают держать строй.`,
+      text: `${offline} из ${total} узлов молчат. Остальные держат строй без паники.`,
       stats: `${online}/${total}`,
     };
   }
@@ -79,7 +79,7 @@ function buildSummary(data: StatusResp | null) {
     return {
       tone: "warn" as const,
       title: "Система трудится",
-      text: "Все узлы на связи, но часть серверов заметно занята. Shpun ворчит, но работает.",
+      text: "Все узлы на связи, но часть серверов уже закатала рукава.",
       stats: `${online}/${total}`,
     };
   }
@@ -87,7 +87,7 @@ function buildSummary(data: StatusResp | null) {
   return {
     tone: "online" as const,
     title: "Система стабильна",
-    text: "Все наблюдаемые узлы на связи, нагрузка спокойная. Интернету выдан зелёный чай.",
+    text: "Все узлы на связи, нагрузка спокойная. Shpun пьёт зелёный чай.",
     stats: `${online}/${total}`,
   };
 }
@@ -104,7 +104,7 @@ function buildGroupSummary(items: StatusItem[], emptyTitle: string) {
       tone: "pending" as const,
       title: emptyTitle,
       value: "0/0",
-      sub: "не настроено",
+      sub: "лампочек пока нет",
       load: null as number | null,
     };
   }
@@ -114,7 +114,7 @@ function buildGroupSummary(items: StatusItem[], emptyTitle: string) {
       tone: "pending" as const,
       title: "Собираем данные",
       value: `${online}/${total}`,
-      sub: "первый опрос",
+      sub: "первый обход",
       load: null as number | null,
     };
   }
@@ -124,7 +124,7 @@ function buildGroupSummary(items: StatusItem[], emptyTitle: string) {
       tone: "offline" as const,
       title: offline === 1 ? "Есть один молчун" : "Есть молчуны",
       value: `${online}/${total}`,
-      sub: `${offline} не отвечает`,
+      sub: `${offline} играет в молчанку`,
       load: maxLoad,
     };
   }
@@ -134,7 +134,7 @@ function buildGroupSummary(items: StatusItem[], emptyTitle: string) {
       tone: "warn" as const,
       title: "Высокая нагрузка",
       value: `${online}/${total}`,
-      sub: `пик ${maxLoad}%`,
+      sub: `пик ${maxLoad}% — жарко`,
       load: maxLoad,
     };
   }
@@ -144,7 +144,7 @@ function buildGroupSummary(items: StatusItem[], emptyTitle: string) {
       tone: "warn" as const,
       title: "Трудится плотнее",
       value: `${online}/${total}`,
-      sub: `пик ${maxLoad}%`,
+      sub: `пик ${maxLoad}% — пашет`,
       load: maxLoad,
     };
   }
@@ -153,7 +153,7 @@ function buildGroupSummary(items: StatusItem[], emptyTitle: string) {
     tone: "online" as const,
     title: "В строю",
     value: `${online}/${total}`,
-    sub: maxLoad > 0 ? `пик ${maxLoad}%` : "нагрузка тихая",
+    sub: maxLoad > 0 ? `пик ${maxLoad}% — тихо` : "сонная нагрузка",
     load: maxLoad,
   };
 }
@@ -306,7 +306,7 @@ export function ServerStatus() {
         <div className="card__body">
           <div className="serverStatus-hero__title">
             <h1 className="h1">Состояние системы</h1>
-            <p className="p miniPage__subtitle">Коротко: что живо, что занято, куда Shpun сейчас внимательно смотрит.</p>
+            <p className="p miniPage__subtitle">Короткая сводка: кто бодр, кто задумался, где Shpun держит ухо востро.</p>
           </div>
           <div className="serverStatus-actions">
             <button className="btn btn--primary" type="button" onClick={() => void load()} disabled={loading}>
