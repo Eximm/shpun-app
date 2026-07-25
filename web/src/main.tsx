@@ -18,6 +18,9 @@ import { Services }         from "./pages/Services";
 import { ServicesOrder }    from "./pages/ServicesOrder";
 import { Payments }         from "./pages/Payments";
 import { Profile }          from "./pages/Profile";
+import { Reviews }          from "./pages/Reviews";
+import { Support }          from "./pages/Support";
+import { ServerStatus }     from "./pages/ServerStatus";
 import { Referrals }        from "./pages/Referrals";
 import { PaymentsHistory }  from "./pages/PaymentsHistory";
 import { PaymentsReceipts } from "./pages/PaymentsReceipts";
@@ -257,6 +260,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                   <Route path="/payments/history"  element={<PaymentsHistory />} />
                   <Route path="/payments/receipts" element={<PaymentsReceipts />} />
                   <Route path="/profile"           element={<Profile />} />
+                  <Route path="/reviews"           element={<Reviews />} />
+                  <Route path="/support"           element={<Support />} />
+                  <Route path="/server-status"     element={<ServerStatus />} />
                   <Route path="/admin"             element={<AdminPage />} />
                 </Route>
 

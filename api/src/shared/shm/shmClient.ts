@@ -32,7 +32,7 @@ function telegramProfile(): string | undefined {
     process.env.SHM_TELEGRAM_PROFILE ||
       process.env.TELEGRAM_PROFILE ||
       process.env.TG_PROFILE ||
-      'telegram_bot'
+      ''
   ).trim()
   return profile || undefined
 }
@@ -283,6 +283,7 @@ export async function shmTelegramWebAuthBind(
       ...(widgetPayload ?? {}),
       uid,
       bind_to_profile: 1,
+      bind_only_if_new: 1,
     }),
   })
 }

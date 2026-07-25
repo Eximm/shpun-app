@@ -1,4 +1,5 @@
 import { Link, NavLink, Navigate, useParams } from "react-router-dom";
+import { PageBackButton } from "../shared/ui/PageBackButton";
 
 type LegalDocKey = "privacy" | "offer" | "terms" | "contacts";
 
@@ -10,7 +11,6 @@ type LegalSection = {
 
 type LegalDoc = {
   key: LegalDocKey;
-  icon: string;
   title: string;
   short: string;
   description: string;
@@ -25,7 +25,6 @@ const SUPPORT_EMAIL = "shpynsdn@gmail.com";
 const docs: LegalDoc[] = [
   {
     key: "privacy",
-    icon: "🔐",
     title: "Политика конфиденциальности",
     short: "Конфиденциальность",
     description: "Какие данные нужны сервису, зачем они используются и как с ними обращаться.",
@@ -92,7 +91,6 @@ const docs: LegalDoc[] = [
   },
   {
     key: "offer",
-    icon: "📄",
     title: "Публичная оферта",
     short: "Оферта",
     description: "Условия заказа, оплаты, активации и использования платных услуг сервиса.",
@@ -154,7 +152,6 @@ const docs: LegalDoc[] = [
   },
   {
     key: "terms",
-    icon: "📘",
     title: "Условия использования",
     short: "Условия",
     description: "Правила поведения, ограничения, ответственность и порядок работы с сервисом.",
@@ -207,7 +204,6 @@ const docs: LegalDoc[] = [
   },
   {
     key: "contacts",
-    icon: "✉️",
     title: "Контакты и обращения",
     short: "Контакты",
     description: "Куда писать по вопросам документов, оплаты, данных и работы сервиса.",
@@ -241,11 +237,47 @@ function getDoc(key?: string): LegalDoc | null {
   return docs.find((doc) => doc.key === key) ?? null;
 }
 
+function LegalIcon({ name }: { name: LegalDocKey | "overview" }) {
+  const common = {
+    fill: "none",
+    stroke: "currentColor",
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    strokeWidth: 2,
+  };
+  return (
+    <svg className="legal-icon-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      {name === "overview" && <>
+        <path {...common} d="M4 10.5 12 4l8 6.5" />
+        <path {...common} d="M6.5 10v9h11v-9" />
+        <path {...common} d="M10 19v-5h4v5" />
+      </>}
+      {name === "privacy" && <>
+        <rect {...common} x="5" y="10" width="14" height="10" rx="2" />
+        <path {...common} d="M8 10V7a4 4 0 0 1 8 0v3" />
+        <path {...common} d="M12 14v2" />
+      </>}
+      {name === "offer" && <>
+        <path {...common} d="M7 3h7l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" />
+        <path {...common} d="M14 3v5h5M8.5 12h7M8.5 16h5" />
+      </>}
+      {name === "terms" && <>
+        <path {...common} d="M6 4h10a2 2 0 0 1 2 2v14H8a2 2 0 0 1-2-2V4Z" />
+        <path {...common} d="M8 4v14M11 8h4M11 12h4" />
+      </>}
+      {name === "contacts" && <>
+        <rect {...common} x="3.5" y="5.5" width="17" height="13" rx="2" />
+        <path {...common} d="m4.5 7 7.5 6 7.5-6" />
+      </>}
+    </svg>
+  );
+}
+
 function LegalTabs({ active }: { active?: LegalDocKey }) {
   return (
     <div className="legal-tabs" role="tablist" aria-label="Документы сервиса">
       <NavLink end to="/legal" className={({ isActive }) => `legal-tab${isActive && !active ? " legal-tab--active" : ""}`}>
-        <span>🏠</span>
+        <LegalIcon name="overview" />
         <span>Обзор</span>
       </NavLink>
       {docs.map((doc) => (
@@ -254,7 +286,7 @@ function LegalTabs({ active }: { active?: LegalDocKey }) {
           to={`/legal/${doc.key}`}
           className={({ isActive }) => `legal-tab${isActive || active === doc.key ? " legal-tab--active" : ""}`}
         >
-          <span>{doc.icon}</span>
+          <LegalIcon name={doc.key} />
           <span>{doc.short}</span>
         </NavLink>
       ))}
@@ -267,7 +299,7 @@ function LegalHero() {
     <div className="card legal-hero">
       <div className="card__body">
         <div className="legal-hero__top">
-          <div className="legal-hero__mark">📄</div>
+          <div className="legal-hero__mark"><LegalIcon name="offer" /></div>
           <div className="legal-hero__main">
             <h1 className="h1">Документы сервиса</h1>
             <p className="p legal-hero__subtitle">
@@ -284,6 +316,9 @@ function LegalHero() {
 function LegalOverview() {
   return (
     <div className="section legal-page">
+      <div className="pageBackRow">
+        <PageBackButton to="/profile" />
+      </div>
       <LegalHero />
       <LegalTabs />
 
@@ -291,7 +326,7 @@ function LegalOverview() {
         {docs.map((doc) => (
           <Link className="card legal-doc-card" to={`/legal/${doc.key}`} key={doc.key}>
             <div className="card__body">
-              <div className="legal-doc-card__icon">{doc.icon}</div>
+              <div className="legal-doc-card__icon"><LegalIcon name={doc.key} /></div>
               <div className="legal-doc-card__title">{doc.title}</div>
               <p className="p legal-doc-card__text">{doc.description}</p>
               <div className="legal-doc-card__cta">Открыть</div>
@@ -318,14 +353,16 @@ function LegalOverview() {
 function LegalDocument({ doc }: { doc: LegalDoc }) {
   return (
     <div className="section legal-page">
+      <div className="pageBackRow">
+        <PageBackButton to="/profile" />
+      </div>
       <LegalHero />
       <LegalTabs active={doc.key} />
 
       <div className="card legal-document-hero">
         <div className="card__body">
-          <Link className="btn legal-back" to="/legal">← Все документы</Link>
           <div className="legal-document-hero__head">
-            <div className="legal-document-hero__icon">{doc.icon}</div>
+            <div className="legal-document-hero__icon"><LegalIcon name={doc.key} /></div>
             <div>
               <h2 className="legal-title">{doc.title}</h2>
               <p className="p">{doc.description}</p>

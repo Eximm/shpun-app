@@ -151,6 +151,7 @@ export function PaymentsHistory() {
   /* ── Render ────────────────────────────────────────────────────────────── */
   return (
     <div className="section miniPage payments-history-page">
+      <Link className="btn miniPage__back pageBackButton" to="/payments">{t('paymentsHistory.back')}</Link>
 
       {/* Шапка */}
       <div className="card miniPage__hero">
@@ -160,7 +161,6 @@ export function PaymentsHistory() {
               <h1 className="h1">{t('paymentsHistory.title')}</h1>
               <p className="p miniPage__subtitle">{busy ? t('paymentsHistory.loading') : pageInfo(paysResp, paysPage, paysView)}</p>
             </div>
-            <Link className="btn miniPage__back" to="/payments">{t('paymentsHistory.back')}</Link>
           </div>
           <div className="actions actions--2 miniPage__actions">
             <button className="btn" onClick={() => void loadAll()} disabled={busy} type="button">

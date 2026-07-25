@@ -29,6 +29,12 @@ const ITEMS: CardItem[] = [
     tab: "trialProtection",
   },
   {
+    title: "Статус серверов",
+    sub: "Домены, node exporter, аптайм и лампочки для клиента.",
+    chip: { label: "LIVE", tone: "ok" },
+    tab: "serverStatus",
+  },
+  {
     title: "Дальнейшее расширение",
     sub: "Поиск по IP, фильтры, whitelist и дополнительная диагностика.",
     chip: { label: "FUTURE", tone: "soft" },

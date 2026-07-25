@@ -77,6 +77,32 @@ function extractShmMessage(payload: any): string {
   return "";
 }
 
+function extractTelegramIdFromWidgetPayload(payload: any): string {
+  const raw = payload?.id ?? payload?.user?.id;
+  const id = String(raw ?? "").trim();
+  return /^\d+$/.test(id) ? id : "";
+}
+
+function extractTelegramIdFromShmTelegram(payload: any): string {
+  const candidates = [
+    payload?.user_id,
+    payload?.telegram?.user_id,
+    payload?.data?.user_id,
+    payload?.data?.telegram?.user_id,
+    payload?.data?.[0]?.user_id,
+  ];
+  for (const v of candidates) {
+    const id = String(v ?? "").trim();
+    if (/^\d+$/.test(id)) return id;
+  }
+  return "";
+}
+
+function isAlreadyBoundTelegramMessage(msg: string): boolean {
+  const s = String(msg || "").trim().toLowerCase();
+  return s.includes("already bound");
+}
+
 function getClientIp(req: any): string {
   return (
     String(req.headers["x-forwarded-for"] ?? "").split(",")[0].trim() ||
@@ -150,6 +176,18 @@ async function markOnboardingStep(sessionId: string, step: string) {
       body: toFormUrlEncoded({ session_id: sessionId, action: "onboarding.mark", step }),
     });
   } catch { /* best-effort */ }
+}
+
+async function callShpunAppAction(
+  sessionId: string,
+  action: string,
+  params?: Record<string, any>
+) {
+  return await shmFetch<any>(null, "v1/template/shpun_app", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: toFormUrlEncoded({ session_id: sessionId, action, ...(params ?? {}) }),
+  });
 }
 
 // ─── routes ──────────────────────────────────────────────────────────────────
@@ -532,12 +570,52 @@ export async function userRoutes(app: FastifyInstance) {
 
     const msg = extractShmMessage(r.json);
     const apiError = String((r.json as any)?.error ?? "").trim();
-    if (!r.ok || apiError) {
+    const alreadyBound = isAlreadyBoundTelegramMessage(apiError || msg);
+    const telegramId = extractTelegramIdFromWidgetPayload(body);
+
+    if ((!r.ok || apiError) && !alreadyBound) {
       return reply.code(r.status === 400 ? 400 : r.status === 409 ? 409 : r.status || 502).send({
         ok: false,
         error: apiError || msg || "shm_telegram_bind_failed",
         message: msg || null,
+        details: msg || String(r.text ?? "").slice(0, 300) || null,
+        detail: r.json ?? r.text ?? null,
         shm: { status: r.status },
+      });
+    }
+
+    if (!telegramId) {
+      return reply.code(400).send({ ok: false, error: "telegram_id_missing" });
+    }
+
+    if (alreadyBound) {
+      const currentTg = await fetchTelegramUser(s.shmSessionId);
+      const currentTgId = extractTelegramIdFromShmTelegram(currentTg);
+      if (currentTgId && currentTgId !== telegramId) {
+        return reply.code(409).send({
+          ok: false,
+          error: "telegram_already_bound_to_another_account",
+          message: "Telegram account is already connected to another profile.",
+        });
+      }
+    }
+
+    // SHM официально ищет Telegram-пользователя через login="@id" или login2="@id".
+    // Пользовательский /v1/user молча игнорирует login2, поэтому фиксируем его
+    // через наш billing-шаблон: он выполняется внутри SHM и вызывает u.set(login2).
+    const login2Res = await callShpunAppAction(s.shmSessionId, "auth.telegram", {
+      telegram_id: telegramId,
+      telegram_login: String(body?.username ?? "").trim(),
+    });
+    const login2Msg = extractShmMessage(login2Res.json);
+    const login2ApiError = String((login2Res.json as any)?.error ?? "").trim();
+    if (!login2Res.ok || login2ApiError) {
+      return reply.code(login2Res.status === 409 ? 409 : login2Res.status || 502).send({
+        ok: false,
+        error: login2ApiError || login2Msg || "telegram_login_bind_failed",
+        message: login2Msg || null,
+        details: "telegram_login_is_already_used_or_rejected",
+        shm: { status: login2Res.status },
       });
     }
 

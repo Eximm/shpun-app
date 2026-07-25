@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useMe } from "../app/auth/useMe";
 import { useI18n } from "../shared/i18n";
+import { PageBackButton } from "../shared/ui/PageBackButton";
 
 import { AdminTabButton } from "./admin/shared";
 import { OverviewSection } from "./admin/OverviewSection";
@@ -12,6 +13,7 @@ import { OrderRulesSection } from "./admin/OrderRulesSection";
 import { TrialProtectionSection } from "./admin/TrialProtectionSection";
 import { ServiceCategoriesSection } from "./admin/ServiceCategoriesSection";
 import { ReferralAliasesSection } from "./admin/ReferralAliasesSection";
+import { ServerStatusSection } from "./admin/ServerStatusSection";
 import type { AdminTab } from "./admin/types";
 
 export function AdminPage() {
@@ -39,6 +41,7 @@ export function AdminPage() {
 
   return (
     <div className="section admin-page">
+      <PageBackButton to="/profile" label="В профиль" />
       <div className="card admin-hero">
         <div className="card__body">
           <div className="kicker">Admin panel</div>
@@ -52,6 +55,7 @@ export function AdminPage() {
             <AdminTabButton active={tab === "trialProtection"} onClick={() => setTab("trialProtection")} title={t("admin.tab.trial")}      subtitle={t("admin.tab.trial.sub")} />
             <AdminTabButton active={tab === "serviceCategories"} onClick={() => setTab("serviceCategories")} title={t("admin.tab.categories")} subtitle={t("admin.tab.categories.sub")} />
             <AdminTabButton active={tab === "referralAliases"} onClick={() => setTab("referralAliases")} title="Реферальные ссылки" subtitle="Блогеры" />
+            <AdminTabButton active={tab === "serverStatus"} onClick={() => setTab("serverStatus")} title="Статус серверов" subtitle="Node exporter" />
           </div>
         </div>
       </div>
@@ -63,6 +67,7 @@ export function AdminPage() {
         {tab === "trialProtection" && <TrialProtectionSection />}
         {tab === "serviceCategories" && <ServiceCategoriesSection />}
         {tab === "referralAliases" && <ReferralAliasesSection />}
+        {tab === "serverStatus" && <ServerStatusSection />}
       </div>
     </div>
   );

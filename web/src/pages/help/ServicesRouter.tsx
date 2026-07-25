@@ -1,8 +1,8 @@
 // FILE: web/src/pages/help/ServicesRouter.tsx
 
 import { useMemo } from "react";
-import { useNavigate } from "react-router-dom";
 import { useI18n } from "../../shared/i18n";
+import { PageBackButton } from "../../shared/ui/PageBackButton";
 
 type BlockTone = "default" | "good" | "warn";
 
@@ -21,7 +21,6 @@ const ROUTER_PACKAGE_25_URL = "https://spb.shpyn.online/files/apk/shpun-router_2
 
 export function ServicesRouter() {
   const { t } = useI18n();
-  const nav = useNavigate();
 
   const blocks = useMemo<Block[]>(() => [
     {
@@ -110,6 +109,7 @@ export function ServicesRouter() {
 
   return (
     <div className="section miniPage router-help-page">
+      <PageBackButton label={t("servicesRouter.page.back", "Назад")} />
       <div className="card miniPage__hero router-help-hero">
         <div className="card__body">
           <div className="miniPage__head">
@@ -119,9 +119,6 @@ export function ServicesRouter() {
                 {t("servicesRouter.page.sub", "Router VPN для всей домашней сети на OpenWrt 24.x и 25.x. Главное — выбрать роутер, который не будет слабым местом.")}
               </p>
             </div>
-            <button className="btn miniPage__back" onClick={() => nav(-1)} type="button">
-              {t("servicesRouter.page.back", "Назад")}
-            </button>
           </div>
 
           <div className="router-help-tags">
@@ -214,9 +211,6 @@ export function ServicesRouter() {
               type="button"
             >
               🚀 {t("servicesRouter.page.order", "Заказать")}
-            </button>
-            <button className="btn" onClick={() => nav(-1)} type="button">
-              {t("servicesRouter.page.back", "Назад")}
             </button>
           </div>
         </div>

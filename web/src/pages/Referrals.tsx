@@ -394,6 +394,7 @@ export function Referrals() {
 
   return (
     <div className="section miniPage referrals-page">
+      <Link className="btn miniPage__back pageBackButton" to="/">{t("bottomNav.home")}</Link>
       <div className="card miniPage__hero referrals-hero" style={{
         background: "linear-gradient(135deg, rgba(124,92,255,0.12), rgba(77,215,255,0.07))",
         borderColor: "rgba(124,92,255,0.22)",
@@ -404,7 +405,6 @@ export function Referrals() {
               <h1 className="h1">🤝 {t("home.ref.title")}</h1>
               <p className="p miniPage__subtitle">{t("home.ref.sub")}</p>
             </div>
-            <Link className="btn miniPage__back" to="/" style={{ flexShrink: 0 }}>{t("bottomNav.home")}</Link>
           </div>
 
           <div className="referrals-metrics">

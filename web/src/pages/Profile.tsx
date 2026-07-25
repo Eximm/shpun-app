@@ -12,6 +12,7 @@ import { resetOnboardingPromptSession } from "../shared/onboardingPromptSession"
 import { normalizeError } from "../shared/api/errorText";
 import { detectPwaInstallPlatform, isIOSPwaInstallPlatform, pwaGuideKey, resetPwaInstallPromptForNextSession } from "../shared/pwa/install";
 import { clearTelegramMiniAppSession } from "../shared/telegram/sdk";
+import { PageBackButton } from "../shared/ui/PageBackButton";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -19,7 +20,7 @@ type BeforeInstallPromptEvent = Event & {
 };
 
 type VerifyModalState = "idle" | "sent" | "success";
-type ProfileScreen = "main" | "settings" | "about" | "reviews";
+type ProfileScreen = "main" | "settings" | "about";
 
 const EMAIL_CODE_SENT_KEY    = "email_verify:sent_at";
 const EMAIL_CODE_COOLDOWN_MS = 60_000;
@@ -168,13 +169,13 @@ function PRow({ label, value, muted, right, hint, last }: {
 }
 
 function SectionCard({ icon, title, children, action }: {
-  icon?: string; title: string; children: React.ReactNode; action?: React.ReactNode;
+  icon?: React.ReactNode; title: string; children: React.ReactNode; action?: React.ReactNode;
 }) {
   return (
     <div className="card profile-section-card" style={{ marginTop: 8 }}>
       <div className="card__body" style={{ padding: "12px 14px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
-          {icon && <span style={{ fontSize: 13, opacity: 0.7 }}>{icon}</span>}
+          {icon && <span className="profile-section-icon">{icon}</span>}
           <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase" as const, color: "rgba(255,255,255,0.32)", flex: 1 }}>
             {title}
           </div>
@@ -216,8 +217,132 @@ function SmallBtn({ children, onClick, primary, danger, disabled }: {
   );
 }
 
+type ProfileIconName =
+  | "activity"
+  | "server"
+  | "settings"
+  | "info"
+  | "reviews"
+  | "support"
+  | "channel"
+  | "logout"
+  | "admin"
+  | "moon"
+  | "user"
+  | "mail"
+  | "telegram"
+  | "lock"
+  | "globe"
+  | "phone"
+  | "bell"
+  | "document"
+  | "bolt"
+  | "eye"
+  | "eyeOff";
+
+function ProfileIcon({ name }: { name: ProfileIconName }) {
+  const common = {
+    fill: "none",
+    stroke: "currentColor",
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    strokeWidth: 2,
+  };
+  return (
+    <svg className="profile-icon-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      {name === "activity" && <>
+        <path {...common} d="M4 19V5" />
+        <path {...common} d="M8 19v-6" />
+        <path {...common} d="M12 19V9" />
+        <path {...common} d="M16 19v-9" />
+        <path {...common} d="M20 19V7" />
+      </>}
+      {name === "server" && <>
+        <rect {...common} x="4" y="5" width="16" height="6" rx="2" />
+        <rect {...common} x="4" y="13" width="16" height="6" rx="2" />
+        <path {...common} d="M8 8h.01M8 16h.01M12 8h4M12 16h4" />
+      </>}
+      {name === "settings" && <>
+        <path {...common} d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
+        <path {...common} d="M19 13.5a7.7 7.7 0 0 0 0-3l2-1.5-2-3.5-2.4 1a8 8 0 0 0-2.6-1.5L13.7 2h-4l-.4 3a8 8 0 0 0-2.6 1.5l-2.4-1-2 3.5 2 1.5a7.7 7.7 0 0 0 0 3l-2 1.5 2 3.5 2.4-1a8 8 0 0 0 2.6 1.5l.4 3h4l.4-3a8 8 0 0 0 2.6-1.5l2.4 1 2-3.5-2.1-1.5Z" />
+      </>}
+      {name === "info" && <>
+        <circle {...common} cx="12" cy="12" r="9" />
+        <path {...common} d="M12 11v5M12 8h.01" />
+      </>}
+      {name === "reviews" && <>
+        <path {...common} d="M5 6.5A3.5 3.5 0 0 1 8.5 3h7A3.5 3.5 0 0 1 19 6.5v5A3.5 3.5 0 0 1 15.5 15H11l-5 4v-4.3A3.5 3.5 0 0 1 5 12V6.5Z" />
+        <path {...common} d="M9 8h6M9 11h4" />
+      </>}
+      {name === "support" && <>
+        <circle {...common} cx="12" cy="12" r="9" />
+        <path {...common} d="M8 8.5A4.5 4.5 0 0 1 16 11c0 3-4 2.8-4 5" />
+        <path {...common} d="M12 19h.01" />
+      </>}
+      {name === "channel" && <>
+        <path {...common} d="M4 13V9l13-5v14L4 13Z" />
+        <path {...common} d="M7 14.5 9 20h3l-2.5-5" />
+      </>}
+      {name === "logout" && <>
+        <path {...common} d="M10 5H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4" />
+        <path {...common} d="M15 8l4 4-4 4" />
+        <path {...common} d="M19 12H9" />
+      </>}
+      {name === "admin" && <>
+        <path {...common} d="M14.7 6.3 17 4l3 3-2.3 2.3" />
+        <path {...common} d="M5 19l5.7-1.2L18 10.5 13.5 6 6.2 13.3 5 19Z" />
+        <path {...common} d="M12.5 7 17 11.5" />
+      </>}
+      {name === "moon" && <path {...common} d="M20 14.5A8.2 8.2 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5Z" />}
+      {name === "user" && <>
+        <circle {...common} cx="12" cy="8" r="4" />
+        <path {...common} d="M4.5 20a7.5 7.5 0 0 1 15 0" />
+      </>}
+      {name === "mail" && <>
+        <rect {...common} x="3.5" y="5.5" width="17" height="13" rx="2" />
+        <path {...common} d="m4.5 7 7.5 6 7.5-6" />
+      </>}
+      {name === "telegram" && <>
+        <path {...common} d="M20.5 4.5 3.8 11.2c-1.1.4-1 1.9.2 2.2l4.1 1.1 1.6 4.7c.4 1.1 1.8 1.3 2.4.3l2.2-3.5 4.3 3c.9.6 2.1.1 2.3-1l2.2-12.2c.2-1-.8-1.8-1.7-1.4Z" />
+        <path {...common} d="m8.1 14.5 7.9-5.2-6.3 7.1" />
+      </>}
+      {name === "lock" && <>
+        <rect {...common} x="5" y="10" width="14" height="10" rx="2" />
+        <path {...common} d="M8 10V7a4 4 0 0 1 8 0v3" />
+      </>}
+      {name === "globe" && <>
+        <circle {...common} cx="12" cy="12" r="9" />
+        <path {...common} d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+      </>}
+      {name === "phone" && <>
+        <rect {...common} x="8" y="3" width="8" height="18" rx="2" />
+        <path {...common} d="M11 18h2" />
+      </>}
+      {name === "bell" && <>
+        <path {...common} d="M6 10a6 6 0 1 1 12 0c0 5 2 5 2 7H4c0-2 2-2 2-7Z" />
+        <path {...common} d="M10 20a2.4 2.4 0 0 0 4 0" />
+      </>}
+      {name === "document" && <>
+        <path {...common} d="M7 3h7l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" />
+        <path {...common} d="M14 3v5h5M8.5 12h7M8.5 16h5" />
+      </>}
+      {name === "bolt" && <path {...common} d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z" />}
+      {name === "eye" && <>
+        <path {...common} d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
+        <circle {...common} cx="12" cy="12" r="3" />
+      </>}
+      {name === "eyeOff" && <>
+        <path {...common} d="M3 3l18 18" />
+        <path {...common} d="M10.6 10.6A3 3 0 0 0 13.4 13.4" />
+        <path {...common} d="M7.2 7.6C4.2 9.1 2.5 12 2.5 12s3.5 6 9.5 6c1.7 0 3.2-.4 4.5-1" />
+        <path {...common} d="M19 14.4c1.6-1.2 2.5-2.4 2.5-2.4S18 6 12 6c-.8 0-1.5.1-2.2.3" />
+      </>}
+    </svg>
+  );
+}
+
 function ProfileMenuItem({ icon, title, subtitle, onClick, badge, external, danger }: {
-  icon: string;
+  icon: React.ReactNode;
   title: string;
   subtitle?: React.ReactNode;
   onClick?: () => void;
@@ -333,7 +458,7 @@ function EmailVerifyModal({ open, email, onClose, onVerified, t }: {
 
   const sentScreen = (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ textAlign: "center", fontSize: 48, lineHeight: 1 }}>📬</div>
+      <div className="profile-modal-icon"><ProfileIcon name="mail" /></div>
       <p className="p" style={{ textAlign: "center", margin: 0 }}>{t("profile.email.verify.sent.text_pre")} <strong>{email}</strong>.<br />{t("profile.email.verify.sent.text_post")}</p>
       <form onSubmit={(e) => { e.preventDefault(); void confirmCode(); }}>
         <div className="field">
@@ -472,7 +597,7 @@ export function Profile() {
         ? { login: tg.login ?? clean, username: tg.username ?? null, chatId: tg.chat_id ?? tg.chatId ?? null, status: tg?.ShpynSDNSystem?.status ?? tg.status ?? null }
         : { ...(telegramRaw ?? {}), login: clean }
       );
-      setTgModal(false); showToast("✈️ " + t("profile.telegram.toast.saved"));
+      setTgModal(false); showToast(t("profile.telegram.toast.saved"));
     } catch (e: any) { setTgError(e?.message || t("profile.telegram.error.save")); }
     finally { setSavingTg(false); }
   }
@@ -516,7 +641,7 @@ export function Profile() {
           }
       );
       setTgModal(false);
-      showToast("✈️ " + t("profile.telegram.toast.linked", "Telegram подключён"));
+      showToast(t("profile.telegram.toast.linked", "Telegram подключён"));
       await refetch?.();
     } catch (e: any) {
       setTgError(mapTelegramBindError(e));
@@ -649,7 +774,7 @@ export function Profile() {
     try {
       const res = await apiFetch<PasswordSetResponse>("/auth/password/set", { method: "POST", body: { password: pwd1.trim() } }) as any;
       if (!res?.ok) throw new Error(String(res?.error || "password_set_failed"));
-      showToast("🔐 " + t("profile.password.toast.changed"));
+      showToast(t("profile.password.toast.changed"));
       try {
         resetPwaInstallPromptForNextSession();
         resetOnboardingPromptSession();
@@ -668,7 +793,7 @@ export function Profile() {
   async function doCopyLogin() {
     if (!loginText) return;
     await copyToClipboard(loginText);
-    setCopied(true); showToast(getMood("copied") ?? "📋 " + t("profile.toast.copied"));
+    setCopied(true); showToast(getMood("copied") ?? t("profile.toast.copied"));
     window.setTimeout(() => setCopied(false), 1200);
   }
 
@@ -699,22 +824,22 @@ export function Profile() {
   useEffect(() => {
     setStandalone(isStandalonePwa());
     const onBip       = (e: Event) => { e.preventDefault?.(); setDeferredPrompt(e as BeforeInstallPromptEvent); };
-    const onInstalled = () => { setStandalone(true); setDeferredPrompt(null); showToast("📲 " + t("profile.pwa.toast.installed")); };
+    const onInstalled = () => { setStandalone(true); setDeferredPrompt(null); showToast(t("profile.pwa.toast.installed")); };
     window.addEventListener("beforeinstallprompt", onBip as any);
     window.addEventListener("appinstalled",        onInstalled as any);
     return () => { window.removeEventListener("beforeinstallprompt", onBip as any); window.removeEventListener("appinstalled", onInstalled as any); };
   }, [t]);
 
   async function doInstallPwa() {
-    if (standalone)      { showToast("📲 " + t("profile.pwa.toast.already_installed")); return; }
+    if (standalone)      { showToast(t("profile.pwa.toast.already_installed")); return; }
     const prompt = deferredPrompt || getPwaInstallPrompt();
     if (prompt && prompt !== deferredPrompt) setDeferredPrompt(prompt);
     if (!prompt) { setPwaGuideOpen(true); return; }
     try {
       await prompt!.prompt();
       const choice = await prompt!.userChoice;
-      showToast(choice?.outcome === "accepted" ? "🚀 " + t("profile.pwa.toast.started") : "😕 " + t("profile.pwa.toast.cancelled"));
-    } catch { showToast("😬 " + t("profile.pwa.toast.failed")); }
+      showToast(choice?.outcome === "accepted" ? t("profile.pwa.toast.started") : t("profile.pwa.toast.cancelled"));
+    } catch { showToast(t("profile.pwa.toast.failed")); }
     finally { setDeferredPrompt(null); }
   }
 
@@ -732,18 +857,18 @@ export function Profile() {
     setPushLoading(true);
     try {
       const enabled = pushState.permission === "granted" && pushState.hasSubscription && !pushState.disabledByUser;
-      if (enabled) { await disablePush(); showToast("🔕 " + t("profile.push.toast.disabled")); }
+      if (enabled) { await disablePush(); showToast(t("profile.push.toast.disabled")); }
       else {
-        if (isIOSPwaInstallPlatform(pwaPlatform) && !standalone) { showToast("📲 " + t("profile.push.toast.install_ios")); setPwaGuideOpen(true); return; }
+        if (isIOSPwaInstallPlatform(pwaPlatform) && !standalone) { showToast(t("profile.push.toast.install_ios")); setPwaGuideOpen(true); return; }
         await enablePushByUserGesture().catch(() => false);
         const actual = await getPushState().catch(() => null);
         if (actual) setPushState({ ...actual, disabledByUser: isPushDisabledByUser() });
         showToast(
           actual?.permission === "granted" && actual.hasSubscription && !actual.disabledByUser
-            ? "🔔 " + t("profile.push.toast.enabled")
+            ? t("profile.push.toast.enabled")
             : actual?.permission === "denied"
-              ? "🚫 " + t("profile.push.toast.denied")
-              : "😬 " + t("profile.push.toast.failed")
+              ? t("profile.push.toast.denied")
+              : t("profile.push.toast.failed")
         );
       }
     } finally { setPushLoading(false); await refreshPush(); }
@@ -797,7 +922,7 @@ export function Profile() {
 
   /* ── Render ── */
   const supportUrl = "https://t.me/shpun_staff";
-  const channelUrl = "https://t.me/shpunvpn_bot";
+  const channelUrl = "https://t.me/shpunsdn";
 
   function openExternal(url: string) {
     try { window.open(url, "_blank", "noopener,noreferrer"); }
@@ -826,24 +951,31 @@ export function Profile() {
             <div className="profile-more-stat"><span>Последний вход</span><strong>{formatDate(profile?.lastLogin)}</strong></div>
           </div>
 
+          {isAdmin && (
+            <div className="profile-more-group profile-more-group--admin">
+              <div className="profile-more-group__title">Администрирование</div>
+              <div className="profile-menu-list profile-menu-list--admin">
+                <ProfileMenuItem icon={<ProfileIcon name="admin" />} title={t("profile.admin")} subtitle="Пульт для внутренней магии" onClick={() => nav("/admin")} />
+              </div>
+            </div>
+          )}
+
           <div className="profile-more-group">
             <div className="profile-more-group__title">Утилиты</div>
             <div className="profile-menu-list">
-              <ProfileMenuItem icon="🧪" title="Спидтест" subtitle="Сравнить отклик серверов" onClick={() => showToast("Скоро добавим нормальный спидтест, без гадания на пинге.")} />
-              <ProfileMenuItem icon="🛰️" title="Статус серверов" subtitle="Мониторинг и автообновление" onClick={() => nav("/services")} />
+              <ProfileMenuItem icon={<ProfileIcon name="server" />} title="Статус серверов" subtitle="Онлайн, аптайм и отклик" onClick={() => nav("/server-status")} />
             </div>
           </div>
 
           <div className="profile-more-group">
             <div className="profile-more-group__title">Меню</div>
             <div className="profile-menu-list">
-              <ProfileMenuItem icon="⚙️" title="Настройки" subtitle="Тема, язык, уведомления и вход" onClick={() => setScreen("settings")} />
-              <ProfileMenuItem icon="ℹ️" title="О сервисе" subtitle="Кто такой Shpun и зачем он оживляет интернет" onClick={() => setScreen("about")} />
-              <ProfileMenuItem icon="💬" title="Отзывы" subtitle="Будущий уголок пользовательских историй" onClick={() => setScreen("reviews")} />
-              <ProfileMenuItem icon="🛟" title="Поддержка" subtitle="Telegram чат" external onClick={() => openExternal(supportUrl)} />
-              <ProfileMenuItem icon="📣" title="Канал" subtitle="Новости и важные объявления" external onClick={() => openExternal(channelUrl)} />
-              {isAdmin && <ProfileMenuItem icon="🛠️" title={t("profile.admin")} subtitle="Пульт для внутренней магии" onClick={() => nav("/admin")} />}
-              <ProfileMenuItem icon="🚪" title="Выйти из аккаунта" subtitle="Закрыть сессию на этом устройстве" danger onClick={() => void logout()} />
+              <ProfileMenuItem icon={<ProfileIcon name="settings" />} title="Настройки" subtitle="Тема, язык, уведомления и вход" onClick={() => setScreen("settings")} />
+              <ProfileMenuItem icon={<ProfileIcon name="info" />} title="О сервисе" subtitle="Кто такой Shpun и зачем он оживляет интернет" onClick={() => setScreen("about")} />
+              <ProfileMenuItem icon={<ProfileIcon name="reviews" />} title="Отзывы" subtitle="Что пишут пользователи" onClick={() => nav("/reviews")} />
+              <ProfileMenuItem icon={<ProfileIcon name="support" />} title="Поддержка" subtitle="Telegram чат" external onClick={() => openExternal(supportUrl)} />
+              <ProfileMenuItem icon={<ProfileIcon name="channel" />} title="Новости" subtitle="Группа с объявлениями" external onClick={() => openExternal(channelUrl)} />
+              <ProfileMenuItem icon={<ProfileIcon name="logout" />} title="Выйти из аккаунта" subtitle="Закрыть сессию на этом устройстве" danger onClick={() => void logout()} />
             </div>
           </div>
         </div>
@@ -851,60 +983,69 @@ export function Profile() {
 
       {screen === "settings" && (
         <div className="profile-more-shell">
-          <button className="profile-more-back" type="button" onClick={() => setScreen("main")}>← Назад</button>
+          <PageBackButton onClick={() => setScreen("main")} />
           <div className="profile-more-title">Настройки</div>
 
           <div className="profile-more-group">
             <div className="profile-more-group__title">Внешний вид</div>
             <div className="profile-menu-list">
-              <ProfileMenuItem icon="🌙" title="Тема оформления" subtitle="Тёмная, как ночной серверный шкаф" badge={<ProfileSwitch checked disabled />} onClick={() => showToast("Светлую тему пока не заводили — тёмная держит стиль.")} />
+              <ProfileMenuItem icon={<ProfileIcon name="moon" />} title="Тема оформления" subtitle="Тёмная, как ночной серверный шкаф" badge={<ProfileSwitch checked disabled />} onClick={() => showToast("Светлую тему пока не заводили — тёмная держит стиль.")} />
             </div>
           </div>
 
           <div className="profile-more-group">
             <div className="profile-more-group__title">Аккаунт</div>
             <div className="profile-menu-list">
-              <ProfileMenuItem icon="👤" title={t("profile.personal.title")} subtitle={`${personalNameView !== "—" && personalNameView !== "вЂ”" ? personalNameView : t("profile.email.empty")} · ID ${profile?.id ?? "—"}`} badge={<SmallBtn>{t("profile.personal.edit")}</SmallBtn>} onClick={() => setEditPersonal(true)} />
-              <ProfileMenuItem icon="📧" title={t("profile.email.title")} subtitle={emailLoading ? t("profile.email.loading") : email || t("profile.email.empty")} badge={email ? <SmallBadge text={emailVerified === true ? t("profile.email.badge.verified") : t("profile.email.badge.unverified")} tone={emailVerified === true ? "ok" : "warn"} /> : undefined} onClick={() => setEmailModal(true)} />
-              <ProfileMenuItem icon="✈️" title="Telegram" subtitle={telegramLogin || t("profile.telegram.unlinked")} badge={telegramLogin ? <SmallBadge text={t("profile.telegram.badge.linked")} tone="ok" /> : <SmallBadge text={t("profile.telegram.badge.unlinked")} />} onClick={() => setTgModal(true)} />
-              <ProfileMenuItem icon="🔐" title={t("profile.change_password")} subtitle="Смена пароля и повторный вход" onClick={() => setPwdModal(true)} />
+              <ProfileMenuItem icon={<ProfileIcon name="user" />} title={t("profile.personal.title")} subtitle={`${personalNameView !== "—" && personalNameView !== "вЂ”" ? personalNameView : t("profile.email.empty")} · ID ${profile?.id ?? "—"}`} badge={<SmallBtn>{t("profile.personal.edit")}</SmallBtn>} onClick={() => setEditPersonal(true)} />
+              <ProfileMenuItem icon={<ProfileIcon name="mail" />} title={t("profile.email.title")} subtitle={emailLoading ? t("profile.email.loading") : email || t("profile.email.empty")} badge={email ? <SmallBadge text={emailVerified === true ? t("profile.email.badge.verified") : t("profile.email.badge.unverified")} tone={emailVerified === true ? "ok" : "warn"} /> : undefined} onClick={() => setEmailModal(true)} />
+              <ProfileMenuItem icon={<ProfileIcon name="telegram" />} title="Telegram" subtitle={telegramLogin || t("profile.telegram.unlinked")} badge={telegramLogin ? <SmallBadge text={t("profile.telegram.badge.linked")} tone="ok" /> : <SmallBadge text={t("profile.telegram.badge.unlinked")} />} onClick={() => setTgModal(true)} />
+              <ProfileMenuItem icon={<ProfileIcon name="lock" />} title={t("profile.change_password")} subtitle="Смена пароля и повторный вход" onClick={() => setPwdModal(true)} />
             </div>
           </div>
 
           <div className="profile-more-group">
             <div className="profile-more-group__title">Основные</div>
             <div className="profile-menu-list">
-              <ProfileMenuItem icon="🌐" title={t("profile.language.title")} subtitle={lang === "ru" ? t("profile.language.ru") : t("profile.language.en")} badge={<Segmented value={(lang as any) === "en" ? "en" : "ru"} onChange={setLang as any} ariaLabel={t("profile.language.aria")} />} />
-              <ProfileMenuItem icon="📲" title={t("profile.pwa.title")} subtitle={standalone ? t("profile.pwa.installed") : t("profile.pwa.not_installed")} badge={standalone ? <SmallBadge text={t("profile.pwa.installed")} tone="ok" /> : <SmallBtn primary>{deferredPrompt ? t("profile.pwa.button.install") : t("profile.pwa.button.how")}</SmallBtn>} onClick={() => void doInstallPwa()} />
-              <ProfileMenuItem icon="🔔" title={t("profile.push.title")} subtitle={<>{pushEnabled ? t("profile.push.enabled") : t("profile.push.disabled")} · {pushPermText}</>} badge={<ProfileSwitch checked={pushEnabled} disabled={!pushState.supported || pushState.permission === "denied" || pushLoading} />} onClick={() => void togglePush()} />
-              <ProfileMenuItem icon="📄" title={t("profile.legal.title")} subtitle={t("profile.legal.value")} onClick={() => nav("/legal")} />
+              <ProfileMenuItem icon={<ProfileIcon name="globe" />} title={t("profile.language.title")} subtitle={lang === "ru" ? t("profile.language.ru") : t("profile.language.en")} badge={<Segmented value={(lang as any) === "en" ? "en" : "ru"} onChange={setLang as any} ariaLabel={t("profile.language.aria")} />} />
+              <ProfileMenuItem icon={<ProfileIcon name="phone" />} title={t("profile.pwa.title")} subtitle={standalone ? t("profile.pwa.installed") : t("profile.pwa.not_installed")} badge={standalone ? <SmallBadge text={t("profile.pwa.installed")} tone="ok" /> : <SmallBtn primary>{deferredPrompt ? t("profile.pwa.button.install") : t("profile.pwa.button.how")}</SmallBtn>} onClick={() => void doInstallPwa()} />
+              <ProfileMenuItem icon={<ProfileIcon name="bell" />} title={t("profile.push.title")} subtitle={<>{pushEnabled ? t("profile.push.enabled") : t("profile.push.disabled")} · {pushPermText}</>} badge={<ProfileSwitch checked={pushEnabled} disabled={!pushState.supported || pushState.permission === "denied" || pushLoading} />} onClick={() => void togglePush()} />
+              <ProfileMenuItem icon={<ProfileIcon name="document" />} title={t("profile.legal.title")} subtitle={t("profile.legal.value")} onClick={() => nav("/legal")} />
             </div>
           </div>
         </div>
       )}
 
       {screen === "about" && (
-        <div className="profile-more-shell">
-          <button className="profile-more-back" type="button" onClick={() => setScreen("main")}>← Назад</button>
-          <div className="profile-more-title">О сервисе</div>
+        <div className="profile-more-shell profile-about-shell">
+          <PageBackButton onClick={() => setScreen("main")} />
           <div className="card profile-more-info"><div className="card__body">
-            <div className="profile-more-info__icon">⚡</div>
-            <h2>Shpun App</h2>
-            <p>Личный кабинет для VPN-сервисов Shpun: услуги, оплата, бонусы, уведомления и вход через Telegram или e-mail — всё в одном месте.</p>
-            <button className="btn btn--primary" type="button" onClick={() => nav("/legal")}>Оферта и условия</button>
+            <div className="profile-about-top">
+              <div className="profile-more-info__icon"><ProfileIcon name="bolt" /></div>
+              <div className="profile-about-titleBlock">
+                <div className="profile-about-kicker">О сервисе</div>
+                <h2>Shpun App</h2>
+                <p className="profile-about-lead">
+                  VPN-сервис для привычного интернета без лишних квестов с настройками.
+                </p>
+              </div>
+            </div>
+            <div className="profile-about-summary">
+              <span>Держим баланс качества, понятного кабинета и доступной цены.</span>
+              <span>Развиваем собственную экосистему: Telegram-вход, статусы серверов, сценарии для устройств и решения для домашней сети.</span>
+            </div>
+            <div className="profile-about-grid">
+              <div className="profile-about-card"><ProfileIcon name="activity" /><b>Видео и связь</b><span>Помогаем смотреть ролики, держать мессенджеры под рукой и не ругаться с мобильным интернетом каждый вечер.</span></div>
+              <div className="profile-about-card"><ProfileIcon name="server" /><b>Баланс и качество</b><span>Следим за стабильностью, ценой и понятностью сервиса. Нам важно, чтобы VPN был не роскошью, а нормальным рабочим инструментом.</span></div>
+              <div className="profile-about-card"><ProfileIcon name="lock" /><b>Кабинет без квестов</b><span>Услуги, оплата, бонусы, уведомления и вход через e-mail или Telegram собраны в одном месте.</span></div>
+              <div className="profile-about-card"><ProfileIcon name="phone" /><b>Для разных устройств</b><span>Телефон, компьютер, планшет или домашняя сеть — стараемся закрывать сценарии, которыми реально пользуются каждый день.</span></div>
+              <div className="profile-about-card"><ProfileIcon name="admin" /><b>Свои разработки</b><span>У нас есть собственные модули и интеграции, а не только набор чужих ссылок под красивой кнопкой.</span></div>
+              <div className="profile-about-card"><ProfileIcon name="globe" /><b>Shpun Router</b><span>Отдельное направление — наш пакет для OpenWrt-роутеров, чтобы VPN работал сразу для всей домашней сети.</span></div>
+            </div>
+            <div className="actions actions--2 profile-about-actions">
+              <button className="btn btn--primary" type="button" onClick={() => nav("/services")}>Мои услуги</button>
+              <button className="btn" type="button" onClick={() => nav("/legal")}>Оферта и условия</button>
+            </div>
           </div></div>
-        </div>
-      )}
-
-      {screen === "reviews" && (
-        <div className="profile-more-shell">
-          <button className="profile-more-back" type="button" onClick={() => setScreen("main")}>← Назад</button>
-          <div className="profile-more-title">Отзывы</div>
-          <div className="profile-reviews-grid">
-            <div className="profile-review-card">“YouTube снова не делает вид, что он телеграф 1897 года.”<span>Пользователь Shpun</span></div>
-            <div className="profile-review-card">“Подключил, оплатил, забыл. Лучший вид настройки.”<span>Пользователь Shpun</span></div>
-            <div className="profile-review-card profile-review-card--soon">Скоро добавим реальные отзывы и форму обратной связи.</div>
-          </div>
         </div>
       )}
 
@@ -929,7 +1070,7 @@ export function Profile() {
                 ID {profile?.id ?? "—"}{loginText ? ` · ${loginText}` : ""}
               </div>
             </div>
-            {isAdmin && <SmallBtn onClick={() => nav("/admin")}>🛠 {t("profile.admin")}</SmallBtn>}
+            {isAdmin && <SmallBtn onClick={() => nav("/admin")}><ProfileIcon name="admin" /> {t("profile.admin")}</SmallBtn>}
           </div>
 
           {/* Метадаты */}
@@ -949,17 +1090,17 @@ export function Profile() {
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
             <button className="btn" onClick={() => setPwdModal(true)} type="button" style={{ fontSize: 12, minHeight: 34 }}>
-              🔐 {t("profile.change_password")}
+              <ProfileIcon name="lock" /> {t("profile.change_password")}
             </button>
             <button className="btn btn--danger" onClick={() => void logout()} disabled={loggingOut} type="button" style={{ fontSize: 12, minHeight: 34 }}>
-              🚪 {loggingOut ? "…" : t("profile.logout")}
+              <ProfileIcon name="logout" /> {loggingOut ? "…" : t("profile.logout")}
             </button>
           </div>
         </div>
       </div>
 
       {/* ── Личные данные ── */}
-      <SectionCard icon="🪪" title={t("profile.personal.title")}
+      <SectionCard icon={<ProfileIcon name="user" />} title={t("profile.personal.title")}
         action={!editPersonal ? <SmallBtn onClick={() => setEditPersonal(true)}>{t("profile.personal.edit")}</SmallBtn> : undefined}>
 
         {personalError && <div className="pre" style={{ marginBottom: 8 }}>{personalError}</div>}
@@ -986,7 +1127,7 @@ export function Profile() {
             <PRow
               label={t("profile.personal.login")}
               value={loginText || "—"}
-              right={loginText ? <SmallBtn onClick={() => void doCopyLogin()}>{copied ? "✓" : "📋"}</SmallBtn> : undefined}
+              right={loginText ? <SmallBtn onClick={() => void doCopyLogin()}>{copied ? "Готово" : "Копировать"}</SmallBtn> : undefined}
             />
             <PRow label={t("profile.personal.id")} value={profile?.id ?? "—"} last />
           </>
@@ -994,7 +1135,7 @@ export function Profile() {
       </SectionCard>
 
       {/* ── Вход и привязки ── */}
-      <SectionCard icon="🔑" title={t("profile.auth.title")}>
+      <SectionCard icon={<ProfileIcon name="lock" />} title={t("profile.auth.title")}>
 
         <PRow
           label={t("profile.auth.login2.title")}
@@ -1034,7 +1175,7 @@ export function Profile() {
       </SectionCard>
 
       {/* ── Настройки ── */}
-      <SectionCard icon="⚙️" title={t("profile.settings.title")}>
+      <SectionCard icon={<ProfileIcon name="settings" />} title={t("profile.settings.title")}>
 
         <PRow
           label={t("profile.language.title")}
@@ -1124,7 +1265,7 @@ export function Profile() {
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <p className="p" style={{ margin: 0 }}>Email <strong>{email}</strong> — {t("profile.email.toast.saved")}.</p>
             <div className="pre" style={{ background: "rgba(124,92,255,.06)", borderColor: "rgba(124,92,255,.2)" }}>
-              <div style={{ fontWeight: 600, marginBottom: 4 }}>📨 {t("profile.email.modal.verify_title")}</div>
+              <div className="profile-note-title"><ProfileIcon name="mail" /> {t("profile.email.modal.verify_title")}</div>
               <div style={{ opacity: 0.75, fontSize: 13, lineHeight: 1.5 }}>{t("profile.email.modal.verify_text")}</div>
             </div>
             <div className="actions actions--2">
@@ -1135,7 +1276,7 @@ export function Profile() {
         ) : (
           <>
             <div className="pre" style={{ marginBottom: 12, background: "rgba(124,92,255,.06)", borderColor: "rgba(124,92,255,.2)" }}>
-              <div style={{ fontWeight: 600, marginBottom: 4 }}>📌 {t("profile.email.modal.notice_title")}</div>
+              <div className="profile-note-title"><ProfileIcon name="info" /> {t("profile.email.modal.notice_title")}</div>
               <div style={{ opacity: 0.75, fontSize: 13, lineHeight: 1.5 }}>{t("profile.email.modal.text")}</div>
               {authLoginText && (
                 <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,.08)" }}>
@@ -1160,14 +1301,14 @@ export function Profile() {
           <span className="field__label">{t("profile.password.field.p1")}</span>
           <div className="pwdfield">
             <input className="input" placeholder={t("profile.password.field.p1_ph")} value={pwd1} onChange={(e) => setPwd1(e.target.value)} type={showPwd1 ? "text" : "password"} autoComplete="new-password" disabled={pwdBusy} />
-            <button type="button" className="btn btn--soft pwdfield__btn" onClick={() => setShowPwd1((v) => !v)} disabled={pwdBusy}>{showPwd1 ? "🙈" : "👁"}</button>
+            <button type="button" className="btn btn--soft pwdfield__btn" onClick={() => setShowPwd1((v) => !v)} disabled={pwdBusy}>{showPwd1 ? <ProfileIcon name="eyeOff" /> : <ProfileIcon name="eye" />}</button>
           </div>
         </label>
         <label className="field" style={{ marginTop: 10 }}>
           <span className="field__label">{t("profile.password.field.p2")}</span>
           <div className="pwdfield">
             <input className="input" placeholder={t("profile.password.field.p2_ph")} value={pwd2} onChange={(e) => setPwd2(e.target.value)} type={showPwd2 ? "text" : "password"} autoComplete="new-password" disabled={pwdBusy} />
-            <button type="button" className="btn btn--soft pwdfield__btn" onClick={() => setShowPwd2((v) => !v)} disabled={pwdBusy}>{showPwd2 ? "🙈" : "👁"}</button>
+            <button type="button" className="btn btn--soft pwdfield__btn" onClick={() => setShowPwd2((v) => !v)} disabled={pwdBusy}>{showPwd2 ? <ProfileIcon name="eyeOff" /> : <ProfileIcon name="eye" />}</button>
           </div>
         </label>
         <div className="pre pwdmeter" style={{ marginTop: 10 }}>

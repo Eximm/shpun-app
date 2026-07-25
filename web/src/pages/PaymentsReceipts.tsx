@@ -75,6 +75,7 @@ export function PaymentsReceipts() {
   /* ── Render ────────────────────────────────────────────────────────────── */
   return (
     <div className="section miniPage receipts-page">
+      <Link className="btn miniPage__back pageBackButton" to="/payments">{t('paymentsReceipts.back')}</Link>
 
       {/* Шапка */}
       <div className="card miniPage__hero">
@@ -84,7 +85,6 @@ export function PaymentsReceipts() {
               <h1 className="h1">{t('paymentsReceipts.title')}</h1>
               <p className="p miniPage__subtitle">{t('paymentsReceipts.subtitle')}</p>
             </div>
-            <Link className="btn miniPage__back" to="/payments">{t('paymentsReceipts.back')}</Link>
           </div>
 
           <div className="actions actions--2 miniPage__actions">
