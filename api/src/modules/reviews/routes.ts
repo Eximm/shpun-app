@@ -13,6 +13,8 @@ import {
   setReviewStatus,
 } from "./repo.js";
 
+type AuthorVisibility = "public" | "masked" | "hidden";
+
 function text(v: unknown, max: number) {
   return String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
 }
@@ -26,11 +28,16 @@ function int(v: unknown, fallback: number) {
   return Number.isFinite(n) ? Math.trunc(n) : fallback;
 }
 
+function normalizeAuthorVisibility(v: unknown): AuthorVisibility {
+  const s = String(v ?? "").trim();
+  return s === "public" || s === "hidden" || s === "masked" ? s : "masked";
+}
+
 function sessionUser(s: any) {
   const id = Number(s?.shmUserId ?? s?.userId ?? 0);
   if (!Number.isFinite(id) || id <= 0) return null;
   const login = text(s?.login, 120);
-  const displayName = login ? login.replace(/^@/, "") : `Пользователь #${id}`;
+  const displayName = text(s?.name || s?.displayName || s?.clientName, 120) || (login ? login.replace(/^@/, "") : `Пользователь #${id}`);
   return { id, login, displayName };
 }
 
@@ -45,12 +52,37 @@ async function isAdminSession(s: any) {
   }
 }
 
+function maskAuthorName(value: unknown, userId: unknown) {
+  const raw = String(value ?? "").replace(/^@/, "").trim();
+  const fallback = `Пользователь #${Number(userId) || "?"}`;
+  const name = raw || fallback;
+
+  if (name.includes("@")) {
+    const [left, domain] = name.split("@");
+    const visible = left.slice(0, Math.min(3, Math.max(1, left.length)));
+    return `${visible}${"•".repeat(Math.max(3, left.length - visible.length))}@${domain || "mail"}`;
+  }
+
+  if (name.length <= 3) return `${name[0] || "Г"}••`;
+  if (name.length <= 6) return `${name.slice(0, 2)}••`;
+  return `${name.slice(0, 3)}•••${name.slice(-1)}`;
+}
+
+function publicAuthor(row: any) {
+  const visibility = normalizeAuthorVisibility(row.author_visibility);
+  const raw = row.display_name || row.user_login || `Пользователь #${row.user_id}`;
+  if (visibility === "hidden") return "Пользователь Shpun";
+  if (visibility === "public") return String(raw);
+  return maskAuthorName(raw, row.user_id);
+}
+
 function publicReview(row: any, currentUserId: number, isAdmin: boolean) {
   return {
     id: row.id,
     rating: row.rating,
     text: row.text,
-    author: row.display_name || row.user_login || `Пользователь #${row.user_id}`,
+    author: publicAuthor(row),
+    authorVisibility: normalizeAuthorVisibility(row.author_visibility),
     userId: row.user_id,
     status: row.status,
     mine: Number(row.user_id) === currentUserId,
@@ -62,7 +94,8 @@ function publicReview(row: any, currentUserId: number, isAdmin: boolean) {
       id: c.id,
       reviewId: c.review_id,
       text: c.text,
-      author: c.display_name || c.user_login || `Пользователь #${c.user_id}`,
+      author: publicAuthor(c),
+      authorVisibility: normalizeAuthorVisibility(c.author_visibility),
       userId: c.user_id,
       status: c.status,
       mine: Number(c.user_id) === currentUserId,
@@ -103,13 +136,14 @@ export async function reviewsRoutes(app: FastifyInstance) {
       userId: user.id,
       userLogin: user.login,
       displayName: user.displayName,
+      authorVisibility: normalizeAuthorVisibility(body.authorVisibility),
       rating,
       text: reviewText,
     });
     return reply.code(201).send({
       ok: true,
       item: publicReview({ ...created, comments: [] }, user.id, false),
-      message: "Отзыв отправлен. После короткой проверки появится в общем списке.",
+      message: "Отзыв отправлен. Не потерялся — просто ждёт зелёный свет.",
     });
   });
 
@@ -135,6 +169,7 @@ export async function reviewsRoutes(app: FastifyInstance) {
       userId: user.id,
       userLogin: user.login,
       displayName: user.displayName,
+      authorVisibility: normalizeAuthorVisibility(body.authorVisibility),
       text: commentText,
     });
     return reply.code(201).send({

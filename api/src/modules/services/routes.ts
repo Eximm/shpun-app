@@ -81,17 +81,39 @@ function isRouterSubscriptionCategory(category: string) {
   return c === "marzban-r" || c === "remnawave-r";
 }
 
-function remnawaveUsernameForService(category: string, usi: number, parent?: unknown, title?: unknown) {
+function remnawaveUsernameForService(category: string, usi: number) {
   const normalized = String(category || "").trim().toLowerCase();
   if (isRouterSubscriptionCategory(normalized)) return null;
-  const name = String(title || "").trim().toLowerCase();
-  const parentId = Number(parent ?? 0);
-  const isFlexPlus = normalized.includes("wl")
-    || normalized.includes("plus")
-    || name.includes("flex plus")
-    || name.includes("flex+")
-    || (Number.isFinite(parentId) && parentId > 0);
-  return `${isFlexPlus ? "uswl" : "us"}_${usi}`;
+  return `${normalized.includes("wl") ? "uswl" : "us"}_${usi}`;
+}
+
+function remnawaveUsernameFromSubscriptionUrl(value: unknown) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+
+  try {
+    const url = new URL(raw);
+    const segments = url.pathname.split("/").map((x) => x.trim()).filter(Boolean);
+    const token = segments[segments.length - 1] || "";
+    return cleanSubscriptionToken(token);
+  } catch {
+    return cleanSubscriptionToken(raw.split("/").filter(Boolean).pop() || raw);
+  }
+}
+
+async function resolveRemnawaveUsernameFromBilling(shmSessionId: string, usi: number) {
+  const r = await shmShpunAppConnectGet(shmSessionId, usi, "marzban");
+  const j: any = r.json ?? {};
+  if (!r.ok || (j?.ok ?? 0) !== 1) return "";
+
+  return remnawaveUsernameFromSubscriptionUrl(
+    j?.username
+      ?? j?.remnawave_username
+      ?? j?.remnawaveUser
+      ?? j?.subscription_username
+      ?? j?.subscription_url
+      ?? j?.subscriptionUrl,
+  );
 }
 
 async function resolveOwnedRemnawaveUser(shmSessionId: string, usi: number) {
@@ -101,12 +123,18 @@ async function resolveOwnedRemnawaveUser(shmSessionId: string, usi: number) {
 
   const category = String(service.item?.service?.category ?? service.item?.category ?? "");
   const title = service.item?.service?.name ?? service.item?.name ?? "";
-  const username = remnawaveUsernameForService(category, usi, service.item?.parent, title);
+  const candidates = [
+    await resolveRemnawaveUsernameFromBilling(shmSessionId, usi),
+    remnawaveUsernameForService(category, usi),
+  ].map((x) => String(x ?? "").trim()).filter(Boolean);
+  const usernames = Array.from(new Set(candidates));
+  const username = usernames[0];
   if (!username) return { ok: false as const, status: 400, error: "hwid_not_available" };
 
   return {
     ok: true as const,
     username,
+    usernames,
     debug: {
       user_service_id: usi,
       category,
@@ -758,7 +786,16 @@ export async function servicesRoutes(app: FastifyInstance) {
         });
       }
 
-      const result = await remnawaveGetUserHwidDevices(ownedUser.username);
+      let result = await remnawaveGetUserHwidDevices(ownedUser.username);
+      for (const username of ownedUser.usernames.slice(1)) {
+        const currentDevices = Array.isArray(result.devices) ? result.devices : [];
+        if (result.ok && currentDevices.length > 0) break;
+        const next = await remnawaveGetUserHwidDevices(username);
+        const nextDevices = Array.isArray(next.devices) ? next.devices : [];
+        if (!result.ok || nextDevices.length > currentDevices.length) {
+          result = next;
+        }
+      }
       if (!result.ok) {
         return reply.code(result.error === "user_not_found" ? 404 : 502).send({
           ok: false,
@@ -773,7 +810,7 @@ export async function servicesRoutes(app: FastifyInstance) {
         limit: typeof result.limit === "number" ? result.limit : null,
         total: devices.length,
         devices,
-        debug: debug ? { username: ownedUser.username, service: ownedUser.debug } : undefined,
+        debug: debug ? { username: ownedUser.username, usernames: ownedUser.usernames, service: ownedUser.debug } : undefined,
       });
     } catch (error: any) {
       req.log.error({ err: error, usi }, "Failed to load Remnawave devices");
@@ -807,7 +844,19 @@ export async function servicesRoutes(app: FastifyInstance) {
         });
       }
 
-      const result = await remnawaveDeleteUserHwidDevice(ownedUser.username, hwid);
+      let result = await remnawaveDeleteUserHwidDevice(ownedUser.username, hwid);
+      if (!result.ok || !result.removed) {
+        for (const username of ownedUser.usernames.slice(1)) {
+          const next = await remnawaveDeleteUserHwidDevice(username, hwid);
+          if (next.ok && next.removed) {
+            result = next;
+            break;
+          }
+          if (result.error === "user_not_found" && next.error !== "user_not_found") {
+            result = next;
+          }
+        }
+      }
       if (!result.ok || !result.removed) {
         return reply.code(result.error === "device_not_found" ? 404 : 502).send({
           ok: false,

@@ -3,12 +3,14 @@ import { apiFetch } from "../shared/api/client";
 import { PageBackButton } from "../shared/ui/PageBackButton";
 
 type ReviewStatus = "pending" | "published" | "hidden";
+type AuthorVisibility = "public" | "masked" | "hidden";
 
 type ReviewComment = {
   id: number;
   reviewId: number;
   text: string;
   author: string;
+  authorVisibility?: AuthorVisibility;
   status: ReviewStatus;
   mine?: boolean;
   canModerate?: boolean;
@@ -21,6 +23,7 @@ type Review = {
   rating: number;
   text: string;
   author: string;
+  authorVisibility?: AuthorVisibility;
   status: ReviewStatus;
   mine?: boolean;
   canModerate?: boolean;
@@ -31,11 +34,17 @@ type Review = {
 
 type ReviewFilter = "public" | "pending" | "hidden" | "all";
 
+const AUTHOR_OPTIONS: { value: AuthorVisibility; title: string; hint: string }[] = [
+  { value: "masked", title: "Скрыть часть имени", hint: "Ник будет выглядеть мягко и без лишней публичности." },
+  { value: "public", title: "Показать имя", hint: "Покажем имя так, как оно записано в кабинете." },
+  { value: "hidden", title: "Без имени", hint: "Будет просто «Пользователь Shpun»." },
+];
+
 function fmtDate(v: string) {
   try {
     return new Date(v.replace(" ", "T") + "Z").toLocaleDateString("ru-RU", {
       day: "2-digit",
-      month: "2-digit",
+      month: "long",
       year: "numeric",
     });
   } catch {
@@ -46,7 +55,18 @@ function fmtDate(v: string) {
 function statusLabel(status: ReviewStatus) {
   if (status === "published") return "Опубликовано";
   if (status === "hidden") return "Скрыто";
-  return "На проверке";
+  return "Ждёт модерации";
+}
+
+function visibilityLabel(value?: AuthorVisibility) {
+  if (value === "public") return "имя открыто";
+  if (value === "hidden") return "без имени";
+  return "имя скрыто";
+}
+
+function authorInitial(author: string) {
+  const clean = String(author || "").replace(/^@/, "").trim();
+  return (clean[0] || "S").toUpperCase();
 }
 
 function Stars({ value, onChange }: { value: number; onChange?: (v: number) => void }) {
@@ -72,6 +92,35 @@ function StatusBadge({ status }: { status: ReviewStatus }) {
   return <span className={`reviews-status reviews-status--${status}`}>{statusLabel(status)}</span>;
 }
 
+function AuthorVisibilityPicker({
+  value,
+  onChange,
+}: {
+  value: AuthorVisibility;
+  onChange: (value: AuthorVisibility) => void;
+}) {
+  const current = AUTHOR_OPTIONS.find((x) => x.value === value) ?? AUTHOR_OPTIONS[0];
+
+  return (
+    <div className="reviews-privacy">
+      <div className="reviews-privacy__label">Как подписать отзыв</div>
+      <div className="reviews-privacy__options" role="radiogroup" aria-label="Отображение имени автора">
+        {AUTHOR_OPTIONS.map((item) => (
+          <button
+            key={item.value}
+            type="button"
+            className={`reviews-privacy__option${value === item.value ? " is-active" : ""}`}
+            onClick={() => onChange(item.value)}
+          >
+            {item.title}
+          </button>
+        ))}
+      </div>
+      <div className="reviews-muted">{current.hint}</div>
+    </div>
+  );
+}
+
 export function Reviews() {
   const [items, setItems] = useState<Review[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -81,6 +130,7 @@ export function Reviews() {
   const [notice, setNotice] = useState<string | null>(null);
   const [rating, setRating] = useState(5);
   const [text, setText] = useState("");
+  const [authorVisibility, setAuthorVisibility] = useState<AuthorVisibility>("masked");
   const [busy, setBusy] = useState(false);
   const [commentDrafts, setCommentDrafts] = useState<Record<number, string>>({});
   const [commentBusy, setCommentBusy] = useState<Record<number, boolean>>({});
@@ -131,7 +181,7 @@ export function Reviews() {
     try {
       const data = await apiFetch<{ ok: true; item: Review; message?: string }>("/reviews", {
         method: "POST",
-        body: { rating, text: body },
+        body: { rating, text: body, authorVisibility },
       });
       setItems((prev) => [data.item, ...prev]);
       setText("");
@@ -153,7 +203,7 @@ export function Reviews() {
     try {
       const data = await apiFetch<{ ok: true; item: ReviewComment; message?: string }>(`/reviews/${reviewId}/comments`, {
         method: "POST",
-        body: { text: body },
+        body: { text: body, authorVisibility: "masked" },
       });
       setItems((prev) => prev.map((r) => r.id === reviewId ? { ...r, comments: [...(r.comments ?? []), data.item] } : r));
       setCommentDrafts((prev) => ({ ...prev, [reviewId]: "" }));
@@ -221,14 +271,16 @@ export function Reviews() {
       <PageBackButton />
 
       <div className="card reviews-hero">
-        <div className="card__body">
-          <div className="reviews-hero__kicker">Отзывы</div>
-          <h1 className="h1">Что говорят про Shpun</h1>
-          <p className="p">Живой уголок пользовательских историй: без пресс-релизов, сухих шаблонов и корпоративного пластика.</p>
+        <div className="card__body reviews-hero__body">
+          <div>
+            <div className="reviews-hero__kicker">Отзывы</div>
+            <h1 className="h1">Что говорят про Shpun</h1>
+            <p className="p">Живой уголок пользовательских историй: без пресс-релизов, зато с честным вайбом и лёгкой модерацией — чтобы уют не превращался в подъезд.</p>
+          </div>
           <div className="reviews-hero__stats">
             <span>{publishedItems.length} опубликовано</span>
-            <span>Средняя оценка {avgRating ? avgRating.toFixed(1) : "—"}</span>
-            {isAdmin && <span>{pendingCount} ждёт проверки</span>}
+            <span>Оценка {avgRating ? avgRating.toFixed(1) : "—"}</span>
+            {isAdmin && <span>{pendingCount} ждёт</span>}
           </div>
         </div>
       </div>
@@ -258,7 +310,7 @@ export function Reviews() {
           <div className="reviews-compose__head">
             <div>
               <div className="reviews-card-title">Оставить отзыв</div>
-              <div className="reviews-muted">Напишите как есть: что понравилось, что бесит, чего не хватает.</div>
+              <div className="reviews-muted">Пишите по-человечески: что понравилось, где Shpun красавчик, а где ещё просит напильник.</div>
             </div>
             <Stars value={rating} onChange={setRating} />
           </div>
@@ -267,8 +319,9 @@ export function Reviews() {
             value={text}
             onChange={(e) => setText(e.target.value)}
             maxLength={1200}
-            placeholder="Например: YouTube ожил, мобильный интернет перестал строить из себя улитку..."
+            placeholder="Например: YouTube ожил, мобильный интернет перестал изображать улитку..."
           />
+          <AuthorVisibilityPicker value={authorVisibility} onChange={setAuthorVisibility} />
           <div className="reviews-compose__actions">
             <span className="reviews-muted">{text.trim().length}/1200</span>
             <button className="btn btn--primary" type="button" onClick={() => void submitReview()} disabled={busy || text.trim().length < 8}>
@@ -293,9 +346,15 @@ export function Reviews() {
             <article className={`card reviews-card reviews-card--${r.status}`} key={r.id}>
               <div className="card__body">
                 <div className="reviews-card__top">
-                  <div>
-                    <div className="reviews-author">{r.author}</div>
-                    <div className="reviews-muted">{fmtDate(r.createdAt)}</div>
+                  <div className="reviews-authorBlock">
+                    <div className="reviews-avatar">{authorInitial(r.author)}</div>
+                    <div>
+                      <div className="reviews-authorLine">
+                        <span className="reviews-author">{r.author}</span>
+                        <span className="reviews-authorMode">{visibilityLabel(r.authorVisibility)}</span>
+                      </div>
+                      <div className="reviews-muted">{fmtDate(r.createdAt)}</div>
+                    </div>
                   </div>
                   <div className="reviews-card__meta">
                     <StatusBadge status={r.status} />
@@ -323,7 +382,10 @@ export function Reviews() {
 
                 {r.status !== "hidden" && (
                   <div className="reviews-comments">
-                    <div className="reviews-comments__title">Комментарии</div>
+                    <div className="reviews-comments__title">
+                      <span>Комментарии</span>
+                      <small>{(r.comments ?? []).length}</small>
+                    </div>
                     {(r.comments ?? []).map((c) => (
                       <div className={`reviews-comment reviews-comment--${c.status}`} key={c.id}>
                         <div className="reviews-comment__meta">
