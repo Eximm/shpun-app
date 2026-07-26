@@ -6,6 +6,12 @@ type NetPoint = {
   tx: number;
 };
 
+type CpuPoint = {
+  ts: number;
+  total: number;
+  idle: number;
+};
+
 export type ServerCheckResult = {
   id: number;
   title: string;
@@ -26,6 +32,7 @@ export type ServerCheckResult = {
 
 const scrapeCache = new Map<number, { ts: number; value: any }>();
 const netCache = new Map<number, NetPoint>();
+const cpuCache = new Map<number, CpuPoint>();
 const statusCache = new Map<number, ServerCheckResult>();
 const SCRAPE_CACHE_MS = 25_000;
 const SCRAPE_TIMEOUT_MS = 4_000;
@@ -84,6 +91,37 @@ function maxMetric(metrics: string, name: string, include?: (line: string) => bo
   return max;
 }
 
+function cpuTotals(metrics: string) {
+  let total = 0;
+  let idle = 0;
+  const re = /^node_cpu_seconds_total\{[^\n]*mode="([^"]+)"[^\n]*\}\s+(-?\d+(?:\.\d+)?(?:e[+-]?\d+)?)$/gim;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(metrics))) {
+    const mode = m[1];
+    const n = Number(m[2]);
+    if (!Number.isFinite(n)) continue;
+    total += n;
+    if (mode === "idle") idle += n;
+  }
+  return total > 0 ? { total, idle } : null;
+}
+
+function parseCpuBusy(metrics: string, id: number, now: number) {
+  const point = cpuTotals(metrics);
+  if (!point) return null;
+
+  const prev = cpuCache.get(id);
+  cpuCache.set(id, { ts: now, total: point.total, idle: point.idle });
+  if (!prev || now <= prev.ts) return null;
+
+  const totalDelta = point.total - prev.total;
+  const idleDelta = point.idle - prev.idle;
+  if (totalDelta <= 0 || idleDelta < 0) return null;
+
+  const busy = 100 * (1 - idleDelta / totalDelta);
+  return Math.min(100, Math.max(0, Math.round(busy)));
+}
+
 function fmtUptime(seconds: number | null) {
   if (!seconds || seconds < 0) return null;
   const days = Math.floor(seconds / 86400);
@@ -100,7 +138,8 @@ function parseLoad(metrics: string, uplinkMbps: number | null, id: number, now: 
     ? new Set((metrics.match(/^node_cpu_seconds_total\{[^\n]*cpu="([^"]+)"/gim) || []).map((x) => x.match(/cpu="([^"]+)"/)?.[1]).filter(Boolean)).size
     : 0;
   const load1 = metricValue(metrics, "node_load1");
-  const cpuLoadPct = load1 != null && cores > 0 ? Math.min(100, Math.max(0, Math.round((load1 / cores) * 100))) : null;
+  const systemLoadPct = load1 != null && cores > 0 ? Math.min(100, Math.max(0, Math.round((load1 / cores) * 100))) : null;
+  const cpuLoadPct = parseCpuBusy(metrics, id, now) ?? systemLoadPct;
 
   const rx = sumMetric(metrics, "node_network_receive_bytes_total", (line) => !/device="lo"/.test(line));
   const tx = sumMetric(metrics, "node_network_transmit_bytes_total", (line) => !/device="lo"/.test(line));
@@ -127,8 +166,7 @@ function parseLoad(metrics: string, uplinkMbps: number | null, id: number, now: 
     ? Math.min(100, Math.max(0, Math.round(((memTotal - memAvailable) / memTotal) * 100)))
     : null;
 
-  const candidates = [uplinkLoadPct, cpuLoadPct, memoryLoadPct].filter((x): x is number => x != null);
-  const loadPct = candidates.length ? Math.max(...candidates) : null;
+  const loadPct = cpuLoadPct;
   return { loadPct, cpuLoadPct, uplinkLoadPct, memoryLoadPct, rxMbps, txMbps };
 }
 
