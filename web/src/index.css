@@ -5263,11 +5263,8 @@ button.reviews-star:not(:disabled) {
 .serverStatus-hero .card__body {
   position: relative;
   z-index: 1;
-  display: grid;
-  grid-template-columns: minmax(0,1fr) minmax(180px, 240px);
-  align-items: center;
-  gap: 16px;
-  padding: 14px 16px;
+  display: block;
+  padding: 12px 14px;
 }
 .serverStatus-hero__title {
   min-width: 0;
@@ -5557,6 +5554,10 @@ button.reviews-star:not(:disabled) {
   background: #ff4d6d;
   box-shadow: 0 0 0 4px rgba(255,77,109,0.12), 0 0 18px rgba(255,77,109,0.42);
 }
+.serverStatus-dot--warn {
+  background: #ffd166;
+  box-shadow: 0 0 0 4px rgba(255,209,102,0.12), 0 0 18px rgba(255,209,102,0.34);
+}
 .serverStatus-dot--pending {
   background: rgba(255,255,255,0.45);
   box-shadow: 0 0 0 4px rgba(255,255,255,0.06);
@@ -5603,7 +5604,7 @@ button.reviews-star:not(:disabled) {
 }
 .serverStatus-metrics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0,1fr));
+  grid-template-columns: repeat(3, minmax(0,1fr));
   gap: 4px;
   margin-top: 3px;
 }
@@ -5644,6 +5645,13 @@ button.reviews-star:not(:disabled) {
   gap: 10px;
   margin-top: 12px;
 }
+.admin-serverStatus-form--modal {
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 9px;
+}
+.admin-serverStatus-fieldWide {
+  grid-column: 1 / -1;
+}
 .admin-serverStatus-check {
   display: flex;
   align-items: center;
@@ -5652,6 +5660,59 @@ button.reviews-star:not(:disabled) {
   color: rgba(255,255,255,0.74);
   font-size: 13px;
   font-weight: 850;
+}
+.admin-serverStatus-check--modal {
+  padding: 0 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.035);
+}
+.admin-serverStatus-editor {
+  width: min(720px, calc(100vw - 26px));
+}
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(0,0,0,0.58);
+  backdrop-filter: blur(10px);
+}
+.modalCard {
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  border-radius: 22px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background:
+    radial-gradient(520px 260px at 100% 0%, rgba(77,215,255,0.10), transparent 70%),
+    linear-gradient(145deg, rgba(31,35,48,0.98), rgba(14,16,24,0.98));
+  box-shadow: 0 24px 80px rgba(0,0,0,0.48);
+  padding: 16px;
+}
+.modalCard__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.modalCard__title {
+  margin: 4px 0 0;
+  color: rgba(255,255,255,0.94);
+  font-size: 20px;
+  font-weight: 950;
+}
+.modalCard__close {
+  width: 38px;
+  height: 38px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.82);
+  font-size: 24px;
+  font-weight: 850;
+  cursor: pointer;
 }
 .admin-serverStatus-matrix {
   width: 100%;
@@ -5685,14 +5746,14 @@ button.reviews-star:not(:disabled) {
   color: rgba(255,255,255,0.92);
   font-weight: 950;
 }
-.admin-serverStatus-list { display: grid; gap: 10px; }
+.admin-serverStatus-list { display: grid; gap: 6px; }
 .admin-serverStatus-item {
   display: grid;
   grid-template-columns: minmax(0,1fr) auto;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
-  padding: 12px;
-  border-radius: 16px;
+  padding: 8px 10px;
+  border-radius: 13px;
   border: 1px solid rgba(255,255,255,0.08);
   background: rgba(255,255,255,0.035);
 }
@@ -5700,9 +5761,23 @@ button.reviews-star:not(:disabled) {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: rgba(255,255,255,0.90);
-  font-size: 14px;
+  color: rgba(255,255,255,0.92);
+  font-size: 13px;
   font-weight: 950;
+}
+.admin-serverStatus-item .list__sub {
+  margin-top: 2px;
+  font-size: 10.5px;
+  line-height: 1.25;
+}
+.admin-serverStatus-item .actions {
+  gap: 6px;
+}
+.admin-serverStatus-item .actions .btn {
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 10px;
+  font-size: 11px;
 }
 
 @media (max-width: 560px) {
@@ -5751,10 +5826,7 @@ button.reviews-star:not(:disabled) {
 
 @media (max-width: 520px) {
   .serverStatus-hero .card__body {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 9px;
-    padding: 12px;
+    padding: 11px 12px;
   }
   .serverStatus-hero .h1 {
     font-size: 18px;
@@ -5783,9 +5855,24 @@ button.reviews-star:not(:disabled) {
     gap: 6px;
   }
   .serverStatus-metrics {
-    grid-template-columns: repeat(4, minmax(0,1fr));
+    grid-template-columns: repeat(3, minmax(0,1fr));
   }
   .serverStatus-group__head p { display: none; }
+  .admin-serverStatus-form--modal {
+    grid-template-columns: 1fr;
+  }
+  .admin-serverStatus-fieldWide {
+    grid-column: auto;
+  }
+  .admin-serverStatus-item {
+    grid-template-columns: 1fr;
+  }
+  .admin-serverStatus-item .actions {
+    justify-content: stretch;
+  }
+  .admin-serverStatus-item .actions .btn {
+    flex: 1;
+  }
 }
 
 @media (min-width: 780px) {

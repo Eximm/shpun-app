@@ -11,6 +11,11 @@ type StatusItem = {
   latencyMs: number | null;
   uptime: string | null;
   loadPct: number | null;
+  cpuLoadPct?: number | null;
+  uplinkLoadPct?: number | null;
+  memoryLoadPct?: number | null;
+  rxMbps?: number | null;
+  txMbps?: number | null;
   checkedAt: string | null;
 };
 
@@ -26,7 +31,7 @@ type StatusResp = {
 
 type SummaryTone = "online" | "warn" | "offline" | "pending";
 
-function timeAgo(iso?: string) {
+function timeAgo(iso?: string | null) {
   const ts = iso ? Date.parse(iso) : 0;
   if (!Number.isFinite(ts) || ts <= 0) return "—";
   const sec = Math.max(0, Math.round((Date.now() - ts) / 1000));
@@ -52,31 +57,33 @@ function summarySeed(total: number, online: number, offline: number, hot: number
   return total * 17 + online * 13 + offline * 7 + hot * 5 + minute;
 }
 
+function countHot(items: StatusItem[], threshold: number) {
+  return items.filter((x) => (x.loadPct ?? 0) >= threshold).length;
+}
+
 function buildSummary(data: StatusResp | null) {
-  const items = [...(data?.vpn ?? []), ...(data?.infra ?? [])];
   const vpn = data?.vpn ?? [];
   const infra = data?.infra ?? [];
+  const items = [...vpn, ...infra];
   const total = items.length;
   const checked = items.filter((x) => x.online != null).length;
   const online = items.filter((x) => x.online === true).length;
-  const offline = items.filter((x) => x.online === false).length;
   const infraOffline = infra.filter((x) => x.online === false).length;
   const vpnOffline = vpn.filter((x) => x.online === false).length;
-  const hot = items.filter((x) => (x.loadPct ?? 0) >= 65).length;
-  const overloaded = items.filter((x) => (x.loadPct ?? 0) >= 85).length;
+  const infraHot = countHot(infra, 65);
+  const vpnHot = countHot(vpn, 65);
+  const overloaded = countHot(items, 85);
   const maxLoad = Math.max(0, ...items.map((x) => x.loadPct ?? 0));
-  const slow = items.filter((x) => (x.latencyMs ?? 0) >= 500).length;
-  const verySlow = items.filter((x) => (x.latencyMs ?? 0) >= 900).length;
-  const seed = summarySeed(total, online, offline, hot);
+  const seed = summarySeed(total, online, infraOffline + vpnOffline, infraHot + vpnHot);
 
   if (!total) {
     return {
       tone: "pending" as SummaryTone,
       title: "Мониторинг готовится",
       text: pickVariant([
-        "Серверы ещё не добавлены. Как только появятся узлы — тут будет нормальная живая сводка.",
-        "Пока список пустой. Добавим серверы — и раздел начнёт показывать реальную картину.",
-        "Мониторинг включён, но смотреть ему пока не на кого. Это легко поправимо.",
+        "Список серверов пока пустой. Добавим узлы — и здесь появится нормальная живая сводка.",
+        "Пока смотреть не на кого, но место под табло уже занято.",
+        "Мониторинг включён, осталось добавить серверы в админке.",
       ], seed),
       stats: "0/0",
     };
@@ -88,8 +95,8 @@ function buildSummary(data: StatusResp | null) {
       title: "Собираем телеметрию",
       text: pickVariant([
         "Первый снимок ещё готовится. Страница не ждёт опрос — данные появятся сами.",
-        "Даём серверам пару секунд ответить. Обычно это быстрее, чем найти зарядку.",
-        "Мониторинг проснулся и собирает первые ответы. Сейчас всё разложим по полочкам.",
+        "Даём серверам ответить по очереди, без набега всей толпой.",
+        "Мониторинг проснулся и раскладывает первые ответы по полочкам.",
       ], seed),
       stats: `${checked}/${total}`,
     };
@@ -98,33 +105,46 @@ function buildSummary(data: StatusResp | null) {
   if (infraOffline > 0) {
     return {
       tone: "offline" as SummaryTone,
-      title: infraOffline > 1 ? "Служебная часть просела" : "Кабинет требует внимания",
+      title: infraOffline > 1 ? "Служебный контур просел" : "Нужна проверка инфраструктуры",
       text: pickVariant([
-        "Кабинет или подписки отвечают не полностью. Пользовательская часть может вести себя неровно.",
-        "Проблема не в VPN-нодах: один из служебных узлов не ответил на проверку.",
-        "Служебный контур моргнул красным. Лучше проверить кабинет и авторизацию подписок.",
-        "Инфраструктурный узел молчит. Тут уже не про скорость, а про доступность сервиса.",
+        "Кабинет или сервер подписок не отвечает. Это важнее отдельной VPN-ноды — лучше проверить сразу.",
+        "Есть проблема в служебной части: авторизация, кабинет или подписки могут вести себя неровно.",
+        "VPN-направления могут быть живы, но служебный узел не ответил. Это уже повод заглянуть внутрь.",
+      ], seed),
+      stats: `${online}/${total}`,
+    };
+  }
+
+  if (infraHot > 0) {
+    return {
+      tone: "warn" as SummaryTone,
+      title: "Служебные серверы под нагрузкой",
+      text: pickVariant([
+        "Кабинет и подписки отвечают, но один из служебных узлов работает плотнее обычного.",
+        "Сервис доступен, однако служебная часть сейчас трудится заметнее. Держим глаз на табло.",
+        "Основные узлы на связи, но нагрузка в инфраструктуре уже просит внимания.",
       ], seed),
       stats: `${online}/${total}`,
     };
   }
 
   if (vpnOffline > 0) {
-    const manyOffline = vpnOffline >= Math.ceil(Math.max(1, vpn.length) / 3);
+    const vpnRatio = vpn.length ? vpnOffline / vpn.length : 0;
+    const serious = vpnOffline >= 3 || vpnRatio >= 0.25;
     return {
-      tone: manyOffline ? "offline" as SummaryTone : "warn" as SummaryTone,
-      title: manyOffline ? "Часть VPN-направлений недоступна" : "Одна из VPN-нод не отвечает",
+      tone: serious ? "offline" as SummaryTone : "warn" as SummaryTone,
+      title: serious ? "Часть VPN-сети недоступна" : "Точечная проблема на VPN-ноде",
       text: pickVariant(
-        manyOffline
+        serious
           ? [
-              `${vpnOffline} VPN-нод сейчас не отвечают. Рабочие направления продолжают держать сервис.`,
-              `Не всё спокойно: несколько VPN-направлений недоступны, но часть сети остаётся в строю.`,
-              `${vpnOffline} VPN-нод выпали из мониторинга. Похоже, пора заглянуть в сеть внимательнее.`,
+              `${vpnOffline} VPN-ноды сейчас не отвечают. Служебная часть жива, но сеть стоит проверить.`,
+              "Несколько VPN-направлений выпали из мониторинга. Пользователи могут заметить просадку по отдельным локациям.",
+              "VPN-сеть не в полном составе. Не катастрофа, но уже не то состояние, где можно махнуть рукой.",
             ]
           : [
-              "Одна VPN-нода не отвечает. Для пользователя всё может быть нормально, но проверить стоит.",
-              "Один участок сети задумался. Остальные направления на связи.",
-              "Есть точечная проблема на VPN-ноде. Не пожар, но заметку на полях оставляем.",
+              "Одна-две VPN-ноды не отвечают. Основная система работает, остальные направления остаются доступными.",
+              "Есть точечная проблема на VPN-направлении. Не пожар, но заметку на полях оставляем.",
+              "Служебные серверы в порядке, а одна VPN-нода решила взять паузу. Проверить стоит, паниковать — нет.",
             ],
         seed,
       ),
@@ -138,36 +158,21 @@ function buildSummary(data: StatusResp | null) {
       title: "Есть высокая нагрузка",
       text: pickVariant([
         `Все узлы отвечают, но один из серверов дошёл до ${maxLoad}% нагрузки.`,
-        "Связь есть, но часть системы уже работает на повышенных оборотах.",
+        "Связь есть, но часть системы работает на повышенных оборотах.",
         "Сервис доступен, однако нагрузка местами высокая. Наблюдаем внимательнее.",
-        "Серверы держатся, но одному из них явно достался вечерний забег.",
       ], seed),
       stats: `${online}/${total}`,
     };
   }
 
-  if (verySlow > 0) {
+  if (vpnHot > 1) {
     return {
       tone: "warn" as SummaryTone,
-      title: "Есть медленные ответы",
+      title: "VPN-сеть трудится плотнее",
       text: pickVariant([
-        "Узлы на связи, но часть ответов заметно медленнее обычного.",
-        "Доступность нормальная, а вот отклик местами задумчивый.",
-        "Сервис живой, но несколько проверок вернулись с тяжёлым пингом.",
-      ], seed),
-      stats: `${online}/${total}`,
-    };
-  }
-
-  if (hot > 1 || slow > 1) {
-    return {
-      tone: "warn" as SummaryTone,
-      title: hot > 1 ? "Система трудится" : "Сеть задумалась",
-      text: pickVariant([
-        "Все узлы на связи, но часть серверов работает плотнее обычного.",
-        "Связь есть, сервис живой, просто некоторые узлы сегодня не прохлаждаются.",
-        "Всё отвечает, но нагрузка местами подросла. Следим, чтобы не перегрелось.",
-        "Всё в строю, но несколько показателей уже просят присмотра.",
+        "Все узлы отвечают, но несколько VPN-направлений сегодня не прохлаждаются.",
+        "Сеть живая, нагрузка местами подросла. Пока штатно, но без сна на посту.",
+        "Пользоваться можно спокойно, просто отдельные VPN-ноды сейчас работают активнее обычного.",
       ], seed),
       stats: `${online}/${total}`,
     };
@@ -177,16 +182,16 @@ function buildSummary(data: StatusResp | null) {
     tone: "online" as SummaryTone,
     title: "Система стабильна",
     text: pickVariant([
-      "Все узлы на связи, нагрузка спокойная. Можно пользоваться без лишней драматургии.",
-      "Сервис отвечает штатно, серверы не нервничают, всё выглядит ровно.",
-      "Картина хорошая: узлы доступны, нагрузка в норме, поводов для суеты нет.",
-      "Всё зелёное и бодрое. Именно так мы это и любим.",
+      "Кабинет, подписки и VPN-ноды на связи. Всё зелёное и бодрое.",
+      "Служебные серверы отвечают, VPN-направления в строю. Можно без лишней драматургии.",
+      "Картина хорошая: узлы доступны, нагрузка спокойная, поводов для суеты нет.",
+      "Шпун держит строй: кабинет живой, подписки доступны, VPN-ноды отвечают.",
     ], seed),
     stats: `${online}/${total}`,
   };
 }
 
-function buildGroupSummary(items: StatusItem[], emptyTitle: string) {
+function buildGroupSummary(items: StatusItem[], emptyTitle: string, important = false) {
   const total = items.length;
   const online = items.filter((x) => x.online === true).length;
   const offline = items.filter((x) => x.online === false).length;
@@ -206,19 +211,19 @@ function buildGroupSummary(items: StatusItem[], emptyTitle: string) {
   if (pending === total) {
     return {
       tone: "pending" as const,
-      title: "Собираем данные",
+      title: "Опрос ещё идёт",
       value: `${online}/${total}`,
-      sub: "идёт первый опрос",
+      sub: "ждём первый снимок",
       load: null as number | null,
     };
   }
 
   if (offline > 0) {
     return {
-      tone: "offline" as const,
-      title: offline === 1 ? "Есть один молчун" : "Есть молчуны",
+      tone: important || offline > 2 ? "offline" as const : "warn" as const,
+      title: offline === 1 ? "1 не отвечает" : `${offline} не отвечают`,
       value: `${online}/${total}`,
-      sub: `${offline} не отвечает`,
+      sub: important ? "важный контур" : "остальные в строю",
       load: maxLoad,
     };
   }
@@ -236,7 +241,7 @@ function buildGroupSummary(items: StatusItem[], emptyTitle: string) {
   if (maxLoad >= 65) {
     return {
       tone: "warn" as const,
-      title: "Трудится плотнее",
+      title: "Работает плотнее",
       value: `${online}/${total}`,
       sub: `пик ${maxLoad}%`,
       load: maxLoad,
@@ -267,6 +272,7 @@ function regionForTitle(title: string) {
   if (/\bfi\b|helsinki|finland|фин/.test(t)) return "FI";
   if (/\bnl\b|meppel|netherlands|нидер/.test(t)) return "NL";
   if (/\btl\b|tallin|tallinn|estonia|эстон/.test(t)) return "EE";
+  if (/\blv\b|riga|latvia|латв/.test(t)) return "LV";
   if (/\bde\b|frankfurt|germany|герман/.test(t)) return "DE";
   return "VPN";
 }
@@ -285,10 +291,9 @@ function ServerCard({ item }: { item: StatusItem }) {
         <span style={{ width: `${loadPct}%` }} />
       </div>
       <div className="serverStatus-metrics" aria-label="Показатели сервера">
-        <span><small>апт</small><b>{item.uptime || "—"}</b></span>
-        <span><small>пинг</small><b>{item.latencyMs != null ? `${item.latencyMs} мс` : "—"}</b></span>
-        <span className={`serverStatus-load serverStatus-load--${loadTone(item.loadPct)}`}><small>load</small><b>{item.loadPct != null ? `${item.loadPct}%` : "—"}</b></span>
-        <span className="serverStatus-card__checked"><small>опрос</small><b>{item.checkedAt ? timeAgo(item.checkedAt) : "ждём"}</b></span>
+        <span><small>аптайм</small><b>{item.uptime || "—"}</b></span>
+        <span className={`serverStatus-load serverStatus-load--${loadTone(item.loadPct)}`}><small>нагрузка</small><b>{item.loadPct != null ? `${item.loadPct}%` : "—"}</b></span>
+        <span className="serverStatus-card__checked"><small>проверка</small><b>{item.checkedAt ? timeAgo(item.checkedAt) : "ждём"}</b></span>
       </div>
     </div>
   );
@@ -297,7 +302,7 @@ function ServerCard({ item }: { item: StatusItem }) {
 function StatusOverview({ data }: { data: StatusResp | null }) {
   const summary = useMemo(() => buildSummary(data), [data]);
   const vpnSummary = useMemo(() => buildGroupSummary(data?.vpn ?? [], "VPN-ноды не добавлены"), [data]);
-  const infraSummary = useMemo(() => buildGroupSummary(data?.infra ?? [], "Кабинет не добавлен"), [data]);
+  const infraSummary = useMemo(() => buildGroupSummary(data?.infra ?? [], "Кабинет не добавлен", true), [data]);
   return (
     <div className={`serverStatus-summary serverStatus-summary--${summary.tone}`}>
       <div className="serverStatus-summary__top">
@@ -369,44 +374,23 @@ function StatusGroup({ title, sub, items, defaultOpen = false }: { title: string
 
 export function ServerStatus() {
   const [data, setData] = useState<StatusResp | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function load(silent = false) {
-    if (!silent) setLoading(true);
+  async function load() {
     setError(null);
     try {
       const r = await apiFetch<StatusResp>("/server-status", { method: "GET" });
       setData(r);
     } catch (e: any) {
       setError(e?.message || "Не удалось загрузить статус серверов.");
-    } finally {
-      if (!silent) setLoading(false);
     }
   }
 
   useEffect(() => {
     void load();
-    const timer = window.setInterval(() => void load(true), 30_000);
+    const timer = window.setInterval(() => void load(), 30_000);
     return () => window.clearInterval(timer);
   }, []);
-
-  async function refreshNow() {
-    if (refreshing) return;
-    setRefreshing(true);
-    setError(null);
-    try {
-      await apiFetch("/server-status/refresh", { method: "POST" });
-      await load(true);
-      window.setTimeout(() => void load(true), 2_500);
-      window.setTimeout(() => void load(true), 6_000);
-    } catch (e: any) {
-      setError(e?.message || "Не удалось обновить статус серверов.");
-    } finally {
-      setRefreshing(false);
-    }
-  }
 
   return (
     <div className="section miniPage serverStatus-page">
@@ -419,11 +403,6 @@ export function ServerStatus() {
             <h1 className="h1">Состояние системы</h1>
             <p className="p miniPage__subtitle">Короткая сводка по кабинету, подпискам и VPN-нодам.</p>
           </div>
-          <div className="serverStatus-actions">
-            <button className="btn btn--primary" type="button" onClick={() => void refreshNow()} disabled={loading || refreshing || data?.refreshing}>
-              {refreshing || data?.refreshing ? "Обновляем…" : "Обновить"}
-            </button>
-          </div>
           {error && <div className="pre" style={{ marginTop: 12 }}>{error}</div>}
         </div>
       </div>
@@ -431,13 +410,13 @@ export function ServerStatus() {
       <StatusOverview data={data} />
       <StatusGroup
         title="VPN-серверы"
-        sub="Ноды, которые используются для подключений."
+        sub="Направления для подключений. Подробности закрыты, чтобы не занимать экран без нужды."
         items={data?.vpn ?? []}
         defaultOpen={(data?.vpn ?? []).some((x) => x.online !== true)}
       />
       <StatusGroup
         title="Кабинет и подписки"
-        sub="Служебные узлы приложения и инфраструктуры."
+        sub="Служебная часть сервиса: кабинет, авторизация и выдача подписок."
         items={data?.infra ?? []}
         defaultOpen={(data?.infra ?? []).some((x) => x.online !== true)}
       />

@@ -89,6 +89,7 @@ export function ServerStatusSection() {
   const [form, setForm] = useState(EMPTY);
   const [matrixText, setMatrixText] = useState(DEFAULT_SERVER_MATRIX);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -110,6 +111,12 @@ export function ServerStatusSection() {
 
   useEffect(() => { void load(); }, []);
 
+  function startCreate() {
+    setEditingId(null);
+    setForm(EMPTY);
+    setEditorOpen(true);
+  }
+
   function edit(item: MonitoredServer) {
     setEditingId(item.id);
     setForm({
@@ -121,11 +128,13 @@ export function ServerStatusSection() {
       uplinkMbps: item.uplink_mbps != null ? String(item.uplink_mbps) : "",
       active: Number(item.active) === 1,
     });
+    setEditorOpen(true);
   }
 
   function reset() {
     setEditingId(null);
     setForm(EMPTY);
+    setEditorOpen(false);
   }
 
   async function save() {
@@ -208,50 +217,12 @@ export function ServerStatusSection() {
             <div>
               <div className="kicker">Server status</div>
               <h2 className="h2">Мониторинг серверов</h2>
-              <p className="p">Добавляем домен, exporter и тип сервера. Пользователю показываем только лампочку, аптайм, отклик и компактную нагрузку.</p>
+              <p className="p">Компактное управление нодами мониторинга. Домен и exporter остаются внутренней кухней.</p>
             </div>
-            <button className="btn" type="button" onClick={() => void load()} disabled={loading}>Обновить</button>
-          </div>
-
-          <div className="admin-serverStatus-form">
-            <label className="field">
-              <span className="field__label">Название</span>
-              <input className="input" value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} placeholder="NL · Amsterdam" />
-            </label>
-            <label className="field">
-              <span className="field__label">Домен/IP</span>
-              <input className="input" value={form.host} onChange={(e) => setForm((p) => ({ ...p, host: e.target.value }))} placeholder="nl-01.example.com" />
-            </label>
-            <label className="field">
-              <span className="field__label">Node exporter URL</span>
-              <input className="input" value={form.exporterUrl} onChange={(e) => setForm((p) => ({ ...p, exporterUrl: e.target.value }))} placeholder="http://nl-01.example.com:9100/metrics" />
-            </label>
-            <label className="field">
-              <span className="field__label">Тип</span>
-              <select className="input" value={form.kind} onChange={(e) => setForm((p) => ({ ...p, kind: e.target.value === "infra" ? "infra" : "vpn" }))}>
-                <option value="vpn">VPN-сервер</option>
-                <option value="infra">Кабинет/подписки</option>
-              </select>
-            </label>
-            <label className="field">
-              <span className="field__label">Порядок</span>
-              <input className="input" type="number" value={form.sortOrder} onChange={(e) => setForm((p) => ({ ...p, sortOrder: Number(e.target.value) }))} />
-            </label>
-            <label className="field">
-              <span className="field__label">Uplink, Mbps</span>
-              <input className="input" type="number" value={form.uplinkMbps} onChange={(e) => setForm((p) => ({ ...p, uplinkMbps: e.target.value }))} placeholder="1000" />
-            </label>
-            <label className="admin-serverStatus-check">
-              <input type="checkbox" checked={form.active} onChange={(e) => setForm((p) => ({ ...p, active: e.target.checked }))} />
-              Активен
-            </label>
-          </div>
-
-          <div className="actions actions--2 admin-gap-top-sm">
-            <button className="btn btn--primary" type="button" onClick={() => void save()} disabled={busy || !form.host.trim()}>
-              {editingId ? "Сохранить" : "Добавить сервер"}
-            </button>
-            {editingId && <button className="btn" type="button" onClick={reset}>Отмена</button>}
+            <div className="actions">
+              <button className="btn" type="button" onClick={() => void load()} disabled={loading}>Обновить список</button>
+              <button className="btn btn--primary" type="button" onClick={startCreate}>Новая нода</button>
+            </div>
           </div>
 
           {error && <div className="pre admin-gap-top-sm">{error}</div>}
@@ -325,6 +296,61 @@ export function ServerStatusSection() {
           </div>
         </div>
       </div>
+
+      {editorOpen && (
+        <div className="modalBackdrop" role="presentation" onMouseDown={reset}>
+          <div className="modalCard admin-serverStatus-editor" role="dialog" aria-modal="true" aria-label={editingId ? "Редактировать ноду" : "Добавить ноду"} onMouseDown={(e) => e.stopPropagation()}>
+            <div className="modalCard__head">
+              <div>
+                <div className="kicker">Node exporter</div>
+                <h3 className="modalCard__title">{editingId ? "Редактировать ноду" : "Новая нода"}</h3>
+              </div>
+              <button className="modalCard__close" type="button" onClick={reset}>×</button>
+            </div>
+
+            <div className="admin-serverStatus-form admin-serverStatus-form--modal">
+              <label className="field">
+                <span className="field__label">Название</span>
+                <input className="input" value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} placeholder="Riga LV" />
+              </label>
+              <label className="field">
+                <span className="field__label">Домен/IP</span>
+                <input className="input" value={form.host} onChange={(e) => setForm((p) => ({ ...p, host: e.target.value }))} placeholder="lv.shpyn.online" />
+              </label>
+              <label className="field admin-serverStatus-fieldWide">
+                <span className="field__label">Node exporter URL</span>
+                <input className="input" value={form.exporterUrl} onChange={(e) => setForm((p) => ({ ...p, exporterUrl: e.target.value }))} placeholder="http://lv.shpyn.online:9100/metrics" />
+              </label>
+              <label className="field">
+                <span className="field__label">Тип</span>
+                <select className="input" value={form.kind} onChange={(e) => setForm((p) => ({ ...p, kind: e.target.value === "infra" ? "infra" : "vpn" }))}>
+                  <option value="vpn">VPN-сервер</option>
+                  <option value="infra">Кабинет/подписки</option>
+                </select>
+              </label>
+              <label className="field">
+                <span className="field__label">Порядок</span>
+                <input className="input" type="number" value={form.sortOrder} onChange={(e) => setForm((p) => ({ ...p, sortOrder: Number(e.target.value) }))} />
+              </label>
+              <label className="field">
+                <span className="field__label">Uplink, Mbps</span>
+                <input className="input" type="number" value={form.uplinkMbps} onChange={(e) => setForm((p) => ({ ...p, uplinkMbps: e.target.value }))} placeholder="1000" />
+              </label>
+              <label className="admin-serverStatus-check admin-serverStatus-check--modal">
+                <input type="checkbox" checked={form.active} onChange={(e) => setForm((p) => ({ ...p, active: e.target.checked }))} />
+                Активна
+              </label>
+            </div>
+
+            <div className="actions actions--2 admin-gap-top-sm">
+              <button className="btn btn--primary" type="button" onClick={() => void save()} disabled={busy || !form.host.trim()}>
+                {editingId ? "Сохранить" : "Добавить"}
+              </button>
+              <button className="btn" type="button" onClick={reset} disabled={busy}>Отмена</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

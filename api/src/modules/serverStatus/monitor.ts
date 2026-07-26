@@ -18,6 +18,9 @@ export type ServerCheckResult = {
   loadPct: number | null;
   cpuLoadPct: number | null;
   uplinkLoadPct: number | null;
+  memoryLoadPct: number | null;
+  rxMbps: number | null;
+  txMbps: number | null;
   checkedAt: string | null;
 };
 
@@ -26,11 +29,11 @@ const netCache = new Map<number, NetPoint>();
 const statusCache = new Map<number, ServerCheckResult>();
 const SCRAPE_CACHE_MS = 25_000;
 const SCRAPE_TIMEOUT_MS = 4_000;
-const STATUS_REFRESH_MS = 60_000;
-const MANUAL_REFRESH_MIN_MS = 20_000;
-const AUTO_REFRESH_MIN_MS = 45_000;
-const CHECK_SPACING_MS = 350;
-const CHECK_JITTER_MS = 650;
+const STATUS_REFRESH_MS = 120_000;
+const MANUAL_REFRESH_MIN_MS = 30_000;
+const AUTO_REFRESH_MIN_MS = 90_000;
+const CHECK_SPACING_MS = 900;
+const CHECK_JITTER_MS = 1_600;
 
 let refreshInFlight: Promise<{ started: boolean; reason: string }> | null = null;
 let refreshTimer: ReturnType<typeof setInterval> | null = null;
@@ -68,6 +71,19 @@ function sumMetric(metrics: string, name: string, include?: (line: string) => bo
   return sum;
 }
 
+function maxMetric(metrics: string, name: string, include?: (line: string) => boolean) {
+  let max: number | null = null;
+  const re = new RegExp(`^(${name}(?:\\{[^\\n]*\\})?)\\s+(-?\\d+(?:\\.\\d+)?(?:e[+-]?\\d+)?)$`, "gim");
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(metrics))) {
+    const line = m[1] || "";
+    if (include && !include(line)) continue;
+    const n = Number(m[2]);
+    if (Number.isFinite(n) && n > 0) max = max == null ? n : Math.max(max, n);
+  }
+  return max;
+}
+
 function fmtUptime(seconds: number | null) {
   if (!seconds || seconds < 0) return null;
   const days = Math.floor(seconds / 86400);
@@ -88,19 +104,32 @@ function parseLoad(metrics: string, uplinkMbps: number | null, id: number, now: 
 
   const rx = sumMetric(metrics, "node_network_receive_bytes_total", (line) => !/device="lo"/.test(line));
   const tx = sumMetric(metrics, "node_network_transmit_bytes_total", (line) => !/device="lo"/.test(line));
+  const nodeSpeedBytes = maxMetric(metrics, "node_network_speed_bytes", (line) => !/device="lo"/.test(line));
+  const detectedUplinkMbps = nodeSpeedBytes != null ? Math.round((nodeSpeedBytes * 8) / 1_000_000) : null;
+  const effectiveUplinkMbps = detectedUplinkMbps && detectedUplinkMbps > 0 ? detectedUplinkMbps : uplinkMbps;
   const prev = netCache.get(id);
   netCache.set(id, { ts: now, rx, tx });
 
   let uplinkLoadPct: number | null = null;
-  if (prev && uplinkMbps && uplinkMbps > 0 && now > prev.ts) {
+  let rxMbps: number | null = null;
+  let txMbps: number | null = null;
+  if (prev && effectiveUplinkMbps && effectiveUplinkMbps > 0 && now > prev.ts) {
     const seconds = (now - prev.ts) / 1000;
-    const bytesPerSec = Math.max(0, (rx - prev.rx) + (tx - prev.tx)) / seconds;
-    const mbps = (bytesPerSec * 8) / 1_000_000;
-    uplinkLoadPct = Math.min(100, Math.max(0, Math.round((mbps / uplinkMbps) * 100)));
+    rxMbps = Math.max(0, ((rx - prev.rx) * 8) / seconds / 1_000_000);
+    txMbps = Math.max(0, ((tx - prev.tx) * 8) / seconds / 1_000_000);
+    const totalMbps = rxMbps + txMbps;
+    uplinkLoadPct = Math.min(100, Math.max(0, Math.round((totalMbps / effectiveUplinkMbps) * 100)));
   }
 
-  const loadPct = uplinkLoadPct ?? cpuLoadPct;
-  return { loadPct, cpuLoadPct, uplinkLoadPct };
+  const memTotal = metricValue(metrics, "node_memory_MemTotal_bytes");
+  const memAvailable = metricValue(metrics, "node_memory_MemAvailable_bytes");
+  const memoryLoadPct = memTotal && memTotal > 0 && memAvailable != null
+    ? Math.min(100, Math.max(0, Math.round(((memTotal - memAvailable) / memTotal) * 100)))
+    : null;
+
+  const candidates = [uplinkLoadPct, cpuLoadPct, memoryLoadPct].filter((x): x is number => x != null);
+  const loadPct = candidates.length ? Math.max(...candidates) : null;
+  return { loadPct, cpuLoadPct, uplinkLoadPct, memoryLoadPct, rxMbps, txMbps };
 }
 
 function normalizeCachedValue(row: MonitoredServerRow, value: ServerCheckResult): ServerCheckResult {
@@ -126,6 +155,9 @@ function pendingStatus(row: MonitoredServerRow): ServerCheckResult {
     loadPct: null,
     cpuLoadPct: null,
     uplinkLoadPct: null,
+    memoryLoadPct: null,
+    rxMbps: null,
+    txMbps: null,
     checkedAt: null,
   };
 }
@@ -183,6 +215,9 @@ export async function checkServer(row: MonitoredServerRow): Promise<ServerCheckR
       loadPct: load.loadPct,
       cpuLoadPct: load.cpuLoadPct,
       uplinkLoadPct: load.uplinkLoadPct,
+      memoryLoadPct: load.memoryLoadPct,
+      rxMbps: load.rxMbps,
+      txMbps: load.txMbps,
       checkedAt: new Date().toISOString(),
     };
     scrapeCache.set(row.id, { ts: Date.now(), value });
@@ -201,6 +236,9 @@ export async function checkServer(row: MonitoredServerRow): Promise<ServerCheckR
       loadPct: null,
       cpuLoadPct: null,
       uplinkLoadPct: null,
+      memoryLoadPct: null,
+      rxMbps: null,
+      txMbps: null,
       checkedAt: new Date().toISOString(),
     };
     scrapeCache.set(row.id, { ts: Date.now(), value });
