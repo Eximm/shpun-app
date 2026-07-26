@@ -87,6 +87,10 @@ function remnawaveUsernameForService(category: string, usi: number) {
   return `${normalized.includes("wl") ? "uswl" : "us"}_${usi}`;
 }
 
+function isRemnawaveUsername(value: unknown) {
+  return /^(us|uswl)_[0-9]+$/.test(String(value ?? "").trim());
+}
+
 function remnawaveUsernameFromSubscriptionUrl(value: unknown) {
   const raw = String(value ?? "").trim();
   if (!raw) return "";
@@ -126,7 +130,7 @@ async function resolveOwnedRemnawaveUser(shmSessionId: string, usi: number) {
   const candidates = [
     await resolveRemnawaveUsernameFromBilling(shmSessionId, usi),
     remnawaveUsernameForService(category, usi),
-  ].map((x) => String(x ?? "").trim()).filter(Boolean);
+  ].map((x) => String(x ?? "").trim()).filter(isRemnawaveUsername);
   const usernames = Array.from(new Set(candidates));
   const username = usernames[0];
   if (!username) return { ok: false as const, status: 400, error: "hwid_not_available" };
@@ -805,6 +809,12 @@ export async function servicesRoutes(app: FastifyInstance) {
       }
 
       const devices = Array.isArray(result.devices) ? result.devices : [];
+      req.log.info({
+        usi,
+        usernames: ownedUser.usernames,
+        devices: devices.length,
+        limit: typeof result.limit === "number" ? result.limit : null,
+      }, "Loaded Remnawave devices");
       return reply.send({
         ok: true,
         limit: typeof result.limit === "number" ? result.limit : null,
