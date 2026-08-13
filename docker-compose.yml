@@ -10,6 +10,7 @@ services:
       - "127.0.0.1:8091:3000"
     volumes:
       - /opt/shpun-app/data:/data:rw
+      - /opt/shpunapp-secrets:/opt/shpunapp-secrets:ro
     env_file:
       - /opt/shpun-app/.env
     environment:
