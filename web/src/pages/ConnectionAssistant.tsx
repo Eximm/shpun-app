@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMe } from "../app/auth/useMe";
+import { EmailVerifyModal } from "./Profile";
 import { apiFetch } from "../shared/api/client";
 import { useI18n } from "../shared/i18n";
 import { toastApiError } from "../shared/ui/toast/toastApiError";
@@ -29,29 +30,6 @@ type Screen = "offer" | "device";
 
 const SNOOZE_KEY = "connection-assistant.snoozed-until.v1";
 const SCREEN_KEY = "connection-assistant.screen.v1";
-const EMAIL_CODE_SENT_KEY = "email_verify:sent_at";
-const EMAIL_CODE_COOLDOWN_MS = 60_000;
-
-function emailCooldownLeft() {
-  try {
-    const sentAt = Number(localStorage.getItem(EMAIL_CODE_SENT_KEY) || "0");
-    return Math.max(0, Math.ceil((sentAt + EMAIL_CODE_COOLDOWN_MS - Date.now()) / 1000));
-  } catch {
-    return 0;
-  }
-}
-
-function rememberEmailCodeSent() {
-  try { localStorage.setItem(EMAIL_CODE_SENT_KEY, String(Date.now())); } catch { /* ignore */ }
-}
-
-function clearEmailCodeSent() {
-  try { localStorage.removeItem(EMAIL_CODE_SENT_KEY); } catch { /* ignore */ }
-}
-
-function isValidEmail(value: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-}
 
 function statusWeight(status: ServiceStatus): number {
   const weights: Record<ServiceStatus, number> = {
@@ -106,11 +84,12 @@ function AssistantLanguageSwitch({
   );
 }
 
-function AssistantEmailVerification({
+function AssistantEmailGate({
   email,
   lang,
   setLang,
   onVerified,
+  onEmailSaved,
   onBack,
   onLater,
   t,
@@ -118,114 +97,61 @@ function AssistantEmailVerification({
   email: string;
   lang: "ru" | "en";
   setLang: (lang: "ru" | "en") => void;
-  onVerified: () => Promise<void>;
+  onVerified: () => void;
+  onEmailSaved: () => Promise<void>;
   onBack: () => void;
   onLater: () => void;
   t: (key: string) => string;
 }) {
   const [currentEmail, setCurrentEmail] = useState(email);
-  const [editing, setEditing] = useState(!email);
   const [draft, setDraft] = useState(email);
-  const [sent, setSent] = useState(Boolean(email) && emailCooldownLeft() > 0);
-  const [code, setCode] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [cooldown, setCooldown] = useState(emailCooldownLeft());
-  const codeRef = useRef<HTMLInputElement>(null);
+  const [verifyOpen, setVerifyOpen] = useState(Boolean(email));
 
-  useEffect(() => {
-    if (!sent) return;
-    const update = () => setCooldown(emailCooldownLeft());
-    update();
-    const timer = window.setInterval(update, 1000);
-    window.setTimeout(() => codeRef.current?.focus(), 100);
-    return () => window.clearInterval(timer);
-  }, [sent]);
-
-  async function sendCode() {
-    if (busy || cooldown > 0) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await apiFetch("/user/email/send-code", { method: "POST", body: {} });
-      rememberEmailCodeSent();
-      setCooldown(EMAIL_CODE_COOLDOWN_MS / 1000);
-      setSent(true);
-      setEditing(false);
-      setCode("");
-    } catch {
-      setError(t("profile.email.verify.error.send"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function saveAndSend() {
+  async function saveEmail() {
     const clean = draft.trim().toLowerCase();
     if (!clean) { setError(t("profile.email.error.empty")); return; }
-    if (!isValidEmail(clean)) { setError(t("profile.email.error.invalid")); return; }
-    setBusy(true);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) {
+      setError(t("profile.email.error.invalid"));
+      return;
+    }
+
+    setSaving(true);
     setError(null);
-    let emailSaved = false;
     try {
       await apiFetch("/user/email", { method: "PUT", body: { email: clean } });
-      emailSaved = true;
       setCurrentEmail(clean);
-      clearEmailCodeSent();
-      await apiFetch("/user/email/send-code", { method: "POST", body: {} });
-      rememberEmailCodeSent();
-      setCooldown(EMAIL_CODE_COOLDOWN_MS / 1000);
-      setSent(true);
-      setEditing(false);
-      setCode("");
-    } catch (nextError: unknown) {
-      if (emailSaved) {
-        setEditing(false);
-        setSent(false);
-        setError(t("profile.email.verify.error.send"));
-        return;
-      }
-      const shaped = nextError as { code?: string; data?: { error?: string } };
-      const errorCode = String(shaped?.code || shaped?.data?.error || "");
-      if (errorCode === "email_already_used") setError(t("profile.email.error.already_used"));
-      else setError(t("profile.email.error.save"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function confirmCode() {
-    const clean = code.trim();
-    if (!clean) { setError(t("profile.email.verify.error.empty_code")); return; }
-    setBusy(true);
-    setError(null);
-    try {
-      await apiFetch("/user/email/confirm", { method: "POST", body: { code: clean } });
-      clearEmailCodeSent();
-      await onVerified();
+      await onEmailSaved();
+      setVerifyOpen(true);
     } catch (nextError: unknown) {
       const shaped = nextError as { code?: string; data?: { error?: string } };
       const errorCode = String(shaped?.code || shaped?.data?.error || "");
-      setError(errorCode === "invalid_code"
-        ? t("profile.email.verify.error.invalid_code")
-        : t("profile.email.verify.error.confirm"));
+      setError(errorCode === "email_already_used"
+        ? t("profile.email.error.already_used")
+        : t("profile.email.error.save"));
     } finally {
-      setBusy(false);
+      setSaving(false);
     }
   }
-
-  const shownEmail = editing ? draft.trim().toLowerCase() : currentEmail || draft.trim().toLowerCase();
 
   return (
     <div className="assistant assistant--center assistant--email">
       <AssistantLanguageSwitch lang={lang} onChange={setLang} />
       <div className="assistant__step">{t("assistant.email.eyebrow")}</div>
       <div className="assistant__orb" aria-hidden="true">✉️</div>
-      <div className="assistant__title">{t(editing ? "assistant.email.add_title" : "assistant.email.verify_title")}</div>
-      <p className="assistant__text">{t(editing ? "assistant.email.add_text" : "assistant.email.verify_text")}</p>
+      <div className="assistant__title">{t(currentEmail ? "assistant.email.verify_title" : "assistant.email.add_title")}</div>
+      <p className="assistant__text">{t(currentEmail ? "assistant.email.verify_text" : "assistant.email.add_text")}</p>
 
-      {editing ? (
-        <form className="assistant-email" onSubmit={(event) => { event.preventDefault(); void saveAndSend(); }}>
+      {currentEmail ? (
+        <div className="assistant-email">
+          <div className="assistant-email__address">{currentEmail}</div>
+          <button className="btn btn--primary assistant__primary" type="button" onClick={() => setVerifyOpen(true)}>
+            {t("profile.email.verify")}
+          </button>
+        </div>
+      ) : (
+        <form className="assistant-email" onSubmit={(event) => { event.preventDefault(); void saveEmail(); }}>
           <label className="field__label" htmlFor="assistant-email">Email</label>
           <input
             id="assistant-email"
@@ -236,55 +162,28 @@ function AssistantEmailVerification({
             value={draft}
             onChange={(event) => { setDraft(event.target.value); setError(null); }}
             placeholder={t("assistant.email.placeholder")}
-            disabled={busy}
+            disabled={saving}
             autoFocus
           />
           {error && <div className="pre assistant-email__error">{error}</div>}
-          <button className="btn btn--primary assistant__primary" type="submit" disabled={busy}>
-            {busy ? t("profile.email.verify.sending") : t("assistant.email.save_send")}
+          <button className="btn btn--primary assistant__primary" type="submit" disabled={saving}>
+            {saving ? t("profile.email.saving") : t("profile.email.save")}
           </button>
         </form>
-      ) : sent ? (
-        <form className="assistant-email" onSubmit={(event) => { event.preventDefault(); void confirmCode(); }}>
-          <div className="assistant-email__address">{shownEmail}</div>
-          <label className="field__label" htmlFor="assistant-email-code">{t("profile.email.verify.code_label")}</label>
-          <input
-            ref={codeRef}
-            id="assistant-email-code"
-            className="input assistant-email__input assistant-email__code"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            value={code}
-            onChange={(event) => { setCode(event.target.value); setError(null); }}
-            placeholder={t("profile.email.verify.code_ph")}
-            disabled={busy}
-          />
-          {error && <div className="pre assistant-email__error">{error}</div>}
-          <button className="btn btn--primary assistant__primary" type="submit" disabled={busy || !code.trim()}>
-            {busy ? t("profile.email.verify.confirming") : t("assistant.email.confirm_continue")}
-          </button>
-          <button className="btn assistant__secondary" type="button" onClick={() => void sendCode()} disabled={busy || cooldown > 0}>
-            {cooldown > 0 ? t("profile.email.verify.resend_cooldown").replace("{n}", String(cooldown)) : t("profile.email.verify.resend_btn")}
-          </button>
-          <p className="assistant-email__hint">{t("profile.email.verify.spam_hint")}</p>
-        </form>
-      ) : (
-        <div className="assistant-email">
-          <div className="assistant-email__address">{shownEmail}</div>
-          {error && <div className="pre assistant-email__error">{error}</div>}
-          <button className="btn btn--primary assistant__primary" type="button" onClick={() => void sendCode()} disabled={busy}>
-            {busy ? t("profile.email.verify.sending") : t("profile.email.verify.send_btn")}
-          </button>
-          <button className="btn assistant__secondary" type="button" onClick={() => { setDraft(shownEmail); setEditing(true); setError(null); }}>
-            {t("assistant.email.change")}
-          </button>
-        </div>
       )}
 
       <div className="assistant-email__exit">
         <button className="btn" type="button" onClick={onBack}>{t("assistant.back")}</button>
         <button className="btn" type="button" onClick={onLater}>{t("assistant.offer.later")}</button>
       </div>
+
+      <EmailVerifyModal
+        open={verifyOpen && Boolean(currentEmail)}
+        email={currentEmail}
+        onClose={() => setVerifyOpen(false)}
+        onVerified={onVerified}
+        t={t}
+      />
     </div>
   );
 }
@@ -297,7 +196,6 @@ export function ConnectionAssistant() {
   const [emailChecked, setEmailChecked] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [items, setItems] = useState<ServiceItem[]>([]);
-  const [emailConfirmed, setEmailConfirmed] = useState(false);
   const [screen, setScreen] = useState<Screen>(() => {
     try { return sessionStorage.getItem(SCREEN_KEY) === "device" ? "device" : "offer"; }
     catch { return "offer"; }
@@ -477,17 +375,15 @@ export function ConnectionAssistant() {
     );
   }
 
-  const needsEmailVerification = Boolean(me?.profile) && me?.profile?.emailVerified !== true && !emailConfirmed;
+  const needsEmailVerification = Boolean(me?.profile) && me?.profile?.emailVerified !== true;
   if (needsEmailVerification) {
     return (
-      <AssistantEmailVerification
+      <AssistantEmailGate
         email={String(me?.profile?.email || "").trim()}
         lang={lang}
         setLang={setLang}
-        onVerified={async () => {
-          setEmailConfirmed(true);
-          await refetchMe();
-        }}
+        onVerified={() => { void refetchMe(); }}
+        onEmailSaved={async () => { await refetchMe(); }}
         onBack={() => {
           setScreen("offer");
           try { sessionStorage.removeItem(SCREEN_KEY); } catch { /* ignore */ }

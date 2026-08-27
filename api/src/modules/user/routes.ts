@@ -476,7 +476,25 @@ export async function userRoutes(app: FastifyInstance) {
       });
     }
 
-    return reply.send({ ok: true });
+    const upstreamMessage = extractShmMessage(r.json).toLowerCase();
+    if (upstreamMessage.includes("invalid") || upstreamMessage.includes("expired") || upstreamMessage.includes("required")) {
+      return reply.code(400).send({ ok: false, error: "invalid_code" });
+    }
+
+    // SHM may answer HTTP 200 even when the operation did not change the
+    // account. Never report success until the persisted billing state says so.
+    let current: Awaited<ReturnType<typeof readCurrentEmail>> | null = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      current = await readCurrentEmail(s.shmSessionId).catch(() => null);
+      if (current?.emailVerified === true) break;
+      if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 120));
+    }
+
+    if (current?.emailVerified !== true) {
+      return reply.code(409).send({ ok: false, error: "email_not_verified" });
+    }
+
+    return reply.send({ ok: true, email: current.email, emailVerified: true });
   });
 
   // POST /user/prefs

@@ -383,7 +383,7 @@ function ProfileSwitch({ checked, disabled }: { checked?: boolean; disabled?: bo
 
 /* ─── Email Verify Modal ─────────────────────────────────────────────────── */
 
-function EmailVerifyModal({ open, email, onClose, onVerified, t }: {
+export function EmailVerifyModal({ open, email, onClose, onVerified, t }: {
   open: boolean; email: string; onClose: () => void; onVerified: () => void; t: (k: string) => string;
 }) {
   const [state,      setState]      = useState<VerifyModalState>("idle");
