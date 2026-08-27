@@ -67,8 +67,23 @@ function isPayable(status: ServiceStatus) {
   return status === "not_paid" || status === "blocked";
 }
 
+function AssistantLanguageSwitch({
+  lang,
+  onChange,
+}: {
+  lang: "ru" | "en";
+  onChange: (lang: "ru" | "en") => void;
+}) {
+  return (
+    <div className="assistant-lang" aria-label="Language">
+      <button type="button" className={lang === "ru" ? "is-active" : ""} onClick={() => onChange("ru")}>RU</button>
+      <button type="button" className={lang === "en" ? "is-active" : ""} onClick={() => onChange("en")}>EN</button>
+    </div>
+  );
+}
+
 export function ConnectionAssistant() {
-  const { t } = useI18n();
+  const { t, lang, setLang } = useI18n();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
@@ -149,6 +164,7 @@ export function ConnectionAssistant() {
   if (loading) {
     return (
       <div className="assistant assistant--center" aria-busy="true">
+        <AssistantLanguageSwitch lang={lang} onChange={setLang} />
         <div className="assistant__orb assistant__orb--pulse" aria-hidden="true">✨</div>
         <div className="assistant__title">{t("assistant.loading.title")}</div>
         <p className="assistant__text">{t("assistant.loading.text")}</p>
@@ -159,6 +175,7 @@ export function ConnectionAssistant() {
   if (error) {
     return (
       <div className="assistant assistant--center">
+        <AssistantLanguageSwitch lang={lang} onChange={setLang} />
         <div className="assistant__orb" aria-hidden="true">🛟</div>
         <div className="assistant__title">{t("assistant.error.title")}</div>
         <p className="assistant__text">{t("assistant.error.text")}</p>
@@ -181,6 +198,7 @@ export function ConnectionAssistant() {
     if (Number(current.price) > 0) params.set("amount", String(Math.ceil(Number(current.price))));
     return (
       <div className="assistant assistant--center">
+        <AssistantLanguageSwitch lang={lang} onChange={setLang} />
         <div className="assistant__step">{t("assistant.resume.eyebrow")}</div>
         <div className="assistant__orb" aria-hidden="true">💳</div>
         <div className="assistant__title">{t("assistant.resume.title")}</div>
@@ -202,6 +220,7 @@ export function ConnectionAssistant() {
   if (current && isWaiting(current.status)) {
     return (
       <div className="assistant assistant--center" aria-live="polite">
+        <AssistantLanguageSwitch lang={lang} onChange={setLang} />
         <div className="assistant__step">{t("assistant.wait.eyebrow")}</div>
         <div className="assistant__orb assistant__orb--pulse" aria-hidden="true">⚙️</div>
         <div className="assistant__title">{t("assistant.wait.title")}</div>
@@ -220,6 +239,7 @@ export function ConnectionAssistant() {
   if (screen === "offer") {
     return (
       <div className="assistant assistant--center">
+        <AssistantLanguageSwitch lang={lang} onChange={setLang} />
         <div className="assistant__step">{t("assistant.offer.eyebrow")}</div>
         <div className="assistant__orb" aria-hidden="true">👋</div>
         <div className="assistant__title">{t("assistant.offer.title")}</div>
@@ -248,7 +268,8 @@ export function ConnectionAssistant() {
   ];
 
   return (
-    <div className="assistant">
+    <div className="assistant assistant--device-screen">
+      <AssistantLanguageSwitch lang={lang} onChange={setLang} />
       <div className="assistant__step">{t("assistant.device.eyebrow")}</div>
       <div className="assistant__title">{t("assistant.device.title")}</div>
       <p className="assistant__text">{t("assistant.device.text")}</p>
@@ -259,16 +280,18 @@ export function ConnectionAssistant() {
             <button className={`assistant-device${recommended ? " assistant-device--recommended" : ""}`} type="button" key={device.key} onClick={() => chooseDevice(device.key)}>
               <span className="assistant-device__icon" aria-hidden="true">{device.icon}</span>
               <span className="assistant-device__copy">
-                <strong>{device.title}</strong>
+                <span className="assistant-device__title-row">
+                  <strong>{device.title}</strong>
+                  {recommended && <span className="assistant-device__badge">{t("assistant.device.this_device")}</span>}
+                </span>
                 <small>{device.text}</small>
               </span>
-              {recommended && <span className="assistant-device__badge">{t("assistant.device.this_device")}</span>}
               <span className="assistant-device__arrow" aria-hidden="true">→</span>
             </button>
           );
         })}
       </div>
-      <button className="btn assistant__secondary" type="button" onClick={() => { setScreen("offer"); try { sessionStorage.removeItem(SCREEN_KEY); } catch { /* ignore */ } }}>
+      <button className="btn assistant__secondary assistant__back" type="button" onClick={() => { setScreen("offer"); try { sessionStorage.removeItem(SCREEN_KEY); } catch { /* ignore */ } }}>
         {t("assistant.back")}
       </button>
     </div>

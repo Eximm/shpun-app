@@ -831,7 +831,27 @@ export function ServicesOrder() {
     navigate('/services')
   }
 
+  function leaveOrderStep() {
+    if (assistantMode) {
+      navigate('/assistant')
+      return
+    }
+    navigate(-1)
+  }
+
+  function closeCategory() {
+    if (assistantMode) {
+      navigate('/assistant')
+      return
+    }
+    setSelectedCat(null)
+  }
+
   function resetSelection() {
+    if (assistantMode) {
+      navigate('/assistant')
+      return
+    }
     setSelected(null)
     setSelectedCat(null)
     setCreated(null)
@@ -1009,7 +1029,7 @@ export function ServicesOrder() {
                   <div className="h1">{t('servicesOrder.step.kind.title')}</div>
                   <p className="p" style={{ marginTop: 4 }}>{t('servicesOrder.step.kind.hint')}</p>
                 </div>
-                <button className="btn" onClick={() => navigate(-1)} type="button" style={{ flexShrink: 0 }}>
+                <button className="btn" onClick={leaveOrderStep} type="button" style={{ flexShrink: 0 }}>
                   ← {t('common.close')}
                 </button>
               </div>
@@ -1039,7 +1059,7 @@ export function ServicesOrder() {
                   {selectedCat.descr && <p className="p" style={{ marginTop: 4 }}>{selectedCat.descr}</p>}
                 </div>
 
-                <button className="btn" onClick={() => setSelectedCat(null)} type="button" style={{ flexShrink: 0 }}>
+                <button className="btn" onClick={closeCategory} type="button" style={{ flexShrink: 0 }}>
                   ← {t('common.close')}
                 </button>
               </div>

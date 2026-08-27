@@ -19,22 +19,6 @@ function normalizeLang(v: unknown): Lang | null {
   return null;
 }
 
-function detectBrowserLang(): Lang {
-  try {
-    const raw =
-      navigator.language ||
-      (Array.isArray(navigator.languages) ? navigator.languages[0] : "") ||
-      "";
-
-    const lang = String(raw).trim().toLowerCase();
-
-    if (lang.startsWith("ru")) return "ru";
-    return "en";
-  } catch {
-    return "en";
-  }
-}
-
 function getInitialLang(): Lang {
   try {
     const saved = normalizeLang(localStorage.getItem(LANG_STORAGE_KEY));
@@ -43,7 +27,9 @@ function getInitialLang(): Lang {
     // ignore
   }
 
-  return detectBrowserLang();
+  // Browser language is frequently English even for Shpun's Russian-speaking
+  // audience. Keep English only when the user selected and saved it explicitly.
+  return "ru";
 }
 
 function dictFor(lang: Lang): Dict {
