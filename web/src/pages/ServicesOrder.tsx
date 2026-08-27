@@ -668,7 +668,7 @@ export function ServicesOrder() {
           description: info.description,
           durationMs: 9000,
           actionLabel: t('servicesOrder.error.trial_email.action'),
-          onAction: () => navigate('/profile'),
+          onAction: () => navigate(assistantMode ? '/assistant' : '/profile'),
         })
       } else if ((code === 'unpaid_order_exists' || code === 'unpaid_same_service_exists') && info.conflict?.userServiceId) {
         const usi = info.conflict.userServiceId

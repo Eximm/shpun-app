@@ -144,7 +144,10 @@ function LandingRoute() {
   const { t } = useI18n();
   const loc   = useLocation();
   const cachedDestination = sessionStorage.getItem("landing_destination");
-  const alreadyChecked = cachedDestination === "home" || cachedDestination === "services" || cachedDestination === "assistant";
+  // "services" used to be cached for clients who postponed the assistant.
+  // It made the Home tab render the Services page, so intentionally ignore
+  // that legacy value and calculate a real landing destination again.
+  const alreadyChecked = cachedDestination === "home" || cachedDestination === "assistant";
   const [state, setState] = React.useState<"loading" | "home" | "services" | "assistant">(
     alreadyChecked ? cachedDestination : "loading"
   );
@@ -160,7 +163,7 @@ function LandingRoute() {
         const unfinished = Number(resp?.summary?.pending ?? 0) + Number(resp?.summary?.notPaid ?? 0) + Number(resp?.summary?.blocked ?? 0);
         let snoozed = false;
         try { snoozed = Number(localStorage.getItem("connection-assistant.snoozed-until.v1") || "0") > Date.now(); } catch { /* ignore */ }
-        const destination = active > 0 ? "home" : unfinished > 0 || !snoozed ? "assistant" : "services";
+        const destination = active > 0 || (snoozed && unfinished === 0) ? "home" : "assistant";
         sessionStorage.setItem("landing_destination", destination);
         setState(destination);
       } catch { if (!cancelled) setState("home"); }
