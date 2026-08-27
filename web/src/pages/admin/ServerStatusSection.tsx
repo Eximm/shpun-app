@@ -7,6 +7,7 @@ type MonitoredServer = {
   host: string;
   exporter_url: string;
   kind: "vpn" | "infra";
+  country_code: string | null;
   active: number;
   sort_order: number;
   uplink_mbps: number | null;
@@ -17,33 +18,58 @@ const EMPTY = {
   host: "",
   exporterUrl: "",
   kind: "vpn" as "vpn" | "infra",
+  countryCode: "",
   sortOrder: 100,
   uplinkMbps: "",
   active: true,
 };
 
-const DEFAULT_SERVER_MATRIX = `# Название | домен | тип | uplink Mbps | порядок
-Warszawa PL2 | pl2.shpyn.online | vpn | 1000 | 10
-Prague CZ | cz.shpyn.online | vpn | 1000 | 20
-Moscow RU | msk.shpyn.online | vpn | 1000 | 30
-Moscow2 RU | msk2.shpyn.online | vpn | 1000 | 40
-Stockholm SWE | swe.shpyn.online | vpn | 1000 | 50
-Fremont US | us.shpyn.online | vpn | 1000 | 60
-Helsinki FI | fi.shpyn.online | vpn | 1000 | 70
-Saint-Petersburg RU | spb.shpyn.online | vpn | 1000 | 80
-Meppel NL | nl.shpyn.online | vpn | 1000 | 90
-Tallinn TL | tl.shpyn.online | vpn | 1000 | 100
-Frankfurt DE | de.shpyn.online | vpn | 1000 | 110
-Frankfurt-2 DE | de2.shpyn.online | vpn | 1000 | 120
-Warszawa PL | pl.shpyn.online | vpn | 1000 | 130
-Core · кабинет | core.shpyn.online | infra | 1000 | 1000
-CoreX · авторизация подписок | corex.shpyn.online | infra | 1000 | 1010`;
+const DEFAULT_SERVER_MATRIX = `# Название | домен | тип | uplink Mbps | порядок | exporter URL | страна
+Warszawa PL2 | pl2.shpyn.online | vpn | 1000 | 10 | | PL
+Prague CZ | cz.shpyn.online | vpn | 1000 | 20 | | CZ
+Moscow RU | msk.shpyn.online | vpn | 1000 | 30 | | RU
+Moscow2 RU | msk2.shpyn.online | vpn | 1000 | 40 | | RU
+Stockholm SWE | swe.shpyn.online | vpn | 1000 | 50 | | SE
+Fremont US | us.shpyn.online | vpn | 1000 | 60 | | US
+Helsinki FI | fi.shpyn.online | vpn | 1000 | 70 | | FI
+Saint-Petersburg RU | spb.shpyn.online | vpn | 1000 | 80 | | RU
+Meppel NL | nl.shpyn.online | vpn | 1000 | 90 | | NL
+Tallinn TL | tl.shpyn.online | vpn | 1000 | 100 | | EE
+Frankfurt DE | de.shpyn.online | vpn | 1000 | 110 | | DE
+Frankfurt-2 DE | de2.shpyn.online | vpn | 1000 | 120 | | DE
+Warszawa PL | pl.shpyn.online | vpn | 1000 | 130 | | PL
+Core · кабинет | core.shpyn.online | infra | 1000 | 1000 | |
+CoreX · авторизация подписок | corex.shpyn.online | infra | 1000 | 1010 | |`;
+
+const COUNTRY_CODES = `AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ
+BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ
+CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ
+DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR
+GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY
+HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP
+KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY
+MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ
+NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY
+QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ
+TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ
+VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW`.split(/\s+/);
+
+const REGION_NAMES = new Intl.DisplayNames(["ru"], { type: "region" });
+
+function countryFlag(code: string) {
+  return String.fromCodePoint(...code.split("").map((char) => 127397 + char.charCodeAt(0)));
+}
+
+const COUNTRY_OPTIONS = COUNTRY_CODES
+  .map((code) => ({ code, label: REGION_NAMES.of(code) || code }))
+  .sort((a, b) => a.label.localeCompare(b.label, "ru"));
 
 type MatrixRow = {
   line: number;
   title: string;
   host: string;
   kind: "vpn" | "infra";
+  countryCode: string;
   uplinkMbps: string;
   sortOrder: number;
   exporterUrl: string;
@@ -63,19 +89,25 @@ function parseServerMatrix(text: string) {
     const lineNo = idx + 1;
     const line = raw.trim();
     if (!line || line.startsWith("#")) return;
-    const [titleRaw, hostRaw, kindRaw, uplinkRaw, sortRaw, exporterRaw] = splitMatrixLine(line);
+    const [titleRaw, hostRaw, kindRaw, uplinkRaw, sortRaw, exporterRaw, countryRaw] = splitMatrixLine(line);
     const host = String(hostRaw ?? "").replace(/^https?:\/\//i, "").replace(/\/.*$/, "").trim();
     if (!host) {
       errors.push(`Строка ${lineNo}: нет домена`);
       return;
     }
     const kind = String(kindRaw ?? "").trim().toLowerCase() === "infra" ? "infra" : "vpn";
+    const countryCode = String(countryRaw ?? "").trim().toUpperCase();
+    if (countryCode && !/^[A-Z]{2}$/.test(countryCode)) {
+      errors.push(`Строка ${lineNo}: страна должна быть двухбуквенным кодом, например GB`);
+      return;
+    }
     const sortOrder = Number.isFinite(Number(sortRaw)) ? Math.trunc(Number(sortRaw)) : 100 + rows.length * 10;
     rows.push({
       line: lineNo,
       title: String(titleRaw ?? "").trim() || host,
       host,
       kind,
+      countryCode,
       uplinkMbps: Number.isFinite(Number(uplinkRaw)) && Number(uplinkRaw) > 0 ? String(Number(uplinkRaw)) : "",
       sortOrder,
       exporterUrl: String(exporterRaw ?? "").trim(),
@@ -124,6 +156,7 @@ export function ServerStatusSection() {
       host: item.host || "",
       exporterUrl: item.exporter_url || "",
       kind: item.kind === "infra" ? "infra" : "vpn",
+      countryCode: item.country_code || "",
       sortOrder: Number(item.sort_order ?? 100),
       uplinkMbps: item.uplink_mbps != null ? String(item.uplink_mbps) : "",
       active: Number(item.active) === 1,
@@ -193,6 +226,7 @@ export function ServerStatusSection() {
             host: row.host,
             exporterUrl: row.exporterUrl,
             kind: row.kind,
+            countryCode: row.countryCode,
             sortOrder: row.sortOrder,
             uplinkMbps: row.uplinkMbps ? Number(row.uplinkMbps) : null,
             active: true,
@@ -236,7 +270,7 @@ export function ServerStatusSection() {
             <div>
               <div className="kicker">Matrix import</div>
               <h2 className="h2">Матрица серверов</h2>
-              <p className="p">Быстрое добавление пачки серверов. Формат строки: название | домен | тип | uplink Mbps | порядок | exporter URL. Если exporter URL пустой — соберём автоматически как http://домен:9100/metrics.</p>
+              <p className="p">Быстрое добавление пачки серверов. Формат строки: название | домен | тип | uplink Mbps | порядок | exporter URL | страна. Страна — двухбуквенный код, например GB. Старые строки без страны тоже поддерживаются.</p>
             </div>
           </div>
 
@@ -283,7 +317,7 @@ export function ServerStatusSection() {
                     <span className={`serverStatus-dot serverStatus-dot--${item.active ? "online" : "offline"}`} />
                     {item.title || item.host}
                   </div>
-                  <div className="list__sub">{item.kind === "infra" ? "Кабинет/подписки" : "VPN"} · {item.host}</div>
+                  <div className="list__sub">{item.kind === "infra" ? "Кабинет/подписки" : "VPN"}{item.country_code ? ` · ${item.country_code}` : ""} · {item.host}</div>
                   <div className="list__sub">{item.exporter_url}</div>
                 </div>
                 <div className="actions">
@@ -329,6 +363,13 @@ export function ServerStatusSection() {
                 </select>
               </label>
               <label className="field">
+                <span className="field__label">Страна{form.kind === "vpn" ? " *" : ""}</span>
+                <select className="input" value={form.countryCode} onChange={(e) => setForm((p) => ({ ...p, countryCode: e.target.value }))}>
+                  <option value="">{form.kind === "vpn" ? "Выберите страну" : "Не указана"}</option>
+                  {COUNTRY_OPTIONS.map(({ code, label }) => <option key={code} value={code}>{countryFlag(code)} {label}</option>)}
+                </select>
+              </label>
+              <label className="field">
                 <span className="field__label">Порядок</span>
                 <input className="input" type="number" value={form.sortOrder} onChange={(e) => setForm((p) => ({ ...p, sortOrder: Number(e.target.value) }))} />
               </label>
@@ -343,7 +384,7 @@ export function ServerStatusSection() {
             </div>
 
             <div className="actions actions--2 admin-gap-top-sm">
-              <button className="btn btn--primary" type="button" onClick={() => void save()} disabled={busy || !form.host.trim()}>
+              <button className="btn btn--primary" type="button" onClick={() => void save()} disabled={busy || !form.host.trim() || (form.kind === "vpn" && !form.countryCode)}>
                 {editingId ? "Сохранить" : "Добавить"}
               </button>
               <button className="btn" type="button" onClick={reset} disabled={busy}>Отмена</button>

@@ -17,6 +17,7 @@ export type ServerCheckResult = {
   title: string;
   host: string;
   kind: MonitoredServerRow["kind"];
+  countryCode: string | null;
   online: boolean | null;
   latencyMs: number | null;
   uptime: string | null;
@@ -177,6 +178,7 @@ function normalizeCachedValue(row: MonitoredServerRow, value: ServerCheckResult)
     title: row.title,
     host: row.host,
     kind: row.kind,
+    countryCode: row.country_code,
   };
 }
 
@@ -186,6 +188,7 @@ function pendingStatus(row: MonitoredServerRow): ServerCheckResult {
     title: row.title,
     host: row.host,
     kind: row.kind,
+    countryCode: row.country_code,
     online: null,
     latencyMs: null,
     uptime: null,
@@ -246,6 +249,7 @@ export async function checkServer(row: MonitoredServerRow): Promise<ServerCheckR
       title: row.title,
       host: row.host,
       kind: row.kind,
+      countryCode: row.country_code,
       online: true,
       latencyMs,
       uptime: fmtUptime(uptimeSeconds),
@@ -267,6 +271,7 @@ export async function checkServer(row: MonitoredServerRow): Promise<ServerCheckR
       title: row.title,
       host: row.host,
       kind: row.kind,
+      countryCode: row.country_code,
       online: false,
       latencyMs: null,
       uptime: null,

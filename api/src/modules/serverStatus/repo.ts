@@ -8,6 +8,7 @@ export type MonitoredServerRow = {
   host: string;
   exporter_url: string;
   kind: ServerKind;
+  country_code: string | null;
   active: number;
   sort_order: number;
   uplink_mbps: number | null;
@@ -22,6 +23,7 @@ CREATE TABLE IF NOT EXISTS monitored_servers (
   host TEXT NOT NULL DEFAULT '',
   exporter_url TEXT NOT NULL DEFAULT '',
   kind TEXT NOT NULL DEFAULT 'vpn',
+  country_code TEXT,
   active INTEGER NOT NULL DEFAULT 1,
   sort_order INTEGER NOT NULL DEFAULT 100,
   uplink_mbps REAL,
@@ -33,12 +35,19 @@ CREATE INDEX IF NOT EXISTS idx_monitored_servers_kind_active
   ON monitored_servers(kind, active, sort_order, id);
 `);
 
+try { linkDb.exec(`ALTER TABLE monitored_servers ADD COLUMN country_code TEXT`); } catch { /* already exists */ }
+
 function kind(v: unknown): ServerKind {
   return String(v ?? "").trim() === "infra" ? "infra" : "vpn";
 }
 
 function clean(v: unknown, max = 300) {
   return String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
+}
+
+function countryCode(v: unknown) {
+  const code = clean(v, 2).toUpperCase();
+  return /^[A-Z]{2}$/.test(code) ? code : null;
 }
 
 function exporterFromHost(host: string, exporterUrl?: string) {
@@ -50,7 +59,7 @@ function exporterFromHost(host: string, exporterUrl?: string) {
 
 export function listMonitoredServers({ includeInactive = false }: { includeInactive?: boolean } = {}) {
   const sql = `
-    SELECT id, title, host, exporter_url, kind, active, sort_order, uplink_mbps, created_at, updated_at
+    SELECT id, title, host, exporter_url, kind, country_code, active, sort_order, uplink_mbps, created_at, updated_at
     FROM monitored_servers
     ${includeInactive ? "" : "WHERE active = 1"}
     ORDER BY kind = 'infra', sort_order ASC, id ASC
@@ -60,7 +69,7 @@ export function listMonitoredServers({ includeInactive = false }: { includeInact
 
 export function getMonitoredServer(id: number) {
   return linkDb.prepare(`
-    SELECT id, title, host, exporter_url, kind, active, sort_order, uplink_mbps, created_at, updated_at
+    SELECT id, title, host, exporter_url, kind, country_code, active, sort_order, uplink_mbps, created_at, updated_at
     FROM monitored_servers
     WHERE id = ?
   `).get(id) as MonitoredServerRow | undefined;
@@ -71,6 +80,7 @@ export function createMonitoredServer(input: {
   host?: unknown;
   exporterUrl?: unknown;
   kind?: unknown;
+  countryCode?: unknown;
   active?: unknown;
   sortOrder?: unknown;
   uplinkMbps?: unknown;
@@ -79,15 +89,19 @@ export function createMonitoredServer(input: {
   const title = clean(input.title, 160) || host;
   const exporterUrl = exporterFromHost(host, clean(input.exporterUrl, 500));
   if (!host || !exporterUrl) return { ok: false as const, error: "host_required" };
+  if (clean(input.countryCode, 10) && !countryCode(input.countryCode)) {
+    return { ok: false as const, error: "country_code_invalid" };
+  }
 
   const info = linkDb.prepare(`
-    INSERT INTO monitored_servers (title, host, exporter_url, kind, active, sort_order, uplink_mbps)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO monitored_servers (title, host, exporter_url, kind, country_code, active, sort_order, uplink_mbps)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     title,
     host,
     exporterUrl,
     kind(input.kind),
+    countryCode(input.countryCode),
     input.active === false ? 0 : 1,
     Number.isFinite(Number(input.sortOrder)) ? Math.trunc(Number(input.sortOrder)) : 100,
     Number.isFinite(Number(input.uplinkMbps)) && Number(input.uplinkMbps) > 0 ? Number(input.uplinkMbps) : null,
@@ -105,6 +119,9 @@ export function updateMonitoredServer(id: number, input: Record<string, unknown>
     ? exporterFromHost(host, clean(input.exporterUrl ?? current.exporter_url, 500))
     : current.exporter_url;
   if (!host || !exporterUrl) return { ok: false as const, error: "host_required" };
+  if ("countryCode" in input && clean(input.countryCode, 10) && !countryCode(input.countryCode)) {
+    return { ok: false as const, error: "country_code_invalid" };
+  }
 
   linkDb.prepare(`
     UPDATE monitored_servers
@@ -112,6 +129,7 @@ export function updateMonitoredServer(id: number, input: Record<string, unknown>
         host = ?,
         exporter_url = ?,
         kind = ?,
+        country_code = ?,
         active = ?,
         sort_order = ?,
         uplink_mbps = ?,
@@ -122,6 +140,7 @@ export function updateMonitoredServer(id: number, input: Record<string, unknown>
     host,
     exporterUrl,
     "kind" in input ? kind(input.kind) : current.kind,
+    "countryCode" in input ? countryCode(input.countryCode) : current.country_code,
     "active" in input ? (input.active === false ? 0 : 1) : current.active,
     "sortOrder" in input && Number.isFinite(Number(input.sortOrder)) ? Math.trunc(Number(input.sortOrder)) : current.sort_order,
     "uplinkMbps" in input

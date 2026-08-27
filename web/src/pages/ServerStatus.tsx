@@ -7,6 +7,7 @@ type StatusItem = {
   title: string;
   host: string;
   kind: "vpn" | "infra";
+  countryCode: string | null;
   online: boolean | null;
   latencyMs: number | null;
   uptime: string | null;
@@ -277,6 +278,11 @@ function regionForTitle(title: string) {
   return "VPN";
 }
 
+function regionForItem(item: StatusItem) {
+  const explicit = String(item.countryCode ?? "").trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(explicit) ? explicit : regionForTitle(item.title || item.host);
+}
+
 function ServerCard({ item }: { item: StatusItem }) {
   const tone = statusTone(item.online);
   const loadPct = Math.max(0, Math.min(100, item.loadPct ?? 0));
@@ -284,7 +290,7 @@ function ServerCard({ item }: { item: StatusItem }) {
     <div className={`serverStatus-card serverStatus-card--${tone}`}>
       <div className="serverStatus-card__top">
         <span className={`serverStatus-dot serverStatus-dot--${tone}`} />
-        <span className="serverStatus-card__region" aria-hidden="true">{regionForTitle(item.title || item.host)}</span>
+        <span className="serverStatus-card__region" aria-hidden="true">{regionForItem(item)}</span>
         <div className="serverStatus-card__title">{item.title || item.host}</div>
       </div>
       <div className="serverStatus-card__line" aria-hidden="true">
