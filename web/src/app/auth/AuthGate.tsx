@@ -359,14 +359,15 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     Boolean(firstPayBonus?.pending) &&
     Number(firstPayBonus?.percent ?? 0) > 0 &&
     !firstPayBonusDismissed;
+  const assistantFlow = loc.pathname === "/assistant" || new URLSearchParams(loc.search).get("assistant") === "1";
   const profilePromptGranted = useOnboardingPromptSlot("profile", needsFirstLoginOnboarding);
   const bonusPromptGranted = useOnboardingPromptSlot(
     "first_pay_bonus",
-    !needsFirstLoginOnboarding && showFirstPayBonus
+    !needsFirstLoginOnboarding && showFirstPayBonus && !assistantFlow
   );
   const pushPromptGranted = useOnboardingPromptSlot(
     "push",
-    !needsFirstLoginOnboarding && !showFirstPayBonus && pushPromptOpen
+    !needsFirstLoginOnboarding && !showFirstPayBonus && !assistantFlow && pushPromptOpen
   );
 
   const authInProgress = hasFreshAuthPending();

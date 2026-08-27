@@ -374,10 +374,16 @@ export function Payments() {
   const { t } = useI18n();
   const location = useLocation();
   const navigate = useNavigate();
+  const paymentQuery = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const requestedReturn = String(paymentQuery.get("return") || "");
+  const returnPath = requestedReturn.startsWith("/") && !requestedReturn.startsWith("//") ? requestedReturn : "";
 
   const [loading,            setLoading]            = useState(true);
   const [err,                setErr]                = useState<unknown>(null);
-  const [amount,             setAmount]             = useState<string>("");
+  const [amount,             setAmount]             = useState<string>(() => {
+    const value = Math.ceil(Number(new URLSearchParams(window.location.search).get("amount") || "0"));
+    return Number.isFinite(value) && value > 0 ? String(value) : "";
+  });
   const [paySystems,         setPaySystems]         = useState<PaySystem[]>([]);
   const [forecast,           setForecast]           = useState<any>(null);
   const [reqModal,           setReqModal]           = useState(false);
@@ -483,6 +489,14 @@ export function Payments() {
   return (
     <div className="section payments-page">
 
+      {returnPath && (
+        <div className="assistant-return">
+          <span aria-hidden="true">✨</span>
+          <div><strong>{t("assistant.payment.title")}</strong><small>{t("assistant.payment.text")}</small></div>
+          <button className="btn" type="button" onClick={() => navigate(returnPath)}>{t("assistant.payment.return")}</button>
+        </div>
+      )}
+
       <PaymentErrorModal
         open={payErrorOpen}
         onClose={() => setPayErrorOpen(false)}
@@ -513,6 +527,7 @@ export function Payments() {
                     {checkingPay ? "…" : t("payments.overlay.refresh")}
                   </button>
                   <button className="btn" onClick={() => setShowOverlay(false)} type="button">{t("payments.overlay.close")}</button>
+                  {returnPath && <button className="btn" onClick={() => navigate(returnPath)} type="button">{t("assistant.continue")}</button>}
                 </div>
               </div>
             </div>

@@ -69,6 +69,16 @@ export async function buildServer() {
     },
   })
 
+  // API responses can contain session and service data. Keep every response
+  // out of browser, reverse-proxy, and CDN caches by default.
+  app.addHook('onSend', async (_req, reply, payload) => {
+    reply.header('Cache-Control', 'private, no-store, no-cache, max-age=0, must-revalidate')
+    reply.header('CDN-Cache-Control', 'no-store')
+    reply.header('Pragma', 'no-cache')
+    reply.header('Expires', '0')
+    return payload
+  })
+
   app.addHook('preHandler', async (req, reply) => {
     const sid = (req as any).cookies?.sid as string | undefined
     if (!sid) return

@@ -124,6 +124,21 @@ function normalizeConnectKind(kind: string): string {
   return k
 }
 
+function categoryMatchesRequestedKind(cat: ServiceCategory, requested: string): boolean {
+  const target = normalizeConnectKind(requested)
+  const ownKind = normalizeConnectKind(cat.connect_kind)
+  if (ownKind === target) return true
+
+  const haystack = [cat.category_key, cat.title, ...cat.billing_category_keys].join(' ').toLowerCase()
+  if (target === 'flex') {
+    return haystack.includes('flex') || haystack.includes('remnawave')
+  }
+  if (target === 'marzban_router') {
+    return haystack.includes('router') || haystack.includes('remnawave-r') || haystack.includes('marzban-r')
+  }
+  return false
+}
+
 function buildPayUrl(base: string, amount: number) {
   const a = Math.max(1, Math.ceil(nnum(amount, 1)))
   return base.includes('{amount}') ? base.replace('{amount}', String(a)) : `${base}${a}`
@@ -427,6 +442,9 @@ export function ServicesOrder() {
   const navigate = useNavigate()
   const { t } = useI18n()
   const { me, loading: meLoading, error: meError, refetch } = useMe()
+  const query = useMemo(() => new URLSearchParams(window.location.search), [])
+  const assistantMode = query.get('assistant') === '1'
+  const requestedKind = String(query.get('kind') || '').trim()
 
   const balanceAmount = nnum(me?.balance?.amount)
   const currency = String(me?.balance?.currency || 'RUB')
@@ -579,26 +597,21 @@ export function ServicesOrder() {
 
   useEffect(() => {
     void loadAll()
-
-    try {
-      const k = new URLSearchParams(window.location.search).get('kind')
-
-      if (k) {
-        const timer = setTimeout(() => {
-          setCategories((cats) => {
-            const targetKind = normalizeConnectKind(k)
-            const found = cats.find((c) => normalizeConnectKind(c.connect_kind) === targetKind)
-            if (found) setSelectedCat(found)
-            return cats
-          })
-        }, 500)
-
-        return () => clearTimeout(timer)
-      }
-    } catch {
-      /* ignore */
-    }
   }, [])
+
+  useEffect(() => {
+    if (!requestedKind || selectedCat || categories.length === 0) return
+    const found = categories.find((cat) => categoryMatchesRequestedKind(cat, requestedKind))
+      ?? (normalizeConnectKind(requestedKind) === 'flex'
+        ? categories.find((cat) => cat.recommended && normalizeConnectKind(cat.connect_kind) === 'marzban')
+        : undefined)
+    if (found) setSelectedCat(found)
+  }, [categories, requestedKind, selectedCat])
+
+  useEffect(() => {
+    if (!assistantMode || selected || tariffsInCat.length !== 1) return
+    setSelected(tariffsInCat[0])
+  }, [assistantMode, selected, tariffsInCat])
 
   useEffect(() => {
     if (!selectedCat) return
@@ -639,6 +652,12 @@ export function ServicesOrder() {
       } else {
         setWaitMsg(t('servicesOrder.status.activated'))
         toast.success(getMood('service_activated') ?? t('servicesOrder.toast.done'), { description: moodSuccess(seed, nnum(selected.price)) })
+        if (assistantMode) {
+          const target = status === 'active'
+            ? `/services?usi=${encodeURIComponent(String(item.userServiceId))}&connect=1&assistant=1`
+            : `/assistant?usi=${encodeURIComponent(String(item.userServiceId))}`
+          window.setTimeout(() => navigate(target), 350)
+        }
       }
     } catch (e: any) {
       const info = getOrderError(e, t)
@@ -738,10 +757,10 @@ export function ServicesOrder() {
     toast.info(t('servicesOrder.pay.opened'), { description: t('servicesOrder.pay.opened.desc') })
   }
 
-  async function pollOnce() {
+  async function pollOnce(silent = false) {
     const seed = String(created?.userServiceId || selected?.serviceId || '')
 
-    toast.info(t('servicesOrder.toast.checking'), { description: moodChecking(seed) })
+    if (!silent) toast.info(t('servicesOrder.toast.checking'), { description: moodChecking(seed) })
 
     try {
       await Promise.resolve(refetch?.())
@@ -758,16 +777,36 @@ export function ServicesOrder() {
       if (item && (item.status === 'active' || item.status === 'pending')) {
         setCreated((cur) => (cur ? { ...cur, status: item.status, statusRaw: item.statusRaw || cur.statusRaw } : cur))
         setWaitMsg(t('servicesOrder.status.activated'))
-        toast.success(getMood('service_activated') ?? t('servicesOrder.toast.paid'), { description: moodSuccess(seed, toPay) })
+        if (!silent) toast.success(getMood('service_activated') ?? t('servicesOrder.toast.paid'), { description: moodSuccess(seed, toPay) })
+        if (assistantMode) {
+          navigate(item.status === 'active'
+            ? `/services?usi=${encodeURIComponent(String(item.userServiceId))}&connect=1&assistant=1`
+            : `/assistant?usi=${encodeURIComponent(String(item.userServiceId))}`)
+        }
         return
       }
     } catch {
       /* ignore */
     }
 
-    setWaitMsg(t('servicesOrder.status.not_confirmed'))
-    toast.info(getMood('payment_failed') ?? t('servicesOrder.pay.not_seen'), { description: t('servicesOrder.pay.not_seen.desc') })
+    if (!silent) {
+      setWaitMsg(t('servicesOrder.status.not_confirmed'))
+      toast.info(getMood('payment_failed') ?? t('servicesOrder.pay.not_seen'), { description: t('servicesOrder.pay.not_seen.desc') })
+    }
   }
+
+  useEffect(() => {
+    if (!assistantMode || !created?.userServiceId || !shouldShowPay) return
+    const check = () => { if (document.visibilityState === 'visible') void pollOnce(true) }
+    const timer = window.setInterval(check, 4000)
+    window.addEventListener('focus', check)
+    document.addEventListener('visibilitychange', check)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('focus', check)
+      document.removeEventListener('visibilitychange', check)
+    }
+  }, [assistantMode, created?.userServiceId, shouldShowPay]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleCopyLink() {
     if (!lastPayUrl) return
@@ -782,6 +821,14 @@ export function ServicesOrder() {
     }
 
     toast.success(getMood('copied') ?? t('servicesOrder.pay.copy_link_ok'), { description: t('servicesOrder.pay.copy_link_ok.desc') })
+  }
+
+  function continueAfterOrder() {
+    if (assistantMode && created?.userServiceId) {
+      navigate(`/assistant?usi=${encodeURIComponent(String(created.userServiceId))}`)
+      return
+    }
+    navigate('/services')
   }
 
   function resetSelection() {
@@ -860,8 +907,8 @@ export function ServicesOrder() {
                   <button className="btn" onClick={() => void pollOnce()} type="button">
                     🔄 {t('servicesOrder.pay.poll')}
                   </button>
-                  <button className="btn" onClick={() => navigate('/services')} type="button">
-                    → {t('services.page.title')}
+                  <button className="btn" onClick={continueAfterOrder} type="button">
+                    → {assistantMode ? t('assistant.continue') : t('services.page.title')}
                   </button>
                 </div>
               </div>
@@ -1212,8 +1259,8 @@ export function ServicesOrder() {
                     <button className="btn" onClick={() => void pollOnce()} type="button">
                       🔄 {t('servicesOrder.pay.poll')}
                     </button>
-                    <button className="btn" onClick={() => navigate('/services')} type="button">
-                      → {t('services.page.title')}
+                    <button className="btn" onClick={continueAfterOrder} type="button">
+                      → {assistantMode ? t('assistant.continue') : t('services.page.title')}
                     </button>
                   </div>
 
@@ -1231,14 +1278,14 @@ export function ServicesOrder() {
             <div className="actions actions--1" style={{ marginTop: 12 }}>
               <button
                 className="btn"
-                onClick={() => navigate('/services')}
+                onClick={continueAfterOrder}
                 type="button"
                 style={{
                   ...getCategoryButtonStyle(selectedCat),
                   minHeight: 52,
                 }}
               >
-                → {t('services.page.title')}
+                → {assistantMode ? t('assistant.continue') : t('services.page.title')}
               </button>
             </div>
           )}

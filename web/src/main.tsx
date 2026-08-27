@@ -16,6 +16,7 @@ import { Home }             from "./pages/Home";
 import { Feed }             from "./pages/Feed";
 import { Services }         from "./pages/Services";
 import { ServicesOrder }    from "./pages/ServicesOrder";
+import { ConnectionAssistant } from "./pages/ConnectionAssistant";
 import { Payments }         from "./pages/Payments";
 import { Profile }          from "./pages/Profile";
 import { Reviews }          from "./pages/Reviews";
@@ -71,14 +72,14 @@ if (import.meta.env.PROD) {
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
-type ServicesSummaryResp = { ok: true; summary?: { active?: number } };
+type ServicesSummaryResp = { ok: true; summary?: { active?: number; pending?: number; notPaid?: number; blocked?: number } };
 
 const ROUTE_ORDER = ["/", "/home", "/feed", "/services", "/payments", "/profile"];
 
 function routeTone(pathname: string) {
   if (pathname === "/" || pathname === "/home") return "home";
   if (pathname.startsWith("/feed")) return "feed";
-  if (pathname.startsWith("/services") || pathname.startsWith("/help")) return "services";
+  if (pathname.startsWith("/services") || pathname.startsWith("/help") || pathname.startsWith("/assistant")) return "services";
   if (pathname.startsWith("/payments")) return "payments";
   if (pathname.startsWith("/profile")) return "profile";
   if (pathname.startsWith("/admin")) return "admin";
@@ -99,7 +100,8 @@ function routeRank(pathname: string) {
 function AppShell({ children }: { children: React.ReactNode }) {
   const { t } = useI18n();
   const loc   = useLocation();
-  const hideNav = loc.pathname === "/login" || loc.pathname.startsWith("/legal");
+  const assistantFlow = loc.pathname === "/assistant" || new URLSearchParams(loc.search).get("assistant") === "1";
+  const hideNav = loc.pathname === "/login" || loc.pathname.startsWith("/legal") || assistantFlow;
   const tone = routeTone(loc.pathname);
 
   return (
@@ -141,9 +143,10 @@ function AuthedLayout() {
 function LandingRoute() {
   const { t } = useI18n();
   const loc   = useLocation();
-  const alreadyChecked = sessionStorage.getItem("landing_checked") === "1";
-  const [state, setState] = React.useState<"loading" | "home" | "services">(
-    alreadyChecked ? "home" : "loading"
+  const cachedDestination = sessionStorage.getItem("landing_destination");
+  const alreadyChecked = cachedDestination === "home" || cachedDestination === "services" || cachedDestination === "assistant";
+  const [state, setState] = React.useState<"loading" | "home" | "services" | "assistant">(
+    alreadyChecked ? cachedDestination : "loading"
   );
 
   React.useEffect(() => {
@@ -154,8 +157,12 @@ function LandingRoute() {
         const resp   = await apiFetch<ServicesSummaryResp>("/services", { method: "GET" });
         const active = Number(resp?.summary?.active ?? 0);
         if (cancelled) return;
-        sessionStorage.setItem("landing_checked", "1");
-        setState(active > 0 ? "home" : "services");
+        const unfinished = Number(resp?.summary?.pending ?? 0) + Number(resp?.summary?.notPaid ?? 0) + Number(resp?.summary?.blocked ?? 0);
+        let snoozed = false;
+        try { snoozed = Number(localStorage.getItem("connection-assistant.snoozed-until.v1") || "0") > Date.now(); } catch { /* ignore */ }
+        const destination = active > 0 ? "home" : unfinished > 0 || !snoozed ? "assistant" : "services";
+        sessionStorage.setItem("landing_destination", destination);
+        setState(destination);
       } catch { if (!cancelled) setState("home"); }
     })();
     return () => { cancelled = true; };
@@ -172,7 +179,9 @@ function LandingRoute() {
       </div>
     );
   }
-  return state === "home" ? <Home /> : <Services />;
+  if (state === "home") return <Home />;
+  if (state === "assistant") return <ConnectionAssistant />;
+  return <Services />;
 }
 
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
@@ -255,6 +264,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                   <Route path="/feed"              element={<Feed />} />
                   <Route path="/services"          element={<Services />} />
                   <Route path="/services/order"    element={<ServicesOrder />} />
+                  <Route path="/assistant"         element={<ConnectionAssistant />} />
                   <Route path="/help/router"       element={<ServicesRouter />} />
                   <Route path="/payments"          element={<Payments />} />
                   <Route path="/payments/history"  element={<PaymentsHistory />} />

@@ -266,6 +266,7 @@ function Modal({ title, open, children, confirmText, cancelText, loading, error,
 /* ─── ConnectInline ──────────────────────────────────────────────────────── */
 
 function ConnectInline({ kind, service, onDone, t }: { kind: ServiceKind; service: ApiServiceItem; onDone?: () => void; t: T }) {
+  const assistantMode = new URLSearchParams(window.location.search).get("assistant") === "1";
   return (
     <div className="svc__connect">
       <div className="row svc__connectHead">
@@ -278,6 +279,27 @@ function ConnectInline({ kind, service, onDone, t }: { kind: ServiceKind; servic
           {kind === "marzban_router" ? <ConnectRouter    usi={service.userServiceId} service={service} onDone={onDone} /> : null}
           {kind === "unknown" ? <div className="pre">{t("services.connect.unavailable")}</div> : null}
         </Suspense>
+        {assistantMode && kind !== "unknown" && (
+          <div className="assistant-finish">
+            <div className="assistant-finish__title">{t("assistant.finish.title")}</div>
+            <p>{t("assistant.finish.text")}</p>
+            <div className="actions actions--2">
+              <button className="btn btn--primary" type="button" onClick={() => {
+                try {
+                  localStorage.removeItem("connection-assistant.snoozed-until.v1");
+                  sessionStorage.removeItem("connection-assistant.screen.v1");
+                  sessionStorage.setItem("landing_destination", "home");
+                } catch { /* ignore */ }
+                window.location.assign("/home?connected=1");
+              }}>
+                {t("assistant.finish.done")}
+              </button>
+              <button className="btn" type="button" onClick={() => window.location.assign(`/support?topic=connection&usi=${encodeURIComponent(String(service.userServiceId))}`)}>
+                {t("assistant.finish.help")}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -613,6 +635,7 @@ export function Services() {
     focusedUsiRef.current = target;
     setOpenGroups((cur) => ({ ...cur, [detectKind(item.category)]: true }));
     setExpandedId(target);
+    if (sp.get("connect") === "1" && item.status === "active") setConnectOpenId(target);
 
     window.setTimeout(() => {
       document.querySelector<HTMLElement>(`[data-usi="${target}"]`)?.scrollIntoView({
@@ -784,7 +807,7 @@ export function Services() {
               <p className="services-empty__text">{t("services.empty.text")}</p>
 
               <div className="services-empty__actions">
-                <button className="btn btn--primary services-empty__cta" onClick={() => go("/services/order")} type="button">
+                <button className="btn btn--primary services-empty__cta" onClick={() => go("/assistant")} type="button">
                   {t("services.empty.cta")}
                 </button>
               </div>
