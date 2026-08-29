@@ -6,7 +6,6 @@ import { useMe } from "../app/auth/useMe";
 import { apiFetch } from "../shared/api/client";
 import { useI18n } from "../shared/i18n";
 import { toast } from "../shared/ui/toast";
-import { getMood } from "../shared/payments-mood";
 import { ensureTelegramWebAppSdk, getTelegramWebApp, isTelegramMiniAppEnv } from "../shared/telegram/sdk";
 
 type RefItem = {
@@ -311,10 +310,10 @@ export function Referrals() {
       if (!navigator.clipboard?.writeText) throw new Error("clipboard_unavailable");
       await navigator.clipboard.writeText(referralUrl);
       if (showSuccess) {
-        toast.success(getMood("copied") ?? t("home.ref.copy_ok"), { description: t("home.ref.copy_ok.desc") });
+        toast.success(t("home.ref.copy_ok"), { description: t("home.ref.copy_ok.desc") });
       }
     } catch {
-      toast.error(t("home.services.error"));
+      toast.error(t("home.ref.copy_error"), { description: t("home.ref.copy_error.desc") });
     }
   }
 
