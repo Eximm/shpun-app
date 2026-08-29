@@ -265,8 +265,19 @@ function Modal({ title, open, children, confirmText, cancelText, loading, error,
 
 /* ─── ConnectInline ──────────────────────────────────────────────────────── */
 
-function ConnectInline({ kind, service, onDone, t }: { kind: ServiceKind; service: ApiServiceItem; onDone?: () => void; t: T }) {
+function ConnectInline({ kind, service, mobileKeyUsi, onDone, t }: {
+  kind: ServiceKind;
+  service: ApiServiceItem;
+  mobileKeyUsi?: number | null;
+  onDone?: () => void;
+  t: T;
+}) {
   const assistantMode = new URLSearchParams(window.location.search).get("assistant") === "1";
+  const [assistantFinished, setAssistantFinished] = useState(() => {
+    if (!assistantMode) return false;
+    try { return sessionStorage.getItem(`connection-assistant.connect-step.v1:${service.userServiceId}`) === "done"; }
+    catch { return false; }
+  });
   return (
     <div className="svc__connect">
       <div className="row svc__connectHead">
@@ -275,14 +286,35 @@ function ConnectInline({ kind, service, onDone, t }: { kind: ServiceKind; servic
       <div className="svc__connectBody">
         <Suspense fallback={<p className="p">{t("services.loading_short")}</p>}>
           {kind === "amneziawg"      ? <ConnectAmneziaWG usi={service.userServiceId} service={service} onDone={onDone} /> : null}
-          {(kind === "marzban" || kind === "flex") ? <ConnectMarzban usi={service.userServiceId} service={service} onDone={onDone} /> : null}
+          {(kind === "marzban" || kind === "flex") ? (
+            <ConnectMarzban
+              usi={service.userServiceId}
+              service={service}
+              onDone={onDone}
+              onAssistantStepChange={(step) => setAssistantFinished(step === "done")}
+            />
+          ) : null}
           {kind === "marzban_router" ? <ConnectRouter    usi={service.userServiceId} service={service} onDone={onDone} /> : null}
           {kind === "unknown" ? <div className="pre">{t("services.connect.unavailable")}</div> : null}
         </Suspense>
-        {assistantMode && kind !== "unknown" && (
+        {assistantMode && kind !== "unknown" && (kind !== "flex" || assistantFinished) && (
           <div className="assistant-finish">
             <div className="assistant-finish__title">{t("assistant.finish.title")}</div>
             <p>{t("assistant.finish.text")}</p>
+            {mobileKeyUsi ? (
+              <div className="assistant-mobile-key">
+                <span aria-hidden="true">📱</span>
+                <div>
+                  <strong>{t("assistant.finish.mobile_key.title")}</strong>
+                  <small>{t("assistant.finish.mobile_key.text")}</small>
+                </div>
+                <button className="btn btn--primary" type="button" onClick={() => {
+                  window.location.assign(`/services?usi=${encodeURIComponent(String(mobileKeyUsi))}&connect=1&assistant=1`);
+                }}>
+                  {t("assistant.finish.mobile_key.button")}
+                </button>
+              </div>
+            ) : null}
             <div className="actions actions--2">
               <button className="btn btn--primary" type="button" onClick={() => {
                 try {
@@ -307,8 +339,9 @@ function ConnectInline({ kind, service, onDone, t }: { kind: ServiceKind; servic
 
 /* ─── ServiceRow — одна услуга ───────────────────────────────────────────── */
 
-function ServiceRow({ s, expanded, connectOpen, onToggle, onToggleConnect, onRefresh, onAskDelete, onAskStop, t, isChild = false }: {
+function ServiceRow({ s, expanded, connectOpen, onToggle, onToggleConnect, onRefresh, onAskDelete, onAskStop, t, isChild = false, mobileKeyUsi = null }: {
   s: ApiServiceItem; expanded: boolean; connectOpen: boolean; isChild?: boolean;
+  mobileKeyUsi?: number | null;
   onToggle: () => void; onToggleConnect: () => void; onRefresh: () => void;
   onAskDelete: (s: ApiServiceItem) => void; onAskStop: (s: ApiServiceItem) => void; t: T;
 }) {
@@ -408,7 +441,7 @@ function ServiceRow({ s, expanded, connectOpen, onToggle, onToggleConnect, onRef
             </div>
           )}
 
-          {connectOpen && canConnect && <ConnectInline kind={kind} service={s} onDone={onRefresh} t={t} />}
+          {connectOpen && canConnect && <ConnectInline kind={kind} service={s} mobileKeyUsi={mobileKeyUsi} onDone={onRefresh} t={t} />}
 
           {!isChild && canStopStatus(s.status) && (
             <button className="btn" onClick={() => onAskStop(s)} type="button" style={{ width: "100%", fontSize: 11, color: "rgba(255,255,255,.40)", borderColor: "rgba(255,255,255,.08)" }}>
@@ -436,6 +469,7 @@ function ServiceCard({ main, children, expandedId, connectOpenId, onToggle, onTo
 }) {
   const tint = statusTint(main.status);
   const hasWL = children.length > 0;
+  const mobileKeyUsi = children.find((child) => child.status === "active" && isFlexPlus(child.category))?.userServiceId ?? null;
 
   const pulseAnim =
     main.status === "blocked" || main.status === "error"
@@ -463,6 +497,7 @@ function ServiceCard({ main, children, expandedId, connectOpenId, onToggle, onTo
         onRefresh={onRefresh}
         onAskDelete={onAskDelete}
         onAskStop={onAskStop}
+        mobileKeyUsi={mobileKeyUsi}
         t={t}
       />
 

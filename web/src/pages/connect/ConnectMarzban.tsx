@@ -12,6 +12,7 @@ type Props = {
   usi: number;
   service: { title: string; status: string; statusRaw: string; category?: string; parent?: number | null };
   onDone?: () => void;
+  onAssistantStepChange?: (step: "install" | "import" | "done") => void;
 };
 
 type Platform = "android" | "ios" | "windows" | "mac" | "linux";
@@ -272,7 +273,7 @@ function deviceUpdatedDate(value: string) {
   });
 }
 
-export default function ConnectMarzban({ usi, service }: Props) {
+export default function ConnectMarzban({ usi, service, onAssistantStepChange }: Props) {
   const { t } = useI18n();
 
   const bridgeDeepLink = useMemo(() => getHappBridgeDeepLink(), []);
@@ -329,6 +330,7 @@ export default function ConnectMarzban({ usi, service }: Props) {
   function setAssistantStep(step: AssistantFocusStep) {
     setAssistantStepState(step);
     try { sessionStorage.setItem(assistantStepKey, step); } catch { /* ignore */ }
+    onAssistantStepChange?.(step);
   }
 
   async function load() {
@@ -602,7 +604,7 @@ export default function ConnectMarzban({ usi, service }: Props) {
 
       {assistantMode && assistantStep !== "done" && (
         <div className="cm__assistantGuide" role="status">
-          <span className="cm__assistantGuideNumber">{assistantStep === "install" ? "1" : "2"}</span>
+          <span className="cm__assistantGuideNumber">{assistantStep === "install" ? "А" : "Б"}</span>
           <div>
             <strong>{t(assistantStep === "install" ? "connect.assistant.install_title" : "connect.assistant.import_title")}</strong>
             <span>{t(assistantStep === "install" ? "connect.assistant.install_text" : "connect.assistant.import_text")}</span>
