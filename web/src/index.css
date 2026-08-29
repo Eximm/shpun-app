@@ -3584,6 +3584,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .cm__assistantGuide div { display: flex; flex-direction: column; gap: 3px; }
 .cm__assistantGuide strong { font-size: 14px; }
 .cm__assistantGuide span:last-child { color: rgba(255,255,255,.64); font-size: 12px; line-height: 1.35; }
+.cm--assistant-install .cm__assistantGuide span:last-child { color: #ff7185; font-weight: 850; }
 .cm__focusStep { position: relative; transition: opacity 180ms ease, filter 180ms ease, box-shadow 180ms ease; }
 .cm__focusStep--active {
   margin: -8px;
