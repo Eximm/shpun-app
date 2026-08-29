@@ -3594,6 +3594,13 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .cm__focusStep--dimmed { opacity: .24; filter: grayscale(.55); pointer-events: none; }
 .cm__assistantContinue { width: 100%; margin-top: 10px; border-color: rgba(77,215,255,.24); }
 .cm__assistantSecondary { opacity: .18; filter: grayscale(.7); pointer-events: none; }
+.cm--assistant-focus > :not(.cm__assistantGuide):not(.cm__setupCard) {
+  opacity: .18;
+  filter: grayscale(.72);
+  pointer-events: none;
+  transition: opacity 180ms ease, filter 180ms ease;
+}
+.svc-row__toggle--assistant-muted { opacity: .24; filter: grayscale(.7); pointer-events: none; }
 .cm__clientPick {
   display: flex;
   align-items: flex-start;
@@ -4108,6 +4115,23 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .assistant-finish { margin-top: 16px; padding: 16px; border: 1px solid rgba(43,227,143,.24); border-radius: 16px; background: rgba(43,227,143,.055); }
 .assistant-finish__title { font-size: 16px; font-weight: 900; color: #71f0b2; }
 .assistant-finish p { margin: 6px 0 14px; color: rgba(255,255,255,.64); font-size: 13px; line-height: 1.5; }
+.assistant-connect-exit {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: 13px;
+  background: rgba(5,9,18,.48);
+}
+.assistant-connect-exit span { color: rgba(255,255,255,.48); font-size: 11px; line-height: 1.35; }
+.assistant-connect-exit .btn { flex: 0 0 auto; min-height: 38px; }
+@media (max-width: 430px) {
+  .assistant-connect-exit { align-items: stretch; flex-direction: column; }
+  .assistant-connect-exit .btn { width: 100%; }
+}
 .assistant-mobile-key {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

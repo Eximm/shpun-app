@@ -534,7 +534,7 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
   }
 
   return (
-    <div className={`cm${assistantMode ? ` cm--assistant-focus cm--assistant-${assistantStep}` : ""}`}>
+    <div className={`cm${assistantMode && ready ? ` cm--assistant-focus cm--assistant-${assistantStep}` : ""}`}>
       <div className="pre" style={{
         borderColor: ready ? "rgba(43,227,143,0.28)" : error ? "rgba(255,77,109,0.28)" : "rgba(77,215,255,0.20)",
         background: ready ? "rgba(43,227,143,0.06)" : error ? "rgba(255,77,109,0.06)" : "rgba(77,215,255,0.05)",
@@ -602,7 +602,7 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
         </div>
       </div>
 
-      {assistantMode && assistantStep !== "done" && (
+      {assistantMode && ready && assistantStep !== "done" && (
         <div className="cm__assistantGuide" role="status">
           <span className="cm__assistantGuideNumber">{assistantStep === "install" ? "А" : "Б"}</span>
           <div>
@@ -614,7 +614,7 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
 
       <div className="card cm__setupCard" style={{ marginTop: 12 }}>
         <div className="card__body">
-          <div className={`cm__focusStep${assistantMode && assistantStep === "install" ? " cm__focusStep--active" : ""}${assistantMode && assistantStep === "import" ? " cm__focusStep--dimmed" : ""}`}>
+          <div className={`cm__focusStep${assistantMode && ready && assistantStep === "install" ? " cm__focusStep--active" : ""}${assistantMode && ready && assistantStep === "import" ? " cm__focusStep--dimmed" : ""}`}>
           <div className="pre" style={{ borderColor: "rgba(124,92,255,0.22)", background: "rgba(124,92,255,0.05)" }}>
             <b>{t("connect.step1.label")}</b> {t("connect.step_install_desc").replace("{client}", selectedLinks.title).replace("{platform}", platformLabel(platform))}
           </div>
@@ -639,14 +639,14 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
             <span>{selectedClient.icon}</span>
             <span>{t(selectedClient.noteKey)}</span>
           </div>
-          {assistantMode && assistantStep === "install" && (
+          {assistantMode && ready && assistantStep === "install" && (
             <button className="btn cm__assistantContinue" type="button" onClick={() => setAssistantStep("import")}>
               {t("connect.assistant.already_installed")}
             </button>
           )}
           </div>
 
-          <div className={`cm__focusStep${assistantMode && assistantStep === "import" ? " cm__focusStep--active" : ""}${assistantMode && assistantStep === "install" ? " cm__focusStep--dimmed" : ""}`}>
+          <div className={`cm__focusStep${assistantMode && ready && assistantStep === "import" ? " cm__focusStep--active" : ""}${assistantMode && ready && assistantStep === "install" ? " cm__focusStep--dimmed" : ""}`}>
           <div className="pre" style={{ marginTop: 12, borderColor: "rgba(77,215,255,0.22)", background: "rgba(77,215,255,0.05)" }}>
             <b>{t("connect.step2.label")}</b> {t("connect.step_import_desc")}
           </div>

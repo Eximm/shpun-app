@@ -280,6 +280,14 @@ function ConnectInline({ kind, service, mobileKeyUsi, onDone, t }: {
   });
   return (
     <div className="svc__connect">
+      {assistantMode && (
+        <div className="assistant-connect-exit">
+          <span>{t("assistant.connect.exit_hint")}</span>
+          <button className="btn" type="button" onClick={() => window.location.assign("/home")}>
+            {t("assistant.connect.exit")}
+          </button>
+        </div>
+      )}
       <div className="row svc__connectHead">
         <div className="services-cat__title svc__connectTitle">{t("services.connect.title")}</div>
       </div>
@@ -348,6 +356,7 @@ function ServiceRow({ s, expanded, connectOpen, onToggle, onToggleConnect, onRef
   const tint       = statusTint(s.status);
   const kind       = detectKind(s.category);
   const canConnect = kind !== "unknown" && s.status === "active";
+  const assistantMode = new URLSearchParams(window.location.search).get("assistant") === "1";
   const hint       = daysLeftText(s, t);
   const until      = s.expireAt ? fmtDate(s.expireAt) : "";
   const payUrl     = `/payments?reason=service&usi=${encodeURIComponent(String(s.userServiceId))}`;
@@ -362,7 +371,7 @@ function ServiceRow({ s, expanded, connectOpen, onToggle, onToggleConnect, onRef
     } as React.CSSProperties}>
 
       {/* Заголовок — кликабельный */}
-      <button className="svc-row__toggle" type="button" onClick={onToggle} aria-expanded={expanded} style={{
+      <button className={`svc-row__toggle${assistantMode && connectOpen ? " svc-row__toggle--assistant-muted" : ""}`} type="button" onClick={onToggle} aria-expanded={expanded} disabled={assistantMode && connectOpen} style={{
         width: "100%", display: "flex", alignItems: "center", gap: 10,
         padding: isChild ? "10px 12px" : "10px 12px",
         background: "transparent", border: "none", cursor: "pointer", textAlign: "left",
@@ -414,7 +423,7 @@ function ServiceRow({ s, expanded, connectOpen, onToggle, onToggleConnect, onRef
             </div>
           )}
 
-          {s.status === "active" && (
+          {s.status === "active" && !(assistantMode && connectOpen) && (
             <button className="btn btn--primary" onClick={onToggleConnect} disabled={!canConnect} type="button" style={{ width: "100%", fontWeight: 800 }}>
               {connectOpen ? t("services.connect.hide") : t("services.connect.button")}
             </button>

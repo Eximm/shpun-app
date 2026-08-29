@@ -76,6 +76,11 @@ function isPayable(status: ServiceStatus) {
   return status === "not_paid" || status === "blocked";
 }
 
+function needsSubscriptionLink(category: string): boolean {
+  const normalized = String(category || "").trim().toLowerCase();
+  return normalized === "remnawave" || normalized === "remnawave-wl" || normalized === "marzban";
+}
+
 function AssistantLanguageSwitch({
   lang,
   onChange,
@@ -229,6 +234,7 @@ export function ConnectionAssistant() {
   const [emailChecked, setEmailChecked] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [items, setItems] = useState<ServiceItem[]>([]);
+  const [subscriptionReadyUsi, setSubscriptionReadyUsi] = useState<number | null>(null);
   const [screen, setScreen] = useState<Screen>(() => {
     try { return sessionStorage.getItem(SCREEN_KEY) === "device" ? "device" : "offer"; }
     catch { return "offer"; }
@@ -285,9 +291,40 @@ export function ConnectionAssistant() {
   }, [current, load]);
 
   useEffect(() => {
+    if (!current || current.status !== "active" || !needsSubscriptionLink(current.category)) return;
+    if (subscriptionReadyUsi === current.userServiceId) return;
+
+    let stopped = false;
+    let timer: number | null = null;
+
+    const probe = async () => {
+      try {
+        const response = await apiFetch<{ subscription_url?: string; subscriptionUrl?: string }>(
+          `/services/${encodeURIComponent(String(current.userServiceId))}/connect/marzban`,
+          { method: "GET" },
+        );
+        const subscriptionUrl = String(response?.subscription_url || response?.subscriptionUrl || "").trim();
+        if (!stopped && subscriptionUrl) {
+          setSubscriptionReadyUsi(current.userServiceId);
+          return;
+        }
+      } catch { /* service is active, but its subscription is still being prepared */ }
+
+      if (!stopped) timer = window.setTimeout(() => void probe(), 2500);
+    };
+
+    void probe();
+    return () => {
+      stopped = true;
+      if (timer != null) window.clearTimeout(timer);
+    };
+  }, [current, subscriptionReadyUsi]);
+
+  useEffect(() => {
     if (!current || current.status !== "active") return;
+    if (needsSubscriptionLink(current.category) && subscriptionReadyUsi !== current.userServiceId) return;
     navigate(`/services?usi=${encodeURIComponent(String(current.userServiceId))}&connect=1&assistant=1`, { replace: true });
-  }, [current, navigate]);
+  }, [current, navigate, subscriptionReadyUsi]);
 
   function chooseDevice(device: DeviceKind) {
     const kind = device === "router" ? "marzban_router" : "flex";
@@ -297,6 +334,11 @@ export function ConnectionAssistant() {
   function continueAssistant() {
     try { sessionStorage.setItem(SCREEN_KEY, "device"); } catch { /* ignore */ }
     setScreen("device");
+  }
+
+  function exitToHome() {
+    try { sessionStorage.setItem("landing_destination", "home"); } catch { /* ignore */ }
+    navigate("/home");
   }
 
   function snooze() {
@@ -332,6 +374,9 @@ export function ConnectionAssistant() {
         <button className="btn assistant__secondary" type="button" onClick={() => navigate("/support?topic=connection-assistant")}>
           {t("assistant.support")}
         </button>
+        <button className="btn assistant__secondary" type="button" onClick={exitToHome}>
+          {t("assistant.connect.exit")}
+        </button>
       </div>
     );
   }
@@ -360,6 +405,9 @@ export function ConnectionAssistant() {
         <button className="btn assistant__secondary" type="button" onClick={() => navigate(`/services?usi=${encodeURIComponent(String(current.userServiceId))}`)}>
           {t("assistant.resume.open")}
         </button>
+        <button className="btn assistant__secondary" type="button" onClick={exitToHome}>
+          {t("assistant.connect.exit")}
+        </button>
       </div>
     );
   }
@@ -378,6 +426,25 @@ export function ConnectionAssistant() {
         </button>
         <button className="btn assistant__secondary" type="button" onClick={() => navigate("/support?topic=connection-assistant")}>
           {t("assistant.support")}
+        </button>
+        <button className="btn assistant__secondary" type="button" onClick={exitToHome}>
+          {t("assistant.connect.exit")}
+        </button>
+      </div>
+    );
+  }
+
+  if (current && current.status === "active" && needsSubscriptionLink(current.category) && subscriptionReadyUsi !== current.userServiceId) {
+    return (
+      <div className="assistant assistant--center" aria-live="polite">
+        <AssistantLanguageSwitch lang={lang} onChange={setLang} />
+        <div className="assistant__step">{t("assistant.wait.eyebrow")}</div>
+        <div className="assistant__orb assistant__orb--pulse" aria-hidden="true">🔗</div>
+        <div className="assistant__title">{t("assistant.wait.subscription_title")}</div>
+        <p className="assistant__text">{t("assistant.wait.subscription_text")}</p>
+        <div className="assistant__summary"><span>{current.title}</span><strong>{t("assistant.wait.subscription_status")}</strong></div>
+        <button className="btn assistant__secondary" type="button" onClick={exitToHome}>
+          {t("assistant.connect.exit")}
         </button>
       </div>
     );
