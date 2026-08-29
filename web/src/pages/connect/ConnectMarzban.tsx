@@ -18,6 +18,7 @@ type Platform = "android" | "ios" | "windows" | "mac" | "linux";
 type Chip = "auto" | Platform;
 type RuntimeMode = "telegram-miniapp" | "browser" | "standalone-app";
 type ClientKind = "happ" | "v2ray" | "hiddify";
+type AssistantFocusStep = "install" | "import" | "done";
 type DeepLinkFallback = {
   title: string;
   desc: string;
@@ -275,6 +276,8 @@ export default function ConnectMarzban({ usi, service }: Props) {
   const { t } = useI18n();
 
   const bridgeDeepLink = useMemo(() => getHappBridgeDeepLink(), []);
+  const assistantMode = useMemo(() => new URLSearchParams(window.location.search).get("assistant") === "1", []);
+  const assistantStepKey = `connection-assistant.connect-step.v1:${usi}`;
   const variant = serviceVariant(service?.category);
   const happOnly = isHappOnlyService(service, variant);
 
@@ -305,6 +308,13 @@ export default function ConnectMarzban({ usi, service }: Props) {
   const [deviceLimit, setDeviceLimit] = useState<number | null>(null);
   const [deletingDevice, setDeletingDevice] = useState<SubscriptionDevice | null>(null);
   const [deletePending, setDeletePending] = useState(false);
+  const [assistantStep, setAssistantStepState] = useState<AssistantFocusStep>(() => {
+    if (!assistantMode) return "done";
+    try {
+      const saved = sessionStorage.getItem(assistantStepKey);
+      return saved === "import" || saved === "done" ? saved : "install";
+    } catch { return "install"; }
+  });
 
   const effectiveClient: ClientKind = happOnly ? "happ" : client;
   const availableClients: ClientKind[] = happOnly ? ["happ"] : ["happ", "v2ray", "hiddify"];
@@ -315,6 +325,11 @@ export default function ConnectMarzban({ usi, service }: Props) {
     if (!happOnly) return;
     setClient("happ");
   }, [happOnly]);
+
+  function setAssistantStep(step: AssistantFocusStep) {
+    setAssistantStepState(step);
+    try { sessionStorage.setItem(assistantStepKey, step); } catch { /* ignore */ }
+  }
 
   async function load() {
     setLoading(true);
@@ -367,6 +382,7 @@ export default function ConnectMarzban({ usi, service }: Props) {
   async function openImport(useMirror = false, client: ClientKind = "happ") {
     const target = useMirror ? (subscriptionUrlMirror ?? "") : subscriptionUrl;
     if (!ready || !target) return;
+    if (assistantMode) setAssistantStep("done");
     const targetClient: ClientKind = happOnly ? "happ" : client;
 
     if (targetClient === "happ") {
@@ -431,6 +447,7 @@ export default function ConnectMarzban({ usi, service }: Props) {
 
   function openClientStore(client: ClientKind) {
     const targetClient: ClientKind = happOnly ? "happ" : client;
+    if (assistantMode) setAssistantStep("import");
     openLinkSafe(CLIENTS[targetClient].links[platform].market);
   }
 
@@ -438,6 +455,7 @@ export default function ConnectMarzban({ usi, service }: Props) {
     const targetClient: ClientKind = happOnly ? "happ" : client;
     const links = CLIENTS[targetClient].links[platform];
     if (!links.direct) return;
+    if (assistantMode) setAssistantStep("import");
     openLinkSafe(links.direct);
   }
 
@@ -514,7 +532,7 @@ export default function ConnectMarzban({ usi, service }: Props) {
   }
 
   return (
-    <div className="cm">
+    <div className={`cm${assistantMode ? ` cm--assistant-focus cm--assistant-${assistantStep}` : ""}`}>
       <div className="pre" style={{
         borderColor: ready ? "rgba(43,227,143,0.28)" : error ? "rgba(255,77,109,0.28)" : "rgba(77,215,255,0.20)",
         background: ready ? "rgba(43,227,143,0.06)" : error ? "rgba(255,77,109,0.06)" : "rgba(77,215,255,0.05)",
@@ -582,8 +600,19 @@ export default function ConnectMarzban({ usi, service }: Props) {
         </div>
       </div>
 
-      <div className="card" style={{ marginTop: 12 }}>
+      {assistantMode && assistantStep !== "done" && (
+        <div className="cm__assistantGuide" role="status">
+          <span className="cm__assistantGuideNumber">{assistantStep === "install" ? "1" : "2"}</span>
+          <div>
+            <strong>{t(assistantStep === "install" ? "connect.assistant.install_title" : "connect.assistant.import_title")}</strong>
+            <span>{t(assistantStep === "install" ? "connect.assistant.install_text" : "connect.assistant.import_text")}</span>
+          </div>
+        </div>
+      )}
+
+      <div className="card cm__setupCard" style={{ marginTop: 12 }}>
         <div className="card__body">
+          <div className={`cm__focusStep${assistantMode && assistantStep === "install" ? " cm__focusStep--active" : ""}${assistantMode && assistantStep === "import" ? " cm__focusStep--dimmed" : ""}`}>
           <div className="pre" style={{ borderColor: "rgba(124,92,255,0.22)", background: "rgba(124,92,255,0.05)" }}>
             <b>{t("connect.step1.label")}</b> {t("connect.step_install_desc").replace("{client}", selectedLinks.title).replace("{platform}", platformLabel(platform))}
           </div>
@@ -608,7 +637,14 @@ export default function ConnectMarzban({ usi, service }: Props) {
             <span>{selectedClient.icon}</span>
             <span>{t(selectedClient.noteKey)}</span>
           </div>
+          {assistantMode && assistantStep === "install" && (
+            <button className="btn cm__assistantContinue" type="button" onClick={() => setAssistantStep("import")}>
+              {t("connect.assistant.already_installed")}
+            </button>
+          )}
+          </div>
 
+          <div className={`cm__focusStep${assistantMode && assistantStep === "import" ? " cm__focusStep--active" : ""}${assistantMode && assistantStep === "install" ? " cm__focusStep--dimmed" : ""}`}>
           <div className="pre" style={{ marginTop: 12, borderColor: "rgba(77,215,255,0.22)", background: "rgba(77,215,255,0.05)" }}>
             <b>{t("connect.step2.label")}</b> {t("connect.step_import_desc")}
           </div>
@@ -617,11 +653,12 @@ export default function ConnectMarzban({ usi, service }: Props) {
               {loading ? `\u23F3 ${t("connect.wait")}` : `\u26A1 ${t("connect.add_sub")} ${selectedLinks.title}`}
             </button>
           </div>
+          </div>
         </div>
       </div>
 
       {subscriptionUrlMirror && ready && (
-        <div className="cm__priorityCard cm__priorityCard--mirror">
+        <div className={`cm__priorityCard cm__priorityCard--mirror${assistantMode && assistantStep !== "done" ? " cm__assistantSecondary" : ""}`}>
           <div className="cm__priorityHead">
             <span className="cm__priorityIcon">{"\u2194"}</span>
             <div>
@@ -638,7 +675,7 @@ export default function ConnectMarzban({ usi, service }: Props) {
       )}
 
       {ready && (
-        <div className="card cm__devicesCard">
+        <div className={`card cm__devicesCard${assistantMode && assistantStep !== "done" ? " cm__assistantSecondary" : ""}`}>
           <div className="card__body cm__devicesCardBody">
             <div className="cm__devicesIntro">
               <span className="cm__devicesIntroIcon" aria-hidden="true">{"\u{1F4F1}"}</span>

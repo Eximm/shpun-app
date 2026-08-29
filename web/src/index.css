@@ -3556,6 +3556,44 @@ button, a { -webkit-tap-highlight-color: transparent; }
   font-weight: 700;
   line-height: 1.35;
 }
+.cm__assistantGuide {
+  position: sticky;
+  top: 8px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-top: 12px;
+  padding: 13px 14px;
+  border: 1px solid rgba(77,215,255,.46);
+  border-radius: 15px;
+  background: rgba(10,18,34,.96);
+  box-shadow: 0 14px 38px rgba(0,0,0,.38), 0 0 28px rgba(77,215,255,.12);
+}
+.cm__assistantGuideNumber {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff;
+  font-weight: 950;
+}
+.cm__assistantGuide div { display: flex; flex-direction: column; gap: 3px; }
+.cm__assistantGuide strong { font-size: 14px; }
+.cm__assistantGuide span:last-child { color: rgba(255,255,255,.64); font-size: 12px; line-height: 1.35; }
+.cm__focusStep { position: relative; transition: opacity 180ms ease, filter 180ms ease, box-shadow 180ms ease; }
+.cm__focusStep--active {
+  margin: -8px;
+  padding: 8px;
+  border-radius: 15px;
+  box-shadow: 0 0 0 2px rgba(77,215,255,.54), 0 0 34px rgba(77,215,255,.16);
+}
+.cm__focusStep--dimmed { opacity: .24; filter: grayscale(.55); pointer-events: none; }
+.cm__assistantContinue { width: 100%; margin-top: 10px; border-color: rgba(77,215,255,.24); }
+.cm__assistantSecondary { opacity: .18; filter: grayscale(.7); pointer-events: none; }
 .cm__clientPick {
   display: flex;
   align-items: flex-start;

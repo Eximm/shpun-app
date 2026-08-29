@@ -183,7 +183,7 @@ function LandingRoute() {
     );
   }
   if (state === "home") return <Home />;
-  if (state === "assistant") return <ConnectionAssistant />;
+  if (state === "assistant") return <Navigate to="/assistant" replace />;
   return <Services />;
 }
 

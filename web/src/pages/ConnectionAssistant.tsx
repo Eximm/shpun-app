@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useMe } from "../app/auth/useMe";
 import { EmailVerifyModal } from "./Profile";
 import { apiFetch } from "../shared/api/client";
+import { clearPendingEmailVerification } from "../shared/emailVerificationState";
 import { useI18n } from "../shared/i18n";
 import { toastApiError } from "../shared/ui/toast/toastApiError";
 
@@ -30,6 +31,12 @@ type Screen = "offer" | "device";
 
 const SNOOZE_KEY = "connection-assistant.snoozed-until.v1";
 const SCREEN_KEY = "connection-assistant.screen.v1";
+const EMAIL_KEY = "connection-assistant.email.v1";
+
+function readAssistantEmail(): string {
+  try { return String(sessionStorage.getItem(EMAIL_KEY) || "").trim(); }
+  catch { return ""; }
+}
 
 function statusWeight(status: ServiceStatus): number {
   const weights: Record<ServiceStatus, number> = {
@@ -103,11 +110,23 @@ function AssistantEmailGate({
   onLater: () => void;
   t: (key: string) => string;
 }) {
-  const [currentEmail, setCurrentEmail] = useState(email);
-  const [draft, setDraft] = useState(email);
+  const initialEmail = email || readAssistantEmail();
+  const [currentEmail, setCurrentEmail] = useState(initialEmail);
+  const [draft, setDraft] = useState(initialEmail);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [verifyOpen, setVerifyOpen] = useState(Boolean(email));
+  const [editingEmail, setEditingEmail] = useState(!initialEmail);
+  const [verifyOpen, setVerifyOpen] = useState(Boolean(initialEmail));
+
+  useEffect(() => {
+    const nextEmail = email.trim();
+    if (!nextEmail || nextEmail === currentEmail) return;
+    setCurrentEmail(nextEmail);
+    setDraft(nextEmail);
+    setEditingEmail(false);
+    setVerifyOpen(true);
+    try { sessionStorage.setItem(EMAIL_KEY, nextEmail); } catch { /* ignore */ }
+  }, [email, currentEmail]);
 
   async function saveEmail() {
     const clean = draft.trim().toLowerCase();
@@ -120,8 +139,11 @@ function AssistantEmailGate({
     setSaving(true);
     setError(null);
     try {
+      if (clean !== currentEmail) clearPendingEmailVerification();
       await apiFetch("/user/email", { method: "PUT", body: { email: clean } });
       setCurrentEmail(clean);
+      setEditingEmail(false);
+      try { sessionStorage.setItem(EMAIL_KEY, clean); } catch { /* ignore */ }
       await onEmailSaved();
       setVerifyOpen(true);
     } catch (nextError: unknown) {
@@ -143,7 +165,7 @@ function AssistantEmailGate({
       <div className="assistant__title">{t(currentEmail ? "assistant.email.verify_title" : "assistant.email.add_title")}</div>
       <p className="assistant__text">{t(currentEmail ? "assistant.email.verify_text" : "assistant.email.add_text")}</p>
 
-      {currentEmail ? (
+      {currentEmail && !editingEmail ? (
         <div className="assistant-email">
           <div className="assistant-email__address">{currentEmail}</div>
           <button className="btn btn--primary assistant__primary" type="button" onClick={() => setVerifyOpen(true)}>
@@ -181,7 +203,18 @@ function AssistantEmailGate({
         open={verifyOpen && Boolean(currentEmail)}
         email={currentEmail}
         onClose={() => setVerifyOpen(false)}
-        onVerified={onVerified}
+        onVerified={() => {
+          try { sessionStorage.removeItem(EMAIL_KEY); } catch { /* ignore */ }
+          onVerified();
+        }}
+        onChangeEmail={() => {
+          clearPendingEmailVerification();
+          setVerifyOpen(false);
+          setEditingEmail(true);
+          setDraft(currentEmail);
+          setError(null);
+        }}
+        onLater={onLater}
         t={t}
       />
     </div>

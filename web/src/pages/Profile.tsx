@@ -13,6 +13,13 @@ import { normalizeError } from "../shared/api/errorText";
 import { detectPwaInstallPlatform, isIOSPwaInstallPlatform, pwaGuideKey, resetPwaInstallPromptForNextSession } from "../shared/pwa/install";
 import { clearTelegramMiniAppSession } from "../shared/telegram/sdk";
 import { PageBackButton } from "../shared/ui/PageBackButton";
+import {
+  clearPendingEmailVerification,
+  EMAIL_CODE_COOLDOWN_MS,
+  getPendingEmailCooldown,
+  getPendingEmailVerificationAt,
+  markPendingEmailVerification,
+} from "../shared/emailVerificationState";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -21,9 +28,6 @@ type BeforeInstallPromptEvent = Event & {
 
 type VerifyModalState = "idle" | "sent" | "success";
 type ProfileScreen = "main" | "settings" | "about";
-
-const EMAIL_CODE_SENT_KEY    = "email_verify:sent_at";
-const EMAIL_CODE_COOLDOWN_MS = 60_000;
 
 function readEnv(key: string): string {
   const v = (import.meta as any).env?.[key];
@@ -82,20 +86,8 @@ function permissionLabel(p: string, t: (k: string) => string) {
   return t("profile.push.permission.unsupported");
 }
 
-function getCodeSentAt(): number {
-  try { return Number(localStorage.getItem(EMAIL_CODE_SENT_KEY) ?? 0) || 0; } catch { return 0; }
-}
-function setCodeSentAt() {
-  try { localStorage.setItem(EMAIL_CODE_SENT_KEY, String(Date.now())); } catch { /* ignore */ }
-}
-function clearCodeSentAt() {
-  try { localStorage.removeItem(EMAIL_CODE_SENT_KEY); } catch { /* ignore */ }
-}
 function getCooldownLeft(): number {
-  const sentAt = getCodeSentAt();
-  if (!sentAt) return 0;
-  const left = Math.ceil((sentAt + EMAIL_CODE_COOLDOWN_MS - Date.now()) / 1000);
-  return left > 0 ? left : 0;
+  return getPendingEmailCooldown();
 }
 
 /* ─── UI primitives ──────────────────────────────────────────────────────── */
@@ -383,10 +375,16 @@ function ProfileSwitch({ checked, disabled }: { checked?: boolean; disabled?: bo
 
 /* ─── Email Verify Modal ─────────────────────────────────────────────────── */
 
-export function EmailVerifyModal({ open, email, onClose, onVerified, t }: {
-  open: boolean; email: string; onClose: () => void; onVerified: () => void; t: (k: string) => string;
+export function EmailVerifyModal({ open, email, onClose, onVerified, onChangeEmail, onLater, t }: {
+  open: boolean;
+  email: string;
+  onClose: () => void;
+  onVerified: () => void;
+  onChangeEmail?: () => void;
+  onLater?: () => void;
+  t: (k: string) => string;
 }) {
-  const [state,      setState]      = useState<VerifyModalState>("idle");
+  const [state,      setState]      = useState<VerifyModalState>(() => getPendingEmailVerificationAt() > 0 ? "sent" : "idle");
   const [code,       setCode]       = useState("");
   const [codeError,  setCodeError]  = useState<string | null>(null);
   const [sending,    setSending]    = useState(false);
@@ -399,7 +397,7 @@ export function EmailVerifyModal({ open, email, onClose, onVerified, t }: {
     if (!open) return;
     const left = getCooldownLeft();
     setCooldown(left);
-    if (getCodeSentAt() > 0) setState("sent");
+    setState(getPendingEmailVerificationAt() > 0 ? "sent" : "idle");
     if (timerRef.current) clearInterval(timerRef.current);
     if (left > 0) {
       timerRef.current = setInterval(() => {
@@ -410,17 +408,17 @@ export function EmailVerifyModal({ open, email, onClose, onVerified, t }: {
     return () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } };
   }, [open]);
 
-  useEffect(() => { if (!open) { setState("idle"); setCode(""); setCodeError(null); } }, [open]);
+  useEffect(() => { if (!open) { setCode(""); setCodeError(null); } }, [open]);
   useEffect(() => { if (state === "sent") setTimeout(() => codeInputRef.current?.focus(), 100); }, [state]);
 
-  function handleClose() { if (state === "success") clearCodeSentAt(); setCode(""); setCodeError(null); onClose(); }
+  function handleClose() { if (state === "success") clearPendingEmailVerification(); setCode(""); setCodeError(null); onClose(); }
 
   async function sendCode() {
     if (cooldown > 0 || sending) return;
     setSending(true); setCodeError(null);
     try {
       await apiFetch("/user/email/send-code", { method: "POST", body: {} });
-      setCodeSentAt(); setCooldown(EMAIL_CODE_COOLDOWN_MS / 1000);
+      markPendingEmailVerification(); setCooldown(EMAIL_CODE_COOLDOWN_MS / 1000);
       if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = setInterval(() => {
         const l = getCooldownLeft(); setCooldown(l);
@@ -437,7 +435,7 @@ export function EmailVerifyModal({ open, email, onClose, onVerified, t }: {
     setConfirming(true); setCodeError(null);
     try {
       await apiFetch("/user/email/confirm", { method: "POST", body: { code: trimmed } });
-      clearCodeSentAt(); setState("success"); onVerified();
+      clearPendingEmailVerification(); setState("success"); onVerified();
     } catch (e: any) {
       const errCode = e?.code ?? e?.data?.error ?? "";
       setCodeError(errCode === "invalid_code" ? t("profile.email.verify.error.invalid_code") : t("profile.email.verify.error.confirm"));
@@ -476,6 +474,16 @@ export function EmailVerifyModal({ open, email, onClose, onVerified, t }: {
           <button className="btn" type="button" onClick={() => void sendCode()} disabled={sending || cooldown > 0} style={{ width: "100%", opacity: cooldown > 0 ? 0.6 : 1 }}>
             {sending ? t("profile.email.verify.sending") : cooldown > 0 ? t("profile.email.verify.resend_cooldown").replace("{n}", String(cooldown)) : t("profile.email.verify.resend_btn")}
           </button>
+          {onChangeEmail && (
+            <button className="btn" type="button" onClick={onChangeEmail} disabled={confirming || sending} style={{ width: "100%" }}>
+              {t("assistant.email.change")}
+            </button>
+          )}
+          {onLater && (
+            <button className="btn" type="button" onClick={onLater} disabled={confirming || sending} style={{ width: "100%" }}>
+              {t("assistant.offer.later")}
+            </button>
+          )}
         </div>
       </form>
       <p className="p" style={{ textAlign: "center", margin: 0, opacity: 0.5, fontSize: 13 }}>{t("profile.email.verify.spam_hint")}</p>
@@ -906,7 +914,7 @@ export function Profile() {
   const personalPhoneView = savedPhone || "—";
   const pushEnabled       = pushState.permission === "granted" && pushState.hasSubscription && !pushState.disabledByUser;
   const pushPermText      = permissionLabel(String(pushState.permission), t);
-  const codePending       = getCodeSentAt() > 0 && emailVerified !== true;
+  const codePending       = getPendingEmailVerificationAt() > 0 && emailVerified !== true;
   const displayName       = personalNameView !== "—" ? personalNameView : authLoginText || loginText || "—";
   const initials          = displayName.trim().split(/\s+/).map((w: string) => w[0]).slice(0, 2).join("").toUpperCase() || "?";
 

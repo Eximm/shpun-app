@@ -360,7 +360,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     Number(firstPayBonus?.percent ?? 0) > 0 &&
     !firstPayBonusDismissed;
   const assistantFlow = loc.pathname === "/assistant" || new URLSearchParams(loc.search).get("assistant") === "1";
-  const profilePromptGranted = useOnboardingPromptSlot("profile", needsFirstLoginOnboarding);
+  const profilePromptGranted = useOnboardingPromptSlot("profile", needsFirstLoginOnboarding && !assistantFlow);
   const bonusPromptGranted = useOnboardingPromptSlot(
     "first_pay_bonus",
     !needsFirstLoginOnboarding && showFirstPayBonus && !assistantFlow
@@ -522,6 +522,11 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   // ── Push/install онбординг ────────────────────────────────────────────────
   useEffect(() => {
     if (!me || loading) return;
+    if (assistantFlow) {
+      setPushPromptOpen(false);
+      setPushGuideOpen(false);
+      return;
+    }
     if (needsFirstLoginOnboarding) {
       setPushPromptOpen(false);
       return;
@@ -569,7 +574,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       cancelled = true;
       window.clearTimeout(t);
     };
-  }, [me, loading, telegramMiniApp, uid, needsFirstLoginOnboarding]);
+  }, [me, loading, telegramMiniApp, uid, needsFirstLoginOnboarding, assistantFlow]);
 
   async function onPushPromptAccept() {
     if (!uid || pushPromptBusy) return;
