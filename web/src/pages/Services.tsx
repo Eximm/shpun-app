@@ -278,8 +278,23 @@ function ConnectInline({ kind, service, mobileKeyUsi, onDone, t }: {
     try { return sessionStorage.getItem(`connection-assistant.connect-step.v1:${service.userServiceId}`) === "done"; }
     catch { return false; }
   });
+  const connectRootRef = useRef<HTMLDivElement>(null);
+  const assistantScrolledRef = useRef(false);
+
+  useEffect(() => {
+    if (!assistantMode || assistantScrolledRef.current) return;
+    assistantScrolledRef.current = true;
+    const scrollToSteps = () => connectRootRef.current?.scrollIntoView({ behavior: "auto", block: "start" });
+    const frame = window.requestAnimationFrame(scrollToSteps);
+    const timer = window.setTimeout(scrollToSteps, 350);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(timer);
+    };
+  }, [assistantMode]);
+
   return (
-    <div className="svc__connect">
+    <div className="svc__connect assistant-connect-target" ref={connectRootRef}>
       {assistantMode && (
         <div className="assistant-connect-exit">
           <span>{t("assistant.connect.exit_hint")}</span>

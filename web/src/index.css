@@ -4128,6 +4128,9 @@ button, a { -webkit-tap-highlight-color: transparent; }
 }
 .assistant-connect-exit span { color: rgba(255,255,255,.48); font-size: 11px; line-height: 1.35; }
 .assistant-connect-exit .btn { flex: 0 0 auto; min-height: 38px; }
+.assistant-connect-target { scroll-margin-top: 76px; }
+.assistant--key-wait .assistant__title { color: #a9f2ff; text-shadow: 0 0 28px rgba(77,215,255,.28); }
+.assistant--key-wait .assistant__summary { border-color: rgba(77,215,255,.34); background: rgba(77,215,255,.09); }
 @media (max-width: 430px) {
   .assistant-connect-exit { align-items: stretch; flex-direction: column; }
   .assistant-connect-exit .btn { width: 100%; }

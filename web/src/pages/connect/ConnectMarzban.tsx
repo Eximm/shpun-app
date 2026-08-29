@@ -461,6 +461,14 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
     openLinkSafe(links.direct);
   }
 
+  function openRecommendedDownload(client: ClientKind) {
+    if (selectedLinks.direct && (platform === "windows" || platform === "mac" || platform === "linux")) {
+      openClientDirect(client);
+      return;
+    }
+    openClientStore(client);
+  }
+
   async function loadDevices() {
     setDevicesLoading(true);
     setDevicesError("");
@@ -615,10 +623,16 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
       <div className="card cm__setupCard" style={{ marginTop: 12 }}>
         <div className="card__body">
           <div className={`cm__focusStep${assistantMode && ready && assistantStep === "install" ? " cm__focusStep--active" : ""}${assistantMode && ready && assistantStep === "import" ? " cm__focusStep--dimmed" : ""}`}>
-          <div className="pre" style={{ borderColor: "rgba(124,92,255,0.22)", background: "rgba(124,92,255,0.05)" }}>
+          {!assistantMode && <div className="pre" style={{ borderColor: "rgba(124,92,255,0.22)", background: "rgba(124,92,255,0.05)" }}>
             <b>{t("connect.step1.label")}</b> {t("connect.step_install_desc").replace("{client}", selectedLinks.title).replace("{platform}", platformLabel(platform))}
-          </div>
-          {selectedLinks.direct ? (
+          </div>}
+          {assistantMode ? (
+            <div className="actions actions--1">
+              <button className="btn btn--primary" type="button" onClick={() => openRecommendedDownload(client)}>
+                {"\u2B07\uFE0F"} {t("connect.assistant.download_happ")}
+              </button>
+            </div>
+          ) : selectedLinks.direct ? (
             <div className="actions actions--2">
               <button className="btn btn--primary" type="button" onClick={() => openClientStore(client)}>
                 {"\u{1F4F2}"} {t("connect.open_store")} {t(selectedLinks.storeLabelKey)}
@@ -635,10 +649,10 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
             </div>
           )}
 
-          <div className="cm__clientNote">
+          {!assistantMode && <div className="cm__clientNote">
             <span>{selectedClient.icon}</span>
             <span>{t(selectedClient.noteKey)}</span>
-          </div>
+          </div>}
           {assistantMode && ready && assistantStep === "install" && (
             <button className="btn cm__assistantContinue" type="button" onClick={() => setAssistantStep("import")}>
               {t("connect.assistant.already_installed")}
@@ -647,12 +661,12 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
           </div>
 
           <div className={`cm__focusStep${assistantMode && ready && assistantStep === "import" ? " cm__focusStep--active" : ""}${assistantMode && ready && assistantStep === "install" ? " cm__focusStep--dimmed" : ""}`}>
-          <div className="pre" style={{ marginTop: 12, borderColor: "rgba(77,215,255,0.22)", background: "rgba(77,215,255,0.05)" }}>
+          {!assistantMode && <div className="pre" style={{ marginTop: 12, borderColor: "rgba(77,215,255,0.22)", background: "rgba(77,215,255,0.05)" }}>
             <b>{t("connect.step2.label")}</b> {t("connect.step_import_desc")}
-          </div>
+          </div>}
           <div className="actions actions--1">
             <button className="btn btn--primary" onClick={() => void openImport(false, effectiveClient)} disabled={!ready} type="button">
-              {loading ? `\u23F3 ${t("connect.wait")}` : `\u26A1 ${t("connect.add_sub")} ${selectedLinks.title}`}
+              {loading ? `\u23F3 ${t("connect.wait")}` : assistantMode ? `\u{1F511} ${t("connect.assistant.import_key")}` : `\u26A1 ${t("connect.add_sub")} ${selectedLinks.title}`}
             </button>
           </div>
           </div>

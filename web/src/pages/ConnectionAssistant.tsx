@@ -436,7 +436,7 @@ export function ConnectionAssistant() {
 
   if (current && current.status === "active" && needsSubscriptionLink(current.category) && subscriptionReadyUsi !== current.userServiceId) {
     return (
-      <div className="assistant assistant--center" aria-live="polite">
+      <div className="assistant assistant--center assistant--key-wait" aria-live="polite">
         <AssistantLanguageSwitch lang={lang} onChange={setLang} />
         <div className="assistant__step">{t("assistant.wait.eyebrow")}</div>
         <div className="assistant__orb assistant__orb--pulse" aria-hidden="true">🔗</div>
