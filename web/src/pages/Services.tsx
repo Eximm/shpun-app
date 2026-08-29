@@ -279,19 +279,51 @@ function ConnectInline({ kind, service, mobileKeyUsi, onDone, t }: {
     catch { return false; }
   });
   const connectRootRef = useRef<HTMLDivElement>(null);
+  const assistantFinishRef = useRef<HTMLDivElement>(null);
   const assistantScrolledRef = useRef(false);
 
   useEffect(() => {
     if (!assistantMode || assistantScrolledRef.current) return;
     assistantScrolledRef.current = true;
-    const scrollToSteps = () => connectRootRef.current?.scrollIntoView({ behavior: "auto", block: "start" });
+    const scrollToSteps = () => {
+      if (kind === "flex" || kind === "marzban") return;
+      connectRootRef.current?.scrollIntoView({ behavior: "auto", block: "start" });
+    };
     const frame = window.requestAnimationFrame(scrollToSteps);
     const timer = window.setTimeout(scrollToSteps, 350);
     return () => {
       window.cancelAnimationFrame(frame);
       window.clearTimeout(timer);
     };
-  }, [assistantMode]);
+  }, [assistantMode, kind]);
+
+  useEffect(() => {
+    if (!assistantMode || !assistantFinished) return;
+    let restoreTimer: number | null = null;
+    const scrollToFinish = (behavior: ScrollBehavior = "smooth") => {
+      assistantFinishRef.current?.scrollIntoView({ behavior, block: "center", inline: "nearest" });
+    };
+    const restoreFocus = () => {
+      if (restoreTimer != null) window.clearTimeout(restoreTimer);
+      restoreTimer = window.setTimeout(() => scrollToFinish("smooth"), 120);
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") restoreFocus();
+    };
+    const frame = window.requestAnimationFrame(() => scrollToFinish("smooth"));
+    const settleTimer = window.setTimeout(() => scrollToFinish("auto"), 380);
+    window.addEventListener("focus", restoreFocus);
+    window.addEventListener("pageshow", restoreFocus);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      if (restoreTimer != null) window.clearTimeout(restoreTimer);
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(settleTimer);
+      window.removeEventListener("focus", restoreFocus);
+      window.removeEventListener("pageshow", restoreFocus);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [assistantFinished, assistantMode]);
 
   return (
     <div className="svc__connect assistant-connect-target" ref={connectRootRef}>
@@ -320,8 +352,8 @@ function ConnectInline({ kind, service, mobileKeyUsi, onDone, t }: {
           {kind === "marzban_router" ? <ConnectRouter    usi={service.userServiceId} service={service} onDone={onDone} /> : null}
           {kind === "unknown" ? <div className="pre">{t("services.connect.unavailable")}</div> : null}
         </Suspense>
-        {assistantMode && kind !== "unknown" && (kind !== "flex" || assistantFinished) && (
-          <div className="assistant-finish">
+        {assistantMode && kind !== "unknown" && (!["flex", "marzban"].includes(kind) || assistantFinished) && (
+          <div className="assistant-finish" ref={assistantFinishRef}>
             <div className="assistant-finish__title">{t("assistant.finish.title")}</div>
             <p>{t("assistant.finish.text")}</p>
             {mobileKeyUsi ? (

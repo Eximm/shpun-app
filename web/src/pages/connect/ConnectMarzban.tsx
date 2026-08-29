@@ -1,6 +1,6 @@
 // FILE: web/src/pages/connect/ConnectMarzban.tsx
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import QRCode from "qrcode";
 import { apiFetch } from "../../shared/api/client";
@@ -309,6 +309,8 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
   const [deviceLimit, setDeviceLimit] = useState<number | null>(null);
   const [deletingDevice, setDeletingDevice] = useState<SubscriptionDevice | null>(null);
   const [deletePending, setDeletePending] = useState(false);
+  const installStepRef = useRef<HTMLDivElement>(null);
+  const importStepRef = useRef<HTMLDivElement>(null);
   const [assistantStep, setAssistantStepState] = useState<AssistantFocusStep>(() => {
     if (!assistantMode) return "done";
     try {
@@ -373,6 +375,43 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
   }, [usi, bridgeDeepLink]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const ready = !loading && !error && !!subscriptionUrl;
+
+  const scrollAssistantStepIntoView = useCallback((behavior: ScrollBehavior = "smooth") => {
+    if (!assistantMode || !ready || assistantStep === "done") return;
+    const target = assistantStep === "install" ? installStepRef.current : importStepRef.current;
+    target?.scrollIntoView({ behavior, block: "center", inline: "nearest" });
+  }, [assistantMode, assistantStep, ready]);
+
+  useEffect(() => {
+    if (!assistantMode || !ready || assistantStep === "done") return;
+    const frame = window.requestAnimationFrame(() => scrollAssistantStepIntoView("smooth"));
+    const settleTimer = window.setTimeout(() => scrollAssistantStepIntoView("auto"), 380);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(settleTimer);
+    };
+  }, [assistantMode, assistantStep, effectiveClient, platform, ready, scrollAssistantStepIntoView]);
+
+  useEffect(() => {
+    if (!assistantMode || !ready || assistantStep === "done") return;
+    let restoreTimer: number | null = null;
+    const restoreFocus = () => {
+      if (restoreTimer != null) window.clearTimeout(restoreTimer);
+      restoreTimer = window.setTimeout(() => scrollAssistantStepIntoView("smooth"), 120);
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") restoreFocus();
+    };
+    window.addEventListener("focus", restoreFocus);
+    window.addEventListener("pageshow", restoreFocus);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      if (restoreTimer != null) window.clearTimeout(restoreTimer);
+      window.removeEventListener("focus", restoreFocus);
+      window.removeEventListener("pageshow", restoreFocus);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [assistantMode, assistantStep, ready, scrollAssistantStepIntoView]);
 
   function openWithVisibleFallback(fallback: DeepLinkFallback) {
     setDeepLinkFallback(fallback);
@@ -622,7 +661,7 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
 
       <div className="card cm__setupCard" style={{ marginTop: 12 }}>
         <div className="card__body">
-          <div className={`cm__focusStep${assistantMode && ready && assistantStep === "install" ? " cm__focusStep--active" : ""}${assistantMode && ready && assistantStep === "import" ? " cm__focusStep--dimmed" : ""}`}>
+          <div ref={installStepRef} className={`cm__focusStep${assistantMode && ready && assistantStep === "install" ? " cm__focusStep--active" : ""}${assistantMode && ready && assistantStep === "import" ? " cm__focusStep--dimmed" : ""}`}>
           {!assistantMode && <div className="pre" style={{ borderColor: "rgba(124,92,255,0.22)", background: "rgba(124,92,255,0.05)" }}>
             <b>{t("connect.step1.label")}</b> {t("connect.step_install_desc").replace("{client}", selectedLinks.title).replace("{platform}", platformLabel(platform))}
           </div>}
@@ -660,7 +699,7 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
           )}
           </div>
 
-          <div className={`cm__focusStep${assistantMode && ready && assistantStep === "import" ? " cm__focusStep--active" : ""}${assistantMode && ready && assistantStep === "install" ? " cm__focusStep--dimmed" : ""}`}>
+          <div ref={importStepRef} className={`cm__focusStep${assistantMode && ready && assistantStep === "import" ? " cm__focusStep--active" : ""}${assistantMode && ready && assistantStep === "install" ? " cm__focusStep--dimmed" : ""}`}>
           {!assistantMode && <div className="pre" style={{ marginTop: 12, borderColor: "rgba(77,215,255,0.22)", background: "rgba(77,215,255,0.05)" }}>
             <b>{t("connect.step2.label")}</b> {t("connect.step_import_desc")}
           </div>}
