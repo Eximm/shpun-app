@@ -1,0 +1,17 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /assistant
+Disallow: /feed
+Disallow: /help
+Disallow: /home
+Disallow: /login
+Disallow: /payments
+Disallow: /profile
+Disallow: /referrals
+Disallow: /reviews
+Disallow: /server-status
+Disallow: /services
+Disallow: /support
+
+Sitemap: https://app.shpun.net/sitemap.xml

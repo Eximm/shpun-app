@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b1220" />
+    <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1" />
+    <meta name="description" content="VPN для роутера OpenWrt от Shpun. Несколько режимов маршрутизации, VPN для всей домашней сети и работа без постоянного выключения." />
+    <link rel="canonical" href="https://app.shpun.net/vpn-router.html" />
+    <link rel="icon" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="stylesheet" href="/seo.css" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="ru_RU" />
+    <meta property="og:site_name" content="Shpun VPN" />
+    <meta property="og:title" content="VPN для роутера OpenWrt — Shpun Router" />
+    <meta property="og:description" content="Собственный пакет Shpun, несколько режимов маршрутизации и VPN сразу для всех устройств дома." />
+    <meta property="og:url" content="https://app.shpun.net/vpn-router.html" />
+    <meta property="og:image" content="https://app.shpun.net/icons/icon-512.png" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="VPN для роутера OpenWrt — Shpun Router" />
+    <meta name="twitter:description" content="VPN для всей домашней сети, который не нужно постоянно выключать." />
+    <meta name="twitter:image" content="https://app.shpun.net/icons/icon-512.png" />
+
+    <title>VPN для роутера OpenWrt — Shpun Router</title>
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Service",
+            "@id": "https://app.shpun.net/vpn-router.html#service",
+            "name": "Shpun Router — VPN для роутера OpenWrt",
+            "serviceType": "VPN для роутера OpenWrt",
+            "url": "https://app.shpun.net/vpn-router.html",
+            "description": "Собственный пакет Shpun для совместимых роутеров OpenWrt. Подключает VPN для всей домашней сети и предлагает несколько режимов маршрутизации.",
+            "provider": {
+              "@type": "Organization",
+              "name": "Shpun",
+              "url": "https://shpun.net/"
+            }
+          },
+          {
+            "@type": "FAQPage",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "Нужно ли постоянно выключать VPN на роутере?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Нет. Маршрутизация Shpun направляет нужные сайты через VPN, а остальные открывает напрямую. VPN можно оставить включённым."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Какие режимы есть в Shpun Router?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Можно направить через VPN весь интернет или только нужные сайты. Режим выбирается под домашнюю сеть и привычный сценарий использования."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "На каких устройствах работает VPN после настройки роутера?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "На устройствах, подключённых к домашнему роутеру: телефонах, компьютерах, телевизорах, приставках и другой технике."
+                }
+              }
+            ]
+          }
+        ]
+      }
+    </script>
+  </head>
+  <body>
+    <header class="seoTopbar">
+      <a class="seoBrand" href="/vpn.html" aria-label="Shpun VPN">
+        <img src="/icons/icon-192.png" alt="" width="38" height="38" />
+        <span><b>Shpun VPN</b><small>Shpun Router</small></span>
+      </a>
+      <a class="seoTopbar__cta" href="/">Подключить VPN</a>
+    </header>
+
+    <main>
+      <section class="seoHero">
+        <div class="seoEyebrow">Эксклюзив Shpun · OpenWrt</div>
+        <h1>VPN для роутера.<br />Один раз включили — и готово.</h1>
+        <p>Собственный пакет Shpun подключает VPN сразу для всей домашней сети. Телефоны, компьютеры, телевизоры и приставки работают через один роутер.</p>
+        <div class="seoActions">
+          <a class="seoButton seoButton--primary" href="/">Подключить Shpun Router</a>
+          <a class="seoButton" href="#modes">Посмотреть режимы</a>
+        </div>
+      </section>
+
+      <section class="seoGrid" aria-label="Преимущества VPN для роутера">
+        <article>
+          <span aria-hidden="true">🧭</span>
+          <h2>VPN можно не выключать</h2>
+          <p>Нужные сайты идут через VPN, остальные — напрямую. Shpun уже предусмотрел удобную маршрутизацию.</p>
+        </article>
+        <article>
+          <span aria-hidden="true">🏠</span>
+          <h2>VPN для всего дома</h2>
+          <p>Настройка выполняется на роутере, поэтому не нужно отдельно подключать каждое домашнее устройство.</p>
+        </article>
+        <article>
+          <span aria-hidden="true">📡</span>
+          <h2>Собственный пакет Shpun</h2>
+          <p>Эксклюзивная разработка Shpun для совместимых роутеров OpenWrt. Готовый пакет доступен клиентам Shpun.</p>
+        </article>
+      </section>
+
+      <section class="seoSection" id="modes">
+        <div class="seoSection__head">
+          <span>Режимы Shpun Router</span>
+          <h2>Выберите, как должен работать VPN</h2>
+          <p>Режим можно поменять под свою домашнюю сеть. Постоянно включать и выключать VPN вручную не придётся.</p>
+        </div>
+        <div class="seoModes">
+          <article><b>01</b><h3>Весь интернет через VPN</h3><p>Простой режим для всей домашней сети.</p></article>
+          <article><b>02</b><h3>Только нужные сайты</h3><p>Выбранные сайты идут через VPN, остальные — напрямую.</p></article>
+          <article><b>03</b><h3>Раздельная маршрутизация</h3><p>Гибкий режим для разных сайтов и задач.</p></article>
+        </div>
+      </section>
+
+      <section class="seoSection seoFaq">
+        <div class="seoSection__head">
+          <span>Коротко о главном</span>
+          <h2>Частые вопросы</h2>
+        </div>
+        <details open><summary>Нужно ли выключать VPN?</summary><p>Нет. Shpun сам направляет нужные сайты через VPN, а остальные открывает напрямую.</p></details>
+        <details><summary>Что подключится через роутер?</summary><p>Все устройства домашней сети: телефоны, компьютеры, телевизоры, приставки и другая техника.</p></details>
+        <details><summary>Сложно ли настроить?</summary><p>Shpun App проводит по подключению шаг за шагом. Если понадобится помощь, поддержка остаётся рядом.</p></details>
+      </section>
+
+      <section class="seoFinal">
+        <span>Shpun Router</span>
+        <h2>Один VPN для всего дома</h2>
+        <p>Выберите услугу в Shpun App — дальше помощник подскажет каждый шаг.</p>
+        <a class="seoButton seoButton--primary" href="/">Открыть Shpun App</a>
+      </section>
+    </main>
+
+    <footer>
+      <span>Shpun VPN · SDN System</span>
+      <nav aria-label="Документы">
+        <a href="/vpn.html">О Shpun VPN</a>
+        <a href="/legal/privacy">Конфиденциальность</a>
+        <a href="/legal/offer">Оферта</a>
+        <a href="/legal/contacts">Контакты</a>
+      </nav>
+    </footer>
+  </body>
+</html>
