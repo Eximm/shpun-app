@@ -1174,15 +1174,16 @@ export function Login() {
                 {authModal === "register" && emailTouched && registerEmailMessage && (
                   <div className="login__fieldError">{registerEmailMessage}</div>
                 )}
-                {authModal === "register" && (
-                  <div className="loginRegisterStep__optional">
-                    <label className="field__label">{t("login.password.client")}</label>
-                    <input className="input" placeholder={t("login.password.client_ph")}
-                      value={clientName} onChange={(e) => setClientName(e.target.value)}
-                      autoComplete="name" disabled={loading} />
-                  </div>
-                )}
               </div>
+
+              {authModal === "register" && (
+                <div className="field loginRegisterStep loginRegisterStep__optional">
+                  <label className="field__label">{t("login.password.client")}</label>
+                  <input className="input" placeholder={t("login.password.client_ph")}
+                    value={clientName} onChange={(e) => setClientName(e.target.value)}
+                    autoComplete="name" disabled={loading} />
+                </div>
+              )}
 
               <div className={authModal === "register" ? "field loginRegisterStep" : "field"}>
                 <label className="field__label">
