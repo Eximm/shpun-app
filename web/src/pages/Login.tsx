@@ -1,6 +1,7 @@
 ﻿// FILE: web/src/pages/Login.tsx
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 import { apiFetch } from "../shared/api/client";
 import { refetchMe } from "../app/auth/useMe";
@@ -411,6 +412,7 @@ export function Login() {
   // ── Refs ──────────────────────────────────────────────────────────────────
   const authInProgressRef       = useRef(false);
   const widgetWrapRef           = useRef<HTMLDivElement | null>(null);
+  const authModalBodyRef        = useRef<HTMLDivElement | null>(null);
   const referralHandledRef      = useRef(false);
   const authOkHandledRef        = useRef(false);
   const tokenHandledRef         = useRef(false);
@@ -429,6 +431,13 @@ export function Login() {
     : "";
   const canPasswordRegister = login.trim().length > 0 && password.length > 0
     && password2.length > 0 && password === password2 && !registerEmailCode;
+
+  useEffect(() => {
+    if (authModal === "none") return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, [authModal]);
 
   // ── Toast ─────────────────────────────────────────────────────────────────
   function toastError(raw: string) {
@@ -518,6 +527,23 @@ export function Login() {
     setResetToken(""); setResetPwd1(""); setResetPwd2("");
     setResetShowPwd1(false); setResetShowPwd2(false);
     setResetError(null); setResetDone(false); setResetVerifyError(null);
+  }
+
+  function applyPartnerCode() {
+    const nextPartnerId = normalizePartnerId(partnerIdInput);
+    if (nextPartnerId <= 0) return;
+    setPartnerId(nextPartnerId);
+    savePendingPartnerId(nextPartnerId);
+    setReferralAlias("");
+    clearPendingReferralAlias();
+    setPartnerIdInput(String(nextPartnerId));
+    setPartnerOpen(false);
+    requestAnimationFrame(() => authModalBodyRef.current?.scrollTo({ top: 0, behavior: "smooth" }));
+  }
+
+  function cancelPartnerCode() {
+    setPartnerIdInput(partnerId > 0 ? String(partnerId) : "");
+    setPartnerOpen(false);
   }
 
   // ── Reset password logic ──────────────────────────────────────────────────
@@ -1098,9 +1124,9 @@ export function Login() {
 
   // Password (login / register) modal
   const passwordModal = authModal === "login" || authModal === "register" ? (
-    <div className="modal" role="dialog" aria-modal="true">
-      <div className="card modal__card">
-        <div className="card__body">
+    createPortal(<div className="modal loginAuthModal" role="dialog" aria-modal="true">
+      <div className="card modal__card loginAuthModal__card">
+        <div ref={authModalBodyRef} className="card__body">
           <div className="modal__head">
             <div>
               <div className="modal__title">
@@ -1113,7 +1139,7 @@ export function Login() {
               disabled={loading} aria-label={t("common.close")}>×</button>
           </div>
           <div className="modal__content">
-            {authModal === "register" && normalizePartnerId(partnerIdInput) > 0 && (
+            {authModal === "register" && !partnerOpen && normalizePartnerId(partnerIdInput) > 0 && (
               <div className="login__partnerInvite">
                 <div className="login__partnerInviteTitle">{t("login.partner.notice")}</div>
                 <div className="login__partnerInviteMeta">
@@ -1132,8 +1158,8 @@ export function Login() {
                 {t("login.password.register_intro")}
               </p>
             )}
-            <form className="auth__form" onSubmit={(e) => { e.preventDefault(); void (authModal === "login" ? passwordLogin() : passwordRegister()); }}>
-              <div className="field">
+            <form className={`auth__form ${authModal === "register" ? "loginRegisterForm" : ""}`} onSubmit={(e) => { e.preventDefault(); void (authModal === "login" ? passwordLogin() : passwordRegister()); }}>
+              <div className={authModal === "register" ? "field loginRegisterStep" : "field"}>
                 <label className="field__label">
                   {authModal === "register" ? t("login.password.register_email") : t("login.password.login_or_email")}
                 </label>
@@ -1148,18 +1174,17 @@ export function Login() {
                 {authModal === "register" && emailTouched && registerEmailMessage && (
                   <div className="login__fieldError">{registerEmailMessage}</div>
                 )}
+                {authModal === "register" && (
+                  <div className="loginRegisterStep__optional">
+                    <label className="field__label">{t("login.password.client")}</label>
+                    <input className="input" placeholder={t("login.password.client_ph")}
+                      value={clientName} onChange={(e) => setClientName(e.target.value)}
+                      autoComplete="name" disabled={loading} />
+                  </div>
+                )}
               </div>
 
-              {authModal === "register" && (
-                <div className="field">
-                  <label className="field__label">{t("login.password.client")}</label>
-                  <input className="input" placeholder={t("login.password.client_ph")}
-                    value={clientName} onChange={(e) => setClientName(e.target.value)}
-                    autoComplete="name" disabled={loading} />
-                </div>
-              )}
-
-              <div className="field">
+              <div className={authModal === "register" ? "field loginRegisterStep" : "field"}>
                 <label className="field__label">
                   {authModal === "register" ? t("login.password.register_password") : t("login.password.password")}
                 </label>
@@ -1186,7 +1211,7 @@ export function Login() {
 
               {authModal === "register" && (
                 <>
-                  <div className="field">
+                  <div className="field loginRegisterStep">
                     <label className="field__label">{t("login.password.register_repeat")}</label>
                     <div className="pwdfield">
                       <input className="input" placeholder={t("login.password.repeat_ph")}
@@ -1198,25 +1223,37 @@ export function Login() {
                         aria-label={showPassword2 ? t("login.password.hide") : t("login.password.show")}>👁</button>
                     </div>
                   </div>
-                  {normalizePartnerId(partnerIdInput) <= 0 && (
-                    <div style={{ marginTop: 4 }}>
+                  <div className="loginPartnerCode">
+                    {!partnerOpen ? (
                       <button type="button" className="btn login__switchBtn"
-                        onClick={() => setPartnerOpen((v) => !v)} disabled={loading}>
-                        {partnerOpen
-                          ? t("login.partner.hide")
+                        onClick={() => setPartnerOpen(true)} disabled={loading}>
+                        {normalizePartnerId(partnerIdInput) > 0
+                          ? t("login.partner.change")
                           : t("login.partner.have_code")}
                       </button>
-                      {partnerOpen && (
-                        <div className="field" style={{ marginTop: 8 }}>
+                    ) : (
+                      <div className="loginPartnerCode__editor">
+                        <div className="field">
                           <label className="field__label">{t("login.partner.field")}</label>
                           <input className="input" placeholder={t("login.partner.field_ph")}
                             value={partnerIdInput}
                             onChange={(e) => setPartnerIdInput(String(e.target.value).replace(/[^\d]/g, ""))}
                             inputMode="numeric" autoComplete="off" disabled={loading} />
                         </div>
-                      )}
-                    </div>
-                  )}
+                        <div className="loginPartnerCode__actions">
+                          <button type="button" className="btn btn--accent"
+                            onClick={applyPartnerCode}
+                            disabled={loading || normalizePartnerId(partnerIdInput) <= 0}>
+                            {t("login.partner.apply")}
+                          </button>
+                          <button type="button" className="btn"
+                            onClick={cancelPartnerCode} disabled={loading}>
+                            {t("login.partner.cancel")}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   {password2.length > 0 && !passwordsMatch && (
                     <div className="pre login__preMt12">{t("login.password.mismatch")}</div>
                   )}
@@ -1247,7 +1284,7 @@ export function Login() {
           </div>
         </div>
       </div>
-    </div>
+    </div>, document.body)
   ) : null;
 
   // ── Loader ────────────────────────────────────────────────────────────────
