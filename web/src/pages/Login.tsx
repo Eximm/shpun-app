@@ -1063,6 +1063,39 @@ export function Login() {
     </div>
   ) : null;
 
+  const telegramModalChoice = mode !== "telegram" ? (
+    <div ref={widgetWrapRef} className="loginRegisterChoice">
+      <div className="loginRegisterChoice__icon">
+        <LoginIcon src={telegramIconUrl} className="loginHero__svgIcon loginHero__svgIcon--telegram" />
+      </div>
+      <div className="loginRegisterChoice__body">
+        <div className="loginRegisterChoice__title">
+          {authModal === "login" ? t("login.telegram.login_choice_title") : t("login.telegram.register_choice_title")}
+        </div>
+        <div className="loginRegisterChoice__text">
+          {authModal === "login" ? t("login.telegram.login_choice_text") : t("login.telegram.register_choice_text")}
+        </div>
+        {botUsername ? (
+          <>
+            <div id="tg-widget-container" className="login__widgetBox login__widgetBox--modal" />
+            {(tgWidgetState === "idle" || tgWidgetState === "failed") && (
+              <button type="button" className="btn loginRegisterChoice__btn"
+                onClick={() => void mountTelegramWidget(true)} disabled={loading}>
+                {tgWidgetState === "failed"
+                  ? t("login.widget.retry.alt")
+                  : authModal === "login"
+                    ? t("login.telegram.login_choice_cta")
+                    : t("login.telegram.register_choice_cta")}
+              </button>
+            )}
+          </>
+        ) : (
+          <div className="loginRegisterChoice__fallback">{t("login.widget.unavailable.alt")}</div>
+        )}
+      </div>
+    </div>
+  ) : null;
+
   // Password (login / register) modal
   const passwordModal = authModal === "login" || authModal === "register" ? (
     <div className="modal" role="dialog" aria-modal="true">
@@ -1090,45 +1123,19 @@ export function Login() {
                 </div>
               </div>
             )}
-            {mode !== "telegram" && (
-              <div ref={widgetWrapRef} className="loginRegisterChoice">
-                <div className="loginRegisterChoice__icon">
-                  <LoginIcon src={telegramIconUrl} className="loginHero__svgIcon loginHero__svgIcon--telegram" />
-                </div>
-                <div className="loginRegisterChoice__body">
-                  <div className="loginRegisterChoice__title">
-                    {authModal === "login" ? t("login.telegram.login_choice_title") : t("login.telegram.register_choice_title")}
-                  </div>
-                  <div className="loginRegisterChoice__text">
-                    {authModal === "login" ? t("login.telegram.login_choice_text") : t("login.telegram.register_choice_text")}
-                  </div>
-                  {botUsername ? (
-                    <>
-                      <div id="tg-widget-container" className="login__widgetBox login__widgetBox--modal" />
-                      {(tgWidgetState === "idle" || tgWidgetState === "failed") && (
-                        <button type="button" className="btn loginRegisterChoice__btn"
-                          onClick={() => void mountTelegramWidget(true)} disabled={loading}>
-                          {tgWidgetState === "failed"
-                            ? t("login.widget.retry.alt")
-                            : authModal === "login"
-                              ? t("login.telegram.login_choice_cta")
-                              : t("login.telegram.register_choice_cta")}
-                        </button>
-                      )}
-                    </>
-                  ) : (
-                    <div className="loginRegisterChoice__fallback">{t("login.widget.unavailable.alt")}</div>
-                  )}
-                </div>
-              </div>
-            )}
-            {mode !== "telegram" && (
+            {authModal === "login" && telegramModalChoice}
+            {mode !== "telegram" && authModal === "login" && (
               <div className="loginModalDivider"><span>{t("login.modal.email_divider")}</span></div>
+            )}
+            {authModal === "register" && (
+              <p className="p" style={{ margin: "0 0 16px" }}>
+                {t("login.password.register_intro")}
+              </p>
             )}
             <form className="auth__form" onSubmit={(e) => { e.preventDefault(); void (authModal === "login" ? passwordLogin() : passwordRegister()); }}>
               <div className="field">
                 <label className="field__label">
-                  {authModal === "register" ? t("login.password.login") : t("login.password.login_or_email")}
+                  {authModal === "register" ? t("login.password.register_email") : t("login.password.login_or_email")}
                 </label>
                 <input
                   className={`input ${authModal === "register" && emailTouched && registerEmailCode ? "input--invalid" : ""}`}
@@ -1153,7 +1160,9 @@ export function Login() {
               )}
 
               <div className="field">
-                <label className="field__label">{t("login.password.password")}</label>
+                <label className="field__label">
+                  {authModal === "register" ? t("login.password.register_password") : t("login.password.password")}
+                </label>
                 <div className="pwdfield">
                   <input className="input" placeholder={t("login.password.password_ph")}
                     value={password} onChange={(e) => setPassword(e.target.value)}
@@ -1178,7 +1187,7 @@ export function Login() {
               {authModal === "register" && (
                 <>
                   <div className="field">
-                    <label className="field__label">{t("login.password.repeat")}</label>
+                    <label className="field__label">{t("login.password.register_repeat")}</label>
                     <div className="pwdfield">
                       <input className="input" placeholder={t("login.password.repeat_ph")}
                         value={password2} onChange={(e) => setPassword2(e.target.value)}
@@ -1229,6 +1238,12 @@ export function Login() {
                 </button>
               </div>
             </form>
+            {authModal === "register" && mode !== "telegram" && (
+              <>
+                <div className="loginModalDivider"><span>{t("login.modal.telegram_register_divider")}</span></div>
+                {telegramModalChoice}
+              </>
+            )}
           </div>
         </div>
       </div>
