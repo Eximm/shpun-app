@@ -16,8 +16,8 @@ type Block = {
   tone?: BlockTone;
 };
 
-const ROUTER_PACKAGE_24_URL = "https://spb.shpyn.online/files/ipk/shpun-router_1.1.6_all.ipk";
-const ROUTER_PACKAGE_25_URL = "https://spb.shpyn.online/files/apk/shpun-router_2.0.0_all.apk";
+const ROUTER_PACKAGE_24_URL = "https://spb.shpyn.online/files/ipk/shpun-router_1.1.8_all.ipk";
+const ROUTER_INSTALLER_25_URL = "https://spb.shpyn.online/files/apk/shpun-router-openwrt25-installer.tar.gz";
 
 export function ServicesRouter() {
   const { t } = useI18n();
@@ -27,7 +27,7 @@ export function ServicesRouter() {
       icon: "🌐",
       title: t("servicesRouter.what.title", "Что это"),
       body: t("servicesRouter.what.body", "Shpun Router подключает OpenWrt-роутер к Shpun SDN System. Весь домашний трафик идёт через защищённый VPN-туннель."),
-      note: t("servicesRouter.what.note", "Никаких SSH, терминала и ручной настройки конфигов — всё делается через LuCI и помощник подключения."),
+      note: t("servicesRouter.what.note", "Всё устанавливается через веб-интерфейс роутера. Терминал и ручная настройка не нужны."),
       bullets: [
         t("servicesRouter.what.bullet_1", "VPN сразу для всех устройств дома"),
         t("servicesRouter.what.bullet_2", "Привязка роутера по коду"),
@@ -72,7 +72,7 @@ export function ServicesRouter() {
       note: t("servicesRouter.quick_start.note", "Перед установкой роутер должен иметь доступ в интернет. Для первой настройки удобнее подключить его WAN-порт к LAN-порту основного роутера, чтобы он сразу получал готовый интернет."),
       steps: [
         t("servicesRouter.quick_start.step_1", "Запустите роутер с OpenWrt 24.x или 25.x и откройте LuCI"),
-        t("servicesRouter.quick_start.step_2", "Скачайте пакет под вашу версию OpenWrt: 24.x — shpun-router_1.1.6_all.ipk, 25.x — shpun-router_2.0.0_all.apk"),
+        t("servicesRouter.quick_start.step_2", "OpenWrt 24.x: загрузите пакет 1.1.8. OpenWrt 25.x: скачайте установщик и восстановите его как резервную копию"),
         t("servicesRouter.quick_start.step_3", "Закажите отдельную услугу Shpun Router"),
         t("servicesRouter.quick_start.step_4", "Введите код из виджета роутера в помощнике подключения"),
       ],
@@ -82,7 +82,7 @@ export function ServicesRouter() {
       title: t("servicesRouter.setup.title", "Пошаговая настройка"),
       bullets: [
         t("servicesRouter.setup.bullet_1", "Убедитесь, что интернет на роутере уже работает. Для первой настройки лучше подключить его WAN-порт к LAN-порту основного роутера"),
-        t("servicesRouter.setup.bullet_2", "Установите пакет через LuCI: System → Software → Upload package"),
+        t("servicesRouter.setup.bullet_2", "OpenWrt 24.x: System → Software → Upload package. OpenWrt 25.x: System → Backup / Flash Firmware → Restore backup"),
         t("servicesRouter.setup.bullet_3", "Закажите услугу Shpun Router в миниаппе или приложении"),
         t("servicesRouter.setup.bullet_4", "На главной странице LuCI найдите виджет Shpun Router и введите его код в помощнике подключения — остальные настройки загрузятся автоматически"),
       ],
@@ -141,15 +141,19 @@ export function ServicesRouter() {
               onClick={() => window.open(ROUTER_PACKAGE_24_URL, "_blank", "noopener,noreferrer")}
               type="button"
             >
-              ⬇️ {t("servicesRouter.page.download_24", "OpenWrt 24.x — пакет 1.1.6")}
+              ⬇️ {t("servicesRouter.page.download_24", "OpenWrt 24.x — пакет 1.1.8")}
             </button>
             <button
               className="btn"
-              onClick={() => window.open(ROUTER_PACKAGE_25_URL, "_blank", "noopener,noreferrer")}
+              onClick={() => window.open(ROUTER_INSTALLER_25_URL, "_blank", "noopener,noreferrer")}
               type="button"
             >
-              ⬇️ {t("servicesRouter.page.download_25", "OpenWrt 25.x — пакет 2.0")}
+              ⬇️ {t("servicesRouter.page.download_25_installer", "OpenWrt 25.x — простой установщик 2.0.2")}
             </button>
+          </div>
+          <div className="router-help-install-command">
+            <strong>{t("servicesRouter.page.install_25_title", "Первая установка OpenWrt 25.x")}</strong>
+            <span>{t("servicesRouter.page.install_25_hint", "Скачайте установщик. В роутере откройте System → Backup / Flash Firmware → Restore backup, выберите файл и дождитесь перезагрузки.")}</span>
           </div>
         </div>
       </div>

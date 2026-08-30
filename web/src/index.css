@@ -4627,7 +4627,18 @@ button, a { -webkit-tap-highlight-color: transparent; }
   animation: profile-hero-shine 5.5s ease-in-out infinite;
   pointer-events: none;
 }
-
+.router-help-install-command {
+  display: grid;
+  gap: 7px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid rgba(245,158,11,0.24);
+  border-radius: var(--radius-sm);
+  background: rgba(245,158,11,0.07);
+  color: rgba(255,255,255,0.82);
+  font-size: 13px;
+  line-height: 1.45;
+}
 .profile-more-page {
   max-width: 920px;
   margin-left: auto;
