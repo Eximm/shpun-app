@@ -23,7 +23,15 @@ precacheAndRoute(self.__WB_MANIFEST || []);
 const handler = createHandlerBoundToURL("/index.html");
 
 const navigationRoute = new NavigationRoute(handler, {
-  denylist: [/^\/api\//],
+  // Public SEO documents must be served as real HTML files. If the PWA has
+  // already installed this worker, treating them as SPA routes opens Shpun App
+  // instead of the requested landing page.
+  denylist: [
+    /^\/api\//,
+    /^\/vpn(?:-router)?\.html(?:$|[?#])/,
+    /^\/robots\.txt(?:$|[?#])/,
+    /^\/sitemap\.xml(?:$|[?#])/,
+  ],
 });
 
 registerRoute(navigationRoute);
