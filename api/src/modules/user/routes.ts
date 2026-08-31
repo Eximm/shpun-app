@@ -14,6 +14,10 @@ import {
   shmTelegramWebAuthBind,
   toFormUrlEncoded,
 } from "../../shared/shm/shmClient.js";
+import {
+  validateRegistrationEmail,
+  validateRegistrationEmailBasic,
+} from "../../shared/utils/email.js";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -31,10 +35,6 @@ function toNum(v: any, fallback = 0): number {
 
 function normalizeEmail(input: any): string {
   return String(input ?? "").trim().toLowerCase();
-}
-
-function isValidEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 function extractEmailFromPayload(payload: any): string | null {
@@ -343,8 +343,15 @@ export async function userRoutes(app: FastifyInstance) {
     }
 
     const email = normalizeEmail((req.body as any)?.email);
-    if (!email)               return reply.code(400).send({ ok: false, error: "empty_email" });
-    if (!isValidEmail(email)) return reply.code(400).send({ ok: false, error: "invalid_email" });
+    if (!email) return reply.code(400).send({ ok: false, error: "empty_email" });
+
+    const emailCheck = await validateRegistrationEmail(email);
+    if (!emailCheck.ok) {
+      return reply.code(400).send({
+        ok: false,
+        error: emailCheck.code || "invalid_email",
+      });
+    }
 
     const emailRes = await shmSetUserEmail(s.shmSessionId, email);
     const emailMsg = extractShmMessage(emailRes.json);
@@ -409,7 +416,20 @@ export async function userRoutes(app: FastifyInstance) {
       return reply.code(401).send({ ok: false, error: "not_authenticated" });
     }
 
-    const r = await shmRequestUserEmailVerify(s.shmSessionId, (req.body as any) ?? {});
+    const payload = (req.body as any) ?? {};
+    const requestedEmail = normalizeEmail(payload?.email);
+    const current = requestedEmail
+      ? { email: requestedEmail }
+      : await readCurrentEmail(s.shmSessionId).catch(() => ({ email: null }));
+    const emailCheck = validateRegistrationEmailBasic(current.email);
+    if (!emailCheck.ok) {
+      return reply.code(400).send({
+        ok: false,
+        error: emailCheck.code || "invalid_email",
+      });
+    }
+
+    const r = await shmRequestUserEmailVerify(s.shmSessionId, payload);
     if (!r.ok) {
       return reply.code(r.status || 502).send({
         ok: false, error: "shm_email_verify_failed", shm: { status: r.status }, text: r.text,
@@ -431,6 +451,13 @@ export async function userRoutes(app: FastifyInstance) {
 
     if (!current.email) {
       return reply.code(400).send({ ok: false, error: "no_email_set" });
+    }
+    const emailCheck = validateRegistrationEmailBasic(current.email);
+    if (!emailCheck.ok) {
+      return reply.code(400).send({
+        ok: false,
+        error: emailCheck.code || "invalid_email",
+      });
     }
     if (current.emailVerified === true) {
       return reply.code(400).send({ ok: false, error: "email_already_verified" });
@@ -461,6 +488,18 @@ export async function userRoutes(app: FastifyInstance) {
     const code = String((req.body as any)?.code ?? "").trim();
     if (!code) {
       return reply.code(400).send({ ok: false, error: "code_required" });
+    }
+
+    const storedEmail = await readCurrentEmail(s.shmSessionId).catch(() => ({
+      email: null,
+      emailVerified: null,
+    }));
+    const emailCheck = validateRegistrationEmailBasic(storedEmail.email);
+    if (!emailCheck.ok) {
+      return reply.code(400).send({
+        ok: false,
+        error: emailCheck.code || "invalid_email",
+      });
     }
 
     const r = await shmFetch<any>(s.shmSessionId, "v1/user/email/verify", {

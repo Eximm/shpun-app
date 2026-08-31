@@ -299,6 +299,14 @@ function getOrderError(e: any, t: (key: string) => string): { title: string; des
     }
   }
 
+  if (code === 'trial_email_unacceptable') {
+    return {
+      title: t('servicesOrder.error.trial_email_unacceptable.title'),
+      description: t('servicesOrder.error.trial_email_unacceptable.desc'),
+      conflict,
+    }
+  }
+
   if (code === 'trial_already_used') {
     return {
       title: t('servicesOrder.error.trial_used.title'),
@@ -663,7 +671,7 @@ export function ServicesOrder() {
       const info = getOrderError(e, t)
       setErr(info.description)
       const code = String(e?.error || e?.code || '').trim()
-      if (code === 'trial_email_verification_required') {
+      if (code === 'trial_email_verification_required' || code === 'trial_email_unacceptable') {
         toast.error(info.title, {
           description: info.description,
           durationMs: 9000,

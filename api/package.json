@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
+    "test:email": "tsx --test src/shared/utils/email.test.ts",
     "start": "node dist/index.js",
     "deps:check": "npm ls fastify @fastify/formbody @fastify/multipart"
   },

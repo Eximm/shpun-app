@@ -154,9 +154,15 @@ function AssistantEmailGate({
     } catch (nextError: unknown) {
       const shaped = nextError as { code?: string; data?: { error?: string } };
       const errorCode = String(shaped?.code || shaped?.data?.error || "");
-      setError(errorCode === "email_already_used"
-        ? t("profile.email.error.already_used")
-        : t("profile.email.error.save"));
+      setError(
+        errorCode === "email_already_used"
+          ? t("profile.email.error.already_used")
+          : errorCode === "email_disposable"
+            ? t("profile.email.error.disposable")
+            : errorCode.startsWith("email_")
+              ? t("profile.email.error.invalid")
+              : t("profile.email.error.save")
+      );
     } finally {
       setSaving(false);
     }

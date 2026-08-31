@@ -36,6 +36,7 @@ import {
 } from "../device/deviceService.js";
 
 import { listServiceCategories } from "../../shared/linkdb/serviceCategoriesRepo.js";
+import { validateRegistrationEmailBasic } from "../../shared/utils/email.js";
 import {
   remnawaveDeleteUserHwidDevice,
   remnawaveGetUserHwidDevices,
@@ -1388,6 +1389,39 @@ export async function servicesRoutes(app: FastifyInstance) {
         emailState = await readTrialEmailState(shmSessionId);
       } catch {
         emailState = { email: null, emailVerified: null };
+      }
+
+      const emailCheck = emailState.email
+        ? validateRegistrationEmailBasic(emailState.email)
+        : null;
+
+      if (emailCheck && !emailCheck.ok) {
+        if (deviceToken) {
+          logTrialEvent({
+            deviceToken,
+            userId,
+            ip,
+            userAgent,
+            eventType: "trial_group_block",
+            decision: "block",
+            reason: emailCheck.code === "email_disposable"
+              ? "trial_email_disposable"
+              : "trial_email_invalid",
+            meta: {
+              serviceId,
+              trialGroup,
+              isTrialService,
+              emailValidationCode: emailCheck.code,
+              ...trialMeta,
+            },
+          });
+        }
+
+        return reply.code(403).send({
+          ok: false,
+          error: "trial_email_unacceptable",
+          message: "Для тестового доступа укажите обычную постоянную почту.",
+        });
       }
 
       if (emailState.emailVerified !== true) {

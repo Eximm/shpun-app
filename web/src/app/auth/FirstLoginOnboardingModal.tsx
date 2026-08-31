@@ -37,9 +37,15 @@ export function isValidEmail(email: string): boolean {
 }
 
 export function getEmailErrorText(err: unknown, t: (key: string) => string): string {
-  const raw = String((err as any)?.message || "").toLowerCase();
+  const shaped = err as any;
+  const raw = [shaped?.message, shaped?.code, shaped?.data?.error]
+    .map((value) => String(value || ""))
+    .join(" ")
+    .toLowerCase();
   if (raw.includes("email_already_used") || raw.includes("already in use"))
     return t("onboarding.error.email_used");
+  if (raw.includes("email_disposable"))
+    return t("onboarding.error.email_disposable");
   if (raw.includes("invalid_email")) return t("onboarding.error.email_invalid");
   if (raw.includes("empty_email"))   return t("onboarding.error.email_empty");
   if (raw.includes("email_not_saved"))

@@ -739,8 +739,13 @@ export function Profile() {
   useEffect(() => { if (!emailModal) { setEmailDraft(email || ""); setEmailError(null); setEmailSaved(false); } }, [emailModal, email]);
 
   function getEmailError(err: unknown): string {
-    const raw = String((err as any)?.message || "").toLowerCase();
+    const shaped = err as any;
+    const raw = [shaped?.message, shaped?.code, shaped?.data?.error]
+      .map((value) => String(value || ""))
+      .join(" ")
+      .toLowerCase();
     if (raw.includes("email_already_used") || raw.includes("already in use")) return t("profile.email.error.already_used");
+    if (raw.includes("email_disposable"))  return t("profile.email.error.disposable");
     if (raw.includes("invalid_email"))     return t("profile.email.error.invalid");
     if (raw.includes("empty_email"))       return t("profile.email.error.empty");
     if (raw.includes("email_not_saved"))   return t("profile.email.error.not_saved");
