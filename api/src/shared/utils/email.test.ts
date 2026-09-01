@@ -13,6 +13,8 @@ test("rejects known disposable domains and their subdomains", () => {
     "user@sub.yopmail.com",
     "user@temp-mail.org",
     "user@mail.tm",
+    "user@mailto.plus",
+    "user@1secmail.com",
   ]) {
     assert.deepEqual(validateRegistrationEmailBasic(email), {
       ok: false,

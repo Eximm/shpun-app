@@ -13,6 +13,7 @@ import { pushRoutes } from '../../modules/notifications/push.js'
 import { promoRoutes } from '../../modules/promo/routes.js'
 import { reviewsRoutes } from '../../modules/reviews/routes.js'
 import { serverStatusRoutes } from '../../modules/serverStatus/routes.js'
+import { emailValidationRoutes } from '../../modules/emailValidation/routes.js'
 
 export async function registerRoutes(app: FastifyInstance) {
   await app.register(
@@ -27,6 +28,7 @@ export async function registerRoutes(app: FastifyInstance) {
       await promoRoutes(api)
       await reviewsRoutes(api)
       await serverStatusRoutes(api)
+      await emailValidationRoutes(api)
 
       // 🔔 Billing HTTP Push + Notifications
       await pushRoutes(api)

@@ -1,4 +1,5 @@
-import { resolve4, resolve6, resolveMx } from "node:dns/promises";
+import { resolveMx } from "node:dns/promises";
+import bundledDisposableDomains from "../data/disposable-email-domains.json" with { type: "json" };
 
 export type EmailValidationCode =
   | "email_required"
@@ -81,6 +82,7 @@ const DISPOSABLE_DOMAINS = new Set([
   "maildrop.cc",
   "mailforspam.com",
   "mailnesia.com",
+  "mailto.plus",
   "mailsac.com",
   "mintemail.com",
   "minuteinbox.com",
@@ -108,6 +110,20 @@ const DISPOSABLE_DOMAINS = new Set([
 
 const ENV_DISPOSABLE_DOMAINS = parseDomainList(process.env.EMAIL_BLOCKED_DOMAINS);
 const ENV_ALLOWED_DOMAINS = parseDomainList(process.env.EMAIL_ALLOWED_DOMAINS);
+const BUNDLED_DISPOSABLE_DOMAINS = parseDomainList(bundledDisposableDomains);
+let REFRESHED_DISPOSABLE_DOMAINS = new Set(BUNDLED_DISPOSABLE_DOMAINS);
+
+const DISPOSABLE_DOMAINS_URL = String(
+  process.env.EMAIL_DISPOSABLE_DOMAINS_URL ??
+    "https://raw.githubusercontent.com/disposable/disposable-email-domains/master/domains_strict_mx.json"
+).trim();
+const DISPOSABLE_DOMAINS_REFRESH_MS = 6 * 60 * 60 * 1000;
+const DISPOSABLE_DOMAINS_RETRY_MS = 15 * 60 * 1000;
+const DISPOSABLE_DOMAINS_FETCH_TIMEOUT_MS = 4000;
+const DISPOSABLE_DOMAINS_MAX_BYTES = 2 * 1024 * 1024;
+let disposableDomainsLastAttemptAt = 0;
+let disposableDomainsLastSuccessAt = 0;
+let disposableDomainsRefreshPromise: Promise<void> | null = null;
 
 // Catch obvious rotating names without rejecting ordinary private domains.
 // Keep this deliberately narrow; the exact blocklist can be extended through
@@ -121,12 +137,61 @@ export function normalizeEmail(value: unknown): string {
 }
 
 function parseDomainList(value: unknown): Set<string> {
+  const source = Array.isArray(value)
+    ? value.map((item) => String(item ?? ""))
+    : String(value ?? "").split(/[\s,;]+/);
+
   return new Set(
-    String(value ?? "")
-      .split(/[\s,;]+/)
+    source
       .map((item) => item.trim().toLowerCase().replace(/^@+/, "").replace(/\.+$/, ""))
-      .filter(Boolean)
+      .filter((item) => DOMAIN_ALLOWED_RE.test(item) && item.includes("."))
   );
+}
+
+export async function refreshDisposableEmailDomains(force = false): Promise<void> {
+  if (!DISPOSABLE_DOMAINS_URL || DISPOSABLE_DOMAINS_URL.toLowerCase() === "off") return;
+
+  const now = Date.now();
+  const retryAfter = disposableDomainsLastSuccessAt
+    ? DISPOSABLE_DOMAINS_REFRESH_MS
+    : DISPOSABLE_DOMAINS_RETRY_MS;
+  if (!force && now - disposableDomainsLastAttemptAt < retryAfter) return;
+  if (disposableDomainsRefreshPromise) return disposableDomainsRefreshPromise;
+
+  disposableDomainsLastAttemptAt = now;
+  disposableDomainsRefreshPromise = (async () => {
+    const response = await withTimeout(
+      fetch(DISPOSABLE_DOMAINS_URL, {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(DISPOSABLE_DOMAINS_FETCH_TIMEOUT_MS),
+      }),
+      DISPOSABLE_DOMAINS_FETCH_TIMEOUT_MS
+    );
+    if (!response.ok) throw new Error(`disposable_domains_http_${response.status}`);
+
+    const declaredSize = Number(response.headers.get("content-length") || 0);
+    if (declaredSize > DISPOSABLE_DOMAINS_MAX_BYTES) throw new Error("disposable_domains_too_large");
+
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.byteLength > DISPOSABLE_DOMAINS_MAX_BYTES) throw new Error("disposable_domains_too_large");
+
+    const refreshed = parseDomainList(JSON.parse(new TextDecoder().decode(bytes)));
+    if (refreshed.size < 1000) throw new Error("disposable_domains_too_small");
+
+    REFRESHED_DISPOSABLE_DOMAINS = new Set([
+      ...BUNDLED_DISPOSABLE_DOMAINS,
+      ...refreshed,
+    ]);
+    disposableDomainsLastSuccessAt = Date.now();
+  })()
+    .catch(() => {
+      // Keep using the bundled snapshot when the remote source is unavailable.
+    })
+    .finally(() => {
+      disposableDomainsRefreshPromise = null;
+    });
+
+  return disposableDomainsRefreshPromise;
 }
 
 function matchesDomainOrParent(domain: string, domains: Set<string>): boolean {
@@ -151,6 +216,7 @@ export function isDisposableEmailDomain(value: unknown): boolean {
   if (matchesDomainOrParent(domain, ENV_ALLOWED_DOMAINS)) return false;
   if (matchesDomainOrParent(domain, ENV_DISPOSABLE_DOMAINS)) return true;
   if (matchesDomainOrParent(domain, DISPOSABLE_DOMAINS)) return true;
+  if (matchesDomainOrParent(domain, REFRESHED_DISPOSABLE_DOMAINS)) return true;
   return DISPOSABLE_DOMAIN_PATTERN.test(domain);
 }
 
@@ -318,29 +384,16 @@ async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   }
 }
 
-async function hasResolvableMailDomain(domain: string): Promise<boolean> {
+async function hasMailExchange(domain: string): Promise<boolean> {
   try {
     const mx = await withTimeout(resolveMx(domain), DNS_TIMEOUT_MS);
-    if (Array.isArray(mx) && mx.length > 0) return true;
+    return Array.isArray(mx) && mx.some((record) => {
+      const exchange = String(record?.exchange ?? "").trim();
+      return exchange !== "" && exchange !== ".";
+    });
   } catch {
-    // ignore and fallback
+    return false;
   }
-
-  try {
-    const a = await withTimeout(resolve4(domain), DNS_TIMEOUT_MS);
-    if (Array.isArray(a) && a.length > 0) return true;
-  } catch {
-    // ignore and fallback
-  }
-
-  try {
-    const aaaa = await withTimeout(resolve6(domain), DNS_TIMEOUT_MS);
-    if (Array.isArray(aaaa) && aaaa.length > 0) return true;
-  } catch {
-    // ignore
-  }
-
-  return false;
 }
 
 export async function validateRegistrationEmail(value: unknown): Promise<EmailValidationResult> {
@@ -349,6 +402,10 @@ export async function validateRegistrationEmail(value: unknown): Promise<EmailVa
   if (!basic.ok) {
     return basic;
   }
+
+  // Refresh in the background. The bundled snapshot is checked synchronously,
+  // so registration never waits for GitHub and remains protected offline.
+  void refreshDisposableEmailDomains();
 
   const [, domain] = basic.normalized.split("@");
 
@@ -361,7 +418,7 @@ export async function validateRegistrationEmail(value: unknown): Promise<EmailVa
   }
 
   try {
-    const resolvable = await hasResolvableMailDomain(domain);
+    const resolvable = await hasMailExchange(domain);
 
     if (!resolvable) {
       return {
