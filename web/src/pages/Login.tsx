@@ -288,8 +288,7 @@ function mapAuthError(raw: string, t: (k: string, fb?: string) => string): strin
     case "email_required":              return t("login.err.email_required");
     case "email_non_ascii":             return t("login.err.email_non_ascii");
     case "email_invalid_format":        return t("login.err.email_invalid_format");
-    case "email_disposable":            return t("login.err.email_disposable");
-    case "email_domain_unresolvable":   return t("login.err.email_domain_unresolvable");
+    case "email_domain_not_allowed":    return t("login.err.email_domain_not_allowed");
     default:                            return t("login.err.generic");
   }
 }

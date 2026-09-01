@@ -1404,8 +1404,8 @@ export async function servicesRoutes(app: FastifyInstance) {
             userAgent,
             eventType: "trial_group_block",
             decision: "block",
-            reason: emailCheck.code === "email_disposable"
-              ? "trial_email_disposable"
+            reason: emailCheck.code === "email_domain_not_allowed"
+              ? "trial_email_domain_not_allowed"
               : "trial_email_invalid",
             meta: {
               serviceId,
@@ -1420,7 +1420,7 @@ export async function servicesRoutes(app: FastifyInstance) {
         return reply.code(403).send({
           ok: false,
           error: "trial_email_unacceptable",
-          message: "Для тестового доступа укажите обычную постоянную почту.",
+          message: "Используйте почту популярного сервиса: Gmail, Mail.ru, Яндекс или Outlook.",
         });
       }
 

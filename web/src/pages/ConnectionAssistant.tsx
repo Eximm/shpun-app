@@ -157,8 +157,8 @@ function AssistantEmailGate({
       setError(
         errorCode === "email_already_used"
           ? t("profile.email.error.already_used")
-          : errorCode === "email_disposable"
-            ? t("profile.email.error.disposable")
+          : errorCode === "email_domain_not_allowed"
+            ? t("profile.email.error.domain_not_allowed")
             : errorCode.startsWith("email_")
               ? t("profile.email.error.invalid")
               : t("profile.email.error.save")

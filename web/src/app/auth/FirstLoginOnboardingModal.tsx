@@ -44,8 +44,8 @@ export function getEmailErrorText(err: unknown, t: (key: string) => string): str
     .toLowerCase();
   if (raw.includes("email_already_used") || raw.includes("already in use"))
     return t("onboarding.error.email_used");
-  if (raw.includes("email_disposable"))
-    return t("onboarding.error.email_disposable");
+  if (raw.includes("email_domain_not_allowed"))
+    return t("onboarding.error.email_domain_not_allowed");
   if (raw.includes("invalid_email")) return t("onboarding.error.email_invalid");
   if (raw.includes("empty_email"))   return t("onboarding.error.email_empty");
   if (raw.includes("email_not_saved"))

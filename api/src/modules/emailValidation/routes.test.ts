@@ -4,19 +4,19 @@ import Fastify from "fastify";
 
 import { emailValidationRoutes } from "./routes.js";
 
-test("internal domain check rejects disposable mail", async () => {
+test("internal domain check rejects a domain outside the allowlist", async () => {
   const app = Fastify({ trustProxy: true });
   await app.register(emailValidationRoutes, { prefix: "/api" });
 
   const response = await app.inject({
     method: "GET",
-    url: "/api/internal/email-domain/check?domain=mailto.plus",
+    url: "/api/internal/email-domain/check?domain=emailgen.uk",
     headers: { host: "shpun-app-api:3000" },
     remoteAddress: "172.19.0.10",
   });
 
   assert.equal(response.statusCode, 200);
-  assert.deepEqual(response.json(), { ok: false, code: "email_disposable" });
+  assert.deepEqual(response.json(), { ok: false, code: "email_domain_not_allowed" });
   await app.close();
 });
 

@@ -745,7 +745,7 @@ export function Profile() {
       .join(" ")
       .toLowerCase();
     if (raw.includes("email_already_used") || raw.includes("already in use")) return t("profile.email.error.already_used");
-    if (raw.includes("email_disposable"))  return t("profile.email.error.disposable");
+    if (raw.includes("email_domain_not_allowed")) return t("profile.email.error.domain_not_allowed");
     if (raw.includes("invalid_email"))     return t("profile.email.error.invalid");
     if (raw.includes("empty_email"))       return t("profile.email.error.empty");
     if (raw.includes("email_not_saved"))   return t("profile.email.error.not_saved");
