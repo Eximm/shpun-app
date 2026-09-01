@@ -15,6 +15,7 @@ test("rejects known disposable domains and their subdomains", () => {
     "user@mail.tm",
     "user@mailto.plus",
     "user@1secmail.com",
+    "user@jmaie.com",
   ]) {
     assert.deepEqual(validateRegistrationEmailBasic(email), {
       ok: false,
@@ -34,6 +35,8 @@ test("keeps normal public and private mail domains valid", () => {
   for (const email of [
     "person@gmail.com",
     "person@mail.ru",
+    "person@yandex.ru",
+    "person@outlook.com",
     "person@proton.me",
     "person@company.example",
   ]) {

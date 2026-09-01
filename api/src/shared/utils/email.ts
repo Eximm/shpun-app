@@ -75,6 +75,7 @@ const DISPOSABLE_DOMAINS = new Set([
   "huad.ru",
   "inboxkitten.com",
   "jourrapide.com",
+  "jmaie.com",
   "mail.cx",
   "mail.gw",
   "mail.tm",
@@ -108,6 +109,17 @@ const DISPOSABLE_DOMAINS = new Set([
   "wegwerfmail.org",
 ]);
 
+// Popular mailbox providers are intentionally kept out of third-party
+// intelligence checks. This avoids false positives and preserves its quota.
+const TRUSTED_MAIL_DOMAINS = new Set([
+  "gmail.com", "googlemail.com", "mail.ru", "bk.ru", "inbox.ru", "list.ru",
+  "internet.ru", "yandex.ru", "yandex.com", "yandex.by", "yandex.kz", "ya.ru",
+  "outlook.com", "hotmail.com", "live.com", "msn.com", "yahoo.com",
+  "proton.me", "protonmail.com", "icloud.com", "me.com", "mac.com",
+  "rambler.ru", "gmx.com", "gmx.de", "zoho.com", "tuta.com", "tutanota.com",
+  "fastmail.com",
+]);
+
 const ENV_DISPOSABLE_DOMAINS = parseDomainList(process.env.EMAIL_BLOCKED_DOMAINS);
 const ENV_ALLOWED_DOMAINS = parseDomainList(process.env.EMAIL_ALLOWED_DOMAINS);
 const BUNDLED_DISPOSABLE_DOMAINS = parseDomainList(bundledDisposableDomains);
@@ -131,6 +143,18 @@ let disposableDomainsRefreshPromise: Promise<void> | null = null;
 const DISPOSABLE_DOMAIN_PATTERN = /(?:^|[.-])(?:temp(?:orary)?|trash|throwaway|disposable|burner|fake)(?:-?(?:mail|email|inbox))(?:[.-]|$)|(?:^|[.-])(?:10|20|30|60|minute|hour)-?(?:minute-?)?mail(?:[.-]|$)|(?:^|[.-])mail-?(?:temp|trash|drop|catch)(?:[.-]|$)/i;
 
 const DNS_TIMEOUT_MS = 2500;
+const DOMAIN_INTELLIGENCE_URL = String(
+  process.env.EMAIL_DOMAIN_INTELLIGENCE_URL ?? "https://api.usercheck.com/domain/"
+).trim();
+const DOMAIN_INTELLIGENCE_KEY = String(process.env.EMAIL_DOMAIN_INTELLIGENCE_KEY ?? "").trim();
+const DOMAIN_INTELLIGENCE_TIMEOUT_MS = 2500;
+const DOMAIN_INTELLIGENCE_POSITIVE_CACHE_MS = 7 * 24 * 60 * 60 * 1000;
+const DOMAIN_INTELLIGENCE_NEGATIVE_CACHE_MS = 24 * 60 * 60 * 1000;
+const DOMAIN_INTELLIGENCE_ERROR_PAUSE_MS = 15 * 60 * 1000;
+const DOMAIN_INTELLIGENCE_RATE_LIMIT_PAUSE_MS = 60 * 60 * 1000;
+const DOMAIN_INTELLIGENCE_CACHE_MAX = 5000;
+const domainIntelligenceCache = new Map<string, { disposable: boolean; expiresAt: number }>();
+let domainIntelligencePausedUntil = 0;
 
 export function normalizeEmail(value: unknown): string {
   return String(value ?? "").trim().toLowerCase();
@@ -214,10 +238,71 @@ export function isDisposableEmailDomain(value: unknown): boolean {
 
   if (!domain) return false;
   if (matchesDomainOrParent(domain, ENV_ALLOWED_DOMAINS)) return false;
+  if (TRUSTED_MAIL_DOMAINS.has(domain)) return false;
   if (matchesDomainOrParent(domain, ENV_DISPOSABLE_DOMAINS)) return true;
   if (matchesDomainOrParent(domain, DISPOSABLE_DOMAINS)) return true;
   if (matchesDomainOrParent(domain, REFRESHED_DISPOSABLE_DOMAINS)) return true;
   return DISPOSABLE_DOMAIN_PATTERN.test(domain);
+}
+
+async function lookupDisposableDomain(domain: string): Promise<boolean | undefined> {
+  if (!DOMAIN_INTELLIGENCE_URL || DOMAIN_INTELLIGENCE_URL.toLowerCase() === "off") return undefined;
+  if (matchesDomainOrParent(domain, ENV_ALLOWED_DOMAINS) || TRUSTED_MAIL_DOMAINS.has(domain)) {
+    return false;
+  }
+
+  const now = Date.now();
+  const cached = domainIntelligenceCache.get(domain);
+  if (cached && cached.expiresAt > now) return cached.disposable;
+  if (cached) domainIntelligenceCache.delete(domain);
+  if (domainIntelligencePausedUntil > now) return undefined;
+
+  try {
+    const base = DOMAIN_INTELLIGENCE_URL.endsWith("/")
+      ? DOMAIN_INTELLIGENCE_URL
+      : `${DOMAIN_INTELLIGENCE_URL}/`;
+    const headers: Record<string, string> = { Accept: "application/json" };
+    if (DOMAIN_INTELLIGENCE_KEY) headers.Authorization = `Bearer ${DOMAIN_INTELLIGENCE_KEY}`;
+
+    const response = await withTimeout(
+      fetch(`${base}${encodeURIComponent(domain)}?include_mx=false`, {
+        headers,
+        signal: AbortSignal.timeout(DOMAIN_INTELLIGENCE_TIMEOUT_MS),
+      }),
+      DOMAIN_INTELLIGENCE_TIMEOUT_MS
+    );
+
+    if (response.status === 429) {
+      const retryAfterSeconds = Number(response.headers.get("retry-after") || 0);
+      domainIntelligencePausedUntil = now + Math.max(
+        DOMAIN_INTELLIGENCE_RATE_LIMIT_PAUSE_MS,
+        Number.isFinite(retryAfterSeconds) ? retryAfterSeconds * 1000 : 0
+      );
+      return undefined;
+    }
+    if (!response.ok) {
+      domainIntelligencePausedUntil = now + DOMAIN_INTELLIGENCE_ERROR_PAUSE_MS;
+      return undefined;
+    }
+
+    const payload = await response.json() as { disposable?: unknown };
+    if (typeof payload.disposable !== "boolean") return undefined;
+
+    if (domainIntelligenceCache.size >= DOMAIN_INTELLIGENCE_CACHE_MAX) {
+      const oldestKey = domainIntelligenceCache.keys().next().value as string | undefined;
+      if (oldestKey) domainIntelligenceCache.delete(oldestKey);
+    }
+    domainIntelligenceCache.set(domain, {
+      disposable: payload.disposable,
+      expiresAt: now + (payload.disposable
+        ? DOMAIN_INTELLIGENCE_POSITIVE_CACHE_MS
+        : DOMAIN_INTELLIGENCE_NEGATIVE_CACHE_MS),
+    });
+    return payload.disposable;
+  } catch {
+    domainIntelligencePausedUntil = now + DOMAIN_INTELLIGENCE_ERROR_PAUSE_MS;
+    return undefined;
+  }
 }
 
 export function validateRegistrationEmailBasic(value: unknown): EmailValidationResult {
@@ -384,15 +469,16 @@ async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   }
 }
 
-async function hasMailExchange(domain: string): Promise<boolean> {
+async function resolveMailExchanges(domain: string): Promise<string[]> {
   try {
     const mx = await withTimeout(resolveMx(domain), DNS_TIMEOUT_MS);
-    return Array.isArray(mx) && mx.some((record) => {
-      const exchange = String(record?.exchange ?? "").trim();
-      return exchange !== "" && exchange !== ".";
-    });
+    return Array.isArray(mx)
+      ? mx
+          .map((record) => String(record?.exchange ?? "").trim().toLowerCase().replace(/\.$/, ""))
+          .filter((exchange) => exchange !== "" && exchange !== ".")
+      : [];
   } catch {
-    return false;
+    return [];
   }
 }
 
@@ -418,13 +504,30 @@ export async function validateRegistrationEmail(value: unknown): Promise<EmailVa
   }
 
   try {
-    const resolvable = await hasMailExchange(domain);
+    const intelligenceDisposable = await lookupDisposableDomain(domain);
+    if (intelligenceDisposable === true) {
+      return {
+        ok: false,
+        normalized: basic.normalized,
+        code: "email_disposable",
+      };
+    }
 
-    if (!resolvable) {
+    const mailExchanges = await resolveMailExchanges(domain);
+
+    if (mailExchanges.length === 0) {
       return {
         ok: false,
         normalized: basic.normalized,
         code: "email_domain_unresolvable",
+      };
+    }
+
+    if (mailExchanges.some((exchange) => isDisposableEmailDomain(exchange))) {
+      return {
+        ok: false,
+        normalized: basic.normalized,
+        code: "email_disposable",
       };
     }
 
