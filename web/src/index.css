@@ -5172,6 +5172,19 @@ button, a { -webkit-tap-highlight-color: transparent; }
   background: linear-gradient(135deg, #7c5cff, #4dd7ff);
   box-shadow: 0 0 12px rgba(77,215,255,0.35);
 }
+.profile-about-email-note {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 1px solid rgba(77,215,255,0.13);
+  border-radius: 14px;
+  background: rgba(77,215,255,0.045);
+  color: rgba(255,255,255,0.60);
+  font-size: 11px;
+  line-height: 1.45;
+  font-weight: 750;
+}
 .profile-about-grid {
   display: grid;
   gap: 10px;

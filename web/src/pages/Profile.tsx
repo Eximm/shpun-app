@@ -1046,6 +1046,10 @@ export function Profile() {
               <span>Держим баланс качества, понятного кабинета и доступной цены.</span>
               <span>Развиваем собственную экосистему: Telegram-вход, статусы серверов, сценарии для устройств и решения для домашней сети.</span>
             </div>
+            <div className="profile-about-email-note">
+              <span aria-hidden="true">ℹ️</span>
+              При регистрации используйте свою настоящую почту — она нужна для подтверждения и восстановления доступа.
+            </div>
             <div className="profile-about-grid">
               <div className="profile-about-card"><ProfileIcon name="activity" /><b>Видео и связь</b><span>Помогаем смотреть ролики, держать мессенджеры под рукой и не ругаться с мобильным интернетом каждый вечер.</span></div>
               <div className="profile-about-card"><ProfileIcon name="server" /><b>Баланс и качество</b><span>Следим за стабильностью, ценой и понятностью сервиса. Нам важно, чтобы VPN был не роскошью, а нормальным рабочим инструментом.</span></div>
