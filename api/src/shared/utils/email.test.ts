@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -50,6 +51,18 @@ test("matches allowed domains exactly", () => {
   assert.equal(isAllowedEmailDomain("GMAIL.COM"), true);
   assert.equal(isAllowedEmailDomain("sub.gmail.com"), false);
   assert.equal(isAllowedEmailDomain("gmail.com.example"), false);
+});
+
+test("keeps the app and API allowlists identical", () => {
+  const webDomains = JSON.parse(readFileSync(
+    new URL("../../../../web/src/shared/data/allowed-email-domains.json", import.meta.url),
+    "utf8"
+  )) as string[];
+  const apiDomains = JSON.parse(readFileSync(
+    new URL("../data/allowed-email-domains.json", import.meta.url),
+    "utf8"
+  )) as string[];
+  assert.deepEqual([...webDomains].sort(), [...apiDomains].sort());
 });
 
 test("still rejects malformed mailbox input", () => {

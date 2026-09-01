@@ -23,6 +23,7 @@ import shieldIconUrl from "../assets/brand-icons/shield.svg";
 import signalIconUrl from "../assets/brand-icons/signal-bars.svg";
 import telegramIconUrl from "../assets/brand-icons/telegram.svg";
 import youtubeIconUrl from "../assets/brand-icons/youtube.svg";
+import allowedEmailDomains from "../shared/data/allowed-email-domains.json";
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 
@@ -30,7 +31,11 @@ type TgWebApp  = { initData?: string; ready?: () => void; expand?: () => void };
 type Mode      = "detecting" | "telegram" | "web";
 type AuthModal = "none" | "login" | "register" | "forgot" | "reset";
 type TgWidgetState           = "idle" | "loading" | "ready" | "failed";
-type RegisterEmailClientCode = "email_required" | "email_invalid_format" | "email_non_ascii";
+type RegisterEmailClientCode =
+  | "email_required"
+  | "email_invalid_format"
+  | "email_non_ascii"
+  | "email_domain_not_allowed";
 
 /* ─── Constants ─────────────────────────────────────────────────────────── */
 
@@ -62,6 +67,9 @@ const ORBIT_RESOURCE_POOL = [
   "TikTok",
 ] as const;
 const ORBIT_RESOURCE_COUNT = 5;
+const REGISTER_ALLOWED_EMAIL_DOMAINS = new Set(
+  allowedEmailDomains.map((domain) => String(domain).trim().toLowerCase())
+);
 
 /* ─── Forgot helpers ─────────────────────────────────────────────────────── */
 
@@ -214,6 +222,8 @@ function validateRegisterEmailClient(value: string): RegisterEmailClientCode | n
   if (!email) return "email_required";
   if (!/^[\x00-\x7F]+$/.test(email)) return "email_non_ascii";
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return "email_invalid_format";
+  const domain = email.slice(email.lastIndexOf("@") + 1);
+  if (!REGISTER_ALLOWED_EMAIL_DOMAINS.has(domain)) return "email_domain_not_allowed";
   return null;
 }
 
@@ -373,6 +383,8 @@ export function Login() {
   const [showPassword,  setShowPassword]  = useState(false);
   const [showPassword2, setShowPassword2] = useState(false);
   const [emailTouched,  setEmailTouched]  = useState(false);
+  const [registerEmailServerCode, setRegisterEmailServerCode] =
+    useState<RegisterEmailClientCode | null>(null);
 
   // ── Forgot password ───────────────────────────────────────────────────────
   const [forgotLogin,    setForgotLogin]    = useState("");
@@ -423,10 +435,13 @@ export function Login() {
   // ── Derived ───────────────────────────────────────────────────────────────
   const canPasswordLogin    = login.trim().length > 0 && password.length > 0;
   const passwordsMatch      = password2.length === 0 ? true : password === password2;
-  const registerEmailCode   = authModal === "register" ? validateRegisterEmailClient(login) : null;
+  const registerEmailCode = authModal === "register"
+    ? (registerEmailServerCode || validateRegisterEmailClient(login))
+    : null;
   const registerEmailMessage = registerEmailCode === "email_required"      ? t("login.err.email_required")
     : registerEmailCode === "email_non_ascii"      ? t("login.err.email_non_ascii")
     : registerEmailCode === "email_invalid_format" ? t("login.err.email_invalid_format")
+    : registerEmailCode === "email_domain_not_allowed" ? t("login.err.email_domain_not_allowed")
     : "";
   const canPasswordRegister = login.trim().length > 0 && password.length > 0
     && password2.length > 0 && password === password2 && !registerEmailCode;
@@ -437,6 +452,12 @@ export function Login() {
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = previousOverflow; };
   }, [authModal]);
+
+  useEffect(() => {
+    if (authModal !== "register" || !login.trim()) return;
+    const timer = window.setTimeout(() => setEmailTouched(true), 450);
+    return () => window.clearTimeout(timer);
+  }, [authModal, login]);
 
   // ── Toast ─────────────────────────────────────────────────────────────────
   function toastError(raw: string) {
@@ -503,7 +524,8 @@ export function Login() {
   function openModal(next: AuthModal) {
     resetTelegramWidgetUi();
     setAuthModal(next);
-    setPassword(""); setPassword2(""); setShowPassword(false); setShowPassword2(false); setEmailTouched(false);
+    setPassword(""); setPassword2(""); setShowPassword(false); setShowPassword2(false);
+    setEmailTouched(false); setRegisterEmailServerCode(null);
     if (next !== "register") setClientName("");
     if (next === "register") {
       const p = readPendingPartnerId();
@@ -521,7 +543,7 @@ export function Login() {
     resetTelegramWidgetUi();
     setAuthModal("none");
     setPassword(""); setPassword2(""); setShowPassword(false); setShowPassword2(false);
-    setClientName(""); setEmailTouched(false); setForgotLoading(false);
+    setClientName(""); setEmailTouched(false); setRegisterEmailServerCode(null); setForgotLoading(false);
     // Reset-state сбрасываем полностью
     setResetToken(""); setResetPwd1(""); setResetPwd2("");
     setResetShowPwd1(false); setResetShowPwd2(false);
@@ -702,7 +724,14 @@ export function Login() {
         },
       });
       await goAfterAuth(r, "password");
-    } catch (e: unknown) { clearAuthPending(); toastError(errorToAuthRaw(e, t("error.password_register_failed")));
+    } catch (e: unknown) {
+      clearAuthPending();
+      const raw = errorToAuthRaw(e, t("error.password_register_failed"));
+      if (raw === "email_domain_not_allowed") {
+        setRegisterEmailServerCode("email_domain_not_allowed");
+        setEmailTouched(true);
+      }
+      toastError(raw);
     } finally { setLoading(false); }
   }
 
@@ -1165,13 +1194,23 @@ export function Login() {
                 <input
                   className={`input ${authModal === "register" && emailTouched && registerEmailCode ? "input--invalid" : ""}`}
                   placeholder={authModal === "register" ? t("login.password.login_ph_register") : t("login.password.login_ph")}
-                  value={login} onChange={(e) => setLogin(e.target.value)}
+                  value={login} onChange={(e) => {
+                    setLogin(e.target.value);
+                    if (authModal === "register") {
+                      setEmailTouched(false);
+                      setRegisterEmailServerCode(null);
+                    }
+                  }}
                   onBlur={() => { if (authModal === "register") setEmailTouched(true); }}
                   autoComplete="username" disabled={loading}
                   inputMode={authModal === "register" ? "email" : "text"}
+                  aria-invalid={authModal === "register" && emailTouched && Boolean(registerEmailCode)}
+                  aria-describedby={authModal === "register" && emailTouched && registerEmailMessage ? "register-email-error" : undefined}
                 />
                 {authModal === "register" && emailTouched && registerEmailMessage && (
-                  <div className="login__fieldError">{registerEmailMessage}</div>
+                  <div id="register-email-error" className="login__fieldError" role="alert">
+                    {registerEmailMessage}
+                  </div>
                 )}
               </div>
 
