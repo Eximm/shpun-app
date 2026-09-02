@@ -4732,6 +4732,11 @@ button, a { -webkit-tap-highlight-color: transparent; }
   font-size: 13px;
   line-height: 1.45;
 }
+
+#openwrt-25,
+#openwrt-24 {
+  scroll-margin-top: 80px;
+}
 .profile-more-page {
   max-width: 920px;
   margin-left: auto;

@@ -231,6 +231,15 @@
 
     .button:active { transform: translateY(1px); }
 
+    .button--secondary {
+      border: 1px solid rgba(69, 200, 245, .45);
+      background: #10283a;
+      color: #a9e8ff;
+    }
+
+    #openwrt25,
+    #openwrt24 { scroll-margin-top: 76px; }
+
     .notice {
       margin-top: 10px;
       padding: 10px 11px;
@@ -280,12 +289,12 @@
           <div class="brand__icon" aria-hidden="true">📡</div>
           <div>
             <h1>Shpun Router</h1>
-            <div class="version">Пакеты для OpenWrt 24.x и 25.x</div>
+            <div class="version">Выберите свою версию OpenWrt</div>
           </div>
         </div>
         <span class="status">Готов к работе</span>
       </div>
-      <p class="hero__text">VPN для всей домашней сети. После привязки роутер сам получит настройки и подключится к Shpun SDN System.</p>
+      <p class="hero__text">Сначала выберите версию OpenWrt. Мы покажем нужный файл и простые шаги установки.</p>
       <div class="tags">
         <span class="tag">OpenWrt 24.x</span>
         <span class="tag">OpenWrt 25.x</span>
@@ -302,62 +311,60 @@
 
     <section class="page active" id="page-start">
       <div class="section section--accent">
-        <h2>Подключение за четыре шага</h2>
-        <p class="section__lead">Понадобится роутер с OpenWrt 24.x или 25.x, доступ к его панели LuCI и работающее подключение к интернету.</p>
-        <div class="notice"><strong>Важно перед установкой.</strong> Роутер, на который вы устанавливаете Shpun Router, должен уже иметь доступ в интернет. Для первой настройки удобнее поставить его за основным роутером: соединить LAN-порт основного роутера с WAN-портом настраиваемого. Так он сразу получит готовый интернет.</div>
+        <h2>1. Узнайте свою версию OpenWrt</h2>
+        <p class="section__lead">Откройте страницу роутера <strong>192.168.1.1</strong>. Номер OpenWrt написан на главной странице.</p>
+        <div class="notice"><strong>Выберите только свой раздел:</strong> OpenWrt 25 или OpenWrt 24. Не скачивайте файлы из другого раздела.</div>
+        <div class="notice"><strong>Перед установкой:</strong> интернет на роутере уже должен работать.</div>
+        <button class="button" type="button" onclick="document.getElementById('openwrt25').scrollIntoView({ behavior: 'smooth' })">У меня OpenWrt 25</button>
+        <button class="button button--secondary" type="button" onclick="document.getElementById('openwrt24').scrollIntoView({ behavior: 'smooth' })">У меня OpenWrt 24</button>
+      </div>
 
+      <div class="section section--accent" id="openwrt25">
+        <h2>🟢 У меня OpenWrt 25</h2>
+        <p class="section__lead"><strong>Этот раздел только для OpenWrt 25.</strong></p>
+        <div class="notice"><strong>Зачем нужна программа-установщик?</strong> OpenWrt 25 не разрешает поставить наш файл обычной кнопкой в панели роутера. Программа сама подключится к роутеру и установит всё правильно. Команды вводить не нужно.</div>
         <ol class="steps">
-          <li class="step">
-            <span class="step__num">1</span>
-            <div class="step__text">
-              <h3>Запустите роутер</h3>
-              <p>Убедитесь, что интернет на нём уже работает, затем откройте панель управления LuCI.</p>
-            </div>
-          </li>
-          <li class="step">
-            <span class="step__num">2</span>
-            <div class="step__text">
-              <h3>Установите пакет Shpun Router</h3>
-              <p><strong>OpenWrt 24.x:</strong> скачайте IPK и установите его через System → Software → Upload package.</p>
-              <p><strong>OpenWrt 25.x:</strong> подключите компьютер с Windows к LAN или Wi-Fi роутера, скачайте установщик и запустите его. Он сам найдёт роутер и при необходимости попросит пароль root.</p>
-            </div>
-          </li>
-          <li class="step">
-            <span class="step__num">3</span>
-            <div class="step__text">
-              <h3>Закажите услугу Shpun Router</h3>
-              <p>Вернитесь в миниапп или Shpun App и оформите отдельную услугу для роутера.</p>
-            </div>
-          </li>
-          <li class="step">
-            <span class="step__num">4</span>
-            <div class="step__text">
-              <h3>Введите код привязки</h3>
-              <p>На главной странице LuCI найдите виджет Shpun Router. В помощнике подключения выбранной услуги введите код из виджета.</p>
-            </div>
-          </li>
+          <li class="step"><span class="step__num">1</span><div class="step__text"><h3>Подключите компьютер</h3><p>Подключите компьютер к LAN или Wi-Fi этого роутера.</p></div></li>
+          <li class="step"><span class="step__num">2</span><div class="step__text"><h3>Выберите свою Windows</h3><p>Для Windows 10/11 нажмите первую кнопку. Для Windows 7/8 — вторую.</p></div></li>
+          <li class="step"><span class="step__num">3</span><div class="step__text"><h3>Запустите файл</h3><p>Если Windows покажет предупреждение, нажмите «Подробнее», затем «Выполнить в любом случае».</p></div></li>
+          <li class="step"><span class="step__num">4</span><div class="step__text"><h3>Нажмите «Установить»</h3><p>Программа сама найдёт роутер. Если на роутере есть пароль, программа попросит его ввести.</p></div></li>
+          <li class="step"><span class="step__num">5</span><div class="step__text"><h3>Дождитесь сообщения «Готово»</h3><p>После этого откройте страницу роутера 192.168.1.1.</p></div></li>
         </ol>
+        <button class="button" type="button" onclick="ShpunRouterApp.openDownload('25')">⬇️ OpenWrt 25 — скачать для Windows 10/11</button>
+        <button class="button" type="button" onclick="ShpunRouterApp.openDownload('25-win7')">⬇️ OpenWrt 25 — скачать для Windows 7/8</button>
+      </div>
 
-        <button class="button" type="button" onclick="ShpunRouterApp.openDownload('24')">⬇️ OpenWrt 24.x — скачать Shpun Router 1.1.8</button>
-        <button class="button" type="button" onclick="ShpunRouterApp.openDownload('25')">⬇️ OpenWrt 25.x — установщик для Windows</button>
-        <button class="button" type="button" onclick="ShpunRouterApp.openDownload('25-win7')">⬇️ Версия для Windows 7/8</button>
-        <div class="notice"><strong>Готово.</strong> После привязки настройки загрузятся автоматически. Вручную добавлять серверы или конфиги не нужно.</div>
+      <div class="section" id="openwrt24">
+        <h2>🔵 У меня OpenWrt 24</h2>
+        <p class="section__lead"><strong>Этот раздел только для OpenWrt 24.</strong> Программа из раздела OpenWrt 25 вам не нужна.</p>
+        <ol class="steps">
+          <li class="step"><span class="step__num">1</span><div class="step__text"><h3>Скачайте пакет</h3><p>Нажмите кнопку «Скачать пакет 1.1.8» ниже.</p></div></li>
+          <li class="step"><span class="step__num">2</span><div class="step__text"><h3>Откройте панель роутера</h3><p>Перейдите на 192.168.1.1.</p></div></li>
+          <li class="step"><span class="step__num">3</span><div class="step__text"><h3>Откройте установку программ</h3><p>Нажмите System (Система) → Software (Программы) → Upload package.</p></div></li>
+          <li class="step"><span class="step__num">4</span><div class="step__text"><h3>Выберите скачанный файл</h3><p>Подтвердите установку. Когда она закончится, вернитесь на главную страницу.</p></div></li>
+        </ol>
+        <button class="button" type="button" onclick="ShpunRouterApp.openDownload('24')">⬇️ OpenWrt 24 — скачать пакет 1.1.8</button>
       </div>
 
       <div class="section">
-        <h2>Где взять код</h2>
-        <p class="muted">Откройте главную страницу LuCI после установки пакета. Код находится в виджете <strong>Shpun Router / SDN System</strong>. Вводить его нужно в помощнике подключения услуги Shpun Router.</p>
+        <h2>После установки</h2>
+        <ol class="steps">
+          <li class="step"><span class="step__num">1</span><div class="step__text"><h3>Найдите код</h3><p>На главной странице роутера найдите большой блок Shpun Router. В нём будет короткий код.</p></div></li>
+          <li class="step"><span class="step__num">2</span><div class="step__text"><h3>Введите код в приложении</h3><p>Закажите услугу Shpun Router и введите код. Роутер сам получит настройки и подключится.</p></div></li>
+        </ol>
+        <div class="notice"><strong>Готово.</strong> Ничего настраивать вручную больше не нужно.</div>
       </div>
+
     </section>
 
     <section class="page" id="page-router">
       <div class="section">
         <h2>Какой роутер подойдёт</h2>
-        <p class="section__lead">Главное требование — стабильная поддержка OpenWrt 24.x или 25.x. Для комфортной скорости рекомендуем современный роутер класса AX3000 или сопоставимую модель.</p>
+        <p class="section__lead">Лучше выбрать современный роутер с Wi-Fi 6 и надписью AX3000. На нём VPN обычно работает быстро и без зависаний.</p>
         <ul class="list">
-          <li><strong>Рекомендуем</strong><span>Wi-Fi 6, 256 МБ RAM или больше, современный двухъядерный процессор.</span></li>
-          <li><strong>Допустимо</strong><span>Более старые совместимые модели, если высокая скорость VPN не критична.</span></li>
-          <li class="warning"><strong>Не рекомендуем</strong><span>Старые одноядерные MIPS-устройства и модели с 32–64 МБ RAM: они могут заметно снижать скорость.</span></li>
+          <li><strong>Хороший выбор</strong><span>Современный роутер класса AX3000.</span></li>
+          <li><strong>Проще всего</strong><span>Купить роутер, на котором продавец уже установил OpenWrt 24 или 25.</span></li>
+          <li class="warning"><strong>Не рекомендуем</strong><span>Старые и самые дешёвые роутеры: VPN на них может работать медленно.</span></li>
         </ul>
       </div>
     </section>
@@ -366,10 +373,10 @@
       <div class="section">
         <h2>Если что-то не работает</h2>
         <ul class="list">
-          <li><strong>Виджет не появился</strong><span>Обновите страницу LuCI. Если не помогло, откройте её в режиме инкогнито и убедитесь, что пакет установлен.</span></li>
+          <li><strong>Блок Shpun Router не появился</strong><span>Обновите страницу роутера. Если не помогло, закройте браузер и откройте страницу снова.</span></li>
           <li><strong>Код не принимается</strong><span>Введите восемь латинских букв и цифр из виджета. Дефис можно не вводить.</span></li>
           <li><strong>VPN не подключился</strong><span>Проверьте интернет без VPN и активность услуги Shpun Router, затем обновите статус в виджете.</span></li>
-          <li><strong>Скорость ниже ожидаемой</strong><span>Проверьте скорость по кабелю. Чаще всего ограничением становится процессор роутера или Wi-Fi.</span></li>
+          <li><strong>Скорость стала ниже</strong><span>Проверьте скорость сначала по кабелю, потом по Wi-Fi. На старом роутере VPN может работать медленно.</span></li>
         </ul>
       </div>
     </section>

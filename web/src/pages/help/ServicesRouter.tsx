@@ -68,27 +68,6 @@ export function ServicesRouter() {
       ],
     },
     {
-      icon: "⚡",
-      title: t("servicesRouter.quick_start.title", "Быстрый старт"),
-      note: t("servicesRouter.quick_start.note", "Перед установкой роутер должен иметь доступ в интернет. Для первой настройки удобнее подключить его WAN-порт к LAN-порту основного роутера, чтобы он сразу получал готовый интернет."),
-      steps: [
-        t("servicesRouter.quick_start.step_1", "Подключите роутер с OpenWrt 24.x или 25.x к интернету, а компьютер — к его LAN или Wi-Fi"),
-        t("servicesRouter.quick_start.step_2", "OpenWrt 24.x: загрузите пакет 1.1.8 через LuCI. OpenWrt 25.x: скачайте и запустите установщик для Windows"),
-        t("servicesRouter.quick_start.step_3", "Закажите отдельную услугу Shpun Router"),
-        t("servicesRouter.quick_start.step_4", "Введите код из виджета роутера в помощнике подключения"),
-      ],
-    },
-    {
-      icon: "🔧",
-      title: t("servicesRouter.setup.title", "Пошаговая настройка"),
-      bullets: [
-        t("servicesRouter.setup.bullet_1", "Убедитесь, что интернет на роутере уже работает. Для первой настройки лучше подключить его WAN-порт к LAN-порту основного роутера"),
-        t("servicesRouter.setup.bullet_2", "OpenWrt 24.x: System → Software → Upload package. OpenWrt 25.x: запустите установщик на Windows и следуйте подсказкам — входить в LuCI не требуется"),
-        t("servicesRouter.setup.bullet_3", "Закажите услугу Shpun Router в миниаппе или приложении"),
-        t("servicesRouter.setup.bullet_4", "На главной странице LuCI найдите виджет Shpun Router и введите его код в помощнике подключения — остальные настройки загрузятся автоматически"),
-      ],
-    },
-    {
       icon: "❓",
       title: t("servicesRouter.faq.title", "Частые вопросы"),
       bullets: [
@@ -117,7 +96,7 @@ export function ServicesRouter() {
             <div>
               <h1 className="h1">📡 {t("servicesRouter.page.title", "Shpun Router")}</h1>
               <p className="p miniPage__subtitle">
-                {t("servicesRouter.page.sub", "Router VPN для всей домашней сети на OpenWrt 24.x и 25.x. Главное — выбрать роутер, который не будет слабым местом.")}
+                {t("servicesRouter.page.sub", "Сначала выберите свою версию OpenWrt. После этого вы увидите только нужные шаги и правильный файл.")}
               </p>
             </div>
           </div>
@@ -129,39 +108,120 @@ export function ServicesRouter() {
             <span className="chip">LuCI</span>
           </div>
 
+          <div className="router-help-note">
+            <span aria-hidden="true">🔎</span>
+            <span>{t("servicesRouter.choose.how", "Как узнать версию: откройте страницу роутера 192.168.1.1. Номер OpenWrt написан на главной странице.")}</span>
+          </div>
           <div className="actions actions--2 miniPage__actions">
             <button
               className="btn btn--primary"
-              onClick={() => window.location.assign("/services/order?kind=marzban_router")}
+              onClick={() => document.getElementById("openwrt-25")?.scrollIntoView({ behavior: "smooth" })}
               type="button"
             >
-              🚀 {t("servicesRouter.page.order", "Заказать Shpun Router")}
+              {t("servicesRouter.choose.25", "У меня OpenWrt 25")}
             </button>
             <button
               className="btn"
-              onClick={() => window.open(ROUTER_PACKAGE_24_URL, "_blank", "noopener,noreferrer")}
+              onClick={() => document.getElementById("openwrt-24")?.scrollIntoView({ behavior: "smooth" })}
               type="button"
             >
-              ⬇️ {t("servicesRouter.page.download_24", "OpenWrt 24.x — пакет 1.1.8")}
-            </button>
-            <button
-              className="btn"
-              onClick={() => window.open(ROUTER_INSTALLER_25_URL, "_blank", "noopener,noreferrer")}
-              type="button"
-            >
-              ⬇️ {t("servicesRouter.page.download_25_installer", "OpenWrt 25.x — установщик для Windows")}
-            </button>
-            <button
-              className="btn"
-              onClick={() => window.open(ROUTER_INSTALLER_25_WIN7_URL, "_blank", "noopener,noreferrer")}
-              type="button"
-            >
-              ⬇️ {t("servicesRouter.page.download_25_installer_legacy", "Версия для Windows 7/8")}
+              {t("servicesRouter.choose.24", "У меня OpenWrt 24")}
             </button>
           </div>
-          <div className="router-help-install-command">
-            <strong>{t("servicesRouter.page.install_25_title", "Первая установка OpenWrt 25.x")}</strong>
-            <span>{t("servicesRouter.page.install_25_hint", "Подключите компьютер к LAN или Wi-Fi роутера и запустите установщик. Он найдёт роутер на 192.168.1.1, при необходимости попросит пароль root и сам выполнит установку.")}</span>
+        </div>
+      </div>
+
+      <div className="card miniPage__panel router-help-card router-help-card--good" id="openwrt-25">
+        <div className="card__body">
+          <div className="router-help-card__head">
+            <span className="router-help-card__icon" aria-hidden="true">🟢</span>
+            <div className="h1 router-help-card__title">
+              {t("servicesRouter.install25.title", "OpenWrt 25.x — установка через Windows")}
+            </div>
+          </div>
+          <div className="router-help-note">
+            <span aria-hidden="true">✓</span>
+            <strong>{t("servicesRouter.install25.only", "Этот раздел только для OpenWrt 25. Если у вас OpenWrt 24 — пропустите его.")}</strong>
+          </div>
+          <p className="p router-help-card__body">
+            {t("servicesRouter.install25.why", "Зачем нужна программа: OpenWrt 25 не разрешает поставить наш файл обычной кнопкой в панели роутера. Установщик сам подключится к роутеру и всё сделает правильно. Команды вводить не нужно.")}
+          </p>
+          <div className="router-help-steps">
+            {[
+              t("servicesRouter.install25.step_1", "Подключите роутер к интернету, а компьютер — к LAN или Wi-Fi этого роутера"),
+              t("servicesRouter.install25.step_2", "Выберите кнопку для своей Windows: Windows 10/11 или Windows 7/8"),
+              t("servicesRouter.install25.step_3", "Запустите скачанный файл. Если Windows покажет предупреждение, нажмите «Подробнее», затем «Выполнить в любом случае»"),
+              t("servicesRouter.install25.step_4", "Нажмите «Установить». Программа сама найдёт роутер. Если на роутере есть пароль, программа попросит его ввести"),
+              t("servicesRouter.install25.step_5", "Дождитесь надписи об успешной установке, затем откройте страницу роутера 192.168.1.1"),
+            ].map((step, idx) => (
+              <div className="router-help-step" key={idx}>
+                <span className="router-help-step__num">{idx + 1}</span>
+                <span>{step}</span>
+              </div>
+            ))}
+          </div>
+          <div className="actions actions--2 miniPage__actions">
+            <button className="btn btn--primary" onClick={() => window.open(ROUTER_INSTALLER_25_URL, "_blank", "noopener,noreferrer")} type="button">
+              ⬇️ {t("servicesRouter.install25.download_modern", "Windows 10/11 — скачать")}
+            </button>
+            <button className="btn" onClick={() => window.open(ROUTER_INSTALLER_25_WIN7_URL, "_blank", "noopener,noreferrer")} type="button">
+              ⬇️ {t("servicesRouter.install25.download_legacy", "Windows 7/8 — скачать")}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="card miniPage__panel router-help-card" id="openwrt-24">
+        <div className="card__body">
+          <div className="router-help-card__head">
+            <span className="router-help-card__icon" aria-hidden="true">🔵</span>
+            <div className="h1 router-help-card__title">
+              {t("servicesRouter.install24.title", "OpenWrt 24.x — установка через LuCI")}
+            </div>
+          </div>
+          <div className="router-help-note">
+            <span aria-hidden="true">✓</span>
+            <strong>{t("servicesRouter.install24.only", "Этот раздел только для OpenWrt 24. Программа-установщик из раздела OpenWrt 25 здесь не нужна.")}</strong>
+          </div>
+          <div className="router-help-steps">
+            {[
+              t("servicesRouter.install24.step_1", "Убедитесь, что интернет на роутере уже работает"),
+              t("servicesRouter.install24.step_2", "Нажмите кнопку «Скачать пакет 1.1.8» ниже"),
+              t("servicesRouter.install24.step_3", "Откройте панель роутера 192.168.1.1 и перейдите: System (Система) → Software (Программы) → Upload package"),
+              t("servicesRouter.install24.step_4", "Выберите скачанный файл и подтвердите установку. Когда установка закончится, вернитесь на главную страницу"),
+            ].map((step, idx) => (
+              <div className="router-help-step" key={idx}>
+                <span className="router-help-step__num">{idx + 1}</span>
+                <span>{step}</span>
+              </div>
+            ))}
+          </div>
+          <div className="actions miniPage__actions">
+            <button className="btn btn--primary" onClick={() => window.open(ROUTER_PACKAGE_24_URL, "_blank", "noopener,noreferrer")} type="button">
+              ⬇️ {t("servicesRouter.install24.download", "OpenWrt 24.x — скачать пакет 1.1.8")}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="card miniPage__panel router-help-card router-help-card--good">
+        <div className="card__body">
+          <div className="router-help-card__head">
+            <span className="router-help-card__icon" aria-hidden="true">🔗</span>
+            <div className="h1 router-help-card__title">
+              {t("servicesRouter.after_install.title", "Готово. Теперь подключите роутер к услуге")}
+            </div>
+          </div>
+          <div className="router-help-steps">
+            {[
+              t("servicesRouter.after_install.step_1", "На главной странице роутера найдите большой блок Shpun Router. В нём будет короткий код"),
+              t("servicesRouter.after_install.step_2", "Закажите услугу Shpun Router в приложении и введите этот код. Роутер сам получит настройки и подключится"),
+            ].map((step, idx) => (
+              <div className="router-help-step" key={idx}>
+                <span className="router-help-step__num">{idx + 1}</span>
+                <span>{step}</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
