@@ -319,7 +319,7 @@
             <div class="step__text">
               <h3>Установите пакет Shpun Router</h3>
               <p><strong>OpenWrt 24.x:</strong> скачайте IPK и установите его через System → Software → Upload package.</p>
-              <p><strong>OpenWrt 25.x:</strong> скачайте простой установщик. Откройте System → Backup / Flash Firmware → Restore backup, выберите файл и дождитесь перезагрузки.</p>
+              <p><strong>OpenWrt 25.x:</strong> подключите компьютер с Windows к LAN или Wi-Fi роутера, скачайте установщик и запустите его. Он сам найдёт роутер и при необходимости попросит пароль root.</p>
             </div>
           </li>
           <li class="step">
@@ -339,7 +339,8 @@
         </ol>
 
         <button class="button" type="button" onclick="ShpunRouterApp.openDownload('24')">⬇️ OpenWrt 24.x — скачать Shpun Router 1.1.8</button>
-        <button class="button" type="button" onclick="ShpunRouterApp.openDownload('25')">⬇️ OpenWrt 25.x — простой установщик 2.0.2</button>
+        <button class="button" type="button" onclick="ShpunRouterApp.openDownload('25')">⬇️ OpenWrt 25.x — установщик для Windows</button>
+        <button class="button" type="button" onclick="ShpunRouterApp.openDownload('25-win7')">⬇️ Версия для Windows 7/8</button>
         <div class="notice"><strong>Готово.</strong> После привязки настройки загрузятся автоматически. Вручную добавлять серверы или конфиги не нужно.</div>
       </div>
 
@@ -377,7 +378,8 @@
   <script>
     const ShpunRouterApp = {
       packageUrl24: "https://spb.shpyn.online/files/ipk/shpun-router_1.1.8_all.ipk",
-      packageUrl25: "https://spb.shpyn.online/files/apk/shpun-router-openwrt25-installer.tar.gz",
+      packageUrl25: "https://spb.shpyn.online/files/apk/shpun-router-openwrt25-installer.exe",
+      packageUrl25Win7: "https://spb.shpyn.online/files/apk/shpun-router-openwrt25-win7.exe",
       tg: window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null,
 
       init() {
@@ -403,7 +405,11 @@
       },
 
       openDownload(branch = "24") {
-        const url = branch === "25" ? this.packageUrl25 : this.packageUrl24;
+        const url = branch === "25-win7"
+          ? this.packageUrl25Win7
+          : branch === "25"
+            ? this.packageUrl25
+            : this.packageUrl24;
         if (this.tg) {
           this.tg.openLink(url, { try_instant_view: false });
           return;

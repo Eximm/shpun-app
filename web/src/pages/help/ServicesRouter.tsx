@@ -17,7 +17,8 @@ type Block = {
 };
 
 const ROUTER_PACKAGE_24_URL = "https://spb.shpyn.online/files/ipk/shpun-router_1.1.8_all.ipk";
-const ROUTER_INSTALLER_25_URL = "https://spb.shpyn.online/files/apk/shpun-router-openwrt25-installer.tar.gz";
+const ROUTER_INSTALLER_25_URL = "https://spb.shpyn.online/files/apk/shpun-router-openwrt25-installer.exe";
+const ROUTER_INSTALLER_25_WIN7_URL = "https://spb.shpyn.online/files/apk/shpun-router-openwrt25-win7.exe";
 
 export function ServicesRouter() {
   const { t } = useI18n();
@@ -71,8 +72,8 @@ export function ServicesRouter() {
       title: t("servicesRouter.quick_start.title", "Быстрый старт"),
       note: t("servicesRouter.quick_start.note", "Перед установкой роутер должен иметь доступ в интернет. Для первой настройки удобнее подключить его WAN-порт к LAN-порту основного роутера, чтобы он сразу получал готовый интернет."),
       steps: [
-        t("servicesRouter.quick_start.step_1", "Запустите роутер с OpenWrt 24.x или 25.x и откройте LuCI"),
-        t("servicesRouter.quick_start.step_2", "OpenWrt 24.x: загрузите пакет 1.1.8. OpenWrt 25.x: скачайте установщик и восстановите его как резервную копию"),
+        t("servicesRouter.quick_start.step_1", "Подключите роутер с OpenWrt 24.x или 25.x к интернету, а компьютер — к его LAN или Wi-Fi"),
+        t("servicesRouter.quick_start.step_2", "OpenWrt 24.x: загрузите пакет 1.1.8 через LuCI. OpenWrt 25.x: скачайте и запустите установщик для Windows"),
         t("servicesRouter.quick_start.step_3", "Закажите отдельную услугу Shpun Router"),
         t("servicesRouter.quick_start.step_4", "Введите код из виджета роутера в помощнике подключения"),
       ],
@@ -82,7 +83,7 @@ export function ServicesRouter() {
       title: t("servicesRouter.setup.title", "Пошаговая настройка"),
       bullets: [
         t("servicesRouter.setup.bullet_1", "Убедитесь, что интернет на роутере уже работает. Для первой настройки лучше подключить его WAN-порт к LAN-порту основного роутера"),
-        t("servicesRouter.setup.bullet_2", "OpenWrt 24.x: System → Software → Upload package. OpenWrt 25.x: System → Backup / Flash Firmware → Restore backup"),
+        t("servicesRouter.setup.bullet_2", "OpenWrt 24.x: System → Software → Upload package. OpenWrt 25.x: запустите установщик на Windows и следуйте подсказкам — входить в LuCI не требуется"),
         t("servicesRouter.setup.bullet_3", "Закажите услугу Shpun Router в миниаппе или приложении"),
         t("servicesRouter.setup.bullet_4", "На главной странице LuCI найдите виджет Shpun Router и введите его код в помощнике подключения — остальные настройки загрузятся автоматически"),
       ],
@@ -148,12 +149,19 @@ export function ServicesRouter() {
               onClick={() => window.open(ROUTER_INSTALLER_25_URL, "_blank", "noopener,noreferrer")}
               type="button"
             >
-              ⬇️ {t("servicesRouter.page.download_25_installer", "OpenWrt 25.x — простой установщик 2.0.2")}
+              ⬇️ {t("servicesRouter.page.download_25_installer", "OpenWrt 25.x — установщик для Windows")}
+            </button>
+            <button
+              className="btn"
+              onClick={() => window.open(ROUTER_INSTALLER_25_WIN7_URL, "_blank", "noopener,noreferrer")}
+              type="button"
+            >
+              ⬇️ {t("servicesRouter.page.download_25_installer_legacy", "Версия для Windows 7/8")}
             </button>
           </div>
           <div className="router-help-install-command">
             <strong>{t("servicesRouter.page.install_25_title", "Первая установка OpenWrt 25.x")}</strong>
-            <span>{t("servicesRouter.page.install_25_hint", "Скачайте установщик. В роутере откройте System → Backup / Flash Firmware → Restore backup, выберите файл и дождитесь перезагрузки.")}</span>
+            <span>{t("servicesRouter.page.install_25_hint", "Подключите компьютер к LAN или Wi-Fi роутера и запустите установщик. Он найдёт роутер на 192.168.1.1, при необходимости попросит пароль root и сам выполнит установку.")}</span>
           </div>
         </div>
       </div>
