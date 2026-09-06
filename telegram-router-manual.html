@@ -289,12 +289,12 @@
           <div class="brand__icon" aria-hidden="true">📡</div>
           <div>
             <h1>Shpun Router</h1>
-            <div class="version">Выберите свою версию OpenWrt</div>
+            <div class="version">Установка с компьютера Windows</div>
           </div>
         </div>
         <span class="status">Готов к работе</span>
       </div>
-      <p class="hero__text">Сначала выберите версию OpenWrt. Мы покажем нужный файл и простые шаги установки.</p>
+      <p class="hero__text">Один установщик подходит для OpenWrt 24 и 25. Он сам проверит роутер и поставит нужную версию.</p>
       <div class="tags">
         <span class="tag">OpenWrt 24.x</span>
         <span class="tag">OpenWrt 25.x</span>
@@ -311,39 +311,24 @@
 
     <section class="page active" id="page-start">
       <div class="section section--accent">
-        <h2>1. Узнайте свою версию OpenWrt</h2>
-        <p class="section__lead">Откройте страницу роутера <strong>192.168.1.1</strong>. Номер OpenWrt написан на главной странице.</p>
-        <div class="notice"><strong>Выберите только свой раздел:</strong> OpenWrt 25 или OpenWrt 24. Не скачивайте файлы из другого раздела.</div>
-        <div class="notice"><strong>Перед установкой:</strong> интернет на роутере уже должен работать.</div>
-        <button class="button" type="button" onclick="document.getElementById('openwrt25').scrollIntoView({ behavior: 'smooth' })">У меня OpenWrt 25</button>
-        <button class="button button--secondary" type="button" onclick="document.getElementById('openwrt24').scrollIntoView({ behavior: 'smooth' })">У меня OpenWrt 24</button>
+        <h2>1. Подготовьте роутер</h2>
+        <p class="section__lead">Подключите роутер к интернету. Подключите компьютер к его Wi-Fi или кабелем.</p>
+        <div class="notice"><strong>Версию OpenWrt и модель узнавать не нужно.</strong> Установщик проверит их сам.</div>
       </div>
 
-      <div class="section section--accent" id="openwrt25">
-        <h2>🟢 У меня OpenWrt 25</h2>
-        <p class="section__lead"><strong>Этот раздел только для OpenWrt 25.</strong></p>
-        <div class="notice"><strong>Зачем нужна программа-установщик?</strong> OpenWrt 25 не разрешает поставить наш файл обычной кнопкой в панели роутера. Программа сама подключится к роутеру и установит всё правильно. Команды вводить не нужно.</div>
+      <div class="section section--accent">
+        <h2>2. Запустите установщик</h2>
+        <p class="section__lead"><strong>Подходит для OpenWrt 24 и OpenWrt 25.</strong></p>
+        <div class="notice"><strong>Что сделает программа?</strong> Она найдёт роутер, выберет нужный пакет и установит его. Команды вводить не нужно.</div>
         <ol class="steps">
-          <li class="step"><span class="step__num">1</span><div class="step__text"><h3>Подключите компьютер</h3><p>Подключите компьютер к LAN или Wi-Fi этого роутера.</p></div></li>
-          <li class="step"><span class="step__num">2</span><div class="step__text"><h3>Выберите свою Windows</h3><p>Для Windows 10/11 нажмите первую кнопку. Для Windows 7/8 — вторую.</p></div></li>
-          <li class="step"><span class="step__num">3</span><div class="step__text"><h3>Запустите файл</h3><p>Если Windows покажет предупреждение, нажмите «Подробнее», затем «Выполнить в любом случае».</p></div></li>
-          <li class="step"><span class="step__num">4</span><div class="step__text"><h3>Нажмите «Установить»</h3><p>Программа сама найдёт роутер. Если на роутере есть пароль, программа попросит его ввести.</p></div></li>
-          <li class="step"><span class="step__num">5</span><div class="step__text"><h3>Дождитесь сообщения «Готово»</h3><p>После этого откройте страницу роутера 192.168.1.1.</p></div></li>
+          <li class="step"><span class="step__num">1</span><div class="step__text"><h3>Выберите свою Windows</h3><p>Для Windows 10/11 нажмите первую кнопку. Для Windows 7/8 — вторую.</p></div></li>
+          <li class="step"><span class="step__num">2</span><div class="step__text"><h3>Запустите файл</h3><p>Если Windows покажет предупреждение, нажмите «Подробнее», затем «Выполнить в любом случае».</p></div></li>
+          <li class="step"><span class="step__num">3</span><div class="step__text"><h3>Подтвердите установку</h3><p>Если у роутера есть пароль, программа попросит его ввести.</p></div></li>
+          <li class="step"><span class="step__num">4</span><div class="step__text"><h3>Если найден другой VPN</h3><p>Лучше разрешить его удалить. Тогда он не будет мешать Shpun Router.</p></div></li>
+          <li class="step"><span class="step__num">5</span><div class="step__text"><h3>Дождитесь сообщения «Готово»</h3><p>Программа покажет код роутера и откроет ShpunApp.</p></div></li>
         </ol>
-        <button class="button" type="button" onclick="ShpunRouterApp.openDownload('25')">⬇️ OpenWrt 25 — скачать для Windows 10/11</button>
-        <button class="button" type="button" onclick="ShpunRouterApp.openDownload('25-win7')">⬇️ OpenWrt 25 — скачать для Windows 7/8</button>
-      </div>
-
-      <div class="section" id="openwrt24">
-        <h2>🔵 У меня OpenWrt 24</h2>
-        <p class="section__lead"><strong>Этот раздел только для OpenWrt 24.</strong> Программа из раздела OpenWrt 25 вам не нужна.</p>
-        <ol class="steps">
-          <li class="step"><span class="step__num">1</span><div class="step__text"><h3>Скачайте пакет</h3><p>Нажмите кнопку «Скачать пакет 1.1.8» ниже.</p></div></li>
-          <li class="step"><span class="step__num">2</span><div class="step__text"><h3>Откройте панель роутера</h3><p>Перейдите на 192.168.1.1.</p></div></li>
-          <li class="step"><span class="step__num">3</span><div class="step__text"><h3>Откройте установку программ</h3><p>Нажмите System (Система) → Software (Программы) → Upload package.</p></div></li>
-          <li class="step"><span class="step__num">4</span><div class="step__text"><h3>Выберите скачанный файл</h3><p>Подтвердите установку. Когда она закончится, вернитесь на главную страницу.</p></div></li>
-        </ol>
-        <button class="button" type="button" onclick="ShpunRouterApp.openDownload('24')">⬇️ OpenWrt 24 — скачать пакет 1.1.8</button>
+        <button class="button" type="button" onclick="ShpunRouterApp.openDownload('modern')">⬇️ Скачать для Windows 10/11</button>
+        <button class="button" type="button" onclick="ShpunRouterApp.openDownload('legacy')">⬇️ Скачать для Windows 7/8</button>
       </div>
 
       <div class="section">
@@ -384,9 +369,8 @@
 
   <script>
     const ShpunRouterApp = {
-      packageUrl24: "https://spb.shpyn.online/files/ipk/shpun-router_1.1.8_all.ipk",
-      packageUrl25: "https://spb.shpyn.online/files/apk/shpun-router-openwrt25-installer.exe",
-      packageUrl25Win7: "https://spb.shpyn.online/files/apk/shpun-router-openwrt25-win7.exe",
+      installerUrl: "https://spb.shpyn.online/files/router/shpun-router-installer.exe",
+      installerWin7Url: "https://spb.shpyn.online/files/router/shpun-router-installer-win7.exe",
       tg: window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null,
 
       init() {
@@ -411,12 +395,8 @@
         window.scrollTo({ top: 0, behavior: "smooth" });
       },
 
-      openDownload(branch = "24") {
-        const url = branch === "25-win7"
-          ? this.packageUrl25Win7
-          : branch === "25"
-            ? this.packageUrl25
-            : this.packageUrl24;
+      openDownload(version = "modern") {
+        const url = version === "legacy" ? this.installerWin7Url : this.installerUrl;
         if (this.tg) {
           this.tg.openLink(url, { try_instant_view: false });
           return;
