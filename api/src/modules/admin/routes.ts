@@ -663,6 +663,34 @@ export async function adminRoutes(app: FastifyInstance) {
     });
   });
 
+  app.put("/admin/settings/review-reward", async (req, reply) => {
+    const s = getSessionFromRequest(req);
+    if (!s?.shmSessionId) return reply.code(401).send({ ok: false });
+    if (!(await ensureAdmin(s.shmSessionId))) {
+      return reply.code(403).send({ ok: false, error: "not_admin" });
+    }
+
+    const amount = Math.round(Number((req.body as any)?.reviewRewardAmount) * 100) / 100;
+    if (!Number.isFinite(amount) || amount < 1 || amount > 500) {
+      return reply.code(400).send({
+        ok: false,
+        error: "bad_review_reward_amount",
+        message: "Укажите сумму от 1 до 500 ₽.",
+      });
+    }
+
+    const r = await shmShpunAppAdminSettingsSet(s.shmSessionId, { reviewRewardAmount: amount });
+    const logicalOk = r.json?.ok === 1 || r.json?.ok === true;
+    if (!r.ok || !logicalOk) {
+      return reply.code(502).send({
+        ok: false,
+        error: r.json?.error || "review_reward_setting_failed",
+        message: "Биллинг не подтвердил сохранение суммы.",
+      });
+    }
+    return reply.send(r.json);
+  });
+
   app.put("/admin/trial-protection/settings", async (req, reply) => {
     const s = getSessionFromRequest(req);
     if (!s?.shmSessionId) return reply.code(401).send({ ok: false });

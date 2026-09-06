@@ -1,11 +1,16 @@
 import type { FastifyInstance } from "fastify";
 import { getSessionFromRequest } from "../../shared/session/sessionStore.js";
-import { shmShpunAppAdminStatus } from "../../shared/shm/shmClient.js";
+import { shmShpunAppAdminReviewReward, shmShpunAppAdminStatus } from "../../shared/shm/shmClient.js";
+import { notifyReviewReward } from "./notifications.js";
 import {
+  beginReviewReward,
+  completeReviewReward,
   createComment,
   createReview,
+  failReviewReward,
   getCommentById,
   getReviewById,
+  hasReviewByUserId,
   hideComment,
   hideReview,
   listReviews,
@@ -77,7 +82,8 @@ function publicAuthor(row: any) {
 }
 
 function publicReview(row: any, currentUserId: number, isAdmin: boolean) {
-  return {
+  const mine = Number(row.user_id) === currentUserId;
+  const item: any = {
     id: row.id,
     rating: row.rating,
     text: row.text,
@@ -85,7 +91,7 @@ function publicReview(row: any, currentUserId: number, isAdmin: boolean) {
     authorVisibility: normalizeAuthorVisibility(row.author_visibility),
     userId: row.user_id,
     status: row.status,
-    mine: Number(row.user_id) === currentUserId,
+    mine,
     canModerate: isAdmin || Number(row.user_id) === currentUserId,
     canApprove: isAdmin,
     createdAt: row.created_at,
@@ -105,6 +111,17 @@ function publicReview(row: any, currentUserId: number, isAdmin: boolean) {
       updatedAt: c.updated_at,
     })),
   };
+  if (isAdmin) {
+    item.rewardStatus = row.reward_status || "none";
+    item.rewardAmount = row.reward_amount == null ? null : Number(row.reward_amount);
+    item.rewardError = row.reward_error || null;
+    item.rewardedAt = row.rewarded_at || null;
+  } else if (mine && row.reward_status === "rewarded") {
+    item.rewardStatus = "rewarded";
+    item.rewardAmount = row.reward_amount == null ? null : Number(row.reward_amount);
+    item.rewardedAt = row.rewarded_at || null;
+  }
+  return item;
 }
 
 export async function reviewsRoutes(app: FastifyInstance) {
@@ -117,13 +134,26 @@ export async function reviewsRoutes(app: FastifyInstance) {
     const limit = Math.min(Math.max(int(q.limit, 50), 1), 100);
     const admin = await isAdminSession(s);
     const items = listReviews({ limit, currentUserId: user.id, includeAll: admin }).map((r) => publicReview(r, user.id, admin));
-    return reply.send({ ok: true, items, isAdmin: admin });
+    return reply.send({
+      ok: true,
+      items,
+      isAdmin: admin,
+      canCreateReview: !hasReviewByUserId(user.id),
+    });
   });
 
   app.post("/reviews", async (req, reply) => {
     const s = getSessionFromRequest(req) as any;
     const user = sessionUser(s);
     if (!user) return reply.code(401).send({ ok: false, error: "unauthorized" });
+
+    if (hasReviewByUserId(user.id)) {
+      return reply.code(409).send({
+        ok: false,
+        error: "review_already_exists",
+        message: "Вы уже оставили отзыв.",
+      });
+    }
 
     const body = (req.body ?? {}) as any;
     const reviewText = multiline(body.text, 1200);
@@ -132,18 +162,30 @@ export async function reviewsRoutes(app: FastifyInstance) {
     }
 
     const rating = Math.min(Math.max(int(body.rating, 5), 1), 5);
-    const created = createReview({
-      userId: user.id,
-      userLogin: user.login,
-      displayName: user.displayName,
-      authorVisibility: normalizeAuthorVisibility(body.authorVisibility),
-      rating,
-      text: reviewText,
-    });
+    let created;
+    try {
+      created = createReview({
+        userId: user.id,
+        userLogin: user.login,
+        displayName: user.displayName,
+        authorVisibility: normalizeAuthorVisibility(body.authorVisibility),
+        rating,
+        text: reviewText,
+      });
+    } catch (error: any) {
+      if (String(error?.message || "").includes("review_already_exists")) {
+        return reply.code(409).send({
+          ok: false,
+          error: "review_already_exists",
+          message: "Вы уже оставили отзыв.",
+        });
+      }
+      throw error;
+    }
     return reply.code(201).send({
       ok: true,
       item: publicReview({ ...created, comments: [] }, user.id, false),
-      message: "Отзыв отправлен. Не потерялся — просто ждёт зелёный свет.",
+      message: "Отзыв отправлен на проверку.",
     });
   });
 
@@ -196,8 +238,119 @@ export async function reviewsRoutes(app: FastifyInstance) {
       return reply.code(400).send({ ok: false, error: "bad_status" });
     }
 
+    if (review.reward_status === "processing" && status !== review.status) {
+      return reply.code(409).send({
+        ok: false,
+        error: "reward_in_progress",
+        message: "Сначала дождитесь подтверждения начисления в биллинге.",
+      });
+    }
+
     setReviewStatus(id, status);
     return reply.send({ ok: true });
+  });
+
+  app.post("/reviews/:id/approve", async (req, reply) => {
+    const s = getSessionFromRequest(req) as any;
+    const user = sessionUser(s);
+    if (!user) return reply.code(401).send({ ok: false, error: "unauthorized" });
+
+    const admin = await isAdminSession(s);
+    if (!admin) return reply.code(403).send({ ok: false, error: "forbidden" });
+
+    const id = int((req.params as any)?.id, 0);
+    let review = id > 0 ? getReviewById(id) : null;
+    if (!review) return reply.code(404).send({ ok: false, error: "review_not_found" });
+    const reviewUserId = Number(review.user_id);
+
+    if (review.reward_status === "rewarded") {
+      if (review.status !== "published") setReviewStatus(id, "published");
+      review = getReviewById(id);
+      const rewardAmount = Number(review?.reward_amount);
+      if (review && Number.isFinite(rewardAmount) && rewardAmount > 0) {
+        await notifyReviewReward({
+          reviewId: id,
+          userId: reviewUserId,
+          amount: rewardAmount,
+        });
+      }
+      return reply.send({
+        ok: true,
+        alreadyRewarded: true,
+        item: publicReview({ ...review, comments: [] }, user.id, true),
+        message: "Отзыв уже был оплачен и опубликован.",
+      });
+    }
+
+    if (!beginReviewReward(id)) {
+      review = getReviewById(id);
+      if (review?.reward_status !== "processing") {
+        return reply.code(409).send({
+          ok: false,
+          error: "reward_not_available",
+          message: "Этот отзыв уже опубликован или недоступен для начисления.",
+        });
+      }
+    }
+
+    const sid = String(s?.shmSessionId ?? "").trim();
+    try {
+      const billing = await shmShpunAppAdminReviewReward(sid, {
+        reviewId: id,
+        userId: reviewUserId,
+      });
+      const payload = billing.json?.data && typeof billing.json.data === "object"
+        ? billing.json.data
+        : billing.json;
+      const amount = Math.round(Number(payload?.amount) * 100) / 100;
+      const logicalOk = payload?.ok === 1 || payload?.ok === true;
+      const sameReview = Number(payload?.review_id) === id;
+      const sameUser = Number(payload?.target_user_id) === reviewUserId;
+      const validAmount = Number.isFinite(amount) && amount >= 1 && amount <= 500;
+      const alreadyRewarded = payload?.already_rewarded === 1 || payload?.already_rewarded === true;
+      const exactBonusAdded = Math.abs(Number(payload?.bonus_added) - amount) < 0.001;
+      const rewarded = alreadyRewarded || exactBonusAdded;
+
+      if (!billing.ok || !logicalOk || !sameReview || !sameUser || !validAmount || !rewarded) {
+        const code = text(payload?.error || `billing_${billing.status}`, 120) || "billing_error";
+        if (code === "bonus_not_added") failReviewReward(id, code);
+        return reply.code(502).send({
+          ok: false,
+          error: code,
+          message: code === "reward_in_progress"
+            ? "Биллинг ещё обрабатывает начисление. Проверьте его повторно через несколько секунд."
+            : payload?.message || "Биллинг не подтвердил начисление. Отзыв не опубликован.",
+        });
+      }
+
+      if (!completeReviewReward(id, amount)) {
+        return reply.code(500).send({
+          ok: false,
+          error: "review_publish_not_saved",
+          message: "Бонус подтверждён, но публикация не сохранена. Повторите проверку.",
+        });
+      }
+      review = getReviewById(id);
+      await notifyReviewReward({
+        reviewId: id,
+        userId: reviewUserId,
+        amount,
+      });
+      return reply.send({
+        ok: true,
+        alreadyRewarded,
+        bonusAdded: Number(payload?.bonus_added || 0),
+        bonusAfter: Number(payload?.bonus_after || 0),
+        item: publicReview({ ...review, comments: [] }, user.id, true),
+        message: `Отзыв опубликован. Пользователю начислено ${amount.toLocaleString("ru-RU")} ₽ бонусами.`,
+      });
+    } catch (error: any) {
+      return reply.code(502).send({
+        ok: false,
+        error: "billing_request_failed",
+        message: "Ответ биллинга не получен. Отзыв не опубликован; проверьте начисление повторно.",
+      });
+    }
   });
 
   app.patch("/reviews/comments/:id/status", async (req, reply) => {

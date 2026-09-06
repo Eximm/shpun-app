@@ -531,6 +531,7 @@ export async function shmShpunAppAdminSettingsSet(
     trialIpPrefixDistinctUsersThreshold?: number
     trialRequireVerifiedEmail?: boolean
     requireVerifiedEmail?: boolean
+    reviewRewardAmount?: number
   }
 ) {
   return await shmShpunAppTemplate<any>(shmSessionId, 'admin.settings.set', payload)
@@ -553,6 +554,29 @@ export async function shmShpunAppAdminPartnerStats(
 ) {
   return await shmShpunAppTemplate<any>(shmSessionId, 'admin.partner.stats', {
     partner_id: partnerId,
+  })
+}
+
+export type ShmReviewRewardResp = {
+  ok?: number | boolean
+  error?: string
+  message?: string
+  review_id?: number
+  target_user_id?: number
+  amount?: number
+  bonus_added?: number
+  bonus_after?: number
+  already_rewarded?: number | boolean
+  [k: string]: any
+}
+
+export async function shmShpunAppAdminReviewReward(
+  shmSessionId: string,
+  payload: { reviewId: number; userId: number }
+) {
+  return await shmShpunAppTemplate<ShmReviewRewardResp>(shmSessionId, 'admin.review.reward', {
+    review_id: payload.reviewId,
+    target_user_id: payload.userId,
   })
 }
 

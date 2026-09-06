@@ -7013,6 +7013,15 @@ button.reviews-star:not(:disabled) {
 .admin-tightItem          { padding: 10px 12px; }
 .admin-broadcastDate      { display: flex; flex-direction: column; gap: 6px; margin: 0 0 8px; }
 .admin-fieldHint          { display: block; margin-top: 6px; font-size: 12px; line-height: 1.38; color: rgba(255,255,255,0.54); }
+.admin-reviewSetting      { display: grid; grid-template-columns: minmax(0,1fr) 120px; gap: 16px; align-items: center; }
+.admin-reviewSetting .list__title,
+.admin-reviewCard .list__title { padding-right: 0; white-space: normal; overflow: visible; text-overflow: clip; }
+.admin-reviewSetting .list__sub,
+.admin-reviewCard .list__sub { margin-top: 6px; }
+.admin-reviewAmountInput  { width: 120px; }
+.admin-reviewCard         { display: block; }
+.admin-reviewCard .p      { overflow-wrap: anywhere; }
+.admin-reviewActions      { margin-top: 14px; }
 .admin-pushToggle {
   display: grid;
   grid-template-columns: 42px minmax(0,1fr);
@@ -7352,6 +7361,8 @@ button.reviews-star:not(:disabled) {
   .admin-modal__card { width: 100%; max-height: 88dvh; }
   .admin-modal__body { padding: 12px; }
   .refPartnerCard__metrics { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .admin-reviewSetting { grid-template-columns: 1fr; }
+  .admin-reviewAmountInput { width: 100%; }
 }
 @media (max-width: 420px) {
   .admin-page .card__body { padding: 14px; }
@@ -7369,6 +7380,7 @@ button.reviews-star:not(:disabled) {
   .refPartnerCard__link { font-size: 14px; }
   .refPartnerCard__actions { justify-content: stretch; }
   .refPartnerCard__actions .btn { flex: 1 1 0; }
+  .admin-reviewActions { grid-template-columns: 1fr; }
 }
 
 

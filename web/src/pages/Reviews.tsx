@@ -30,6 +30,9 @@ type Review = {
   canApprove?: boolean;
   createdAt: string;
   comments: ReviewComment[];
+  rewardStatus?: "none" | "processing" | "rewarded" | "failed";
+  rewardAmount?: number | null;
+  rewardedAt?: string | null;
 };
 
 type ReviewFilter = "public" | "pending" | "hidden" | "all";
@@ -56,6 +59,10 @@ function statusLabel(status: ReviewStatus) {
   if (status === "published") return "Опубликовано";
   if (status === "hidden") return "Скрыто";
   return "Ждёт модерации";
+}
+
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
 }
 
 function visibilityLabel(value?: AuthorVisibility) {
@@ -124,6 +131,7 @@ function AuthorVisibilityPicker({
 export function Reviews() {
   const [items, setItems] = useState<Review[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [canCreateReview, setCanCreateReview] = useState(true);
   const [filter, setFilter] = useState<ReviewFilter>("public");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -158,11 +166,12 @@ export function Reviews() {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiFetch<{ ok: true; items: Review[]; isAdmin?: boolean }>("/reviews", { method: "GET" });
+      const data = await apiFetch<{ ok: true; items: Review[]; isAdmin?: boolean; canCreateReview?: boolean }>("/reviews", { method: "GET" });
       setItems(data.items ?? []);
       setIsAdmin(Boolean(data.isAdmin));
-    } catch (e: any) {
-      setError(String(e?.message || "Не удалось загрузить отзывы."));
+      setCanCreateReview(data.canCreateReview !== false);
+    } catch (e: unknown) {
+      setError(errorMessage(e, "Не удалось загрузить отзывы."));
     } finally {
       setLoading(false);
     }
@@ -186,9 +195,10 @@ export function Reviews() {
       setItems((prev) => [data.item, ...prev]);
       setText("");
       setRating(5);
-      setNotice(data.message || "Отзыв отправлен. Не потерялся — просто ждёт зелёный свет.");
-    } catch (e: any) {
-      setError(String(e?.message || "Не удалось сохранить отзыв."));
+      setCanCreateReview(false);
+      setNotice(data.message || "Отзыв отправлен на проверку.");
+    } catch (e: unknown) {
+      setError(errorMessage(e, "Не удалось сохранить отзыв."));
     } finally {
       setBusy(false);
     }
@@ -208,8 +218,8 @@ export function Reviews() {
       setItems((prev) => prev.map((r) => r.id === reviewId ? { ...r, comments: [...(r.comments ?? []), data.item] } : r));
       setCommentDrafts((prev) => ({ ...prev, [reviewId]: "" }));
       setNotice(data.message || "Комментарий отправлен.");
-    } catch (e: any) {
-      setError(String(e?.message || "Не удалось добавить комментарий."));
+    } catch (e: unknown) {
+      setError(errorMessage(e, "Не удалось добавить комментарий."));
     } finally {
       setCommentBusy((prev) => ({ ...prev, [reviewId]: false }));
     }
@@ -222,8 +232,8 @@ export function Reviews() {
     try {
       await apiFetch(`/reviews/${id}/status`, { method: "PATCH", body: { status } });
       setItems((prev) => prev.map((x) => x.id === id ? { ...x, status } : x).filter((x) => isAdmin || x.status !== "hidden"));
-    } catch (e: any) {
-      setError(String(e?.message || "Не удалось изменить статус отзыва."));
+    } catch (e: unknown) {
+      setError(errorMessage(e, "Не удалось изменить статус отзыва."));
     } finally {
       setModerationBusy((prev) => ({ ...prev, [key]: false }));
     }
@@ -239,8 +249,8 @@ export function Reviews() {
         ...r,
         comments: r.comments.map((c) => c.id === commentId ? { ...c, status } : c).filter((c) => isAdmin || c.status !== "hidden"),
       } : r));
-    } catch (e: any) {
-      setError(String(e?.message || "Не удалось изменить статус комментария."));
+    } catch (e: unknown) {
+      setError(errorMessage(e, "Не удалось изменить статус комментария."));
     } finally {
       setModerationBusy((prev) => ({ ...prev, [key]: false }));
     }
@@ -305,12 +315,12 @@ export function Reviews() {
         </div>
       )}
 
-      <div className="card reviews-compose">
+      {canCreateReview ? <div className="card reviews-compose">
         <div className="card__body">
           <div className="reviews-compose__head">
             <div>
               <div className="reviews-card-title">Оставить отзыв</div>
-              <div className="reviews-muted">Пишите по-человечески: что понравилось, где Shpun красавчик, а где ещё просит напильник.</div>
+              <div className="reviews-muted">Расскажите, что вам понравилось и что можно улучшить.</div>
             </div>
             <Stars value={rating} onChange={setRating} />
           </div>
@@ -319,7 +329,7 @@ export function Reviews() {
             value={text}
             onChange={(e) => setText(e.target.value)}
             maxLength={1200}
-            placeholder="Например: YouTube ожил, мобильный интернет перестал изображать улитку..."
+            placeholder="Расскажите о работе сервиса и приложения"
           />
           <AuthorVisibilityPicker value={authorVisibility} onChange={setAuthorVisibility} />
           <div className="reviews-compose__actions">
@@ -331,14 +341,19 @@ export function Reviews() {
           {notice && <div className="pre reviews-notice">{notice}</div>}
           {error && <div className="pre reviews-error">{error}</div>}
         </div>
-      </div>
+      </div> : (
+        <div className="card reviews-compose"><div className="card__body">
+          <div className="reviews-card-title">Отзыв уже отправлен</div>
+          <div className="reviews-muted">С одного аккаунта можно оставить один отзыв.</div>
+          {notice && <div className="pre reviews-notice">{notice}</div>}
+        </div></div>
+      )}
 
       {loading ? (
         <div className="card"><div className="card__body"><p className="p">Загружаем отзывы…</p></div></div>
       ) : visibleItems.length === 0 ? (
         <div className="card reviews-empty"><div className="card__body">
-          <div className="reviews-card-title">{isAdmin && filter !== "public" ? "Тут чисто" : "Пока тихо"}</div>
-          <p className="p">Можно быть первым. Да, это редкий шанс зайти в историю без особого риска.</p>
+          <div className="reviews-card-title">{isAdmin && filter !== "public" ? "Новых отзывов нет" : "Отзывов пока нет"}</div>
         </div></div>
       ) : (
         <div className="reviews-list">
@@ -362,10 +377,13 @@ export function Reviews() {
                   </div>
                 </div>
                 <p className="reviews-text">{r.text}</p>
+                {r.mine && r.rewardStatus === "rewarded" && Number(r.rewardAmount) > 0 && (
+                  <div className="reviews-notice">Начислено {Number(r.rewardAmount).toLocaleString("ru-RU")} ₽ бонусами.</div>
+                )}
                 <div className="reviews-moderation">
                   {r.canApprove && r.status !== "published" && (
                     <button className="btn btn--primary" type="button" onClick={() => void setReviewModerationStatus(r.id, "published")}>
-                      Опубликовать
+                      Опубликовать без бонуса
                     </button>
                   )}
                   {r.canApprove && r.status !== "pending" && (

@@ -56,6 +56,10 @@ function resolveEventMeta(ev: any): { link: string; urgency: webpush.Urgency; tt
     return { link: "/payments", urgency: "high", ttl: 3600 }; // 1 час
   }
 
+  if (type.startsWith("review.")) {
+    return { link: "/reviews", urgency: "high", ttl: 86400 }; // 24 часа
+  }
+
   // Сервисные события — нормальный приоритет
   if (type.startsWith("service.") || type.startsWith("services.")) {
     return { link: "/services", urgency: "normal", ttl: 43200 }; // 12 часов

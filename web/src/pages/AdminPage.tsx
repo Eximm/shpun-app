@@ -14,6 +14,7 @@ import { TrialProtectionSection } from "./admin/TrialProtectionSection";
 import { ServiceCategoriesSection } from "./admin/ServiceCategoriesSection";
 import { ReferralAliasesSection } from "./admin/ReferralAliasesSection";
 import { ServerStatusSection } from "./admin/ServerStatusSection";
+import { ReviewsSection } from "./admin/ReviewsSection";
 import type { AdminTab } from "./admin/types";
 
 export function AdminPage() {
@@ -50,6 +51,7 @@ export function AdminPage() {
 
           <div className="admin-tabsGrid admin-gap-top-md">
             <AdminTabButton active={tab === "overview"}        onClick={() => setTab("overview")}        title={t("admin.tab.overview")}   subtitle={t("admin.tab.overview.sub")} />
+            <AdminTabButton active={tab === "reviews"}         onClick={() => setTab("reviews")}         title="Отзывы" subtitle="Проверка и бонусы" />
             <AdminTabButton active={tab === "broadcasts"}      onClick={() => setTab("broadcasts")}      title={t("admin.tab.broadcasts")} subtitle={t("admin.tab.broadcasts.sub")} />
             <AdminTabButton active={tab === "orderRules"}      onClick={() => setTab("orderRules")}      title={t("admin.tab.orders")}     subtitle={t("admin.tab.orders.sub")} />
             <AdminTabButton active={tab === "trialProtection"} onClick={() => setTab("trialProtection")} title={t("admin.tab.trial")}      subtitle={t("admin.tab.trial.sub")} />
@@ -62,6 +64,7 @@ export function AdminPage() {
 
       <div className="admin-content admin-gap-top-md">
         {tab === "overview"        && <OverviewSection onOpenTab={setTab} />}
+        {tab === "reviews"         && <ReviewsSection />}
         {tab === "broadcasts"      && <BroadcastsSection />}
         {tab === "orderRules"      && <OrderRulesSection />}
         {tab === "trialProtection" && <TrialProtectionSection />}

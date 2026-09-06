@@ -23,6 +23,7 @@ export type AdminSettingsResp = {
   ok: 1 | true;
   settings?: {
     orderBlockMode?: OrderBlockMode;
+    reviewRewardAmount?: number;
   };
 };
 
@@ -163,4 +164,4 @@ export type ClearEventsResp = {
   keepLatest: number;
 };
 
-export type AdminTab = "overview" | "broadcasts" | "orderRules" | "trialProtection" | "serviceCategories" | "referralAliases" | "serverStatus";
+export type AdminTab = "overview" | "reviews" | "broadcasts" | "orderRules" | "trialProtection" | "serviceCategories" | "referralAliases" | "serverStatus";

@@ -11,6 +11,12 @@ type CardItem = {
 
 const ITEMS: CardItem[] = [
   {
+    title: "Отзывы",
+    sub: "Проверка отзывов, публикация и начисление бонусов через биллинг.",
+    chip: { label: "БОНУСЫ", tone: "ok" },
+    tab: "reviews",
+  },
+  {
     title: "Broadcasts",
     sub: "Просмотр и удаление разосланных новостей.",
     chip: { label: "ГОТОВО", tone: "ok" },
