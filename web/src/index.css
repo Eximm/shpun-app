@@ -2323,6 +2323,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .loginAuthError {
   display: grid;
   gap: 3px;
+  margin-top: 10px;
   padding: 11px 12px;
   border: 1px solid rgba(255,77,109,0.48);
   border-radius: 13px;
