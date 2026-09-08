@@ -177,11 +177,6 @@ function normStatus(s: any): UiStatus {
   return valid.includes(v as UiStatus) ? (v as UiStatus) : "error";
 }
 
-function nnum(v: any, def = 0) {
-  const x = typeof v === "string" ? Number(v.replace(",", ".")) : Number(v);
-  return Number.isFinite(x) ? x : def;
-}
-
 /* ─── Lazy connect components ────────────────────────────────────────────── */
 
 const ConnectAmneziaWG = React.lazy(() => import("./connect/ConnectAmneziaWG"));
