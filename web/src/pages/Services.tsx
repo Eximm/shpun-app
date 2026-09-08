@@ -6,7 +6,6 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { apiFetch } from "../shared/api/client";
 import { toast } from "../shared/ui/toast";
 import { toastApiError } from "../shared/ui/toast/toastApiError";
-import { useMe } from "../app/auth/useMe";
 import { normalizeError } from "../shared/api/errorText";
 import { getMood } from "../shared/payments-mood";
 import { useI18n } from "../shared/i18n";
@@ -90,6 +89,12 @@ function kindIcon(k: ServiceKind): string {
     case "amneziawg":      return "🔑";
     default:               return "📦";
   }
+}
+
+function quickConnectLabel(service: ApiServiceItem, t: T) {
+  if (isFlexPlus(service.category)) return t("services.connect.quick_mobile");
+  if (detectKind(service.category) === "marzban_router") return t("services.connect.quick_router");
+  return t("services.connect.quick");
 }
 
 function statusLabel(s: UiStatus, t: T) {
@@ -451,6 +456,14 @@ function ServiceRow({ s, expanded, connectOpen, onToggle, onToggleConnect, onRef
         </div>
       </button>
 
+      {canConnect && !expanded && (
+        <div className="svc-row__quickConnect">
+          <button className="btn btn--primary" type="button" onClick={onToggleConnect}>
+            {quickConnectLabel(s, t)}
+          </button>
+        </div>
+      )}
+
       {/* Действия */}
       {expanded && (
         <div className="svc-row__details" style={{ padding: "0 12px 10px", display: "flex", flexDirection: "column", gap: 6 }}>
@@ -649,9 +662,6 @@ export function Services() {
       navigate(location.pathname + (next ? `?${next}` : ""), { replace: true });
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const { me } = useMe();
-  const discountPercent = Math.max(0, nnum((me as any)?.discount, 0));
 
   useEffect(() => { saveGroupsState(openGroups); }, [openGroups]);
 
@@ -855,6 +865,8 @@ export function Services() {
   const fallbackActive = items.filter((x) => x.status === "active").length;
   const fallbackAttn   = items.filter((x) => x.status === "blocked" || x.status === "not_paid").length;
   const attnCount      = (s?.blocked ?? 0) + (s?.notPaid ?? 0) || fallbackAttn;
+  const activeCount    = s?.active ?? fallbackActive;
+  const hasActiveServices = activeCount > 0;
   const stopErrText    = stopError   ? normalizeError(stopError).description   : null;
   const deleteErrText  = deleteError ? normalizeError(deleteError).description : null;
 
@@ -864,44 +876,37 @@ export function Services() {
 
       <PaymentSuccessModal open={paySuccessOpen} onClose={() => setPaySuccessOpen(false)} />
 
-      {/* ── Шапка ── */}
-      <div className={`card services-summary-card${hasServices ? " services-summary-card--has-services" : ""}`}>
-        <div className="card__body">
-          <div className="services-top">
-            <div className="services-top__left">
-              <div className="services-top__title">{hasServices ? t("services.keys_title") : t("services.title")}</div>
-              <div className="services-top__sub">{hasServices ? t("services.keys_hint") : t("services.sub")}</div>
+      {/* ── Главный следующий шаг ── */}
+      {hasServices ? (
+        <div className={`services-focus${hasActiveServices ? " services-focus--active" : " services-focus--attention"}`}>
+          <div className="services-focus__copy">
+            <div className="services-focus__eyebrow">
+              {hasActiveServices
+                ? t("services.focus.active").replace("{count}", String(activeCount))
+                : t("services.focus.attention")}
             </div>
+            <h1 className="services-focus__title">
+              {hasActiveServices ? t("services.focus.connect_title") : t("services.focus.check_title")}
+            </h1>
+            <p className="services-focus__text">
+              {hasActiveServices ? t("services.focus.connect_text") : t("services.focus.check_text")}
+            </p>
           </div>
-
-          {hasServices && (
-            <div className="services-head__meta">
-              <span className="badge">✅ {t("services.meta.active")}: <b>{s?.active ?? fallbackActive}</b></span>
-              {attnCount > 0 && (
-                <span className="badge" style={{ borderColor: "rgba(245,158,11,.38)", background: "rgba(245,158,11,.08)" }}>
-                  ⚠️ {t("services.meta.attention")}: <b>{attnCount}</b>
-                </span>
-              )}
-              {discountPercent > 0 && (
-                <span className="badge" style={{ borderColor: "rgba(124,92,255,.38)", background: "rgba(124,92,255,.08)" }}>
-                  🎁 {t("services.meta.discount")}: <b>-{Math.round(discountPercent)}%</b>
-                </span>
-              )}
-            </div>
-          )}
-
-          {hasServices && (
-            <div className="services-head__actions">
-              <button className="btn btn--primary services-head__cta" onClick={() => go("/services/order")} type="button">
-                {t("services.cta.add_more")}
-              </button>
-              <button className="btn services-head__cta services-head__refresh" onClick={() => void load({ silent: false, toastOnSuccess: true })} type="button" aria-label={t("services.refresh")}>
-                <span aria-hidden="true">↻</span><span className="services-head__refreshText">{t("services.refresh")}</span>
-              </button>
-            </div>
+          <button className="btn services-focus__refresh" onClick={() => void load({ silent: false, toastOnSuccess: true })} type="button" aria-label={t("services.refresh")}>
+            <span aria-hidden="true">↻</span>
+          </button>
+          {attnCount > 0 && (
+            <div className="services-focus__notice">⚠️ {t("services.meta.attention")}: <b>{attnCount}</b></div>
           )}
         </div>
-      </div>
+      ) : (
+        <div className="card services-summary-card">
+          <div className="card__body">
+            <div className="services-top__title">{t("services.title")}</div>
+            <div className="services-top__sub">{t("services.sub")}</div>
+          </div>
+        </div>
+      )}
 
       {/* ── Empty state ── */}
       {!hasServices && (
@@ -972,6 +977,15 @@ export function Services() {
           </div>
         );
       })}
+
+      {hasServices && (
+        <div className="services-more">
+          <span>{t("services.more.text")}</span>
+          <button className="btn" onClick={() => go("/services/order")} type="button">
+            + {t("services.cta.add_more")}
+          </button>
+        </div>
+      )}
 
       {/* ── Stop modal ── */}
       <Modal
