@@ -8,6 +8,7 @@ import {
   shmShpunAppAdminStatus,
   shmShpunAppAdminPartnerPercentSet,
   shmShpunAppAdminPartnerStats,
+  shmShpunAppAdminCampaignStats,
 } from "../../shared/shm/shmClient.js";
 import { linkDb } from "../../shared/linkdb/db.js";
 import {
@@ -346,6 +347,34 @@ export async function adminRoutes(app: FastifyInstance) {
 
     const item = getReferralAliasById((req.params as any)?.id);
     if (!item) return reply.code(404).send({ ok: false, error: "alias_not_found" });
+    if (item.link_type === "campaign") {
+      const result = await shmShpunAppAdminCampaignStats(
+        s.shmSessionId,
+        item.billing_comment ?? ""
+      );
+      const statsJson = unwrapTemplateJson(result.json as any);
+      if (result.ok && statsJson?.ok) {
+        return reply.send({
+          ok: true,
+          linkType: "campaign",
+          totalUsers: Number(statsJson?.total_users ?? 0),
+          activeUsers: 0,
+          scannedUsers: Number(statsJson?.scanned_users ?? 0),
+          truncated: Boolean(statsJson?.truncated),
+          activeSource: "billing",
+        });
+      }
+      return reply.send({
+        ok: true,
+        linkType: "campaign",
+        totalUsers: item.registrations_count,
+        activeUsers: 0,
+        scannedUsers: item.registrations_count,
+        truncated: false,
+        activeSource: "local",
+        fallback: true,
+      });
+    }
 
     const result = await shmShpunAppAdminPartnerStats(s.shmSessionId, item.partner_id);
     const statsJson = unwrapTemplateJson(result.json as any);
@@ -402,24 +431,29 @@ export async function adminRoutes(app: FastifyInstance) {
     if (!(await ensureAdmin(s.shmSessionId))) return reply.code(403).send({ ok: false, error: "not_admin" });
     try {
       const body = (req.body ?? {}) as any;
+      const linkType = body.linkType === "campaign" ? "campaign" : "partner";
       const partnerId = Math.trunc(Number(body.partnerId));
       const incomePercent = Math.trunc(Number(body.partnerRewardPercent ?? 0));
       if (!isValidReferralAlias(body.alias)) throw new Error("invalid_alias");
-      if (!Number.isFinite(partnerId) || partnerId <= 0) throw new Error("invalid_partner_id");
-      if (!Number.isFinite(incomePercent) || incomePercent < 0 || incomePercent > 100) {
+      if (linkType === "partner" && (!Number.isFinite(partnerId) || partnerId <= 0)) {
+        throw new Error("invalid_partner_id");
+      }
+      if (linkType === "partner" && (!Number.isFinite(incomePercent) || incomePercent < 0 || incomePercent > 100)) {
         throw new Error("invalid_reward_percent");
       }
 
-      const shmResult = await shmShpunAppAdminPartnerPercentSet(
-        s.shmSessionId,
-        partnerId,
-        incomePercent
-      );
-      if (!shmResult.ok || !(shmResult.json as any)?.ok) {
-        return reply.code(502).send({
-          ok: false,
-          error: (shmResult.json as any)?.error || "partner_percent_not_saved",
-        });
+      if (linkType === "partner") {
+        const shmResult = await shmShpunAppAdminPartnerPercentSet(
+          s.shmSessionId,
+          partnerId,
+          incomePercent
+        );
+        if (!shmResult.ok || !(shmResult.json as any)?.ok) {
+          return reply.code(502).send({
+            ok: false,
+            error: (shmResult.json as any)?.error || "partner_percent_not_saved",
+          });
+        }
       }
 
       return reply.send({ ok: true, item: saveReferralAlias(body) });

@@ -488,13 +488,14 @@ export function Login() {
       setReferralAlias("");
     }
 
-    if (id <= 0 && alias) {
+    if (alias) {
       try {
-        const resolved = await apiFetch<{ ok: true; partnerId: number }>(
+        const resolved = await apiFetch<{ ok: true; linkType: "partner" | "campaign"; partnerId: number }>(
           `/referrals/resolve?alias=${encodeURIComponent(alias)}`,
           { method: "GET" }
         );
-        id = normalizePartnerId(resolved.partnerId);
+        id = resolved.linkType === "partner" ? normalizePartnerId(resolved.partnerId) : 0;
+        if (resolved.linkType === "campaign") clearPendingPartnerId();
       } catch {
         alias = "";
       }
@@ -903,13 +904,20 @@ export function Login() {
         clearPendingReferralAlias();
         setReferralAlias("");
       }
-      if (fromUrl <= 0 && alias) {
+      let resolvedAlias = false;
+      if (alias) {
         try {
-          const resolved = await apiFetch<{ ok: true; partnerId: number }>(
+          const resolved = await apiFetch<{ ok: true; linkType: "partner" | "campaign"; partnerId: number }>(
             `/referrals/resolve?alias=${encodeURIComponent(alias)}`,
             { method: "GET" }
           );
-          fromUrl = normalizePartnerId(resolved.partnerId);
+          resolvedAlias = true;
+          fromUrl = resolved.linkType === "partner" ? normalizePartnerId(resolved.partnerId) : 0;
+          if (resolved.linkType === "campaign") {
+            clearPendingPartnerId();
+            setPartnerId(0);
+            setPartnerIdInput("");
+          }
           savePendingReferralAlias(alias);
           setReferralAlias(alias);
         } catch { /* Unknown/disabled aliases behave like an ordinary visit. */ }
@@ -920,8 +928,8 @@ export function Login() {
         savePendingPartnerId(finalId);
         setPartnerId(finalId);
         setPartnerIdInput(String(finalId));
-        if (mode === "web") openModal("register");
       }
+      if (mode === "web" && (finalId > 0 || resolvedAlias)) openModal("register");
     })();
   }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
 

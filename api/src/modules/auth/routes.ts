@@ -20,6 +20,7 @@ import {
 import {
   findReferralAlias,
   recordReferralAliasRegistration,
+  recordReferralAliasRegistrationForUser,
 } from "../../shared/linkdb/referralAliasesRepo.js";
 
 /* ============================================================
@@ -228,13 +229,33 @@ async function callShmTemplate(
   return r.json ?? {};
 }
 
-async function tryAttachPartner(
+async function tryAttachReferral(
   shmSessionId: string,
   partnerIdRaw: any,
-  referralAliasRaw?: any
+  referralAliasRaw?: any,
+  options?: { allowCampaign?: boolean }
 ): Promise<void> {
   const referralAlias = String(referralAliasRaw ?? "").trim().toLowerCase();
   const campaign = referralAlias ? findReferralAlias(referralAlias) : null;
+  if (campaign?.link_type === "campaign") {
+    if (!options?.allowCampaign) return;
+    try {
+      const claimResult = await callShmTemplate(shmSessionId, "campaign.claim", {
+        campaign_alias: campaign.alias,
+        campaign_comment: campaign.billing_comment ?? "",
+        referral_secret: String(process.env.SHM_REFERRAL_SECRET ?? ""),
+      });
+      const claimData = (claimResult as any)?.data && typeof (claimResult as any).data === "object"
+        ? (claimResult as any).data
+        : claimResult;
+      if (Number((claimData as any)?.comment_written ?? 0) === 1) {
+        recordReferralAliasRegistrationForUser(campaign.alias, (claimData as any)?.user_id);
+      }
+    } catch {
+      // Registration itself must remain successful if campaign attribution fails.
+    }
+    return;
+  }
   // If an alias was supplied but is unknown/disabled, do not trust a numeric ID
   // supplied alongside it. The user must be registered without a partner.
   const partnerId = referralAlias
@@ -561,6 +582,7 @@ async function resolveTelegramMiniAppSession(
   | {
       ok: true;
       shmSessionId: string;
+      registered: boolean;
       source:
         | "telegram"
         | "telegram_password_existing"
@@ -580,6 +602,7 @@ async function resolveTelegramMiniAppSession(
     return {
       ok: true,
       shmSessionId: String(rr.json?.session_id ?? "").trim(),
+      registered: false,
       source: "telegram",
     };
   }
@@ -606,6 +629,7 @@ async function resolveTelegramMiniAppSession(
       return {
         ok: true,
         shmSessionId: String(rr.json?.session_id ?? "").trim(),
+        registered: false,
         source: "telegram",
       };
     }
@@ -613,6 +637,7 @@ async function resolveTelegramMiniAppSession(
     return {
       ok: true,
       shmSessionId: existing.shmSessionId,
+      registered: false,
       source: "telegram_password_existing",
     };
   }
@@ -639,6 +664,7 @@ async function resolveTelegramMiniAppSession(
     return {
       ok: true,
       shmSessionId: String(rr.json?.session_id ?? "").trim(),
+      registered: true,
       source: "telegram",
     };
   }
@@ -654,6 +680,7 @@ async function resolveTelegramMiniAppSession(
   return {
     ok: true,
     shmSessionId: created.shmSessionId,
+    registered: true,
     source: "telegram_password_new",
   };
 }
@@ -665,6 +692,7 @@ async function resolveTelegramWidgetSession(
   | {
       ok: true;
       shmSessionId: string;
+      registered: boolean;
       source: "widget" | "widget_password_existing" | "widget_password_new";
     }
   | {
@@ -683,6 +711,7 @@ async function resolveTelegramWidgetSession(
     return {
       ok: true,
       shmSessionId: String(rr.json?.session_id ?? "").trim(),
+      registered: false,
       source: "widget",
     };
   }
@@ -709,6 +738,7 @@ async function resolveTelegramWidgetSession(
       return {
         ok: true,
         shmSessionId: String(rr.json?.session_id ?? "").trim(),
+        registered: false,
         source: "widget",
       };
     }
@@ -716,6 +746,7 @@ async function resolveTelegramWidgetSession(
     return {
       ok: true,
       shmSessionId: existing.shmSessionId,
+      registered: false,
       source: "widget_password_existing",
     };
   }
@@ -738,6 +769,7 @@ async function resolveTelegramWidgetSession(
     return {
       ok: true,
       shmSessionId: String(rr.json?.session_id ?? "").trim(),
+      registered: true,
       source: "widget",
     };
   }
@@ -772,6 +804,7 @@ async function resolveTelegramWidgetSession(
     return {
       ok: true,
       shmSessionId: String(rr.json?.session_id ?? "").trim(),
+      registered: true,
       source: "widget",
     };
   }
@@ -779,6 +812,7 @@ async function resolveTelegramWidgetSession(
   return {
     ok: true,
     shmSessionId: created.shmSessionId,
+    registered: true,
     source: "widget_password_new",
   };
 }
@@ -913,7 +947,9 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     try {
-      await tryAttachPartner(shmSessionId, body?.partner_id, body?.referral_alias);
+      await tryAttachReferral(shmSessionId, body?.partner_id, body?.referral_alias, {
+        allowCampaign: Boolean(resolved.registered),
+      });
     } catch {}
 
     const localSid = reuseOrCreateSid(req);
@@ -980,7 +1016,9 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     try {
-      await tryAttachPartner(shmSessionId, body?.partner_id, body?.referral_alias);
+      await tryAttachReferral(shmSessionId, body?.partner_id, body?.referral_alias, {
+        allowCampaign: Boolean(resolved.registered),
+      });
     } catch {}
 
     const localSid = reuseOrCreateSid(req);
@@ -1038,7 +1076,9 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     try {
-      await tryAttachPartner(shmSessionId, payload?.partner_id, payload?.referral_alias);
+      await tryAttachReferral(shmSessionId, payload?.partner_id, payload?.referral_alias, {
+        allowCampaign: Boolean(resolved.registered),
+      });
     } catch {}
 
     const localSid = reuseOrCreateSid(req);
@@ -1103,7 +1143,9 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     if (mode === "register") {
-      await tryAttachPartner(shmSessionId, body?.partner_id, body?.referral_alias);
+      await tryAttachReferral(shmSessionId, body?.partner_id, body?.referral_alias, {
+        allowCampaign: true,
+      });
     }
 
     const localSid = reuseOrCreateSid(req);

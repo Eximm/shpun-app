@@ -4,8 +4,10 @@ import { apiFetch } from "../../shared/api/client";
 type AliasItem = {
   id: number;
   alias: string;
+  link_type: "partner" | "campaign";
   partner_id: number;
   campaign_code: string | null;
+  billing_comment: string | null;
   first_payment_bonus_percent: number;
   partner_reward_percent: number;
   enabled: boolean;
@@ -14,9 +16,11 @@ type AliasItem = {
 };
 
 type PartnerForm = {
+  linkType: "partner" | "campaign";
   alias: string;
   partnerId: string;
   campaignCode: string;
+  billingComment: string;
   firstPaymentBonusPercent: string;
   partnerRewardPercent: string;
   enabled: boolean;
@@ -36,13 +40,15 @@ type PartnerStats = {
   referralUserIdsCount?: number;
   templateVersion?: string;
   templateActiveUsers?: number;
-  activeSource?: "services" | "template";
+  activeSource?: "services" | "template" | "billing" | "local";
 };
 
 const createEmptyForm = (): PartnerForm => ({
+  linkType: "partner",
   alias: "",
   partnerId: "",
   campaignCode: "",
+  billingComment: "",
   firstPaymentBonusPercent: "",
   partnerRewardPercent: "",
   enabled: true,
@@ -97,6 +103,8 @@ export function ReferralAliasesSection() {
     void Promise.allSettled(response.items.map((item) => loadStats(item)));
   }
 
+  // Initial admin snapshot; subsequent reloads are explicit after mutations.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { void load(); }, []);
 
   function clearForm() {
@@ -106,8 +114,8 @@ export function ReferralAliasesSection() {
     setMessage("");
   }
 
-  function createPartner() {
-    setForm(createEmptyForm());
+  function createLink(linkType: "partner" | "campaign") {
+    setForm({ ...createEmptyForm(), linkType });
     setEditingAlias("");
     setCreating(true);
     setMessage("");
@@ -117,9 +125,11 @@ export function ReferralAliasesSection() {
     setCreating(false);
     setEditingAlias(item.alias);
     setForm({
+      linkType: item.link_type,
       alias: item.alias,
       partnerId: String(item.partner_id),
       campaignCode: item.campaign_code || "",
+      billingComment: item.billing_comment || "",
       firstPaymentBonusPercent: String(item.first_payment_bonus_percent),
       partnerRewardPercent: String(item.partner_reward_percent),
       enabled: item.enabled,
@@ -146,9 +156,9 @@ export function ReferralAliasesSection() {
       });
       clearForm();
       await load();
-      setMessage("Партнёр сохранён.");
-    } catch (error: any) {
-      setMessage(error?.message || "Не удалось сохранить партнёра.");
+      setMessage(form.linkType === "campaign" ? "Рекламная ссылка сохранена." : "Партнёр сохранён.");
+    } catch (error: unknown) {
+      setMessage(error instanceof Error ? error.message : "Не удалось сохранить ссылку.");
     }
   }
 
@@ -157,25 +167,39 @@ export function ReferralAliasesSection() {
     await load();
   }
 
+  const campaignItems = items.filter((item) => item.link_type === "campaign");
+  const partnerItems = items.filter((item) => item.link_type !== "campaign");
+
   return (
     <div className="card"><div className="card__body">
-      <div className="kicker">Партнёрские кампании</div>
-      <h2 className="h1">Партнёры</h2>
+      <div className="kicker">Блогерский модуль</div>
+      <h2 className="h1">Ссылки и партнёры</h2>
       <p className="p">
-        У каждого партнёра своя ссылка, условия первого пополнения и размер вознаграждения.
+        Партнёрские ссылки управляют выплатами, а рекламные ссылки только записывают метку в комментарий нового клиента в биллинге.
       </p>
 
       {!creating && !editingAlias && (
-        <button className="btn btn--primary admin-gap-top-md" type="button" onClick={createPartner}>
-          Новый партнёр
-        </button>
+        <div className="row admin-gap-top-md">
+          <button className="btn btn--primary" type="button" onClick={() => createLink("campaign")}>
+            Новая рекламная ссылка
+          </button>
+          <button className="btn btn--soft" type="button" onClick={() => createLink("partner")}>
+            Новый партнёр
+          </button>
+        </div>
       )}
 
       {(creating || editingAlias) && <>
       <h3 className="h2 admin-gap-top-md">
-        {editingAlias ? `Редактирование: ${editingAlias}` : "Создание партнёра"}
+        {editingAlias
+          ? `Редактирование: ${editingAlias}`
+          : form.linkType === "campaign" ? "Новая рекламная ссылка" : "Создание партнёра"}
       </h3>
-      <p className="p">Заполните условия вручную. Пустой процент означает 0%.</p>
+      <p className="p">
+        {form.linkType === "campaign"
+          ? "Метка будет записана только при новой регистрации и только если комментарий клиента ещё пуст."
+          : "Заполните условия вручную. Пустой процент означает 0%."}
+      </p>
 
       <div className="grid admin-gap-top-md">
         <label className="field">
@@ -192,7 +216,7 @@ export function ReferralAliasesSection() {
           />
         </label>
 
-        <label className="field">
+        {form.linkType === "partner" && <label className="field">
           <span className="field__label">ID партнёра в биллинге</span>
           <input
             className="input"
@@ -201,9 +225,9 @@ export function ReferralAliasesSection() {
             placeholder="ID пользователя SHM"
             onChange={(event) => setForm({ ...form, partnerId: event.target.value.replace(/\D/g, "") })}
           />
-        </label>
+        </label>}
 
-        <label className="field">
+        {form.linkType === "partner" && <label className="field">
           <span className="field__label">Имя партнёра или кампании</span>
           <input
             className="input"
@@ -211,9 +235,20 @@ export function ReferralAliasesSection() {
             placeholder="например: канал или имя блогера"
             onChange={(event) => setForm({ ...form, campaignCode: event.target.value })}
           />
-        </label>
+        </label>}
 
-        <label className="field">
+        {form.linkType === "campaign" && <label className="field">
+          <span className="field__label">Комментарий в биллинге</span>
+          <input
+            className="input"
+            value={form.billingComment}
+            maxLength={255}
+            placeholder="например: Реклама Telegram — канал Новости"
+            onChange={(event) => setForm({ ...form, billingComment: event.target.value })}
+          />
+        </label>}
+
+        {form.linkType === "partner" && <label className="field">
           <span className="field__label">Бонус клиенту на первое пополнение, %</span>
           <input
             className="input"
@@ -225,9 +260,9 @@ export function ReferralAliasesSection() {
               firstPaymentBonusPercent: event.target.value.replace(/\D/g, ""),
             })}
           />
-        </label>
+        </label>}
 
-        <label className="field">
+        {form.linkType === "partner" && <label className="field">
           <span className="field__label">Вознаграждение партнёра, %</span>
           <input
             className="input"
@@ -239,7 +274,7 @@ export function ReferralAliasesSection() {
               partnerRewardPercent: event.target.value.replace(/\D/g, ""),
             })}
           />
-        </label>
+        </label>}
 
         <label className="field">
           <span className="field__label">Состояние</span>
@@ -256,7 +291,9 @@ export function ReferralAliasesSection() {
 
       <div className="row admin-gap-top-md">
         <button className="btn btn--primary" type="button" onClick={() => void save()}>
-          {editingAlias ? "Сохранить изменения" : "Добавить партнёра"}
+          {editingAlias
+            ? "Сохранить изменения"
+            : form.linkType === "campaign" ? "Добавить ссылку" : "Добавить партнёра"}
         </button>
         <button className="btn btn--soft" type="button" onClick={clearForm}>Отмена</button>
       </div>
@@ -265,11 +302,65 @@ export function ReferralAliasesSection() {
 
       <div className="refPartnerList admin-gap-top-md">
         <div className="refPartnerList__head">
-          <h3 className="h2">Созданные партнёры</h3>
-          {items.length > 0 && <span className="chip chip--soft">{items.length}</span>}
+          <h3 className="h2">Рекламные ссылки без партнёрки</h3>
+          {campaignItems.length > 0 && <span className="chip chip--soft">{campaignItems.length}</span>}
         </div>
-        {items.length === 0 && <p className="p">Партнёры пока не добавлены.</p>}
-        {items.map((item) => {
+        <p className="p">Для Telegram-каналов и других площадок, где нужно только посчитать регистрации по метке.</p>
+        {campaignItems.length === 0 && <p className="p">Рекламные ссылки пока не добавлены.</p>}
+        {campaignItems.map((item) => {
+          const itemStats = stats[item.id];
+          return (
+          <article className="refPartnerCard" key={item.id}>
+            <div className="refPartnerCard__head">
+              <div className="refPartnerCard__identity">
+                <span className="refPartnerCard__eyebrow">Рекламная метка</span>
+                <a className="refPartnerCard__link" href={`/?${item.alias}`} target="_blank" rel="noreferrer">
+                  app.shpun.net/?{item.alias}
+                </a>
+                <span className="refPartnerCard__campaign">Комментарий: {item.billing_comment}</span>
+              </div>
+              <span className={`chip ${item.enabled ? "chip--ok" : "chip--soft"}`}>
+                {item.enabled ? "Активна" : "Выключена"}
+              </span>
+            </div>
+            <div className="refPartnerCard__metrics">
+              <div className="refPartnerCard__metric">
+                <span>Переходы</span>
+                <strong>{item.visits_count || 0}</strong>
+              </div>
+              <div className="refPartnerCard__metric refPartnerCard__metric--active">
+                <span>Комментариев записано</span>
+                <strong>
+                  {statsLoading[item.id]
+                    ? "…"
+                    : itemStats ? itemStats.totalUsers : item.registrations_count || 0}
+                </strong>
+              </div>
+            </div>
+            <div className="refPartnerCard__actions">
+              <button className="btn btn--soft" type="button" onClick={() => edit(item)}>Изменить</button>
+              <button
+                className="btn btn--soft"
+                type="button"
+                disabled={Boolean(statsLoading[item.id])}
+                onClick={() => void loadStats(item)}
+              >
+                Обновить
+              </button>
+              <button className="btn refPartnerCard__delete" type="button" onClick={() => void remove(item.id)}>Удалить</button>
+            </div>
+          </article>
+          );
+        })}
+      </div>
+
+      <div className="refPartnerList admin-gap-top-md">
+        <div className="refPartnerList__head">
+          <h3 className="h2">Созданные партнёры</h3>
+          {partnerItems.length > 0 && <span className="chip chip--soft">{partnerItems.length}</span>}
+        </div>
+        {partnerItems.length === 0 && <p className="p">Партнёры пока не добавлены.</p>}
+        {partnerItems.map((item) => {
           const itemStats = stats[item.id];
           const activeTitle = activeStatsTitle(itemStats);
           return (

@@ -30,7 +30,12 @@ export async function referralsRoutes(app: FastifyInstance) {
     recordReferralAliasVisit(alias);
 
     // Public response deliberately exposes only data needed before registration.
-    return reply.send({ ok: true, alias: item.alias, partnerId: item.partner_id });
+    return reply.send({
+      ok: true,
+      alias: item.alias,
+      linkType: item.link_type,
+      partnerId: item.link_type === "partner" ? item.partner_id : 0,
+    });
   });
 
   /**

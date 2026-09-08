@@ -557,6 +557,15 @@ export async function shmShpunAppAdminPartnerStats(
   })
 }
 
+export async function shmShpunAppAdminCampaignStats(
+  shmSessionId: string,
+  campaignComment: string
+) {
+  return await shmShpunAppTemplate<any>(shmSessionId, 'admin.campaign.stats', {
+    campaign_comment: campaignComment,
+  })
+}
+
 export type ShmReviewRewardResp = {
   ok?: number | boolean
   error?: string
