@@ -667,6 +667,7 @@ export function Services() {
   const prevStatusesRef = useRef<Map<number, UiStatus> | null>(null);
   const statusInitRef   = useRef(false);
   const focusedUsiRef   = useRef<number | null>(null);
+  const activeGroupsPreparedRef = useRef(false);
 
   async function load(opts?: { silent?: boolean; toastOnSuccess?: boolean }) {
     const silent         = !!opts?.silent;
@@ -712,6 +713,20 @@ export function Services() {
   }
 
   useEffect(() => { void load({ silent: false }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (loading || activeGroupsPreparedRef.current || !items.length) return;
+    const activeKinds = new Set(
+      items.filter((item) => item.status === "active").map((item) => detectKind(item.category))
+    );
+    activeGroupsPreparedRef.current = true;
+    if (!activeKinds.size) return;
+    setOpenGroups((current) => {
+      const next = { ...current };
+      activeKinds.forEach((kind) => { next[kind] = true; });
+      return next;
+    });
+  }, [items, loading]);
 
   useEffect(() => {
     if (loading || !items.length) return;
@@ -845,22 +860,22 @@ export function Services() {
 
   /* ── Render ── */
   return (
-    <div className="section services-page">
+    <div className={`section services-page${hasServices ? " services-page--has-services" : ""}`}>
 
       <PaymentSuccessModal open={paySuccessOpen} onClose={() => setPaySuccessOpen(false)} />
 
       {/* ── Шапка ── */}
-      <div className="card">
+      <div className={`card services-summary-card${hasServices ? " services-summary-card--has-services" : ""}`}>
         <div className="card__body">
           <div className="services-top">
             <div className="services-top__left">
-              <div className="services-top__title">{t("services.title")}</div>
-              <div className="services-top__sub">{t("services.sub")}</div>
+              <div className="services-top__title">{hasServices ? t("services.keys_title") : t("services.title")}</div>
+              <div className="services-top__sub">{hasServices ? t("services.keys_hint") : t("services.sub")}</div>
             </div>
           </div>
 
           {hasServices && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginTop: 10 }}>
+            <div className="services-head__meta">
               <span className="badge">✅ {t("services.meta.active")}: <b>{s?.active ?? fallbackActive}</b></span>
               {attnCount > 0 && (
                 <span className="badge" style={{ borderColor: "rgba(245,158,11,.38)", background: "rgba(245,158,11,.08)" }}>
@@ -880,8 +895,8 @@ export function Services() {
               <button className="btn btn--primary services-head__cta" onClick={() => go("/services/order")} type="button">
                 {t("services.cta.add_more")}
               </button>
-              <button className="btn services-head__cta" onClick={() => void load({ silent: false, toastOnSuccess: true })} type="button">
-                {t("services.refresh")}
+              <button className="btn services-head__cta services-head__refresh" onClick={() => void load({ silent: false, toastOnSuccess: true })} type="button" aria-label={t("services.refresh")}>
+                <span aria-hidden="true">↻</span><span className="services-head__refreshText">{t("services.refresh")}</span>
               </button>
             </div>
           )}
