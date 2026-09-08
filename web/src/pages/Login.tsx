@@ -425,6 +425,8 @@ export function Login() {
   const authInProgressRef       = useRef(false);
   const widgetWrapRef           = useRef<HTMLDivElement | null>(null);
   const authModalBodyRef        = useRef<HTMLDivElement | null>(null);
+  const loginInputRef           = useRef<HTMLInputElement | null>(null);
+  const passwordInputRef        = useRef<HTMLInputElement | null>(null);
   const referralHandledRef      = useRef(false);
   const authOkHandledRef        = useRef(false);
   const tokenHandledRef         = useRef(false);
@@ -695,7 +697,17 @@ export function Login() {
 
   async function passwordLogin() {
     if (mode === "telegram") { toast.error(t("login.toast.error_title"), { description: t("login.tg.only.password_disabled") }); return; }
-    if (!canPasswordLogin) { toastError("login_and_password_required"); return; }
+    if (!canPasswordLogin) {
+      const raw = !login.trim()
+        ? (password ? "login_required" : "login_and_password_required")
+        : "password_required";
+      setPasswordLoginError(mapAuthError(raw, t));
+      toastError(raw);
+      requestAnimationFrame(() => {
+        (!login.trim() ? loginInputRef : passwordInputRef).current?.focus();
+      });
+      return;
+    }
     setPasswordLoginError(null);
     setLoading(true);
     try {
@@ -1200,6 +1212,7 @@ export function Login() {
                   {authModal === "register" ? t("login.password.register_email") : t("login.password.login_or_email")}
                 </label>
                 <input
+                  ref={loginInputRef}
                   className={`input ${authModal === "register" && emailTouched && registerEmailCode ? "input--invalid" : ""}`}
                   placeholder={authModal === "register" ? t("login.password.login_ph_register") : t("login.password.login_ph")}
                   value={login} onChange={(e) => {
@@ -1238,6 +1251,7 @@ export function Login() {
                 </label>
                 <div className="pwdfield">
                   <input className="input" placeholder={t("login.password.password_ph")}
+                    ref={passwordInputRef}
                     value={password} onChange={(e) => {
                       setPassword(e.target.value);
                       if (authModal === "login") setPasswordLoginError(null);
@@ -1320,7 +1334,7 @@ export function Login() {
 
               <div className="auth__actions">
                 <button type="submit" className="btn btn--primary login__btnFull"
-                  disabled={loading || (authModal === "login" ? !canPasswordLogin : !canPasswordRegister)}>
+                  disabled={loading || (authModal === "register" && !canPasswordRegister)}>
                   {loading
                     ? (authModal === "login" ? t("login.password.submit_loading") : t("login.password.register_loading"))
                     : (authModal === "login" ? t("login.password.submit") : t("login.password.register_submit"))}
