@@ -309,6 +309,7 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
   const [deviceLimit, setDeviceLimit] = useState<number | null>(null);
   const [deletingDevice, setDeletingDevice] = useState<SubscriptionDevice | null>(null);
   const [deletePending, setDeletePending] = useState(false);
+  const setupCardRef = useRef<HTMLDivElement>(null);
   const installStepRef = useRef<HTMLDivElement>(null);
   const importStepRef = useRef<HTMLDivElement>(null);
   const [assistantStep, setAssistantStepState] = useState<AssistantFocusStep>(() => {
@@ -375,6 +376,14 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
   }, [usi, bridgeDeepLink]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const ready = !loading && !error && !!subscriptionUrl;
+
+  useEffect(() => {
+    if (assistantMode || !ready) return;
+    const frame = window.requestAnimationFrame(() => {
+      setupCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [assistantMode, ready]);
 
   const scrollAssistantStepIntoView = useCallback((behavior: ScrollBehavior = "smooth") => {
     if (!assistantMode || !ready || assistantStep === "done") return;
@@ -663,7 +672,7 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
         </div>
       )}
 
-      <div className="card cm__setupCard" style={{ marginTop: 12 }}>
+      <div ref={setupCardRef} className="card cm__setupCard" style={{ marginTop: 12 }}>
         <div className="card__body">
           <div ref={installStepRef} className={`cm__focusStep${assistantMode && ready && assistantStep === "install" ? " cm__focusStep--active" : ""}${assistantMode && ready && assistantStep === "import" ? " cm__focusStep--dimmed" : ""}`}>
           {!assistantMode && <div className="pre" style={{ borderColor: "rgba(124,92,255,0.22)", background: "rgba(124,92,255,0.05)" }}>
