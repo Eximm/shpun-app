@@ -382,6 +382,7 @@ export function Login() {
   const [password2,     setPassword2]     = useState("");
   const [showPassword,  setShowPassword]  = useState(false);
   const [showPassword2, setShowPassword2] = useState(false);
+  const [passwordLoginError, setPasswordLoginError] = useState<string | null>(null);
   const [emailTouched,  setEmailTouched]  = useState(false);
   const [registerEmailServerCode, setRegisterEmailServerCode] =
     useState<RegisterEmailClientCode | null>(null);
@@ -525,6 +526,7 @@ export function Login() {
     resetTelegramWidgetUi();
     setAuthModal(next);
     setPassword(""); setPassword2(""); setShowPassword(false); setShowPassword2(false);
+    setPasswordLoginError(null);
     setEmailTouched(false); setRegisterEmailServerCode(null);
     if (next !== "register") setClientName("");
     if (next === "register") {
@@ -543,6 +545,7 @@ export function Login() {
     resetTelegramWidgetUi();
     setAuthModal("none");
     setPassword(""); setPassword2(""); setShowPassword(false); setShowPassword2(false);
+    setPasswordLoginError(null);
     setClientName(""); setEmailTouched(false); setRegisterEmailServerCode(null); setForgotLoading(false);
     // Reset-state сбрасываем полностью
     setResetToken(""); setResetPwd1(""); setResetPwd2("");
@@ -693,11 +696,16 @@ export function Login() {
   async function passwordLogin() {
     if (mode === "telegram") { toast.error(t("login.toast.error_title"), { description: t("login.tg.only.password_disabled") }); return; }
     if (!canPasswordLogin) { toastError("login_and_password_required"); return; }
+    setPasswordLoginError(null);
     setLoading(true);
     try {
       const r = await apiFetch<AuthResponse>("/auth/password", { method: "POST", body: { login: login.trim(), password, mode: "login" } });
       await goAfterAuth(r, "password");
-    } catch (e: unknown) { clearAuthPending(); toastError(errorToAuthRaw(e, t("error.password_login_failed")));
+    } catch (e: unknown) {
+      clearAuthPending();
+      const raw = errorToAuthRaw(e, t("error.password_login_failed"));
+      setPasswordLoginError(mapAuthError(raw, t));
+      toastError(raw);
     } finally { setLoading(false); }
   }
 
@@ -1196,6 +1204,7 @@ export function Login() {
                   placeholder={authModal === "register" ? t("login.password.login_ph_register") : t("login.password.login_ph")}
                   value={login} onChange={(e) => {
                     setLogin(e.target.value);
+                    if (authModal === "login") setPasswordLoginError(null);
                     if (authModal === "register") {
                       setEmailTouched(false);
                       setRegisterEmailServerCode(null);
@@ -1229,7 +1238,10 @@ export function Login() {
                 </label>
                 <div className="pwdfield">
                   <input className="input" placeholder={t("login.password.password_ph")}
-                    value={password} onChange={(e) => setPassword(e.target.value)}
+                    value={password} onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (authModal === "login") setPasswordLoginError(null);
+                    }}
                     type={showPassword ? "text" : "password"}
                     autoComplete={authModal === "login" ? "current-password" : "new-password"}
                     disabled={loading} />
@@ -1238,6 +1250,13 @@ export function Login() {
                     aria-label={showPassword ? t("login.password.hide") : t("login.password.show")}>👁</button>
                 </div>
               </div>
+
+              {authModal === "login" && passwordLoginError && (
+                <div className="loginAuthError" role="alert" aria-live="assertive">
+                  <div className="loginAuthError__title">{t("login.password.login_error_title")}</div>
+                  <div className="loginAuthError__text">{passwordLoginError}</div>
+                </div>
+              )}
 
               {authModal === "login" && (
                 <div className="login__switchWrap" style={{ marginTop: 4 }}>

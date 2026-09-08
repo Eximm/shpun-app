@@ -2320,6 +2320,26 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .loginRegisterStep__optional .field__label {
   color: rgba(255,255,255,0.56);
 }
+.loginAuthError {
+  display: grid;
+  gap: 3px;
+  padding: 11px 12px;
+  border: 1px solid rgba(255,77,109,0.48);
+  border-radius: 13px;
+  background: rgba(255,77,109,0.12);
+  box-shadow: 0 0 22px rgba(255,77,109,0.08);
+  color: #ffd7df;
+}
+.loginAuthError__title {
+  font-size: 14px;
+  font-weight: 950;
+  color: #fff;
+}
+.loginAuthError__text {
+  font-size: 13px;
+  line-height: 1.35;
+  font-weight: 750;
+}
 .loginPartnerCode {
   margin-top: 0;
 }
