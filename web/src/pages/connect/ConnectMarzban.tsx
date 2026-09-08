@@ -385,7 +385,7 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
   useEffect(() => {
     if (!assistantMode || !ready || assistantStep === "done") return;
     const frame = window.requestAnimationFrame(() => scrollAssistantStepIntoView("smooth"));
-    const settleTimer = window.setTimeout(() => scrollAssistantStepIntoView("auto"), 380);
+    const settleTimer = window.setTimeout(() => scrollAssistantStepIntoView("smooth"), 420);
     return () => {
       window.cancelAnimationFrame(frame);
       window.clearTimeout(settleTimer);
@@ -395,9 +395,12 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
   useEffect(() => {
     if (!assistantMode || !ready || assistantStep === "done") return;
     let restoreTimer: number | null = null;
+    let settleTimer: number | null = null;
     const restoreFocus = () => {
       if (restoreTimer != null) window.clearTimeout(restoreTimer);
+      if (settleTimer != null) window.clearTimeout(settleTimer);
       restoreTimer = window.setTimeout(() => scrollAssistantStepIntoView("smooth"), 120);
+      settleTimer = window.setTimeout(() => scrollAssistantStepIntoView("smooth"), 520);
     };
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") restoreFocus();
@@ -407,6 +410,7 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
       if (restoreTimer != null) window.clearTimeout(restoreTimer);
+      if (settleTimer != null) window.clearTimeout(settleTimer);
       window.removeEventListener("focus", restoreFocus);
       window.removeEventListener("pageshow", restoreFocus);
       document.removeEventListener("visibilitychange", onVisibilityChange);

@@ -749,9 +749,16 @@ export function Services() {
     if (sp.get("connect") === "1" && item.status === "active") setConnectOpenId(target);
 
     window.setTimeout(() => {
-      document.querySelector<HTMLElement>(`[data-usi="${target}"]`)?.scrollIntoView({
+      const serviceRow = document.querySelector<HTMLElement>(`[data-usi="${target}"]`);
+      const assistantStep = sp.get("assistant") === "1"
+        ? serviceRow?.querySelector<HTMLElement>(".cm__focusStep--active")
+        : null;
+      const assistantConnector = sp.get("assistant") === "1"
+        ? serviceRow?.querySelector<HTMLElement>(".assistant-connect-target")
+        : null;
+      (assistantStep ?? assistantConnector ?? serviceRow)?.scrollIntoView({
         behavior: "smooth",
-        block: "center",
+        block: assistantStep ? "center" : "start",
       });
     }, 120);
   }, [items, loading, location.search]);
