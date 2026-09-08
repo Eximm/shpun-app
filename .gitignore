@@ -21,6 +21,7 @@ build/
 Thumbs.db
 .idea/
 .vscode/
+.codex-remote-attachments/
 
 # ================================
 # Logs
