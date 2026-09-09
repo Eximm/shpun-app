@@ -552,32 +552,6 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
     }
   }
 
-  if (bridgeDeepLink) {
-    return (
-      <div className="cm">
-        <div className="card">
-          <div className="card__body">
-            <div className="pre" style={{ borderColor: "rgba(77,215,255,0.22)", background: "rgba(77,215,255,0.05)" }}>
-              <b>{"\u041e\u0442\u043a\u0440\u044b\u0432\u0430\u0435\u043c Happ."}</b> {"\u0415\u0441\u043b\u0438 \u043f\u0440\u0438\u043b\u043e\u0436\u0435\u043d\u0438\u0435 \u043d\u0435 \u043e\u0442\u043a\u0440\u044b\u043b\u043e\u0441\u044c \u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438, \u043d\u0430\u0436\u043c\u0438\u0442\u0435 \u043a\u043d\u043e\u043f\u043a\u0443 \u043d\u0438\u0436\u0435."}
-            </div>
-            <div className="actions actions--1" style={{ marginTop: 12 }}>
-              <a className="btn btn--primary" href={bridgeDeepLink}>
-                {"\u041e\u0442\u043a\u0440\u044b\u0442\u044c Happ"}
-              </a>
-              <button className="btn" type="button" onClick={() => void copyToClipboard(bridgeDeepLink).then((ok) => {
-                ok
-                  ? toast.success(t("connect.copied"), { description: t("connect.import_text") })
-                  : toast.error(t("connect.copy_link"), { description: t("connect.sub_prepare_error_desc") });
-              })}>
-                {t("connect.copy_link")}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className={`cm${assistantMode && ready ? ` cm--assistant-focus cm--assistant-${assistantStep}` : ""}`}>
       <div className="pre" style={{
