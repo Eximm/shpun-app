@@ -660,10 +660,6 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
             </div>
           )}
 
-          {!assistantMode && <div className="cm__clientNote">
-            <span>{selectedClient.icon}</span>
-            <span>{t(selectedClient.noteKey)}</span>
-          </div>}
           {assistantMode && ready && assistantStep === "install" && (
             <button className="btn cm__assistantContinue" type="button" onClick={() => setAssistantStep("import")}>
               {t("connect.assistant.already_installed")}

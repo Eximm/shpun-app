@@ -256,11 +256,7 @@ function readHappImportTarget(): string {
 function HappImportBridge({ target }: { target: string }) {
   const isRussian = !String(navigator.language || "ru").toLowerCase().startsWith("en");
   const safeTarget = target.replace(/#/g, "%23");
-  const happDeepLink = `happ://add/${safeTarget}`;
-  const playStoreUrl = "https://play.google.com/store/apps/details?id=com.happproxy";
-  const launchLink = /Android/i.test(navigator.userAgent)
-    ? `intent://add/${safeTarget}#Intent;scheme=happ;package=com.happproxy;S.browser_fallback_url=${encodeURIComponent(playStoreUrl)};end`
-    : happDeepLink;
+  const launchLink = `happ://add/${safeTarget}`;
 
   return (
     <main className="happ-import-bridge">
