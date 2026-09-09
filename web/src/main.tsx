@@ -255,22 +255,20 @@ function readHappImportTarget(): string {
 
 function HappImportBridge({ target }: { target: string }) {
   const isRussian = !String(navigator.language || "ru").toLowerCase().startsWith("en");
-  const deepLink = `happ://add/${target.replace(/#/g, "%23")}`;
-
-  React.useEffect(() => {
-    const timer = window.setTimeout(() => {
-      try { window.location.href = deepLink; } catch { /* the button remains available */ }
-    }, 80);
-    return () => window.clearTimeout(timer);
-  }, [deepLink]);
+  const safeTarget = target.replace(/#/g, "%23");
+  const happDeepLink = `happ://add/${safeTarget}`;
+  const playStoreUrl = "https://play.google.com/store/apps/details?id=com.happproxy";
+  const launchLink = /Android/i.test(navigator.userAgent)
+    ? `intent://add/${safeTarget}#Intent;scheme=happ;package=com.happproxy;S.browser_fallback_url=${encodeURIComponent(playStoreUrl)};end`
+    : happDeepLink;
 
   return (
     <main className="happ-import-bridge">
       <div className="happ-import-bridge__card">
         <div className="happ-import-bridge__icon" aria-hidden="true">🔑</div>
-        <h1>{isRussian ? "Открываем Happ" : "Opening Happ"}</h1>
-        <p>{isRussian ? "Если Happ не открылся сам, нажмите кнопку." : "If Happ did not open, tap the button."}</p>
-        <a className="btn btn--primary" href={deepLink}>
+        <h1>{isRussian ? "Добавить ключ в Happ" : "Add key to Happ"}</h1>
+        <p>{isRussian ? "Нажмите кнопку — ключ добавится в приложение." : "Tap the button to add the key to the app."}</p>
+        <a className="btn btn--primary" href={launchLink}>
           {isRussian ? "Открыть Happ" : "Open Happ"}
         </a>
       </div>
