@@ -924,8 +924,6 @@ export function Services() {
                   {t("services.empty.cta")}
                 </button>
               </div>
-
-              <div className="services-empty__hint">{t("services.empty.hint")}</div>
             </div>
           </div>
         </div>

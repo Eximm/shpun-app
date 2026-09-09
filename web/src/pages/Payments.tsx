@@ -716,10 +716,6 @@ export function Payments() {
               <span className="payments-method__arrow" style={{ fontSize: 14, color: "rgba(255,255,255,0.40)", flexShrink: 0 }}>→</span>
             </button>
 
-            {/* Примечание */}
-            <p style={{ fontSize: 11, color: "rgba(255,255,255,0.28)", lineHeight: 1.4, marginTop: 4 }}>
-              {t("payments.methods.note")}
-            </p>
           </div>
         </div>
       </div>

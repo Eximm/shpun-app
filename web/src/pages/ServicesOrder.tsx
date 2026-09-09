@@ -1035,7 +1035,6 @@ export function ServicesOrder() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
                 <div>
                   <div className="h1">{t('servicesOrder.step.kind.title')}</div>
-                  <p className="p" style={{ marginTop: 4 }}>{t('servicesOrder.step.kind.hint')}</p>
                 </div>
                 <button className="btn" onClick={leaveOrderStep} type="button" style={{ flexShrink: 0 }}>
                   ← {t('common.close')}
