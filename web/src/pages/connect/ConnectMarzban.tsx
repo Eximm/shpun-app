@@ -197,7 +197,7 @@ function openViaTelegramBridge(url: string) {
   try {
     const tg = (window as any).Telegram?.WebApp;
     if (tg && typeof tg.openLink === "function") {
-      tg.openLink(bridge, { try_instant_view: false });
+      tg.openLink(bridge, { try_instant_view: false, try_browser: "chrome" });
       return true;
     }
   } catch { /* ignore */ }
