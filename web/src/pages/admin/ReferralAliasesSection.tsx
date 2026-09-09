@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../../shared/api/client";
 
 type AliasItem = {
@@ -54,6 +54,26 @@ const createEmptyForm = (): PartnerForm => ({
   enabled: true,
 });
 
+function readEnv(key: string): string {
+  const v = (import.meta as any).env?.[key];
+  return typeof v === "string" ? v.trim() : "";
+}
+
+function getTelegramBotUsername(): string {
+  const raw = readEnv("VITE_TG_BOT_USERNAME");
+  return raw.startsWith("@") ? raw.slice(1).trim() : raw.trim();
+}
+
+function toBase64Url(value: string): string {
+  return btoa(value).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function buildTelegramBotLink(botUsername: string, alias: string): string {
+  if (!botUsername) return "";
+  const payload = new URLSearchParams({ referral_alias: alias }).toString();
+  return `https://t.me/${botUsername}?start=${toBase64Url(payload)}`;
+}
+
 function activeStatsTitle(stats?: PartnerStats): string {
   if (!stats) return "";
   if (stats.activeSource === "template") {
@@ -78,6 +98,7 @@ export function ReferralAliasesSection() {
   const [message, setMessage] = useState("");
   const [stats, setStats] = useState<Record<number, PartnerStats>>({});
   const [statsLoading, setStatsLoading] = useState<Record<number, boolean>>({});
+  const botUsername = useMemo(() => getTelegramBotUsername(), []);
 
   async function loadStats(item: AliasItem) {
     setStatsLoading((current) => ({ ...current, [item.id]: true }));
@@ -309,6 +330,7 @@ export function ReferralAliasesSection() {
         {campaignItems.length === 0 && <p className="p">Рекламные ссылки пока не добавлены.</p>}
         {campaignItems.map((item) => {
           const itemStats = stats[item.id];
+          const botLink = buildTelegramBotLink(botUsername, item.alias);
           return (
           <article className="refPartnerCard" key={item.id}>
             <div className="refPartnerCard__head">
@@ -317,6 +339,11 @@ export function ReferralAliasesSection() {
                 <a className="refPartnerCard__link" href={`/?${item.alias}`} target="_blank" rel="noreferrer">
                   app.shpun.net/?{item.alias}
                 </a>
+                {botLink && (
+                  <a className="refPartnerCard__link" href={botLink} target="_blank" rel="noreferrer">
+                    t.me/{botUsername}?start=...
+                  </a>
+                )}
                 <span className="refPartnerCard__campaign">Комментарий: {item.billing_comment}</span>
               </div>
               <span className={`chip ${item.enabled ? "chip--ok" : "chip--soft"}`}>
@@ -363,6 +390,7 @@ export function ReferralAliasesSection() {
         {partnerItems.map((item) => {
           const itemStats = stats[item.id];
           const activeTitle = activeStatsTitle(itemStats);
+          const botLink = buildTelegramBotLink(botUsername, item.alias);
           return (
           <article className="refPartnerCard" key={item.id}>
             <div className="refPartnerCard__head">
@@ -371,6 +399,11 @@ export function ReferralAliasesSection() {
                 <a className="refPartnerCard__link" href={`/?${item.alias}`} target="_blank" rel="noreferrer">
                   app.shpun.net/?{item.alias}
                 </a>
+                {botLink && (
+                  <a className="refPartnerCard__link" href={botLink} target="_blank" rel="noreferrer">
+                    t.me/{botUsername}?start=...
+                  </a>
+                )}
                 {item.campaign_code && (
                   <span className="refPartnerCard__campaign">{item.campaign_code}</span>
                 )}

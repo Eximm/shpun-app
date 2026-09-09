@@ -1,7 +1,7 @@
 // web/src/pages/AdminPage.tsx
 
 import { useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
 import { useMe } from "../app/auth/useMe";
 import { useI18n } from "../shared/i18n";
 import { PageBackButton } from "../shared/ui/PageBackButton";
@@ -21,7 +21,9 @@ export function AdminPage() {
   const { me, loading } = useMe() as any;
   const { t } = useI18n();
   const isAdmin = Boolean(me?.profile?.isAdmin || me?.admin?.isAdmin);
-  const [tab, setTab] = useState<AdminTab>("overview");
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get("tab") === "referralAliases" ? "referralAliases" : "overview";
+  const [tab, setTab] = useState<AdminTab>(initialTab);
 
   if (loading) {
     return (
@@ -56,7 +58,7 @@ export function AdminPage() {
             <AdminTabButton active={tab === "orderRules"}      onClick={() => setTab("orderRules")}      title={t("admin.tab.orders")}     subtitle={t("admin.tab.orders.sub")} />
             <AdminTabButton active={tab === "trialProtection"} onClick={() => setTab("trialProtection")} title={t("admin.tab.trial")}      subtitle={t("admin.tab.trial.sub")} />
             <AdminTabButton active={tab === "serviceCategories"} onClick={() => setTab("serviceCategories")} title={t("admin.tab.categories")} subtitle={t("admin.tab.categories.sub")} />
-            <AdminTabButton active={tab === "referralAliases"} onClick={() => setTab("referralAliases")} title="Реферальные ссылки" subtitle="Блогеры" />
+            <AdminTabButton active={tab === "referralAliases"} onClick={() => setTab("referralAliases")} title="Реклама и блогеры" subtitle="Ссылки" />
             <AdminTabButton active={tab === "serverStatus"} onClick={() => setTab("serverStatus")} title="Статус серверов" subtitle="Node exporter" />
           </div>
         </div>
