@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useMe } from "../app/auth/useMe";
 import { EmailVerifyModal } from "./Profile";
 import { apiFetch } from "../shared/api/client";
-import { clearPendingEmailVerification } from "../shared/emailVerificationState";
+import { clearPendingEmailVerification, markPendingEmailVerification } from "../shared/emailVerificationState";
 import { useI18n } from "../shared/i18n";
 import { toastApiError } from "../shared/ui/toast/toastApiError";
 
@@ -149,6 +149,12 @@ function AssistantEmailGate({
       setCurrentEmail(clean);
       setEditingEmail(false);
       try { sessionStorage.setItem(EMAIL_KEY, clean); } catch { /* ignore */ }
+      try {
+        await apiFetch("/user/email/send-code", { method: "POST", body: {} });
+        markPendingEmailVerification();
+      } catch {
+        clearPendingEmailVerification();
+      }
       await onEmailSaved();
       setVerifyOpen(true);
     } catch (nextError: unknown) {
@@ -200,7 +206,7 @@ function AssistantEmailGate({
           />
           {error && <div className="pre assistant-email__error">{error}</div>}
           <button className="btn btn--primary assistant__primary" type="submit" disabled={saving}>
-            {saving ? t("profile.email.saving") : t("profile.email.save")}
+            {saving ? t("assistant.email.saving_send") : t("assistant.email.save_send")}
           </button>
         </form>
       )}
