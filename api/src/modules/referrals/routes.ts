@@ -58,6 +58,7 @@ export async function referralsRoutes(app: FastifyInstance) {
       alias: item.alias,
       linkType: item.link_type,
       partnerId: item.link_type === "partner" ? item.partner_id : 0,
+      billingComment: item.billing_comment ?? "",
     });
   });
 
@@ -69,6 +70,8 @@ export async function referralsRoutes(app: FastifyInstance) {
     const query = (req.query ?? {}) as any;
     const alias = String(query.alias ?? "").trim().toLowerCase();
     const shmSessionId = String(query.session_id ?? "").trim();
+    const botUserId = toInt(query.user_id, 0);
+    const botCommentWritten = toInt(query.bot_comment_written, 0) === 1;
     if (!isValidReferralAlias(alias)) {
       return reply.code(400).send({ ok: false, error: "invalid_alias" });
     }
@@ -78,13 +81,36 @@ export async function referralsRoutes(app: FastifyInstance) {
 
     const item = findReferralAlias(alias);
     if (!item) return reply.code(404).send({ ok: false, error: "alias_not_found" });
+    if (item.link_type === "campaign" && botCommentWritten && botUserId > 0) {
+      recordReferralAliasRegistrationForUser(item.alias, botUserId);
+    }
     if (item.link_type !== "campaign") {
+      const claimResult = await shmShpunAppTemplate<any>(shmSessionId, "referrals.claim", {
+        partner_id: item.partner_id,
+        referral_alias: item.alias,
+        first_pay: item.first_payment_bonus_percent,
+        first_pay_campaign: item.campaign_code ?? item.alias,
+        referral_secret: String(process.env.SHM_REFERRAL_SECRET ?? ""),
+      });
+      if (!claimResult.ok) {
+        return reply.code(502).send({ ok: false, error: "shm_failed", status: claimResult.status });
+      }
+
+      const claimJson: any = claimResult.json ?? {};
+      const claimData = claimJson?.data && typeof claimJson.data === "object" ? claimJson.data : claimJson;
+      const registered = Number(claimData?.campaign_initialized ?? 0) === 1
+        && Number(claimData?.partner_confirmed ?? 0) === 1;
+      if (registered) {
+        recordReferralAliasRegistrationForUser(item.alias, claimData?.user_id);
+      }
+
       return reply.send({
         ok: true,
         alias: item.alias,
         linkType: item.link_type,
         partnerId: item.partner_id,
-        commentWritten: 0,
+        registered: registered ? 1 : 0,
+        userId: Number(claimData?.user_id ?? 0) || 0,
       });
     }
 
@@ -100,16 +126,16 @@ export async function referralsRoutes(app: FastifyInstance) {
     const claimJson: any = claimResult.json ?? {};
     const claimData = claimJson?.data && typeof claimJson.data === "object" ? claimJson.data : claimJson;
     const commentWritten = Number(claimData?.comment_written ?? 0) === 1;
-    if (commentWritten) {
-      recordReferralAliasRegistrationForUser(item.alias, claimData?.user_id);
+    if (commentWritten || (botCommentWritten && botUserId > 0)) {
+      recordReferralAliasRegistrationForUser(item.alias, claimData?.user_id ?? botUserId);
     }
 
     return reply.send({
       ok: true,
       alias: item.alias,
       linkType: item.link_type,
-      commentWritten: commentWritten ? 1 : 0,
-      userId: Number(claimData?.user_id ?? 0) || 0,
+      commentWritten: (commentWritten || botCommentWritten) ? 1 : 0,
+      userId: Number(claimData?.user_id ?? botUserId) || 0,
     });
   });
 

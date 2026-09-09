@@ -7228,6 +7228,14 @@ button.reviews-star:not(:disabled) {
   letter-spacing: 0.09em;
   text-transform: uppercase;
 }
+.refPartnerCard__title {
+  max-width: 100%;
+  color: rgba(255,255,255,0.96);
+  font-size: 16px;
+  font-weight: 950;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
 .refPartnerCard__link {
   max-width: 100%;
   color: rgba(255,255,255,0.96);
@@ -7242,6 +7250,51 @@ button.reviews-star:not(:disabled) {
   color: rgba(255,255,255,0.55);
   font-size: 12px;
   line-height: 1.3;
+}
+.refPartnerLinks {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+.refPartnerLinks__title {
+  color: rgba(255,255,255,0.52);
+  font-size: 11px;
+  font-weight: 900;
+}
+.refPartnerLinks__row {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  align-items: stretch;
+  gap: 8px;
+}
+.refPartnerLinks__body {
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid rgba(255,255,255,0.075);
+  border-radius: 12px;
+  background: rgba(8,12,20,0.24);
+}
+.refPartnerLinks__body span {
+  display: block;
+  color: rgba(255,255,255,0.48);
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+.refPartnerLinks__body code {
+  display: block;
+  margin-top: 5px;
+  color: rgba(255,255,255,0.92);
+  font: 800 12px/1.35 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.refPartnerLinks__copy {
+  min-width: 118px;
+  min-height: 100%;
+  padding: 8px 12px;
+  border-color: rgba(77,215,255,0.18);
 }
 .refPartnerCard__metrics {
   display: grid;
@@ -7430,6 +7483,8 @@ button.reviews-star:not(:disabled) {
   .admin-modal__card { width: 100%; max-height: 88dvh; }
   .admin-modal__body { padding: 12px; }
   .refPartnerCard__metrics { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .refPartnerLinks__row { grid-template-columns: 1fr; }
+  .refPartnerLinks__copy { width: 100%; min-height: 38px; }
   .admin-reviewSetting { grid-template-columns: 1fr; }
   .admin-reviewAmountInput { width: 100%; }
 }
@@ -7447,6 +7502,7 @@ button.reviews-star:not(:disabled) {
   .admin-modal__content { padding-right: 0; }
   .refPartnerCard { padding: 13px; border-radius: 16px; }
   .refPartnerCard__link { font-size: 14px; }
+  .refPartnerCard__title { font-size: 14px; }
   .refPartnerCard__actions { justify-content: stretch; }
   .refPartnerCard__actions .btn { flex: 1 1 0; }
   .admin-reviewActions { grid-template-columns: 1fr; }

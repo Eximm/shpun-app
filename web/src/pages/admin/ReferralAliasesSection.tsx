@@ -68,10 +68,25 @@ function toBase64Url(value: string): string {
   return btoa(value).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
-function buildTelegramBotLink(botUsername: string, alias: string): string {
+function buildTelegramBotLink(botUsername: string, item: AliasItem): string {
   if (!botUsername) return "";
-  const payload = new URLSearchParams({ referral_alias: alias }).toString();
+  const payload = item.link_type === "campaign"
+    ? new URLSearchParams({ campaign: item.alias }).toString()
+    : new URLSearchParams({ referral_alias: item.alias, partner_id: String(item.partner_id) }).toString();
   return `https://t.me/${botUsername}?start=${toBase64Url(payload)}`;
+}
+
+function buildAppLink(alias: string): string {
+  return `https://app.shpun.net/?${alias}`;
+}
+
+async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function activeStatsTitle(stats?: PartnerStats): string {
@@ -98,7 +113,21 @@ export function ReferralAliasesSection() {
   const [message, setMessage] = useState("");
   const [stats, setStats] = useState<Record<number, PartnerStats>>({});
   const [statsLoading, setStatsLoading] = useState<Record<number, boolean>>({});
+  const [copiedLink, setCopiedLink] = useState("");
   const botUsername = useMemo(() => getTelegramBotUsername(), []);
+
+  async function copyLink(key: string, value: string) {
+    const ok = await copyToClipboard(value);
+    if (!ok) {
+      setMessage("Не удалось скопировать. Выделите ссылку вручную.");
+      return;
+    }
+    setCopiedLink(key);
+    setMessage("Ссылка скопирована.");
+    window.setTimeout(() => {
+      setCopiedLink((current) => current === key ? "" : current);
+    }, 1800);
+  }
 
   async function loadStats(item: AliasItem) {
     setStatsLoading((current) => ({ ...current, [item.id]: true }));
@@ -330,25 +359,42 @@ export function ReferralAliasesSection() {
         {campaignItems.length === 0 && <p className="p">Рекламные ссылки пока не добавлены.</p>}
         {campaignItems.map((item) => {
           const itemStats = stats[item.id];
-          const botLink = buildTelegramBotLink(botUsername, item.alias);
+          const appLink = buildAppLink(item.alias);
+          const botLink = buildTelegramBotLink(botUsername, item);
           return (
           <article className="refPartnerCard" key={item.id}>
             <div className="refPartnerCard__head">
               <div className="refPartnerCard__identity">
-                <span className="refPartnerCard__eyebrow">Рекламная метка</span>
-                <a className="refPartnerCard__link" href={`/?${item.alias}`} target="_blank" rel="noreferrer">
-                  app.shpun.net/?{item.alias}
-                </a>
-                {botLink && (
-                  <a className="refPartnerCard__link" href={botLink} target="_blank" rel="noreferrer">
-                    t.me/{botUsername}?start=...
-                  </a>
-                )}
+                <span className="refPartnerCard__eyebrow">Рекламная ссылка без партнёрки</span>
+                <strong className="refPartnerCard__title">{item.alias}</strong>
                 <span className="refPartnerCard__campaign">Комментарий: {item.billing_comment}</span>
               </div>
               <span className={`chip ${item.enabled ? "chip--ok" : "chip--soft"}`}>
                 {item.enabled ? "Активна" : "Выключена"}
               </span>
+            </div>
+            <div className="refPartnerLinks" aria-label="Ссылки для размещения">
+              <div className="refPartnerLinks__title">Ссылки для размещения</div>
+              <div className="refPartnerLinks__row">
+                <div className="refPartnerLinks__body">
+                  <span>Сайт и приложение</span>
+                  <code>{appLink}</code>
+                </div>
+                <button className="btn btn--soft refPartnerLinks__copy" type="button" onClick={() => void copyLink(`app-${item.id}`, appLink)}>
+                  {copiedLink === `app-${item.id}` ? "Скопировано" : "Копировать"}
+                </button>
+              </div>
+              {botLink && (
+                <div className="refPartnerLinks__row">
+                  <div className="refPartnerLinks__body">
+                    <span>Telegram-бот</span>
+                    <code>{botLink}</code>
+                  </div>
+                  <button className="btn btn--soft refPartnerLinks__copy" type="button" onClick={() => void copyLink(`bot-${item.id}`, botLink)}>
+                    {copiedLink === `bot-${item.id}` ? "Скопировано" : "Копировать"}
+                  </button>
+                </div>
+              )}
             </div>
             <div className="refPartnerCard__metrics">
               <div className="refPartnerCard__metric">
@@ -390,20 +436,14 @@ export function ReferralAliasesSection() {
         {partnerItems.map((item) => {
           const itemStats = stats[item.id];
           const activeTitle = activeStatsTitle(itemStats);
-          const botLink = buildTelegramBotLink(botUsername, item.alias);
+          const appLink = buildAppLink(item.alias);
+          const botLink = buildTelegramBotLink(botUsername, item);
           return (
           <article className="refPartnerCard" key={item.id}>
             <div className="refPartnerCard__head">
               <div className="refPartnerCard__identity">
                 <span className="refPartnerCard__eyebrow">Партнёр #{item.partner_id}</span>
-                <a className="refPartnerCard__link" href={`/?${item.alias}`} target="_blank" rel="noreferrer">
-                  app.shpun.net/?{item.alias}
-                </a>
-                {botLink && (
-                  <a className="refPartnerCard__link" href={botLink} target="_blank" rel="noreferrer">
-                    t.me/{botUsername}?start=...
-                  </a>
-                )}
+                <strong className="refPartnerCard__title">{item.alias}</strong>
                 {item.campaign_code && (
                   <span className="refPartnerCard__campaign">{item.campaign_code}</span>
                 )}
@@ -411,6 +451,29 @@ export function ReferralAliasesSection() {
               <span className={`chip ${item.enabled ? "chip--ok" : "chip--soft"}`}>
                 {item.enabled ? "Активна" : "Выключена"}
               </span>
+            </div>
+            <div className="refPartnerLinks" aria-label="Ссылки для размещения">
+              <div className="refPartnerLinks__title">Ссылки для размещения</div>
+              <div className="refPartnerLinks__row">
+                <div className="refPartnerLinks__body">
+                  <span>Сайт и приложение</span>
+                  <code>{appLink}</code>
+                </div>
+                <button className="btn btn--soft refPartnerLinks__copy" type="button" onClick={() => void copyLink(`app-${item.id}`, appLink)}>
+                  {copiedLink === `app-${item.id}` ? "Скопировано" : "Копировать"}
+                </button>
+              </div>
+              {botLink && (
+                <div className="refPartnerLinks__row">
+                  <div className="refPartnerLinks__body">
+                    <span>Telegram-бот</span>
+                    <code>{botLink}</code>
+                  </div>
+                  <button className="btn btn--soft refPartnerLinks__copy" type="button" onClick={() => void copyLink(`bot-${item.id}`, botLink)}>
+                    {copiedLink === `bot-${item.id}` ? "Скопировано" : "Копировать"}
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="refPartnerCard__metrics">
