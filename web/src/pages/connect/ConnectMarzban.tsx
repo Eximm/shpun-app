@@ -186,17 +186,9 @@ function buildHappImportLink(url: string, platform: Platform, runtime: RuntimeMo
 
 function buildHappBridgeLink(url: string) {
   if (!/^https?:$/.test(window.location.protocol)) return "";
-  const bridgeUrl = new URL(window.location.href);
-  bridgeUrl.searchParams.set("happ_import", url.trim());
+  const bridgeUrl = new URL("/happ-import", window.location.origin);
+  bridgeUrl.hash = new URLSearchParams({ url: url.trim() }).toString();
   return bridgeUrl.toString();
-}
-
-function getHappBridgeDeepLink() {
-  const params = new URLSearchParams(window.location.search);
-  const directLink = params.get("happ_link")?.trim();
-  if (directLink) return directLink;
-  const target = params.get("happ_import")?.trim();
-  return target ? buildHappImportLink(target, "android", "browser") : "";
 }
 
 function openViaTelegramBridge(url: string) {
@@ -276,7 +268,6 @@ function deviceUpdatedDate(value: string) {
 export default function ConnectMarzban({ usi, service, onAssistantStepChange }: Props) {
   const { t } = useI18n();
 
-  const bridgeDeepLink = useMemo(() => getHappBridgeDeepLink(), []);
   const assistantMode = useMemo(() => new URLSearchParams(window.location.search).get("assistant") === "1", []);
   const assistantStepKey = `connection-assistant.connect-step.v1:${usi}`;
   const variant = serviceVariant(service?.category);
@@ -366,14 +357,8 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
   }
 
   useEffect(() => {
-    if (bridgeDeepLink) {
-      const timer = window.setTimeout(() => {
-        window.location.href = bridgeDeepLink;
-      }, 80);
-      return () => window.clearTimeout(timer);
-    }
     void load();
-  }, [usi, bridgeDeepLink]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [usi]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const ready = !loading && !error && !!subscriptionUrl;
 

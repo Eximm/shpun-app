@@ -242,9 +242,50 @@ function PageContainer({ children }: { children: React.ReactNode }) {
   );
 }
 
+function readHappImportTarget(): string {
+  if (window.location.pathname !== "/happ-import") return "";
+  const target = new URLSearchParams(window.location.hash.slice(1)).get("url")?.trim() || "";
+  try {
+    const parsed = new URL(target);
+    return parsed.protocol === "https:" || parsed.protocol === "http:" ? target : "";
+  } catch {
+    return "";
+  }
+}
+
+function HappImportBridge({ target }: { target: string }) {
+  const isRussian = !String(navigator.language || "ru").toLowerCase().startsWith("en");
+  const deepLink = `happ://add/${target.replace(/#/g, "%23")}`;
+
+  React.useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try { window.location.href = deepLink; } catch { /* the button remains available */ }
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, [deepLink]);
+
+  return (
+    <main className="happ-import-bridge">
+      <div className="happ-import-bridge__card">
+        <div className="happ-import-bridge__icon" aria-hidden="true">🔑</div>
+        <h1>{isRussian ? "Открываем Happ" : "Opening Happ"}</h1>
+        <p>{isRussian ? "Если Happ не открылся сам, нажмите кнопку." : "If Happ did not open, tap the button."}</p>
+        <a className="btn btn--primary" href={deepLink}>
+          {isRussian ? "Открыть Happ" : "Open Happ"}
+        </a>
+      </div>
+    </main>
+  );
+}
+
 /* ─── Root ───────────────────────────────────────────────────────────────── */
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
+const root = ReactDOM.createRoot(document.getElementById("root")!);
+const happImportTarget = readHappImportTarget();
+
+if (happImportTarget) {
+  root.render(<HappImportBridge target={happImportTarget} />);
+} else root.render(
   <React.StrictMode>
     <I18nProvider>
       <ToastProvider>

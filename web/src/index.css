@@ -192,6 +192,26 @@ button, a { -webkit-tap-highlight-color: transparent; }
   padding-bottom: max(14px, env(safe-area-inset-bottom));
 }
 
+.happ-import-bridge {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+}
+.happ-import-bridge__card {
+  width: min(100%, 430px);
+  padding: 28px 22px;
+  border: 1px solid rgba(77,215,255,.24);
+  border-radius: 20px;
+  background: linear-gradient(160deg, rgba(255,255,255,.08), rgba(255,255,255,.035));
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+.happ-import-bridge__icon { font-size: 46px; line-height: 1; }
+.happ-import-bridge__card h1 { margin: 16px 0 0; font-size: 24px; }
+.happ-import-bridge__card p { margin: 8px 0 18px; color: var(--muted); font-size: 14px; line-height: 1.4; }
+.happ-import-bridge__card .btn { width: 100%; min-height: 48px; }
+
 .section { margin-top: 18px; }
 
 
