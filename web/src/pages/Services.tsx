@@ -982,8 +982,7 @@ export function Services() {
 
       {hasServices && (
         <div className="services-more">
-          <span>{t("services.more.text")}</span>
-          <button className="btn" onClick={() => go("/services/order")} type="button">
+          <button className="btn btn--primary" onClick={() => go("/services/order")} type="button">
             + {t("services.cta.add_more")}
           </button>
         </div>

@@ -3195,8 +3195,12 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .services-head__refresh { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; }
 .svc-row__quickConnect { padding: 0 12px 11px; }
 .svc-row__quickConnect .btn { width: 100%; min-height: 38px; border-radius: 11px; font-size: 12px; font-weight: 900; }
-.services-more { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 14px 0 6px; color: rgba(255,255,255,.48); font-size: 12px; font-weight: 750; }
-.services-more .btn { min-height: 36px; padding: 7px 12px; border-radius: 11px; font-size: 12px; }
+.services-more {
+  margin: 18px 0 6px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255,255,255,.10);
+}
+.services-more .btn { width: 100%; min-height: 44px; padding: 10px 16px; border-radius: 13px; font-size: 13px; font-weight: 900; }
 
 .services-cat__head         { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .services-cat__head--toggle { width: 100%; text-align: left; background: transparent; border: 0; padding: 0; cursor: pointer; }
@@ -3441,7 +3445,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .services-focus__refresh { width: 36px; min-height: 36px; border-radius: 11px; }
   .services-focus__notice { font-size: 10px; }
   .services-cat__head .p { font-size: 11px; line-height: 1.3; }
-  .services-more { flex-direction: column; gap: 6px; margin-top: 12px; }
+  .services-more { margin-top: 14px; padding-top: 12px; }
   .services-empty { padding: 20px 14px 16px; }
   .services-empty__title { font-size: 18px; }
 }
