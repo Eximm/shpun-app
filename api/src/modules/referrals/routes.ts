@@ -59,6 +59,7 @@ export async function referralsRoutes(app: FastifyInstance) {
       linkType: item.link_type,
       partnerId: item.link_type === "partner" ? item.partner_id : 0,
       billingComment: item.billing_comment ?? "",
+      billing_comment: item.billing_comment ?? "",
     });
   });
 
