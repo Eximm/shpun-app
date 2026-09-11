@@ -6,6 +6,7 @@ import formbody from '@fastify/formbody'
 import multipart from '@fastify/multipart'
 import { registerRoutes } from './routes/index.js'
 import { getSessionBySid } from '../shared/session/sessionStore.js'
+import { registerTolerantJsonBodyParser } from './plugins/jsonBody.js'
 
 function parseAllowedOrigins(): string[] {
   const raw = (process.env.APP_ORIGIN || '').trim()
@@ -68,6 +69,9 @@ export async function buildServer() {
       files: 1,
     },
   })
+
+  // Tolerate empty JSON bodies from server-to-server clients (SHM Telegram template).
+  registerTolerantJsonBodyParser(app)
 
   // API responses can contain session and service data. Keep every response
   // out of browser, reverse-proxy, and CDN caches by default.

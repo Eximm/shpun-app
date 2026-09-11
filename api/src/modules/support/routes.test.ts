@@ -14,6 +14,7 @@ const { supportAdminRoutes } = await import("./adminRoutes.js");
 const { setSupportShmPort } = await import("./snapshot.js");
 const { setSupportAdminChecker } = await import("./adminGuard.js");
 const { putSession } = await import("../../shared/session/sessionStore.js");
+const { registerTolerantJsonBodyParser } = await import("../../app/plugins/jsonBody.js");
 
 const SUPPORT_SECRET = "test-support-secret";
 
@@ -66,6 +67,7 @@ putSession("sid-admin", {
 });
 
 const app = Fastify();
+registerTolerantJsonBodyParser(app);
 await app.register(
   async (api) => {
     await supportRoutes(api);
@@ -209,6 +211,76 @@ test("internal API creates a ticket for the session user", async () => {
   assert.equal(ticket.userId, 201);
   assert.equal(ticket.source, "telegram");
   assert.equal(ticket.telegramChatId, 555001);
+});
+
+test("internal API creates a ticket through the GET action endpoint", async () => {
+  const response = await app.inject({
+    method: "GET",
+    url:
+      "/api/internal/support/tickets/create?session_id=shm-user-201&category_key=connection&telegram_chat_id=555002&text=" +
+      encodeURIComponent("Бот: создание через GET action") +
+      "&secret=" +
+      SUPPORT_SECRET,
+  });
+  assert.equal(response.statusCode, 200);
+  const ticket = response.json().ticket;
+  assert.equal(ticket.userId, 201);
+  assert.equal(ticket.source, "telegram");
+  assert.equal(ticket.telegramChatId, 555002);
+  assert.ok(ticket.publicNo);
+});
+
+test("GET create action is not shadowed by the ticket view route", async () => {
+  const response = await app.inject({
+    method: "GET",
+    url: `/api/internal/support/tickets/create?session_id=shm-user-201&category_key=connection&text=${encodeURIComponent(
+      "route precedence"
+    )}&secret=${SUPPORT_SECRET}`,
+  });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().error, undefined);
+  assert.ok(response.json().ticket?.id > 0);
+});
+
+test("internal action tolerates an empty JSON body (SHM client behaviour)", async () => {
+  // Exact production failure: POST with Content-Type: application/json and an
+  // empty body (query carries all params).
+  const response = await app.inject({
+    method: "POST",
+    url:
+      "/api/internal/support/tickets?session_id=shm-user-201&category_key=connection&text=" +
+      encodeURIComponent("empty json body") +
+      "&secret=" +
+      SUPPORT_SECRET,
+    headers: { "content-type": "application/json" },
+    payload: "",
+  });
+  assert.equal(response.statusCode, 201);
+  assert.ok(response.json().ticket?.id > 0);
+});
+
+test("internal API replies through the GET action endpoint", async () => {
+  const created = await app.inject({
+    method: "GET",
+    url: `/api/internal/support/tickets/create?session_id=shm-user-201&category_key=other&text=${encodeURIComponent(
+      "GET reply flow"
+    )}&secret=${SUPPORT_SECRET}`,
+  });
+  assert.equal(created.statusCode, 200);
+  const ticketId = created.json().ticket.id;
+
+  const reply = await app.inject({
+    method: "GET",
+    url: `/api/internal/support/tickets/${ticketId}/reply?session_id=shm-user-201&text=${encodeURIComponent(
+      "Уточнение по обращению"
+    )}&secret=${SUPPORT_SECRET}`,
+  });
+  assert.equal(reply.statusCode, 200);
+  const body = reply.json();
+  assert.equal(body.ticket.status, "waiting_staff");
+  assert.ok(
+    body.ticket.messages.some((m: any) => m.authorType === "user" && m.text === "Уточнение по обращению")
+  );
 });
 
 test("internal API requires session_id and keeps requests session-scoped", async () => {
