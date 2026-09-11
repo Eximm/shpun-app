@@ -14,6 +14,9 @@ import { promoRoutes } from '../../modules/promo/routes.js'
 import { reviewsRoutes } from '../../modules/reviews/routes.js'
 import { serverStatusRoutes } from '../../modules/serverStatus/routes.js'
 import { emailValidationRoutes } from '../../modules/emailValidation/routes.js'
+import { supportRoutes } from '../../modules/support/routes.js'
+import { supportInternalRoutes } from '../../modules/support/internalRoutes.js'
+import { supportAdminRoutes } from '../../modules/support/adminRoutes.js'
 
 export async function registerRoutes(app: FastifyInstance) {
   await app.register(
@@ -29,6 +32,9 @@ export async function registerRoutes(app: FastifyInstance) {
       await reviewsRoutes(api)
       await serverStatusRoutes(api)
       await emailValidationRoutes(api)
+      await supportRoutes(api)
+      await supportInternalRoutes(api)
+      await supportAdminRoutes(api)
 
       // 🔔 Billing HTTP Push + Notifications
       await pushRoutes(api)

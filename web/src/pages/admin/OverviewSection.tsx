@@ -35,6 +35,12 @@ const ITEMS: CardItem[] = [
     tab: "trialProtection",
   },
   {
+    title: "Поддержка",
+    sub: "Тикеты из ShpunApp и Telegram: переписка, статусы, заметки.",
+    chip: { label: "TICKETS", tone: "warn" },
+    tab: "support",
+  },
+  {
     title: "Статус серверов",
     sub: "Домены, node exporter, аптайм и лампочки для клиента.",
     chip: { label: "LIVE", tone: "ok" },

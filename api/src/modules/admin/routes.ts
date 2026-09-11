@@ -50,7 +50,7 @@ import {
   saveReferralAlias,
 } from "../../shared/linkdb/referralAliasesRepo.js";
 
-async function ensureAdmin(shmSessionId: string) {
+export async function ensureAdmin(shmSessionId: string) {
   const r = await shmShpunAppAdminStatus(shmSessionId);
   return r.ok && (r.json?.is_admin === 1 || r.json?.is_admin === true);
 }

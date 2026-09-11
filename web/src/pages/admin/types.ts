@@ -164,4 +164,16 @@ export type ClearEventsResp = {
   keepLatest: number;
 };
 
-export type AdminTab = "overview" | "reviews" | "broadcasts" | "orderRules" | "trialProtection" | "serviceCategories" | "referralAliases" | "serverStatus";
+export const ADMIN_TABS = [
+  "overview",
+  "reviews",
+  "broadcasts",
+  "orderRules",
+  "trialProtection",
+  "serviceCategories",
+  "referralAliases",
+  "serverStatus",
+  "support",
+] as const;
+
+export type AdminTab = (typeof ADMIN_TABS)[number];
