@@ -26,14 +26,18 @@
 import { timingSafeEqual } from "node:crypto";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { getSupportShmPort } from "./snapshot.js";
-import { isTicketStatus, type TicketStatus } from "./types.js";
+import { isTicketKind, isTicketStatus, type TicketStatus } from "./types.js";
 import {
   addUserMessage,
+  addUserMessageWithAttachments,
+  closeUserTicket,
+  createPartnership,
   createTicket,
   getUserTicket,
   listCategories,
   listUserTickets,
 } from "./service.js";
+import { downloadTelegramFile } from "./telegram.js";
 import { pick, readBody, sendSupportError } from "./http.js";
 
 function supportSecret(): string {
@@ -165,6 +169,105 @@ async function handleReply(req: any, reply: FastifyReply, successStatus: number)
   }
 }
 
+async function handleCreatePartnership(req: any, reply: FastifyReply, successStatus: number) {
+  try {
+    const body = readBody(req);
+    if (!ensureInternalAuthorized(req, reply, body)) return;
+
+    const data = merged(req);
+    const sessionId = String(pick(data, "session_id", "sessionId") ?? "").trim();
+    if (!sessionId) {
+      return reply.code(400).send({ ok: false, error: "session_id_required" });
+    }
+
+    const identity = await getSupportShmPort().resolveIdentity(sessionId);
+    const telegramChatIdRaw = pick(data, "telegram_chat_id", "telegramChatId");
+    const telegramChatId =
+      telegramChatIdRaw === undefined || telegramChatIdRaw === null || telegramChatIdRaw === ""
+        ? null
+        : Math.trunc(Number(telegramChatIdRaw));
+
+    const ticket = await createPartnership({
+      userId: identity.userId,
+      source: "telegram",
+      proposalType: String(pick(data, "proposal_type", "proposalType") ?? "").trim(),
+      platformUrl: String(pick(data, "platform_url", "platformUrl") ?? ""),
+      audienceSize: (pick(data, "audience_size", "audienceSize") as string | null) ?? null,
+      offer: pick(data, "offer", "text", "message"),
+      contact: (pick(data, "contact") as string | null) ?? null,
+      comment: (pick(data, "comment") as string | null) ?? null,
+      telegramChatId: Number.isFinite(Number(telegramChatId)) ? telegramChatId : null,
+      shmSessionId: sessionId,
+      login: identity.login,
+      displayName: identity.displayName,
+      balance: identity.balance,
+    });
+
+    return reply.code(successStatus).send({ ok: true, ticket });
+  } catch (error) {
+    return handleInternalError(reply, error);
+  }
+}
+
+async function handleCloseTicket(req: any, reply: FastifyReply, successStatus: number) {
+  try {
+    const body = readBody(req);
+    if (!ensureInternalAuthorized(req, reply, body)) return;
+
+    const data = merged(req);
+    const sessionId = String(pick(data, "session_id", "sessionId") ?? "").trim();
+    const userId = await resolveUserId(sessionId);
+    if (!userId) return reply.code(401).send({ ok: false, error: "session_not_resolved" });
+
+    const ticket = closeUserTicket(Number((req.params as any)?.id), userId);
+    return reply.code(successStatus).send({ ok: true, ticket });
+  } catch (error) {
+    return handleInternalError(reply, error);
+  }
+}
+
+async function handleTelegramAttachment(req: any, reply: FastifyReply, successStatus: number) {
+  try {
+    const body = readBody(req);
+    if (!ensureInternalAuthorized(req, reply, body)) return;
+
+    const data = merged(req);
+    const sessionId = String(pick(data, "session_id", "sessionId") ?? "").trim();
+    const userId = await resolveUserId(sessionId);
+    if (!userId) return reply.code(401).send({ ok: false, error: "session_not_resolved" });
+
+    const ticketId = Number((req.params as any)?.id);
+    const ticket = getUserTicket(ticketId, userId);
+    if (!ticket) return reply.code(404).send({ ok: false, error: "ticket_not_found" });
+    if (ticket.status === "closed") return reply.code(409).send({ ok: false, error: "ticket_closed" });
+
+    const fileId = String(pick(data, "telegram_file_id", "file_id") ?? "").trim();
+    if (!fileId) return reply.code(400).send({ ok: false, error: "file_id_required" });
+
+    const fileType = String(pick(data, "file_type", "fileType") ?? "").trim().toLowerCase();
+    const caption = String(pick(data, "caption") ?? "").trim();
+    const uniqueIdRaw = pick(data, "telegram_file_unique_id", "file_unique_id");
+
+    // Backend fetches the binary directly from Telegram (never via the DSL).
+    const downloaded = await downloadTelegramFile(fileId);
+    if (!downloaded) return reply.code(502).send({ ok: false, error: "telegram_download_failed" });
+
+    const result = addUserMessageWithAttachments(ticketId, userId, caption, [
+      {
+        filename: fileType === "photo" ? "photo.jpg" : "document",
+        mimetype: "",
+        buffer: downloaded.buffer,
+        telegramFileId: fileId,
+        telegramFileUniqueId: uniqueIdRaw == null ? null : String(uniqueIdRaw),
+      },
+    ]);
+
+    return reply.code(successStatus).send({ ok: true, ticket: result });
+  } catch (error) {
+    return handleInternalError(reply, error);
+  }
+}
+
 function handleInternalError(reply: FastifyReply, error: unknown): FastifyReply {
   // A failed SHM identity resolution is a gateway error, not a client error.
   if (error instanceof Error && String(error.message).startsWith("support_shm_")) {
@@ -187,6 +290,10 @@ export async function supportInternalRoutes(app: FastifyInstance) {
   app.post("/internal/support/tickets", (req, reply) => handleCreateTicket(req, reply, 201));
   app.get("/internal/support/tickets/create", (req, reply) => handleCreateTicket(req, reply, 200));
 
+  // Create a partnership/advertising proposal on behalf of the session user.
+  app.post("/internal/support/partnership", (req, reply) => handleCreatePartnership(req, reply, 201));
+  app.get("/internal/support/partnership/create", (req, reply) => handleCreatePartnership(req, reply, 200));
+
   // List tickets of the user identified by session_id.
   app.get("/internal/support/tickets", async (req, reply) => {
     try {
@@ -203,6 +310,7 @@ export async function supportInternalRoutes(app: FastifyInstance) {
       if (!userId) return reply.code(401).send({ ok: false, error: "session_not_resolved" });
 
       const result = listUserTickets(userId, {
+        kind: isTicketKind(data.kind) ? data.kind : "support",
         status: parseStatusFilter(data.status),
         limit: data.limit,
         offset: data.offset,
@@ -236,4 +344,17 @@ export async function supportInternalRoutes(app: FastifyInstance) {
   // POST kept for compatibility; GET action is what the SHM DSL uses.
   app.post("/internal/support/tickets/:id/messages", (req, reply) => handleReply(req, reply, 201));
   app.get("/internal/support/tickets/:id/reply", (req, reply) => handleReply(req, reply, 200));
+
+  // Close an own ticket (user-scoped). GET action for the SHM DSL.
+  app.post("/internal/support/tickets/:id/close", (req, reply) => handleCloseTicket(req, reply, 200));
+  app.get("/internal/support/tickets/:id/close", (req, reply) => handleCloseTicket(req, reply, 200));
+
+  // Telegram photo/document ingest. The bot passes only file_id + metadata;
+  // the backend downloads the binary directly via the Bot API.
+  app.post("/internal/support/tickets/:id/telegram-attachment", (req, reply) =>
+    handleTelegramAttachment(req, reply, 201)
+  );
+  app.get("/internal/support/tickets/:id/telegram-attachment", (req, reply) =>
+    handleTelegramAttachment(req, reply, 200)
+  );
 }

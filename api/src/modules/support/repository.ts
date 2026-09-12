@@ -35,6 +35,7 @@ export interface TicketRepository {
   addMessage(input: AddMessageInput): TicketMessage;
   addInternalNote(input: AddMessageInput): TicketMessage;
   listMessages(ticketId: number, options?: LoadMessagesOptions): TicketMessage[];
+  deleteMessage(id: number): boolean;
 
   updateTicket(id: number, patch: TicketPatch): Ticket | null;
   assignOperator(id: number, operatorId: number | null): Ticket | null;

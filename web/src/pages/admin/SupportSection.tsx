@@ -8,6 +8,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "../../shared/api/client";
 import { refreshSupportUnread } from "../../app/notifications/supportUnread";
+import {
+  ATTACHMENT_ACCEPT,
+  AttachmentList,
+  PendingFiles,
+  buildMessageFormData,
+  releasePendingFiles,
+  toPendingFiles,
+  type PendingFile,
+  type TicketAttachment,
+} from "../../shared/support/attachments";
 import { ModalShell } from "./shared";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -51,11 +61,13 @@ type TicketMessage = {
   text: string;
   isInternalNote: boolean;
   createdAt: string;
+  attachments?: TicketAttachment[];
 };
 
 type AdminTicket = {
   id: number;
   publicNo: string;
+  kind?: "support" | "partnership";
   storageProvider: string;
   externalId: string | null;
   userId: number;
@@ -98,6 +110,32 @@ type Filters = {
   unassigned: boolean;
   q: string;
 };
+
+type PartnershipContext = {
+  proposal_type?: string;
+  platform_url?: string;
+  audience_size?: string | null;
+  offer?: string;
+  contact?: string | null;
+  comment?: string | null;
+};
+
+const PARTNERSHIP_TYPE_LABELS: Record<string, string> = {
+  blogger: "Блогер / автор",
+  channel: "Telegram-канал / сообщество",
+  youtube: "YouTube / Twitch",
+  site: "Сайт / проект",
+  other: "Другое",
+};
+
+function partnershipTypeLabel(key?: string | null): string {
+  return (key && PARTNERSHIP_TYPE_LABELS[key]) || key || "Другое";
+}
+
+function partnershipOf(ticket: AdminTicket): PartnershipContext | null {
+  const raw = ticket.contextSnapshot?.["partnership"];
+  return raw && typeof raw === "object" ? (raw as PartnershipContext) : null;
+}
 
 const EMPTY_FILTERS: Filters = {
   status: "",
@@ -193,8 +231,9 @@ function formatPeriod(period?: string | number | null) {
   return /^\d+$/.test(raw) ? `${raw} мес` : raw;
 }
 
-function buildQuery(filters: Filters): string {
+function buildQuery(filters: Filters, kind?: "support" | "partnership"): string {
   const params = new URLSearchParams();
+  if (kind) params.set("kind", kind);
   if (filters.status) params.set("status", filters.status);
   if (filters.priority) params.set("priority", filters.priority);
   if (filters.categoryKey) params.set("category_key", filters.categoryKey);
@@ -223,7 +262,8 @@ function MessageBubble({ message }: { message: TicketMessage }) {
           {message.authorName ? <span>· {message.authorName}</span> : null}
           <span className="supportMsg__time">{formatClock(message.createdAt)}</span>
         </div>
-        <div className="supportMsg__text">{message.text}</div>
+        {message.text ? <div className="supportMsg__text">{message.text}</div> : null}
+        <AttachmentList attachments={message.attachments} />
       </div>
     );
   }
@@ -237,7 +277,8 @@ function MessageBubble({ message }: { message: TicketMessage }) {
         {!isUser && !isSystem && message.authorName ? <span>· {message.authorName}</span> : null}
         <span className="supportMsg__time">{formatClock(message.createdAt)}</span>
       </div>
-      <div className="supportMsg__text">{message.text}</div>
+      {message.text ? <div className="supportMsg__text">{message.text}</div> : null}
+      <AttachmentList attachments={message.attachments} />
     </div>
   );
 }
@@ -247,6 +288,7 @@ function MessageBubble({ message }: { message: TicketMessage }) {
 function Diagnostics({ ticket }: { ticket: AdminTicket }) {
   const contextUser = (ticket.contextSnapshot?.user ?? null) as ContextUser | null;
   const service = ticket.serviceSnapshot;
+  const partnership = partnershipOf(ticket);
   const balance = contextUser?.balance ?? ticket.balanceSnapshot;
   const login = contextUser?.login ?? ticket.userLoginSnapshot;
   const displayName = contextUser?.display_name ?? ticket.displayNameSnapshot;
@@ -290,8 +332,42 @@ function Diagnostics({ ticket }: { ticket: AdminTicket }) {
       </div>
 
       <div className="supportDiag__block">
-        <div className="supportDiag__title">Снимок услуги</div>
-        {serviceRows.length === 0 ? (
+        <div className="supportDiag__title">
+          {ticket.kind === "partnership" ? "Параметры предложения" : "Снимок услуги"}
+        </div>
+        {ticket.kind === "partnership" ? (
+          partnership ? (
+            <>
+              <div className="supportDiag__grid">
+                {[
+                  { label: "тип", value: partnershipTypeLabel(partnership.proposal_type) },
+                  { label: "площадка", value: partnership.platform_url || "—" },
+                  { label: "аудитория", value: partnership.audience_size || "—" },
+                  { label: "контакт", value: partnership.contact || "—" },
+                ].map((row) => (
+                  <div key={row.label} className="supportDiag__cell">
+                    <div className="supportDiag__label">{row.label}</div>
+                    <div className="supportDiag__value">{row.value}</div>
+                  </div>
+                ))}
+              </div>
+              {partnership.offer ? (
+                <div className="admin-gap-top-sm">
+                  <div className="supportDiag__label">предложение</div>
+                  <div className="supportDiag__value" style={{ whiteSpace: "pre-wrap" }}>{partnership.offer}</div>
+                </div>
+              ) : null}
+              {partnership.comment ? (
+                <div className="admin-gap-top-sm">
+                  <div className="supportDiag__label">комментарий</div>
+                  <div className="supportDiag__value" style={{ whiteSpace: "pre-wrap" }}>{partnership.comment}</div>
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <div className="supportDiag__label">Нет данных предложения.</div>
+          )
+        ) : serviceRows.length === 0 ? (
           <div className="supportDiag__label">Обращение без привязки к услуге.</div>
         ) : (
           <div className="supportDiag__grid">
@@ -334,10 +410,14 @@ function Diagnostics({ ticket }: { ticket: AdminTicket }) {
 
 /* ─── Section ────────────────────────────────────────────────────────────── */
 
-export function SupportSection({ initialTicketId }: { initialTicketId?: number } = {}) {
+export function SupportSection({
+  initialKind = "support",
+  initialTicketId,
+}: { initialKind?: "support" | "partnership"; initialTicketId?: number } = {}) {
   const [items, setItems] = useState<AdminTicket[]>([]);
   const [total, setTotal] = useState(0);
   const [categories, setCategories] = useState<SupportCategory[]>([]);
+  const [kind, setKind] = useState<"support" | "partnership">(initialKind);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState("");
@@ -349,6 +429,7 @@ export function SupportSection({ initialTicketId }: { initialTicketId?: number }
 
   const [composerMode, setComposerMode] = useState<"reply" | "note">("reply");
   const [composerText, setComposerText] = useState("");
+  const [pending, setPending] = useState<PendingFile[]>([]);
   const [sending, setSending] = useState(false);
   const [patching, setPatching] = useState(false);
   const [assigneeDraft, setAssigneeDraft] = useState("");
@@ -359,6 +440,7 @@ export function SupportSection({ initialTicketId }: { initialTicketId?: number }
   const openedIdRef = useRef<number | null>(null);
   const autoOpenedRef = useRef(false);
   const threadRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const categoryTitles = useMemo(() => {
     const map = new Map<string, string>();
@@ -378,6 +460,7 @@ export function SupportSection({ initialTicketId }: { initialTicketId?: number }
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
+    kind,
     filters.status,
     filters.priority,
     filters.categoryKey,
@@ -422,7 +505,7 @@ export function SupportSection({ initialTicketId }: { initialTicketId?: number }
     setListError("");
     try {
       const response = await apiFetch<{ ok: true; items: AdminTicket[]; total: number }>(
-        `/admin/support/tickets${buildQuery(filters)}`,
+        `/admin/support/tickets${buildQuery(filters, kind)}`,
         { method: "GET" },
       );
       setItems(response.items ?? []);
@@ -467,7 +550,7 @@ export function SupportSection({ initialTicketId }: { initialTicketId?: number }
   async function sendComposer() {
     if (!opened) return;
     const payload = composerText.trim();
-    if (payload.length < 2) {
+    if (payload.length < 2 && pending.length === 0) {
       setOpenedError("Сообщение слишком короткое.");
       return;
     }
@@ -480,12 +563,17 @@ export function SupportSection({ initialTicketId }: { initialTicketId?: number }
     const internal = composerMode === "note";
     const ticketId = opened.id;
     try {
+      const body = pending.length
+        ? buildMessageFormData(payload, pending.map((f) => f.file), { internal: internal ? "1" : "0" })
+        : { text: payload, internal };
       const response = await apiFetch<{ ok: true; ticket: AdminTicket }>(
         `/admin/support/tickets/${ticketId}/messages`,
-        { method: "POST", body: { text: payload, internal } },
+        { method: "POST", body },
       );
       if (openedIdRef.current !== ticketId) return;
       setOpened(response.ticket);
+      releasePendingFiles(pending);
+      setPending([]);
       setComposerText("");
       setNotice(internal ? "Внутренняя заметка добавлена." : "Ответ отправлен пользователю.");
       void loadTickets({ silent: true });
@@ -497,6 +585,22 @@ export function SupportSection({ initialTicketId }: { initialTicketId?: number }
       sendLock.current = false;
       setSending(false);
     }
+  }
+
+  function onPickFiles(event: React.ChangeEvent<HTMLInputElement>) {
+    const picked = toPendingFiles(event.target.files);
+    setPending((prev) => [...prev, ...picked].slice(0, 5));
+    event.target.value = "";
+  }
+
+  function removePending(id: string) {
+    setPending((prev) => {
+      const target = prev.find((f) => f.id === id);
+      if (target?.previewUrl) {
+        try { URL.revokeObjectURL(target.previewUrl); } catch { /* ignore */ }
+      }
+      return prev.filter((f) => f.id !== id);
+    });
   }
 
   async function patchTicket(patch: Record<string, unknown>) {
@@ -536,9 +640,30 @@ export function SupportSection({ initialTicketId }: { initialTicketId?: number }
   return (
     <div className="card">
       <div className="card__body">
-        <div className="kicker">Support</div>
-        <h2 className="h1">Обращения в поддержку</h2>
-        <p className="p">Тикеты из ShpunApp и Telegram: переписка, ответы и внутренние заметки.</p>
+        <div className="kicker">Inbox</div>
+        <h2 className="h1">{kind === "partnership" ? "Сотрудничество" : "Обращения в поддержку"}</h2>
+        <p className="p">
+          {kind === "partnership"
+            ? "Входящие предложения о рекламе и сотрудничестве."
+            : "Тикеты из ShpunApp и Telegram: переписка, ответы и внутренние заметки."}
+        </p>
+
+        <div className="supportKindTabs">
+          <button
+            type="button"
+            className={`supportKindTab${kind === "support" ? " supportKindTab--active" : ""}`}
+            onClick={() => setKind("support")}
+          >
+            Поддержка
+          </button>
+          <button
+            type="button"
+            className={`supportKindTab${kind === "partnership" ? " supportKindTab--active" : ""}`}
+            onClick={() => setKind("partnership")}
+          >
+            🤝 Сотрудничество
+          </button>
+        </div>
 
         {/* ── Filters ── */}
         <div className="supportFilters admin-gap-top-sm">
@@ -725,7 +850,11 @@ export function SupportSection({ initialTicketId }: { initialTicketId?: number }
           {/* Compact context */}
           <div className="supportDetail__context">
             <span><strong>{userLabel(opened)}</strong> · #{opened.userId}</span>
-            {opened.serviceSnapshot || opened.userServiceId ? (
+            {opened.kind === "partnership" ? (
+              partnershipOf(opened)?.platform_url ? (
+                <span>Площадка: {partnershipOf(opened)?.platform_url}</span>
+              ) : null
+            ) : opened.serviceSnapshot || opened.userServiceId ? (
               <span>
                 Услуга{opened.userServiceId ? ` #${opened.userServiceId}` : ""}
                 {opened.serviceSnapshot?.name ? ` · ${opened.serviceSnapshot.name}` : ""}
@@ -778,16 +907,29 @@ export function SupportSection({ initialTicketId }: { initialTicketId?: number }
               onChange={(e) => setComposerText(e.target.value)}
             />
 
-            <div className="actions actions--1">
+            <PendingFiles files={pending} onRemove={removePending} disabled={sending} />
+
+            <div className="actions actions--2">
+              <button
+                className="composerAttach"
+                type="button"
+                aria-label="Прикрепить файл"
+                disabled={sending || pending.length >= 5}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                📎
+              </button>
+              <input ref={fileInputRef} type="file" multiple accept={ATTACHMENT_ACCEPT} style={{ display: "none" }} onChange={onPickFiles} />
               <button
                 className={`btn ${composerMode === "note" ? "btn--soft" : "btn--primary"}`}
                 type="button"
-                disabled={sending || composerText.trim().length < 2}
+                disabled={sending || (composerText.trim().length < 2 && pending.length === 0)}
                 onClick={() => void sendComposer()}
               >
                 {sending ? "Отправляю…" : composerMode === "note" ? "Сохранить заметку" : "Отправить ответ"}
               </button>
             </div>
+            <div className="composerHint">Вложения хранятся до 180 дней и затем автоматически удаляются.</div>
           </div>
         </ModalShell>
       )}

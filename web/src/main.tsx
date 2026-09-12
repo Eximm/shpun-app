@@ -21,6 +21,7 @@ import { Payments }         from "./pages/Payments";
 import { Profile }          from "./pages/Profile";
 import { Reviews }          from "./pages/Reviews";
 import { Support }          from "./pages/Support";
+import { Partnership }      from "./pages/Partnership";
 import { ServerStatus }     from "./pages/ServerStatus";
 import { Referrals }        from "./pages/Referrals";
 import { PaymentsHistory }  from "./pages/PaymentsHistory";
@@ -325,6 +326,7 @@ if (happImportTarget) {
                   <Route path="/profile"           element={<Profile />} />
                   <Route path="/reviews"           element={<Reviews />} />
                   <Route path="/support"           element={<Support />} />
+                  <Route path="/partnership"       element={<Partnership />} />
                   <Route path="/server-status"     element={<ServerStatus />} />
                   <Route path="/admin"             element={<AdminPage />} />
                 </Route>

@@ -934,7 +934,6 @@ export function Profile() {
   );
 
   /* ── Render ── */
-  const supportUrl = "https://t.me/shpun_staff";
   const channelUrl = "https://t.me/shpunsdn";
 
   function openExternal(url: string) {
@@ -986,7 +985,8 @@ export function Profile() {
               <ProfileMenuItem icon={<ProfileIcon name="settings" />} title="Настройки" subtitle="Тема, язык, уведомления и вход" onClick={() => setScreen("settings")} />
               <ProfileMenuItem icon={<ProfileIcon name="info" />} title="О сервисе" subtitle="Кто такой Shpun и зачем он оживляет интернет" onClick={() => setScreen("about")} />
               <ProfileMenuItem icon={<ProfileIcon name="reviews" />} title="Отзывы" subtitle="Что пишут пользователи" onClick={() => nav("/reviews")} />
-              <ProfileMenuItem icon={<ProfileIcon name="support" />} title="Поддержка" subtitle="Telegram чат" external onClick={() => openExternal(supportUrl)} />
+              <ProfileMenuItem icon={<ProfileIcon name="support" />} title="Поддержка" subtitle="Обращения и чат с командой" onClick={() => nav("/support")} />
+              <ProfileMenuItem icon={<ProfileIcon name="channel" />} title="Реклама и сотрудничество" subtitle="Предложить размещение" onClick={() => nav("/partnership")} />
               <ProfileMenuItem icon={<ProfileIcon name="channel" />} title="Новости" subtitle="Группа с объявлениями" external onClick={() => openExternal(channelUrl)} />
               <ProfileMenuItem icon={<ProfileIcon name="logout" />} title="Выйти из аккаунта" subtitle="Закрыть сессию на этом устройстве" danger onClick={() => void logout()} />
             </div>

@@ -18,7 +18,7 @@ import {
   markSupportTicketRead,
   recordSupportNotifyRecipient,
 } from "./notifyRepo.js";
-import { isTicketPriority, isTicketStatus, type TicketPriority, type TicketStatus } from "./types.js";
+import { isTicketKind, isTicketPriority, isTicketStatus, type TicketPriority, type TicketStatus } from "./types.js";
 import {
   addStaffMessage,
   getAdminTicket,
@@ -26,7 +26,8 @@ import {
   listCategories,
   updateTicketByAdmin,
 } from "./service.js";
-import { pick, readBody, sendSupportError, sessionUser } from "./http.js";
+import { pick, readBody, readMultipart, sendSupportError, sessionUser } from "./http.js";
+import type { UploadFile } from "./attachmentService.js";
 
 function parseStatusFilter(value: unknown): TicketStatus[] | undefined {
   const raw = String(value ?? "").trim();
@@ -79,7 +80,9 @@ export async function supportAdminRoutes(app: FastifyInstance) {
     const session = await requireAdmin(req, reply);
     if (!session) return;
     const admin = sessionUser(session);
-    const count = admin?.userId ? countSupportUnread(admin.userId) : 0;
+    const kindRaw = (req.query as any)?.kind;
+    const kind = isTicketKind(kindRaw) ? kindRaw : undefined;
+    const count = admin?.userId ? countSupportUnread(admin.userId, kind) : 0;
     return reply.send({ ok: true, count });
   });
 
@@ -104,6 +107,7 @@ export async function supportAdminRoutes(app: FastifyInstance) {
             : parseOptionalInt(assignedRaw);
 
       const result = listAdminTickets({
+        kind: isTicketKind(query.kind) ? query.kind : undefined,
         status: parseStatusFilter(query.status),
         priority: parsePriorityFilter(query.priority),
         categoryKey: String(pick(query, "categoryKey", "category_key") ?? "").trim() || undefined,
@@ -114,8 +118,9 @@ export async function supportAdminRoutes(app: FastifyInstance) {
         offset: query.offset,
       });
       const admin = sessionUser(session);
+      const kind = isTicketKind(query.kind) ? query.kind : undefined;
       const unreadIds = admin?.userId
-        ? new Set(listSupportUnreadTicketIds(admin.userId))
+        ? new Set(listSupportUnreadTicketIds(admin.userId, kind))
         : new Set<number>();
       const items = result.items.map((t) => ({ ...t, unread: unreadIds.has(t.id) }));
       return reply.send({ ok: true, items, total: result.total, unreadCount: unreadIds.size });
@@ -147,16 +152,31 @@ export async function supportAdminRoutes(app: FastifyInstance) {
       if (!session) return;
 
       const admin = sessionUser(session);
-      const body = readBody(req);
-      const internalRaw = pick(body, "internal", "isInternalNote", "is_internal_note");
-      const internal = internalRaw === true || internalRaw === 1 || internalRaw === "1" || internalRaw === "true";
+
+      let text: unknown;
+      let internal = false;
+      let files: UploadFile[] = [];
+
+      if ((req as any).isMultipart?.()) {
+        const mp = await readMultipart(req);
+        text = mp.text;
+        const rawInternal = mp.fields.internal;
+        internal = rawInternal === "1" || rawInternal === "true" || rawInternal === "on";
+        files = mp.files;
+      } else {
+        const body = readBody(req);
+        text = pick(body, "text", "message");
+        const internalRaw = pick(body, "internal", "isInternalNote", "is_internal_note");
+        internal = internalRaw === true || internalRaw === 1 || internalRaw === "1" || internalRaw === "true";
+      }
 
       const ticket = addStaffMessage({
         ticketId: Number((req.params as any)?.id),
         operatorId: admin?.userId ?? null,
         operatorName: admin?.displayName ?? admin?.login ?? null,
-        text: pick(body, "text", "message"),
+        text,
         internal,
+        files,
       });
       if (admin?.userId && !internal) markSupportTicketRead(admin.userId, ticket.id);
       return reply.code(201).send({ ok: true, ticket });

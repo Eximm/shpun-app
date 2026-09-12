@@ -298,3 +298,57 @@ test("Telegram API error does not break user message", async () => {
     restoreFetch();
   }
 });
+
+/* ─── Partnership topic routing ──────────────────────────────────────────── */
+
+test("partnership notification uses PARTNERSHIP_ADMIN_THREAD_ID", async () => {
+  process.env.PARTNERSHIP_ADMIN_THREAD_ID = "55555";
+  stubFetch("ok");
+  try {
+    await telegram.sendPartnershipAdminTelegramMessage("hi");
+    assert.equal(telegramCalls()[0].body.message_thread_id, 55555);
+  } finally {
+    delete process.env.PARTNERSHIP_ADMIN_THREAD_ID;
+    restoreFetch();
+  }
+});
+
+test("partnership notification falls back to the general chat when topic is unset", async () => {
+  delete process.env.PARTNERSHIP_ADMIN_THREAD_ID;
+  stubFetch("ok");
+  try {
+    await telegram.sendPartnershipAdminTelegramMessage("hi");
+    assert.equal("message_thread_id" in telegramCalls()[0].body, false);
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("partnership create notifies admins in the partnership topic", async () => {
+  process.env.PARTNERSHIP_ADMIN_THREAD_ID = "55555";
+  stubFetch("ok");
+  try {
+    const ticket = await service.createPartnership({
+      userId: 508,
+      source: "app",
+      proposalType: "channel",
+      platformUrl: "@example",
+      audienceSize: "~15 000",
+      offer: "Предлагаю сотрудничество по рекламе в канале.",
+    });
+    await flush();
+
+    const admin = telegramCalls().find((c) => c.body?.chat_id === SUPPORT_CHAT);
+    assert.ok(admin, "partnership admin Telegram message expected");
+    assert.equal(admin!.body.message_thread_id, 55555);
+    assert.match(String(admin!.body.text), /Новое предложение/);
+    assert.ok(
+      String(admin!.body.reply_markup?.inline_keyboard?.[0]?.[0]?.url).includes(
+        `tab=partnership&ticket=${ticket.id}`
+      )
+    );
+  } finally {
+    delete process.env.PARTNERSHIP_ADMIN_THREAD_ID;
+    restoreFetch();
+  }
+});

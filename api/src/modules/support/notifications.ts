@@ -1,29 +1,27 @@
 // api/src/modules/support/notifications.ts
 //
-// Best-effort support notification layer.
+// Best-effort notification layer for support tickets AND partnership proposals.
 //
-//  - notifySupportTicketCreated  -> admins (Telegram + ShpunApp in-app)
-//  - notifySupportUserMessage    -> admins (Telegram + ShpunApp in-app)
-//  - notifySupportStaffReply     -> user   (Telegram only for now; source-extensible)
+//  - notifyTicketCreated    -> admins (Telegram topic + ShpunApp in-app)
+//  - notifyTicketUserMessage-> admins (Telegram topic + ShpunApp in-app)
+//  - notifyTicketStaffReply -> applicant (Telegram only for now; source-extensible)
 //
-// Notifications must NEVER block or roll back the ticket/message write. Every
-// public function catches its own errors. Callers may safely `void` them.
-//
-// Admin Telegram recipients: see telegram.ts (SUPPORT_ADMIN_CHAT_IDS, optionally
-// routed into the single SUPPORT_ADMIN_THREAD_ID topic). Admin in-app recipients:
-// the local delivery registry (see notifyRepo.ts); it is populated only after the
-// existing billing/auth admin check has already confirmed admin access.
+// Support and partnership share the same infrastructure but use different
+// Telegram topics (SUPPORT_ADMIN_THREAD_ID / PARTNERSHIP_ADMIN_THREAD_ID) and
+// different wording. Notifications never block or roll back a write; every
+// public function catches its own errors and callers may safely `void` them.
 
 import { getTicketRepository } from "./repository.js";
 import { listSupportNotifyRecipients } from "./notifyRepo.js";
 import { putNotifEvent, type NotifEvent } from "../../shared/linkdb/notificationsRepo.js";
 import { sendWebPushToUser } from "../notifications/webpush.js";
 import {
+  sendPartnershipAdminTelegramMessage,
   sendSupportAdminTelegramMessage,
   sendSupportTelegramMessage,
   supportTicketAdminUrl,
 } from "./telegram.js";
-import type { Ticket, TicketMessage } from "./types.js";
+import { partnershipTypeLabel, type PartnershipContext, type Ticket, type TicketMessage } from "./types.js";
 
 function esc(value: unknown): string {
   return String(value ?? "")
@@ -58,17 +56,30 @@ function serviceLine(ticket: Ticket): string {
   return name ? `${head} · ${esc(name)}` : head;
 }
 
+function partnershipContext(ticket: Ticket): PartnershipContext | null {
+  const raw = (ticket.contextSnapshot as any)?.partnership;
+  return raw && typeof raw === "object" ? (raw as PartnershipContext) : null;
+}
+
 function nowTs(): number {
   return Math.floor(Date.now() / 1000);
 }
 
+function adminTab(kind: Ticket["kind"]): string {
+  return kind === "partnership" ? "partnership" : "support";
+}
+
 /* ─── Admin Telegram ─────────────────────────────────────────────────────── */
 
-async function sendAdminTelegram(text: string, ticketId: number): Promise<void> {
+async function sendAdminTelegram(ticket: Ticket, text: string): Promise<void> {
   const replyMarkup = {
-    inline_keyboard: [[{ text: "Открыть в ShpunApp", url: supportTicketAdminUrl(ticketId) }]],
+    inline_keyboard: [[{ text: "Открыть в ShpunApp", url: supportTicketAdminUrl(ticket.id, ticket.kind) }]],
   };
-  await sendSupportAdminTelegramMessage(text, replyMarkup);
+  if (ticket.kind === "partnership") {
+    await sendPartnershipAdminTelegramMessage(text, replyMarkup);
+  } else {
+    await sendSupportAdminTelegramMessage(text, replyMarkup);
+  }
 }
 
 /* ─── Admin ShpunApp in-app ──────────────────────────────────────────────── */
@@ -78,15 +89,14 @@ function emitAdminInApp(base: {
   type: string;
   title: string;
   message: string;
-  ticketId: number;
-  publicNo: string;
+  ticket: Ticket;
   messageId?: number;
 }): void {
   const recipients = listSupportNotifyRecipients();
   if (recipients.length === 0) return;
 
   const ts = nowTs();
-  const to = `/admin?tab=support&ticket=${base.ticketId}`;
+  const to = `/admin?tab=${adminTab(base.ticket.kind)}&ticket=${base.ticket.id}`;
 
   for (const uid of recipients) {
     const event: NotifEvent = {
@@ -100,8 +110,9 @@ function emitAdminInApp(base: {
       user_id: uid,
       toast: true,
       meta: {
-        ticketId: base.ticketId,
-        publicNo: base.publicNo,
+        ticketId: base.ticket.id,
+        publicNo: base.ticket.publicNo,
+        kind: base.ticket.kind,
         ...(base.messageId ? { messageId: base.messageId } : {}),
         action: { kind: "nav", to, label: "Открыть" },
         short: { title: base.title, message: base.message },
@@ -115,63 +126,92 @@ function emitAdminInApp(base: {
   }
 }
 
+/* ─── Text builders ──────────────────────────────────────────────────────── */
+
+function createdTelegramText(ticket: Ticket): string {
+  if (ticket.kind === "partnership") {
+    const p = partnershipContext(ticket);
+    return [
+      `🤝 <b>Новое предложение #${esc(ticket.publicNo)}</b>`,
+      p ? esc(partnershipTypeLabel(p.proposal_type)) : "",
+      p?.platform_url ? `Площадка: ${esc(p.platform_url)}` : "",
+      p?.audience_size ? `Аудитория: ${esc(p.audience_size)}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  return [
+    `🛟 <b>Новый тикет #${esc(ticket.publicNo)}</b>`,
+    userLine(ticket),
+    esc(categoryTitle(ticket)),
+    serviceLine(ticket),
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function createdInAppTitle(ticket: Ticket): string {
+  return ticket.kind === "partnership"
+    ? `🤝 Новое предложение #${ticket.publicNo}`
+    : `🛟 Новый тикет #${ticket.publicNo}`;
+}
+
+function createdInAppMessage(ticket: Ticket): string {
+  if (ticket.kind === "partnership") {
+    const p = partnershipContext(ticket);
+    return [partnershipTypeLabel(p?.proposal_type), p?.platform_url].filter(Boolean).join(" · ");
+  }
+  return [ticket.displayNameSnapshot || `#${ticket.userId}`, categoryTitle(ticket)].filter(Boolean).join(" · ");
+}
+
 /* ─── Public API ─────────────────────────────────────────────────────────── */
 
-export async function notifySupportTicketCreated(
-  ticket: Ticket,
-  _firstMessage?: TicketMessage | null
-): Promise<void> {
+export async function notifyTicketCreated(ticket: Ticket): Promise<void> {
   try {
-    const lines = [
-      `🛟 <b>Новый тикет #${esc(ticket.publicNo)}</b>`,
-      userLine(ticket),
-      esc(categoryTitle(ticket)),
-      serviceLine(ticket),
-    ].filter(Boolean);
-    await sendAdminTelegram(lines.join("\n"), ticket.id);
+    await sendAdminTelegram(ticket, createdTelegramText(ticket));
   } catch {
     // best-effort
   }
 
   try {
     emitAdminInApp({
-      eventBaseId: `support:ticket:${ticket.id}:created`,
-      type: "support.ticket.created",
-      title: `🛟 Новый тикет #${ticket.publicNo}`,
-      message: [ticket.displayNameSnapshot || `#${ticket.userId}`, categoryTitle(ticket)]
-        .filter(Boolean)
-        .join(" · "),
-      ticketId: ticket.id,
-      publicNo: ticket.publicNo,
+      eventBaseId: `${ticket.kind}:${ticket.id}:created`,
+      type: ticket.kind === "partnership" ? "partnership.created" : "support.ticket.created",
+      title: createdInAppTitle(ticket),
+      message: createdInAppMessage(ticket),
+      ticket,
     });
   } catch {
     // best-effort
   }
 }
 
-export async function notifySupportUserMessage(
-  ticket: Ticket,
-  message: TicketMessage
-): Promise<void> {
+export async function notifyTicketUserMessage(ticket: Ticket, message: TicketMessage): Promise<void> {
+  const hasAttachments = Array.isArray(message.attachments) && message.attachments.length > 0;
+  const preview = clip(message.text, 200) || (hasAttachments ? "📎 Пользователь отправил вложение" : "");
+
   try {
-    const lines = [
-      `💬 <b>Новый ответ в тикете #${esc(ticket.publicNo)}</b>`,
-      userLine(ticket),
-      esc(clip(message.text, 200)),
-    ].filter(Boolean);
-    await sendAdminTelegram(lines.join("\n"), ticket.id);
+    const head =
+      ticket.kind === "partnership"
+        ? `💬 <b>Новый ответ по предложению #${esc(ticket.publicNo)}</b>`
+        : `💬 <b>Новый ответ в тикете #${esc(ticket.publicNo)}</b>`;
+    const text = [head, userLine(ticket), esc(preview)].filter(Boolean).join("\n");
+    await sendAdminTelegram(ticket, text);
   } catch {
     // best-effort
   }
 
   try {
     emitAdminInApp({
-      eventBaseId: `support:ticket:${ticket.id}:msg:${message.id}`,
-      type: "support.message",
-      title: `💬 Новый ответ в тикете #${ticket.publicNo}`,
-      message: clip(message.text, 160),
-      ticketId: ticket.id,
-      publicNo: ticket.publicNo,
+      eventBaseId: `${ticket.kind}:${ticket.id}:msg:${message.id}`,
+      type: ticket.kind === "partnership" ? "partnership.message" : "support.message",
+      title:
+        ticket.kind === "partnership"
+          ? `💬 Новый ответ по предложению #${ticket.publicNo}`
+          : `💬 Новый ответ в тикете #${ticket.publicNo}`,
+      message: preview || "📎 Вложение",
+      ticket,
       messageId: message.id,
     });
   } catch {
@@ -179,17 +219,17 @@ export async function notifySupportUserMessage(
   }
 }
 
-export async function notifySupportStaffReply(
-  ticket: Ticket,
-  _message: TicketMessage
-): Promise<void> {
-  // User notification is source-extensible: Telegram now, app/web push later.
+export async function notifyTicketStaffReply(ticket: Ticket, _message: TicketMessage): Promise<void> {
+  // Applicant notification is source-extensible: Telegram now, app/web push later.
   if (ticket.source !== "telegram") return;
   if (!ticket.telegramChatId) return;
 
   const text =
-    `🛟 По обращению #${esc(ticket.publicNo)} есть новый ответ.\n\n` +
-    `Откройте «Мои обращения», чтобы посмотреть сообщение поддержки.`;
+    ticket.kind === "partnership"
+      ? `🤝 По предложению #${esc(ticket.publicNo)} есть новый ответ.\n\n` +
+        `Откройте «Мои обращения», чтобы посмотреть ответ.`
+      : `🛟 По обращению #${esc(ticket.publicNo)} есть новый ответ.\n\n` +
+        `Откройте «Мои обращения», чтобы посмотреть сообщение поддержки.`;
 
   const replyMarkup = {
     inline_keyboard: [[{ text: "🎫 Открыть обращение", callback_data: `support:view ${ticket.id}` }]],

@@ -15,6 +15,7 @@ import type {
   StorageProvider,
   SupportCategory,
   Ticket,
+  TicketKind,
   TicketListResult,
   TicketMessage,
   TicketPatch,
@@ -27,6 +28,7 @@ linkDb.exec(`
 CREATE TABLE IF NOT EXISTS support_tickets (
   id                     INTEGER PRIMARY KEY AUTOINCREMENT,
   public_no              TEXT NOT NULL UNIQUE,
+  kind                   TEXT NOT NULL DEFAULT 'support',
   storage_provider       TEXT NOT NULL DEFAULT 'local',
   external_id            TEXT,
   migration_status       TEXT,
@@ -69,6 +71,8 @@ CREATE INDEX IF NOT EXISTS idx_support_tickets_category
   ON support_tickets(category_key);
 CREATE INDEX IF NOT EXISTS idx_support_tickets_external
   ON support_tickets(storage_provider, external_id);
+CREATE INDEX IF NOT EXISTS idx_support_tickets_kind
+  ON support_tickets(kind, last_message_at DESC);
 
 CREATE TABLE IF NOT EXISTS support_ticket_messages (
   id                INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -100,6 +104,19 @@ CREATE TABLE IF NOT EXISTS support_ticket_counters (
   value  INTEGER NOT NULL DEFAULT 0
 );
 `);
+
+// Best-effort schema upgrade for existing databases.
+try {
+  linkDb.exec(`ALTER TABLE support_tickets ADD COLUMN kind TEXT NOT NULL DEFAULT 'support'`);
+} catch {
+  // column already exists
+}
+
+try {
+  linkDb.exec(`CREATE INDEX IF NOT EXISTS idx_support_tickets_kind ON support_tickets(kind, last_message_at DESC)`);
+} catch {
+  // ignore
+}
 
 /* ─── Seed categories (bootstrap only; editing happens via admin later) ──── */
 
@@ -138,6 +155,7 @@ try {
 type TicketRow = {
   id: number;
   public_no: string;
+  kind: string;
   storage_provider: string;
   external_id: string | null;
   migration_status: string | null;
@@ -206,6 +224,7 @@ function mapTicket(row: TicketRow): Ticket {
   return {
     id: Number(row.id),
     publicNo: String(row.public_no),
+    kind: (row.kind as TicketKind) || "support",
     storageProvider: row.storage_provider as StorageProvider,
     externalId: row.external_id ?? null,
     migrationStatus: row.migration_status ?? null,
@@ -265,13 +284,13 @@ const SELECT_TICKET = `SELECT * FROM support_tickets`;
 
 const insertTicketStmt = linkDb.prepare(`
   INSERT INTO support_tickets (
-    public_no, storage_provider, external_id, migration_status, migrated_at, synced_at,
+    public_no, kind, storage_provider, external_id, migration_status, migrated_at, synced_at,
     user_id, source, category_key, subject, status, priority, assigned_to,
     service_id, user_service_id, service_category,
     user_login_snapshot, display_name_snapshot, balance_snapshot,
     service_snapshot_json, context_snapshot_json, telegram_chat_id
   ) VALUES (
-    @public_no, @storage_provider, @external_id, @migration_status, @migrated_at, @synced_at,
+    @public_no, @kind, @storage_provider, @external_id, @migration_status, @migrated_at, @synced_at,
     @user_id, @source, @category_key, @subject, @status, @priority, @assigned_to,
     @service_id, @user_service_id, @service_category,
     @user_login_snapshot, @display_name_snapshot, @balance_snapshot,
@@ -300,24 +319,28 @@ function safeOffset(value: unknown): number {
 }
 
 export class SqliteTicketRepository implements TicketRepository {
-  private nextPublicNo(): string {
+  private nextPublicNo(kind: TicketKind): string {
+    const counterName = kind === "partnership" ? "partnership" : "ticket";
     linkDb
-      .prepare(`INSERT OR IGNORE INTO support_ticket_counters(name, value) VALUES('ticket', 1000)`)
-      .run();
+      .prepare(`INSERT OR IGNORE INTO support_ticket_counters(name, value) VALUES(?, 1000)`)
+      .run(counterName);
     linkDb
-      .prepare(`UPDATE support_ticket_counters SET value = value + 1 WHERE name = 'ticket'`)
-      .run();
+      .prepare(`UPDATE support_ticket_counters SET value = value + 1 WHERE name = ?`)
+      .run(counterName);
     const row = linkDb
-      .prepare(`SELECT value FROM support_ticket_counters WHERE name = 'ticket'`)
-      .get() as { value?: number } | undefined;
-    return String(Number(row?.value ?? 1000));
+      .prepare(`SELECT value FROM support_ticket_counters WHERE name = ?`)
+      .get(counterName) as { value?: number } | undefined;
+    const n = Number(row?.value ?? 1000);
+    return kind === "partnership" ? `P${n}` : String(n);
   }
 
   createTicket(input: CreateTicketInput): Ticket {
     const tx = linkDb.transaction((payload: CreateTicketInput) => {
-      const publicNo = String(payload.publicNo ?? "").trim() || this.nextPublicNo();
+      const kind: TicketKind = payload.kind ?? "support";
+      const publicNo = String(payload.publicNo ?? "").trim() || this.nextPublicNo(kind);
       const info = insertTicketStmt.run({
         public_no: publicNo,
+        kind,
         storage_provider: payload.storageProvider ?? "local",
         external_id: payload.externalId ?? null,
         migration_status: payload.migrationStatus ?? null,
@@ -368,6 +391,10 @@ export class SqliteTicketRepository implements TicketRepository {
   listUserTickets(filter: UserTicketFilter): TicketListResult {
     const where: string[] = ["user_id = ?"];
     const params: unknown[] = [filter.userId];
+    if (filter.kind) {
+      where.push("kind = ?");
+      params.push(filter.kind);
+    }
     if (filter.status && filter.status.length > 0) {
       where.push(`status IN (${filter.status.map(() => "?").join(", ")})`);
       params.push(...filter.status);
@@ -395,6 +422,10 @@ export class SqliteTicketRepository implements TicketRepository {
     const where: string[] = [];
     const params: unknown[] = [];
 
+    if (filter.kind) {
+      where.push("kind = ?");
+      params.push(filter.kind);
+    }
     if (filter.status && filter.status.length > 0) {
       where.push(`status IN (${filter.status.map(() => "?").join(", ")})`);
       params.push(...filter.status);
@@ -474,6 +505,13 @@ export class SqliteTicketRepository implements TicketRepository {
 
   addInternalNote(input: AddMessageInput): TicketMessage {
     return this.addMessage({ ...input, authorType: "staff", isInternalNote: true });
+  }
+
+  deleteMessage(id: number): boolean {
+    const n = Math.trunc(Number(id));
+    if (!Number.isFinite(n) || n <= 0) return false;
+    const info = linkDb.prepare(`DELETE FROM support_ticket_messages WHERE id = ?`).run(n);
+    return Number(info.changes) > 0;
   }
 
   listMessages(ticketId: number, options?: LoadMessagesOptions): TicketMessage[] {

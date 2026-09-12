@@ -94,15 +94,16 @@ export function markSupportTicketRead(userId: number, ticketId: number): void {
 }
 
 /** Ticket ids that have at least one unread user message for this admin. */
-export function listSupportUnreadTicketIds(userId: number): number[] {
+export function listSupportUnreadTicketIds(userId: number, kind?: string | null): number[] {
   const uid = Math.trunc(Number(userId));
   if (!Number.isFinite(uid) || uid <= 0) return [];
+  const useKind = kind === "support" || kind === "partnership";
   try {
     const rows = linkDb
       .prepare(
         `SELECT t.id AS ticket_id
          FROM support_tickets t
-         WHERE EXISTS (
+         WHERE ${useKind ? "t.kind = @kind AND" : ""} EXISTS (
            SELECT 1
            FROM support_ticket_messages m
            LEFT JOIN support_reads r
@@ -113,7 +114,7 @@ export function listSupportUnreadTicketIds(userId: number): number[] {
              AND (r.last_read_message_id IS NULL OR m.id > r.last_read_message_id)
          )`
       )
-      .all({ uid }) as Array<{ ticket_id: number }>;
+      .all(useKind ? { uid, kind } : { uid }) as Array<{ ticket_id: number }>;
     return rows
       .map((r) => Math.trunc(Number(r?.ticket_id)))
       .filter((n) => Number.isFinite(n) && n > 0);
@@ -122,6 +123,39 @@ export function listSupportUnreadTicketIds(userId: number): number[] {
   }
 }
 
-export function countSupportUnread(userId: number): number {
-  return listSupportUnreadTicketIds(userId).length;
+export function countSupportUnread(userId: number, kind?: string | null): number {
+  return listSupportUnreadTicketIds(userId, kind).length;
+}
+
+/**
+ * Ticket ids where the OWNER has an unread staff reply (non-internal).
+ * Reuses the same support_reads table as admin unread, just for the user id.
+ */
+export function listOwnerUnreadTicketIds(userId: number, kind?: string | null): number[] {
+  const uid = Math.trunc(Number(userId));
+  if (!Number.isFinite(uid) || uid <= 0) return [];
+  const useKind = kind === "support" || kind === "partnership";
+  try {
+    const rows = linkDb
+      .prepare(
+        `SELECT t.id AS ticket_id
+         FROM support_tickets t
+         WHERE ${useKind ? "t.kind = @kind AND" : ""} EXISTS (
+           SELECT 1
+           FROM support_ticket_messages m
+           LEFT JOIN support_reads r
+             ON r.ticket_id = t.id AND r.user_id = @uid
+           WHERE m.ticket_id = t.id
+             AND m.author_type = 'staff'
+             AND m.is_internal_note = 0
+             AND (r.last_read_message_id IS NULL OR m.id > r.last_read_message_id)
+         )`
+      )
+      .all(useKind ? { uid, kind } : { uid }) as Array<{ ticket_id: number }>;
+    return rows
+      .map((r) => Math.trunc(Number(r?.ticket_id)))
+      .filter((n) => Number.isFinite(n) && n > 0);
+  } catch {
+    return [];
+  }
 }

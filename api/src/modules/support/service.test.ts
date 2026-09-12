@@ -259,3 +259,46 @@ test("user listing returns only that user's tickets", async () => {
   assert.equal(page.total, 1);
   assert.ok(page.items.every((t) => t.userId === 121));
 });
+
+/* ─── User close ─────────────────────────────────────────────────────────── */
+
+test("user can close own ticket and cannot close another user's ticket", async () => {
+  const ticket = await service.createTicket(
+    { userId: 131, source: "app", categoryKey: "other", text: "Закройте меня" },
+    { shm: fakeShm }
+  );
+
+  assert.throws(
+    () => service.closeUserTicket(ticket.id, 132),
+    (error) => assertSupportError(error, "ticket_not_found")
+  );
+
+  const closed = service.closeUserTicket(ticket.id, 131);
+  assert.equal(closed.status, "closed");
+  assert.ok(closed.closedAt);
+  assert.ok(closed.messages.some((m) => m.authorType === "system"));
+
+  // Closed tickets reject replies.
+  assert.throws(
+    () => service.addUserMessage(ticket.id, 131, "После закрытия"),
+    (error) => assertSupportError(error, "ticket_closed")
+  );
+
+  // Closing again is idempotent.
+  assert.equal(service.closeUserTicket(ticket.id, 131).status, "closed");
+});
+
+test("resolved ticket can be replied to and then closed by the user", async () => {
+  const ticket = await service.createTicket(
+    { userId: 141, source: "app", categoryKey: "other", text: "Решённый вопрос" },
+    { shm: fakeShm }
+  );
+
+  service.updateTicketByAdmin(ticket.id, { status: "resolved" });
+  const replied = service.addUserMessage(ticket.id, 141, "Ответ после resolved");
+  assert.equal(replied.status, "waiting_staff");
+
+  service.updateTicketByAdmin(ticket.id, { status: "resolved" });
+  const closed = service.closeUserTicket(ticket.id, 141);
+  assert.equal(closed.status, "closed");
+});

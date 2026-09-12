@@ -25,6 +25,14 @@ export type StorageProvider = (typeof STORAGE_PROVIDERS)[number];
 export const AUTHOR_TYPES = ["user", "staff", "system"] as const;
 export type AuthorType = (typeof AUTHOR_TYPES)[number];
 
+/** Ticket kind: technical support vs. advertising/partnership proposal. */
+export const TICKET_KINDS = ["support", "partnership"] as const;
+export type TicketKind = (typeof TICKET_KINDS)[number];
+
+export function isTicketKind(value: unknown): value is TicketKind {
+  return typeof value === "string" && (TICKET_KINDS as readonly string[]).includes(value);
+}
+
 export function isTicketStatus(value: unknown): value is TicketStatus {
   return typeof value === "string" && (TICKET_STATUSES as readonly string[]).includes(value);
 }
@@ -91,6 +99,7 @@ export type Ticket = {
   id: number;
   /** Stable human-readable number, independent from the storage primary key. */
   publicNo: string;
+  kind: TicketKind;
 
   // Integration metadata. Local storage -> "local" / null.
   // Future SHM/Billing storage -> "shm" / external ticket id.
@@ -135,12 +144,31 @@ export type TicketMessage = {
   text: string;
   isInternalNote: boolean;
   createdAt: string;
+  attachments?: SupportAttachment[];
+};
+
+export type SupportAttachment = {
+  id: number;
+  messageId: number;
+  ticketId: number;
+  storageProvider: string;
+  storageKey: string;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  width: number | null;
+  height: number | null;
+  telegramFileId: string | null;
+  createdAt: string;
+  deletedAt: string | null;
+  deleteReason: string | null;
 };
 
 export type TicketWithMessages = Ticket & { messages: TicketMessage[] };
 
 export type CreateTicketInput = {
   userId: number;
+  kind?: TicketKind;
   source: TicketSource;
   categoryKey: string;
   subject?: string | null;
@@ -189,12 +217,14 @@ export type TicketListResult = {
 
 export type UserTicketFilter = {
   userId: number;
+  kind?: TicketKind;
   status?: TicketStatus[];
   limit?: number;
   offset?: number;
 };
 
 export type AdminTicketFilter = {
+  kind?: TicketKind;
   status?: TicketStatus[];
   priority?: TicketPriority[];
   categoryKey?: string;
@@ -210,3 +240,32 @@ export type LoadMessagesOptions = {
   limit?: number;
   offset?: number;
 };
+
+/** Structured context for a partnership/advertising proposal. */
+export type PartnershipContext = {
+  proposal_type: string;
+  platform_url: string;
+  audience_size?: string | null;
+  offer: string;
+  contact?: string | null;
+  comment?: string | null;
+};
+
+/** Allowed partnership proposal types (kept in one place for UI + backend). */
+export const PARTNERSHIP_TYPES = [
+  { key: "blogger", label: "Блогер / автор" },
+  { key: "channel", label: "Telegram-канал / сообщество" },
+  { key: "youtube", label: "YouTube / Twitch" },
+  { key: "site", label: "Сайт / проект" },
+  { key: "other", label: "Другое" },
+] as const;
+export type PartnershipTypeKey = (typeof PARTNERSHIP_TYPES)[number]["key"];
+
+export function isPartnershipType(value: unknown): value is PartnershipTypeKey {
+  return typeof value === "string" && PARTNERSHIP_TYPES.some((t) => t.key === value);
+}
+
+export function partnershipTypeLabel(value: unknown): string {
+  const found = PARTNERSHIP_TYPES.find((t) => t.key === value);
+  return found?.label ?? String(value ?? "Другое");
+}

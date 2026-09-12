@@ -27,9 +27,14 @@ export function AdminPage() {
   const [searchParams] = useSearchParams();
   const tabParam = searchParams.get("tab") ?? "";
   const initialTicketId = Number(searchParams.get("ticket") ?? 0) || undefined;
-  const initialTab: AdminTab = (ADMIN_TABS as readonly string[]).includes(tabParam)
-    ? (tabParam as AdminTab)
-    : "overview";
+  const initialKind: "support" | "partnership" =
+    tabParam === "partnership" || searchParams.get("kind") === "partnership" ? "partnership" : "support";
+  const initialTab: AdminTab =
+    tabParam === "partnership"
+      ? "support"
+      : (ADMIN_TABS as readonly string[]).includes(tabParam)
+        ? (tabParam as AdminTab)
+        : "overview";
   const [tab, setTab] = useState<AdminTab>(initialTab);
 
   if (loading) {
@@ -80,7 +85,7 @@ export function AdminPage() {
         {tab === "trialProtection" && <TrialProtectionSection />}
         {tab === "serviceCategories" && <ServiceCategoriesSection />}
         {tab === "referralAliases" && <ReferralAliasesSection />}
-        {tab === "support" && <SupportSection initialTicketId={initialTicketId} />}
+        {tab === "support" && <SupportSection initialKind={initialKind} initialTicketId={initialTicketId} />}
         {tab === "serverStatus" && <ServerStatusSection />}
       </div>
     </div>

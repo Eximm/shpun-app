@@ -52,6 +52,19 @@ export function supportAdminThreadId(): number | null {
   return Math.trunc(n);
 }
 
+/**
+ * Forum topic id for partnership/advertising intake notifications.
+ * Returns null when unset or invalid; the message is then sent to the general
+ * admin chat (no thread) as a safe fallback.
+ */
+export function partnershipAdminThreadId(): number | null {
+  const raw = envStr("PARTNERSHIP_ADMIN_THREAD_ID");
+  if (!raw) return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.trunc(n);
+}
+
 export function supportAppBaseUrl(): string {
   const explicit = envStr("SUPPORT_APP_URL");
   if (explicit) return explicit.replace(/\/+$/, "");
@@ -64,10 +77,11 @@ export function supportAppBaseUrl(): string {
   return (https || "https://app.shpun.net").replace(/\/+$/, "");
 }
 
-/** Deep link that opens the support ticket in the ShpunApp admin. */
-export function supportTicketAdminUrl(ticketId: number | string): string {
+/** Deep link that opens a ticket/proposal in the ShpunApp admin. */
+export function supportTicketAdminUrl(ticketId: number | string, kind?: string): string {
   const id = encodeURIComponent(String(ticketId ?? "").trim());
-  return `${supportAppBaseUrl()}/admin?tab=support&ticket=${id}`;
+  const tab = kind === "partnership" ? "partnership" : "support";
+  return `${supportAppBaseUrl()}/admin?tab=${tab}&ticket=${id}`;
 }
 
 export type TelegramSendResult = { ok: boolean; error?: string };
@@ -131,4 +145,56 @@ export async function sendSupportAdminTelegramMessage(
   await Promise.allSettled(
     chats.map((chatId) => sendSupportTelegramMessage(chatId, text, replyMarkup, { threadId }))
   );
+}
+
+/**
+ * Send a partnership notification to the same admin chats, routed into the
+ * PARTNERSHIP_ADMIN_THREAD_ID topic when configured. Falls back to the general
+ * chat (no thread) when the partnership topic is unset.
+ */
+export async function sendPartnershipAdminTelegramMessage(
+  text: string,
+  replyMarkup?: Record<string, unknown>
+): Promise<void> {
+  const chats = supportAdminChatIds();
+  if (chats.length === 0) return;
+
+  const threadId = partnershipAdminThreadId();
+  await Promise.allSettled(
+    chats.map((chatId) => sendSupportTelegramMessage(chatId, text, replyMarkup, { threadId }))
+  );
+}
+/* ─── Incoming file download (Telegram Bot API) ──────────────────────────── */
+
+export type TelegramDownload = { buffer: Buffer; filePath: string; size?: number };
+
+/**
+ * Download a Telegram file by file_id via Bot API (getFile + file download).
+ * The binary never travels through the SHM billing DSL.
+ */
+export async function downloadTelegramFile(fileId: string): Promise<TelegramDownload | null> {
+  const token = supportBotToken();
+  const id = String(fileId ?? "").trim();
+  if (!token || !id) return null;
+
+  try {
+    const metaRes = await fetch(
+      `https://api.telegram.org/bot${token}/getFile?file_id=${encodeURIComponent(id)}`
+    );
+    const meta: any = await metaRes.json().catch(() => null);
+    if (!metaRes.ok || !meta?.ok || !meta?.result?.file_path) return null;
+
+    const filePath = String(meta.result.file_path);
+    const fileRes = await fetch(`https://api.telegram.org/file/bot${token}/${filePath}`);
+    if (!fileRes.ok) return null;
+
+    const arrayBuffer = await fileRes.arrayBuffer();
+    return {
+      buffer: Buffer.from(arrayBuffer),
+      filePath,
+      size: Number(meta.result.file_size ?? 0) || undefined,
+    };
+  } catch {
+    return null;
+  }
 }

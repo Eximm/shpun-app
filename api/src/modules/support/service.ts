@@ -8,17 +8,26 @@
 import { getTicketRepository, type TicketRepository } from "./repository.js";
 import { getSupportShmPort } from "./snapshot.js";
 import {
-  notifySupportStaffReply,
-  notifySupportTicketCreated,
-  notifySupportUserMessage,
+  enrichMessagesWithAttachments,
+  saveMessageAttachments,
+  type UploadFile,
+} from "./attachmentService.js";
+import {
+  notifyTicketCreated,
+  notifyTicketStaffReply,
+  notifyTicketUserMessage,
 } from "./notifications.js";
 import {
+  isPartnershipType,
   isTicketPriority,
   isTicketStatus,
+  partnershipTypeLabel,
+  type PartnershipContext,
   type ServiceSnapshot,
   type SupportCategory,
   type SupportIdentity,
   type SupportShmPort,
+  type TicketKind,
   type TicketListResult,
   type TicketPatch,
   type TicketSource,
@@ -70,6 +79,7 @@ export function listCategories(
 
 export type CreateTicketServiceInput = {
   userId: number;
+  kind?: TicketKind;
   source: TicketSource;
   categoryKey: string;
   text: unknown;
@@ -170,6 +180,7 @@ export async function createTicket(
 
   const ticket = repo.createTicket({
     userId: identity.userId,
+    kind: input.kind ?? "support",
     source: input.source,
     categoryKey,
     subject,
@@ -187,7 +198,7 @@ export async function createTicket(
     telegramChatId: input.telegramChatId ?? null,
   });
 
-  const firstMessage = repo.addMessage({
+  repo.addMessage({
     ticketId: ticket.id,
     authorType: "user",
     authorUserId: identity.userId,
@@ -197,7 +208,7 @@ export async function createTicket(
   });
 
   const created = mustGetUserTicket(ticket.id, identity.userId, deps);
-  void notifySupportTicketCreated(created, firstMessage);
+  void notifyTicketCreated(created);
   return created;
 }
 
@@ -205,12 +216,13 @@ export async function createTicket(
 
 export function listUserTickets(
   userId: number,
-  options: { status?: TicketStatus[]; limit?: number; offset?: number } = {},
+  options: { kind?: TicketKind; status?: TicketStatus[]; limit?: number; offset?: number } = {},
   deps: SupportServiceDeps = {}
 ): TicketListResult {
   const repo = deps.repo ?? getTicketRepository();
   return repo.listUserTickets({
     userId: requireUserId(userId),
+    kind: options.kind,
     status: options.status,
     limit: options.limit,
     offset: options.offset,
@@ -226,7 +238,7 @@ export function getUserTicket(
   const ticket = repo.getTicket(ticketId);
   if (!ticket || ticket.userId !== requireUserId(userId)) return null;
 
-  const messages = repo.listMessages(ticket.id, { includeInternalNotes: false });
+  const messages = enrichMessagesWithAttachments(repo.listMessages(ticket.id, { includeInternalNotes: false }));
   return { ...ticket, messages };
 }
 
@@ -248,6 +260,16 @@ export function addUserMessage(
   text: unknown,
   deps: SupportServiceDeps = {}
 ): TicketWithMessages {
+  return addUserMessageWithAttachments(ticketId, userId, text, [], deps);
+}
+
+export function addUserMessageWithAttachments(
+  ticketId: number,
+  userId: number,
+  text: unknown,
+  files: UploadFile[],
+  deps: SupportServiceDeps = {}
+): TicketWithMessages {
   const repo = deps.repo ?? getTicketRepository();
   const uid = requireUserId(userId);
 
@@ -256,8 +278,9 @@ export function addUserMessage(
     throw new SupportError("ticket_not_found", 404);
   }
 
+  const hasFiles = Array.isArray(files) && files.length > 0;
   const normalized = normalizeText(text, 4000);
-  if (normalized.length < 2) {
+  if (!hasFiles && normalized.length < 2) {
     throw new SupportError("invalid_text", 400, "Опишите проблему чуть подробнее.");
   }
 
@@ -276,10 +299,21 @@ export function addUserMessage(
     text: normalized,
     isInternalNote: false,
   });
+
+  let attachments: Awaited<ReturnType<typeof saveMessageAttachments>> = [];
+  try {
+    if (hasFiles) {
+      attachments = saveMessageAttachments({ ticketId: ticket.id, messageId: message.id, files });
+    }
+  } catch (error) {
+    repo.deleteMessage(message.id);
+    throw error;
+  }
+
   repo.updateTicket(ticket.id, { status: "waiting_staff" });
 
   const result = mustGetUserTicket(ticket.id, uid, deps);
-  void notifySupportUserMessage(result, message);
+  void notifyTicketUserMessage(result, { ...message, attachments });
   return result;
 }
 
@@ -300,7 +334,7 @@ export function getAdminTicket(
   const repo = deps.repo ?? getTicketRepository();
   const ticket = repo.getTicket(ticketId);
   if (!ticket) return null;
-  const messages = repo.listMessages(ticket.id, { includeInternalNotes: true });
+  const messages = enrichMessagesWithAttachments(repo.listMessages(ticket.id, { includeInternalNotes: true }));
   return { ...ticket, messages };
 }
 
@@ -311,6 +345,7 @@ export function addStaffMessage(
     operatorName?: string | null;
     text: unknown;
     internal?: boolean;
+    files?: UploadFile[];
   },
   deps: SupportServiceDeps = {}
 ): TicketWithMessages {
@@ -319,8 +354,9 @@ export function addStaffMessage(
   const ticket = repo.getTicket(input.ticketId);
   if (!ticket) throw new SupportError("ticket_not_found", 404);
 
+  const hasFiles = Array.isArray(input.files) && input.files.length > 0;
   const normalized = normalizeText(input.text, 4000);
-  if (normalized.length < 2) {
+  if (!hasFiles && normalized.length < 2) {
     throw new SupportError("invalid_text", 400, "Сообщение получилось слишком коротким.");
   }
 
@@ -328,7 +364,7 @@ export function addStaffMessage(
 
   // Internal notes never reach the user API and never change the status.
   if (input.internal) {
-    repo.addInternalNote({
+    const note = repo.addInternalNote({
       ticketId: ticket.id,
       authorType: "staff",
       authorUserId: operatorId,
@@ -336,6 +372,14 @@ export function addStaffMessage(
       text: normalized,
       isInternalNote: true,
     });
+    try {
+      if (hasFiles) {
+        saveMessageAttachments({ ticketId: ticket.id, messageId: note.id, files: input.files as UploadFile[] });
+      }
+    } catch (error) {
+      repo.deleteMessage(note.id);
+      throw error;
+    }
     return getAdminTicket(ticket.id, deps) as TicketWithMessages;
   }
 
@@ -347,10 +391,21 @@ export function addStaffMessage(
     text: normalized,
     isInternalNote: false,
   });
+
+  let attachments: Awaited<ReturnType<typeof saveMessageAttachments>> = [];
+  try {
+    if (hasFiles) {
+      attachments = saveMessageAttachments({ ticketId: ticket.id, messageId: message.id, files: input.files as UploadFile[] });
+    }
+  } catch (error) {
+    repo.deleteMessage(message.id);
+    throw error;
+  }
+
   repo.updateTicket(ticket.id, { status: "waiting_user" });
 
   const result = getAdminTicket(ticket.id, deps) as TicketWithMessages;
-  void notifySupportStaffReply(result, message);
+  void notifyTicketStaffReply(result, { ...message, attachments });
   return result;
 }
 
@@ -394,6 +449,187 @@ export function assignOperator(
   deps: SupportServiceDeps = {}
 ): TicketWithMessages {
   return updateTicketByAdmin(ticketId, { assignedTo: operatorId }, deps);
+}
+
+/* ─── Close: user scope ──────────────────────────────────────────────────── */
+
+/** Statuses in which the ticket owner is allowed to close the ticket. */
+export const USER_CLOSEABLE_STATUSES: TicketStatus[] = [
+  "open",
+  "waiting_staff",
+  "waiting_user",
+  "resolved",
+];
+
+export function closeUserTicket(
+  ticketId: number,
+  userId: number,
+  deps: SupportServiceDeps = {}
+): TicketWithMessages {
+  const repo = deps.repo ?? getTicketRepository();
+  const uid = requireUserId(userId);
+
+  const ticket = repo.getTicket(ticketId);
+  if (!ticket || ticket.userId !== uid) {
+    throw new SupportError("ticket_not_found", 404);
+  }
+
+  // Idempotent: an already closed ticket is returned as is.
+  if (ticket.status === "closed") {
+    return getUserTicket(ticket.id, uid, deps) as TicketWithMessages;
+  }
+
+  if (!USER_CLOSEABLE_STATUSES.includes(ticket.status)) {
+    throw new SupportError("ticket_not_closable", 409, "Обращение нельзя закрыть в текущем статусе.");
+  }
+
+  repo.updateTicket(ticket.id, { status: "closed" });
+  repo.addMessage({
+    ticketId: ticket.id,
+    authorType: "system",
+    authorUserId: null,
+    authorName: null,
+    text: "Обращение закрыто пользователем.",
+    isInternalNote: false,
+  });
+
+  return getUserTicket(ticket.id, uid, deps) as TicketWithMessages;
+}
+
+/* ─── Partnership proposals ──────────────────────────────────────────────── */
+
+export type CreatePartnershipServiceInput = {
+  userId: number;
+  source: TicketSource;
+  proposalType: string;
+  platformUrl: string;
+  audienceSize?: string | null;
+  offer: unknown;
+  contact?: string | null;
+  comment?: string | null;
+  telegramChatId?: number | null;
+  shmSessionId?: string | null;
+  login?: string | null;
+  displayName?: string | null;
+  balance?: number | null;
+};
+
+function buildPartnershipMessage(p: PartnershipContext): string {
+  return [
+    "🤝 Предложение о сотрудничестве",
+    "",
+    `Тип: ${partnershipTypeLabel(p.proposal_type)}`,
+    `Площадка: ${p.platform_url}`,
+    `Аудитория: ${p.audience_size || "—"}`,
+    "",
+    "Предложение:",
+    p.offer,
+    p.contact ? `\nКонтакт: ${p.contact}` : "",
+    p.comment ? `Комментарий: ${p.comment}` : "",
+  ]
+    .filter((line) => line !== "")
+    .join("\n");
+}
+
+export async function createPartnership(
+  input: CreatePartnershipServiceInput,
+  deps: SupportServiceDeps = {}
+): Promise<TicketWithMessages> {
+  const repo = deps.repo ?? getTicketRepository();
+  const shm = deps.shm ?? getSupportShmPort();
+  const userId = requireUserId(input.userId);
+
+  if (!isPartnershipType(input.proposalType)) {
+    throw new SupportError("invalid_proposal_type", 400);
+  }
+
+  const platformUrl = normalizeText(input.platformUrl, 300);
+  if (platformUrl.length < 2) {
+    throw new SupportError("invalid_platform", 400, "Укажите площадку (ссылку или username).");
+  }
+
+  const offer = normalizeText(input.offer, 2000);
+  if (offer.length < 10) {
+    throw new SupportError("invalid_offer", 400, "Опишите предложение подробнее.");
+  }
+
+  const audienceSize = input.audienceSize == null ? null : normalizeText(input.audienceSize, 100) || null;
+  const contact = input.contact == null ? null : normalizeText(input.contact, 200) || null;
+  const comment = input.comment == null ? null : normalizeText(input.comment, 500) || null;
+
+  let identity: SupportIdentity = {
+    userId,
+    login: input.login ?? null,
+    displayName: input.displayName ?? null,
+    balance: input.balance ?? null,
+    bonus: null,
+  };
+
+  if (input.shmSessionId) {
+    try {
+      const fresh = await shm.resolveIdentity(input.shmSessionId);
+      identity = {
+        userId,
+        login: identity.login ?? fresh.login,
+        displayName: identity.displayName ?? fresh.displayName,
+        balance: fresh.balance ?? identity.balance,
+        bonus: fresh.bonus ?? identity.bonus,
+      };
+    } catch {
+      // best-effort snapshot
+    }
+  }
+
+  const partnership: PartnershipContext = {
+    proposal_type: input.proposalType,
+    platform_url: platformUrl,
+    audience_size: audienceSize,
+    offer,
+    contact,
+    comment,
+  };
+
+  const contextSnapshot = {
+    captured_at: new Date().toISOString(),
+    source: input.source,
+    user: {
+      user_id: identity.userId,
+      login: identity.login,
+      display_name: identity.displayName,
+      balance: identity.balance,
+      bonus: identity.bonus,
+    },
+    partnership,
+  };
+
+  const ticket = repo.createTicket({
+    userId: identity.userId,
+    kind: "partnership",
+    source: input.source,
+    categoryKey: "partnership",
+    subject: partnershipTypeLabel(input.proposalType),
+    status: "open",
+    priority: "normal",
+    assignedTo: null,
+    userLoginSnapshot: identity.login,
+    displayNameSnapshot: identity.displayName,
+    balanceSnapshot: identity.balance,
+    contextSnapshot,
+    telegramChatId: input.telegramChatId ?? null,
+  });
+
+  repo.addMessage({
+    ticketId: ticket.id,
+    authorType: "user",
+    authorUserId: identity.userId,
+    authorName: identity.displayName,
+    text: buildPartnershipMessage(partnership),
+    isInternalNote: false,
+  });
+
+  const created = mustGetUserTicket(ticket.id, identity.userId, deps);
+  void notifyTicketCreated(created);
+  return created;
 }
 
 /** Narrow helper used by routes to distinguish domain errors. */

@@ -414,3 +414,62 @@ test("categories endpoint is available to authenticated users", async () => {
 test.after(async () => {
   await app.close();
 });
+
+/* ─── User close + partnership API ───────────────────────────────────────── */
+
+test("user can close own ticket and cannot close another user's ticket", async () => {
+  const created = await createUserTicket("sid-user-201");
+  const ticketId = created.json().ticket.id;
+
+  const foreign = await app.inject({
+    method: "POST",
+    url: `/api/support/tickets/${ticketId}/close`,
+    headers: userHeaders("sid-user-202"),
+  });
+  assert.equal(foreign.statusCode, 404);
+
+  const closed = await app.inject({
+    method: "POST",
+    url: `/api/support/tickets/${ticketId}/close`,
+    headers: userHeaders("sid-user-201"),
+  });
+  assert.equal(closed.statusCode, 200);
+  assert.equal(closed.json().ticket.status, "closed");
+
+  const replyAfterClose = await app.inject({
+    method: "POST",
+    url: `/api/support/tickets/${ticketId}/messages`,
+    headers: userHeaders("sid-user-201"),
+    payload: { text: "После закрытия" },
+  });
+  assert.equal(replyAfterClose.statusCode, 409);
+});
+
+test("user can create a partnership proposal via API", async () => {
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/support/partnership",
+    headers: userHeaders("sid-user-201"),
+    payload: {
+      proposalType: "channel",
+      platformUrl: "@example",
+      audienceSize: "~15 000",
+      offer: "Предлагаю размещение в тематическом канале.",
+    },
+  });
+  assert.equal(response.statusCode, 201);
+  const ticket = response.json().ticket;
+  assert.equal(ticket.kind, "partnership");
+  assert.match(ticket.publicNo, /^P\d+$/);
+});
+
+test("partnership proposal validation returns a domain error", async () => {
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/support/partnership",
+    headers: userHeaders("sid-user-201"),
+    payload: { proposalType: "channel", platformUrl: "@example", offer: "no" },
+  });
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().error, "invalid_offer");
+});
