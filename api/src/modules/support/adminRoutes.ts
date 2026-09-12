@@ -13,7 +13,7 @@ import type { FastifyInstance } from "fastify";
 import { getSessionFromRequest } from "../../shared/session/sessionStore.js";
 import { isSupportAdmin } from "./adminGuard.js";
 import {
-  countSupportUnread,
+  countSupportUnreadBreakdown,
   listSupportUnreadTicketIds,
   markSupportTicketRead,
   recordSupportNotifyRecipient,
@@ -80,10 +80,11 @@ export async function supportAdminRoutes(app: FastifyInstance) {
     const session = await requireAdmin(req, reply);
     if (!session) return;
     const admin = sessionUser(session);
-    const kindRaw = (req.query as any)?.kind;
-    const kind = isTicketKind(kindRaw) ? kindRaw : undefined;
-    const count = admin?.userId ? countSupportUnread(admin.userId, kind) : 0;
-    return reply.send({ ok: true, count });
+    const breakdown = admin?.userId
+      ? countSupportUnreadBreakdown(admin.userId)
+      : { total: 0, support: 0, partnership: 0 };
+    // `count` kept for backward compatibility; `total/support/partnership` for the UI.
+    return reply.send({ ok: true, count: breakdown.total, ...breakdown });
   });
 
   app.get("/admin/support/categories", async (req, reply) => {

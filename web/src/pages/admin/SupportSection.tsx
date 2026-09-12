@@ -7,7 +7,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { apiFetch } from "../../shared/api/client";
-import { refreshSupportUnread } from "../../app/notifications/supportUnread";
+import { refreshSupportUnread, useSupportUnread } from "../../app/notifications/supportUnread";
 import {
   ATTACHMENT_ACCEPT,
   buildMessageFormData,
@@ -17,7 +17,7 @@ import {
   type TicketAttachment,
 } from "../../shared/support/attachments";
 import { AttachmentList, PendingFiles } from "../../shared/support/AttachmentViews";
-import { ModalShell } from "./shared";
+import { ModalShell, PartnershipTabIcon, SupportTabIcon, UnreadMarker } from "./shared";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -417,6 +417,7 @@ export function SupportSection({
   const [total, setTotal] = useState(0);
   const [categories, setCategories] = useState<SupportCategory[]>([]);
   const [kind, setKind] = useState<"support" | "partnership">(initialKind);
+  const unreadCounts = useSupportUnread(true);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState("");
@@ -653,14 +654,18 @@ export function SupportSection({
             className={`supportKindTab${kind === "support" ? " supportKindTab--active" : ""}`}
             onClick={() => setKind("support")}
           >
-            Поддержка
+            <SupportTabIcon />
+            <span>Поддержка</span>
+            <UnreadMarker count={unreadCounts.support} variant="badge" />
           </button>
           <button
             type="button"
             className={`supportKindTab${kind === "partnership" ? " supportKindTab--active" : ""}`}
             onClick={() => setKind("partnership")}
           >
-            🤝 Сотрудничество
+            <PartnershipTabIcon />
+            <span>Сотрудничество</span>
+            <UnreadMarker count={unreadCounts.partnership} variant="badge" />
           </button>
         </div>
 
@@ -758,7 +763,7 @@ export function SupportSection({
               >
                 <div className="list__main">
                   <div className="list__title">
-                    {ticket.unread ? <span className="supportUnreadDot" aria-label="Непрочитано" /> : null}
+                    <UnreadMarker count={ticket.unread ? 1 : 0} />
                     #{ticket.publicNo} · {userLabel(ticket)}
                   </div>
                   <div className="list__sub" style={{ marginTop: 6 }}>

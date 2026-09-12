@@ -24,7 +24,7 @@ function BellIcon() {
 export function SupportBell() {
   const { me } = useMe();
   const isAdmin = Boolean(me?.profile?.isAdmin || me?.admin?.isAdmin);
-  const count = useSupportUnread(isAdmin);
+  const { total: count } = useSupportUnread(isAdmin);
   const navigate = useNavigate();
 
   if (!isAdmin) return null;

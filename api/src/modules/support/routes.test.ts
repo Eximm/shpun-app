@@ -389,8 +389,20 @@ test("admin API handles staff replies, status updates and filtering", async () =
   assert.ok(filtered.json().items.some((t: any) => t.id === ticketId));
 });
 
-test("admin support unread endpoint returns a count", async () => {
+test("admin support unread endpoint returns a kind breakdown", async () => {
   await createUserTicket("sid-user-201");
+
+  const partnership = await app.inject({
+    method: "POST",
+    url: "/api/support/partnership",
+    headers: userHeaders("sid-user-201"),
+    payload: {
+      proposalType: "channel",
+      platformUrl: "@example",
+      offer: "Предлагаю размещение в канале.",
+    },
+  });
+  assert.equal(partnership.statusCode, 201);
 
   const response = await app.inject({
     method: "GET",
@@ -398,7 +410,11 @@ test("admin support unread endpoint returns a count", async () => {
     headers: userHeaders("sid-admin"),
   });
   assert.equal(response.statusCode, 200);
-  assert.ok(Number(response.json().count) >= 1);
+  const body = response.json();
+  assert.ok(Number(body.support) >= 1, "support unread expected");
+  assert.ok(Number(body.partnership) >= 1, "partnership unread expected");
+  assert.equal(Number(body.total), Number(body.support) + Number(body.partnership));
+  assert.equal(Number(body.count), Number(body.total));
 });
 
 test("categories endpoint is available to authenticated users", async () => {

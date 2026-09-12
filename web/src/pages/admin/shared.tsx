@@ -108,3 +108,60 @@ export function ModalShell({
     </div>
   );
 }
+/* ─── Unread + section icons ─────────────────────────────────────────────── */
+
+export function UnreadMarker({
+  count,
+  variant = "dot",
+}: {
+  count?: number;
+  variant?: "dot" | "badge";
+}) {
+  const n = Number(count ?? 0);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  if (variant === "badge") {
+    return (
+      <span className="unreadBadge" title="Есть непрочитанные">
+        {n > 99 ? "99+" : n}
+      </span>
+    );
+  }
+  return <span className="unreadDot" aria-label="Непрочитано" title="Непрочитано" />;
+}
+
+export function SupportTabIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.7" />
+      <circle cx="12" cy="12" r="3.4" stroke="currentColor" strokeWidth="1.7" />
+      <path
+        d="M12 3v4M12 17v4M3 12h4M17 12h4"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+export function PartnershipTabIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="8.5" cy="8" r="2.6" stroke="currentColor" strokeWidth="1.7" />
+      <circle cx="15.5" cy="8" r="2.6" stroke="currentColor" strokeWidth="1.7" />
+      <path
+        d="M4 18.5a4.5 4.5 0 0 1 9 0"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+      />
+      <path
+        d="M14.5 18.5a4.5 4.5 0 0 1 5.5-4.2"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        opacity="0.65"
+      />
+    </svg>
+  );
+}

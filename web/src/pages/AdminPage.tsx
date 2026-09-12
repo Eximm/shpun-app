@@ -20,7 +20,7 @@ import { SupportSection } from "./admin/SupportSection";
 import { ADMIN_TABS, type AdminTab } from "./admin/types";
 
 export function AdminPage() {
-  const { me, loading } = useMe() as any;
+  const { me, loading } = useMe();
   const { t } = useI18n();
   const isAdmin = Boolean(me?.profile?.isAdmin || me?.admin?.isAdmin);
   const supportUnread = useSupportUnread(isAdmin);
@@ -71,7 +71,7 @@ export function AdminPage() {
             <AdminTabButton active={tab === "trialProtection"} onClick={() => setTab("trialProtection")} title={t("admin.tab.trial")}      subtitle={t("admin.tab.trial.sub")} />
             <AdminTabButton active={tab === "serviceCategories"} onClick={() => setTab("serviceCategories")} title={t("admin.tab.categories")} subtitle={t("admin.tab.categories.sub")} />
             <AdminTabButton active={tab === "referralAliases"} onClick={() => setTab("referralAliases")} title="Реклама и блогеры" subtitle="Ссылки" />
-            <AdminTabButton active={tab === "support"} onClick={() => setTab("support")} title="Поддержка" subtitle="Тикеты и переписка" badge={supportUnread > 0 ? supportUnread : undefined} />
+            <AdminTabButton active={tab === "support"} onClick={() => setTab("support")} title="Поддержка" subtitle="Тикеты и переписка" badge={supportUnread.total > 0 ? supportUnread.total : undefined} />
             <AdminTabButton active={tab === "serverStatus"} onClick={() => setTab("serverStatus")} title="Статус серверов" subtitle="Node exporter" />
           </div>
         </div>

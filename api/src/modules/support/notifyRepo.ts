@@ -127,6 +127,19 @@ export function countSupportUnread(userId: number, kind?: string | null): number
   return listSupportUnreadTicketIds(userId, kind).length;
 }
 
+/** Single-call breakdown for the admin inbox badges (support vs partnership). */
+export function countSupportUnreadBreakdown(userId: number): {
+  total: number;
+  support: number;
+  partnership: number;
+} {
+  const uid = Math.trunc(Number(userId));
+  if (!Number.isFinite(uid) || uid <= 0) return { total: 0, support: 0, partnership: 0 };
+  const support = listSupportUnreadTicketIds(uid, "support").length;
+  const partnership = listSupportUnreadTicketIds(uid, "partnership").length;
+  return { total: support + partnership, support, partnership };
+}
+
 /**
  * Ticket ids where the OWNER has an unread staff reply (non-internal).
  * Reuses the same support_reads table as admin unread, just for the user id.
