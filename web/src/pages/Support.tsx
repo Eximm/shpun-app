@@ -5,6 +5,7 @@
 // identity and service snapshot are resolved server-side.
 
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useSearchParams } from "react-router-dom";
 import { apiFetch } from "../shared/api/client";
 import { PageBackButton } from "../shared/ui/PageBackButton";
 import { toast } from "../shared/ui/toast";
@@ -119,6 +120,8 @@ function Bubble({ message }: { message: TicketMessage }) {
 }
 
 export function Support() {
+  const [searchParams] = useSearchParams();
+  const autoOpenedRef = useRef(false);
   const [view, setView] = useState<"list" | "create" | "detail">("list");
   const [tickets, setTickets] = useState<UserTicket[]>([]);
   const [loading, setLoading] = useState(true);
@@ -154,6 +157,16 @@ export function Support() {
     void loadCategories();
     void loadServices();
   }, []);
+
+  // Deep link: /support?ticket=<id> opens the specific ticket once
+  // (used by staff-reply notifications for app-source tickets).
+  useEffect(() => {
+    if (autoOpenedRef.current) return;
+    const id = Number(searchParams.get("ticket") ?? 0);
+    if (!Number.isFinite(id) || id <= 0) return;
+    autoOpenedRef.current = true;
+    void openTicket(id);
+  }, [searchParams]);
 
   useEffect(() => {
     const el = threadRef.current;

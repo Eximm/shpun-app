@@ -2,14 +2,19 @@
 //
 // Best-effort notification layer for support tickets AND partnership proposals.
 //
-//  - notifyTicketCreated    -> admins (Telegram topic + ShpunApp in-app)
-//  - notifyTicketUserMessage-> admins (Telegram topic + ShpunApp in-app)
-//  - notifyTicketStaffReply -> applicant (Telegram only for now; source-extensible)
+//  - notifyTicketCreated     -> admins (Telegram topic + ShpunApp in-app)
+//  - notifyTicketUserMessage -> admins (Telegram topic + ShpunApp in-app)
+//  - notifyTicketStaffReply  -> applicant, SOURCE-AWARE:
+//      * source=telegram -> short Telegram message (+ attachments via Bot API)
+//      * source=app      -> owner notif_event + web push (deep link to ticket)
+//
+// The ticket `source` is the single source of truth for the reply channel.
+// A telegram_chat_id on an app-source ticket is NEVER used as a fallback.
 //
 // Support and partnership share the same infrastructure but use different
-// Telegram topics (SUPPORT_ADMIN_THREAD_ID / PARTNERSHIP_ADMIN_THREAD_ID) and
-// different wording. Notifications never block or roll back a write; every
-// public function catches its own errors and callers may safely `void` them.
+// Telegram topics (SUPPORT_ADMIN_THREAD_ID / PARTNERSHIP_ADMIN_THREAD_ID).
+// Notifications never block or roll back a write; every public function catches
+// its own errors and callers may safely `void` them.
 
 import { getTicketRepository } from "./repository.js";
 import { listSupportNotifyRecipients } from "./notifyRepo.js";
@@ -65,6 +70,27 @@ function partnershipContext(ticket: Ticket): PartnershipContext | null {
 
 function nowTs(): number {
   return Math.floor(Date.now() / 1000);
+}
+
+/**
+ * Concise delivery logging (no secrets, no file contents).
+ * Use it to confirm in production that a reply was saved and whether delivery
+ * to Telegram / in-app succeeded.
+ */
+function logDelivery(event: string, data: Record<string, unknown>): void {
+  try {
+    console.info(`SUPPORT_NOTIFY ${event}`, data);
+  } catch {
+    // ignore
+  }
+}
+
+function logDeliveryFailure(event: string, data: Record<string, unknown>): void {
+  try {
+    console.warn(`SUPPORT_NOTIFY ${event}`, data);
+  } catch {
+    // ignore
+  }
 }
 
 function adminTab(kind: Ticket["kind"]): string {
@@ -125,6 +151,60 @@ function emitAdminInApp(base: {
     if (stored.ok && !stored.dedup) {
       void sendWebPushToUser(uid, event).catch(() => {});
     }
+  }
+}
+
+function emitOwnerInApp(ticket: Ticket, base: {
+  eventBaseId: string;
+  type: string;
+  title: string;
+  message: string;
+  messageId?: number;
+}): void {
+  const uid = Math.trunc(Number(ticket.userId));
+  if (!Number.isFinite(uid) || uid <= 0) return;
+
+  const ts = nowTs();
+  const to = `/support?ticket=${ticket.id}`;
+  const event: NotifEvent = {
+    event_id: `u:${uid}:${base.eventBaseId}`,
+    ts,
+    type: base.type,
+    level: "info",
+    title: base.title,
+    message: base.message,
+    target: "user",
+    user_id: uid,
+    toast: true,
+    meta: {
+      ticketId: ticket.id,
+      publicNo: ticket.publicNo,
+      kind: ticket.kind,
+      ...(base.messageId ? { messageId: base.messageId } : {}),
+      action: { kind: "nav", to, label: "Открыть" },
+      short: { title: base.title, message: base.message },
+    },
+  };
+
+  const stored = putNotifEvent(event);
+  if (!stored.ok) {
+    logDeliveryFailure("owner_inapp_store_failed", {
+      ticket: ticket.publicNo,
+      kind: ticket.kind,
+      source: ticket.source,
+      error: stored.error,
+    });
+    return;
+  }
+  logDelivery("owner_inapp_ok", {
+    ticket: ticket.publicNo,
+    kind: ticket.kind,
+    source: ticket.source,
+    user_id: uid,
+    dedup: stored.dedup,
+  });
+  if (!stored.dedup) {
+    void sendWebPushToUser(uid, event).catch(() => {});
   }
 }
 
@@ -222,43 +302,118 @@ export async function notifyTicketUserMessage(ticket: Ticket, message: TicketMes
 }
 
 export async function notifyTicketStaffReply(ticket: Ticket, message: TicketMessage): Promise<void> {
-  // Applicant notification is source-extensible: Telegram now, app/web push later.
-  if (ticket.source !== "telegram") return;
-  if (!ticket.telegramChatId) return;
+  const hasAttachments = Array.isArray(message.attachments) && message.attachments.length > 0;
+  const preview = clip(message.text, 200) || (hasAttachments ? "📎 Поддержка отправила вложение" : "Новый ответ");
 
-  const text =
-    ticket.kind === "partnership"
-      ? `🤝 По предложению #${esc(ticket.publicNo)} есть новый ответ.\n\n` +
-        `Откройте «Мои обращения», чтобы посмотреть ответ.`
-      : `🛟 По обращению #${esc(ticket.publicNo)} есть новый ответ.\n\n` +
-        `Откройте «Мои обращения», чтобы посмотреть сообщение поддержки.`;
-
-  const replyMarkup = {
-    inline_keyboard: [[{ text: "🎫 Открыть обращение", callback_data: `support:view ${ticket.id}` }]],
-  };
-
-  try {
-    await sendSupportTelegramMessage(ticket.telegramChatId, text, replyMarkup);
-  } catch {
-    // best-effort: never roll back the staff reply
-  }
-
-  // Forward staff attachments directly to the user's Telegram chat (no public URLs).
-  const attachments = message.attachments ?? [];
-  if (attachments.length === 0) return;
-
-  const storage = getAttachmentStorage();
-  for (const attachment of attachments) {
-    if (attachment.deletedAt) continue;
-    try {
-      const buffer = storage.read(attachment.storageKey);
-      if (!buffer) continue;
-      await sendSupportTelegramAttachment(
-        ticket.telegramChatId,
-        { buffer, filename: attachment.originalName || "file", mimeType: attachment.mimeType }
-      );
-    } catch {
-      // best-effort
+  // SOURCE-AWARE: the ticket source decides the reply channel.
+  if (ticket.source === "telegram") {
+    const chatId = ticket.telegramChatId;
+    if (!chatId) {
+      logDeliveryFailure("staff_reply_skipped", {
+        ticket: ticket.publicNo,
+        kind: ticket.kind,
+        source: ticket.source,
+        reason: "missing_telegram_chat_id",
+      });
+      return;
     }
+
+    const text =
+      ticket.kind === "partnership"
+        ? `🤝 По предложению #${esc(ticket.publicNo)} есть новый ответ.\n\n` +
+          `Откройте «Мои обращения», чтобы посмотреть ответ.`
+        : `🛟 По обращению #${esc(ticket.publicNo)} есть новый ответ.\n\n` +
+          `Откройте «Мои обращения», чтобы посмотреть сообщение поддержки.`;
+
+    const replyMarkup = {
+      inline_keyboard: [[{ text: "🎫 Открыть обращение", callback_data: `support:view ${ticket.id}` }]],
+    };
+
+    try {
+      const result = await sendSupportTelegramMessage(chatId, text, replyMarkup);
+      if (result.ok) {
+        logDelivery("staff_reply_telegram_ok", {
+          ticket: ticket.publicNo,
+          kind: ticket.kind,
+          source: ticket.source,
+          chat_id: chatId,
+        });
+      } else {
+        logDeliveryFailure("staff_reply_telegram_failed", {
+          ticket: ticket.publicNo,
+          kind: ticket.kind,
+          source: ticket.source,
+          chat_id: chatId,
+          error: result.error,
+        });
+      }
+    } catch (error: any) {
+      logDeliveryFailure("staff_reply_telegram_error", {
+        ticket: ticket.publicNo,
+        kind: ticket.kind,
+        source: ticket.source,
+        chat_id: chatId,
+        error: String(error?.message ?? error ?? "unknown"),
+      });
+    }
+
+    // Forward staff attachments directly to the user's Telegram chat (no public URLs).
+    const attachments = message.attachments ?? [];
+    if (attachments.length === 0) return;
+
+    const storage = getAttachmentStorage();
+    let delivered = 0;
+    let failed = 0;
+    for (const attachment of attachments) {
+      if (attachment.deletedAt) continue;
+      try {
+        const buffer = storage.read(attachment.storageKey);
+        if (!buffer) {
+          failed++;
+          continue;
+        }
+        const result = await sendSupportTelegramAttachment(chatId, {
+          buffer,
+          filename: attachment.originalName || "file",
+          mimeType: attachment.mimeType,
+        });
+        if (result.ok) delivered++;
+        else failed++;
+      } catch {
+        failed++;
+      }
+    }
+    logDelivery("staff_reply_attachments", {
+      ticket: ticket.publicNo,
+      kind: ticket.kind,
+      source: ticket.source,
+      chat_id: chatId,
+      delivered,
+      failed,
+    });
+    return;
   }
+
+  // source=app (or any non-telegram source): in-app notification + web push only.
+  // Never fall back to Telegram just because a chat id happens to exist.
+  if (ticket.source === "app") {
+    emitOwnerInApp(ticket, {
+      eventBaseId: `${ticket.kind}:${ticket.id}:staff:${message.id}`,
+      type: ticket.kind === "partnership" ? "partnership.reply" : "support.reply",
+      title:
+        ticket.kind === "partnership"
+          ? `Ответ по предложению #${ticket.publicNo}`
+          : `Ответ по обращению #${ticket.publicNo}`,
+      message: preview,
+      messageId: message.id,
+    });
+    return;
+  }
+
+  logDeliveryFailure("staff_reply_skipped", {
+    ticket: ticket.publicNo,
+    kind: ticket.kind,
+    source: ticket.source,
+    reason: "unsupported_source",
+  });
 }
