@@ -71,6 +71,97 @@ test("creates a ticket and snapshots the owned service", async () => {
   assert.equal(ticket.messages[0]?.authorType, "user");
 });
 
+test("creates a ticket with NO service (general question)", async () => {
+  const ticket = await service.createTicket(
+    {
+      userId: 42,
+      source: "telegram",
+      categoryKey: "other",
+      text: "Общий вопрос без услуги",
+      shmSessionId: "shm-ok",
+    },
+    { shm: fakeShm }
+  );
+
+  // The exact no-service regression: no snapshot, no ownership lookup.
+  assert.equal(ticket.userServiceId, null);
+  assert.equal(ticket.serviceId, null);
+  assert.equal(ticket.serviceCategory, null);
+  assert.equal(ticket.serviceSnapshot, null);
+  assert.equal(ticket.messages.length, 1);
+});
+
+test("normalizes every no-service variant (absent, '', null, whitespace) to null", async () => {
+  const variants: Array<unknown> = [undefined, "", "   ", null];
+  for (const value of variants) {
+    const ticket = await service.createTicket(
+      {
+        userId: 42,
+        source: "telegram",
+        categoryKey: "other",
+        text: `No service variant ${JSON.stringify(value)}`,
+        userServiceId: value as number | null | undefined,
+        shmSessionId: "shm-ok",
+      },
+      { shm: fakeShm }
+    );
+    assert.equal(ticket.userServiceId, null, `userServiceId must be null for ${JSON.stringify(value)}`);
+    assert.equal(ticket.serviceId, null);
+    assert.equal(ticket.serviceSnapshot, null);
+  }
+});
+
+test("does not leak a stale service context into a later no-service ticket", async () => {
+  // First ticket is bound to an owned service...
+  const withService = await service.createTicket(
+    {
+      userId: 42,
+      source: "telegram",
+      categoryKey: "connection",
+      text: "Проблема с услугой",
+      userServiceId: 77,
+      shmSessionId: "shm-ok",
+    },
+    { shm: fakeShm }
+  );
+  assert.equal(withService.userServiceId, 77);
+
+  // ...the next one is a general question with an empty service value.
+  const general = await service.createTicket(
+    {
+      userId: 42,
+      source: "telegram",
+      categoryKey: "other",
+      text: "Потом общий вопрос",
+      userServiceId: "" as unknown as number,
+      shmSessionId: "shm-ok",
+    },
+    { shm: fakeShm }
+  );
+
+  assert.equal(general.userServiceId, null);
+  assert.equal(general.serviceId, null);
+  assert.equal(general.serviceSnapshot, null);
+});
+
+test("rejects a malformed non-empty service id", async () => {
+  await assert.rejects(
+    () =>
+      service.createTicket(
+        {
+          userId: 42,
+          source: "telegram",
+          categoryKey: "other",
+          text: "Плохой сервис",
+          userServiceId: "abc" as unknown as number,
+          shmSessionId: "shm-ok",
+        },
+        { shm: fakeShm }
+      ),
+    (error) => assertSupportError(error, "invalid_service")
+  );
+});
+
 test("rejects a service that does not belong to the requester", async () => {
   await assert.rejects(
     () =>

@@ -65,6 +65,28 @@ function requireUserId(userId: unknown): number {
   return Math.trunc(n);
 }
 
+/**
+ * Normalizes an optional user service id into a single no-service case.
+ *
+ * Different clients deliver "general question / no service" differently:
+ * the SHM Telegram DSL omits the param, an empty query value arrives as "",
+ * JSON clients send null, and whitespace may leak from the UI. All of those
+ * must mean `null` (no service) instead of an invalid service id. A non-empty
+ * value that is not a positive number is still a client error.
+ */
+export function normalizeOptionalServiceId(value: unknown): number | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value === "string") {
+    const raw = value.trim();
+    if (!raw || raw.toLowerCase() === "none" || raw.toLowerCase() === "null") return null;
+  }
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) {
+    throw new SupportError("invalid_service", 400);
+  }
+  return Math.trunc(n);
+}
+
 /* ─── Categories ─────────────────────────────────────────────────────────── */
 
 export function listCategories(
@@ -144,12 +166,12 @@ export async function createTicket(
 
   // A provided user_service_id must be owned by the requester. Without a
   // session we cannot verify that, so reject instead of trusting the client.
+  // No-service tickets (general question) never reach this branch: absent,
+  // null, "" and whitespace are normalized to null before any validation.
+  const normalizedServiceId = normalizeOptionalServiceId(input.userServiceId);
   let serviceSnapshot: ServiceSnapshot | null = null;
-  if (input.userServiceId !== undefined && input.userServiceId !== null) {
-    const usi = Math.trunc(Number(input.userServiceId));
-    if (!Number.isFinite(usi) || usi <= 0) {
-      throw new SupportError("invalid_service", 400);
-    }
+  if (normalizedServiceId !== null) {
+    const usi = normalizedServiceId;
     if (!input.shmSessionId) {
       throw new SupportError("service_ownership_unavailable", 400);
     }

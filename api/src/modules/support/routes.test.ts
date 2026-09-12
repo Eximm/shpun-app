@@ -175,6 +175,30 @@ test("user API snapshots an owned service", async () => {
   assert.equal(ticket.balanceSnapshot, 100);
 });
 
+test("user API creates a no-service general question (ShpunApp)", async () => {
+  const response = await createUserTicket("sid-user-201", {
+    categoryKey: "other",
+    userServiceId: null,
+  });
+  assert.equal(response.statusCode, 201);
+  const ticket = response.json().ticket;
+  assert.equal(ticket.userServiceId, null);
+  assert.equal(ticket.serviceId, null);
+  assert.equal(ticket.serviceSnapshot, null);
+});
+
+test("user API treats an empty userServiceId as no service", async () => {
+  const response = await createUserTicket("sid-user-201", {
+    categoryKey: "other",
+    userServiceId: "",
+  });
+  assert.equal(response.statusCode, 201);
+  const ticket = response.json().ticket;
+  assert.equal(ticket.userServiceId, null);
+  assert.equal(ticket.serviceId, null);
+  assert.equal(ticket.serviceSnapshot, null);
+});
+
 test("internal API rejects missing and wrong secret", async () => {
   const missing = await app.inject({
     method: "POST",
@@ -228,6 +252,56 @@ test("internal API creates a ticket through the GET action endpoint", async () =
   assert.equal(ticket.source, "telegram");
   assert.equal(ticket.telegramChatId, 555002);
   assert.ok(ticket.publicNo);
+});
+
+test("internal Telegram route succeeds without user_service_id (general question)", async () => {
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/internal/support/tickets",
+    headers: { "content-type": "application/json", "x-support-secret": SUPPORT_SECRET },
+    payload: {
+      session_id: "shm-user-201",
+      source: "telegram",
+      category_key: "other",
+      text: "Бот: общий вопрос без услуги",
+    },
+  });
+  assert.equal(response.statusCode, 201);
+  const ticket = response.json().ticket;
+  assert.equal(ticket.userServiceId, null);
+  assert.equal(ticket.serviceId, null);
+  assert.equal(ticket.serviceSnapshot, null);
+});
+
+test("internal Telegram route normalizes user_service_id=\"\" to no service", async () => {
+  const response = await app.inject({
+    method: "GET",
+    url:
+      "/api/internal/support/tickets/create?session_id=shm-user-201&category_key=other&user_service_id=" +
+      "&text=" +
+      encodeURIComponent("Бот: пустой user_service_id") +
+      "&secret=" +
+      SUPPORT_SECRET,
+  });
+  assert.equal(response.statusCode, 200);
+  const ticket = response.json().ticket;
+  assert.equal(ticket.userServiceId, null);
+  assert.equal(ticket.serviceId, null);
+  assert.equal(ticket.serviceSnapshot, null);
+});
+
+test("internal Telegram route rejects a malformed non-empty user_service_id", async () => {
+  const response = await app.inject({
+    method: "GET",
+    url:
+      "/api/internal/support/tickets/create?session_id=shm-user-201&category_key=other&user_service_id=abc" +
+      "&text=" +
+      encodeURIComponent("Бот: плохой user_service_id") +
+      "&secret=" +
+      SUPPORT_SECRET,
+  });
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().error, "invalid_service");
 });
 
 test("GET create action is not shadowed by the ticket view route", async () => {
