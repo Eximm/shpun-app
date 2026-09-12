@@ -24,7 +24,7 @@ import type {
 
 /* ─── Schema ─────────────────────────────────────────────────────────────── */
 
-linkDb.exec(`
+const BASE_SCHEMA = `
 CREATE TABLE IF NOT EXISTS support_tickets (
   id                     INTEGER PRIMARY KEY AUTOINCREMENT,
   public_no              TEXT NOT NULL UNIQUE,
@@ -71,8 +71,6 @@ CREATE INDEX IF NOT EXISTS idx_support_tickets_category
   ON support_tickets(category_key);
 CREATE INDEX IF NOT EXISTS idx_support_tickets_external
   ON support_tickets(storage_provider, external_id);
-CREATE INDEX IF NOT EXISTS idx_support_tickets_kind
-  ON support_tickets(kind, last_message_at DESC);
 
 CREATE TABLE IF NOT EXISTS support_ticket_messages (
   id                INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -103,20 +101,64 @@ CREATE TABLE IF NOT EXISTS support_ticket_counters (
   name   TEXT PRIMARY KEY,
   value  INTEGER NOT NULL DEFAULT 0
 );
-`);
+`;
 
-// Best-effort schema upgrade for existing databases.
-try {
-  linkDb.exec(`ALTER TABLE support_tickets ADD COLUMN kind TEXT NOT NULL DEFAULT 'support'`);
-} catch {
-  // column already exists
+/* ─── Initialization (phased, idempotent) ──────────────────────────────────
+ * Phase A: base tables (CREATE TABLE IF NOT EXISTS).
+ * Phase B: schema migrations — explicit PRAGMA column checks + ALTER.
+ * Phase C: indexes that may reference migrated columns.
+ * Phase D: seeds.
+ *
+ * CRITICAL: an index that references a migrated column must be created only
+ * AFTER the matching ALTER. Otherwise a legacy DB without that column crashes
+ * during initialization (the production "no such column: kind" bug).
+ */
+
+function tableHasColumn(table: string, column: string): boolean {
+  const rows = linkDb.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  return rows.some((row) => String(row.name) === column);
 }
 
-try {
-  linkDb.exec(`CREATE INDEX IF NOT EXISTS idx_support_tickets_kind ON support_tickets(kind, last_message_at DESC)`);
-} catch {
-  // ignore
+function ensureColumn(table: string, column: string, ddl: string): void {
+  if (tableHasColumn(table, column)) return;
+  linkDb.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
 }
+
+/**
+ * Keep public_no counters ahead of existing rows so legacy DBs (missing or
+ * stale counters) never generate a duplicate ticket number.
+ */
+function reconcileTicketCounters(): void {
+  const supportRow = linkDb
+    .prepare(
+      `SELECT COALESCE(MAX(CAST(public_no AS INTEGER)), 0) AS m
+       FROM support_tickets WHERE public_no GLOB '[0-9]*'`
+    )
+    .get() as { m?: number } | undefined;
+  const partnershipRow = linkDb
+    .prepare(
+      `SELECT COALESCE(MAX(CAST(SUBSTR(public_no, 2) AS INTEGER)), 0) AS m
+       FROM support_tickets WHERE public_no GLOB 'P[0-9]*'`
+    )
+    .get() as { m?: number } | undefined;
+
+  const bump = (name: string, min: number) => {
+    linkDb
+      .prepare(`INSERT OR IGNORE INTO support_ticket_counters(name, value) VALUES(?, 1000)`)
+      .run(name);
+    linkDb
+      .prepare(`UPDATE support_ticket_counters SET value = MAX(value, ?) WHERE name = ?`)
+      .run(Math.max(0, Math.trunc(min) || 0), name);
+  };
+
+  bump("ticket", Number(supportRow?.m ?? 0));
+  bump("partnership", Number(partnershipRow?.m ?? 0));
+}
+
+const INDEX_SCHEMA = `
+CREATE INDEX IF NOT EXISTS idx_support_tickets_kind
+  ON support_tickets(kind, last_message_at DESC);
+`;
 
 /* ─── Seed categories (bootstrap only; editing happens via admin later) ──── */
 
@@ -130,25 +172,48 @@ const SEED_CATEGORIES: Array<{ key: string; title: string; description: string; 
   { key: "other", title: "Другое", description: "Всё остальное", sortOrder: 100 },
 ];
 
-try {
-  const seedStmt = linkDb.prepare(
-    `INSERT OR IGNORE INTO support_categories(key, title, description, sort_order, active)
-     VALUES (@key, @title, @description, @sort_order, 1)`
-  );
-  const seedTx = linkDb.transaction(() => {
-    for (const item of SEED_CATEGORIES) {
-      seedStmt.run({
-        key: item.key,
-        title: item.title,
-        description: item.description,
-        sort_order: item.sortOrder,
-      });
-    }
-  });
-  seedTx();
-} catch {
-  // Seeding is best-effort; the module must still load.
+function seedSupportCategories(): void {
+  try {
+    const seedStmt = linkDb.prepare(
+      `INSERT OR IGNORE INTO support_categories(key, title, description, sort_order, active)
+       VALUES (@key, @title, @description, @sort_order, 1)`
+    );
+    const seedTx = linkDb.transaction(() => {
+      for (const item of SEED_CATEGORIES) {
+        seedStmt.run({
+          key: item.key,
+          title: item.title,
+          description: item.description,
+          sort_order: item.sortOrder,
+        });
+      }
+    });
+    seedTx();
+  } catch {
+    // Seeding is best-effort; the module must still load.
+  }
 }
+
+/**
+ * Bring the support schema to the current version.
+ * Idempotent and safe on: fresh DB, legacy DB without `kind`, already migrated
+ * DB, and repeated application starts. Exported so a migration regression test
+ * can re-run it (restart simulation).
+ */
+export function ensureSupportSchema(): void {
+  // Phase A: base tables.
+  linkDb.exec(BASE_SCHEMA);
+  // Phase B: migrations (explicit column checks — never rely on try/catch).
+  ensureColumn("support_tickets", "kind", "kind TEXT NOT NULL DEFAULT 'support'");
+  // Phase B.2: keep public_no counters ahead of existing rows.
+  reconcileTicketCounters();
+  // Phase C: indexes that reference migrated columns.
+  linkDb.exec(INDEX_SCHEMA);
+  // Phase D: seeds.
+  seedSupportCategories();
+}
+
+ensureSupportSchema();
 
 /* ─── Row mapping ────────────────────────────────────────────────────────── */
 
