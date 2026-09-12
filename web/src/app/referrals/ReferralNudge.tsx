@@ -135,7 +135,9 @@ export function ReferralNudge({ enabled = true }: { enabled?: boolean }) {
   const { t } = useI18n();
   const loc = useLocation();
   const nav = useNavigate();
-  const { me } = useMe() as any;
+  const me = useMe().me as unknown as
+    | { profile?: { id?: number; user_id?: number }; id?: number }
+    | null;
   const timerRef = useRef<number | null>(null);
   const pathRef = useRef(loc.pathname);
 
