@@ -31,6 +31,7 @@ import { LegalDocs }        from "./pages/LegalDocs";
 
 import { AuthGate }                from "./app/auth/AuthGate";
 import { BottomNav }               from "./app/layout/BottomNav";
+import { SupportBell }              from "./app/layout/SupportBell";
 import { PwaInstallPrompt }        from "./app/pwa/PwaInstallPrompt";
 import { ReferralNudge }           from "./app/referrals/ReferralNudge";
 import { I18nProvider, useI18n }   from "./shared/i18n";
@@ -116,7 +117,10 @@ function AppShell({ children }: { children: React.ReactNode }) {
               <div className="brand__subtitle">SDN System</div>
             </div>
           </div>
-          <span className="badge">{t("app.beta")}</span>
+          <div className="topbar__end">
+            <SupportBell />
+            <span className="badge">{t("app.beta")}</span>
+          </div>
         </div>
       </header>
       <main className="main">

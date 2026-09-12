@@ -5,11 +5,13 @@ export function AdminTabButton({
   title,
   subtitle,
   onClick,
+  badge,
 }: {
   active: boolean;
   title: string;
   subtitle: string;
   onClick: () => void;
+  badge?: ReactNode;
 }) {
   return (
     <button
@@ -17,7 +19,10 @@ export function AdminTabButton({
       type="button"
       onClick={onClick}
     >
-      <span className="admin-tabBtn__title">{title}</span>
+      <span className="admin-tabBtn__title">
+        {title}
+        {badge ? <span className="admin-tabBtn__badge">{badge}</span> : null}
+      </span>
       <span className="admin-tabBtn__sub">{subtitle}</span>
     </button>
   );

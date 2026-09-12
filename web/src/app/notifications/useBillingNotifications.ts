@@ -185,16 +185,24 @@ function getToastView(ev: BillingPushEvent): {
   title: string;
   description: string;
   level: "info" | "success" | "error";
+  action?: { label: string; to: string };
 } {
   const level = ev.level || "info";
 
   const shortTitle = String(ev.meta?.short?.title || "").trim();
   const shortMessage = String(ev.meta?.short?.message || "").trim();
 
+  const rawAction = ev.meta?.action;
+  const action =
+    rawAction && rawAction.kind === "nav" && typeof rawAction.to === "string" && rawAction.to.trim()
+      ? { label: String(rawAction.label || "Открыть"), to: String(rawAction.to).trim() }
+      : undefined;
+
   return {
     title: shortTitle || ev.title || "Уведомление",
     description: shortMessage || ev.message || "",
     level,
+    action,
   };
 }
 
@@ -330,12 +338,22 @@ export function useBillingNotifications(enabled: boolean) {
 
           shownKeys.forEach((key) => markToastShown(uid, key));
 
+          const toastOpts = {
+            description: view.description,
+            ...(view.action
+              ? {
+                  actionLabel: view.action.label,
+                  onAction: () => { window.location.assign(view.action!.to); },
+                }
+              : {}),
+          };
+
           if (view.level === "success") {
-            toast.success(view.title, { description: view.description });
+            toast.success(view.title, toastOpts);
           } else if (view.level === "error") {
-            toast.error(view.title, { description: view.description });
+            toast.error(view.title, toastOpts);
           } else {
-            toast.info(view.title, { description: view.description });
+            toast.info(view.title, toastOpts);
           }
         }
 

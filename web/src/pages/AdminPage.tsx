@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
 import { useMe } from "../app/auth/useMe";
+import { useSupportUnread } from "../app/notifications/supportUnread";
 import { useI18n } from "../shared/i18n";
 import { PageBackButton } from "../shared/ui/PageBackButton";
 
@@ -22,8 +23,10 @@ export function AdminPage() {
   const { me, loading } = useMe() as any;
   const { t } = useI18n();
   const isAdmin = Boolean(me?.profile?.isAdmin || me?.admin?.isAdmin);
+  const supportUnread = useSupportUnread(isAdmin);
   const [searchParams] = useSearchParams();
   const tabParam = searchParams.get("tab") ?? "";
+  const initialTicketId = Number(searchParams.get("ticket") ?? 0) || undefined;
   const initialTab: AdminTab = (ADMIN_TABS as readonly string[]).includes(tabParam)
     ? (tabParam as AdminTab)
     : "overview";
@@ -63,7 +66,7 @@ export function AdminPage() {
             <AdminTabButton active={tab === "trialProtection"} onClick={() => setTab("trialProtection")} title={t("admin.tab.trial")}      subtitle={t("admin.tab.trial.sub")} />
             <AdminTabButton active={tab === "serviceCategories"} onClick={() => setTab("serviceCategories")} title={t("admin.tab.categories")} subtitle={t("admin.tab.categories.sub")} />
             <AdminTabButton active={tab === "referralAliases"} onClick={() => setTab("referralAliases")} title="Реклама и блогеры" subtitle="Ссылки" />
-            <AdminTabButton active={tab === "support"} onClick={() => setTab("support")} title="Поддержка" subtitle="Тикеты и переписка" />
+            <AdminTabButton active={tab === "support"} onClick={() => setTab("support")} title="Поддержка" subtitle="Тикеты и переписка" badge={supportUnread > 0 ? supportUnread : undefined} />
             <AdminTabButton active={tab === "serverStatus"} onClick={() => setTab("serverStatus")} title="Статус серверов" subtitle="Node exporter" />
           </div>
         </div>
@@ -77,7 +80,7 @@ export function AdminPage() {
         {tab === "trialProtection" && <TrialProtectionSection />}
         {tab === "serviceCategories" && <ServiceCategoriesSection />}
         {tab === "referralAliases" && <ReferralAliasesSection />}
-        {tab === "support" && <SupportSection />}
+        {tab === "support" && <SupportSection initialTicketId={initialTicketId} />}
         {tab === "serverStatus" && <ServerStatusSection />}
       </div>
     </div>

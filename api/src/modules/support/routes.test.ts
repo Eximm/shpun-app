@@ -367,6 +367,18 @@ test("admin API handles staff replies, status updates and filtering", async () =
   assert.ok(filtered.json().items.some((t: any) => t.id === ticketId));
 });
 
+test("admin support unread endpoint returns a count", async () => {
+  await createUserTicket("sid-user-201");
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/api/admin/support/unread",
+    headers: userHeaders("sid-admin"),
+  });
+  assert.equal(response.statusCode, 200);
+  assert.ok(Number(response.json().count) >= 1);
+});
+
 test("categories endpoint is available to authenticated users", async () => {
   const response = await app.inject({
     method: "GET",

@@ -1,11 +1,13 @@
 // web/src/pages/admin/SupportSection.tsx
 //
-// Admin support UI: ticket list, filters, detail card, conversation,
-// staff replies, internal notes and status/priority/assignee management.
-// Uses the existing backend support admin API.
+// Admin support helpdesk UI.
+// Layout: compact header/context, conversation as the main area, pinned
+// composer, diagnostics tucked into a collapsible. Uses the existing backend
+// support admin API (no contract changes).
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "../../shared/api/client";
+import { refreshSupportUnread } from "../../app/notifications/supportUnread";
 import { ModalShell } from "./shared";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -76,6 +78,7 @@ type AdminTicket = {
   updatedAt: string;
   lastMessageAt: string;
   closedAt: string | null;
+  unread?: boolean;
   messages?: TicketMessage[];
 };
 
@@ -157,11 +160,26 @@ function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
-function formatDateTime(value?: string | null) {
-  if (!value) return "—";
+function parseDate(value?: string | null): Date | null {
+  if (!value) return null;
   const iso = value.includes("T") ? value : `${value.replace(" ", "T")}Z`;
   const parsed = new Date(iso);
-  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString("ru-RU");
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatDateTime(value?: string | null) {
+  const parsed = parseDate(value);
+  return parsed ? parsed.toLocaleString("ru-RU") : (value || "—");
+}
+
+function formatClock(value?: string | null) {
+  const parsed = parseDate(value);
+  if (!parsed) return value || "";
+  const today = new Date();
+  const sameDay = parsed.toDateString() === today.toDateString();
+  return sameDay
+    ? parsed.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })
+    : parsed.toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
 function formatCost(value?: number | null) {
@@ -188,8 +206,7 @@ function buildQuery(filters: Filters): string {
 }
 
 function userLabel(ticket: AdminTicket) {
-  const name = ticket.displayNameSnapshot || ticket.userLoginSnapshot;
-  return name ? `${name} · #${ticket.userId}` : `Пользователь #${ticket.userId}`;
+  return ticket.displayNameSnapshot || ticket.userLoginSnapshot || `Пользователь #${ticket.userId}`;
 }
 
 /* ─── Message bubble ─────────────────────────────────────────────────────── */
@@ -198,161 +215,126 @@ function MessageBubble({ message }: { message: TicketMessage }) {
   const isUser = message.authorType === "user";
   const isSystem = message.authorType === "system";
 
-  const background = message.isInternalNote
-    ? "rgba(245,158,11,0.08)"
-    : isUser
-      ? "rgba(255,255,255,0.05)"
-      : isSystem
-        ? "rgba(255,255,255,0.03)"
-        : "rgba(124,92,255,0.14)";
+  if (message.isInternalNote) {
+    return (
+      <div className="supportMsg supportMsg--note">
+        <div className="supportMsg__meta">
+          <strong>Внутренняя заметка</strong>
+          {message.authorName ? <span>· {message.authorName}</span> : null}
+          <span className="supportMsg__time">{formatClock(message.createdAt)}</span>
+        </div>
+        <div className="supportMsg__text">{message.text}</div>
+      </div>
+    );
+  }
 
-  const border = message.isInternalNote
-    ? "1px dashed rgba(245,158,11,0.55)"
-    : isUser
-      ? "1px solid rgba(255,255,255,0.08)"
-      : isSystem
-        ? "1px solid rgba(255,255,255,0.06)"
-        : "1px solid rgba(124,92,255,0.30)";
-
-  const alignSelf = isSystem ? "center" : isUser ? "flex-start" : "flex-end";
-  const maxWidth = isSystem ? "100%" : "92%";
+  const modifier = isUser ? "supportMsg--user" : isSystem ? "supportMsg--system" : "supportMsg--staff";
 
   return (
-    <div
-      style={{
-        alignSelf,
-        maxWidth,
-        minWidth: 0,
-        background,
-        border,
-        borderRadius: 14,
-        padding: "10px 12px",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          gap: 8,
-          alignItems: "baseline",
-          flexWrap: "wrap",
-          fontSize: 12,
-          color: "rgba(255,255,255,0.62)",
-        }}
-      >
-        <strong style={{ color: "rgba(255,255,255,0.88)", fontWeight: 800 }}>
-          {AUTHOR_LABELS[message.authorType]}
-          {!isUser && !isSystem && message.authorName ? ` · ${message.authorName}` : ""}
-        </strong>
-        <span>{formatDateTime(message.createdAt)}</span>
-        {message.isInternalNote && (
-          <span className="chip chip--warn" style={{ marginLeft: "auto" }}>
-            Внутренняя заметка
-          </span>
-        )}
+    <div className={`supportMsg ${modifier}`}>
+      <div className="supportMsg__meta">
+        <strong>{AUTHOR_LABELS[message.authorType]}</strong>
+        {!isUser && !isSystem && message.authorName ? <span>· {message.authorName}</span> : null}
+        <span className="supportMsg__time">{formatClock(message.createdAt)}</span>
       </div>
-      <div
-        style={{
-          marginTop: 6,
-          fontSize: 14,
-          lineHeight: 1.5,
-          whiteSpace: "pre-wrap",
-          overflowWrap: "anywhere",
-          wordBreak: "break-word",
-        }}
-      >
-        {message.text}
-      </div>
+      <div className="supportMsg__text">{message.text}</div>
     </div>
   );
 }
 
-/* ─── Snapshot view ──────────────────────────────────────────────────────── */
+/* ─── Diagnostics ────────────────────────────────────────────────────────── */
 
-function SnapshotView({ ticket }: { ticket: AdminTicket }) {
+function Diagnostics({ ticket }: { ticket: AdminTicket }) {
   const contextUser = (ticket.contextSnapshot?.user ?? null) as ContextUser | null;
   const service = ticket.serviceSnapshot;
   const balance = contextUser?.balance ?? ticket.balanceSnapshot;
   const login = contextUser?.login ?? ticket.userLoginSnapshot;
   const displayName = contextUser?.display_name ?? ticket.displayNameSnapshot;
 
-  const rows: Array<{ label: string; value: string }> = [
-    { label: "Пользователь", value: `#${ticket.userId}` },
-    { label: "Login", value: login || "—" },
-    { label: "Имя", value: displayName || "—" },
-    { label: "Баланс", value: formatCost(balance) },
-    { label: "Бонусы", value: contextUser?.bonus != null ? formatCost(contextUser.bonus) : "—" },
-    { label: "Telegram chat", value: ticket.telegramChatId ? String(ticket.telegramChatId) : "—" },
+  const userRows: Array<{ label: string; value: string }> = [
+    { label: "user id", value: `#${ticket.userId}` },
+    { label: "login", value: login || "—" },
+    { label: "имя", value: displayName || "—" },
+    { label: "баланс", value: formatCost(balance) },
+    { label: "бонусы", value: contextUser?.bonus != null ? formatCost(contextUser.bonus) : "—" },
+    { label: "telegram chat", value: ticket.telegramChatId ? String(ticket.telegramChatId) : "—" },
   ];
 
+  const serviceRows: Array<{ label: string; value: string }> = service
+    ? [
+        { label: "услуга", value: service.name || "—" },
+        { label: "user_service_id", value: service.user_service_id ? `#${service.user_service_id}` : "—" },
+        { label: "service_id", value: service.service_id != null ? String(service.service_id) : "—" },
+        { label: "категория", value: service.category || ticket.serviceCategory || "—" },
+        { label: "статус", value: service.status || "—" },
+        { label: "активна до", value: service.expire || "—" },
+        { label: "период", value: formatPeriod(service.period) },
+        { label: "стоимость", value: formatCost(service.cost) },
+      ]
+    : [];
+
   return (
-    <div className="list admin-gap-top-sm">
-      <div className="list__item admin-tightItem">
-        <div className="list__main">
-          <div className="list__title">Снимок пользователя</div>
-          <div
-            style={{
-              marginTop: 8,
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-              gap: 8,
-            }}
-          >
-            {rows.map((row) => (
-              <div key={row.label} style={{ minWidth: 0 }}>
-                <div className="list__sub" style={{ marginTop: 0, fontSize: 12 }}>
-                  {row.label}
-                </div>
-                <div style={{ fontWeight: 700, overflowWrap: "anywhere" }}>{row.value}</div>
+    <details className="supportDiag">
+      <summary>Диагностика</summary>
+
+      <div className="supportDiag__block">
+        <div className="supportDiag__title">Снимок пользователя</div>
+        <div className="supportDiag__grid">
+          {userRows.map((row) => (
+            <div key={row.label} className="supportDiag__cell">
+              <div className="supportDiag__label">{row.label}</div>
+              <div className="supportDiag__value">{row.value}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="supportDiag__block">
+        <div className="supportDiag__title">Снимок услуги</div>
+        {serviceRows.length === 0 ? (
+          <div className="supportDiag__label">Обращение без привязки к услуге.</div>
+        ) : (
+          <div className="supportDiag__grid">
+            {serviceRows.map((row) => (
+              <div key={row.label} className="supportDiag__cell">
+                <div className="supportDiag__label">{row.label}</div>
+                <div className="supportDiag__value">{row.value}</div>
               </div>
             ))}
           </div>
-        </div>
+        )}
       </div>
 
-      <div className="list__item admin-tightItem">
-        <div className="list__main">
-          <div className="list__title">Снимок услуги</div>
-          {!service ? (
-            <div className="list__sub" style={{ marginTop: 6 }}>
-              Обращение без привязки к услуге.
-            </div>
-          ) : (
-            <div
-              style={{
-                marginTop: 8,
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-                gap: 8,
-              }}
-            >
-              {[
-                { label: "Услуга", value: service.name || "—" },
-                { label: "user_service_id", value: service.user_service_id ? `#${service.user_service_id}` : "—" },
-                { label: "service_id", value: service.service_id != null ? String(service.service_id) : "—" },
-                { label: "Категория", value: service.category || ticket.serviceCategory || "—" },
-                { label: "Статус", value: service.status || "—" },
-                { label: "Активна до", value: service.expire || "—" },
-                { label: "Период", value: formatPeriod(service.period) },
-                { label: "Стоимость", value: formatCost(service.cost) },
-              ].map((row) => (
-                <div key={row.label} style={{ minWidth: 0 }}>
-                  <div className="list__sub" style={{ marginTop: 0, fontSize: 12 }}>
-                    {row.label}
-                  </div>
-                  <div style={{ fontWeight: 700, overflowWrap: "anywhere" }}>{row.value}</div>
-                </div>
-              ))}
-            </div>
+      <details className="supportDiag__raw">
+        <summary>Raw context</summary>
+        <pre className="pre" style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+          {JSON.stringify(
+            {
+              ticketId: ticket.id,
+              publicNo: ticket.publicNo,
+              storageProvider: ticket.storageProvider,
+              externalId: ticket.externalId,
+              userId: ticket.userId,
+              source: ticket.source,
+              serviceId: ticket.serviceId,
+              userServiceId: ticket.userServiceId,
+              serviceCategory: ticket.serviceCategory,
+              balanceSnapshot: ticket.balanceSnapshot,
+              serviceSnapshot: ticket.serviceSnapshot,
+              contextSnapshot: ticket.contextSnapshot,
+            },
+            null,
+            2,
           )}
-        </div>
-      </div>
-    </div>
+        </pre>
+      </details>
+    </details>
   );
 }
 
 /* ─── Section ────────────────────────────────────────────────────────────── */
 
-export function SupportSection() {
+export function SupportSection({ initialTicketId }: { initialTicketId?: number } = {}) {
   const [items, setItems] = useState<AdminTicket[]>([]);
   const [total, setTotal] = useState(0);
   const [categories, setCategories] = useState<SupportCategory[]>([]);
@@ -365,20 +347,18 @@ export function SupportSection() {
   const [openedLoading, setOpenedLoading] = useState(false);
   const [openedError, setOpenedError] = useState("");
 
-  const [replyText, setReplyText] = useState("");
-  const [noteText, setNoteText] = useState("");
-  const [sendingReply, setSendingReply] = useState(false);
-  const [sendingNote, setSendingNote] = useState(false);
+  const [composerMode, setComposerMode] = useState<"reply" | "note">("reply");
+  const [composerText, setComposerText] = useState("");
+  const [sending, setSending] = useState(false);
   const [patching, setPatching] = useState(false);
   const [assigneeDraft, setAssigneeDraft] = useState("");
-  const [rawOpen, setRawOpen] = useState(false);
 
-  // Synchronous locks: prevent double-submit before React re-renders.
-  const replyLock = useRef(false);
-  const noteLock = useRef(false);
+  // Synchronous locks prevent double-submit before React re-renders.
+  const sendLock = useRef(false);
   const patchLock = useRef(false);
-  // Guards against a late response overwriting a different, newly opened ticket.
   const openedIdRef = useRef<number | null>(null);
+  const autoOpenedRef = useRef(false);
+  const threadRef = useRef<HTMLDivElement | null>(null);
 
   const categoryTitles = useMemo(() => {
     const map = new Map<string, string>();
@@ -411,6 +391,20 @@ export function SupportSection() {
     setAssigneeDraft(opened?.assignedTo != null ? String(opened.assignedTo) : "");
   }, [opened?.id, opened?.assignedTo]);
 
+  // Deep link: ?ticket=<id> opens the ticket once.
+  useEffect(() => {
+    if (autoOpenedRef.current) return;
+    if (!initialTicketId || !Number.isFinite(initialTicketId) || initialTicketId <= 0) return;
+    autoOpenedRef.current = true;
+    void openTicket(initialTicketId);
+  }, [initialTicketId]);
+
+  // Keep the conversation scrolled to the latest message.
+  useEffect(() => {
+    const el = threadRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [opened?.id, opened?.messages?.length]);
+
   async function loadCategories() {
     try {
       const response = await apiFetch<{ ok: true; items: SupportCategory[] }>(
@@ -423,8 +417,8 @@ export function SupportSection() {
     }
   }
 
-  async function loadTickets() {
-    setLoading(true);
+  async function loadTickets(options: { silent?: boolean } = {}) {
+    if (!options.silent) setLoading(true);
     setListError("");
     try {
       const response = await apiFetch<{ ok: true; items: AdminTicket[]; total: number }>(
@@ -436,7 +430,7 @@ export function SupportSection() {
     } catch (error) {
       setListError(errorMessage(error, "Не удалось загрузить тикеты."));
     } finally {
-      setLoading(false);
+      if (!options.silent) setLoading(false);
     }
   }
 
@@ -444,15 +438,18 @@ export function SupportSection() {
     setOpenedLoading(true);
     setOpenedError("");
     setNotice("");
-    setRawOpen(false);
+    setComposerMode("reply");
     try {
       const response = await apiFetch<{ ok: true; ticket: AdminTicket }>(
         `/admin/support/tickets/${id}`,
         { method: "GET" },
       );
       setOpened(response.ticket);
-      setReplyText("");
-      setNoteText("");
+      setComposerText("");
+      // Clear the local unread marker and refresh the badge. The backend
+      // already marked the ticket read when it served the detail request.
+      setItems((prev) => prev.map((t) => (t.id === id ? { ...t, unread: false } : t)));
+      void refreshSupportUnread();
     } catch (error) {
       setOpenedError(errorMessage(error, "Не удалось открыть тикет."));
     } finally {
@@ -464,24 +461,23 @@ export function SupportSection() {
     setOpened(null);
     setOpenedError("");
     setNotice("");
+    setComposerText("");
   }
 
-  async function sendMessage(text: string, internal: boolean) {
+  async function sendComposer() {
     if (!opened) return;
-    const payload = text.trim();
+    const payload = composerText.trim();
     if (payload.length < 2) {
       setOpenedError("Сообщение слишком короткое.");
       return;
     }
-
-    const lock = internal ? noteLock : replyLock;
-    if (lock.current) return;
-    lock.current = true;
-    if (internal) setSendingNote(true);
-    else setSendingReply(true);
+    if (sendLock.current) return;
+    sendLock.current = true;
+    setSending(true);
     setOpenedError("");
     setNotice("");
 
+    const internal = composerMode === "note";
     const ticketId = opened.id;
     try {
       const response = await apiFetch<{ ok: true; ticket: AdminTicket }>(
@@ -490,22 +486,16 @@ export function SupportSection() {
       );
       if (openedIdRef.current !== ticketId) return;
       setOpened(response.ticket);
-      if (internal) {
-        setNoteText("");
-        setNotice("Внутренняя заметка добавлена.");
-      } else {
-        setReplyText("");
-        setNotice("Ответ отправлен пользователю.");
-      }
-      await loadTickets();
+      setComposerText("");
+      setNotice(internal ? "Внутренняя заметка добавлена." : "Ответ отправлен пользователю.");
+      void loadTickets({ silent: true });
     } catch (error) {
       if (openedIdRef.current === ticketId) {
         setOpenedError(errorMessage(error, internal ? "Не удалось добавить заметку." : "Не удалось отправить ответ."));
       }
     } finally {
-      lock.current = false;
-      setSendingNote(false);
-      setSendingReply(false);
+      sendLock.current = false;
+      setSending(false);
     }
   }
 
@@ -526,7 +516,7 @@ export function SupportSection() {
       if (openedIdRef.current !== ticketId) return;
       setOpened(response.ticket);
       setNotice("Тикет обновлён.");
-      await loadTickets();
+      void loadTickets({ silent: true });
     } catch (error) {
       if (openedIdRef.current === ticketId) {
         setOpenedError(errorMessage(error, "Не удалось обновить тикет."));
@@ -541,34 +531,20 @@ export function SupportSection() {
     setFilters(EMPTY_FILTERS);
   }
 
-  const hasMessages = Boolean(opened?.messages && opened.messages.length > 0);
+  const messages = opened?.messages ?? [];
 
   return (
     <div className="card">
       <div className="card__body">
         <div className="kicker">Support</div>
         <h2 className="h1">Обращения в поддержку</h2>
-        <p className="p">
-          Тикеты из ShpunApp и Telegram. Здесь можно читать переписку, отвечать пользователю,
-          вести внутренние заметки и управлять статусом.
-        </p>
+        <p className="p">Тикеты из ShpunApp и Telegram: переписка, ответы и внутренние заметки.</p>
 
         {/* ── Filters ── */}
-        <div
-          style={{
-            marginTop: 12,
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-            gap: 10,
-          }}
-        >
+        <div className="supportFilters admin-gap-top-sm">
           <label className="field">
             <span className="field__label">Статус</span>
-            <select
-              className="input"
-              value={filters.status}
-              onChange={(e) => setFilters((p) => ({ ...p, status: e.target.value }))}
-            >
+            <select className="input" value={filters.status} onChange={(e) => setFilters((p) => ({ ...p, status: e.target.value }))}>
               <option value="">Все</option>
               {STATUS_OPTIONS.map((status) => (
                 <option key={status} value={status}>{STATUS_LABELS[status]}</option>
@@ -578,11 +554,7 @@ export function SupportSection() {
 
           <label className="field">
             <span className="field__label">Приоритет</span>
-            <select
-              className="input"
-              value={filters.priority}
-              onChange={(e) => setFilters((p) => ({ ...p, priority: e.target.value }))}
-            >
+            <select className="input" value={filters.priority} onChange={(e) => setFilters((p) => ({ ...p, priority: e.target.value }))}>
               <option value="">Все</option>
               {PRIORITY_OPTIONS.map((priority) => (
                 <option key={priority} value={priority}>{PRIORITY_LABELS[priority]}</option>
@@ -592,11 +564,7 @@ export function SupportSection() {
 
           <label className="field">
             <span className="field__label">Категория</span>
-            <select
-              className="input"
-              value={filters.categoryKey}
-              onChange={(e) => setFilters((p) => ({ ...p, categoryKey: e.target.value }))}
-            >
+            <select className="input" value={filters.categoryKey} onChange={(e) => setFilters((p) => ({ ...p, categoryKey: e.target.value }))}>
               <option value="">Все</option>
               {categories.map((category) => (
                 <option key={category.key} value={category.key}>{category.title}</option>
@@ -618,22 +586,15 @@ export function SupportSection() {
 
           <label className="field">
             <span className="field__label">Поиск</span>
-            <input
-              className="input"
-              placeholder="номер, логин, тема"
-              value={filters.q}
-              onChange={(e) => setFilters((p) => ({ ...p, q: e.target.value }))}
-            />
+            <input className="input" placeholder="номер, логин, тема" value={filters.q} onChange={(e) => setFilters((p) => ({ ...p, q: e.target.value }))} />
           </label>
 
-          <label className="field" style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 8, paddingBottom: 10 }}>
+          <label className="field supportFilters__check">
+            <span className="supportFilters__checkLine">
               <input
                 type="checkbox"
                 checked={filters.unassigned}
-                onChange={(e) =>
-                  setFilters((p) => ({ ...p, unassigned: e.target.checked, assignedTo: e.target.checked ? "" : p.assignedTo }))
-                }
+                onChange={(e) => setFilters((p) => ({ ...p, unassigned: e.target.checked, assignedTo: e.target.checked ? "" : p.assignedTo }))}
               />
               <span className="field__label" style={{ margin: 0 }}>Без оператора</span>
             </span>
@@ -644,12 +605,9 @@ export function SupportSection() {
           <button className="btn btn--soft" type="button" onClick={() => void loadTickets()} disabled={loading}>
             {loading ? "Обновляю…" : "Обновить"}
           </button>
-          <button className="btn" type="button" onClick={resetFilters} disabled={loading}>
-            Сбросить фильтры
-          </button>
+          <button className="btn" type="button" onClick={resetFilters} disabled={loading}>Сбросить фильтры</button>
         </div>
 
-        {notice && <div className="pre admin-gap-top-md">{notice}</div>}
         {listError && <div className="pre admin-gap-top-md">{listError}</div>}
 
         <h3 className="h2 admin-gap-top-md">Тикеты · {total}</h3>
@@ -676,6 +634,7 @@ export function SupportSection() {
               >
                 <div className="list__main">
                   <div className="list__title">
+                    {ticket.unread ? <span className="supportUnreadDot" aria-label="Непрочитано" /> : null}
                     #{ticket.publicNo} · {userLabel(ticket)}
                   </div>
                   <div className="list__sub" style={{ marginTop: 6 }}>
@@ -684,18 +643,16 @@ export function SupportSection() {
                     {SOURCE_LABELS[ticket.source] ?? ticket.source}
                     {ticket.userServiceId ? ` · услуга #${ticket.userServiceId}` : ""}
                     {" · "}
-                    обновлён {formatDateTime(ticket.lastMessageAt)}
+                    {formatClock(ticket.lastMessageAt) || "—"}
                     {" · "}
                     {ticket.assignedTo != null ? `оператор #${ticket.assignedTo}` : "не назначен"}
                   </div>
                 </div>
                 <div className="list__side" style={{ flexDirection: "column", gap: 4, alignItems: "flex-end" }}>
-                  <span className={`chip chip--${STATUS_TONES[ticket.status]}`}>
-                    {STATUS_LABELS[ticket.status]}
-                  </span>
-                  <span className={`chip chip--${PRIORITY_TONES[ticket.priority]}`}>
-                    {PRIORITY_LABELS[ticket.priority]}
-                  </span>
+                  <span className={`chip chip--${STATUS_TONES[ticket.status]}`}>{STATUS_LABELS[ticket.status]}</span>
+                  {(ticket.priority === "high" || ticket.priority === "urgent") && (
+                    <span className={`chip chip--${PRIORITY_TONES[ticket.priority]}`}>{PRIORITY_LABELS[ticket.priority]}</span>
+                  )}
                 </div>
               </div>
             ))}
@@ -715,54 +672,18 @@ export function SupportSection() {
 
       {opened && (
         <ModalShell
-          title={`#${opened.publicNo} · ${opened.subject || "Без темы"}`}
-          kicker={`${STATUS_LABELS[opened.status]} · ${PRIORITY_LABELS[opened.priority]}`}
+          title={opened.subject ? `#${opened.publicNo} · ${opened.subject}` : `#${opened.publicNo}`}
+          kicker={`${categoryTitles.get(opened.categoryKey) ?? opened.categoryKey} · ${SOURCE_LABELS[opened.source] ?? opened.source}`}
           onClose={closeTicket}
         >
           {openedError && <div className="pre">{openedError}</div>}
           {notice && <div className="pre admin-gap-top-sm">{notice}</div>}
 
-          {/* Summary */}
-          <div className="list admin-gap-top-sm">
-            <div className="list__item admin-tightItem">
-              <div className="list__main">
-                <div className="list__title">{userLabel(opened)}</div>
-                <div className="list__sub" style={{ marginTop: 6 }}>
-                  {categoryTitles.get(opened.categoryKey) ?? opened.categoryKey}
-                  {" · "}
-                  {SOURCE_LABELS[opened.source] ?? opened.source}
-                  {" · "}
-                  создан {formatDateTime(opened.createdAt)}
-                  {" · "}
-                  обновлён {formatDateTime(opened.updatedAt)}
-                  {opened.closedAt ? ` · закрыт ${formatDateTime(opened.closedAt)}` : ""}
-                </div>
-              </div>
-              <div className="list__side" style={{ flexDirection: "column", gap: 4, alignItems: "flex-end" }}>
-                <span className={`chip chip--${STATUS_TONES[opened.status]}`}>{STATUS_LABELS[opened.status]}</span>
-                <span className={`chip chip--${PRIORITY_TONES[opened.priority]}`}>{PRIORITY_LABELS[opened.priority]}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Controls */}
-          <h3 className="h2 admin-gap-top-md">Управление</h3>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-              gap: 10,
-              marginTop: 8,
-            }}
-          >
+          {/* Meta / controls (single place for status & priority) */}
+          <div className="supportDetail__meta admin-gap-top-sm">
             <label className="field">
               <span className="field__label">Статус</span>
-              <select
-                className="input"
-                value={opened.status}
-                disabled={patching}
-                onChange={(e) => void patchTicket({ status: e.target.value })}
-              >
+              <select className="input" value={opened.status} disabled={patching} onChange={(e) => void patchTicket({ status: e.target.value })}>
                 {STATUS_OPTIONS.map((status) => (
                   <option key={status} value={status}>{STATUS_LABELS[status]}</option>
                 ))}
@@ -771,12 +692,7 @@ export function SupportSection() {
 
             <label className="field">
               <span className="field__label">Приоритет</span>
-              <select
-                className="input"
-                value={opened.priority}
-                disabled={patching}
-                onChange={(e) => void patchTicket({ priority: e.target.value })}
-              >
+              <select className="input" value={opened.priority} disabled={patching} onChange={(e) => void patchTicket({ priority: e.target.value })}>
                 {PRIORITY_OPTIONS.map((priority) => (
                   <option key={priority} value={priority}>{PRIORITY_LABELS[priority]}</option>
                 ))}
@@ -785,7 +701,7 @@ export function SupportSection() {
 
             <label className="field">
               <span className="field__label">Оператор (ID)</span>
-              <div style={{ display: "flex", gap: 8 }}>
+              <div className="supportDetail__operator">
                 <input
                   className="input"
                   inputMode="numeric"
@@ -798,121 +714,81 @@ export function SupportSection() {
                   className="btn btn--soft"
                   type="button"
                   disabled={patching}
-                  onClick={() =>
-                    void patchTicket({ assigned_to: assigneeDraft.trim() ? Number(assigneeDraft) : null })
-                  }
+                  onClick={() => void patchTicket({ assigned_to: assigneeDraft.trim() ? Number(assigneeDraft) : null })}
                 >
-                  Назначить
+                  ОК
                 </button>
               </div>
             </label>
           </div>
 
-          {/* Snapshot */}
-          <h3 className="h2 admin-gap-top-md">Диагностика</h3>
-          <SnapshotView ticket={opened} />
+          {/* Compact context */}
+          <div className="supportDetail__context">
+            <span><strong>{userLabel(opened)}</strong> · #{opened.userId}</span>
+            {opened.serviceSnapshot || opened.userServiceId ? (
+              <span>
+                Услуга{opened.userServiceId ? ` #${opened.userServiceId}` : ""}
+                {opened.serviceSnapshot?.name ? ` · ${opened.serviceSnapshot.name}` : ""}
+                {opened.serviceSnapshot?.status ? ` · ${opened.serviceSnapshot.status}` : ""}
+              </span>
+            ) : null}
+            <span>создан {formatDateTime(opened.createdAt)}</span>
+          </div>
+
+          <Diagnostics ticket={opened} />
 
           {/* Conversation */}
-          <h3 className="h2 admin-gap-top-md">Переписка</h3>
-          {!hasMessages ? (
-            <div className="list admin-gap-top-sm">
-              <div className="list__item admin-tightItem">
-                <div className="list__sub" style={{ marginTop: 0 }}>Сообщений пока нет.</div>
-              </div>
-            </div>
-          ) : (
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 8,
-                marginTop: 8,
-                maxHeight: 460,
-                overflowY: "auto",
-                paddingRight: 2,
-              }}
-            >
-              {opened.messages!.map((message) => (
-                <MessageBubble key={message.id} message={message} />
-              ))}
-            </div>
-          )}
-
-          {/* Staff reply */}
-          <h3 className="h2 admin-gap-top-md">Ответ пользователю</h3>
-          <textarea
-            className="input"
-            style={{ minHeight: 96, resize: "vertical", marginTop: 8, whiteSpace: "pre-wrap" }}
-            value={replyText}
-            maxLength={4000}
-            disabled={sendingReply || sendingNote}
-            placeholder="Сообщение уйдёт пользователю в ShpunApp и Telegram"
-            onChange={(e) => setReplyText(e.target.value)}
-          />
-          <div className="actions actions--1 admin-gap-top-sm">
-            <button
-              className="btn btn--primary"
-              type="button"
-              disabled={sendingReply || sendingNote || replyText.trim().length < 2}
-              onClick={() => void sendMessage(replyText, false)}
-            >
-              {sendingReply ? "Отправляю…" : "Отправить ответ"}
-            </button>
+          <div className="supportDetail__thread" ref={threadRef}>
+            {messages.length === 0 ? (
+              <div className="supportDetail__empty">Сообщений пока нет.</div>
+            ) : (
+              messages.map((message) => <MessageBubble key={message.id} message={message} />)
+            )}
           </div>
 
-          {/* Internal note */}
-          <h3 className="h2 admin-gap-top-md">Внутренняя заметка</h3>
-          <p className="p" style={{ marginTop: 4 }}>
-            Видна только операторам и не попадает пользователю.
-          </p>
-          <textarea
-            className="input"
-            style={{ minHeight: 80, resize: "vertical", marginTop: 8, whiteSpace: "pre-wrap" }}
-            value={noteText}
-            maxLength={4000}
-            disabled={sendingReply || sendingNote}
-            placeholder="Заметка для команды"
-            onChange={(e) => setNoteText(e.target.value)}
-          />
-          <div className="actions actions--1 admin-gap-top-sm">
-            <button
-              className="btn btn--soft"
-              type="button"
-              disabled={sendingReply || sendingNote || noteText.trim().length < 2}
-              onClick={() => void sendMessage(noteText, true)}
-            >
-              {sendingNote ? "Сохраняю…" : "Добавить заметку"}
-            </button>
-          </div>
+          {/* Pinned composer */}
+          <div className="supportDetail__composer">
+            <div className="supportMode" role="tablist" aria-label="Тип сообщения">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={composerMode === "reply"}
+                className={`supportMode__btn${composerMode === "reply" ? " supportMode__btn--active" : ""}`}
+                onClick={() => setComposerMode("reply")}
+              >
+                Ответ пользователю
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={composerMode === "note"}
+                className={`supportMode__btn${composerMode === "note" ? " supportMode__btn--active" : ""}`}
+                onClick={() => setComposerMode("note")}
+              >
+                Внутренняя заметка
+              </button>
+            </div>
 
-          {/* Raw context */}
-          <details
-            className="admin-gap-top-md"
-            open={rawOpen}
-            onToggle={(e) => setRawOpen((e.target as HTMLDetailsElement).open)}
-          >
-            <summary style={{ cursor: "pointer", fontWeight: 800 }}>Raw context</summary>
-            <pre className="pre" style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
-              {JSON.stringify(
-                {
-                  ticketId: opened.id,
-                  publicNo: opened.publicNo,
-                  storageProvider: opened.storageProvider,
-                  externalId: opened.externalId,
-                  userId: opened.userId,
-                  source: opened.source,
-                  serviceId: opened.serviceId,
-                  userServiceId: opened.userServiceId,
-                  serviceCategory: opened.serviceCategory,
-                  balanceSnapshot: opened.balanceSnapshot,
-                  serviceSnapshot: opened.serviceSnapshot,
-                  contextSnapshot: opened.contextSnapshot,
-                },
-                null,
-                2,
-              )}
-            </pre>
-          </details>
+            <textarea
+              className="input supportDetail__input"
+              value={composerText}
+              maxLength={4000}
+              disabled={sending}
+              placeholder={composerMode === "note" ? "Заметка для команды (пользователь не увидит)" : "Сообщение уйдёт пользователю"}
+              onChange={(e) => setComposerText(e.target.value)}
+            />
+
+            <div className="actions actions--1">
+              <button
+                className={`btn ${composerMode === "note" ? "btn--soft" : "btn--primary"}`}
+                type="button"
+                disabled={sending || composerText.trim().length < 2}
+                onClick={() => void sendComposer()}
+              >
+                {sending ? "Отправляю…" : composerMode === "note" ? "Сохранить заметку" : "Отправить ответ"}
+              </button>
+            </div>
+          </div>
         </ModalShell>
       )}
     </div>

@@ -8,6 +8,11 @@
 import { getTicketRepository, type TicketRepository } from "./repository.js";
 import { getSupportShmPort } from "./snapshot.js";
 import {
+  notifySupportStaffReply,
+  notifySupportTicketCreated,
+  notifySupportUserMessage,
+} from "./notifications.js";
+import {
   isTicketPriority,
   isTicketStatus,
   type ServiceSnapshot,
@@ -182,7 +187,7 @@ export async function createTicket(
     telegramChatId: input.telegramChatId ?? null,
   });
 
-  repo.addMessage({
+  const firstMessage = repo.addMessage({
     ticketId: ticket.id,
     authorType: "user",
     authorUserId: identity.userId,
@@ -191,7 +196,9 @@ export async function createTicket(
     isInternalNote: false,
   });
 
-  return mustGetUserTicket(ticket.id, identity.userId, deps);
+  const created = mustGetUserTicket(ticket.id, identity.userId, deps);
+  void notifySupportTicketCreated(created, firstMessage);
+  return created;
 }
 
 /* ─── Read: user scope ───────────────────────────────────────────────────── */
@@ -261,7 +268,7 @@ export function addUserMessage(
     throw new SupportError("ticket_closed", 409, "Обращение закрыто. Создайте новое.");
   }
 
-  repo.addMessage({
+  const message = repo.addMessage({
     ticketId: ticket.id,
     authorType: "user",
     authorUserId: uid,
@@ -271,7 +278,9 @@ export function addUserMessage(
   });
   repo.updateTicket(ticket.id, { status: "waiting_staff" });
 
-  return mustGetUserTicket(ticket.id, uid, deps);
+  const result = mustGetUserTicket(ticket.id, uid, deps);
+  void notifySupportUserMessage(result, message);
+  return result;
 }
 
 /* ─── Read/write: admin scope ────────────────────────────────────────────── */
@@ -330,7 +339,7 @@ export function addStaffMessage(
     return getAdminTicket(ticket.id, deps) as TicketWithMessages;
   }
 
-  repo.addMessage({
+  const message = repo.addMessage({
     ticketId: ticket.id,
     authorType: "staff",
     authorUserId: operatorId,
@@ -340,7 +349,9 @@ export function addStaffMessage(
   });
   repo.updateTicket(ticket.id, { status: "waiting_user" });
 
-  return getAdminTicket(ticket.id, deps) as TicketWithMessages;
+  const result = getAdminTicket(ticket.id, deps) as TicketWithMessages;
+  void notifySupportStaffReply(result, message);
+  return result;
 }
 
 export function updateTicketByAdmin(

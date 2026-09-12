@@ -18,6 +18,7 @@ import {
   validateRegistrationEmail,
   validateRegistrationEmailBasic,
 } from "../../shared/utils/email.js";
+import { recordSupportNotifyRecipient } from "../support/notifyRepo.js";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -222,6 +223,9 @@ export async function userRoutes(app: FastifyInstance) {
     const tg        = tgRes.status === "fulfilled" ? tgRes.value : null;
     const adminRaw  = adminRes.status === "fulfilled" ? adminRes.value : null;
     const admin     = adminRaw?.ok ? parseAdminStatus(adminRaw) : { role: null as string | null, isAdmin: false };
+    if (admin.isAdmin) {
+      try { recordSupportNotifyRecipient(toNum(meRaw.user_id, 0)); } catch { /* best-effort */ }
+    }
     const referralBonusRaw = referralBonusRes.status === "fulfilled"
       ? (referralBonusRes.value as any)?.json
       : null;

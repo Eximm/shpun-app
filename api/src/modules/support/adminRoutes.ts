@@ -12,6 +12,12 @@
 import type { FastifyInstance } from "fastify";
 import { getSessionFromRequest } from "../../shared/session/sessionStore.js";
 import { isSupportAdmin } from "./adminGuard.js";
+import {
+  countSupportUnread,
+  listSupportUnreadTicketIds,
+  markSupportTicketRead,
+  recordSupportNotifyRecipient,
+} from "./notifyRepo.js";
 import { isTicketPriority, isTicketStatus, type TicketPriority, type TicketStatus } from "./types.js";
 import {
   addStaffMessage,
@@ -60,10 +66,21 @@ async function requireAdmin(req: any, reply: any) {
     reply.code(403).send({ ok: false, error: "not_admin" });
     return null;
   }
+  // Remember this admin as a support notification recipient (best-effort).
+  const admin = sessionUser(session);
+  if (admin?.userId) recordSupportNotifyRecipient(admin.userId);
   return session;
 }
 
 export async function supportAdminRoutes(app: FastifyInstance) {
+  app.get("/admin/support/unread", async (req, reply) => {
+    const session = await requireAdmin(req, reply);
+    if (!session) return;
+    const admin = sessionUser(session);
+    const count = admin?.userId ? countSupportUnread(admin.userId) : 0;
+    return reply.send({ ok: true, count });
+  });
+
   app.get("/admin/support/categories", async (req, reply) => {
     const session = await requireAdmin(req, reply);
     if (!session) return;
@@ -94,7 +111,12 @@ export async function supportAdminRoutes(app: FastifyInstance) {
         limit: query.limit,
         offset: query.offset,
       });
-      return reply.send({ ok: true, items: result.items, total: result.total });
+      const admin = sessionUser(session);
+      const unreadIds = admin?.userId
+        ? new Set(listSupportUnreadTicketIds(admin.userId))
+        : new Set<number>();
+      const items = result.items.map((t) => ({ ...t, unread: unreadIds.has(t.id) }));
+      return reply.send({ ok: true, items, total: result.total, unreadCount: unreadIds.size });
     } catch (error) {
       return sendSupportError(reply, error);
     }
@@ -105,8 +127,11 @@ export async function supportAdminRoutes(app: FastifyInstance) {
       const session = await requireAdmin(req, reply);
       if (!session) return;
 
-      const ticket = getAdminTicket(Number((req.params as any)?.id));
+      const id = Number((req.params as any)?.id);
+      const ticket = getAdminTicket(id);
       if (!ticket) return reply.code(404).send({ ok: false, error: "ticket_not_found" });
+      const admin = sessionUser(session);
+      if (admin?.userId) markSupportTicketRead(admin.userId, id);
       return reply.send({ ok: true, ticket });
     } catch (error) {
       return sendSupportError(reply, error);
@@ -131,6 +156,7 @@ export async function supportAdminRoutes(app: FastifyInstance) {
         text: pick(body, "text", "message"),
         internal,
       });
+      if (admin?.userId && !internal) markSupportTicketRead(admin.userId, ticket.id);
       return reply.code(201).send({ ok: true, ticket });
     } catch (error) {
       return sendSupportError(reply, error);
