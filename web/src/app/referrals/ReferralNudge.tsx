@@ -189,6 +189,7 @@ export function ReferralNudge({ enabled = true }: { enabled?: boolean }) {
           actionLabel: t(keyAt(ACTION_KEYS, plan.actionIndex)),
           durationMs: TOAST_DURATION_MS,
           onAction: () => nav("/referrals"),
+          origin: "referral",
         });
         schedule(msUntilNextLocalDay());
       }, delayMs);

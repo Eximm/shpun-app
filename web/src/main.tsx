@@ -33,6 +33,7 @@ import { LegalDocs }        from "./pages/LegalDocs";
 import { AuthGate }                from "./app/auth/AuthGate";
 import { BottomNav }               from "./app/layout/BottomNav";
 import { SupportBell }              from "./app/layout/SupportBell";
+import { FloatingSupport }          from "./app/layout/FloatingSupport";
 import { PwaInstallPrompt }        from "./app/pwa/PwaInstallPrompt";
 import { ReferralNudge }           from "./app/referrals/ReferralNudge";
 import { I18nProvider, useI18n }   from "./shared/i18n";
@@ -130,6 +131,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
       <PwaInstallPrompt enabled={!hideNav} />
       <ReferralNudge enabled={!hideNav} />
       {!hideNav && <BottomNav />}
+      {!hideNav && <FloatingSupport />}
     </div>
   );
 }

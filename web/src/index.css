@@ -7854,3 +7854,44 @@ button.reviews-star:not(:disabled) {
   border: 1px solid rgba(255,255,255,0.12); background: transparent;
   color: rgba(255,255,255,0.8); cursor: pointer; font-size: 16px; line-height: 1;
 }
+
+/* ── Floating support launcher ────────────────────────────── */
+.floatingSupport {
+  position: fixed;
+  right: max(14px, env(safe-area-inset-right));
+  bottom: calc(var(--nav-h) + max(14px, env(safe-area-inset-bottom)));
+  z-index: 40;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 46px;
+  padding: 0 15px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff;
+  font-weight: 800;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 10px 26px rgba(0,0,0,0.38);
+  transition: transform 140ms ease, box-shadow 140ms ease, opacity 180ms ease;
+}
+.floatingSupport--hidden {
+  opacity: 0;
+  transform: translateY(8px) scale(0.96);
+  pointer-events: none;
+}
+.floatingSupport:hover { transform: translateY(-1px); box-shadow: 0 14px 30px rgba(0,0,0,0.42); }
+.floatingSupport:active { transform: translateY(0) scale(0.98); }
+.floatingSupport:focus-visible { outline: 2px solid rgba(255,255,255,0.7); outline-offset: 2px; }
+.floatingSupport__label { white-space: nowrap; }
+
+@media (max-width: 430px) {
+  .floatingSupport {
+    right: max(12px, env(safe-area-inset-right));
+    height: 48px;
+    padding: 0 14px;
+    font-size: 12.5px;
+  }
+}

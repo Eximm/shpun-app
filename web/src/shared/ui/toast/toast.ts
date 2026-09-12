@@ -6,6 +6,8 @@ export type ToastOptions = {
   sound?: boolean; // default: true
   actionLabel?: string;
   onAction?: () => void;
+  /** Optional origin tag (e.g. "referral") so other floating UI can yield. */
+  origin?: string;
 };
 
 export type ToastItem = {
@@ -16,6 +18,7 @@ export type ToastItem = {
   durationMs: number;
   actionLabel?: string;
   onAction?: () => void;
+  origin?: string;
 };
 
 type Listener = (toasts: ToastItem[]) => void;
@@ -119,6 +122,7 @@ export const toast = {
         durationMs: opts.durationMs ?? 3500,
         actionLabel: opts.actionLabel,
         onAction: opts.onAction,
+        origin: opts.origin,
       },
       { sound: opts.sound !== false }
     );
@@ -133,6 +137,7 @@ export const toast = {
         durationMs: opts.durationMs ?? 4500,
         actionLabel: opts.actionLabel,
         onAction: opts.onAction,
+        origin: opts.origin,
       },
       { sound: opts.sound !== false }
     );
@@ -147,6 +152,7 @@ export const toast = {
         durationMs: opts.durationMs ?? 3500,
         actionLabel: opts.actionLabel,
         onAction: opts.onAction,
+        origin: opts.origin,
       },
       { sound: opts.sound !== false }
     );
