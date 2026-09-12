@@ -2,13 +2,20 @@
 //
 // Compact, draggable floating support FAB for authenticated users.
 //
-//  - fixed, only an icon (no permanent label); title/aria-label = "Поддержка"
-//  - draggable with mouse and touch, clamped to the viewport (safe-area aware)
-//  - position persisted in localStorage as normalized coordinates
-//  - long-press / right-click opens a small menu:
-//      "Открыть поддержку" / "Скрыть до конца сессии"
-//  - session hide persisted in sessionStorage
-//  - yields while the referral nudge toast is visible (existing toast store)
+//  - fixed, icon only (title/aria-label = "Поддержка")
+//  - draggable with mouse and touch, clamped to the VIEWPORT
+//  - position persisted in localStorage as normalized visual coordinates
+//  - long-press / right-click opens a menu: "Открыть поддержку" / "Скрыть до конца сессии"
+//  - session hide in sessionStorage
+//  - yields while the referral nudge toast is visible
+//
+// IMPORTANT: the app sets `body { zoom: var(--ui-scale) }` (0.87 / 0.92 / 1).
+// Inside a zoomed subtree, CSS `left/top` are rendered scaled, while
+// `window.innerWidth/Height` and pointer client coordinates are in visual
+// (unzoomed) viewport pixels. We therefore compute all bounds/positions in
+// VISUAL pixels and divide by the measured effective scale only when writing
+// `left/top`. This keeps the drag range and the stored normalized position
+// independent of the UI scale.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -18,13 +25,13 @@ import { toastStore } from "../../shared/ui/toast";
 const HIDDEN_PREFIXES = ["/support", "/admin", "/login", "/legal"];
 const FAB_SIZE = 48;
 const MARGIN = 12;
-const NAV_H = 74;
+const NAV_H = 74; // fallback if .bottomnav cannot be measured
 const DRAG_THRESHOLD = 6;
 const LONG_PRESS_MS = 500;
 const POS_KEY = "supportFab.pos.v1";
 const HIDDEN_KEY = "supportFab.hidden.v1";
 
-type Pos = { x: number; y: number };
+type Pos = { x: number; y: number }; // visual (unzoomed) viewport px
 type Normalized = { nx: number; ny: number };
 
 function clamp01(v: number): number {
@@ -41,19 +48,57 @@ function safeInset(side: "top" | "right" | "bottom" | "left"): number {
   }
 }
 
-function bounds() {
-  const safeTop = safeInset("top");
-  const safeRight = safeInset("right");
-  const safeBottom = safeInset("bottom");
-  const safeLeft = safeInset("left");
+/**
+ * Effective visual scale of the (possibly zoomed) page.
+ * A 100px probe is measured via getBoundingClientRect: under `body { zoom }`
+ * it returns 100 * scale, so we can convert between CSS and visual pixels.
+ */
+let scaleProbe: HTMLDivElement | null = null;
+function effectiveScale(): number {
+  try {
+    if (!scaleProbe || !scaleProbe.isConnected) {
+      const probe = document.createElement("div");
+      probe.style.cssText =
+        "position:fixed;top:-9999px;left:-9999px;width:100px;height:1px;pointer-events:none;visibility:hidden;";
+      document.body.appendChild(probe);
+      scaleProbe = probe;
+    }
+    const w = scaleProbe.getBoundingClientRect().width;
+    const s = w > 0 ? w / 100 : 1;
+    return Number.isFinite(s) && s > 0 ? s : 1;
+  } catch {
+    return 1;
+  }
+}
 
+function bottomNavHeight(scale: number): number {
+  try {
+    const nav = document.querySelector(".bottomnav");
+    const h = nav ? nav.getBoundingClientRect().height : 0;
+    return h > 0 ? h : NAV_H * scale;
+  } catch {
+    return NAV_H * scale;
+  }
+}
+
+/** Allowed visual viewport area for the FAB (safe-area aware, above bottom nav). */
+function bounds(scale: number) {
+  const s = scale > 0 ? scale : 1;
   const vw = window.innerWidth;
   const vh = window.innerHeight;
 
-  const minX = MARGIN + safeLeft;
-  const maxX = Math.max(minX, vw - FAB_SIZE - MARGIN - safeRight);
-  const minY = MARGIN + safeTop;
-  const maxY = Math.max(minY, vh - NAV_H - Math.max(MARGIN, safeBottom) - FAB_SIZE);
+  const margin = MARGIN * s;
+  const fab = FAB_SIZE * s;
+  const safeTop = safeInset("top") * s;
+  const safeRight = safeInset("right") * s;
+  const safeBottom = safeInset("bottom") * s;
+  const safeLeft = safeInset("left") * s;
+  const navH = bottomNavHeight(s);
+
+  const minX = safeLeft + margin;
+  const maxX = Math.max(minX, vw - safeRight - margin - fab);
+  const minY = safeTop + margin;
+  const maxY = Math.max(minY, vh - navH - safeBottom - margin - fab);
 
   return { minX, maxX, minY, maxY };
 }
@@ -72,8 +117,8 @@ function readSavedPos(): Normalized | null {
   }
 }
 
-function computePosition(saved: Normalized | null): Pos {
-  const b = bounds();
+function computePosition(saved: Normalized | null, scale: number): Pos {
+  const b = bounds(scale);
   const nx = saved ? clamp01(saved.nx) : 1;
   const ny = saved ? clamp01(saved.ny) : 1;
   return {
@@ -82,16 +127,16 @@ function computePosition(saved: Normalized | null): Pos {
   };
 }
 
-function clampPosition(x: number, y: number): Pos {
-  const b = bounds();
+function clampPosition(x: number, y: number, scale: number): Pos {
+  const b = bounds(scale);
   return {
     x: Math.min(Math.max(x, b.minX), b.maxX),
     y: Math.min(Math.max(y, b.minY), b.maxY),
   };
 }
 
-function saveNormalized(pos: Pos): void {
-  const b = bounds();
+function saveNormalized(pos: Pos, scale: number): void {
+  const b = bounds(scale);
   const nx = b.maxX > b.minX ? (pos.x - b.minX) / (b.maxX - b.minX) : 0;
   const ny = b.maxY > b.minY ? (pos.y - b.minY) / (b.maxY - b.minY) : 0;
   try {
@@ -134,11 +179,17 @@ export function FloatingSupport() {
 
   const [nudgeVisible, setNudgeVisible] = useState(false);
   const [sessionHidden, setSessionHidden] = useState<boolean>(() => readSessionHidden());
-  const [pos, setPos] = useState<Pos>(() => computePosition(readSavedPos()));
+  const [{ scale: initScale, pos: initPos }] = useState(() => {
+    const s = effectiveScale();
+    return { scale: s, pos: computePosition(readSavedPos(), s) };
+  });
+  const [scale, setScale] = useState(initScale);
+  const [pos, setPos] = useState<Pos | null>(initPos);
   const [menuOpen, setMenuOpen] = useState(false);
 
   const wrapRef = useRef<HTMLDivElement | null>(null);
-  const posRef = useRef<Pos>(pos);
+  const posRef = useRef<Pos | null>(initPos);
+  const scaleRef = useRef(initScale);
   const dragRef = useRef<{
     startX: number;
     startY: number;
@@ -159,19 +210,23 @@ export function FloatingSupport() {
     return unsubscribe;
   }, []);
 
-  // Keep the FAB inside the viewport on resize/orientation change.
+  // Recompute scale + position (initial and on viewport changes).
   const reposition = useCallback(() => {
-    const next = computePosition(readSavedPos());
-    posRef.current = next;
-    setPos(next);
+    const nextScale = effectiveScale();
+    const nextPos = computePosition(readSavedPos(), nextScale);
+    scaleRef.current = nextScale;
+    posRef.current = nextPos;
+    setScale(nextScale);
+    setPos(nextPos);
   }, []);
 
   useEffect(() => {
-    window.addEventListener("resize", reposition);
-    window.addEventListener("orientationchange", reposition);
+    const onResize = () => reposition();
+    window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onResize);
     return () => {
-      window.removeEventListener("resize", reposition);
-      window.removeEventListener("orientationchange", reposition);
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
     };
   }, [reposition]);
 
@@ -248,7 +303,7 @@ export function FloatingSupport() {
     movedRef.current = true;
     clearLongPress();
 
-    const next = clampPosition(drag.baseX + dx, drag.baseY + dy);
+    const next = clampPosition(drag.baseX + dx, drag.baseY + dy, scaleRef.current);
     posRef.current = next;
     setPos(next);
     event.preventDefault();
@@ -264,10 +319,9 @@ export function FloatingSupport() {
     }
     dragRef.current = null;
 
-    if (drag?.moved) {
+    if (drag?.moved && posRef.current) {
       suppressClickRef.current = true;
-      saveNormalized(posRef.current);
-      // Allow the next real click after this one is swallowed.
+      saveNormalized(posRef.current, scaleRef.current);
       window.setTimeout(() => {
         suppressClickRef.current = false;
       }, 0);
@@ -307,15 +361,19 @@ export function FloatingSupport() {
   if (isHiddenRoute(loc.pathname)) return null;
 
   const hidden = sessionHidden || nudgeVisible;
-  // Priority: session hidden > referral toast hidden > visible.
-  const menuBelow = pos.y < 150;
-  const menuLeft = pos.x > window.innerWidth / 2;
+  const safeScale = scale > 0 ? scale : 1;
+  const menuBelow = pos ? pos.y < 150 : false;
+  const menuLeft = pos ? pos.x > window.innerWidth / 2 : true;
 
   return (
     <div
       ref={wrapRef}
       className={`floatingSupportWrap${hidden ? " floatingSupportWrap--hidden" : ""}`}
-      style={{ left: pos.x, top: pos.y }}
+      style={{
+        left: pos ? pos.x / safeScale : 0,
+        top: pos ? pos.y / safeScale : 0,
+        visibility: pos ? undefined : "hidden",
+      }}
     >
       {menuOpen && (
         <div
