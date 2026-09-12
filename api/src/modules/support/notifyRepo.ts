@@ -3,8 +3,11 @@
 // Support-specific notification state (kept separate from the generic
 // `notif_events` table so the ticket repository interface stays clean).
 //
-//  - support_notify_recipients: admin/operator SHM user ids that should
-//    receive in-app support notifications.
+//  - support_notify_recipients: TECHNICAL DELIVERY REGISTRY of SHM user ids
+//    that should receive in-app support notifications. It is NOT an
+//    authorization source: rows are written only after the existing
+//    billing/auth admin check (`ensureAdmin` / `/api/me` isAdmin) has already
+//    confirmed admin access. Presence here never grants any rights.
 //  - support_reads: minimal per-admin unread model (last read message id
 //    per ticket). No full CRM read model.
 
@@ -28,16 +31,11 @@ CREATE INDEX IF NOT EXISTS idx_support_reads_user
   ON support_reads(user_id);
 `);
 
-function envUserIds(): number[] {
-  const raw = String(process.env.SUPPORT_ADMIN_USER_IDS ?? "").trim();
-  if (!raw) return [];
-  return raw
-    .split(/[,\s]+/)
-    .map((x) => Math.trunc(Number(x)))
-    .filter((n) => Number.isFinite(n) && n > 0);
-}
-
-/** Register an admin/operator SHM user id as a support notification recipient. */
+/**
+ * Register an admin/operator SHM user id as a support notification recipient.
+ * Callers MUST have already confirmed admin access through the existing
+ * billing/auth logic; this registry is delivery-only and never an ACL.
+ */
 export function recordSupportNotifyRecipient(userId: number): void {
   const uid = Math.trunc(Number(userId));
   if (!Number.isFinite(uid) || uid <= 0) return;
@@ -54,9 +52,9 @@ export function recordSupportNotifyRecipient(userId: number): void {
   }
 }
 
-/** All known admin recipients (DB registry + optional env seed). */
+/** Admin delivery recipients registered after a confirmed admin check. */
 export function listSupportNotifyRecipients(): number[] {
-  const ids = new Set<number>(envUserIds());
+  const ids = new Set<number>();
   try {
     const rows = linkDb
       .prepare(`SELECT user_id FROM support_notify_recipients`)

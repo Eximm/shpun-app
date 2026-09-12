@@ -9,17 +9,18 @@
 // Notifications must NEVER block or roll back the ticket/message write. Every
 // public function catches its own errors. Callers may safely `void` them.
 //
-// Admin Telegram recipients: see telegram.ts (dedicated SUPPORT_ADMIN_CHAT_IDS
-// or the existing receipts/staff chat). Admin in-app recipients: the local
-// registry + optional SUPPORT_ADMIN_USER_IDS seed (see notifyRepo.ts).
+// Admin Telegram recipients: see telegram.ts (SUPPORT_ADMIN_CHAT_IDS, optionally
+// routed into the single SUPPORT_ADMIN_THREAD_ID topic). Admin in-app recipients:
+// the local delivery registry (see notifyRepo.ts); it is populated only after the
+// existing billing/auth admin check has already confirmed admin access.
 
 import { getTicketRepository } from "./repository.js";
 import { listSupportNotifyRecipients } from "./notifyRepo.js";
 import { putNotifEvent, type NotifEvent } from "../../shared/linkdb/notificationsRepo.js";
 import { sendWebPushToUser } from "../notifications/webpush.js";
 import {
+  sendSupportAdminTelegramMessage,
   sendSupportTelegramMessage,
-  supportAdminChatIds,
   supportTicketAdminUrl,
 } from "./telegram.js";
 import type { Ticket, TicketMessage } from "./types.js";
@@ -64,16 +65,10 @@ function nowTs(): number {
 /* ─── Admin Telegram ─────────────────────────────────────────────────────── */
 
 async function sendAdminTelegram(text: string, ticketId: number): Promise<void> {
-  const chats = supportAdminChatIds();
-  if (chats.length === 0) return;
-
   const replyMarkup = {
     inline_keyboard: [[{ text: "Открыть в ShpunApp", url: supportTicketAdminUrl(ticketId) }]],
   };
-
-  await Promise.allSettled(
-    chats.map((chatId) => sendSupportTelegramMessage(chatId, text, replyMarkup))
-  );
+  await sendSupportAdminTelegramMessage(text, replyMarkup);
 }
 
 /* ─── Admin ShpunApp in-app ──────────────────────────────────────────────── */

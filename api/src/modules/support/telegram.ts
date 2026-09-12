@@ -2,9 +2,16 @@
 //
 // Outbound Telegram messages for support notifications.
 //
-// Reuses the existing bot token (TG_BOT_TOKEN) and, when no dedicated support
-// list is configured, the existing staff/receipts chat (TG_RECEIPTS_CHAT_ID /
-// RECEIPTS_CHAT_ID). All calls are best-effort: callers must not depend on them.
+// Reuses the existing bot token (TG_BOT_TOKEN). Admin notifications go to
+// SUPPORT_ADMIN_CHAT_IDS; when no dedicated list is configured, the existing
+// staff/receipts chat (TG_RECEIPTS_CHAT_ID / RECEIPTS_CHAT_ID) is used as a
+// fallback so no duplicate list is required out of the box.
+//
+// Admin notifications may be routed into a single forum topic via
+// SUPPORT_ADMIN_THREAD_ID (e.g. the "Support / Тикеты" topic). One topic for
+// all admin support events — never per-event topics.
+//
+// All calls are best-effort: callers must not depend on their result.
 
 function envStr(name: string, def = ""): string {
   const v = String(process.env[name] ?? "").trim();
@@ -32,6 +39,19 @@ export function supportAdminChatIds(): string[] {
   return fallback ? [fallback] : [];
 }
 
+/**
+ * Forum topic id for admin support notifications.
+ * Returns null when unset or invalid, so the message is sent without
+ * `message_thread_id` (plain chat / General topic) as before.
+ */
+export function supportAdminThreadId(): number | null {
+  const raw = envStr("SUPPORT_ADMIN_THREAD_ID");
+  if (!raw) return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.trunc(n);
+}
+
 export function supportAppBaseUrl(): string {
   const explicit = envStr("SUPPORT_APP_URL");
   if (explicit) return explicit.replace(/\/+$/, "");
@@ -52,10 +72,16 @@ export function supportTicketAdminUrl(ticketId: number | string): string {
 
 export type TelegramSendResult = { ok: boolean; error?: string };
 
+export type TelegramSendOptions = {
+  /** Optional forum topic id. Ignored unless a positive integer. */
+  threadId?: number | null;
+};
+
 export async function sendSupportTelegramMessage(
   chatId: string | number,
   text: string,
-  replyMarkup?: Record<string, unknown>
+  replyMarkup?: Record<string, unknown>,
+  options?: TelegramSendOptions
 ): Promise<TelegramSendResult> {
   const token = supportBotToken();
   if (!token) return { ok: false, error: "tg_token_missing" };
@@ -67,6 +93,12 @@ export async function sendSupportTelegramMessage(
       parse_mode: "HTML",
       disable_web_page_preview: true,
     };
+
+    const threadId = Number(options?.threadId ?? 0);
+    if (Number.isFinite(threadId) && threadId > 0) {
+      body.message_thread_id = Math.trunc(threadId);
+    }
+
     if (replyMarkup) body.reply_markup = replyMarkup;
 
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -82,4 +114,21 @@ export async function sendSupportTelegramMessage(
   } catch (error: any) {
     return { ok: false, error: String(error?.message ?? error ?? "tg_send_failed") };
   }
+}
+
+/**
+ * Send a support notification to every configured admin chat, routed into the
+ * single SUPPORT_ADMIN_THREAD_ID topic when configured.
+ */
+export async function sendSupportAdminTelegramMessage(
+  text: string,
+  replyMarkup?: Record<string, unknown>
+): Promise<void> {
+  const chats = supportAdminChatIds();
+  if (chats.length === 0) return;
+
+  const threadId = supportAdminThreadId();
+  await Promise.allSettled(
+    chats.map((chatId) => sendSupportTelegramMessage(chatId, text, replyMarkup, { threadId }))
+  );
 }

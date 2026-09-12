@@ -5,7 +5,6 @@ import path from "node:path";
 import test from "node:test";
 
 process.env.DATA_DIR = mkdtempSync(path.join(tmpdir(), "shpun-support-notify-"));
-process.env.SUPPORT_ADMIN_USER_IDS = "900";
 
 const service = await import("./service.js");
 const notifyRepo = await import("./notifyRepo.js");

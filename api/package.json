@@ -8,7 +8,7 @@
     "build": "tsc -p tsconfig.json",
     "test:email": "tsx --test src/shared/utils/email.test.ts src/modules/emailValidation/routes.test.ts",
     "test:reviews": "tsx --test src/modules/reviews/repo.test.ts src/modules/reviews/notifications.test.ts",
-    "test:support": "tsx --test src/modules/support/repository.test.ts src/modules/support/service.test.ts src/modules/support/routes.test.ts src/modules/support/notifications.test.ts",
+    "test:support": "tsx --test src/modules/support/repository.test.ts src/modules/support/service.test.ts src/modules/support/routes.test.ts src/modules/support/notifications.test.ts src/modules/support/telegram.test.ts",
     "start": "node dist/index.js",
     "deps:check": "npm ls fastify @fastify/formbody @fastify/multipart"
   },

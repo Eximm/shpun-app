@@ -224,6 +224,9 @@ export async function userRoutes(app: FastifyInstance) {
     const adminRaw  = adminRes.status === "fulfilled" ? adminRes.value : null;
     const admin     = adminRaw?.ok ? parseAdminStatus(adminRaw) : { role: null as string | null, isAdmin: false };
     if (admin.isAdmin) {
+      // Existing billing/auth logic confirmed admin access. Remember the user
+      // only as a delivery recipient for in-app support notifications
+      // (delivery-only registry, never an authorization source).
       try { recordSupportNotifyRecipient(toNum(meRaw.user_id, 0)); } catch { /* best-effort */ }
     }
     const referralBonusRaw = referralBonusRes.status === "fulfilled"

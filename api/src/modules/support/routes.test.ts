@@ -334,6 +334,28 @@ test("admin API rejects non-admin and unknown sessions", async () => {
   assert.equal(admin.statusCode, 200);
 });
 
+test("support recipient registry does not grant admin access", async () => {
+  const { recordSupportNotifyRecipient } = await import("./notifyRepo.js");
+
+  // A non-admin is written into the delivery registry...
+  recordSupportNotifyRecipient(201);
+
+  // ...but the existing admin guard is still the only source of truth.
+  const unread = await app.inject({
+    method: "GET",
+    url: "/api/admin/support/unread",
+    headers: userHeaders("sid-user-201"),
+  });
+  assert.equal(unread.statusCode, 403);
+
+  const tickets = await app.inject({
+    method: "GET",
+    url: "/api/admin/support/tickets",
+    headers: userHeaders("sid-user-201"),
+  });
+  assert.equal(tickets.statusCode, 403);
+});
+
 test("admin API handles staff replies, status updates and filtering", async () => {
   const created = await createUserTicket("sid-user-201");
   const ticketId = created.json().ticket.id;

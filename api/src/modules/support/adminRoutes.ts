@@ -66,7 +66,9 @@ async function requireAdmin(req: any, reply: any) {
     reply.code(403).send({ ok: false, error: "not_admin" });
     return null;
   }
-  // Remember this admin as a support notification recipient (best-effort).
+  // Existing ensureAdmin/billing check already confirmed admin access.
+  // Record the user only as a delivery recipient (delivery-only registry,
+  // never an authorization source).
   const admin = sessionUser(session);
   if (admin?.userId) recordSupportNotifyRecipient(admin.userId);
   return session;
