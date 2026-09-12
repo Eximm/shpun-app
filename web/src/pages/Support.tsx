@@ -4,20 +4,19 @@
 // Uses the existing /api/support/* endpoints. No manual user/service data entry:
 // identity and service snapshot are resolved server-side.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { apiFetch } from "../shared/api/client";
 import { PageBackButton } from "../shared/ui/PageBackButton";
 import { toast } from "../shared/ui/toast";
 import {
   ATTACHMENT_ACCEPT,
-  AttachmentList,
-  PendingFiles,
   buildMessageFormData,
   releasePendingFiles,
   toPendingFiles,
   type PendingFile,
   type TicketAttachment,
 } from "../shared/support/attachments";
+import { AttachmentList, PendingFiles } from "../shared/support/AttachmentViews";
 
 type TicketStatus =
   | "open"
@@ -261,7 +260,7 @@ export function Support() {
     }
   }
 
-  function onPickFiles(event: React.ChangeEvent<HTMLInputElement>) {
+  function onPickFiles(event: ChangeEvent<HTMLInputElement>) {
     const picked = toPendingFiles(event.target.files);
     setPending((prev) => [...prev, ...picked].slice(0, 5));
     event.target.value = "";

@@ -5,19 +5,18 @@
 // composer, diagnostics tucked into a collapsible. Uses the existing backend
 // support admin API (no contract changes).
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { apiFetch } from "../../shared/api/client";
 import { refreshSupportUnread } from "../../app/notifications/supportUnread";
 import {
   ATTACHMENT_ACCEPT,
-  AttachmentList,
-  PendingFiles,
   buildMessageFormData,
   releasePendingFiles,
   toPendingFiles,
   type PendingFile,
   type TicketAttachment,
 } from "../../shared/support/attachments";
+import { AttachmentList, PendingFiles } from "../../shared/support/AttachmentViews";
 import { ModalShell } from "./shared";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -587,7 +586,7 @@ export function SupportSection({
     }
   }
 
-  function onPickFiles(event: React.ChangeEvent<HTMLInputElement>) {
+  function onPickFiles(event: ChangeEvent<HTMLInputElement>) {
     const picked = toPendingFiles(event.target.files);
     setPending((prev) => [...prev, ...picked].slice(0, 5));
     event.target.value = "";

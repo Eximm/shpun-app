@@ -18,9 +18,11 @@ import { sendWebPushToUser } from "../notifications/webpush.js";
 import {
   sendPartnershipAdminTelegramMessage,
   sendSupportAdminTelegramMessage,
+  sendSupportTelegramAttachment,
   sendSupportTelegramMessage,
   supportTicketAdminUrl,
 } from "./telegram.js";
+import { getAttachmentStorage } from "./attachmentStorage.js";
 import { partnershipTypeLabel, type PartnershipContext, type Ticket, type TicketMessage } from "./types.js";
 
 function esc(value: unknown): string {
@@ -219,7 +221,7 @@ export async function notifyTicketUserMessage(ticket: Ticket, message: TicketMes
   }
 }
 
-export async function notifyTicketStaffReply(ticket: Ticket, _message: TicketMessage): Promise<void> {
+export async function notifyTicketStaffReply(ticket: Ticket, message: TicketMessage): Promise<void> {
   // Applicant notification is source-extensible: Telegram now, app/web push later.
   if (ticket.source !== "telegram") return;
   if (!ticket.telegramChatId) return;
@@ -239,5 +241,24 @@ export async function notifyTicketStaffReply(ticket: Ticket, _message: TicketMes
     await sendSupportTelegramMessage(ticket.telegramChatId, text, replyMarkup);
   } catch {
     // best-effort: never roll back the staff reply
+  }
+
+  // Forward staff attachments directly to the user's Telegram chat (no public URLs).
+  const attachments = message.attachments ?? [];
+  if (attachments.length === 0) return;
+
+  const storage = getAttachmentStorage();
+  for (const attachment of attachments) {
+    if (attachment.deletedAt) continue;
+    try {
+      const buffer = storage.read(attachment.storageKey);
+      if (!buffer) continue;
+      await sendSupportTelegramAttachment(
+        ticket.telegramChatId,
+        { buffer, filename: attachment.originalName || "file", mimeType: attachment.mimeType }
+      );
+    } catch {
+      // best-effort
+    }
   }
 }

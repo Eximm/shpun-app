@@ -63,10 +63,14 @@ export async function buildServer() {
 
   await app.register(formbody)
 
+  // Global multipart limits: the largest consumer is support attachments
+  // (env-driven, safe defaults). Per-message total is enforced separately.
+  const supportMaxFileMb = Number(process.env.SUPPORT_ATTACHMENT_MAX_FILE_MB || 10);
+  const supportMaxFiles = Number(process.env.SUPPORT_ATTACHMENT_MAX_FILES || 5);
   await app.register(multipart, {
     limits: {
-      fileSize: 2 * 1024 * 1024,
-      files: 1,
+      fileSize: (Number.isFinite(supportMaxFileMb) && supportMaxFileMb > 0 ? supportMaxFileMb : 10) * 1024 * 1024,
+      files: Number.isFinite(supportMaxFiles) && supportMaxFiles > 0 ? Math.trunc(supportMaxFiles) : 5,
     },
   })
 

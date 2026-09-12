@@ -198,3 +198,56 @@ export async function downloadTelegramFile(fileId: string): Promise<TelegramDown
     return null;
   }
 }
+
+/* ─── Outbound attachments (staff reply -> Telegram user) ────────────────── */
+
+async function tgSendFile(
+  endpoint: "sendPhoto" | "sendDocument",
+  field: "photo" | "document",
+  chatId: string | number,
+  buffer: Buffer,
+  filename: string,
+  mimeType: string,
+  caption?: string
+): Promise<TelegramSendResult> {
+  const token = supportBotToken();
+  if (!token) return { ok: false, error: "tg_token_missing" };
+
+  try {
+    const fd = new FormData();
+    fd.append("chat_id", String(chatId));
+    if (caption) fd.append("caption", caption);
+    const u8 = new Uint8Array(buffer);
+    const blob = new Blob([u8], { type: mimeType || "application/octet-stream" });
+    // @ts-ignore — undici supports filename
+    fd.append(field, blob, filename || "file");
+
+    const res = await fetch(`https://api.telegram.org/bot${token}/${endpoint}`, {
+      method: "POST",
+      body: fd as any,
+    });
+    const json: any = await res.json().catch(() => null);
+    if (!res.ok || !json?.ok) {
+      return { ok: false, error: String(json?.description ?? `http_${res.status}`) };
+    }
+    return { ok: true };
+  } catch (error: any) {
+    return { ok: false, error: String(error?.message ?? error ?? "tg_send_file_failed") };
+  }
+}
+
+/**
+ * Send a stored support attachment to a Telegram chat.
+ * Images go as photos; everything else (incl. HEIC and PDF) as documents.
+ */
+export async function sendSupportTelegramAttachment(
+  chatId: string | number,
+  attachment: { buffer: Buffer; filename: string; mimeType: string },
+  caption?: string
+): Promise<TelegramSendResult> {
+  const mime = String(attachment.mimeType || "").toLowerCase();
+  const isPhoto = mime.startsWith("image/") && mime !== "image/heic" && mime !== "image/heif";
+  return isPhoto
+    ? tgSendFile("sendPhoto", "photo", chatId, attachment.buffer, attachment.filename, attachment.mimeType, caption)
+    : tgSendFile("sendDocument", "document", chatId, attachment.buffer, attachment.filename, attachment.mimeType, caption);
+}

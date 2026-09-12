@@ -31,7 +31,14 @@ function resetCalls() {
 function stubFetch(response: "ok" | "fail" | "throw" = "ok") {
   resetCalls();
   globalThis.fetch = (async (url: any, init: any) => {
-    const body = init?.body ? JSON.parse(String(init.body)) : null;
+    let body: any = null;
+    if (init?.body) {
+      if (typeof init.body === "string") {
+        try { body = JSON.parse(init.body); } catch { body = init.body; }
+      } else {
+        body = { __formData: true };
+      }
+    }
     if (response === "throw") throw new Error("network down");
     calls.push({ url: String(url), body });
     return {
@@ -349,6 +356,44 @@ test("partnership create notifies admins in the partnership topic", async () => 
     );
   } finally {
     delete process.env.PARTNERSHIP_ADMIN_THREAD_ID;
+    restoreFetch();
+  }
+});
+
+/* ─── Staff attachment → Telegram user ───────────────────────────────────── */
+
+const JPEG_FIXTURE = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(64, 1)]);
+
+test("staff attachment is forwarded to the Telegram user", async () => {
+  stubFetch("ok");
+  try {
+    const ticket = await service.createTicket({
+      userId: 509,
+      source: "telegram",
+      telegramChatId: 555999,
+      categoryKey: "other",
+      text: "Вопрос",
+    });
+    resetCalls();
+
+    service.addStaffMessage({
+      ticketId: ticket.id,
+      operatorId: 900,
+      text: "Отправляю файл",
+      files: [{ filename: "shot.jpg", mimetype: "image/jpeg", buffer: JPEG_FIXTURE }],
+    });
+    await flush();
+
+    const tg = telegramCalls();
+    assert.ok(
+      tg.some((c) => /\/sendPhoto$/.test(c.url)),
+      "sendPhoto expected"
+    );
+    assert.ok(
+      tg.some((c) => String(c.body?.chat_id) === "555999" && /\/sendMessage$/.test(c.url)),
+      "sendMessage notification expected"
+    );
+  } finally {
     restoreFetch();
   }
 });

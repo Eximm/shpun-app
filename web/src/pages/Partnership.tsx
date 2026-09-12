@@ -4,20 +4,19 @@
 // Flow: conditions -> short form -> summary -> submit -> my proposals + chat.
 // Stored as tickets with kind=partnership (same infra as support, separate UI).
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { apiFetch } from "../shared/api/client";
 import { PageBackButton } from "../shared/ui/PageBackButton";
 import { toast } from "../shared/ui/toast";
 import {
   ATTACHMENT_ACCEPT,
-  AttachmentList,
-  PendingFiles,
   buildMessageFormData,
   releasePendingFiles,
   toPendingFiles,
   type PendingFile,
   type TicketAttachment,
 } from "../shared/support/attachments";
+import { AttachmentList, PendingFiles } from "../shared/support/AttachmentViews";
 
 type TicketMessage = {
   id: number;
@@ -195,7 +194,7 @@ export function Partnership() {
     }
   }
 
-  function onPickFiles(event: React.ChangeEvent<HTMLInputElement>) {
+  function onPickFiles(event: ChangeEvent<HTMLInputElement>) {
     const picked = toPendingFiles(event.target.files);
     setPending((prev) => [...prev, ...picked].slice(0, 5));
     event.target.value = "";
