@@ -1,82 +1,45 @@
 // web/src/pages/admin/OverviewSection.tsx
+//
+// Admin home dashboard. Compact launcher over the same navigation items that
+// power the sidebar/mobile picker (single source of truth in AdminPage).
+// It is only rendered when the "overview" tab is selected.
 
 import type { AdminTab } from "./types";
+import { AdminSectionIcon, UnreadMarker, type AdminNavItem } from "./shared";
 
-type CardItem = {
-  title: string;
-  sub: string;
-  chip: { label: string; tone: "ok" | "warn" | "soft" };
-  tab?: AdminTab;
-};
+export function OverviewSection({
+  items,
+  onOpenTab,
+}: {
+  items: AdminNavItem[];
+  onOpenTab: (tab: AdminTab) => void;
+}) {
+  const shortcuts = items.filter((item) => item.tab !== "overview");
 
-const ITEMS: CardItem[] = [
-  {
-    title: "Отзывы",
-    sub: "Проверка отзывов, публикация и начисление бонусов через биллинг.",
-    chip: { label: "БОНУСЫ", tone: "ok" },
-    tab: "reviews",
-  },
-  {
-    title: "Broadcasts",
-    sub: "Просмотр и удаление разосланных новостей.",
-    chip: { label: "ГОТОВО", tone: "ok" },
-    tab: "broadcasts",
-  },
-  {
-    title: "Правила заказов",
-    sub: "Управление orderBlockMode для неоплаченных услуг.",
-    chip: { label: "ACTIVE", tone: "ok" },
-    tab: "orderRules",
-  },
-  {
-    title: "Trial Protection",
-    sub: "Anti-abuse, режимы, TTL, журнал и активные блокировки.",
-    chip: { label: "CONTROL", tone: "warn" },
-    tab: "trialProtection",
-  },
-  {
-    title: "Поддержка",
-    sub: "Тикеты из ShpunApp и Telegram: переписка, статусы, заметки.",
-    chip: { label: "TICKETS", tone: "warn" },
-    tab: "support",
-  },
-  {
-    title: "Статус серверов",
-    sub: "Домены, node exporter, аптайм и лампочки для клиента.",
-    chip: { label: "LIVE", tone: "ok" },
-    tab: "serverStatus",
-  },
-  {
-    title: "Дальнейшее расширение",
-    sub: "Поиск по IP, фильтры, whitelist и дополнительная диагностика.",
-    chip: { label: "FUTURE", tone: "soft" },
-  },
-];
-
-export function OverviewSection({ onOpenTab }: { onOpenTab: (tab: AdminTab) => void }) {
   return (
     <div className="card">
       <div className="card__body">
-        <div className="kicker">Overview</div>
-        <h2 className="h2">Разделы админки</h2>
-        <p className="p">Все основные инструменты управления собраны в одном компактном экране.</p>
+        <div className="kicker">Обзор</div>
+        <h2 className="h2">Панель управления</h2>
+        <p className="p">Быстрый переход к разделам админки.</p>
 
-        <div className="admin-overviewGrid admin-gap-top-md">
-          {ITEMS.map(({ title, sub, chip, tab }) => (
-            <div key={title} className="mini admin-miniCard">
-              <div className="mini__title">{title}</div>
-              <div className="mini__list">
-                <div className="list__sub">{sub}</div>
-                <div><span className={`chip chip--${chip.tone}`}>{chip.label}</span></div>
-                {tab && (
-                  <div className="actions actions--1">
-                    <button className="btn btn--soft" type="button" onClick={() => onOpenTab(tab)}>
-                      Открыть
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
+        <div className="admin-shortcutGrid admin-gap-top-md">
+          {shortcuts.map((item) => (
+            <button
+              key={item.tab}
+              type="button"
+              className="admin-shortcut"
+              onClick={() => onOpenTab(item.tab)}
+            >
+              <span className="admin-shortcut__icon" aria-hidden="true">
+                <AdminSectionIcon name={item.icon} />
+              </span>
+              <span className="admin-shortcut__main">
+                <span className="admin-shortcut__title">{item.title}</span>
+                <span className="admin-shortcut__sub">{item.subtitle}</span>
+              </span>
+              {item.badge ? <UnreadMarker count={item.badge} variant="badge" /> : null}
+            </button>
           ))}
         </div>
       </div>

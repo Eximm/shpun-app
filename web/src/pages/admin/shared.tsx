@@ -1,31 +1,121 @@
 import { useEffect, type ReactNode, type Ref } from "react";
+import type { AdminTab } from "./types";
 
-export function AdminTabButton({
-  active,
-  title,
-  subtitle,
-  onClick,
-  badge,
-}: {
-  active: boolean;
+/* ─── Admin navigation model + icons ─────────────────────────────────────── */
+
+export type AdminNavIconName =
+  | "overview"
+  | "reviews"
+  | "broadcasts"
+  | "orders"
+  | "trial"
+  | "categories"
+  | "referral"
+  | "support"
+  | "servers";
+
+/** Single source of truth for admin navigation items (sidebar + mobile picker + overview shortcuts). */
+export type AdminNavItem = {
+  tab: AdminTab;
   title: string;
   subtitle: string;
-  onClick: () => void;
-  badge?: ReactNode;
-}) {
-  return (
-    <button
-      className={`btn admin-tabBtn ${active ? "btn--accent admin-tabBtn--active" : "btn--soft"}`}
-      type="button"
-      onClick={onClick}
-    >
-      <span className="admin-tabBtn__title">
-        {title}
-        {badge ? <span className="admin-tabBtn__badge">{badge}</span> : null}
-      </span>
-      <span className="admin-tabBtn__sub">{subtitle}</span>
-    </button>
-  );
+  icon: AdminNavIconName;
+  badge?: number;
+};
+
+export function AdminSectionIcon({ name, size = 18 }: { name: AdminNavIconName; size?: number }) {
+  const common = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", "aria-hidden": true };
+
+  switch (name) {
+    case "overview":
+      return (
+        <svg {...common}>
+          <rect x="3" y="3" width="7.5" height="7.5" rx="1.6" stroke="currentColor" strokeWidth="1.7" />
+          <rect x="13.5" y="3" width="7.5" height="7.5" rx="1.6" stroke="currentColor" strokeWidth="1.7" />
+          <rect x="3" y="13.5" width="7.5" height="7.5" rx="1.6" stroke="currentColor" strokeWidth="1.7" />
+          <rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.6" stroke="currentColor" strokeWidth="1.7" />
+        </svg>
+      );
+    case "reviews":
+      return (
+        <svg {...common}>
+          <path
+            d="M12 3.5l2.6 5.3 5.9.8-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.6l5.9-.8L12 3.5Z"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+    case "broadcasts":
+      return (
+        <svg {...common}>
+          <path d="M4 10v4a1 1 0 0 0 1 1h2l4 3V6L7 9H5a1 1 0 0 0-1 1Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+          <path d="M15.5 8.5a5 5 0 0 1 0 7" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+          <path d="M18 6a8 8 0 0 1 0 12" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" opacity="0.6" />
+        </svg>
+      );
+    case "orders":
+      return (
+        <svg {...common}>
+          <path
+            d="M4 5h2l1.6 9.2a1 1 0 0 0 1 .8h7.9a1 1 0 0 0 1-.8L19 7H7"
+            stroke="currentColor"
+            strokeWidth="1.7"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <circle cx="9.5" cy="19" r="1.3" stroke="currentColor" strokeWidth="1.5" />
+          <circle cx="17" cy="19" r="1.3" stroke="currentColor" strokeWidth="1.5" />
+        </svg>
+      );
+    case "trial":
+      return (
+        <svg {...common}>
+          <path
+            d="M12 3l7 3v5c0 4.2-2.9 7.6-7 9-4.1-1.4-7-4.8-7-9V6l7-3Z"
+            stroke="currentColor"
+            strokeWidth="1.7"
+            strokeLinejoin="round"
+          />
+          <path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "categories":
+      return (
+        <svg {...common}>
+          <path d="M12 3.5 20 8l-8 4.5L4 8l8-4.5Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+          <path d="M4 12l8 4.5 8-4.5" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" opacity="0.7" />
+          <path d="M4 16l8 4.5 8-4.5" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" opacity="0.45" />
+        </svg>
+      );
+    case "referral":
+      return (
+        <svg {...common}>
+          <circle cx="7" cy="12" r="2.6" stroke="currentColor" strokeWidth="1.7" />
+          <circle cx="17" cy="6.5" r="2.6" stroke="currentColor" strokeWidth="1.7" />
+          <circle cx="17" cy="17.5" r="2.6" stroke="currentColor" strokeWidth="1.7" />
+          <path d="M9.3 10.8l5.4-3M9.3 13.2l5.4 3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        </svg>
+      );
+    case "support":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.7" />
+          <circle cx="12" cy="12" r="3.4" stroke="currentColor" strokeWidth="1.7" />
+          <path d="M12 3v4M12 17v4M3 12h4M17 12h4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+        </svg>
+      );
+    case "servers":
+      return (
+        <svg {...common}>
+          <rect x="3.5" y="4" width="17" height="6" rx="2" stroke="currentColor" strokeWidth="1.7" />
+          <rect x="3.5" y="14" width="17" height="6" rx="2" stroke="currentColor" strokeWidth="1.7" />
+          <circle cx="7.5" cy="7" r="1" fill="currentColor" />
+          <circle cx="7.5" cy="17" r="1" fill="currentColor" />
+        </svg>
+      );
+  }
 }
 
 export function AdminMetric({
