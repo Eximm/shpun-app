@@ -247,6 +247,45 @@ function userLabel(ticket: AdminTicket) {
   return ticket.displayNameSnapshot || ticket.userLoginSnapshot || `Пользователь #${ticket.userId}`;
 }
 
+/* ─── Copy button (local feedback, no global toast) ──────────────────────── */
+
+function CopyTextButton({ text, label = "Копировать" }: { text: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  const timerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  // Nothing to copy (e.g. attachment-only message) → no button at all.
+  if (!text.trim()) return null;
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      return;
+    }
+    setCopied(true);
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => setCopied(false), 1600);
+  }
+
+  return (
+    <button
+      type="button"
+      className={`supportMsg__copy${copied ? " supportMsg__copy--done" : ""}`}
+      onClick={() => void handleCopy()}
+      aria-label={copied ? "Скопировано" : label}
+      title={copied ? "Скопировано" : label}
+    >
+      {copied ? "✓ Скопировано" : label}
+    </button>
+  );
+}
+
 /* ─── Message bubble ─────────────────────────────────────────────────────── */
 
 function MessageBubble({ message }: { message: TicketMessage }) {
@@ -278,6 +317,11 @@ function MessageBubble({ message }: { message: TicketMessage }) {
       </div>
       {message.text ? <div className="supportMsg__text">{message.text}</div> : null}
       <AttachmentList attachments={message.attachments} />
+      {isUser && message.text.trim() ? (
+        <div className="supportMsg__actions">
+          <CopyTextButton text={message.text} />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -353,7 +397,10 @@ function Diagnostics({ ticket }: { ticket: AdminTicket }) {
               {partnership.offer ? (
                 <div className="admin-gap-top-sm">
                   <div className="supportDiag__label">предложение</div>
-                  <div className="supportDiag__value" style={{ whiteSpace: "pre-wrap" }}>{partnership.offer}</div>
+                  <div className="supportDiag__value" style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{partnership.offer}</div>
+                  <div className="supportMsg__actions">
+                    <CopyTextButton text={partnership.offer} label="Копировать предложение" />
+                  </div>
                 </div>
               ) : null}
               {partnership.comment ? (
@@ -439,7 +486,10 @@ export function SupportSection({
   const patchLock = useRef(false);
   const openedIdRef = useRef<number | null>(null);
   const autoOpenedRef = useRef(false);
-  const threadRef = useRef<HTMLDivElement | null>(null);
+  // The whole modal content is the single scroll container (no nested thread
+  // scroller), so long messages are never confined to a tiny viewport.
+  const modalContentRef = useRef<HTMLDivElement | null>(null);
+  const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const categoryTitles = useMemo(() => {
@@ -484,9 +534,23 @@ export function SupportSection({
 
   // Keep the conversation scrolled to the latest message.
   useEffect(() => {
-    const el = threadRef.current;
+    const el = modalContentRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [opened?.id, opened?.messages?.length]);
+
+  // Auto-grow the composer up to the CSS max-height, then scroll internally.
+  // The scroll anchor is preserved so typing in a long message never jumps
+  // the caret view back to the top when the height is re-measured.
+  useEffect(() => {
+    const el = composerInputRef.current;
+    if (!el) return;
+    const maxHeight = parseFloat(window.getComputedStyle(el).maxHeight);
+    const cap = Number.isFinite(maxHeight) ? maxHeight : Number.POSITIVE_INFINITY;
+    const fromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, cap)}px`;
+    el.scrollTop = el.scrollHeight - el.clientHeight - fromBottom;
+  }, [composerText, composerMode, opened?.id]);
 
   async function loadCategories() {
     try {
@@ -804,6 +868,7 @@ export function SupportSection({
           title={opened.subject ? `#${opened.publicNo} · ${opened.subject}` : `#${opened.publicNo}`}
           kicker={`${categoryTitles.get(opened.categoryKey) ?? opened.categoryKey} · ${SOURCE_LABELS[opened.source] ?? opened.source}`}
           onClose={closeTicket}
+          contentRef={modalContentRef}
         >
           {openedError && <div className="pre">{openedError}</div>}
           {notice && <div className="pre admin-gap-top-sm">{notice}</div>}
@@ -871,7 +936,7 @@ export function SupportSection({
           <Diagnostics ticket={opened} />
 
           {/* Conversation */}
-          <div className="supportDetail__thread" ref={threadRef}>
+          <div className="supportDetail__thread">
             {messages.length === 0 ? (
               <div className="supportDetail__empty">Сообщений пока нет.</div>
             ) : (
@@ -903,7 +968,9 @@ export function SupportSection({
             </div>
 
             <textarea
-              className="input supportDetail__input"
+              ref={composerInputRef}
+              className="input supportDetail__input supportComposer__input"
+              rows={4}
               value={composerText}
               maxLength={4000}
               disabled={sending}
@@ -913,7 +980,7 @@ export function SupportSection({
 
             <PendingFiles files={pending} onRemove={removePending} disabled={sending} />
 
-            <div className="actions actions--2">
+            <div className="supportComposer__toolbar">
               <button
                 className="composerAttach"
                 type="button"

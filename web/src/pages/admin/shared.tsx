@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, type ReactNode, type Ref } from "react";
 
 export function AdminTabButton({
   active,
@@ -56,11 +56,13 @@ export function ModalShell({
   kicker,
   onClose,
   children,
+  contentRef,
 }: {
   title: string;
   kicker?: string;
   onClose: () => void;
   children: ReactNode;
+  contentRef?: Ref<HTMLDivElement>;
 }) {
   useEffect(() => {
     const prevBodyOverflow = document.body.style.overflow;
@@ -102,7 +104,9 @@ export function ModalShell({
             </button>
           </div>
 
-          <div className="modal__content admin-modal__content">{children}</div>
+          <div className="modal__content admin-modal__content" ref={contentRef}>
+            {children}
+          </div>
         </div>
       </div>
     </div>

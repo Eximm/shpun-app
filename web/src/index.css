@@ -7683,6 +7683,16 @@ button.reviews-star:not(:disabled) {
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
+/* Admin ticket modal: the whole modal content is the single scroll container.
+   No nested thread scroller / max-height, so a long user message is never
+   confined to a tiny viewport and can always be read in full. */
+.admin-modal__content .supportDetail__thread {
+  min-width: 0;
+  max-width: 100%;
+  max-height: none;
+  overflow: visible;
+  overscroll-behavior: auto;
+}
 .supportDetail__empty { font-size: 13px; color: rgba(255,255,255,0.55); padding: 8px 2px; }
 
 .supportDetail__composer {
@@ -7693,7 +7703,27 @@ button.reviews-star:not(:disabled) {
   padding: 10px 0 2px;
   background: linear-gradient(to bottom, rgba(12,12,20,0) 0%, rgba(12,12,20,0.94) 24%, rgba(12,12,20,0.98) 100%);
 }
-.supportDetail__input { min-height: 84px; resize: vertical; white-space: pre-wrap; margin-top: 8px; }
+.supportDetail__input { min-height: 84px; resize: vertical; white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 8px; }
+
+/* Staff composer textarea: large by default, auto-grows to a cap, then scrolls. */
+.supportDetail__input.supportComposer__input {
+  width: 100%;
+  min-height: 132px;
+  max-height: 320px;
+  resize: none;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+@media (min-width: 561px) {
+  .supportDetail__input.supportComposer__input { min-height: 150px; max-height: 360px; }
+}
+
+/* Composer toolbar: attach is fixed, send takes the rest. The textarea sits on
+   its own full-width row, so the attach control can never squeeze it. */
+.supportComposer__toolbar { display: flex; align-items: stretch; gap: 8px; margin-top: 10px; }
+.supportComposer__toolbar .composerAttach { flex: 0 0 auto; }
+.supportComposer__toolbar .btn { flex: 1 1 auto; min-width: 0; min-height: 46px; }
 
 .supportMode { display: inline-flex; gap: 4px; padding: 3px; border-radius: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); }
 .supportMode__btn {
@@ -7730,6 +7760,20 @@ button.reviews-star:not(:disabled) {
 .supportMsg__meta strong { color: rgba(255,255,255,0.90); font-weight: 800; }
 .supportMsg__time { margin-left: auto; white-space: nowrap; }
 .supportMsg__text { margin-top: 5px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
+.supportMsg__actions { display: flex; justify-content: flex-end; margin-top: 6px; }
+.supportMsg__copy {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 9px; min-height: 26px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.72);
+  font-size: 11px; font-weight: 800; line-height: 1;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+.supportMsg__copy:hover { background: rgba(255,255,255,0.09); color: #fff; }
+.supportMsg__copy--done { border-color: rgba(43,227,143,0.50); background: rgba(43,227,143,0.12); color: #b9ffd9; }
 
 .supportDiag { margin-top: 12px; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; background: rgba(255,255,255,0.025); }
 .supportDiag > summary { cursor: pointer; padding: 10px 12px; font-weight: 800; font-size: 13px; color: rgba(255,255,255,0.80); }
@@ -7745,6 +7789,8 @@ button.reviews-star:not(:disabled) {
 @media (max-width: 560px) {
   .supportDetail__meta { grid-template-columns: 1fr; }
   .supportDetail__thread { max-height: 42vh; }
+  /* Use the full available width for user messages on phones. */
+  .supportMsg--user { max-width: 100%; }
 }
 
 /* ── Support / Partnership (user + admin kind tabs) ───────── */
