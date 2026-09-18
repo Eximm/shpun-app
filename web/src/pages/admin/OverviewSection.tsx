@@ -1,47 +1,38 @@
 // web/src/pages/admin/OverviewSection.tsx
 //
-// Admin home dashboard. Compact launcher over the same navigation items that
-// power the sidebar/mobile picker (single source of truth in AdminPage).
-// It is only rendered when the "overview" tab is selected.
+// Admin home dashboard. Deliberately NOT a second section launcher — the
+// navigation (sidebar / mobile picker) is the single source of truth.
+// Shows only real data that is already available (support unread counters).
 
-import type { AdminTab } from "./types";
-import { AdminSectionIcon, UnreadMarker, type AdminNavItem } from "./shared";
+import type { SupportUnreadCounts } from "../../app/notifications/supportUnread";
+import { AdminSectionHeader } from "./shared";
 
-export function OverviewSection({
-  items,
-  onOpenTab,
-}: {
-  items: AdminNavItem[];
-  onOpenTab: (tab: AdminTab) => void;
-}) {
-  const shortcuts = items.filter((item) => item.tab !== "overview");
-
+export function OverviewSection({ unread }: { unread: SupportUnreadCounts }) {
   return (
     <div className="card">
       <div className="card__body">
-        <div className="kicker">Обзор</div>
-        <h2 className="h2">Панель управления</h2>
-        <p className="p">Быстрый переход к разделам админки.</p>
+        <AdminSectionHeader
+          kicker="Обзор"
+          title="Панель управления"
+          subtitle="Сводка по обращениям. Разделы открываются из навигации."
+        />
 
-        <div className="admin-shortcutGrid admin-gap-top-md">
-          {shortcuts.map((item) => (
-            <button
-              key={item.tab}
-              type="button"
-              className="admin-shortcut"
-              onClick={() => onOpenTab(item.tab)}
-            >
-              <span className="admin-shortcut__icon" aria-hidden="true">
-                <AdminSectionIcon name={item.icon} />
-              </span>
-              <span className="admin-shortcut__main">
-                <span className="admin-shortcut__title">{item.title}</span>
-                <span className="admin-shortcut__sub">{item.subtitle}</span>
-              </span>
-              {item.badge ? <UnreadMarker count={item.badge} variant="badge" /> : null}
-            </button>
-          ))}
+        <div className="admin-summaryGrid admin-gap-top-md">
+          <div className="admin-summary">
+            <span className="admin-summary__label">Поддержка</span>
+            <strong className="admin-summary__value">{unread.support}</strong>
+            <span className="admin-summary__hint">без ответа</span>
+          </div>
+          <div className="admin-summary">
+            <span className="admin-summary__label">Сотрудничество</span>
+            <strong className="admin-summary__value">{unread.partnership}</strong>
+            <span className="admin-summary__hint">без ответа</span>
+          </div>
         </div>
+
+        {unread.total === 0 ? (
+          <p className="p admin-gap-top-md">Новых обращений нет.</p>
+        ) : null}
       </div>
     </div>
   );

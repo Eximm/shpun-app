@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../../shared/api/client";
+import { AdminSectionHeader } from "./shared";
 import type { AdminSettingsResp } from "./types";
 
 type RewardStatus = "none" | "processing" | "rewarded" | "failed";
@@ -136,9 +137,16 @@ export function ReviewsSection() {
 
   return (
     <div className="card"><div className="card__body">
-      <div className="kicker">Отзывы и вознаграждения</div>
-      <h2 className="h1">Проверка отзывов</h2>
-      <p className="p">После подтверждения биллинг начислит бонусы, а отзыв будет опубликован.</p>
+      <AdminSectionHeader
+        kicker="Отзывы"
+        title="Проверка отзывов"
+        subtitle="После подтверждения биллинг начислит бонусы, а отзыв будет опубликован."
+        actions={
+          <button className="btn btn--soft" type="button" onClick={() => void load()} disabled={loading || saving || busyId !== null}>
+            Обновить
+          </button>
+        }
+      />
 
       <div className="list admin-gap-top-md">
         <div className="list__item admin-tightItem admin-reviewSetting">
@@ -146,28 +154,27 @@ export function ReviewsSection() {
             <div className="list__title">Награда за один отзыв</div>
             <div className="list__sub">От 1 до 500 ₽. Новая сумма применяется только после сохранения.</div>
           </div>
-          <input
-            className="input admin-reviewAmountInput"
-            inputMode="decimal"
-            value={amount}
-            aria-label="Сумма награды за отзыв"
-            onChange={(event) => setAmount(event.target.value.replace(/[^\d.,]/g, "").replace(",", "."))}
-          />
+          <div className="admin-reviewSetting__controls">
+            <input
+              className="input admin-reviewAmountInput"
+              inputMode="decimal"
+              value={amount}
+              aria-label="Сумма награды за отзыв"
+              onChange={(event) => setAmount(event.target.value.replace(/[^\d.,]/g, "").replace(",", "."))}
+            />
+            <button className="btn btn--accent" type="button" onClick={() => void saveAmount()} disabled={saving || !amountChanged}>
+              {saving ? "Сохраняю…" : "Сохранить сумму"}
+            </button>
+          </div>
         </div>
       </div>
 
       {!amountValid && <div className="pre admin-gap-top-md">Введите сумму от 1 до 500 ₽.</div>}
-      <div className="actions actions--2 admin-gap-top-md">
-        <button className="btn btn--soft" type="button" onClick={() => void load()} disabled={loading || saving || busyId !== null}>Обновить</button>
-        <button className="btn btn--accent" type="button" onClick={() => void saveAmount()} disabled={saving || !amountChanged}>
-          {saving ? "Сохраняю…" : "Сохранить сумму"}
-        </button>
-      </div>
 
       {message && <div className="pre admin-gap-top-md">{message}</div>}
       {error && <div className="pre admin-gap-top-md">{error}</div>}
 
-      <h3 className="h2 admin-gap-top-md">Ожидают проверки</h3>
+      <h3 className="h2 admin-gap-top-md">Ожидают проверки · {pending.length}</h3>
       {loading ? (
         <div className="list admin-gap-top-md"><div className="skeleton h1" /><div className="skeleton p" /></div>
       ) : pending.length === 0 ? (
@@ -206,20 +213,22 @@ export function ReviewsSection() {
         </div>
       )}
 
-      <h3 className="h2 admin-gap-top-md">Последние начисления</h3>
-      {rewarded.length === 0 ? <p className="p">Начислений пока нет.</p> : (
-        <div className="list admin-gap-top-md">
-          {rewarded.slice(0, 20).map((review) => (
-            <div className="list__item admin-tightItem" key={review.id}>
-              <div className="list__main">
-                <div className="list__title">{review.author} · отзыв #{review.id}</div>
-                <div className="list__sub">Начислено {money(Number(review.rewardAmount || 0))} · {date(review.rewardedAt)}</div>
+      <details className="admin-details admin-gap-top-md">
+        <summary className="admin-details__summary">Последние начисления · {rewarded.length}</summary>
+        {rewarded.length === 0 ? <p className="p admin-gap-top-sm">Начислений пока нет.</p> : (
+          <div className="list admin-gap-top-sm">
+            {rewarded.slice(0, 20).map((review) => (
+              <div className="list__item admin-tightItem" key={review.id}>
+                <div className="list__main">
+                  <div className="list__title">{review.author} · отзыв #{review.id}</div>
+                  <div className="list__sub">Начислено {money(Number(review.rewardAmount || 0))} · {date(review.rewardedAt)}</div>
+                </div>
+                <div className="list__side"><span className="chip chip--ok">Опубликован</span></div>
               </div>
-              <div className="list__side"><span className="chip chip--ok">Опубликован</span></div>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+      </details>
     </div></div>
   );
 }

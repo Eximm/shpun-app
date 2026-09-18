@@ -6271,6 +6271,7 @@ button.reviews-star:not(:disabled) {
   white-space: pre;
   overflow: auto;
 }
+.admin-serverStatus-matrixPanel { padding: 0 14px 14px; }
 .admin-serverStatus-matrixPreview {
   display: grid;
   grid-template-columns: repeat(3, minmax(0,1fr));
@@ -7096,6 +7097,7 @@ button.reviews-star:not(:disabled) {
 .admin-nav__item.is-active .admin-nav__sub { color: rgba(255,255,255,0.70); }
 
 .admin-workspace { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.admin-stack { display: flex; flex-direction: column; gap: 12px; }
 
 /* Overview shortcuts (admin home) — compact, same items as the navigation. */
 .admin-shortcutGrid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
@@ -7112,6 +7114,55 @@ button.reviews-star:not(:disabled) {
 .admin-shortcut__main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .admin-shortcut__title { font-size: 13px; font-weight: 800; line-height: 1.2; overflow-wrap: anywhere; }
 .admin-shortcut__sub { font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.50); line-height: 1.2; }
+
+/* Overview summary tiles (real counters only). */
+.admin-summaryGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.admin-summary {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 12px 14px; border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.035);
+}
+.admin-summary__label { font-size: 11.5px; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(255,255,255,0.58); }
+.admin-summary__value { font-size: 22px; font-weight: 950; line-height: 1.1; }
+.admin-summary__hint { font-size: 11.5px; font-weight: 700; color: rgba(255,255,255,0.50); }
+
+/* Compact admin surface + section header (one pattern for all sections).
+   :not excludes nested modal bodies so their own padding rules still apply. */
+.admin-workspace .card__body:not(.admin-modal__body) { padding: 14px; }
+.admin-sectionHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.admin-sectionHeader__main { min-width: 0; }
+.admin-sectionHeader__kicker { font-size: 11px; font-weight: 900; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255,255,255,0.55); }
+.admin-sectionHeader__title { margin: 2px 0 0; font-size: 18px; font-weight: 950; line-height: 1.2; letter-spacing: -0.01em; }
+.admin-sectionHeader__sub { margin: 4px 0 0; font-size: 12.5px; line-height: 1.4; color: rgba(255,255,255,0.60); }
+.admin-sectionHeader__actions { display: flex; flex-wrap: wrap; gap: 8px; flex: 0 0 auto; }
+.admin-sectionHeader__actions .btn { min-height: 40px; }
+@media (max-width: 560px) {
+  .admin-sectionHeader__actions { width: 100%; }
+  .admin-sectionHeader__actions .btn { flex: 1 1 auto; }
+}
+
+/* Collapsible filter bar: inline grid on desktop, toggle on narrow screens. */
+.admin-filterBar { margin-top: 12px; }
+.admin-filterBar__toggle { display: none; }
+.admin-filterBar__body { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+.admin-filterBar__count {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
+  background: #ff4d6d; color: #fff; font-size: 10.5px; font-weight: 900;
+}
+.admin-filterBar__chevron { margin-left: auto; transition: transform 160ms ease; }
+.admin-filterBar.is-open .admin-filterBar__chevron { transform: rotate(180deg); }
+@media (max-width: 640px) {
+  .admin-filterBar__toggle {
+    display: flex; align-items: center; gap: 8px; width: 100%;
+    min-height: 44px; padding: 8px 12px; border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.10); background: rgba(255,255,255,0.04);
+    color: rgba(255,255,255,0.86); font-weight: 800; font-size: 13px; cursor: pointer;
+  }
+  .admin-filterBar__body { display: none; margin-top: 10px; grid-template-columns: 1fr; }
+  .admin-filterBar.is-open .admin-filterBar__body { display: grid; }
+}
 
 @media (max-width: 860px) {
   .admin-shell { grid-template-columns: 1fr; gap: 10px; }
@@ -7151,13 +7202,26 @@ button.reviews-star:not(:disabled) {
 .admin-rowActions .btn { width: 100%; min-height: 40px; }
 .admin-rowActions--single  { min-width: auto; display: flex; align-items: flex-start; justify-content: flex-end; }
 .admin-rowActions--compact { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; width: 100%; margin-top: 10px; }
+.admin-rowActions--inline { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; align-self: start; justify-content: flex-end; }
+.admin-rowActions--inline .btn { width: auto; min-height: 40px; }
+@media (max-width: 720px) {
+  .admin-rowActions--inline { display: grid; grid-template-columns: 1fr; }
+  .admin-rowActions--inline .btn { width: 100%; }
+}
 .admin-list-side-gap { gap: 8px; }
 .admin-inlineMeta         { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 12px; color: rgba(255,255,255,0.62); line-height: 1.35; }
 .admin-inlineMeta strong  { font-weight: 900; color: rgba(255,255,255,0.88); }
 .admin-tightItem          { padding: 10px 12px; }
 .admin-broadcastDate      { display: flex; flex-direction: column; gap: 6px; margin: 0 0 8px; }
 .admin-fieldHint          { display: block; margin-top: 6px; font-size: 12px; line-height: 1.38; color: rgba(255,255,255,0.54); }
-.admin-reviewSetting      { display: grid; grid-template-columns: minmax(0,1fr) 120px; gap: 16px; align-items: center; }
+.admin-reviewSetting      { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 12px; align-items: center; }
+.admin-reviewSetting__controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.admin-cleanupPanel { padding: 0 14px 14px; }
+
+/* Short metric tiles stay 2-up on phones instead of stacking one per row. */
+@media (max-width: 720px) {
+  .admin-workspace .admin-metricsGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .admin-reviewSetting .list__title,
 .admin-reviewCard .list__title { padding-right: 0; white-space: normal; overflow: visible; text-overflow: clip; }
 .admin-reviewSetting .list__sub,
@@ -7244,6 +7308,8 @@ button.reviews-star:not(:disabled) {
 .admin-token              { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.35; word-break: break-word; }
 .admin-radio              { display: block; margin-bottom: 8px; line-height: 1.35; }
 .admin-radio--last        { margin-bottom: 0; }
+.admin-choiceRow          { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.admin-choiceRow .admin-radio { margin-bottom: 0; }
 .admin-groups    { display: flex; flex-direction: column; gap: 14px; }
 .admin-dateGroup { display: flex; flex-direction: column; gap: 8px; }
 .admin-dateTitle { position: sticky; top: 0; z-index: 1; display: inline-flex; align-items: center; width: fit-content; max-width: 100%; padding: 6px 10px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.09); background: rgba(11,15,23,0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); font-size: 11px; font-weight: 900; letter-spacing: 0.10em; text-transform: uppercase; color: rgba(255,255,255,0.65); }
@@ -7264,6 +7330,8 @@ button.reviews-star:not(:disabled) {
 .admin-details__summary::-webkit-details-marker { display: none; }
 .admin-details__summary::after { content: "▾"; opacity: 0.60; font-weight: 900; transition: transform 120ms ease, opacity 120ms ease; }
 .admin-details[open] .admin-details__summary::after { transform: rotate(180deg); opacity: 0.90; }
+.admin-details > :not(summary) { padding-left: 12px; padding-right: 12px; }
+.admin-details > :not(summary):last-child { padding-bottom: 12px; }
 
 .refPartnerNotice {
   width: fit-content;

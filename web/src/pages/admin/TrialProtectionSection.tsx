@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../../shared/api/client";
-import { AdminMetric, ModalShell } from "./shared";
+import { AdminMetric, AdminSectionHeader, ModalShell } from "./shared";
 import { copyText, formatDateTime, parseMetaJson, shortDeviceToken } from "./utils";
 import type {
   BlockDeviceResp, ClearEventsResp, DeleteDeviceResp, ResetDeviceResp, ResetPrefixResp,
@@ -230,18 +230,25 @@ export function TrialProtectionSection() {
       {/* ── Настройки ── */}
       <div className="card">
         <div className="card__body">
-          <div className="admin-sectionHead">
-            <div>
-              <div className="kicker">Trial protection</div>
-              <h2 className="h2">Защита тестовых доступов</h2>
-              <p className="p">Контроль режима, порогов и признаков абьюза.</p>
-            </div>
-            <button className="btn" type="button"
-              onClick={() => void load({ silent: true })}
-              disabled={refreshing || savingSettings || clearingEvents || Boolean(resettingPrefix)}>
-              {refreshing ? "Обновляю…" : "Обновить"}
-            </button>
-          </div>
+          <AdminSectionHeader
+            kicker="Trial protection"
+            title="Защита тестовых доступов"
+            subtitle="Контроль режима, порогов и признаков абьюза."
+            actions={
+              <>
+                <button className="btn" type="button"
+                  onClick={() => void load({ silent: true })}
+                  disabled={refreshing || savingSettings || clearingEvents || Boolean(resettingPrefix)}>
+                  {refreshing ? "Обновляю…" : "Обновить"}
+                </button>
+                <button className="btn btn--primary" type="button"
+                  onClick={() => void saveSettings()}
+                  disabled={savingSettings || !hasSettingsChanges}>
+                  {savingSettings ? "Сохраняю…" : "Сохранить настройки"}
+                </button>
+              </>
+            }
+          />
 
           {error  && <div className="pre admin-gap-top-md" style={{ borderColor: "rgba(255,77,109,0.30)" }}>{error}</div>}
           {okText && <div className="pre admin-gap-top-md" style={{ borderColor: "rgba(43,227,143,0.30)" }}>{okText}</div>}
@@ -318,46 +325,51 @@ export function TrialProtectionSection() {
                 </div>
               </div>
 
-              {/* Пороги */}
-              <div className="admin-compactGrid admin-gap-top-md">
-                {[
-                  { label: "Порог usage по prefix",    value: ipPrefixUsageThresholdDraft,            set: setIpPrefixUsageThresholdDraft,            max: 100 },
-                  { label: "Порог attempts по prefix", value: ipPrefixAttemptThresholdDraft,          set: setIpPrefixAttemptThresholdDraft,          max: 200 },
-                  { label: "Порог distinct devices",   value: ipPrefixDistinctDevicesThresholdDraft,  set: setIpPrefixDistinctDevicesThresholdDraft,  max: 200 },
-                  { label: "Порог attempts по UA",     value: ipPrefixUserAgentAttemptThresholdDraft, set: setIpPrefixUserAgentAttemptThresholdDraft, max: 200 },
-                  { label: "Порог distinct users",     value: ipPrefixDistinctUsersThresholdDraft,    set: setIpPrefixDistinctUsersThresholdDraft,    max: 200 },
-                ].map(({ label, value, set, max }) => (
-                  <div key={label} className="list__item admin-tightItem">
-                    <div className="list__main">
-                      <div className="list__title">{label}</div>
-                      <div className="list__sub admin-gap-top-sm">
-                        <input className="input admin-numberInput" type="number" min="1" max={max} step="1"
-                          value={value} onChange={(e) => set(e.target.value)} />
+              {/* Пороги (расширенные) */}
+              <details className="admin-details admin-gap-top-md">
+                <summary className="admin-details__summary">Пороги и лимиты (расширенные)</summary>
+                <div className="admin-compactGrid admin-gap-top-sm">
+                  {[
+                    { label: "Порог usage по prefix",    value: ipPrefixUsageThresholdDraft,            set: setIpPrefixUsageThresholdDraft,            max: 100 },
+                    { label: "Порог attempts по prefix", value: ipPrefixAttemptThresholdDraft,          set: setIpPrefixAttemptThresholdDraft,          max: 200 },
+                    { label: "Порог distinct devices",   value: ipPrefixDistinctDevicesThresholdDraft,  set: setIpPrefixDistinctDevicesThresholdDraft,  max: 200 },
+                    { label: "Порог attempts по UA",     value: ipPrefixUserAgentAttemptThresholdDraft, set: setIpPrefixUserAgentAttemptThresholdDraft, max: 200 },
+                    { label: "Порог distinct users",     value: ipPrefixDistinctUsersThresholdDraft,    set: setIpPrefixDistinctUsersThresholdDraft,    max: 200 },
+                  ].map(({ label, value, set, max }) => (
+                    <div key={label} className="list__item admin-tightItem">
+                      <div className="list__main">
+                        <div className="list__title">{label}</div>
+                        <div className="list__sub admin-gap-top-sm">
+                          <input className="input admin-numberInput" type="number" min="1" max={max} step="1"
+                            value={value} onChange={(e) => set(e.target.value)} />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+                <div className="actions actions--1 admin-gap-top-sm">
+                  <button className="btn btn--primary" type="button"
+                    onClick={() => void saveSettings()}
+                    disabled={savingSettings || !hasSettingsChanges}>
+                    {savingSettings ? "Сохраняю…" : "Сохранить настройки"}
+                  </button>
+                </div>
+              </details>
 
-              <div className="actions actions--1 admin-gap-top-md">
-                <button className="btn btn--primary" type="button"
-                  onClick={() => void saveSettings()}
-                  disabled={savingSettings || !hasSettingsChanges}>
-                  {savingSettings ? "Сохраняю настройки…" : "Сохранить настройки"}
-                </button>
-              </div>
-
-              <div className="admin-metricsGrid admin-gap-top-md">
-                <AdminMetric label="Allow 24h"            value={status?.allows24h ?? 0}              tone="ok" />
-                <AdminMetric label="Observe 24h"          value={status?.observes24h ?? 0}            tone="warn" />
-                <AdminMetric label="Distinct devices 24h" value={status?.distinctDevices24h ?? 0} />
-                <AdminMetric label="Missing token 24h"    value={status?.missingDeviceToken24h ?? 0}  tone="warn" />
-                <AdminMetric label="Email blocks 24h"     value={status?.emailBlocks24h ?? 0}         tone="warn" />
-                <AdminMetric label="Manual blocks 24h"    value={status?.manualBlocks24h ?? 0}        tone="bad" />
-                <AdminMetric label="Block device 24h"     value={status?.blockDevice24h ?? 0}         tone="bad" />
-                <AdminMetric label="Block ip/prefix 24h"  value={(status?.blockIp24h ?? 0) + (status?.blockIpPrefix24h ?? 0)} tone="bad" />
-                <AdminMetric label="Blocked now"          value={status?.activeBlockedDevices ?? 0}   tone="bad" />
-              </div>
+              <details className="admin-details admin-gap-top-md">
+                <summary className="admin-details__summary">Статистика за 24 часа</summary>
+                <div className="admin-metricsGrid admin-gap-top-sm">
+                  <AdminMetric label="Allow 24h"            value={status?.allows24h ?? 0}              tone="ok" />
+                  <AdminMetric label="Observe 24h"          value={status?.observes24h ?? 0}            tone="warn" />
+                  <AdminMetric label="Distinct devices 24h" value={status?.distinctDevices24h ?? 0} />
+                  <AdminMetric label="Missing token 24h"    value={status?.missingDeviceToken24h ?? 0}  tone="warn" />
+                  <AdminMetric label="Email blocks 24h"     value={status?.emailBlocks24h ?? 0}         tone="warn" />
+                  <AdminMetric label="Manual blocks 24h"    value={status?.manualBlocks24h ?? 0}        tone="bad" />
+                  <AdminMetric label="Block device 24h"     value={status?.blockDevice24h ?? 0}         tone="bad" />
+                  <AdminMetric label="Block ip/prefix 24h"  value={(status?.blockIp24h ?? 0) + (status?.blockIpPrefix24h ?? 0)} tone="bad" />
+                  <AdminMetric label="Blocked now"          value={status?.activeBlockedDevices ?? 0}   tone="bad" />
+                </div>
+              </details>
             </>
           )}
         </div>
@@ -366,18 +378,18 @@ export function TrialProtectionSection() {
       {/* ── Устройства ── */}
       <div className="card admin-gap-top-lg">
         <div className="card__body">
-          <div className="admin-sectionHead">
-            <div>
-              <div className="kicker">Devices</div>
-              <h2 className="h2">Устройства</h2>
-              <p className="p">Просмотр, блокировка и сброс trial.</p>
-            </div>
-            <label className="admin-radio">
-              <input type="checkbox" checked={showAllDevices}
-                onChange={(e) => setShowAllDevices(e.target.checked)} />
-              {" "}Все устройства
-            </label>
-          </div>
+          <AdminSectionHeader
+            kicker="Devices"
+            title="Устройства"
+            subtitle="Просмотр, блокировка и сброс trial."
+            actions={
+              <label className="admin-radio admin-radio--last">
+                <input type="checkbox" checked={showAllDevices}
+                  onChange={(e) => setShowAllDevices(e.target.checked)} />
+                {" "}Все устройства
+              </label>
+            }
+          />
 
           {loading ? (
             <div className="list admin-gap-top-md">
@@ -459,15 +471,10 @@ export function TrialProtectionSection() {
       </div>
 
       {/* ── Очистка сети ── */}
-      <div className="card admin-gap-top-lg">
-        <div className="card__body">
-          <div className="admin-sectionHead">
-            <div>
-              <div className="kicker">Network cleanup</div>
-              <h2 className="h2">Очистка сети / prefix</h2>
-              <p className="p">Чистит usage, снимает блокировки, очищает события по сети.</p>
-            </div>
-          </div>
+      <details className="admin-details admin-gap-top-lg">
+        <summary className="admin-details__summary">Очистка сети / prefix</summary>
+        <div className="admin-cleanupPanel">
+          <p className="admin-sectionHeader__sub">Чистит usage, снимает блокировки, очищает события по сети.</p>
 
           {prefixes.length > 0 && (
             <div className="list admin-gap-top-md">
@@ -507,30 +514,30 @@ export function TrialProtectionSection() {
             </button>
           </div>
         </div>
-      </div>
+      </details>
 
       {/* ── События ── */}
       <div className="card admin-gap-top-lg">
         <div className="card__body">
-          <div className="admin-sectionHead">
-            <div>
-              <div className="kicker">Events</div>
-              <h2 className="h2">Последние события</h2>
-              <p className="p">Диагностика и журнал срабатываний.</p>
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button className="btn" type="button"
-                onClick={() => { setEventsExpanded((v) => !v); if (eventsExpanded) setEventsShowAll(false); }}>
-                {eventsExpanded ? "Скрыть" : "Показать"}
-              </button>
-              {eventsExpanded && (
-                <button className="btn btn--danger" type="button"
-                  onClick={() => void clearEvents()} disabled={clearingEvents}>
-                  {clearingEvents ? "Очищаю…" : "Очистить журнал"}
+          <AdminSectionHeader
+            kicker="Events"
+            title="Последние события"
+            subtitle="Диагностика и журнал срабатываний."
+            actions={
+              <>
+                <button className="btn" type="button"
+                  onClick={() => { setEventsExpanded((v) => !v); if (eventsExpanded) setEventsShowAll(false); }}>
+                  {eventsExpanded ? "Скрыть" : "Показать"}
                 </button>
-              )}
-            </div>
-          </div>
+                {eventsExpanded && (
+                  <button className="btn btn--danger" type="button"
+                    onClick={() => void clearEvents()} disabled={clearingEvents}>
+                    {clearingEvents ? "Очищаю…" : "Очистить журнал"}
+                  </button>
+                )}
+              </>
+            }
+          />
 
           {!eventsExpanded ? (
             <div className="pre admin-gap-top-md">События скрыты. Записей: {sortedEvents.length}.</div>

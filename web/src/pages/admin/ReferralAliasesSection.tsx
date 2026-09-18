@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../../shared/api/client";
+import { AdminSectionHeader } from "./shared";
 
 type AliasItem = {
   id: number;
@@ -222,22 +223,23 @@ export function ReferralAliasesSection() {
 
   return (
     <div className="card"><div className="card__body">
-      <div className="kicker">Блогерский модуль</div>
-      <h2 className="h1">Ссылки и партнёры</h2>
-      <p className="p">
-        Партнёрские ссылки управляют выплатами, а рекламные ссылки только записывают метку в комментарий нового клиента в биллинге.
-      </p>
-
-      {!creating && !editingAlias && (
-        <div className="row admin-gap-top-md">
-          <button className="btn btn--primary" type="button" onClick={() => createLink("campaign")}>
-            Новая рекламная ссылка
-          </button>
-          <button className="btn btn--soft" type="button" onClick={() => createLink("partner")}>
-            Новый партнёр
-          </button>
-        </div>
-      )}
+      <AdminSectionHeader
+        kicker="Блогерский модуль"
+        title="Ссылки и партнёры"
+        subtitle="Партнёрские ссылки управляют выплатами, рекламные — только меткой регистрации."
+        actions={
+          !creating && !editingAlias ? (
+            <>
+              <button className="btn btn--primary" type="button" onClick={() => createLink("campaign")}>
+                Новая рекламная ссылка
+              </button>
+              <button className="btn btn--soft" type="button" onClick={() => createLink("partner")}>
+                Новый партнёр
+              </button>
+            </>
+          ) : null
+        }
+      />
 
       {(creating || editingAlias) && <>
       <h3 className="h2 admin-gap-top-md">
@@ -251,7 +253,7 @@ export function ReferralAliasesSection() {
           : "Заполните условия вручную. Пустой процент означает 0%."}
       </p>
 
-      <div className="grid admin-gap-top-md">
+      <div className="grid2 admin-gap-top-md">
         <label className="field">
           <span className="field__label">Имя ссылки</span>
           <input

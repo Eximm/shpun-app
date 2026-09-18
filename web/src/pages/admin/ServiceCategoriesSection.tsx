@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiFetch } from "../../shared/api/client";
-import { ModalShell } from "./shared";
+import { AdminSectionHeader, ModalShell } from "./shared";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -261,19 +261,19 @@ export function ServiceCategoriesSection() {
     <>
       <div className="card">
         <div className="card__body">
-          <div className="admin-sectionHead">
-            <div>
-              <div className="kicker">Service categories</div>
-              <h2 className="h2">Категории услуг</h2>
-              <p className="p">Управление группами тарифов, оформлением и привязкой к биллингу.</p>
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button className="btn btn--primary" type="button" onClick={openNew}>+ Создать</button>
-              <button className="btn" type="button" onClick={() => void load()} disabled={loading}>
-                {loading ? "Загружаю…" : "Обновить"}
-              </button>
-            </div>
-          </div>
+          <AdminSectionHeader
+            kicker="Service categories"
+            title="Категории услуг"
+            subtitle="Группы тарифов, оформление и привязка к биллингу."
+            actions={
+              <>
+                <button className="btn btn--primary" type="button" onClick={openNew}>+ Создать</button>
+                <button className="btn" type="button" onClick={() => void load()} disabled={loading}>
+                  {loading ? "Загружаю…" : "Обновить"}
+                </button>
+              </>
+            }
+          />
 
           {error && <div className="pre admin-gap-top-md">{error}</div>}
 
@@ -305,7 +305,7 @@ export function ServiceCategoriesSection() {
                       {cat.hint_enabled && <span><strong>📢 подсказка</strong></span>}
                     </div>
                   </div>
-                  <div className="admin-rowActions">
+                  <div className="admin-rowActions admin-rowActions--inline">
                     <button className="btn" type="button" onClick={() => openEdit(cat)}>Изменить</button>
                     <button
                       className="btn btn--danger" type="button"

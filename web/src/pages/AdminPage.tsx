@@ -163,7 +163,7 @@ export function AdminPage() {
         </nav>
 
         <section className="admin-workspace" aria-label={activeItem.title}>
-          {activeTab === "overview" && <OverviewSection items={navItems} onOpenTab={selectTab} />}
+          {activeTab === "overview" && <OverviewSection unread={supportUnread} />}
           {activeTab === "reviews" && <ReviewsSection />}
           {activeTab === "broadcasts" && <BroadcastsSection />}
           {activeTab === "orderRules" && <OrderRulesSection />}

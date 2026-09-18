@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode, type Ref } from "react";
+import { useEffect, useState, type ReactNode, type Ref } from "react";
 import type { AdminTab } from "./types";
 
 /* ─── Admin navigation model + icons ─────────────────────────────────────── */
@@ -116,6 +116,59 @@ export function AdminSectionIcon({ name, size = 18 }: { name: AdminNavIconName; 
         </svg>
       );
   }
+}
+
+/* ─── Compact section header (single pattern for every admin section) ────── */
+
+export function AdminSectionHeader({
+  kicker,
+  title,
+  subtitle,
+  actions,
+}: {
+  kicker?: string;
+  title: string;
+  subtitle?: string;
+  actions?: ReactNode;
+}) {
+  return (
+    <header className="admin-sectionHeader">
+      <div className="admin-sectionHeader__main">
+        {kicker ? <div className="admin-sectionHeader__kicker">{kicker}</div> : null}
+        <h2 className="admin-sectionHeader__title">{title}</h2>
+        {subtitle ? <p className="admin-sectionHeader__sub">{subtitle}</p> : null}
+      </div>
+      {actions ? <div className="admin-sectionHeader__actions">{actions}</div> : null}
+    </header>
+  );
+}
+
+/* ─── Collapsible filter bar (inline on desktop, toggle on mobile) ───────── */
+
+export function AdminFilterBar({
+  activeCount = 0,
+  children,
+}: {
+  activeCount?: number;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className={`admin-filterBar${open ? " is-open" : ""}`}>
+      <button
+        type="button"
+        className="admin-filterBar__toggle"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <span>Фильтры</span>
+        {activeCount > 0 ? <span className="admin-filterBar__count">{activeCount}</span> : null}
+        <span className="admin-filterBar__chevron" aria-hidden="true">▾</span>
+      </button>
+      <div className="admin-filterBar__body">{children}</div>
+    </div>
+  );
 }
 
 export function AdminMetric({

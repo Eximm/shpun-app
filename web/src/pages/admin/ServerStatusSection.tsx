@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../../shared/api/client";
+import { AdminSectionHeader } from "./shared";
 
 type MonitoredServer = {
   id: number;
@@ -247,32 +248,47 @@ export function ServerStatusSection() {
     <div className="admin-stack">
       <div className="card">
         <div className="card__body">
-          <div className="admin-sectionHead">
-            <div>
-              <div className="kicker">Server status</div>
-              <h2 className="h2">Мониторинг серверов</h2>
-              <p className="p">Компактное управление нодами мониторинга. Домен и exporter остаются внутренней кухней.</p>
-            </div>
-            <div className="actions">
-              <button className="btn" type="button" onClick={() => void load()} disabled={loading}>Обновить список</button>
-              <button className="btn btn--primary" type="button" onClick={startCreate}>Новая нода</button>
-            </div>
-          </div>
+          <AdminSectionHeader
+            kicker="Server status"
+            title="Мониторинг серверов"
+            subtitle={loading ? "Загружаем…" : `Нод: ${items.length}`}
+            actions={
+              <>
+                <button className="btn" type="button" onClick={() => void load()} disabled={loading}>Обновить список</button>
+                <button className="btn btn--primary" type="button" onClick={startCreate}>Новая нода</button>
+              </>
+            }
+          />
 
           {error && <div className="pre admin-gap-top-sm">{error}</div>}
           {notice && <div className="pre admin-gap-top-sm">{notice}</div>}
+
+          <div className="admin-serverStatus-list admin-gap-top-md">
+            {items.map((item) => (
+              <div className="admin-serverStatus-item" key={item.id}>
+                <div>
+                  <div className="admin-serverStatus-title">
+                    <span className={`serverStatus-dot serverStatus-dot--${item.active ? "online" : "offline"}`} />
+                    {item.title || item.host}
+                  </div>
+                  <div className="list__sub">{item.kind === "infra" ? "Кабинет/подписки" : "VPN"}{item.country_code ? ` · ${item.country_code}` : ""} · {item.host}</div>
+                  <div className="list__sub">{item.exporter_url}</div>
+                </div>
+                <div className="actions">
+                  <button className="btn btn--soft" type="button" onClick={() => edit(item)}>Изменить</button>
+                  <button className="btn btn--danger" type="button" onClick={() => void remove(item.id)}>Удалить</button>
+                </div>
+              </div>
+            ))}
+            {!loading && items.length === 0 && <div className="pre">Пока пусто. Добавьте первый сервер мониторинга.</div>}
+          </div>
         </div>
       </div>
 
-      <div className="card">
-        <div className="card__body">
-          <div className="admin-sectionHead">
-            <div>
-              <div className="kicker">Matrix import</div>
-              <h2 className="h2">Матрица серверов</h2>
-              <p className="p">Быстрое добавление пачки серверов. Формат строки: название | домен | тип | uplink Mbps | порядок | exporter URL | страна. Страна — двухбуквенный код, например GB. Старые строки без страны тоже поддерживаются.</p>
-            </div>
-          </div>
+      <details className="admin-details">
+        <summary className="admin-details__summary">Матрица серверов · массовый импорт</summary>
+        <div className="admin-serverStatus-matrixPanel">
+          <p className="admin-sectionHeader__sub admin-gap-top-sm">Быстрое добавление пачки серверов. Формат строки: название | домен | тип | uplink Mbps | порядок | exporter URL | страна. Страна — двухбуквенный код, например GB. Старые строки без страны тоже поддерживаются.</p>
 
           <textarea
             className="input admin-serverStatus-matrix"
@@ -298,38 +314,7 @@ export function ServerStatusSection() {
 
           {matrix.errors.length > 0 && <div className="pre admin-gap-top-sm">{matrix.errors.join("\n")}</div>}
         </div>
-      </div>
-
-      <div className="card">
-        <div className="card__body">
-          <div className="admin-sectionHead">
-            <div>
-              <h2 className="h2">Серверы</h2>
-              <p className="p">{loading ? "Загружаем…" : `Добавлено: ${items.length}`}</p>
-            </div>
-          </div>
-
-          <div className="admin-serverStatus-list">
-            {items.map((item) => (
-              <div className="admin-serverStatus-item" key={item.id}>
-                <div>
-                  <div className="admin-serverStatus-title">
-                    <span className={`serverStatus-dot serverStatus-dot--${item.active ? "online" : "offline"}`} />
-                    {item.title || item.host}
-                  </div>
-                  <div className="list__sub">{item.kind === "infra" ? "Кабинет/подписки" : "VPN"}{item.country_code ? ` · ${item.country_code}` : ""} · {item.host}</div>
-                  <div className="list__sub">{item.exporter_url}</div>
-                </div>
-                <div className="actions">
-                  <button className="btn btn--soft" type="button" onClick={() => edit(item)}>Изменить</button>
-                  <button className="btn btn--danger" type="button" onClick={() => void remove(item.id)}>Удалить</button>
-                </div>
-              </div>
-            ))}
-            {!loading && items.length === 0 && <div className="pre">Пока пусто. Добавьте первый сервер мониторинга.</div>}
-          </div>
-        </div>
-      </div>
+      </details>
 
       {editorOpen && (
         <div className="modalBackdrop" role="presentation" onMouseDown={reset}>

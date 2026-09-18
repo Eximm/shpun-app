@@ -17,7 +17,7 @@ import {
   type TicketAttachment,
 } from "../../shared/support/attachments";
 import { AttachmentList, PendingFiles } from "../../shared/support/AttachmentViews";
-import { ModalShell, PartnershipTabIcon, SupportTabIcon, UnreadMarker } from "./shared";
+import { AdminFilterBar, AdminSectionHeader, ModalShell, PartnershipTabIcon, SupportTabIcon, UnreadMarker } from "./shared";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -699,18 +699,32 @@ export function SupportSection({
     setFilters(EMPTY_FILTERS);
   }
 
+  const activeFilterCount = [
+    filters.status,
+    filters.priority,
+    filters.categoryKey,
+    filters.assignedTo.trim(),
+    filters.q.trim(),
+    filters.unassigned ? "unassigned" : "",
+  ].filter(Boolean).length;
+
   const messages = opened?.messages ?? [];
 
   return (
     <div className="card">
       <div className="card__body">
-        <div className="kicker">Inbox</div>
-        <h2 className="h1">{kind === "partnership" ? "Сотрудничество" : "Обращения в поддержку"}</h2>
-        <p className="p">
-          {kind === "partnership"
+        <AdminSectionHeader
+          kicker="Support"
+          title="Поддержка"
+          subtitle={kind === "partnership"
             ? "Входящие предложения о рекламе и сотрудничестве."
-            : "Тикеты из ShpunApp и Telegram: переписка, ответы и внутренние заметки."}
-        </p>
+            : "Тикеты из ShpunApp и Telegram: переписка, ответы и заметки."}
+          actions={
+            <button className="btn btn--soft" type="button" onClick={() => void loadTickets()} disabled={loading}>
+              {loading ? "Обновляю…" : "Обновить"}
+            </button>
+          }
+        />
 
         <div className="supportKindTabs">
           <button
@@ -734,7 +748,7 @@ export function SupportSection({
         </div>
 
         {/* ── Filters ── */}
-        <div className="supportFilters admin-gap-top-sm">
+        <AdminFilterBar activeCount={activeFilterCount}>
           <label className="field">
             <span className="field__label">Статус</span>
             <select className="input" value={filters.status} onChange={(e) => setFilters((p) => ({ ...p, status: e.target.value }))}>
@@ -792,14 +806,13 @@ export function SupportSection({
               <span className="field__label" style={{ margin: 0 }}>Без оператора</span>
             </span>
           </label>
-        </div>
+        </AdminFilterBar>
 
-        <div className="actions actions--2 admin-gap-top-sm">
-          <button className="btn btn--soft" type="button" onClick={() => void loadTickets()} disabled={loading}>
-            {loading ? "Обновляю…" : "Обновить"}
-          </button>
-          <button className="btn" type="button" onClick={resetFilters} disabled={loading}>Сбросить фильтры</button>
-        </div>
+        {activeFilterCount > 0 && (
+          <div className="admin-gap-top-sm">
+            <button className="btn btn--soft" type="button" onClick={resetFilters} disabled={loading}>Сбросить фильтры</button>
+          </div>
+        )}
 
         {listError && <div className="pre admin-gap-top-md">{listError}</div>}
 

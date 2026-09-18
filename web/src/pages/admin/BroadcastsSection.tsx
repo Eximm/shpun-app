@@ -2,11 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../../shared/api/client";
-import { ModalShell } from "./shared";
+import { AdminSectionHeader, ModalShell } from "./shared";
 import { formatDateTime, truncateText } from "./utils";
 import type { BroadcastItem, DeleteResp, HideResp, UpdateResp, ListResp } from "./types";
 
 const PREVIEW_LIMIT = 160;
+
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
 
 type CreateResp = {
   ok: true;
@@ -70,8 +74,8 @@ export function BroadcastsSection() {
     try {
       const r = await apiFetch<ListResp>("/admin/broadcasts?limit=200", { method: "GET" });
       setItems(Array.isArray(r.items) ? r.items : []);
-    } catch (e: any) {
-      setError(e?.message || "Не удалось загрузить список broadcast-новостей.");
+    } catch (e: unknown) {
+      setError(errorMessage(e, "Не удалось загрузить список broadcast-новостей."));
       setItems([]);
     } finally { setLoading(false); }
   }
@@ -86,8 +90,8 @@ export function BroadcastsSection() {
       setItems((prev) => prev.filter((x) => x.origin_id !== originId));
       if (opened?.origin_id === originId) setOpened(null);
       window.alert(`Удалено копий: ${r.deleted}`);
-    } catch (e: any) {
-      window.alert(e?.message || "Не удалось удалить broadcast.");
+    } catch (e: unknown) {
+      window.alert(errorMessage(e, "Не удалось удалить broadcast."));
     } finally { setDeletingId(null); }
   }
 
@@ -103,8 +107,8 @@ export function BroadcastsSection() {
         x.origin_id === item.origin_id ? { ...x, hidden: nextHidden } : x
       ));
       if (opened?.origin_id === item.origin_id) setOpened({ ...opened, hidden: nextHidden });
-    } catch (e: any) {
-      window.alert(e?.message || "Не удалось изменить видимость.");
+    } catch (e: unknown) {
+      window.alert(errorMessage(e, "Не удалось изменить видимость."));
     } finally { setHidingId(null); }
   }
 
@@ -133,8 +137,8 @@ export function BroadcastsSection() {
       setItems((prev) => prev.map((x) => x.origin_id === opened.origin_id ? updated : x));
       setOpened(updated);
       setEditMode(false);
-    } catch (e: any) {
-      setSaveError(e?.message || "Не удалось сохранить изменения.");
+    } catch (e: unknown) {
+      setSaveError(errorMessage(e, "Не удалось сохранить изменения."));
     } finally { setSaving(false); }
   }
 
@@ -161,8 +165,8 @@ export function BroadcastsSection() {
       });
       setNewTitle(""); setNewMessage(""); setNewPublishedAt(""); setNewSendPush(true); setCreateMode(false);
       await load();
-    } catch (e: any) {
-      setCreateError(e?.message || "Не удалось создать новость.");
+    } catch (e: unknown) {
+      setCreateError(errorMessage(e, "Не удалось создать новость."));
     } finally { setCreating(false); }
   }
 
@@ -172,22 +176,22 @@ export function BroadcastsSection() {
     <>
       <div className="card">
         <div className="card__body">
-          <div className="admin-sectionHead">
-            <div>
-              <div className="kicker">Broadcasts</div>
-              <h2 className="h2">Управление broadcast-новостями</h2>
-              <p className="p">Просмотр, создание, редактирование и скрытие.</p>
-            </div>
-            <div className="admin-rowActions">
-              <button className="btn btn--accent" type="button"
-                onClick={() => { setCreateMode((v) => !v); setCreateError(null); }}>
-                {createMode ? "Отмена" : "+ Создать"}
-              </button>
-              <button className="btn btn--soft" type="button" onClick={() => void load()} disabled={loading}>
-                {loading ? "Обновляю…" : "Обновить"}
-              </button>
-            </div>
-          </div>
+          <AdminSectionHeader
+            kicker="Broadcasts"
+            title="Broadcast-новости"
+            subtitle="Просмотр, создание, редактирование и скрытие."
+            actions={
+              <>
+                <button className="btn btn--accent" type="button"
+                  onClick={() => { setCreateMode((v) => !v); setCreateError(null); }}>
+                  {createMode ? "Отмена" : "+ Создать"}
+                </button>
+                <button className="btn btn--soft" type="button" onClick={() => void load()} disabled={loading}>
+                  {loading ? "Обновляю…" : "Обновить"}
+                </button>
+              </>
+            }
+          />
 
           {/* Форма создания */}
           {createMode && (
@@ -285,7 +289,7 @@ export function BroadcastsSection() {
                     <span><strong>copies:</strong> {item.copies}</span>
                   </div>
                 </div>
-                <div className="admin-rowActions">
+                <div className="admin-rowActions admin-rowActions--inline">
                   <button className="btn btn--soft" type="button"
                     onClick={() => { setOpened(item); setEditMode(false); }}>
                     Открыть
