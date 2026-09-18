@@ -6,6 +6,7 @@
 import { useNavigate } from "react-router-dom";
 import { useMe } from "../auth/useMe";
 import { useSupportUnread } from "../notifications/supportUnread";
+import { useI18n } from "../../shared/i18n";
 
 function BellIcon() {
   return (
@@ -23,18 +24,21 @@ function BellIcon() {
 
 export function SupportBell() {
   const { me } = useMe();
+  const { t, tp } = useI18n();
   const isAdmin = Boolean(me?.profile?.isAdmin || me?.admin?.isAdmin);
   const { total: count } = useSupportUnread(isAdmin);
   const navigate = useNavigate();
 
   if (!isAdmin) return null;
 
+  const label = count > 0 ? tp("support.bell.unread", count) : t("support.title");
+
   return (
     <button
       className="topbar__bell"
       type="button"
-      aria-label={count > 0 ? `Поддержка: ${count} непрочитанных` : "Поддержка"}
-      title="Обращения в поддержку"
+      aria-label={label}
+      title={t("support.bell.title")}
       onClick={() => navigate("/admin?tab=support")}
     >
       <BellIcon />

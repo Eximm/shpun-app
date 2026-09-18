@@ -1,4 +1,10 @@
 // web/src/shared/api/errorText.ts
+//
+// Normalizes any API/network error into a human-readable, localized
+// title/description. Raw codes are preserved in `code` for logs/debug only
+// and are never shown to the user.
+
+import { tGlobal } from "../i18n/runtime";
 
 export type NormalizedError = {
   title: string;
@@ -197,8 +203,8 @@ export function normalizeError(err: unknown, ctx?: { title?: string }): Normaliz
 
   if (isAuth(code, status, message)) {
     return {
-      title: ctx?.title || "Нужно войти заново",
-      description: "Сессия устарела. Пожалуйста, войдите в приложение ещё раз.",
+      title: ctx?.title || tGlobal("error.auth.title"),
+      description: tGlobal("error.auth.desc"),
       code,
       status,
     };
@@ -206,8 +212,8 @@ export function normalizeError(err: unknown, ctx?: { title?: string }): Normaliz
 
   if (isNetwork(message, code)) {
     return {
-      title: ctx?.title || "Проблема с соединением",
-      description: "Проверьте интернет и попробуйте ещё раз.",
+      title: ctx?.title || tGlobal("error.network.title"),
+      description: tGlobal("error.network.desc"),
       code,
       status,
     };
@@ -215,8 +221,8 @@ export function normalizeError(err: unknown, ctx?: { title?: string }): Normaliz
 
   if (isShmCode(code, message)) {
     return {
-      title: ctx?.title || "Сервис временно недоступен",
-      description: "Попробуйте ещё раз чуть позже.",
+      title: ctx?.title || tGlobal("error.service_unavailable.title"),
+      description: tGlobal("error.service_unavailable.desc"),
       code: code || "shm_error",
       status,
     };
@@ -224,8 +230,8 @@ export function normalizeError(err: unknown, ctx?: { title?: string }): Normaliz
 
   if (status === 429) {
     return {
-      title: ctx?.title || "Слишком много запросов",
-      description: "Подождите немного и попробуйте ещё раз.",
+      title: ctx?.title || tGlobal("error.rate_limit.title"),
+      description: tGlobal("error.rate_limit.desc"),
       code,
       status,
     };
@@ -233,8 +239,8 @@ export function normalizeError(err: unknown, ctx?: { title?: string }): Normaliz
 
   if (status && status >= 500) {
     return {
-      title: ctx?.title || "Ошибка сервера",
-      description: "Попробуйте ещё раз чуть позже.",
+      title: ctx?.title || tGlobal("error.server.title"),
+      description: tGlobal("error.server.desc"),
       code,
       status,
     };
@@ -242,8 +248,8 @@ export function normalizeError(err: unknown, ctx?: { title?: string }): Normaliz
 
   if (status === 404) {
     return {
-      title: ctx?.title || "Не найдено",
-      description: "Нужные данные не найдены.",
+      title: ctx?.title || tGlobal("error.not_found.title"),
+      description: tGlobal("error.not_found.desc"),
       code,
       status,
     };
@@ -252,7 +258,7 @@ export function normalizeError(err: unknown, ctx?: { title?: string }): Normaliz
   if (status === 400 || status === 422) {
     if (message && !looksLikeTechGarbage(message)) {
       return {
-        title: ctx?.title || "Не удалось выполнить действие",
+        title: ctx?.title || tGlobal("error.action.title"),
         description: message,
         code,
         status,
@@ -260,8 +266,8 @@ export function normalizeError(err: unknown, ctx?: { title?: string }): Normaliz
     }
 
     return {
-      title: ctx?.title || "Проверьте введённые данные",
-      description: "Что-то заполнено неверно или не хватает данных.",
+      title: ctx?.title || tGlobal("error.bad_request.title"),
+      description: tGlobal("error.bad_request.desc"),
       code,
       status,
     };
@@ -269,7 +275,7 @@ export function normalizeError(err: unknown, ctx?: { title?: string }): Normaliz
 
   if (message && !looksLikeTechGarbage(message)) {
     return {
-      title: ctx?.title || "Не удалось выполнить действие",
+      title: ctx?.title || tGlobal("error.action.title"),
       description: message,
       code,
       status,
@@ -277,8 +283,8 @@ export function normalizeError(err: unknown, ctx?: { title?: string }): Normaliz
   }
 
   return {
-    title: ctx?.title || "Что-то пошло не так",
-    description: "Попробуйте ещё раз.",
+    title: ctx?.title || tGlobal("error.generic.title"),
+    description: tGlobal("error.generic.desc"),
     code,
     status,
   };

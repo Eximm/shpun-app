@@ -1,3 +1,5 @@
+import { getRuntimeLocale } from "../../shared/i18n/runtime";
+
 export function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
@@ -5,9 +7,13 @@ export function pad2(n: number) {
 export function formatDateTime(tsSec?: number | null) {
   if (!tsSec || !Number.isFinite(tsSec)) return "—";
   const d = new Date(tsSec * 1000);
-  return `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.${d.getFullYear()} ${pad2(d.getHours())}:${pad2(
-    d.getMinutes(),
-  )}`;
+  return new Intl.DateTimeFormat(getRuntimeLocale(), {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(d);
 }
 
 export function truncateText(text: string | null | undefined, limit: number) {

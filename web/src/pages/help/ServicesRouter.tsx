@@ -104,7 +104,7 @@ export function ServicesRouter() {
             <span className="chip chip--ok">OpenWrt 24.x</span>
             <span className="chip chip--ok">OpenWrt 25.x</span>
             <span className="chip chip--accent">Windows</span>
-            <span className="chip">Без команд</span>
+            <span className="chip">{t("servicesRouter.no_commands")}</span>
           </div>
 
           <div className="router-help-note">

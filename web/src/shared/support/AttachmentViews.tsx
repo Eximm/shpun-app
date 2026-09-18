@@ -1,22 +1,24 @@
 // web/src/shared/support/AttachmentViews.tsx
 // Attachment rendering components (separated from helpers for fast-refresh).
 
+import { useI18n } from "../i18n";
 import {
   attachmentUrl,
-  formatBytes,
   isImageAttachment,
   type PendingFile,
   type TicketAttachment,
 } from "./attachments";
 
 export function AttachmentView({ attachment }: { attachment: TicketAttachment }) {
+  const { t, formatBytes } = useI18n();
+
   if (attachment.deletedAt) {
     return (
       <div className="attachItem attachItem--expired">
-        <span className="attachItem__icon">📎</span>
+        <span className="attachItem__icon"></span>
         <span className="attachItem__main">
-          <span className="attachItem__name">{attachment.originalName || "Файл"}</span>
-          <span className="attachItem__note">Удалено по истечении срока хранения.</span>
+          <span className="attachItem__name">{attachment.originalName || t("support.attachment.file")}</span>
+          <span className="attachItem__note">{t("support.attachment.expired")}</span>
         </span>
       </div>
     );
@@ -25,7 +27,11 @@ export function AttachmentView({ attachment }: { attachment: TicketAttachment })
   if (isImageAttachment(attachment)) {
     return (
       <a className="attachImage" href={attachmentUrl(attachment.id)} target="_blank" rel="noopener noreferrer">
-        <img src={attachmentUrl(attachment.id)} alt={attachment.originalName || "Вложение"} loading="lazy" />
+        <img
+          src={attachmentUrl(attachment.id)}
+          alt={attachment.originalName || t("support.attachment.image_alt")}
+          loading="lazy"
+        />
       </a>
     );
   }
@@ -34,7 +40,7 @@ export function AttachmentView({ attachment }: { attachment: TicketAttachment })
     <a className="attachItem" href={attachmentUrl(attachment.id)} target="_blank" rel="noopener noreferrer">
       <span className="attachItem__icon">📄</span>
       <span className="attachItem__main">
-        <span className="attachItem__name">{attachment.originalName || "Файл"}</span>
+        <span className="attachItem__name">{attachment.originalName || t("support.attachment.file")}</span>
         <span className="attachItem__size">{formatBytes(attachment.sizeBytes)}</span>
       </span>
     </a>
@@ -53,6 +59,7 @@ export function AttachmentList({ attachments }: { attachments?: TicketAttachment
 }
 
 export function PendingFiles({ files, onRemove, disabled }: { files: PendingFile[]; onRemove: (id: string) => void; disabled?: boolean }) {
+  const { t, formatBytes } = useI18n();
   if (files.length === 0) return null;
   return (
     <div className="attachPending">
@@ -70,7 +77,7 @@ export function PendingFiles({ files, onRemove, disabled }: { files: PendingFile
           <button
             type="button"
             className="attachPending__remove"
-            aria-label="Убрать файл"
+            aria-label={t("support.attachment.remove")}
             disabled={disabled}
             onClick={() => onRemove(f.id)}
           >

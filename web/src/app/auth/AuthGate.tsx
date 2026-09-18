@@ -490,8 +490,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         return;
       }
       successShownRef.current = true;
-      toast.success("Вы успешно вошли", {
-        description: "Добро пожаловать в Shpun App.",
+      toast.success(t("auth.toast.welcome_title"), {
+        description: t("auth.toast.welcome_desc"),
       });
       clearAuthPending();
     } catch {
@@ -503,8 +503,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     if (!authRequired || notifiedRef.current) return;
     notifiedRef.current = true;
     if (shouldNotifyExpiredSession(loc.pathname, loc.search)) {
-      toast.error("Сессия истекла", {
-        description: "Пожалуйста, авторизуйтесь снова.",
+      toast.error(t("auth.toast.expired_title"), {
+        description: t("auth.toast.expired_desc"),
         durationMs: 3500,
       });
     }
@@ -630,7 +630,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
             <div className="app-loader__title">Shpun App</div>
           </div>
           <div className="app-loader__text">
-            {authInProgress ? "Завершаем вход…" : "Проверяем авторизацию…"}
+            {authInProgress ? t("auth.loader.finishing") : t("auth.loader.checking")}
           </div>
         </div>
       </div>

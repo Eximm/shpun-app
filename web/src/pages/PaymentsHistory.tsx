@@ -252,7 +252,7 @@ export function PaymentsHistory() {
                   const qnt      = x?.qnt != null ? Number(x.qnt) : null
                   const serviceId = x?.service_id != null ? Number(x.service_id) : null
                   const usi      = x?.user_service_id != null ? Number(x.user_service_id) : null
-                  const period   = months && qnt ? `${months}м × ${qnt}` : months ? `${months}м` : qnt ? `× ${qnt}` : ''
+                  const period   = months && qnt ? t('paymentsHistory.period.months_qty', { months, qty: qnt }) : months ? t('paymentsHistory.period.months', { months }) : qnt ? `× ${qnt}` : ''
 
                   const subParts = [
                     `${t('paymentsHistory.withdrawals.id')}: ${compactId(wid)}`,

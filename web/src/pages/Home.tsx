@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMe } from "../app/auth/useMe";
 import { useI18n } from "../shared/i18n";
+import { getRuntimeLocale } from "../shared/i18n/runtime";
 import { apiFetch } from "../shared/api/client";
 import { toast } from "../shared/ui/toast";
 import { buildHomeNewsPreview } from "../shared/ui/newsPreview";
@@ -38,23 +39,23 @@ function openExternalAuthPage() {
 }
 
 function fmtMoney(n: number, cur: string) {
-  try { return new Intl.NumberFormat(undefined, { style: "currency", currency: cur || "RUB", maximumFractionDigits: 0 }).format(Number(n || 0)); }
+  try { return new Intl.NumberFormat(getRuntimeLocale(), { style: "currency", currency: cur || "RUB", maximumFractionDigits: 0 }).format(Number(n || 0)); }
   catch { return `${n} ${cur || "RUB"}`; }
 }
 function fmtMoneyForecast(n: number, cur: string) {
-  try { return new Intl.NumberFormat(undefined, { style: "currency", currency: cur || "RUB", minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(Number(n || 0)); }
+  try { return new Intl.NumberFormat(getRuntimeLocale(), { style: "currency", currency: cur || "RUB", minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(Number(n || 0)); }
   catch { return `${n} ${cur || "RUB"}`; }
 }
 function fmtShortDate(iso: string | null | undefined) {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return String(iso);
-  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "2-digit" });
+  return new Intl.DateTimeFormat(getRuntimeLocale(), { year: "numeric", month: "short", day: "2-digit" }).format(d);
 }
 function fmtFeedDate(tsSec: number, todayLabel: string) {
   const d = new Date(tsSec * 1000), now = new Date();
   const same = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
-  return same ? todayLabel : d.toLocaleDateString(undefined, { month: "short", day: "2-digit" });
+  return same ? todayLabel : new Intl.DateTimeFormat(getRuntimeLocale(), { month: "short", day: "2-digit" }).format(d);
 }
 function categoryOf(e: NotifEvent): Category {
   const t = String(e.type || "").trim().toLowerCase();
@@ -123,9 +124,10 @@ function StatCell({ to, icon, label, value, sub, accent }: {
 }
 
 function Money({ amount, currency }: { amount: number; currency: string }) {
+  const { formatCurrency, formatNumber } = useI18n();
   return <>{currency === "RUB"
-    ? new Intl.NumberFormat("ru-RU").format(amount) + " ₽"
-    : new Intl.NumberFormat("ru-RU").format(amount) + ` ${currency}`}</>;
+    ? formatCurrency(amount)
+    : `${formatNumber(amount)} ${currency}`}</>;
 }
 
 /* ─── Home ───────────────────────────────────────────────────────────────── */

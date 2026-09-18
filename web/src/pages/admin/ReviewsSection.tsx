@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../../shared/api/client";
+import { useI18n } from "../../shared/i18n";
 import { AdminSectionHeader } from "./shared";
 import type { AdminSettingsResp } from "./types";
 
@@ -19,21 +20,21 @@ type AdminReview = {
   createdAt: string;
 };
 
-function money(value: number) {
-  return `${value.toLocaleString("ru-RU", { maximumFractionDigits: 2 })} ₽`;
-}
-
-function date(value?: string | null) {
-  if (!value) return "";
-  const parsed = new Date(value.endsWith("Z") ? value : `${value.replace(" ", "T")}Z`);
-  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString("ru-RU");
-}
-
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
 export function ReviewsSection() {
+  const { t, formatCurrency, formatDate } = useI18n();
+
+  const fmtDate = (value?: string | null) => {
+    if (!value) return "";
+    const parsed = new Date(value.endsWith("Z") ? value : `${value.replace(" ", "T")}Z`);
+    return Number.isNaN(parsed.getTime())
+      ? value
+      : formatDate(parsed, { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  };
+
   const [items, setItems] = useState<AdminReview[]>([]);
   const [amount, setAmount] = useState("100");
   const [savedAmount, setSavedAmount] = useState(100);
@@ -61,7 +62,7 @@ export function ReviewsSection() {
         apiFetch<AdminSettingsResp>("/admin/settings", { method: "GET" }),
       ]);
       if (settings?.ok !== 1 && settings?.ok !== true) {
-        throw new Error("Биллинг не вернул настройки награды.");
+        throw new Error(t("admin.reviews.err.billing"));
       }
       const nextAmount = Number(settings?.settings?.reviewRewardAmount ?? 100);
       const safeAmount = Number.isFinite(nextAmount) && nextAmount >= 1 && nextAmount <= 500 ? nextAmount : 100;
@@ -69,7 +70,7 @@ export function ReviewsSection() {
       setAmount(String(safeAmount));
       setSavedAmount(safeAmount);
     } catch (e: unknown) {
-      setError(errorMessage(e, "Не удалось загрузить отзывы."));
+      setError(errorMessage(e, t("admin.reviews.err.load")));
     } finally {
       setLoading(false);
     }
@@ -90,9 +91,9 @@ export function ReviewsSection() {
       const next = Number(response.reviewRewardAmount ?? numericAmount);
       setSavedAmount(next);
       setAmount(String(next));
-      setMessage(`Награда за отзыв: ${money(next)}.`);
+      setMessage(t("admin.reviews.reward.saved", { amount: formatCurrency(next) }));
     } catch (e: unknown) {
-      setError(errorMessage(e, "Не удалось сохранить сумму."));
+      setError(errorMessage(e, t("admin.reviews.err.save")));
     } finally {
       setSaving(false);
     }
@@ -100,7 +101,7 @@ export function ReviewsSection() {
 
   async function approve(review: AdminReview) {
     if (amountChanged && review.rewardStatus !== "processing") {
-      setError("Сначала сохраните новую сумму награды.");
+      setError(t("admin.reviews.err.save_amount"));
       return;
     }
     setBusyId(review.id);
@@ -110,10 +111,10 @@ export function ReviewsSection() {
       const response = await apiFetch<{ ok: true; message?: string }>(`/reviews/${review.id}/approve`, {
         method: "POST",
       });
-      setMessage(response.message || "Отзыв опубликован, бонусы начислены.");
+      setMessage(response.message || t("admin.reviews.approved_fallback"));
       await load();
     } catch (e: unknown) {
-      setError(errorMessage(e, "Начисление не выполнено. Отзыв не опубликован."));
+      setError(errorMessage(e, t("admin.reviews.err.accrual")));
       await load();
     } finally {
       setBusyId(null);
@@ -126,10 +127,10 @@ export function ReviewsSection() {
     setMessage("");
     try {
       await apiFetch(`/reviews/${id}/status`, { method: "PATCH", body: { status: "hidden" } });
-      setMessage("Отзыв отклонён и скрыт.");
+      setMessage(t("admin.reviews.msg.rejected"));
       await load();
     } catch (e: unknown) {
-      setError(errorMessage(e, "Не удалось скрыть отзыв."));
+      setError(errorMessage(e, t("admin.reviews.err.hide")));
     } finally {
       setBusyId(null);
     }
@@ -138,12 +139,12 @@ export function ReviewsSection() {
   return (
     <div className="card"><div className="card__body">
       <AdminSectionHeader
-        kicker="Отзывы"
-        title="Проверка отзывов"
-        subtitle="После подтверждения биллинг начислит бонусы, а отзыв будет опубликован."
+        kicker={t("admin.tab.reviews")}
+        title={t("admin.section.reviews.title")}
+        subtitle={t("admin.section.reviews.subtitle")}
         actions={
           <button className="btn btn--soft" type="button" onClick={() => void load()} disabled={loading || saving || busyId !== null}>
-            Обновить
+            {t("common.refresh")}
           </button>
         }
       />
@@ -151,44 +152,44 @@ export function ReviewsSection() {
       <div className="list admin-gap-top-md">
         <div className="list__item admin-tightItem admin-reviewSetting">
           <div className="list__main">
-            <div className="list__title">Награда за один отзыв</div>
-            <div className="list__sub">От 1 до 500 ₽. Новая сумма применяется только после сохранения.</div>
+            <div className="list__title">{t("admin.reviews.reward.title")}</div>
+            <div className="list__sub">{t("admin.reviews.reward.subtitle")}</div>
           </div>
           <div className="admin-reviewSetting__controls">
             <input
               className="input admin-reviewAmountInput"
               inputMode="decimal"
               value={amount}
-              aria-label="Сумма награды за отзыв"
+              aria-label={t("admin.reviews.reward.aria")}
               onChange={(event) => setAmount(event.target.value.replace(/[^\d.,]/g, "").replace(",", "."))}
             />
             <button className="btn btn--accent" type="button" onClick={() => void saveAmount()} disabled={saving || !amountChanged}>
-              {saving ? "Сохраняю…" : "Сохранить сумму"}
+              {saving ? t("admin.reviews.reward.saving") : t("admin.reviews.reward.save")}
             </button>
           </div>
         </div>
       </div>
 
-      {!amountValid && <div className="pre admin-gap-top-md">Введите сумму от 1 до 500 ₽.</div>}
+      {!amountValid && <div className="pre admin-gap-top-md">{t("admin.reviews.reward.invalid")}</div>}
 
       {message && <div className="pre admin-gap-top-md">{message}</div>}
       {error && <div className="pre admin-gap-top-md">{error}</div>}
 
-      <h3 className="h2 admin-gap-top-md">Ожидают проверки · {pending.length}</h3>
+      <h3 className="h2 admin-gap-top-md">{t("admin.reviews.pending_title", { count: pending.length })}</h3>
       {loading ? (
         <div className="list admin-gap-top-md"><div className="skeleton h1" /><div className="skeleton p" /></div>
       ) : pending.length === 0 ? (
-        <p className="p">Новых отзывов нет.</p>
+        <p className="p">{t("admin.reviews.empty")}</p>
       ) : (
         <div className="list admin-gap-top-md">
           {pending.map((review) => (
             <div className="list__item admin-tightItem admin-reviewCard" key={review.id}>
               <div className="list__main">
                 <div className="list__title">{review.author} · {"★".repeat(review.rating)} · #{review.id}</div>
-                <div className="list__sub">Пользователь #{review.userId} · {date(review.createdAt)}</div>
+                <div className="list__sub">{t("admin.reviews.user_ref", { id: review.userId })} · {fmtDate(review.createdAt)}</div>
                 <div className="p admin-gap-top-sm">{review.text}</div>
                 {review.rewardStatus === "failed" && (
-                  <div className="list__sub admin-gap-top-sm">Предыдущее начисление не подтверждено. Можно повторить безопасно.</div>
+                  <div className="list__sub admin-gap-top-sm">{t("admin.reviews.reward.failed_note")}</div>
                 )}
               </div>
               <div className="actions actions--2 admin-reviewActions">
@@ -199,13 +200,13 @@ export function ReviewsSection() {
                   onClick={() => void approve(review)}
                 >
                   {busyId === review.id
-                    ? "Проверяю…"
+                    ? t("admin.reviews.action.checking")
                     : review.rewardStatus === "processing"
-                      ? "Проверить начисление"
-                      : `Одобрить · +${money(savedAmount)}`}
+                      ? t("admin.reviews.action.check_reward")
+                      : t("admin.reviews.action.approve", { amount: formatCurrency(savedAmount) })}
                 </button>
                 <button className="btn btn--soft" type="button" disabled={busyId !== null || review.rewardStatus === "processing"} onClick={() => void hide(review.id)}>
-                  Отклонить
+                  {t("admin.reviews.action.reject")}
                 </button>
               </div>
             </div>
@@ -214,16 +215,16 @@ export function ReviewsSection() {
       )}
 
       <details className="admin-details admin-gap-top-md">
-        <summary className="admin-details__summary">Последние начисления · {rewarded.length}</summary>
-        {rewarded.length === 0 ? <p className="p admin-gap-top-sm">Начислений пока нет.</p> : (
+        <summary className="admin-details__summary">{t("admin.reviews.rewarded_title", { count: rewarded.length })}</summary>
+        {rewarded.length === 0 ? <p className="p admin-gap-top-sm">{t("admin.reviews.rewarded_empty")}</p> : (
           <div className="list admin-gap-top-sm">
             {rewarded.slice(0, 20).map((review) => (
               <div className="list__item admin-tightItem" key={review.id}>
                 <div className="list__main">
-                  <div className="list__title">{review.author} · отзыв #{review.id}</div>
-                  <div className="list__sub">Начислено {money(Number(review.rewardAmount || 0))} · {date(review.rewardedAt)}</div>
+                  <div className="list__title">{review.author} {t("admin.reviews.rewarded.review_ref", { id: review.id })}</div>
+                  <div className="list__sub">{t("admin.reviews.rewarded.credited", { amount: formatCurrency(Number(review.rewardAmount || 0)), date: fmtDate(review.rewardedAt) })}</div>
                 </div>
-                <div className="list__side"><span className="chip chip--ok">Опубликован</span></div>
+                <div className="list__side"><span className="chip chip--ok">{t("admin.reviews.rewarded.published")}</span></div>
               </div>
             ))}
           </div>

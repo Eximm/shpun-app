@@ -1,4 +1,5 @@
 import { createPortal } from "react-dom";
+import { useI18n } from "../../shared/i18n";
 
 export function FirstPayBonusModal({
   open,
@@ -9,6 +10,7 @@ export function FirstPayBonusModal({
   percent: number;
   onClose: () => void;
 }) {
+  const { t, formatCurrency } = useI18n();
   if (!open || percent <= 0) return null;
 
   return createPortal(
@@ -21,17 +23,20 @@ export function FirstPayBonusModal({
           ))}
         </div>
         <div className="firstPayBonusModal__icon" aria-hidden="true">🎁</div>
-        <div className="firstPayBonusModal__eyebrow">Бонус уже доступен</div>
+        <div className="firstPayBonusModal__eyebrow">{t("bonus.firstpay.eyebrow")}</div>
         <div className="firstPayBonusModal__percent">+{percent}%</div>
-        <h2 className="firstPayBonusModal__title">к первому пополнению</h2>
+        <h2 className="firstPayBonusModal__title">{t("bonus.firstpay.title")}</h2>
         <p className="firstPayBonusModal__text">
-          Пополните баланс впервые — мы начислим ещё {percent}% от суммы на бонусный счёт.
+          {t("bonus.firstpay.text", { percent })}
         </p>
         <div className="firstPayBonusModal__example">
-          Например, при пополнении на 1 000 ₽ вы получите ещё {Math.round(1000 * percent / 100)} бонусов.
+          {t("bonus.firstpay.example", {
+            amount: formatCurrency(1000),
+            bonus: Math.round((1000 * percent) / 100),
+          })}
         </div>
         <button className="btn btn--primary firstPayBonusModal__button" type="button" onClick={onClose}>
-          Понятно
+          {t("bonus.firstpay.button")}
         </button>
       </div>
     </div>,

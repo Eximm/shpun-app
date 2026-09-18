@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../shared/api/client";
+import { useI18n } from "../shared/i18n";
 import { PageBackButton } from "../shared/ui/PageBackButton";
 
 type ReviewStatus = "pending" | "published" | "hidden";
@@ -37,38 +38,14 @@ type Review = {
 
 type ReviewFilter = "public" | "pending" | "hidden" | "all";
 
-const AUTHOR_OPTIONS: { value: AuthorVisibility; title: string; hint: string }[] = [
-  { value: "masked", title: "Скрыть часть имени", hint: "Ник будет выглядеть мягко и без лишней публичности." },
-  { value: "public", title: "Показать имя", hint: "Покажем имя так, как оно записано в кабинете." },
-  { value: "hidden", title: "Без имени", hint: "Будет просто «Пользователь Shpun»." },
+const AUTHOR_OPTIONS: { value: AuthorVisibility; titleKey: string; hintKey: string }[] = [
+  { value: "masked", titleKey: "reviews.author.masked.title", hintKey: "reviews.author.masked.hint" },
+  { value: "public", titleKey: "reviews.author.public.title", hintKey: "reviews.author.public.hint" },
+  { value: "hidden", titleKey: "reviews.author.hidden.title", hintKey: "reviews.author.hidden.hint" },
 ];
-
-function fmtDate(v: string) {
-  try {
-    return new Date(v.replace(" ", "T") + "Z").toLocaleDateString("ru-RU", {
-      day: "2-digit",
-      month: "long",
-      year: "numeric",
-    });
-  } catch {
-    return String(v || "").slice(0, 10);
-  }
-}
-
-function statusLabel(status: ReviewStatus) {
-  if (status === "published") return "Опубликовано";
-  if (status === "hidden") return "Скрыто";
-  return "Ждёт модерации";
-}
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
-}
-
-function visibilityLabel(value?: AuthorVisibility) {
-  if (value === "public") return "имя открыто";
-  if (value === "hidden") return "без имени";
-  return "имя скрыто";
 }
 
 function authorInitial(author: string) {
@@ -77,8 +54,9 @@ function authorInitial(author: string) {
 }
 
 function Stars({ value, onChange }: { value: number; onChange?: (v: number) => void }) {
+  const { t } = useI18n();
   return (
-    <div className="reviews-stars" aria-label={`Оценка ${value} из 5`}>
+    <div className="reviews-stars" aria-label={t("reviews.rating.aria", { value })}>
       {[1, 2, 3, 4, 5].map((n) => (
         <button
           key={n}
@@ -86,7 +64,7 @@ function Stars({ value, onChange }: { value: number; onChange?: (v: number) => v
           className={`reviews-star${n <= value ? " is-on" : ""}`}
           onClick={onChange ? () => onChange(n) : undefined}
           disabled={!onChange}
-          aria-label={`${n} из 5`}
+          aria-label={t("reviews.rating.star", { n })}
         >
           ★
         </button>
@@ -96,7 +74,8 @@ function Stars({ value, onChange }: { value: number; onChange?: (v: number) => v
 }
 
 function StatusBadge({ status }: { status: ReviewStatus }) {
-  return <span className={`reviews-status reviews-status--${status}`}>{statusLabel(status)}</span>;
+  const { t } = useI18n();
+  return <span className={`reviews-status reviews-status--${status}`}>{t(`reviews.status.${status}`)}</span>;
 }
 
 function AuthorVisibilityPicker({
@@ -106,12 +85,13 @@ function AuthorVisibilityPicker({
   value: AuthorVisibility;
   onChange: (value: AuthorVisibility) => void;
 }) {
+  const { t } = useI18n();
   const current = AUTHOR_OPTIONS.find((x) => x.value === value) ?? AUTHOR_OPTIONS[0];
 
   return (
     <div className="reviews-privacy">
-      <div className="reviews-privacy__label">Как подписать отзыв</div>
-      <div className="reviews-privacy__options" role="radiogroup" aria-label="Отображение имени автора">
+      <div className="reviews-privacy__label">{t("reviews.author_label")}</div>
+      <div className="reviews-privacy__options" role="radiogroup" aria-label={t("reviews.author_aria")}>
         {AUTHOR_OPTIONS.map((item) => (
           <button
             key={item.value}
@@ -119,16 +99,17 @@ function AuthorVisibilityPicker({
             className={`reviews-privacy__option${value === item.value ? " is-active" : ""}`}
             onClick={() => onChange(item.value)}
           >
-            {item.title}
+            {t(item.titleKey)}
           </button>
         ))}
       </div>
-      <div className="reviews-muted">{current.hint}</div>
+      <div className="reviews-muted">{t(current.hintKey)}</div>
     </div>
   );
 }
 
 export function Reviews() {
+  const { t, formatDate, formatCurrency } = useI18n();
   const [items, setItems] = useState<Review[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [canCreateReview, setCanCreateReview] = useState(true);
@@ -143,6 +124,18 @@ export function Reviews() {
   const [commentDrafts, setCommentDrafts] = useState<Record<number, string>>({});
   const [commentBusy, setCommentBusy] = useState<Record<number, boolean>>({});
   const [moderationBusy, setModerationBusy] = useState<Record<string, boolean>>({});
+
+  function fmtDate(v: string) {
+    try {
+      return formatDate(new Date(v.replace(" ", "T") + "Z"), {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      });
+    } catch {
+      return String(v || "").slice(0, 10);
+    }
+  }
 
   const publishedItems = useMemo(() => items.filter((x) => x.status === "published"), [items]);
   const pendingCount = useMemo(() => {
@@ -171,7 +164,7 @@ export function Reviews() {
       setIsAdmin(Boolean(data.isAdmin));
       setCanCreateReview(data.canCreateReview !== false);
     } catch (e: unknown) {
-      setError(errorMessage(e, "Не удалось загрузить отзывы."));
+      setError(errorMessage(e, t("reviews.errors.load")));
     } finally {
       setLoading(false);
     }
@@ -196,9 +189,9 @@ export function Reviews() {
       setText("");
       setRating(5);
       setCanCreateReview(false);
-      setNotice(data.message || "Отзыв отправлен на проверку.");
+      setNotice(data.message || t("reviews.notice.submitted"));
     } catch (e: unknown) {
-      setError(errorMessage(e, "Не удалось сохранить отзыв."));
+      setError(errorMessage(e, t("reviews.errors.save")));
     } finally {
       setBusy(false);
     }
@@ -217,9 +210,9 @@ export function Reviews() {
       });
       setItems((prev) => prev.map((r) => r.id === reviewId ? { ...r, comments: [...(r.comments ?? []), data.item] } : r));
       setCommentDrafts((prev) => ({ ...prev, [reviewId]: "" }));
-      setNotice(data.message || "Комментарий отправлен.");
+      setNotice(data.message || t("reviews.notice.comment_sent"));
     } catch (e: unknown) {
-      setError(errorMessage(e, "Не удалось добавить комментарий."));
+      setError(errorMessage(e, t("reviews.errors.comment")));
     } finally {
       setCommentBusy((prev) => ({ ...prev, [reviewId]: false }));
     }
@@ -233,7 +226,7 @@ export function Reviews() {
       await apiFetch(`/reviews/${id}/status`, { method: "PATCH", body: { status } });
       setItems((prev) => prev.map((x) => x.id === id ? { ...x, status } : x).filter((x) => isAdmin || x.status !== "hidden"));
     } catch (e: unknown) {
-      setError(errorMessage(e, "Не удалось изменить статус отзыва."));
+      setError(errorMessage(e, t("reviews.errors.review_status")));
     } finally {
       setModerationBusy((prev) => ({ ...prev, [key]: false }));
     }
@@ -250,14 +243,14 @@ export function Reviews() {
         comments: r.comments.map((c) => c.id === commentId ? { ...c, status } : c).filter((c) => isAdmin || c.status !== "hidden"),
       } : r));
     } catch (e: unknown) {
-      setError(errorMessage(e, "Не удалось изменить статус комментария."));
+      setError(errorMessage(e, t("reviews.errors.comment_status")));
     } finally {
       setModerationBusy((prev) => ({ ...prev, [key]: false }));
     }
   }
 
   async function removeReview(id: number) {
-    if (!confirm("Скрыть этот отзыв?")) return;
+    if (!confirm(t("reviews.confirm.hide_review"))) return;
     if (isAdmin) {
       await setReviewModerationStatus(id, "hidden");
       return;
@@ -267,7 +260,7 @@ export function Reviews() {
   }
 
   async function removeComment(reviewId: number, commentId: number) {
-    if (!confirm("Скрыть этот комментарий?")) return;
+    if (!confirm(t("reviews.confirm.hide_comment"))) return;
     if (isAdmin) {
       await setCommentModerationStatus(reviewId, commentId, "hidden");
       return;
@@ -276,6 +269,13 @@ export function Reviews() {
     setItems((prev) => prev.map((r) => r.id === reviewId ? { ...r, comments: r.comments.filter((c) => c.id !== commentId) } : r));
   }
 
+  const FILTERS: [ReviewFilter, string][] = [
+    ["public", t("reviews.filter.public")],
+    ["pending", t("reviews.filter.pending")],
+    ["hidden", t("reviews.filter.hidden")],
+    ["all", t("reviews.filter.all")],
+  ];
+
   return (
     <div className="section reviews-page">
       <PageBackButton />
@@ -283,31 +283,26 @@ export function Reviews() {
       <div className="card reviews-hero">
         <div className="card__body reviews-hero__body">
           <div>
-            <div className="reviews-hero__kicker">Отзывы</div>
-            <h1 className="h1">Что говорят про Shpun</h1>
-            <p className="p">Живой уголок пользовательских историй: без пресс-релизов, зато с честным вайбом и лёгкой модерацией — чтобы уют не превращался в подъезд.</p>
+            <div className="reviews-hero__kicker">{t("reviews.kicker")}</div>
+            <h1 className="h1">{t("reviews.title")}</h1>
+            <p className="p">{t("reviews.intro")}</p>
           </div>
           <div className="reviews-hero__stats">
-            <span>{publishedItems.length} опубликовано</span>
-            <span>Оценка {avgRating ? avgRating.toFixed(1) : "—"}</span>
-            {isAdmin && <span>{pendingCount} ждёт</span>}
+            <span>{t("reviews.stats.published_count", { count: publishedItems.length })}</span>
+            <span>{t("reviews.stats.rating", { rating: avgRating ? avgRating.toFixed(1) : "—" })}</span>
+            {isAdmin && <span>{t("reviews.stats.pending_count", { count: pendingCount })}</span>}
           </div>
         </div>
       </div>
 
       {isAdmin && (
-        <div className="reviews-filter" role="tablist" aria-label="Фильтр отзывов">
-          {[
-            ["public", "Опубликованные"],
-            ["pending", "На проверке"],
-            ["hidden", "Скрытые"],
-            ["all", "Все"],
-          ].map(([value, label]) => (
+        <div className="reviews-filter" role="tablist" aria-label={t("reviews.filter.aria")}>
+          {FILTERS.map(([value, label]) => (
             <button
               key={value}
               className={`reviews-filter__btn${filter === value ? " is-active" : ""}`}
               type="button"
-              onClick={() => setFilter(value as ReviewFilter)}
+              onClick={() => setFilter(value)}
             >
               {label}
             </button>
@@ -319,8 +314,8 @@ export function Reviews() {
         <div className="card__body">
           <div className="reviews-compose__head">
             <div>
-              <div className="reviews-card-title">Оставить отзыв</div>
-              <div className="reviews-muted">Расскажите, что вам понравилось и что можно улучшить.</div>
+              <div className="reviews-card-title">{t("reviews.compose.title")}</div>
+              <div className="reviews-muted">{t("reviews.compose.subtitle")}</div>
             </div>
             <Stars value={rating} onChange={setRating} />
           </div>
@@ -329,13 +324,13 @@ export function Reviews() {
             value={text}
             onChange={(e) => setText(e.target.value)}
             maxLength={1200}
-            placeholder="Расскажите о работе сервиса и приложения"
+            placeholder={t("reviews.compose.placeholder")}
           />
           <AuthorVisibilityPicker value={authorVisibility} onChange={setAuthorVisibility} />
           <div className="reviews-compose__actions">
             <span className="reviews-muted">{text.trim().length}/1200</span>
             <button className="btn btn--primary" type="button" onClick={() => void submitReview()} disabled={busy || text.trim().length < 8}>
-              {busy ? "Отправляем…" : "Отправить"}
+              {busy ? t("reviews.compose.sending") : t("reviews.compose.submit")}
             </button>
           </div>
           {notice && <div className="pre reviews-notice">{notice}</div>}
@@ -343,17 +338,17 @@ export function Reviews() {
         </div>
       </div> : (
         <div className="card reviews-compose"><div className="card__body">
-          <div className="reviews-card-title">Отзыв уже отправлен</div>
-          <div className="reviews-muted">С одного аккаунта можно оставить один отзыв.</div>
+          <div className="reviews-card-title">{t("reviews.compose.sent_title")}</div>
+          <div className="reviews-muted">{t("reviews.compose.sent_text")}</div>
           {notice && <div className="pre reviews-notice">{notice}</div>}
         </div></div>
       )}
 
       {loading ? (
-        <div className="card"><div className="card__body"><p className="p">Загружаем отзывы…</p></div></div>
+        <div className="card"><div className="card__body"><p className="p">{t("reviews.loading")}</p></div></div>
       ) : visibleItems.length === 0 ? (
         <div className="card reviews-empty"><div className="card__body">
-          <div className="reviews-card-title">{isAdmin && filter !== "public" ? "Новых отзывов нет" : "Отзывов пока нет"}</div>
+          <div className="reviews-card-title">{isAdmin && filter !== "public" ? t("reviews.empty.admin") : t("reviews.empty.user")}</div>
         </div></div>
       ) : (
         <div className="reviews-list">
@@ -366,7 +361,7 @@ export function Reviews() {
                     <div>
                       <div className="reviews-authorLine">
                         <span className="reviews-author">{r.author}</span>
-                        <span className="reviews-authorMode">{visibilityLabel(r.authorVisibility)}</span>
+                        <span className="reviews-authorMode">{t(`reviews.visibility.${r.authorVisibility ?? "masked"}`)}</span>
                       </div>
                       <div className="reviews-muted">{fmtDate(r.createdAt)}</div>
                     </div>
@@ -378,22 +373,22 @@ export function Reviews() {
                 </div>
                 <p className="reviews-text">{r.text}</p>
                 {r.mine && r.rewardStatus === "rewarded" && Number(r.rewardAmount) > 0 && (
-                  <div className="reviews-notice">Начислено {Number(r.rewardAmount).toLocaleString("ru-RU")} ₽ бонусами.</div>
+                  <div className="reviews-notice">{t("reviews.reward", { amount: formatCurrency(Number(r.rewardAmount)) })}</div>
                 )}
                 <div className="reviews-moderation">
                   {r.canApprove && r.status !== "published" && (
                     <button className="btn btn--primary" type="button" onClick={() => void setReviewModerationStatus(r.id, "published")}>
-                      Опубликовать без бонуса
+                      {t("reviews.mod.publish_no_bonus")}
                     </button>
                   )}
                   {r.canApprove && r.status !== "pending" && (
                     <button className="btn btn--soft" type="button" onClick={() => void setReviewModerationStatus(r.id, "pending")}>
-                      На проверку
+                      {t("reviews.mod.to_pending")}
                     </button>
                   )}
                   {r.canModerate && r.status !== "hidden" && (
                     <button className="btn btn--soft reviews-card__remove" type="button" onClick={() => void removeReview(r.id)}>
-                      Скрыть отзыв
+                      {t("reviews.mod.hide_review")}
                     </button>
                   )}
                 </div>
@@ -401,7 +396,7 @@ export function Reviews() {
                 {r.status !== "hidden" && (
                   <div className="reviews-comments">
                     <div className="reviews-comments__title">
-                      <span>Комментарии</span>
+                      <span>{t("reviews.comments.title")}</span>
                       <small>{(r.comments ?? []).length}</small>
                     </div>
                     {(r.comments ?? []).map((c) => (
@@ -414,13 +409,13 @@ export function Reviews() {
                         <div className="reviews-comment__text">{c.text}</div>
                         <div className="reviews-moderation reviews-moderation--comment">
                           {c.canApprove && c.status !== "published" && (
-                            <button className="reviews-linkBtn" type="button" onClick={() => void setCommentModerationStatus(r.id, c.id, "published")}>Опубликовать</button>
+                            <button className="reviews-linkBtn" type="button" onClick={() => void setCommentModerationStatus(r.id, c.id, "published")}>{t("reviews.mod.publish")}</button>
                           )}
                           {c.canApprove && c.status !== "pending" && (
-                            <button className="reviews-linkBtn" type="button" onClick={() => void setCommentModerationStatus(r.id, c.id, "pending")}>На проверку</button>
+                            <button className="reviews-linkBtn" type="button" onClick={() => void setCommentModerationStatus(r.id, c.id, "pending")}>{t("reviews.mod.to_pending")}</button>
                           )}
                           {c.canModerate && c.status !== "hidden" && (
-                            <button className="reviews-linkBtn" type="button" onClick={() => void removeComment(r.id, c.id)}>Скрыть</button>
+                            <button className="reviews-linkBtn" type="button" onClick={() => void removeComment(r.id, c.id)}>{t("reviews.mod.hide")}</button>
                           )}
                         </div>
                       </div>
@@ -432,10 +427,10 @@ export function Reviews() {
                         value={commentDrafts[r.id] ?? ""}
                         onChange={(e) => setCommentDrafts((prev) => ({ ...prev, [r.id]: e.target.value }))}
                         maxLength={700}
-                        placeholder="Добавить комментарий"
+                        placeholder={t("reviews.comments.placeholder")}
                       />
                       <button className="btn" type="button" onClick={() => void submitComment(r.id)} disabled={commentBusy[r.id] || !String(commentDrafts[r.id] || "").trim()}>
-                        Отправить
+                        {t("reviews.compose.submit")}
                       </button>
                     </div>
                   </div>

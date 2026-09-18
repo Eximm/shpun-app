@@ -47,3 +47,5 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+# i18n regression test scratch
+.tmp-i18n-test

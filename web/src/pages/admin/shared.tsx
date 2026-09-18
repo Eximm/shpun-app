@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode, type Ref } from "react";
+import { useI18n } from "../../shared/i18n";
 import type { AdminTab } from "./types";
 
 /* ─── Admin navigation model + icons ─────────────────────────────────────── */
@@ -152,6 +153,7 @@ export function AdminFilterBar({
   activeCount?: number;
   children: ReactNode;
 }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
 
   return (
@@ -162,7 +164,7 @@ export function AdminFilterBar({
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
-        <span>Фильтры</span>
+        <span>{t("admin.filter.title")}</span>
         {activeCount > 0 ? <span className="admin-filterBar__count">{activeCount}</span> : null}
         <span className="admin-filterBar__chevron" aria-hidden="true">▾</span>
       </button>
@@ -207,6 +209,7 @@ export function ModalShell({
   children: ReactNode;
   contentRef?: Ref<HTMLDivElement>;
 }) {
+  const { t } = useI18n();
   useEffect(() => {
     const prevBodyOverflow = document.body.style.overflow;
     const prevHtmlOverflow = document.documentElement.style.overflow;
@@ -241,7 +244,7 @@ export function ModalShell({
               type="button"
               className="btn btn--soft modal__close admin-modal__close"
               onClick={onClose}
-              aria-label="Закрыть"
+              aria-label={t("admin.modal.close")}
             >
               ✕
             </button>
@@ -264,16 +267,17 @@ export function UnreadMarker({
   count?: number;
   variant?: "dot" | "badge";
 }) {
+  const { t } = useI18n();
   const n = Number(count ?? 0);
   if (!Number.isFinite(n) || n <= 0) return null;
   if (variant === "badge") {
     return (
-      <span className="unreadBadge" title="Есть непрочитанные">
+      <span className="unreadBadge" title={t("admin.unread.some")}>
         {n > 99 ? "99+" : n}
       </span>
     );
   }
-  return <span className="unreadDot" aria-label="Непрочитано" title="Непрочитано" />;
+  return <span className="unreadDot" aria-label={t("admin.unread.label")} title={t("admin.unread.label")} />;
 }
 
 export function SupportTabIcon() {

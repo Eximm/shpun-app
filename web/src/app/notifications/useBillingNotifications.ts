@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { apiFetch } from "../../shared/api/client";
 import { toast } from "../../shared/ui/toast";
+import { tGlobal } from "../../shared/i18n/runtime";
 import { useMe } from "../auth/useMe";
 
 type BillingPushEvent = {
@@ -195,11 +196,11 @@ function getToastView(ev: BillingPushEvent): {
   const rawAction = ev.meta?.action;
   const action =
     rawAction && rawAction.kind === "nav" && typeof rawAction.to === "string" && rawAction.to.trim()
-      ? { label: String(rawAction.label || "Открыть"), to: String(rawAction.to).trim() }
+      ? { label: String(rawAction.label || tGlobal("notifications.open")), to: String(rawAction.to).trim() }
       : undefined;
 
   return {
-    title: shortTitle || ev.title || "Уведомление",
+    title: shortTitle || ev.title || tGlobal("notifications.default_title"),
     description: shortMessage || ev.message || "",
     level,
     action,

@@ -20,6 +20,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useMe } from "../auth/useMe";
+import { useI18n } from "../../shared/i18n";
 import { toastStore } from "../../shared/ui/toast";
 
 const HIDDEN_PREFIXES = ["/support", "/admin", "/login", "/legal"];
@@ -174,6 +175,7 @@ function isHiddenRoute(pathname: string): boolean {
 
 export function FloatingSupport() {
   const { me } = useMe();
+  const { t } = useI18n();
   const loc = useLocation();
   const navigate = useNavigate();
 
@@ -386,7 +388,7 @@ export function FloatingSupport() {
             className="floatingSupportMenu__item"
             onClick={() => { setMenuOpen(false); navigate("/support"); }}
           >
-            Открыть поддержку
+            {t("floatingSupport.open")}
           </button>
           <button
             type="button"
@@ -394,7 +396,7 @@ export function FloatingSupport() {
             className="floatingSupportMenu__item floatingSupportMenu__item--danger"
             onClick={hideForSession}
           >
-            Скрыть до конца сессии
+            {t("floatingSupport.hide_session")}
           </button>
         </div>
       )}
@@ -402,8 +404,8 @@ export function FloatingSupport() {
       <button
         type="button"
         className="floatingSupport"
-        aria-label="Поддержка"
-        title="Поддержка"
+        aria-label={t("floatingSupport.aria")}
+        title={t("floatingSupport.aria")}
         aria-hidden={hidden || undefined}
         tabIndex={hidden ? -1 : 0}
         onClick={onClick}

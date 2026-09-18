@@ -52,15 +52,15 @@ export function AdminPage() {
 
   // Single source of truth for navigation, overview shortcuts and mobile picker.
   const navItems: AdminNavItem[] = [
-    { tab: "overview", title: t("admin.tab.overview"), subtitle: "Панель", icon: "overview" },
-    { tab: "reviews", title: "Отзывы", subtitle: "Модерация", icon: "reviews" },
+    { tab: "overview", title: t("admin.tab.overview"), subtitle: t("admin.tab.overview.sub"), icon: "overview" },
+    { tab: "reviews", title: t("admin.tab.reviews"), subtitle: t("admin.tab.reviews.sub"), icon: "reviews" },
     { tab: "broadcasts", title: t("admin.tab.broadcasts"), subtitle: t("admin.tab.broadcasts.sub"), icon: "broadcasts" },
-    { tab: "orderRules", title: t("admin.tab.orders"), subtitle: "Правила", icon: "orders" },
+    { tab: "orderRules", title: t("admin.tab.orders"), subtitle: t("admin.tab.orders.sub"), icon: "orders" },
     { tab: "trialProtection", title: t("admin.tab.trial"), subtitle: t("admin.tab.trial.sub"), icon: "trial" },
     { tab: "serviceCategories", title: t("admin.tab.categories"), subtitle: t("admin.tab.categories.sub"), icon: "categories" },
-    { tab: "referralAliases", title: "Реклама и блогеры", subtitle: "Партнёры", icon: "referral" },
-    { tab: "support", title: "Поддержка", subtitle: "Тикеты", icon: "support", badge: supportUnread.total },
-    { tab: "serverStatus", title: "Статус серверов", subtitle: "Мониторинг", icon: "servers" },
+    { tab: "referralAliases", title: t("admin.tab.referral"), subtitle: t("admin.tab.referral.sub"), icon: "referral" },
+    { tab: "support", title: t("admin.tab.support"), subtitle: t("admin.tab.support.sub"), icon: "support", badge: supportUnread.total },
+    { tab: "serverStatus", title: t("admin.tab.serverStatus"), subtitle: t("admin.tab.serverStatus.sub"), icon: "servers" },
   ];
   const activeItem = navItems.find((item) => item.tab === activeTab) ?? navItems[0];
 
@@ -108,13 +108,13 @@ export function AdminPage() {
   return (
     <div className="section admin-page">
       <div className="admin-shell">
-        <nav className="admin-nav" aria-label="Разделы админки">
+        <nav className="admin-nav" aria-label={t("admin.nav.aria")}>
           <div className="admin-nav__top">
             <div className="admin-nav__brand">
               <span className="kicker">Admin</span>
-              <span className="admin-nav__brandTitle">Панель управления</span>
+              <span className="admin-nav__brandTitle">{t("admin.nav.title")}</span>
             </div>
-            <PageBackButton to="/profile" label="В профиль" className="admin-nav__back" />
+            <PageBackButton to="/profile" label={t("admin.nav.to_profile")} className="admin-nav__back" />
           </div>
 
           <button
@@ -129,7 +129,7 @@ export function AdminPage() {
             </span>
             <span className="admin-nav__text">
               <span className="admin-nav__title">{activeItem.title}</span>
-              <span className="admin-nav__sub">Разделы</span>
+              <span className="admin-nav__sub">{t("admin.nav.sections")}</span>
             </span>
             <span className={`admin-nav__chevron${navOpen ? " is-open" : ""}`} aria-hidden="true">
               ▾

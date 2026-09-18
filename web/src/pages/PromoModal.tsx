@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { apiFetch } from '../shared/api/client'
+import { useI18n } from '../shared/i18n'
+
+type TFn = ReturnType<typeof useI18n>['t']
+type CurrencyFn = ReturnType<typeof useI18n>['formatCurrency']
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -62,10 +66,6 @@ function fmtNum(v: any): string {
   return (Math.round(n * 100) / 100).toFixed(2).replace('.00', '')
 }
 
-function fmtMoney(n: number) {
-  return new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(n) + ' ₽'
-}
-
 function substAll(str: string, dict: Record<string, string>): string {
   let s = String(str || '')
   Object.keys(dict).forEach(k => {
@@ -100,7 +100,7 @@ function isMeaningfulChip(s: string): boolean {
   return true
 }
 
-function renderFromItem(item: ShmItem, extra: SuccessData): RenderResult {
+function renderFromItem(item: ShmItem, extra: SuccessData, t: TFn, formatCurrency: CurrencyFn): RenderResult {
   const type         = String(item?.type || 'other')
   const periodDays   = toNum(item?.period_days)
   const periodMonths = toNum(item?.period_months)
@@ -119,39 +119,39 @@ function renderFromItem(item: ShmItem, extra: SuccessData): RenderResult {
     service:       item?.service || '',
   }
 
-  const title    = stripUnsubstituted(substAll(item?.title || '✅ Промокод применён', dict))
-  const baseText = stripUnsubstituted(substAll(item?.text  || 'Промокод успешно применён.', dict))
+  const title    = stripUnsubstituted(substAll(item?.title || t('promo.default.title'), dict))
+  const baseText = stripUnsubstituted(substAll(item?.text  || t('promo.default.text'), dict))
   let chips = parseChips(item?.chips).map(x => stripUnsubstituted(substAll(x, dict))).filter(isMeaningfulChip)
 
   if (type === 'tariff') {
     const bal  = extra.balanceAfter
     const need = (Number.isFinite(bal!) && threshold > 0) ? Math.max(0, threshold - bal!) : threshold > 0 ? threshold : 0
-    if (Number.isFinite(bal!)) chips.push(`Баланс: ${fmtMoney(bal!)}`)
+    if (Number.isFinite(bal!)) chips.push(t('promo.balance', { amount: formatCurrency(bal!) }))
 
     if (threshold > 0 && need > 0) {
-      return { kind: 'warn', title, text: baseText + `\n\nЧтобы активировать тариф, пополните баланс на ${fmtMoney(need)}.`, chips, needPay: need }
+      return { kind: 'warn', title, text: baseText + `\n\n${t('promo.tariff.topup', { amount: formatCurrency(need) })}`, chips, needPay: need }
     }
-    return { kind: 'good', title, text: baseText + '\n\n✅ Тариф активирован. Проверьте раздел «Услуги».', chips, needPay: null }
+    return { kind: 'good', title, text: baseText + `\n\n${t('promo.tariff.activated')}`, chips, needPay: null }
   }
 
   if (type === 'bonus') {
-    if (Number.isFinite(extra.bonusAdded!) && extra.bonusAdded! > 0) chips.push(`Получено бонусов: +${fmtNum(extra.bonusAdded)} ₽`)
-    if (Number.isFinite(extra.bonusAfter!)) chips.push(`Баланс бонусов: ${fmtNum(extra.bonusAfter)} ₽`)
+    if (Number.isFinite(extra.bonusAdded!) && extra.bonusAdded! > 0) chips.push(t('promo.bonus.added', { amount: formatCurrency(Number(extra.bonusAdded)) }))
+    if (Number.isFinite(extra.bonusAfter!)) chips.push(t('promo.bonus.balance', { amount: formatCurrency(Number(extra.bonusAfter)) }))
     return { kind: 'good', title, text: baseText, chips, needPay: null }
   }
 
   return { kind: 'good', title, text: baseText, chips, needPay: null }
 }
 
-function renderFromNumbers(extra: SuccessData): RenderResult {
+function renderFromNumbers(extra: SuccessData, t: TFn, formatCurrency: CurrencyFn): RenderResult {
   const chips: string[] = []
-  if (extra.bonusAdded != null && extra.bonusAdded > 0) chips.push(`Начислено бонусов: +${fmtNum(extra.bonusAdded)}`)
-  if (extra.bonusAfter != null) chips.push(`Бонусов всего: ${fmtNum(extra.bonusAfter)}`)
-  if (extra.balanceAfter != null) chips.push(`Баланс: ${fmtMoney(extra.balanceAfter)}`)
+  if (extra.bonusAdded != null && extra.bonusAdded > 0) chips.push(t('promo.bonus.added', { amount: formatCurrency(Number(extra.bonusAdded)) }))
+  if (extra.bonusAfter != null) chips.push(t('promo.bonus.total', { amount: formatCurrency(Number(extra.bonusAfter)) }))
+  if (extra.balanceAfter != null) chips.push(t('promo.balance', { amount: formatCurrency(extra.balanceAfter) }))
   return {
     kind:    'good',
-    title:   '✅ Промокод применён!',
-    text:    chips.length ? '' : 'Проверьте раздел «Услуги» — тариф мог активироваться автоматически.',
+    title:   t('promo.numbers.title'),
+    text:    chips.length ? '' : t('promo.numbers.text'),
     chips,
     needPay: null,
   }
@@ -235,6 +235,7 @@ export type PromoModalProps = {
 }
 
 export function PromoModal({ open, onClose, onSuccess }: PromoModalProps) {
+  const { t, formatCurrency } = useI18n()
   const [code,    setCode]    = useState('')
   const [phase,   setPhase]   = useState<Phase>({ tag: 'idle' })
   const [mounted, setMounted] = useState(false)
@@ -268,7 +269,7 @@ export function PromoModal({ open, onClose, onSuccess }: PromoModalProps) {
 
   const handleApply = useCallback(async () => {
     const clean = sanitizeCode(code)
-    if (!clean) { setPhase({ tag: 'error', message: 'Введите промокод', kind: 'bad' }); inputRef.current?.focus(); return }
+    if (!clean) { setPhase({ tag: 'error', message: t('promo.err.enter'), kind: 'bad' }); inputRef.current?.focus(); return }
 
     setPhase({ tag: 'loading' })
 
@@ -276,7 +277,7 @@ export function PromoModal({ open, onClose, onSuccess }: PromoModalProps) {
       const resp = await apiFetch<ApplyResp>('/promo/apply', { method: 'POST', body: { code: clean } })
 
       if (!resp.ok) {
-        setPhase({ tag: 'error', message: resp.message || 'Промокод не найден или недоступен.', kind: resp.error === 'already_used' ? 'warn' : 'bad' })
+        setPhase({ tag: 'error', message: resp.message || t('promo.err.not_found'), kind: resp.error === 'already_used' ? 'warn' : 'bad' })
         return
       }
 
@@ -286,7 +287,7 @@ export function PromoModal({ open, onClose, onSuccess }: PromoModalProps) {
         balanceAfter: resp.balanceAfter ?? null,
       }
 
-      const result = resp.item ? renderFromItem(resp.item, extra) : renderFromNumbers(extra)
+      const result = resp.item ? renderFromItem(resp.item, extra, t, formatCurrency) : renderFromNumbers(extra, t, formatCurrency)
       setPhase({ tag: 'success', result })
       onSuccess?.(extra)
 
@@ -296,7 +297,7 @@ export function PromoModal({ open, onClose, onSuccess }: PromoModalProps) {
         if (cardRect) burst(btnRect.left - cardRect.left + btnRect.width / 2, btnRect.top - cardRect.top + btnRect.height / 2)
       }
     } catch (e: any) {
-      setPhase({ tag: 'error', message: e?.message || 'Ошибка соединения. Попробуйте ещё раз.', kind: 'bad' })
+      setPhase({ tag: 'error', message: e?.message || t('promo.err.connection'), kind: 'bad' })
     }
   }, [code, burst, onSuccess])
 
@@ -314,17 +315,17 @@ export function PromoModal({ open, onClose, onSuccess }: PromoModalProps) {
   const res = isSuccess ? (phase as Extract<Phase, { tag: 'success' }>).result : null
 
   return (
-    <div className={`promo-modal${open ? ' promo-modal--open' : ' promo-modal--closing'}`} role="dialog" aria-modal="true" aria-label="Применить промокод" onClick={e => { if (e.target === e.currentTarget) handleClose() }}>
+    <div className={`promo-modal${open ? ' promo-modal--open' : ' promo-modal--closing'}`} role="dialog" aria-modal="true" aria-label={t('promo.aria')} onClick={e => { if (e.target === e.currentTarget) handleClose() }}>
       <div className="promo-modal__card">
         {particles.length > 0 && <ConfettiLayer particles={particles} />}
 
         <div className="promo-modal__head">
           <span className="promo-modal__headIcon" aria-hidden>🎁</span>
           <div className="promo-modal__headText">
-            <div className="promo-modal__title">Промокод</div>
-            <div className="promo-modal__sub">Введите код — применим мгновенно</div>
+            <div className="promo-modal__title">{t('promo.title')}</div>
+            <div className="promo-modal__sub">{t('promo.subtitle')}</div>
           </div>
-          <button className="btn promo-modal__close" onClick={handleClose} disabled={isLoading} aria-label="Закрыть">✕</button>
+          <button className="btn promo-modal__close" onClick={handleClose} disabled={isLoading} aria-label={t('promo.close')}>✕</button>
         </div>
 
         <div className="promo-modal__body">
@@ -342,7 +343,7 @@ export function PromoModal({ open, onClose, onSuccess }: PromoModalProps) {
                 disabled={isLoading}
                 maxLength={64}
               />
-              <button className="btn promo-modal__pasteBtn" onClick={handlePaste} title="Вставить" disabled={isLoading} tabIndex={-1}>📋</button>
+              <button className="btn promo-modal__pasteBtn" onClick={handlePaste} title={t('promo.paste')} disabled={isLoading} tabIndex={-1}>📋</button>
             </div>
           )}
 
@@ -372,12 +373,12 @@ export function PromoModal({ open, onClose, onSuccess }: PromoModalProps) {
           {!isSuccess ? (
             <div className="promo-modal__footerRow">
               <button ref={btnRef} className={`btn btn--primary promo-modal__applyBtn${isLoading ? ' promo-modal__applyBtn--loading' : ''}`} onClick={() => void handleApply()} disabled={isLoading}>
-                {isLoading ? <><span className="promo-modal__spinner" aria-hidden /> Проверяем…</> : '🚀 Применить'}
+                {isLoading ? <><span className="promo-modal__spinner" aria-hidden /> {t('promo.checking')}</> : `🚀 ${t('promo.apply')}`}
               </button>
-              <button className="btn promo-modal__cancelBtn" onClick={handleClose} disabled={isLoading}>Отмена</button>
+              <button className="btn promo-modal__cancelBtn" onClick={handleClose} disabled={isLoading}>{t('common.cancel')}</button>
             </div>
           ) : (
-            <button className="btn btn--primary promo-modal__applyBtn" onClick={handleClose}>Готово ✓</button>
+            <button className="btn btn--primary promo-modal__applyBtn" onClick={handleClose}>{t('promo.done')} ✓</button>
           )}
         </div>
       </div>

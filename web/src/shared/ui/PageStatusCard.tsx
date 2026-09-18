@@ -1,13 +1,15 @@
 import { normalizeError } from "../api/errorText";
+import { tGlobal, useI18n } from "../i18n";
 
 export function pageStatusTextFromError(err: unknown, fallback?: string) {
   const n = normalizeError(err);
   // Prefer a human description; fall back to a safe generic string.
-  return n.description || fallback || "Попробуйте ещё раз.";
+  return n.description || fallback || tGlobal("pageStatus.try_again");
 }
 
 export function PageStatusCard(props: { title: string; text?: string }) {
-  const text = props.text ?? "Загрузка…";
+  const { t } = useI18n();
+  const text = props.text ?? t("pageStatus.loading");
 
   return (
     <div className="page-status">

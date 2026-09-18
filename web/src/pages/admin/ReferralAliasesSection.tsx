@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../../shared/api/client";
+import { useI18n } from "../../shared/i18n";
 import { AdminSectionHeader } from "./shared";
 
 type AliasItem = {
@@ -43,6 +44,8 @@ type PartnerStats = {
   templateActiveUsers?: number;
   activeSource?: "services" | "template" | "billing" | "local";
 };
+
+type TFn = ReturnType<typeof useI18n>["t"];
 
 const createEmptyForm = (): PartnerForm => ({
   linkType: "partner",
@@ -90,16 +93,18 @@ async function copyToClipboard(text: string): Promise<boolean> {
   }
 }
 
-function activeStatsTitle(stats?: PartnerStats): string {
+function activeStatsTitle(stats: PartnerStats | undefined, t: TFn): string {
   if (!stats) return "";
   if (stats.activeSource === "template") {
-    return `Активные клиенты посчитаны шаблоном биллинга${stats.templateVersion ? `: ${stats.templateVersion}` : ""}`;
+    return t("admin.referral.stats.template", {
+      version: stats.templateVersion ? `: ${stats.templateVersion}` : "",
+    });
   }
   if (stats.activeSource === "services") {
     const parts = [
       stats.serviceStatsMethod || "services",
-      typeof stats.scannedServices === "number" ? `услуг: ${stats.scannedServices}` : "",
-      typeof stats.serviceRowsWithOwner === "number" ? `с владельцем: ${stats.serviceRowsWithOwner}` : "",
+      typeof stats.scannedServices === "number" ? t("admin.referral.stats.services_count", { n: stats.scannedServices }) : "",
+      typeof stats.serviceRowsWithOwner === "number" ? t("admin.referral.stats.with_owner", { n: stats.serviceRowsWithOwner }) : "",
     ].filter(Boolean);
     return parts.join(" · ");
   }
@@ -107,6 +112,7 @@ function activeStatsTitle(stats?: PartnerStats): string {
 }
 
 export function ReferralAliasesSection() {
+  const { t } = useI18n();
   const [items, setItems] = useState<AliasItem[]>([]);
   const [form, setForm] = useState<PartnerForm>(createEmptyForm);
   const [editingAlias, setEditingAlias] = useState("");
@@ -120,11 +126,11 @@ export function ReferralAliasesSection() {
   async function copyLink(key: string, value: string) {
     const ok = await copyToClipboard(value);
     if (!ok) {
-      setMessage("Не удалось скопировать. Выделите ссылку вручную.");
+      setMessage(t("admin.referral.msg.copy_failed"));
       return;
     }
     setCopiedLink(key);
-    setMessage("Ссылка скопирована.");
+    setMessage(t("admin.referral.msg.copied"));
     window.setTimeout(() => {
       setCopiedLink((current) => current === key ? "" : current);
     }, 1800);
@@ -207,9 +213,9 @@ export function ReferralAliasesSection() {
       });
       clearForm();
       await load();
-      setMessage(form.linkType === "campaign" ? "Рекламная ссылка сохранена." : "Партнёр сохранён.");
+      setMessage(form.linkType === "campaign" ? t("admin.referral.msg.saved_campaign") : t("admin.referral.msg.saved_partner"));
     } catch (error: unknown) {
-      setMessage(error instanceof Error ? error.message : "Не удалось сохранить ссылку.");
+      setMessage(error instanceof Error ? error.message : t("admin.referral.err.save"));
     }
   }
 
@@ -221,20 +227,56 @@ export function ReferralAliasesSection() {
   const campaignItems = items.filter((item) => item.link_type === "campaign");
   const partnerItems = items.filter((item) => item.link_type !== "campaign");
 
+  function statusChip(enabled: boolean) {
+    return (
+      <span className={`chip ${enabled ? "chip--ok" : "chip--soft"}`}>
+        {enabled ? t("admin.referral.status.active") : t("admin.referral.status.off")}
+      </span>
+    );
+  }
+
+  function placementLinks(item: AliasItem, appLink: string, botLink: string) {
+    return (
+      <div className="refPartnerLinks" aria-label={t("admin.referral.links.aria")}>
+        <div className="refPartnerLinks__title">{t("admin.referral.links.title")}</div>
+        <div className="refPartnerLinks__row">
+          <div className="refPartnerLinks__body">
+            <span>{t("admin.referral.links.app")}</span>
+            <code>{appLink}</code>
+          </div>
+          <button className="btn btn--soft refPartnerLinks__copy" type="button" onClick={() => void copyLink(`app-${item.id}`, appLink)}>
+            {copiedLink === `app-${item.id}` ? t("admin.referral.action.copied") : t("admin.referral.action.copy")}
+          </button>
+        </div>
+        {botLink && (
+          <div className="refPartnerLinks__row">
+            <div className="refPartnerLinks__body">
+              <span>{t("admin.referral.links.bot")}</span>
+              <code>{botLink}</code>
+            </div>
+            <button className="btn btn--soft refPartnerLinks__copy" type="button" onClick={() => void copyLink(`bot-${item.id}`, botLink)}>
+              {copiedLink === `bot-${item.id}` ? t("admin.referral.action.copied") : t("admin.referral.action.copy")}
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="card"><div className="card__body">
       <AdminSectionHeader
-        kicker="Блогерский модуль"
-        title="Ссылки и партнёры"
-        subtitle="Партнёрские ссылки управляют выплатами, рекламные — только меткой регистрации."
+        kicker={t("admin.tab.referral")}
+        title={t("admin.section.referral.title")}
+        subtitle={t("admin.section.referral.subtitle")}
         actions={
           !creating && !editingAlias ? (
             <>
               <button className="btn btn--primary" type="button" onClick={() => createLink("campaign")}>
-                Новая рекламная ссылка
+                {t("admin.referral.action.new_campaign")}
               </button>
               <button className="btn btn--soft" type="button" onClick={() => createLink("partner")}>
-                Новый партнёр
+                {t("admin.referral.action.new_partner")}
               </button>
             </>
           ) : null
@@ -244,22 +286,22 @@ export function ReferralAliasesSection() {
       {(creating || editingAlias) && <>
       <h3 className="h2 admin-gap-top-md">
         {editingAlias
-          ? `Редактирование: ${editingAlias}`
-          : form.linkType === "campaign" ? "Новая рекламная ссылка" : "Создание партнёра"}
+          ? t("admin.referral.edit_title", { alias: editingAlias })
+          : form.linkType === "campaign" ? t("admin.referral.create_campaign") : t("admin.referral.create_partner")}
       </h3>
       <p className="p">
         {form.linkType === "campaign"
-          ? "Метка будет записана только при новой регистрации и только если комментарий клиента ещё пуст."
-          : "Заполните условия вручную. Пустой процент означает 0%."}
+          ? t("admin.referral.hint.campaign")
+          : t("admin.referral.hint.partner")}
       </p>
 
       <div className="grid2 admin-gap-top-md">
         <label className="field">
-          <span className="field__label">Имя ссылки</span>
+          <span className="field__label">{t("admin.referral.field.alias")}</span>
           <input
             className="input"
             value={form.alias}
-            placeholder="например: channel"
+            placeholder={t("admin.referral.field.alias_ph")}
             disabled={Boolean(editingAlias)}
             onChange={(event) => setForm({
               ...form,
@@ -269,44 +311,44 @@ export function ReferralAliasesSection() {
         </label>
 
         {form.linkType === "partner" && <label className="field">
-          <span className="field__label">ID партнёра в биллинге</span>
+          <span className="field__label">{t("admin.referral.field.partner_id")}</span>
           <input
             className="input"
             inputMode="numeric"
             value={form.partnerId}
-            placeholder="ID пользователя SHM"
+            placeholder={t("admin.referral.field.partner_id_ph")}
             onChange={(event) => setForm({ ...form, partnerId: event.target.value.replace(/\D/g, "") })}
           />
         </label>}
 
         {form.linkType === "partner" && <label className="field">
-          <span className="field__label">Имя партнёра или кампании</span>
+          <span className="field__label">{t("admin.referral.field.campaign_code")}</span>
           <input
             className="input"
             value={form.campaignCode}
-            placeholder="например: канал или имя блогера"
+            placeholder={t("admin.referral.field.campaign_code_ph")}
             onChange={(event) => setForm({ ...form, campaignCode: event.target.value })}
           />
         </label>}
 
         {form.linkType === "campaign" && <label className="field">
-          <span className="field__label">Комментарий в биллинге</span>
+          <span className="field__label">{t("admin.referral.field.billing_comment")}</span>
           <input
             className="input"
             value={form.billingComment}
             maxLength={255}
-            placeholder="например: Реклама Telegram — канал Новости"
+            placeholder={t("admin.referral.field.billing_comment_ph")}
             onChange={(event) => setForm({ ...form, billingComment: event.target.value })}
           />
         </label>}
 
         {form.linkType === "partner" && <label className="field">
-          <span className="field__label">Бонус клиенту на первое пополнение, %</span>
+          <span className="field__label">{t("admin.referral.field.first_bonus")}</span>
           <input
             className="input"
             inputMode="numeric"
             value={form.firstPaymentBonusPercent}
-            placeholder="0–100"
+            placeholder={t("admin.referral.field.percent_ph")}
             onChange={(event) => setForm({
               ...form,
               firstPaymentBonusPercent: event.target.value.replace(/\D/g, ""),
@@ -315,12 +357,12 @@ export function ReferralAliasesSection() {
         </label>}
 
         {form.linkType === "partner" && <label className="field">
-          <span className="field__label">Вознаграждение партнёра, %</span>
+          <span className="field__label">{t("admin.referral.field.reward")}</span>
           <input
             className="input"
             inputMode="numeric"
             value={form.partnerRewardPercent}
-            placeholder="0–100"
+            placeholder={t("admin.referral.field.percent_ph")}
             onChange={(event) => setForm({
               ...form,
               partnerRewardPercent: event.target.value.replace(/\D/g, ""),
@@ -329,14 +371,14 @@ export function ReferralAliasesSection() {
         </label>}
 
         <label className="field">
-          <span className="field__label">Состояние</span>
+          <span className="field__label">{t("admin.referral.field.state")}</span>
           <label className="checkRow">
             <input
               type="checkbox"
               checked={form.enabled}
               onChange={(event) => setForm({ ...form, enabled: event.target.checked })}
             />
-            <span>Ссылка активна</span>
+            <span>{t("admin.referral.field.enabled")}</span>
           </label>
         </label>
       </div>
@@ -344,21 +386,21 @@ export function ReferralAliasesSection() {
       <div className="row admin-gap-top-md">
         <button className="btn btn--primary" type="button" onClick={() => void save()}>
           {editingAlias
-            ? "Сохранить изменения"
-            : form.linkType === "campaign" ? "Добавить ссылку" : "Добавить партнёра"}
+            ? t("admin.referral.action.save_changes")
+            : form.linkType === "campaign" ? t("admin.referral.action.add_campaign") : t("admin.referral.action.add_partner")}
         </button>
-        <button className="btn btn--soft" type="button" onClick={clearForm}>Отмена</button>
+        <button className="btn btn--soft" type="button" onClick={clearForm}>{t("common.cancel")}</button>
       </div>
       </>}
       {message && <div className="refPartnerNotice">{message}</div>}
 
       <div className="refPartnerList admin-gap-top-md">
         <div className="refPartnerList__head">
-          <h3 className="h2">Рекламные ссылки без партнёрки</h3>
+          <h3 className="h2">{t("admin.referral.campaigns_title")}</h3>
           {campaignItems.length > 0 && <span className="chip chip--soft">{campaignItems.length}</span>}
         </div>
-        <p className="p">Для Telegram-каналов и других площадок, где нужно только посчитать регистрации по метке.</p>
-        {campaignItems.length === 0 && <p className="p">Рекламные ссылки пока не добавлены.</p>}
+        <p className="p">{t("admin.referral.campaigns_hint")}</p>
+        {campaignItems.length === 0 && <p className="p">{t("admin.referral.campaigns_empty")}</p>}
         {campaignItems.map((item) => {
           const itemStats = stats[item.id];
           const appLink = buildAppLink(item.alias);
@@ -367,44 +409,20 @@ export function ReferralAliasesSection() {
           <article className="refPartnerCard" key={item.id}>
             <div className="refPartnerCard__head">
               <div className="refPartnerCard__identity">
-                <span className="refPartnerCard__eyebrow">Рекламная ссылка без партнёрки</span>
+                <span className="refPartnerCard__eyebrow">{t("admin.referral.eyebrow.campaign")}</span>
                 <strong className="refPartnerCard__title">{item.alias}</strong>
-                <span className="refPartnerCard__campaign">Комментарий: {item.billing_comment}</span>
+                <span className="refPartnerCard__campaign">{t("admin.referral.comment", { text: item.billing_comment || "—" })}</span>
               </div>
-              <span className={`chip ${item.enabled ? "chip--ok" : "chip--soft"}`}>
-                {item.enabled ? "Активна" : "Выключена"}
-              </span>
+              {statusChip(item.enabled)}
             </div>
-            <div className="refPartnerLinks" aria-label="Ссылки для размещения">
-              <div className="refPartnerLinks__title">Ссылки для размещения</div>
-              <div className="refPartnerLinks__row">
-                <div className="refPartnerLinks__body">
-                  <span>Сайт и приложение</span>
-                  <code>{appLink}</code>
-                </div>
-                <button className="btn btn--soft refPartnerLinks__copy" type="button" onClick={() => void copyLink(`app-${item.id}`, appLink)}>
-                  {copiedLink === `app-${item.id}` ? "Скопировано" : "Копировать"}
-                </button>
-              </div>
-              {botLink && (
-                <div className="refPartnerLinks__row">
-                  <div className="refPartnerLinks__body">
-                    <span>Telegram-бот</span>
-                    <code>{botLink}</code>
-                  </div>
-                  <button className="btn btn--soft refPartnerLinks__copy" type="button" onClick={() => void copyLink(`bot-${item.id}`, botLink)}>
-                    {copiedLink === `bot-${item.id}` ? "Скопировано" : "Копировать"}
-                  </button>
-                </div>
-              )}
-            </div>
+            {placementLinks(item, appLink, botLink)}
             <div className="refPartnerCard__metrics">
               <div className="refPartnerCard__metric">
-                <span>Переходы</span>
+                <span>{t("admin.referral.metric.visits")}</span>
                 <strong>{item.visits_count || 0}</strong>
               </div>
               <div className="refPartnerCard__metric refPartnerCard__metric--active">
-                <span>Комментариев записано</span>
+                <span>{t("admin.referral.metric.comments")}</span>
                 <strong>
                   {statsLoading[item.id]
                     ? "…"
@@ -413,16 +431,16 @@ export function ReferralAliasesSection() {
               </div>
             </div>
             <div className="refPartnerCard__actions">
-              <button className="btn btn--soft" type="button" onClick={() => edit(item)}>Изменить</button>
+              <button className="btn btn--soft" type="button" onClick={() => edit(item)}>{t("common.edit")}</button>
               <button
                 className="btn btn--soft"
                 type="button"
                 disabled={Boolean(statsLoading[item.id])}
                 onClick={() => void loadStats(item)}
               >
-                Обновить
+                {t("common.refresh")}
               </button>
-              <button className="btn refPartnerCard__delete" type="button" onClick={() => void remove(item.id)}>Удалить</button>
+              <button className="btn refPartnerCard__delete" type="button" onClick={() => void remove(item.id)}>{t("common.delete")}</button>
             </div>
           </article>
           );
@@ -431,68 +449,44 @@ export function ReferralAliasesSection() {
 
       <div className="refPartnerList admin-gap-top-md">
         <div className="refPartnerList__head">
-          <h3 className="h2">Созданные партнёры</h3>
+          <h3 className="h2">{t("admin.referral.partners_title")}</h3>
           {partnerItems.length > 0 && <span className="chip chip--soft">{partnerItems.length}</span>}
         </div>
-        {partnerItems.length === 0 && <p className="p">Партнёры пока не добавлены.</p>}
+        {partnerItems.length === 0 && <p className="p">{t("admin.referral.partners_empty")}</p>}
         {partnerItems.map((item) => {
           const itemStats = stats[item.id];
-          const activeTitle = activeStatsTitle(itemStats);
+          const activeTitle = activeStatsTitle(itemStats, t);
           const appLink = buildAppLink(item.alias);
           const botLink = buildTelegramBotLink(botUsername, item);
           return (
           <article className="refPartnerCard" key={item.id}>
             <div className="refPartnerCard__head">
               <div className="refPartnerCard__identity">
-                <span className="refPartnerCard__eyebrow">Партнёр #{item.partner_id}</span>
+                <span className="refPartnerCard__eyebrow">{t("admin.referral.eyebrow.partner", { id: item.partner_id })}</span>
                 <strong className="refPartnerCard__title">{item.alias}</strong>
                 {item.campaign_code && (
                   <span className="refPartnerCard__campaign">{item.campaign_code}</span>
                 )}
               </div>
-              <span className={`chip ${item.enabled ? "chip--ok" : "chip--soft"}`}>
-                {item.enabled ? "Активна" : "Выключена"}
-              </span>
+              {statusChip(item.enabled)}
             </div>
-            <div className="refPartnerLinks" aria-label="Ссылки для размещения">
-              <div className="refPartnerLinks__title">Ссылки для размещения</div>
-              <div className="refPartnerLinks__row">
-                <div className="refPartnerLinks__body">
-                  <span>Сайт и приложение</span>
-                  <code>{appLink}</code>
-                </div>
-                <button className="btn btn--soft refPartnerLinks__copy" type="button" onClick={() => void copyLink(`app-${item.id}`, appLink)}>
-                  {copiedLink === `app-${item.id}` ? "Скопировано" : "Копировать"}
-                </button>
-              </div>
-              {botLink && (
-                <div className="refPartnerLinks__row">
-                  <div className="refPartnerLinks__body">
-                    <span>Telegram-бот</span>
-                    <code>{botLink}</code>
-                  </div>
-                  <button className="btn btn--soft refPartnerLinks__copy" type="button" onClick={() => void copyLink(`bot-${item.id}`, botLink)}>
-                    {copiedLink === `bot-${item.id}` ? "Скопировано" : "Копировать"}
-                  </button>
-                </div>
-              )}
-            </div>
+            {placementLinks(item, appLink, botLink)}
 
             <div className="refPartnerCard__metrics">
               <div className="refPartnerCard__metric">
-                <span>Первое пополнение</span>
+                <span>{t("admin.referral.metric.first_topup")}</span>
                 <strong>+{item.first_payment_bonus_percent}%</strong>
               </div>
               <div className="refPartnerCard__metric">
-                <span>Партнёру</span>
+                <span>{t("admin.referral.metric.to_partner")}</span>
                 <strong>{item.partner_reward_percent}%</strong>
               </div>
               <div className="refPartnerCard__metric">
-                <span>Переходы</span>
+                <span>{t("admin.referral.metric.visits")}</span>
                 <strong>{item.visits_count || 0}</strong>
               </div>
               <div className="refPartnerCard__metric">
-                <span>Клиенты в биллинге</span>
+                <span>{t("admin.referral.metric.billing_clients")}</span>
                 <strong>
                   {statsLoading[item.id]
                     ? "…"
@@ -502,7 +496,7 @@ export function ReferralAliasesSection() {
                 </strong>
               </div>
               <div className="refPartnerCard__metric refPartnerCard__metric--active" title={activeTitle || undefined}>
-                <span>Активные по услугам</span>
+                <span>{t("admin.referral.metric.active_services")}</span>
                 <strong>
                   {statsLoading[item.id]
                     ? "…"
@@ -520,10 +514,10 @@ export function ReferralAliasesSection() {
                 disabled={Boolean(statsLoading[item.id])}
                 onClick={() => void loadStats(item)}
               >
-                Обновить
+                {t("common.refresh")}
               </button>
-              <button className="btn btn--soft" type="button" onClick={() => edit(item)}>Изменить</button>
-              <button className="btn refPartnerCard__delete" type="button" onClick={() => void remove(item.id)}>Удалить</button>
+              <button className="btn btn--soft" type="button" onClick={() => edit(item)}>{t("common.edit")}</button>
+              <button className="btn refPartnerCard__delete" type="button" onClick={() => void remove(item.id)}>{t("common.delete")}</button>
             </div>
           </article>
         )})}

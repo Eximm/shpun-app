@@ -623,7 +623,7 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
 
       {assistantMode && ready && assistantStep !== "done" && (
         <div className="cm__assistantGuide" role="status">
-          <span className="cm__assistantGuideNumber">{assistantStep === "install" ? "А" : "Б"}</span>
+          <span className="cm__assistantGuideNumber">{assistantStep === "install" ? t("connect.assistant.step_a") : t("connect.assistant.step_b")}</span>
           <div>
             <strong>{t(assistantStep === "install" ? "connect.assistant.install_title" : "connect.assistant.import_title")}</strong>
             <span>{t(assistantStep === "install" ? "connect.assistant.install_text" : "connect.assistant.import_text")}</span>

@@ -5,6 +5,7 @@ import { useMe } from "../app/auth/useMe";
 import { apiFetch } from "../shared/api/client";
 import type { PasswordSetResponse, UserEmailResponse } from "../shared/api/types";
 import { useI18n } from "../shared/i18n";
+import { getRuntimeLocale } from "../shared/i18n/runtime";
 import { disablePush, enablePushByUserGesture, getPushState, isPushDisabledByUser } from "../app/notifications/push";
 import { toastApiError } from "../shared/ui/toast/toastApiError";
 import { getMood } from "../shared/payments-mood";
@@ -47,7 +48,7 @@ async function copyToClipboard(text: string) {
 function formatDate(v?: string | null) {
   if (!String(v ?? "").trim()) return "—";
   try {
-    return new Date(String(v)).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" });
+    return new Intl.DateTimeFormat(getRuntimeLocale(), { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(String(v)));
   } catch { return String(v ?? "").trim(); }
 }
 
@@ -955,40 +956,40 @@ export function Profile() {
                 <div className="profile-more-user__meta">ID {profile?.id ?? "—"}{loginText ? ` · ${loginText}` : ""}</div>
               </div>
             </div>
-            <button className="profile-more-logout" type="button" onClick={() => void logout()} disabled={loggingOut}>{loggingOut ? "…" : "Выйти"}</button>
+            <button className="profile-more-logout" type="button" onClick={() => void logout()} disabled={loggingOut}>{loggingOut ? "…" : t("profile.more.logout")}</button>
           </div>
 
           <div className="profile-more-stats">
-            <div className="profile-more-stat"><span>Создан</span><strong>{formatDate(profile?.created)}</strong></div>
-            <div className="profile-more-stat"><span>Последний вход</span><strong>{formatDate(profile?.lastLogin)}</strong></div>
+            <div className="profile-more-stat"><span>{t("profile.more.created")}</span><strong>{formatDate(profile?.created)}</strong></div>
+            <div className="profile-more-stat"><span>{t("profile.more.last_login")}</span><strong>{formatDate(profile?.lastLogin)}</strong></div>
           </div>
 
           {isAdmin && (
             <div className="profile-more-group profile-more-group--admin">
-              <div className="profile-more-group__title">Администрирование</div>
+              <div className="profile-more-group__title">{t("profile.more.admin_group")}</div>
               <div className="profile-menu-list profile-menu-list--admin">
-                <ProfileMenuItem icon={<ProfileIcon name="admin" />} title={t("profile.admin")} subtitle="Пульт для внутренней магии" onClick={() => nav("/admin")} />
+                <ProfileMenuItem icon={<ProfileIcon name="admin" />} title={t("profile.admin")} subtitle={t("profile.more.admin_subtitle")} onClick={() => nav("/admin")} />
               </div>
             </div>
           )}
 
           <div className="profile-more-group">
-            <div className="profile-more-group__title">Утилиты</div>
+            <div className="profile-more-group__title">{t("profile.more.utils_group")}</div>
             <div className="profile-menu-list">
-              <ProfileMenuItem icon={<ProfileIcon name="server" />} title="Статус серверов" subtitle="Онлайн, аптайм и отклик" onClick={() => nav("/server-status")} />
+              <ProfileMenuItem icon={<ProfileIcon name="server" />} title={t("profile.more.servers")} subtitle={t("profile.more.servers_sub")} onClick={() => nav("/server-status")} />
             </div>
           </div>
 
           <div className="profile-more-group">
-            <div className="profile-more-group__title">Меню</div>
+            <div className="profile-more-group__title">{t("profile.more.menu_group")}</div>
             <div className="profile-menu-list">
-              <ProfileMenuItem icon={<ProfileIcon name="settings" />} title="Настройки" subtitle="Тема, язык, уведомления и вход" onClick={() => setScreen("settings")} />
-              <ProfileMenuItem icon={<ProfileIcon name="info" />} title="О сервисе" subtitle="Кто такой Shpun и зачем он оживляет интернет" onClick={() => setScreen("about")} />
-              <ProfileMenuItem icon={<ProfileIcon name="reviews" />} title="Отзывы" subtitle="Что пишут пользователи" onClick={() => nav("/reviews")} />
-              <ProfileMenuItem icon={<ProfileIcon name="support" />} title="Поддержка" subtitle="Обращения и чат с командой" onClick={() => nav("/support")} />
-              <ProfileMenuItem icon={<ProfileIcon name="channel" />} title="Реклама и сотрудничество" subtitle="Предложить размещение" onClick={() => nav("/partnership")} />
-              <ProfileMenuItem icon={<ProfileIcon name="channel" />} title="Новости" subtitle="Группа с объявлениями" external onClick={() => openExternal(channelUrl)} />
-              <ProfileMenuItem icon={<ProfileIcon name="logout" />} title="Выйти из аккаунта" subtitle="Закрыть сессию на этом устройстве" danger onClick={() => void logout()} />
+              <ProfileMenuItem icon={<ProfileIcon name="settings" />} title={t("profile.more.settings")} subtitle={t("profile.more.settings_sub")} onClick={() => setScreen("settings")} />
+              <ProfileMenuItem icon={<ProfileIcon name="info" />} title={t("profile.more.about")} subtitle={t("profile.more.about_sub")} onClick={() => setScreen("about")} />
+              <ProfileMenuItem icon={<ProfileIcon name="reviews" />} title={t("profile.more.reviews")} subtitle={t("profile.more.reviews_sub")} onClick={() => nav("/reviews")} />
+              <ProfileMenuItem icon={<ProfileIcon name="support" />} title={t("profile.more.support")} subtitle={t("profile.more.support_sub")} onClick={() => nav("/support")} />
+              <ProfileMenuItem icon={<ProfileIcon name="channel" />} title={t("profile.more.partnership")} subtitle={t("profile.more.partnership_sub")} onClick={() => nav("/partnership")} />
+              <ProfileMenuItem icon={<ProfileIcon name="channel" />} title={t("profile.more.news")} subtitle={t("profile.more.news_sub")} external onClick={() => openExternal(channelUrl)} />
+              <ProfileMenuItem icon={<ProfileIcon name="logout" />} title={t("profile.more.logout_item")} subtitle={t("profile.more.logout_sub")} danger onClick={() => void logout()} />
             </div>
           </div>
         </div>
@@ -997,27 +998,27 @@ export function Profile() {
       {screen === "settings" && (
         <div className="profile-more-shell">
           <PageBackButton onClick={() => setScreen("main")} />
-          <div className="profile-more-title">Настройки</div>
+          <div className="profile-more-title">{t("profile.settings.title")}</div>
 
           <div className="profile-more-group">
-            <div className="profile-more-group__title">Внешний вид</div>
+            <div className="profile-more-group__title">{t("profile.settings.appearance")}</div>
             <div className="profile-menu-list">
-              <ProfileMenuItem icon={<ProfileIcon name="moon" />} title="Тема оформления" subtitle="Тёмная, как ночной серверный шкаф" badge={<ProfileSwitch checked disabled />} onClick={() => showToast("Светлую тему пока не заводили — тёмная держит стиль.")} />
+              <ProfileMenuItem icon={<ProfileIcon name="moon" />} title={t("profile.settings.theme")} subtitle={t("profile.settings.theme_sub")} badge={<ProfileSwitch checked disabled />} onClick={() => showToast(t("profile.settings.theme_toast"))} />
             </div>
           </div>
 
           <div className="profile-more-group">
-            <div className="profile-more-group__title">Аккаунт</div>
+            <div className="profile-more-group__title">{t("profile.settings.account")}</div>
             <div className="profile-menu-list">
-              <ProfileMenuItem icon={<ProfileIcon name="user" />} title={t("profile.personal.title")} subtitle={`${personalNameView !== "—" && personalNameView !== "вЂ”" ? personalNameView : t("profile.email.empty")} · ID ${profile?.id ?? "—"}`} badge={<SmallBtn>{t("profile.personal.edit")}</SmallBtn>} onClick={() => setEditPersonal(true)} />
+              <ProfileMenuItem icon={<ProfileIcon name="user" />} title={t("profile.personal.title")} subtitle={`${personalNameView !== "—" ? personalNameView : t("profile.email.empty")} · ID ${profile?.id ?? "—"}`} badge={<SmallBtn>{t("profile.personal.edit")}</SmallBtn>} onClick={() => setEditPersonal(true)} />
               <ProfileMenuItem icon={<ProfileIcon name="mail" />} title={t("profile.email.title")} subtitle={emailLoading ? t("profile.email.loading") : email || t("profile.email.empty")} badge={email ? <SmallBadge text={emailVerified === true ? t("profile.email.badge.verified") : t("profile.email.badge.unverified")} tone={emailVerified === true ? "ok" : "warn"} /> : undefined} onClick={() => setEmailModal(true)} />
               <ProfileMenuItem icon={<ProfileIcon name="telegram" />} title="Telegram" subtitle={telegramLogin || t("profile.telegram.unlinked")} badge={telegramLogin ? <SmallBadge text={t("profile.telegram.badge.linked")} tone="ok" /> : <SmallBadge text={t("profile.telegram.badge.unlinked")} />} onClick={() => setTgModal(true)} />
-              <ProfileMenuItem icon={<ProfileIcon name="lock" />} title={t("profile.change_password")} subtitle="Смена пароля и повторный вход" onClick={() => setPwdModal(true)} />
+              <ProfileMenuItem icon={<ProfileIcon name="lock" />} title={t("profile.change_password")} subtitle={t("profile.password.subtitle")} onClick={() => setPwdModal(true)} />
             </div>
           </div>
 
           <div className="profile-more-group">
-            <div className="profile-more-group__title">Основные</div>
+            <div className="profile-more-group__title">{t("profile.settings.main")}</div>
             <div className="profile-menu-list">
               <ProfileMenuItem icon={<ProfileIcon name="globe" />} title={t("profile.language.title")} subtitle={lang === "ru" ? t("profile.language.ru") : t("profile.language.en")} badge={<Segmented value={(lang as any) === "en" ? "en" : "ru"} onChange={setLang as any} ariaLabel={t("profile.language.aria")} />} />
               <ProfileMenuItem icon={<ProfileIcon name="phone" />} title={t("profile.pwa.title")} subtitle={standalone ? t("profile.pwa.installed") : t("profile.pwa.not_installed")} badge={standalone ? <SmallBadge text={t("profile.pwa.installed")} tone="ok" /> : <SmallBtn primary>{deferredPrompt ? t("profile.pwa.button.install") : t("profile.pwa.button.how")}</SmallBtn>} onClick={() => void doInstallPwa()} />
@@ -1035,32 +1036,32 @@ export function Profile() {
             <div className="profile-about-top">
               <div className="profile-more-info__icon"><ProfileIcon name="bolt" /></div>
               <div className="profile-about-titleBlock">
-                <div className="profile-about-kicker">О сервисе</div>
+                <div className="profile-about-kicker">{t("profile.about.kicker")}</div>
                 <h2>Shpun App</h2>
                 <p className="profile-about-lead">
-                  VPN-сервис для привычного интернета без лишних квестов с настройками.
+                  {t("profile.about.lead")}
                 </p>
               </div>
             </div>
             <div className="profile-about-summary">
-              <span>Держим баланс качества, понятного кабинета и доступной цены.</span>
-              <span>Развиваем собственную экосистему: Telegram-вход, статусы серверов, сценарии для устройств и решения для домашней сети.</span>
+              <span>{t("profile.about.summary1")}</span>
+              <span>{t("profile.about.summary2")}</span>
             </div>
             <div className="profile-about-email-note">
               <span aria-hidden="true">ℹ️</span>
-              При регистрации используйте свою настоящую почту — она нужна для подтверждения и восстановления доступа.
+              {t("profile.about.email_note")}
             </div>
             <div className="profile-about-grid">
-              <div className="profile-about-card"><ProfileIcon name="activity" /><b>Видео и связь</b><span>Помогаем смотреть ролики, держать мессенджеры под рукой и не ругаться с мобильным интернетом каждый вечер.</span></div>
-              <div className="profile-about-card"><ProfileIcon name="server" /><b>Баланс и качество</b><span>Следим за стабильностью, ценой и понятностью сервиса. Нам важно, чтобы VPN был не роскошью, а нормальным рабочим инструментом.</span></div>
-              <div className="profile-about-card"><ProfileIcon name="lock" /><b>Кабинет без квестов</b><span>Услуги, оплата, бонусы, уведомления и вход через e-mail или Telegram собраны в одном месте.</span></div>
-              <div className="profile-about-card"><ProfileIcon name="phone" /><b>Для разных устройств</b><span>Телефон, компьютер, планшет или домашняя сеть — стараемся закрывать сценарии, которыми реально пользуются каждый день.</span></div>
-              <div className="profile-about-card"><ProfileIcon name="admin" /><b>Свои разработки</b><span>У нас есть собственные модули и интеграции, а не только набор чужих ссылок под красивой кнопкой.</span></div>
-              <div className="profile-about-card"><ProfileIcon name="globe" /><b>Shpun Router</b><span>Отдельное направление — наш пакет для OpenWrt-роутеров, чтобы VPN работал сразу для всей домашней сети.</span></div>
+              <div className="profile-about-card"><ProfileIcon name="activity" /><b>{t("profile.about.card.video.title")}</b><span>{t("profile.about.card.video.text")}</span></div>
+              <div className="profile-about-card"><ProfileIcon name="server" /><b>{t("profile.about.card.balance.title")}</b><span>{t("profile.about.card.balance.text")}</span></div>
+              <div className="profile-about-card"><ProfileIcon name="lock" /><b>{t("profile.about.card.cabinet.title")}</b><span>{t("profile.about.card.cabinet.text")}</span></div>
+              <div className="profile-about-card"><ProfileIcon name="phone" /><b>{t("profile.about.card.devices.title")}</b><span>{t("profile.about.card.devices.text")}</span></div>
+              <div className="profile-about-card"><ProfileIcon name="admin" /><b>{t("profile.about.card.dev.title")}</b><span>{t("profile.about.card.dev.text")}</span></div>
+              <div className="profile-about-card"><ProfileIcon name="globe" /><b>Shpun Router</b><span>{t("profile.about.card.router.text")}</span></div>
             </div>
             <div className="actions actions--2 profile-about-actions">
-              <button className="btn btn--primary" type="button" onClick={() => nav("/services")}>Мои услуги</button>
-              <button className="btn" type="button" onClick={() => nav("/legal")}>Оферта и условия</button>
+              <button className="btn btn--primary" type="button" onClick={() => nav("/services")}>{t("profile.about.action.services")}</button>
+              <button className="btn" type="button" onClick={() => nav("/legal")}>{t("profile.about.action.legal")}</button>
             </div>
           </div></div>
         </div>
@@ -1144,7 +1145,7 @@ export function Profile() {
             <PRow
               label={t("profile.personal.login")}
               value={loginText || "—"}
-              right={loginText ? <SmallBtn onClick={() => void doCopyLogin()}>{copied ? "Готово" : "Копировать"}</SmallBtn> : undefined}
+              right={loginText ? <SmallBtn onClick={() => void doCopyLogin()}>{copied ? t("profile.copy.done") : t("profile.copy.action")}</SmallBtn> : undefined}
             />
             <PRow label={t("profile.personal.id")} value={profile?.id ?? "—"} last />
           </>

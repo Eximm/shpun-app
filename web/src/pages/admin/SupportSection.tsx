@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { apiFetch } from "../../shared/api/client";
 import { refreshSupportUnread, useSupportUnread } from "../../app/notifications/supportUnread";
+import { useI18n } from "../../shared/i18n";
 import {
   ATTACHMENT_ACCEPT,
   buildMessageFormData,
@@ -18,6 +19,7 @@ import {
 } from "../../shared/support/attachments";
 import { AttachmentList, PendingFiles } from "../../shared/support/AttachmentViews";
 import { AdminFilterBar, AdminSectionHeader, ModalShell, PartnershipTabIcon, SupportTabIcon, UnreadMarker } from "./shared";
+import { ticketStatusLabel, TICKET_STATUSES } from "../../shared/support/ticketLabels";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -119,16 +121,19 @@ type PartnershipContext = {
   comment?: string | null;
 };
 
-const PARTNERSHIP_TYPE_LABELS: Record<string, string> = {
-  blogger: "Блогер / автор",
-  channel: "Telegram-канал / сообщество",
-  youtube: "YouTube / Twitch",
-  site: "Сайт / проект",
-  other: "Другое",
+const PARTNERSHIP_TYPE_KEYS: Record<string, string> = {
+  blogger: "partnership.type.blogger",
+  channel: "partnership.type.channel",
+  youtube: "partnership.type.youtube",
+  site: "partnership.type.site",
+  other: "partnership.type.other",
 };
 
-function partnershipTypeLabel(key?: string | null): string {
-  return (key && PARTNERSHIP_TYPE_LABELS[key]) || key || "Другое";
+type TFn = ReturnType<typeof useI18n>["t"];
+
+function partnershipTypeLabel(key: string | null | undefined, t: TFn): string {
+  if (key && PARTNERSHIP_TYPE_KEYS[key]) return t(PARTNERSHIP_TYPE_KEYS[key]);
+  return key || t("partnership.type.other");
 }
 
 function partnershipOf(ticket: AdminTicket): PartnershipContext | null {
@@ -145,15 +150,6 @@ const EMPTY_FILTERS: Filters = {
   q: "",
 };
 
-const STATUS_LABELS: Record<TicketStatus, string> = {
-  open: "Открыт",
-  in_progress: "В работе",
-  waiting_user: "Ждём пользователя",
-  waiting_staff: "Ждём оператора",
-  resolved: "Решён",
-  closed: "Закрыт",
-};
-
 const STATUS_TONES: Record<TicketStatus, string> = {
   open: "warn",
   in_progress: "accent",
@@ -163,11 +159,11 @@ const STATUS_TONES: Record<TicketStatus, string> = {
   closed: "soft",
 };
 
-const PRIORITY_LABELS: Record<TicketPriority, string> = {
-  low: "Низкий",
-  normal: "Обычный",
-  high: "Высокий",
-  urgent: "Срочный",
+const PRIORITY_KEYS: Record<TicketPriority, string> = {
+  low: "ticket.priority.low",
+  normal: "ticket.priority.normal",
+  high: "ticket.priority.high",
+  urgent: "ticket.priority.urgent",
 };
 
 const PRIORITY_TONES: Record<TicketPriority, string> = {
@@ -177,19 +173,19 @@ const PRIORITY_TONES: Record<TicketPriority, string> = {
   urgent: "bad",
 };
 
-const SOURCE_LABELS: Record<TicketSource, string> = {
-  app: "ShpunApp",
-  telegram: "Telegram",
+const SOURCE_KEYS: Record<TicketSource, string> = {
+  app: "ticket.source.app",
+  telegram: "ticket.source.telegram",
 };
 
-const AUTHOR_LABELS: Record<AuthorType, string> = {
-  user: "Пользователь",
-  staff: "Оператор",
-  system: "Система",
+const AUTHOR_KEYS: Record<AuthorType, string> = {
+  user: "ticket.author.user",
+  staff: "ticket.author.staff",
+  system: "ticket.author.system",
 };
 
-const STATUS_OPTIONS = Object.keys(STATUS_LABELS) as TicketStatus[];
-const PRIORITY_OPTIONS = Object.keys(PRIORITY_LABELS) as TicketPriority[];
+const STATUS_OPTIONS = TICKET_STATUSES;
+const PRIORITY_OPTIONS = Object.keys(PRIORITY_KEYS) as TicketPriority[];
 
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
 
@@ -204,30 +200,35 @@ function parseDate(value?: string | null): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function formatDateTime(value?: string | null) {
+type DateFormatter = ReturnType<typeof useI18n>["formatDate"];
+type CurrencyFormatter = ReturnType<typeof useI18n>["formatCurrency"];
+
+function formatDateTime(value: string | null | undefined, formatDate: DateFormatter) {
   const parsed = parseDate(value);
-  return parsed ? parsed.toLocaleString("ru-RU") : (value || "—");
+  return parsed
+    ? formatDate(parsed, { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
+    : (value || "—");
 }
 
-function formatClock(value?: string | null) {
+function formatClock(value: string | null | undefined, formatDate: DateFormatter) {
   const parsed = parseDate(value);
   if (!parsed) return value || "";
   const today = new Date();
   const sameDay = parsed.toDateString() === today.toDateString();
   return sameDay
-    ? parsed.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })
-    : parsed.toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+    ? formatDate(parsed, { hour: "2-digit", minute: "2-digit" })
+    : formatDate(parsed, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
-function formatCost(value?: number | null) {
+function formatCost(value: number | null | undefined, formatCurrency: CurrencyFormatter) {
   if (value === null || value === undefined || !Number.isFinite(Number(value))) return "—";
-  return `${Number(value).toLocaleString("ru-RU", { maximumFractionDigits: 2 })} ₽`;
+  return formatCurrency(Number(value));
 }
 
-function formatPeriod(period?: string | number | null) {
+function formatPeriod(period: string | number | null | undefined, t: TFn) {
   if (period === null || period === undefined || period === "") return "—";
   const raw = String(period);
-  return /^\d+$/.test(raw) ? `${raw} мес` : raw;
+  return /^\d+$/.test(raw) ? t("support.admin.period_months", { n: raw }) : raw;
 }
 
 function buildQuery(filters: Filters, kind?: "support" | "partnership"): string {
@@ -243,15 +244,17 @@ function buildQuery(filters: Filters, kind?: "support" | "partnership"): string 
   return query ? `?${query}` : "";
 }
 
-function userLabel(ticket: AdminTicket) {
-  return ticket.displayNameSnapshot || ticket.userLoginSnapshot || `Пользователь #${ticket.userId}`;
+function userLabel(ticket: AdminTicket, t: TFn) {
+  return ticket.displayNameSnapshot || ticket.userLoginSnapshot || t("support.admin.user_ref", { id: ticket.userId });
 }
 
 /* ─── Copy button (local feedback, no global toast) ──────────────────────── */
 
-function CopyTextButton({ text, label = "Копировать" }: { text: string; label?: string }) {
+function CopyTextButton({ text, label }: { text: string; label?: string }) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<number | null>(null);
+  const resolvedLabel = label ?? t("support.admin.copy");
 
   useEffect(() => {
     return () => {
@@ -278,10 +281,10 @@ function CopyTextButton({ text, label = "Копировать" }: { text: string
       type="button"
       className={`supportMsg__copy${copied ? " supportMsg__copy--done" : ""}`}
       onClick={() => void handleCopy()}
-      aria-label={copied ? "Скопировано" : label}
-      title={copied ? "Скопировано" : label}
+      aria-label={copied ? t("common.copied") : resolvedLabel}
+      title={copied ? t("common.copied") : resolvedLabel}
     >
-      {copied ? "✓ Скопировано" : label}
+      {copied ? `✓ ${t("common.copied")}` : resolvedLabel}
     </button>
   );
 }
@@ -289,6 +292,7 @@ function CopyTextButton({ text, label = "Копировать" }: { text: string
 /* ─── Message bubble ─────────────────────────────────────────────────────── */
 
 function MessageBubble({ message }: { message: TicketMessage }) {
+  const { t, formatDate } = useI18n();
   const isUser = message.authorType === "user";
   const isSystem = message.authorType === "system";
 
@@ -296,9 +300,9 @@ function MessageBubble({ message }: { message: TicketMessage }) {
     return (
       <div className="supportMsg supportMsg--note">
         <div className="supportMsg__meta">
-          <strong>Внутренняя заметка</strong>
+          <strong>{t("support.admin.internal_note")}</strong>
           {message.authorName ? <span>· {message.authorName}</span> : null}
-          <span className="supportMsg__time">{formatClock(message.createdAt)}</span>
+          <span className="supportMsg__time">{formatClock(message.createdAt, formatDate)}</span>
         </div>
         {message.text ? <div className="supportMsg__text">{message.text}</div> : null}
         <AttachmentList attachments={message.attachments} />
@@ -311,9 +315,9 @@ function MessageBubble({ message }: { message: TicketMessage }) {
   return (
     <div className={`supportMsg ${modifier}`}>
       <div className="supportMsg__meta">
-        <strong>{AUTHOR_LABELS[message.authorType]}</strong>
+        <strong>{t(AUTHOR_KEYS[message.authorType])}</strong>
         {!isUser && !isSystem && message.authorName ? <span>· {message.authorName}</span> : null}
-        <span className="supportMsg__time">{formatClock(message.createdAt)}</span>
+        <span className="supportMsg__time">{formatClock(message.createdAt, formatDate)}</span>
       </div>
       {message.text ? <div className="supportMsg__text">{message.text}</div> : null}
       <AttachmentList attachments={message.attachments} />
@@ -329,6 +333,7 @@ function MessageBubble({ message }: { message: TicketMessage }) {
 /* ─── Diagnostics ────────────────────────────────────────────────────────── */
 
 function Diagnostics({ ticket }: { ticket: AdminTicket }) {
+  const { t, formatCurrency } = useI18n();
   const contextUser = (ticket.contextSnapshot?.user ?? null) as ContextUser | null;
   const service = ticket.serviceSnapshot;
   const partnership = partnershipOf(ticket);
@@ -340,8 +345,8 @@ function Diagnostics({ ticket }: { ticket: AdminTicket }) {
     { label: "user id", value: `#${ticket.userId}` },
     { label: "login", value: login || "—" },
     { label: "имя", value: displayName || "—" },
-    { label: "баланс", value: formatCost(balance) },
-    { label: "бонусы", value: contextUser?.bonus != null ? formatCost(contextUser.bonus) : "—" },
+    { label: "баланс", value: formatCost(balance, formatCurrency) },
+    { label: "бонусы", value: contextUser?.bonus != null ? formatCost(contextUser.bonus, formatCurrency) : "—" },
     { label: "telegram chat", value: ticket.telegramChatId ? String(ticket.telegramChatId) : "—" },
   ];
 
@@ -353,17 +358,17 @@ function Diagnostics({ ticket }: { ticket: AdminTicket }) {
         { label: "категория", value: service.category || ticket.serviceCategory || "—" },
         { label: "статус", value: service.status || "—" },
         { label: "активна до", value: service.expire || "—" },
-        { label: "период", value: formatPeriod(service.period) },
-        { label: "стоимость", value: formatCost(service.cost) },
+        { label: "период", value: formatPeriod(service.period, t) },
+        { label: "стоимость", value: formatCost(service.cost, formatCurrency) },
       ]
     : [];
 
   return (
     <details className="supportDiag">
-      <summary>Диагностика</summary>
+      <summary>{t("support.admin.diagnostics")}</summary>
 
       <div className="supportDiag__block">
-        <div className="supportDiag__title">Снимок пользователя</div>
+        <div className="supportDiag__title">{t("support.admin.snapshot_user")}</div>
         <div className="supportDiag__grid">
           {userRows.map((row) => (
             <div key={row.label} className="supportDiag__cell">
@@ -376,17 +381,17 @@ function Diagnostics({ ticket }: { ticket: AdminTicket }) {
 
       <div className="supportDiag__block">
         <div className="supportDiag__title">
-          {ticket.kind === "partnership" ? "Параметры предложения" : "Снимок услуги"}
+          {ticket.kind === "partnership" ? t("support.admin.snapshot_proposal") : t("support.admin.snapshot_service")}
         </div>
         {ticket.kind === "partnership" ? (
           partnership ? (
             <>
               <div className="supportDiag__grid">
                 {[
-                  { label: "тип", value: partnershipTypeLabel(partnership.proposal_type) },
-                  { label: "площадка", value: partnership.platform_url || "—" },
-                  { label: "аудитория", value: partnership.audience_size || "—" },
-                  { label: "контакт", value: partnership.contact || "—" },
+                  { label: t("support.admin.diag.type"), value: partnershipTypeLabel(partnership.proposal_type, t) },
+                  { label: t("support.admin.diag.platform"), value: partnership.platform_url || "—" },
+                  { label: t("support.admin.diag.audience"), value: partnership.audience_size || "—" },
+                  { label: t("support.admin.diag.contact"), value: partnership.contact || "—" },
                 ].map((row) => (
                   <div key={row.label} className="supportDiag__cell">
                     <div className="supportDiag__label">{row.label}</div>
@@ -396,25 +401,25 @@ function Diagnostics({ ticket }: { ticket: AdminTicket }) {
               </div>
               {partnership.offer ? (
                 <div className="admin-gap-top-sm">
-                  <div className="supportDiag__label">предложение</div>
+                  <div className="supportDiag__label">{t("support.admin.diag.offer")}</div>
                   <div className="supportDiag__value" style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{partnership.offer}</div>
                   <div className="supportMsg__actions">
-                    <CopyTextButton text={partnership.offer} label="Копировать предложение" />
+                    <CopyTextButton text={partnership.offer} label={t("support.admin.copy_proposal")} />
                   </div>
                 </div>
               ) : null}
               {partnership.comment ? (
                 <div className="admin-gap-top-sm">
-                  <div className="supportDiag__label">комментарий</div>
+                  <div className="supportDiag__label">{t("support.admin.diag.comment")}</div>
                   <div className="supportDiag__value" style={{ whiteSpace: "pre-wrap" }}>{partnership.comment}</div>
                 </div>
               ) : null}
             </>
           ) : (
-            <div className="supportDiag__label">Нет данных предложения.</div>
+            <div className="supportDiag__label">{t("support.admin.no_proposal")}</div>
           )
         ) : serviceRows.length === 0 ? (
-          <div className="supportDiag__label">Обращение без привязки к услуге.</div>
+          <div className="supportDiag__label">{t("support.admin.no_service")}</div>
         ) : (
           <div className="supportDiag__grid">
             {serviceRows.map((row) => (
@@ -460,6 +465,10 @@ export function SupportSection({
   initialKind = "support",
   initialTicketId,
 }: { initialKind?: "support" | "partnership"; initialTicketId?: number } = {}) {
+  const { t, formatDate } = useI18n();
+  const statusLabel = (status: TicketStatus) => ticketStatusLabel(status, "admin", t);
+  const priorityLabel = (priority: TicketPriority) => t(PRIORITY_KEYS[priority] ?? priority);
+  const sourceLabel = (source: TicketSource) => t(SOURCE_KEYS[source] ?? source);
   const [items, setItems] = useState<AdminTicket[]>([]);
   const [total, setTotal] = useState(0);
   const [categories, setCategories] = useState<SupportCategory[]>([]);
@@ -575,7 +584,7 @@ export function SupportSection({
       setItems(response.items ?? []);
       setTotal(Number(response.total ?? 0));
     } catch (error) {
-      setListError(errorMessage(error, "Не удалось загрузить тикеты."));
+      setListError(errorMessage(error, t("support.admin.list_failed")));
     } finally {
       if (!options.silent) setLoading(false);
     }
@@ -598,7 +607,7 @@ export function SupportSection({
       setItems((prev) => prev.map((t) => (t.id === id ? { ...t, unread: false } : t)));
       void refreshSupportUnread();
     } catch (error) {
-      setOpenedError(errorMessage(error, "Не удалось открыть тикет."));
+      setOpenedError(errorMessage(error, t("support.admin.open_failed")));
     } finally {
       setOpenedLoading(false);
     }
@@ -615,7 +624,7 @@ export function SupportSection({
     if (!opened) return;
     const payload = composerText.trim();
     if (payload.length < 2 && pending.length === 0) {
-      setOpenedError("Сообщение слишком короткое.");
+      setOpenedError(t("support.admin.too_short"));
       return;
     }
     if (sendLock.current) return;
@@ -639,11 +648,11 @@ export function SupportSection({
       releasePendingFiles(pending);
       setPending([]);
       setComposerText("");
-      setNotice(internal ? "Внутренняя заметка добавлена." : "Ответ отправлен пользователю.");
+      setNotice(internal ? t("support.admin.note_added") : t("support.admin.reply_sent"));
       void loadTickets({ silent: true });
     } catch (error) {
       if (openedIdRef.current === ticketId) {
-        setOpenedError(errorMessage(error, internal ? "Не удалось добавить заметку." : "Не удалось отправить ответ."));
+        setOpenedError(errorMessage(error, internal ? t("support.admin.note_failed") : t("support.admin.reply_failed")));
       }
     } finally {
       sendLock.current = false;
@@ -683,11 +692,11 @@ export function SupportSection({
       );
       if (openedIdRef.current !== ticketId) return;
       setOpened(response.ticket);
-      setNotice("Тикет обновлён.");
+      setNotice(t("support.admin.updated"));
       void loadTickets({ silent: true });
     } catch (error) {
       if (openedIdRef.current === ticketId) {
-        setOpenedError(errorMessage(error, "Не удалось обновить тикет."));
+        setOpenedError(errorMessage(error, t("support.admin.update_failed")));
       }
     } finally {
       patchLock.current = false;
@@ -714,14 +723,14 @@ export function SupportSection({
     <div className="card">
       <div className="card__body">
         <AdminSectionHeader
-          kicker="Support"
-          title="Поддержка"
+          kicker={t("support.admin.kicker")}
+          title={t("support.admin.title")}
           subtitle={kind === "partnership"
-            ? "Входящие предложения о рекламе и сотрудничестве."
-            : "Тикеты из ShpunApp и Telegram: переписка, ответы и заметки."}
+            ? t("support.admin.partnership_subtitle")
+            : t("support.admin.subtitle")}
           actions={
             <button className="btn btn--soft" type="button" onClick={() => void loadTickets()} disabled={loading}>
-              {loading ? "Обновляю…" : "Обновить"}
+              {loading ? t("common.refreshing") : t("common.refresh")}
             </button>
           }
         />
@@ -733,7 +742,7 @@ export function SupportSection({
             onClick={() => setKind("support")}
           >
             <SupportTabIcon />
-            <span>Поддержка</span>
+            <span>{t("support.admin.tab.support")}</span>
             <UnreadMarker count={unreadCounts.support} variant="badge" />
           </button>
           <button
@@ -742,7 +751,7 @@ export function SupportSection({
             onClick={() => setKind("partnership")}
           >
             <PartnershipTabIcon />
-            <span>Сотрудничество</span>
+            <span>{t("support.admin.tab.partnership")}</span>
             <UnreadMarker count={unreadCounts.partnership} variant="badge" />
           </button>
         </div>
@@ -750,29 +759,29 @@ export function SupportSection({
         {/* ── Filters ── */}
         <AdminFilterBar activeCount={activeFilterCount}>
           <label className="field">
-            <span className="field__label">Статус</span>
+            <span className="field__label">{t("support.admin.filter.status")}</span>
             <select className="input" value={filters.status} onChange={(e) => setFilters((p) => ({ ...p, status: e.target.value }))}>
-              <option value="">Все</option>
+              <option value="">{t("support.admin.filter.all")}</option>
               {STATUS_OPTIONS.map((status) => (
-                <option key={status} value={status}>{STATUS_LABELS[status]}</option>
+                <option key={status} value={status}>{statusLabel(status)}</option>
               ))}
             </select>
           </label>
 
           <label className="field">
-            <span className="field__label">Приоритет</span>
+            <span className="field__label">{t("support.admin.filter.priority")}</span>
             <select className="input" value={filters.priority} onChange={(e) => setFilters((p) => ({ ...p, priority: e.target.value }))}>
-              <option value="">Все</option>
+              <option value="">{t("support.admin.filter.all")}</option>
               {PRIORITY_OPTIONS.map((priority) => (
-                <option key={priority} value={priority}>{PRIORITY_LABELS[priority]}</option>
+                <option key={priority} value={priority}>{priorityLabel(priority)}</option>
               ))}
             </select>
           </label>
 
           <label className="field">
-            <span className="field__label">Категория</span>
+            <span className="field__label">{t("support.admin.filter.category")}</span>
             <select className="input" value={filters.categoryKey} onChange={(e) => setFilters((p) => ({ ...p, categoryKey: e.target.value }))}>
-              <option value="">Все</option>
+              <option value="">{t("support.admin.filter.all")}</option>
               {categories.map((category) => (
                 <option key={category.key} value={category.key}>{category.title}</option>
               ))}
@@ -780,11 +789,11 @@ export function SupportSection({
           </label>
 
           <label className="field">
-            <span className="field__label">Оператор (ID)</span>
+            <span className="field__label">{t("support.admin.filter.operator")}</span>
             <input
               className="input"
               inputMode="numeric"
-              placeholder="напр. 123"
+              placeholder={t("support.admin.filter.operator_ph")}
               value={filters.assignedTo}
               disabled={filters.unassigned}
               onChange={(e) => setFilters((p) => ({ ...p, assignedTo: e.target.value.replace(/[^\d]/g, "") }))}
@@ -792,8 +801,8 @@ export function SupportSection({
           </label>
 
           <label className="field">
-            <span className="field__label">Поиск</span>
-            <input className="input" placeholder="номер, логин, тема" value={filters.q} onChange={(e) => setFilters((p) => ({ ...p, q: e.target.value }))} />
+            <span className="field__label">{t("support.admin.filter.search")}</span>
+            <input className="input" placeholder={t("support.admin.filter.search_ph")} value={filters.q} onChange={(e) => setFilters((p) => ({ ...p, q: e.target.value }))} />
           </label>
 
           <label className="field supportFilters__check">
@@ -803,20 +812,20 @@ export function SupportSection({
                 checked={filters.unassigned}
                 onChange={(e) => setFilters((p) => ({ ...p, unassigned: e.target.checked, assignedTo: e.target.checked ? "" : p.assignedTo }))}
               />
-              <span className="field__label" style={{ margin: 0 }}>Без оператора</span>
+              <span className="field__label" style={{ margin: 0 }}>{t("support.admin.filter.unassigned")}</span>
             </span>
           </label>
         </AdminFilterBar>
 
         {activeFilterCount > 0 && (
           <div className="admin-gap-top-sm">
-            <button className="btn btn--soft" type="button" onClick={resetFilters} disabled={loading}>Сбросить фильтры</button>
+            <button className="btn btn--soft" type="button" onClick={resetFilters} disabled={loading}>{t("support.admin.filter.reset")}</button>
           </div>
         )}
 
         {listError && <div className="pre admin-gap-top-md">{listError}</div>}
 
-        <h3 className="h2 admin-gap-top-md">Тикеты · {total}</h3>
+        <h3 className="h2 admin-gap-top-md">{t("support.admin.list_title", { count: total })}</h3>
 
         {loading ? (
           <div className="list admin-gap-top-md">
@@ -824,7 +833,7 @@ export function SupportSection({
             <div className="skeleton p" />
           </div>
         ) : items.length === 0 ? (
-          <p className="p admin-gap-top-md">Тикетов по заданным фильтрам нет.</p>
+          <p className="p admin-gap-top-md">{t("support.admin.empty")}</p>
         ) : (
           <div className="list admin-gap-top-md">
             {items.map((ticket) => (
@@ -841,23 +850,23 @@ export function SupportSection({
                 <div className="list__main">
                   <div className="list__title">
                     <UnreadMarker count={ticket.unread ? 1 : 0} />
-                    #{ticket.publicNo} · {userLabel(ticket)}
+                    #{ticket.publicNo} · {userLabel(ticket, t)}
                   </div>
                   <div className="list__sub" style={{ marginTop: 6 }}>
                     {categoryTitles.get(ticket.categoryKey) ?? ticket.categoryKey}
                     {" · "}
-                    {SOURCE_LABELS[ticket.source] ?? ticket.source}
-                    {ticket.userServiceId ? ` · услуга #${ticket.userServiceId}` : ""}
+                    {sourceLabel(ticket.source)}
+                    {ticket.userServiceId ? ` · ${t("support.admin.service_ref", { id: ticket.userServiceId })}` : ""}
                     {" · "}
-                    {formatClock(ticket.lastMessageAt) || "—"}
+                    {formatClock(ticket.lastMessageAt, formatDate) || "—"}
                     {" · "}
-                    {ticket.assignedTo != null ? `оператор #${ticket.assignedTo}` : "не назначен"}
+                    {ticket.assignedTo != null ? t("support.admin.operator_ref", { id: ticket.assignedTo }) : t("support.admin.unassigned")}
                   </div>
                 </div>
                 <div className="list__side" style={{ flexDirection: "column", gap: 4, alignItems: "flex-end" }}>
-                  <span className={`chip chip--${STATUS_TONES[ticket.status]}`}>{STATUS_LABELS[ticket.status]}</span>
+                  <span className={`chip chip--${STATUS_TONES[ticket.status]}`}>{statusLabel(ticket.status)}</span>
                   {(ticket.priority === "high" || ticket.priority === "urgent") && (
-                    <span className={`chip chip--${PRIORITY_TONES[ticket.priority]}`}>{PRIORITY_LABELS[ticket.priority]}</span>
+                    <span className={`chip chip--${PRIORITY_TONES[ticket.priority]}`}>{priorityLabel(ticket.priority)}</span>
                   )}
                 </div>
               </div>
@@ -868,7 +877,7 @@ export function SupportSection({
 
       {/* ── Detail modal ── */}
       {openedLoading && !opened && (
-        <ModalShell title="Загрузка тикета…" kicker="Support" onClose={closeTicket}>
+        <ModalShell title={t("support.admin.loading")} kicker={t("support.admin.kicker")} onClose={closeTicket}>
           <div className="list">
             <div className="skeleton h1" />
             <div className="skeleton p" />
@@ -879,7 +888,7 @@ export function SupportSection({
       {opened && (
         <ModalShell
           title={opened.subject ? `#${opened.publicNo} · ${opened.subject}` : `#${opened.publicNo}`}
-          kicker={`${categoryTitles.get(opened.categoryKey) ?? opened.categoryKey} · ${SOURCE_LABELS[opened.source] ?? opened.source}`}
+          kicker={`${categoryTitles.get(opened.categoryKey) ?? opened.categoryKey} · ${sourceLabel(opened.source)}`}
           onClose={closeTicket}
           contentRef={modalContentRef}
         >
@@ -889,30 +898,30 @@ export function SupportSection({
           {/* Meta / controls (single place for status & priority) */}
           <div className="supportDetail__meta admin-gap-top-sm">
             <label className="field">
-              <span className="field__label">Статус</span>
+              <span className="field__label">{t("support.admin.filter.status")}</span>
               <select className="input" value={opened.status} disabled={patching} onChange={(e) => void patchTicket({ status: e.target.value })}>
                 {STATUS_OPTIONS.map((status) => (
-                  <option key={status} value={status}>{STATUS_LABELS[status]}</option>
+                  <option key={status} value={status}>{statusLabel(status)}</option>
                 ))}
               </select>
             </label>
 
             <label className="field">
-              <span className="field__label">Приоритет</span>
+              <span className="field__label">{t("support.admin.filter.priority")}</span>
               <select className="input" value={opened.priority} disabled={patching} onChange={(e) => void patchTicket({ priority: e.target.value })}>
                 {PRIORITY_OPTIONS.map((priority) => (
-                  <option key={priority} value={priority}>{PRIORITY_LABELS[priority]}</option>
+                  <option key={priority} value={priority}>{priorityLabel(priority)}</option>
                 ))}
               </select>
             </label>
 
             <label className="field">
-              <span className="field__label">Оператор (ID)</span>
+              <span className="field__label">{t("support.admin.filter.operator")}</span>
               <div className="supportDetail__operator">
                 <input
                   className="input"
                   inputMode="numeric"
-                  placeholder="не назначен"
+                  placeholder={t("support.admin.no_operator_ph")}
                   value={assigneeDraft}
                   disabled={patching}
                   onChange={(e) => setAssigneeDraft(e.target.value.replace(/[^\d]/g, ""))}
@@ -923,7 +932,7 @@ export function SupportSection({
                   disabled={patching}
                   onClick={() => void patchTicket({ assigned_to: assigneeDraft.trim() ? Number(assigneeDraft) : null })}
                 >
-                  ОК
+                  {t("common.ok")}
                 </button>
               </div>
             </label>
@@ -931,19 +940,19 @@ export function SupportSection({
 
           {/* Compact context */}
           <div className="supportDetail__context">
-            <span><strong>{userLabel(opened)}</strong> · #{opened.userId}</span>
+            <span><strong>{userLabel(opened, t)}</strong> · #{opened.userId}</span>
             {opened.kind === "partnership" ? (
               partnershipOf(opened)?.platform_url ? (
-                <span>Площадка: {partnershipOf(opened)?.platform_url}</span>
+                <span>{t("support.admin.platform")}: {partnershipOf(opened)?.platform_url}</span>
               ) : null
             ) : opened.serviceSnapshot || opened.userServiceId ? (
               <span>
-                Услуга{opened.userServiceId ? ` #${opened.userServiceId}` : ""}
+                {t("support.service_word")}{opened.userServiceId ? ` #${opened.userServiceId}` : ""}
                 {opened.serviceSnapshot?.name ? ` · ${opened.serviceSnapshot.name}` : ""}
                 {opened.serviceSnapshot?.status ? ` · ${opened.serviceSnapshot.status}` : ""}
               </span>
             ) : null}
-            <span>создан {formatDateTime(opened.createdAt)}</span>
+            <span>{t("support.admin.created_at", { date: formatDateTime(opened.createdAt, formatDate) })}</span>
           </div>
 
           <Diagnostics ticket={opened} />
@@ -951,7 +960,7 @@ export function SupportSection({
           {/* Conversation */}
           <div className="supportDetail__thread">
             {messages.length === 0 ? (
-              <div className="supportDetail__empty">Сообщений пока нет.</div>
+              <div className="supportDetail__empty">{t("support.no_messages")}</div>
             ) : (
               messages.map((message) => <MessageBubble key={message.id} message={message} />)
             )}
@@ -959,7 +968,7 @@ export function SupportSection({
 
           {/* Pinned composer */}
           <div className="supportDetail__composer">
-            <div className="supportMode" role="tablist" aria-label="Тип сообщения">
+            <div className="supportMode" role="tablist" aria-label={t("support.admin.internal_note")}>
               <button
                 type="button"
                 role="tab"
@@ -967,7 +976,7 @@ export function SupportSection({
                 className={`supportMode__btn${composerMode === "reply" ? " supportMode__btn--active" : ""}`}
                 onClick={() => setComposerMode("reply")}
               >
-                Ответ пользователю
+                {t("support.admin.mode.reply")}
               </button>
               <button
                 type="button"
@@ -976,7 +985,7 @@ export function SupportSection({
                 className={`supportMode__btn${composerMode === "note" ? " supportMode__btn--active" : ""}`}
                 onClick={() => setComposerMode("note")}
               >
-                Внутренняя заметка
+                {t("support.admin.mode.note")}
               </button>
             </div>
 
@@ -987,7 +996,7 @@ export function SupportSection({
               value={composerText}
               maxLength={4000}
               disabled={sending}
-              placeholder={composerMode === "note" ? "Заметка для команды (пользователь не увидит)" : "Сообщение уйдёт пользователю"}
+              placeholder={composerMode === "note" ? t("support.admin.composer.note_ph") : t("support.admin.composer.reply_ph")}
               onChange={(e) => setComposerText(e.target.value)}
             />
 
@@ -997,7 +1006,7 @@ export function SupportSection({
               <button
                 className="composerAttach"
                 type="button"
-                aria-label="Прикрепить файл"
+                aria-label={t("support.attach")}
                 disabled={sending || pending.length >= 5}
                 onClick={() => fileInputRef.current?.click()}
               >
@@ -1010,10 +1019,10 @@ export function SupportSection({
                 disabled={sending || (composerText.trim().length < 2 && pending.length === 0)}
                 onClick={() => void sendComposer()}
               >
-                {sending ? "Отправляю…" : composerMode === "note" ? "Сохранить заметку" : "Отправить ответ"}
+                {sending ? t("common.sending") : composerMode === "note" ? t("support.admin.save_note") : t("support.admin.send_reply")}
               </button>
             </div>
-            <div className="composerHint">Вложения хранятся до 180 дней и затем автоматически удаляются.</div>
+            <div className="composerHint">{t("support.retention")}</div>
           </div>
         </ModalShell>
       )}

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../../shared/api/client";
 import { AdminMetric, AdminSectionHeader, ModalShell } from "./shared";
+import { useI18n } from "../../shared/i18n";
 import { copyText, formatDateTime, parseMetaJson, shortDeviceToken } from "./utils";
 import type {
   BlockDeviceResp, ClearEventsResp, DeleteDeviceResp, ResetDeviceResp, ResetPrefixResp,
@@ -15,6 +16,7 @@ const DEVICES_PER_PAGE     = 10;
 const EVENTS_PREVIEW_COUNT = 5;
 
 export function TrialProtectionSection() {
+  const { t } = useI18n();
   const [loading,          setLoading]          = useState(true);
   const [refreshing,       setRefreshing]       = useState(false);
   const [savingSettings,   setSavingSettings]   = useState(false);
@@ -79,7 +81,7 @@ export function TrialProtectionSection() {
       setDevices(Array.isArray(devicesResp.items) ? devicesResp.items : []);
       setPrefixes(Array.isArray(prefixesResp.items) ? prefixesResp.items : []);
     } catch (e: any) {
-      setError(e?.message || "Не удалось загрузить данные Trial Protection.");
+      setError(e?.message || t("admin.trial.load_failed"));
       if (!silent) { setStatus(null); setEvents([]); setDevices([]); setPrefixes([]); }
     } finally { setLoading(false); setRefreshing(false); }
   }
@@ -101,79 +103,79 @@ export function TrialProtectionSection() {
           requireVerifiedEmail:              requireVerifiedEmailDraft,
         },
       });
-      setOkText(`Сохранено: mode=${r.mode}, ttl=${r.ttlHours}h`);
+      setOkText(t("admin.trial.settings.saved", { mode: r.mode, ttl: r.ttlHours }));
       await load({ silent: true });
-    } catch (e: any) { setError(e?.message || "Не удалось сохранить настройки."); }
+    } catch (e: any) { setError(e?.message || t("admin.trial.settings.save_failed")); }
     finally { setSavingSettings(false); }
   }
 
   async function clearEvents() {
-    if (!window.confirm("Очистить журнал событий Trial Protection полностью?")) return;
+    if (!window.confirm(t("admin.trial.confirm.clear_events"))) return;
     setClearingEvents(true); setError(null); setOkText(null);
     try {
       const r = await apiFetch<ClearEventsResp>("/admin/trial-protection/clear-events", { method: "POST", body: { keepLatest: 0 } });
-      setOkText(`Журнал очищен. Удалено: ${r.deleted}`);
+      setOkText(t("admin.trial.events.cleared", { n: r.deleted }));
       if (openedEvent) setOpenedEvent(null);
       await load({ silent: true });
-    } catch (e: any) { setError(e?.message || "Не удалось очистить журнал."); }
+    } catch (e: any) { setError(e?.message || t("admin.trial.events.clear_failed")); }
     finally { setClearingEvents(false); }
   }
 
   async function resetTrial(deviceToken: string) {
-    if (!window.confirm(`Сбросить trial для устройства?\n\n${deviceToken}`)) return;
+    if (!window.confirm(`${t("admin.trial.confirm.reset_device")}\n\n${deviceToken}`)) return;
     setResettingDevice(deviceToken); setError(null); setOkText(null);
     try {
       const r = await apiFetch<ResetDeviceResp>("/admin/trial-protection/reset-device", { method: "POST", body: { deviceToken } });
-      setOkText(`Trial сброшен: ${shortDeviceToken(r.deviceToken)}`);
+      setOkText(t("admin.trial.device.reset_done", { token: shortDeviceToken(r.deviceToken) }));
       await load({ silent: true });
-    } catch (e: any) { setError(e?.message || "Не удалось сбросить trial."); }
+    } catch (e: any) { setError(e?.message || t("admin.trial.device.reset_failed")); }
     finally { setResettingDevice(null); }
   }
 
   async function resetPrefix(rawValue: string) {
     const raw = String(rawValue ?? "").trim();
-    if (!raw) { setError("Укажи IP или prefix."); return; }
-    if (!window.confirm(`Очистить сеть / prefix?\n\n${raw}`)) return;
+    if (!raw) { setError(t("admin.trial.network.need_input")); return; }
+    if (!window.confirm(`${t("admin.trial.confirm.reset_prefix")}\n\n${raw}`)) return;
     setResettingPrefix(raw); setError(null); setOkText(null);
     try {
       const r = await apiFetch<ResetPrefixResp>("/admin/trial-protection/reset-prefix", { method: "POST", body: { ip: raw, clearEvents: 1, unblockDevices: 1 } });
-      setOkText(`Сеть очищена: prefix=${r.ipPrefix}, devices=${r.matchedDevices}`);
+      setOkText(t("admin.trial.network.cleared", { prefix: r.ipPrefix, devices: r.matchedDevices }));
       await load({ silent: true });
-    } catch (e: any) { setError(e?.message || "Не удалось очистить сеть."); }
+    } catch (e: any) { setError(e?.message || t("admin.trial.network.clear_failed")); }
     finally { setResettingPrefix(null); }
   }
 
   async function blockDevice(deviceToken: string) {
-    if (!window.confirm(`Заблокировать устройство?\n\n${deviceToken}`)) return;
+    if (!window.confirm(`${t("admin.trial.confirm.block_device")}\n\n${deviceToken}`)) return;
     setBlockingDevice(deviceToken); setError(null); setOkText(null);
     try {
       const r = await apiFetch<BlockDeviceResp>("/admin/trial-protection/block-device", { method: "POST", body: { deviceToken } });
-      setOkText(`Заблокировано: ${shortDeviceToken(r.deviceToken)}`);
+      setOkText(t("admin.trial.device.blocked", { token: shortDeviceToken(r.deviceToken) }));
       await load({ silent: true });
-    } catch (e: any) { setError(e?.message || "Не удалось заблокировать."); }
+    } catch (e: any) { setError(e?.message || t("admin.trial.device.block_failed")); }
     finally { setBlockingDevice(null); }
   }
 
   async function unblockDevice(deviceToken: string) {
-    if (!window.confirm(`Снять блокировку?\n\n${deviceToken}`)) return;
+    if (!window.confirm(`${t("admin.trial.confirm.unblock_device")}\n\n${deviceToken}`)) return;
     setUnblockingDevice(deviceToken); setError(null); setOkText(null);
     try {
       const r = await apiFetch<BlockDeviceResp>("/admin/trial-protection/unblock-device", { method: "POST", body: { deviceToken } });
-      setOkText(`Разблокировано: ${shortDeviceToken(r.deviceToken)}`);
+      setOkText(t("admin.trial.device.unblocked", { token: shortDeviceToken(r.deviceToken) }));
       await load({ silent: true });
-    } catch (e: any) { setError(e?.message || "Не удалось разблокировать."); }
+    } catch (e: any) { setError(e?.message || t("admin.trial.device.unblock_failed")); }
     finally { setUnblockingDevice(null); }
   }
 
   async function deleteDevice(deviceToken: string) {
-    if (!window.confirm(`Удалить устройство полностью?\n\n${deviceToken}`)) return;
+    if (!window.confirm(`${t("admin.trial.confirm.delete_device")}\n\n${deviceToken}`)) return;
     setDeletingDevice(deviceToken); setError(null); setOkText(null);
     try {
       const r = await apiFetch<DeleteDeviceResp>("/admin/trial-protection/delete-device", { method: "POST", body: { deviceToken } });
-      setOkText(`Удалено: ${shortDeviceToken(r.deviceToken)}`);
+      setOkText(t("admin.trial.device.deleted", { token: shortDeviceToken(r.deviceToken) }));
       if (openedDevice?.device_token === deviceToken) setOpenedDevice(null);
       await load({ silent: true });
-    } catch (e: any) { setError(e?.message || "Не удалось удалить устройство."); }
+    } catch (e: any) { setError(e?.message || t("admin.trial.device.delete_failed")); }
     finally { setDeletingDevice(null); }
   }
 
@@ -231,20 +233,20 @@ export function TrialProtectionSection() {
       <div className="card">
         <div className="card__body">
           <AdminSectionHeader
-            kicker="Trial protection"
-            title="Защита тестовых доступов"
-            subtitle="Контроль режима, порогов и признаков абьюза."
+            kicker={t("admin.tab.trial")}
+            title={t("admin.section.trial.title")}
+            subtitle={t("admin.section.trial.subtitle")}
             actions={
               <>
                 <button className="btn" type="button"
                   onClick={() => void load({ silent: true })}
                   disabled={refreshing || savingSettings || clearingEvents || Boolean(resettingPrefix)}>
-                  {refreshing ? "Обновляю…" : "Обновить"}
+                  {refreshing ? t("admin.trial.refreshing") : t("common.refresh")}
                 </button>
                 <button className="btn btn--primary" type="button"
                   onClick={() => void saveSettings()}
                   disabled={savingSettings || !hasSettingsChanges}>
-                  {savingSettings ? "Сохраняю…" : "Сохранить настройки"}
+                  {savingSettings ? t("admin.trial.saving") : t("admin.trial.save_settings")}
                 </button>
               </>
             }
@@ -260,25 +262,25 @@ export function TrialProtectionSection() {
           ) : (
             <>
               <div className="admin-metricsGrid admin-gap-top-md">
-                <AdminMetric label="Mode"         value={status?.mode || "—"} tone={status?.mode === "enforce" ? "bad" : status?.mode === "observe" ? "warn" : "soft"} />
-                <AdminMetric label="Email gate"   value={status?.requireVerifiedEmail ? "on" : "off"} tone={status?.requireVerifiedEmail ? "warn" : "soft"} />
-                <AdminMetric label="TTL"          value={`${status?.ttlHours ?? "—"}h`} />
-                <AdminMetric label="Devices now"  value={status?.devicesWithTrial ?? 0} />
-                <AdminMetric label="Blocks 24h"   value={status?.blocks24h ?? 0}   tone="bad" />
-                <AdminMetric label="Attempts 24h" value={status?.attempts24h ?? 0} tone="warn" />
-                <AdminMetric label="Distinct IPs" value={status?.distinctIps24h ?? 0} />
+                <AdminMetric label={t("admin.trial.metrics.mode")}         value={status?.mode || "—"} tone={status?.mode === "enforce" ? "bad" : status?.mode === "observe" ? "warn" : "soft"} />
+                <AdminMetric label={t("admin.trial.metrics.email_gate")}   value={status?.requireVerifiedEmail ? t("admin.trial.metrics.email_gate_on") : t("admin.trial.metrics.email_gate_off")} tone={status?.requireVerifiedEmail ? "warn" : "soft"} />
+                <AdminMetric label={t("admin.trial.metrics.ttl")}          value={`${status?.ttlHours ?? "—"}h`} />
+                <AdminMetric label={t("admin.trial.metrics.devices_now")}  value={status?.devicesWithTrial ?? 0} />
+                <AdminMetric label={t("admin.trial.metrics.blocks_24h")}   value={status?.blocks24h ?? 0}   tone="bad" />
+                <AdminMetric label={t("admin.trial.metrics.attempts_24h")} value={status?.attempts24h ?? 0} tone="warn" />
+                <AdminMetric label={t("admin.trial.metrics.distinct_ips")} value={status?.distinctIps24h ?? 0} />
               </div>
 
               <div className="admin-compactGrid admin-gap-top-md">
                 {/* Режим */}
                 <div className="list__item admin-tightItem">
                   <div className="list__main">
-                    <div className="list__title">Режим работы</div>
+                    <div className="list__title">{t("admin.trial.mode.title")}</div>
                     <div className="list__sub admin-gap-top-sm">
                       {([
-                        { value: "off",     label: "защита отключена" },
-                        { value: "observe", label: "только логирование" },
-                        { value: "enforce", label: "блокировать повторный trial" },
+                        { value: "off",     label: t("admin.trial.mode.off") },
+                        { value: "observe", label: t("admin.trial.mode.observe") },
+                        { value: "enforce", label: t("admin.trial.mode.enforce") },
                       ] as { value: TrialDeviceMode; label: string }[]).map(({ value, label }, idx, arr) => (
                         <label key={value} className={`admin-radio${idx === arr.length - 1 ? " admin-radio--last" : ""}`}>
                           <input type="radio" name="trialDeviceMode" value={value}
@@ -293,7 +295,7 @@ export function TrialProtectionSection() {
                 {/* TTL */}
                 <div className="list__item admin-tightItem">
                   <div className="list__main">
-                    <div className="list__title">TTL в часах</div>
+                    <div className="list__title">{t("admin.trial.ttl.title")}</div>
                     <div className="list__sub admin-gap-top-sm">
                       <input className="input admin-numberInput" type="number" min="1" max="720" step="1"
                         value={ttlDraft} onChange={(e) => setTtlDraft(e.target.value)} />
@@ -308,13 +310,13 @@ export function TrialProtectionSection() {
 
                 <div className="list__item admin-tightItem">
                   <div className="list__main">
-                    <div className="list__title">Подтвержденная почта для тестов</div>
+                    <div className="list__title">{t("admin.trial.email.title")}</div>
                     <div className="list__sub admin-gap-top-sm">
                       <label className="admin-radio admin-radio--last">
                         <input type="checkbox"
                           checked={requireVerifiedEmailDraft}
                           onChange={(e) => setRequireVerifiedEmailDraft(e.target.checked)} />
-                        {" "}Тестовый ключ можно заказать только после подтверждения почты
+                        {" "}{t("admin.trial.email.note")}
                       </label>
                     </div>
                     <div className="admin-inlineMeta admin-gap-top-sm">
@@ -327,14 +329,14 @@ export function TrialProtectionSection() {
 
               {/* Пороги (расширенные) */}
               <details className="admin-details admin-gap-top-md">
-                <summary className="admin-details__summary">Пороги и лимиты (расширенные)</summary>
+                <summary className="admin-details__summary">{t("admin.trial.thresholds.title")}</summary>
                 <div className="admin-compactGrid admin-gap-top-sm">
                   {[
-                    { label: "Порог usage по prefix",    value: ipPrefixUsageThresholdDraft,            set: setIpPrefixUsageThresholdDraft,            max: 100 },
-                    { label: "Порог attempts по prefix", value: ipPrefixAttemptThresholdDraft,          set: setIpPrefixAttemptThresholdDraft,          max: 200 },
-                    { label: "Порог distinct devices",   value: ipPrefixDistinctDevicesThresholdDraft,  set: setIpPrefixDistinctDevicesThresholdDraft,  max: 200 },
-                    { label: "Порог attempts по UA",     value: ipPrefixUserAgentAttemptThresholdDraft, set: setIpPrefixUserAgentAttemptThresholdDraft, max: 200 },
-                    { label: "Порог distinct users",     value: ipPrefixDistinctUsersThresholdDraft,    set: setIpPrefixDistinctUsersThresholdDraft,    max: 200 },
+                    { label: t("admin.trial.thresholds.usage"),            value: ipPrefixUsageThresholdDraft,            set: setIpPrefixUsageThresholdDraft,            max: 100 },
+                    { label: t("admin.trial.thresholds.attempts"),         value: ipPrefixAttemptThresholdDraft,          set: setIpPrefixAttemptThresholdDraft,          max: 200 },
+                    { label: t("admin.trial.thresholds.distinct_devices"), value: ipPrefixDistinctDevicesThresholdDraft,  set: setIpPrefixDistinctDevicesThresholdDraft,  max: 200 },
+                    { label: t("admin.trial.thresholds.attempts_ua"),      value: ipPrefixUserAgentAttemptThresholdDraft, set: setIpPrefixUserAgentAttemptThresholdDraft, max: 200 },
+                    { label: t("admin.trial.thresholds.distinct_users"),   value: ipPrefixDistinctUsersThresholdDraft,    set: setIpPrefixDistinctUsersThresholdDraft,    max: 200 },
                   ].map(({ label, value, set, max }) => (
                     <div key={label} className="list__item admin-tightItem">
                       <div className="list__main">
@@ -351,23 +353,23 @@ export function TrialProtectionSection() {
                   <button className="btn btn--primary" type="button"
                     onClick={() => void saveSettings()}
                     disabled={savingSettings || !hasSettingsChanges}>
-                    {savingSettings ? "Сохраняю…" : "Сохранить настройки"}
+                    {savingSettings ? t("admin.trial.saving") : t("admin.trial.save_settings")}
                   </button>
                 </div>
               </details>
 
               <details className="admin-details admin-gap-top-md">
-                <summary className="admin-details__summary">Статистика за 24 часа</summary>
+                <summary className="admin-details__summary">{t("admin.trial.stats.title")}</summary>
                 <div className="admin-metricsGrid admin-gap-top-sm">
-                  <AdminMetric label="Allow 24h"            value={status?.allows24h ?? 0}              tone="ok" />
-                  <AdminMetric label="Observe 24h"          value={status?.observes24h ?? 0}            tone="warn" />
-                  <AdminMetric label="Distinct devices 24h" value={status?.distinctDevices24h ?? 0} />
-                  <AdminMetric label="Missing token 24h"    value={status?.missingDeviceToken24h ?? 0}  tone="warn" />
-                  <AdminMetric label="Email blocks 24h"     value={status?.emailBlocks24h ?? 0}         tone="warn" />
-                  <AdminMetric label="Manual blocks 24h"    value={status?.manualBlocks24h ?? 0}        tone="bad" />
-                  <AdminMetric label="Block device 24h"     value={status?.blockDevice24h ?? 0}         tone="bad" />
-                  <AdminMetric label="Block ip/prefix 24h"  value={(status?.blockIp24h ?? 0) + (status?.blockIpPrefix24h ?? 0)} tone="bad" />
-                  <AdminMetric label="Blocked now"          value={status?.activeBlockedDevices ?? 0}   tone="bad" />
+                  <AdminMetric label={t("admin.trial.metrics.allow_24h")}            value={status?.allows24h ?? 0}              tone="ok" />
+                  <AdminMetric label={t("admin.trial.metrics.observe_24h")}          value={status?.observes24h ?? 0}            tone="warn" />
+                  <AdminMetric label={t("admin.trial.metrics.distinct_devices_24h")} value={status?.distinctDevices24h ?? 0} />
+                  <AdminMetric label={t("admin.trial.metrics.missing_token_24h")}    value={status?.missingDeviceToken24h ?? 0}  tone="warn" />
+                  <AdminMetric label={t("admin.trial.metrics.email_blocks_24h")}     value={status?.emailBlocks24h ?? 0}         tone="warn" />
+                  <AdminMetric label={t("admin.trial.metrics.manual_blocks_24h")}    value={status?.manualBlocks24h ?? 0}        tone="bad" />
+                  <AdminMetric label={t("admin.trial.metrics.block_device_24h")}     value={status?.blockDevice24h ?? 0}         tone="bad" />
+                  <AdminMetric label={t("admin.trial.metrics.block_ip_24h")}         value={(status?.blockIp24h ?? 0) + (status?.blockIpPrefix24h ?? 0)} tone="bad" />
+                  <AdminMetric label={t("admin.trial.metrics.blocked_now")}          value={status?.activeBlockedDevices ?? 0}   tone="bad" />
                 </div>
               </details>
             </>
@@ -379,14 +381,14 @@ export function TrialProtectionSection() {
       <div className="card admin-gap-top-lg">
         <div className="card__body">
           <AdminSectionHeader
-            kicker="Devices"
-            title="Устройства"
-            subtitle="Просмотр, блокировка и сброс trial."
+            kicker={t("admin.trial.devices.kicker")}
+            title={t("admin.trial.devices.title")}
+            subtitle={t("admin.trial.devices.subtitle")}
             actions={
               <label className="admin-radio admin-radio--last">
                 <input type="checkbox" checked={showAllDevices}
                   onChange={(e) => setShowAllDevices(e.target.checked)} />
-                {" "}Все устройства
+                {" "}{t("admin.trial.devices.show_all")}
               </label>
             }
           />
@@ -400,12 +402,12 @@ export function TrialProtectionSection() {
               <div className="admin-gap-top-md">
                 <input className="input" type="text" value={deviceQuery}
                   onChange={(e) => setDeviceQuery(e.target.value)}
-                  placeholder="Поиск по token / IP / user id / user-agent" />
+                  placeholder={t("admin.trial.devices.search_ph")} />
               </div>
 
               {visibleDevices.length === 0 ? (
                 <div className="pre admin-gap-top-md">
-                  {deviceQuery.trim() ? "Ничего не найдено." : "Устройств нет."}
+                  {deviceQuery.trim() ? t("admin.trial.devices.not_found") : t("admin.trial.devices.empty")}
                 </div>
               ) : (
                 <>
@@ -427,24 +429,24 @@ export function TrialProtectionSection() {
                           </div>
                         </div>
                         <div className="admin-rowActions admin-rowActions--compact">
-                          <button className="btn" type="button" onClick={() => setOpenedDevice(item)}>Открыть</button>
+                          <button className="btn" type="button" onClick={() => setOpenedDevice(item)}>{t("common.open")}</button>
                           {Number(item.is_blocked ?? 0) === 1 ? (
                             <button className="btn" type="button"
                               disabled={unblockingDevice === item.device_token}
                               onClick={() => void unblockDevice(item.device_token)}>
-                              {unblockingDevice === item.device_token ? "Снятие…" : "Разблокировать"}
+                              {unblockingDevice === item.device_token ? t("admin.trial.action.unblocking") : t("admin.trial.action.unblock")}
                             </button>
                           ) : (
                             <button className="btn" type="button"
                               disabled={blockingDevice === item.device_token}
                               onClick={() => void blockDevice(item.device_token)}>
-                              {blockingDevice === item.device_token ? "Блок…" : "Заблокировать"}
+                              {blockingDevice === item.device_token ? t("admin.trial.action.blocking") : t("admin.trial.action.block")}
                             </button>
                           )}
                           <button className="btn" type="button"
                             disabled={resettingDevice === item.device_token}
                             onClick={() => void resetTrial(item.device_token)}>
-                            {resettingDevice === item.device_token ? "Сброс…" : "Сбросить trial"}
+                            {resettingDevice === item.device_token ? t("admin.trial.action.resetting") : t("admin.trial.action.reset_trial")}
                           </button>
                         </div>
                       </div>
@@ -454,13 +456,13 @@ export function TrialProtectionSection() {
                   {filteredDevices.length > DEVICES_PER_PAGE && (
                     <div className="actions actions--4 admin-gap-top-md">
                       <button className="btn" type="button"
-                        onClick={() => setDevicesPage(1)} disabled={devicesPage === 1}>« Первая</button>
+                        onClick={() => setDevicesPage(1)} disabled={devicesPage === 1}>{t("admin.trial.action.first")}</button>
                       <button className="btn" type="button"
-                        onClick={() => setDevicesPage((p) => Math.max(1, p - 1))} disabled={devicesPage === 1}>‹ Назад</button>
-                      <div className="pre" style={{ margin: 0 }}>Стр. {devicesPage} / {totalDevicesPages} · {filteredDevices.length}</div>
+                        onClick={() => setDevicesPage((p) => Math.max(1, p - 1))} disabled={devicesPage === 1}>{t("admin.trial.action.prev")}</button>
+                      <div className="pre" style={{ margin: 0 }}>{t("admin.trial.page")} {devicesPage} / {totalDevicesPages} · {filteredDevices.length}</div>
                       <button className="btn" type="button"
                         onClick={() => setDevicesPage((p) => Math.min(totalDevicesPages, p + 1))}
-                        disabled={devicesPage === totalDevicesPages}>Вперёд ›</button>
+                        disabled={devicesPage === totalDevicesPages}>{t("admin.trial.action.next")}</button>
                     </div>
                   )}
                 </>
@@ -472,9 +474,9 @@ export function TrialProtectionSection() {
 
       {/* ── Очистка сети ── */}
       <details className="admin-details admin-gap-top-lg">
-        <summary className="admin-details__summary">Очистка сети / prefix</summary>
+        <summary className="admin-details__summary">{t("admin.trial.network.title")}</summary>
         <div className="admin-cleanupPanel">
-          <p className="admin-sectionHeader__sub">Чистит usage, снимает блокировки, очищает события по сети.</p>
+          <p className="admin-sectionHeader__sub">{t("admin.trial.network.note")}</p>
 
           {prefixes.length > 0 && (
             <div className="list admin-gap-top-md">
@@ -493,7 +495,7 @@ export function TrialProtectionSection() {
                     <button className="btn" type="button"
                       disabled={resettingPrefix === item.ipPrefix}
                       onClick={() => void resetPrefix(item.ipPrefix)}>
-                      {resettingPrefix === item.ipPrefix ? "Очищаю…" : "Очистить"}
+                      {resettingPrefix === item.ipPrefix ? t("admin.trial.network.clearing") : t("admin.trial.network.clear")}
                     </button>
                   </div>
                 </div>
@@ -504,13 +506,13 @@ export function TrialProtectionSection() {
           <div className="admin-gap-top-md">
             <input className="input" type="text" value={networkInput}
               onChange={(e) => setNetworkInput(e.target.value)}
-              placeholder="109.247.173.185 или 109.247.173" />
+              placeholder={t("admin.trial.network.ph")} />
           </div>
           <div className="actions actions--1 admin-gap-top-md">
             <button className="btn btn--primary" type="button"
               disabled={Boolean(resettingPrefix) || !networkInput.trim()}
               onClick={() => void resetPrefix(networkInput)}>
-              {resettingPrefix === networkInput.trim() ? "Очищаю сеть…" : "Очистить сеть / prefix"}
+              {resettingPrefix === networkInput.trim() ? t("admin.trial.network.clearing_network") : t("admin.trial.network.clear_network")}
             </button>
           </div>
         </div>
@@ -520,19 +522,19 @@ export function TrialProtectionSection() {
       <div className="card admin-gap-top-lg">
         <div className="card__body">
           <AdminSectionHeader
-            kicker="Events"
-            title="Последние события"
-            subtitle="Диагностика и журнал срабатываний."
+            kicker={t("admin.trial.events.kicker")}
+            title={t("admin.trial.events.title")}
+            subtitle={t("admin.trial.events.subtitle")}
             actions={
               <>
                 <button className="btn" type="button"
                   onClick={() => { setEventsExpanded((v) => !v); if (eventsExpanded) setEventsShowAll(false); }}>
-                  {eventsExpanded ? "Скрыть" : "Показать"}
+                  {eventsExpanded ? t("admin.trial.events.hide") : t("admin.trial.events.show")}
                 </button>
                 {eventsExpanded && (
                   <button className="btn btn--danger" type="button"
                     onClick={() => void clearEvents()} disabled={clearingEvents}>
-                    {clearingEvents ? "Очищаю…" : "Очистить журнал"}
+                    {clearingEvents ? t("admin.trial.network.clearing") : t("admin.trial.events.clear")}
                   </button>
                 )}
               </>
@@ -540,11 +542,11 @@ export function TrialProtectionSection() {
           />
 
           {!eventsExpanded ? (
-            <div className="pre admin-gap-top-md">События скрыты. Записей: {sortedEvents.length}.</div>
+            <div className="pre admin-gap-top-md">{t("admin.trial.events.hidden", { n: sortedEvents.length })}</div>
           ) : loading ? (
             <div className="list admin-gap-top-md"><div className="skeleton h1" /><div className="skeleton p" /></div>
           ) : visibleEvents.length === 0 ? (
-            <div className="pre admin-gap-top-md">Событий пока нет.</div>
+            <div className="pre admin-gap-top-md">{t("admin.trial.events.empty")}</div>
           ) : (
             <>
               <div className="list admin-gap-top-md">
@@ -568,7 +570,7 @@ export function TrialProtectionSection() {
               {sortedEvents.length > EVENTS_PREVIEW_COUNT && (
                 <div className="actions actions--1 admin-gap-top-md">
                   <button className="btn" type="button" onClick={() => setEventsShowAll((v) => !v)}>
-                    {eventsShowAll ? "Показать только последние 5" : `Показать все (${sortedEvents.length})`}
+                    {eventsShowAll ? t("admin.trial.events.show_preview") : t("admin.trial.events.show_all", { n: sortedEvents.length })}
                   </button>
                 </div>
               )}
@@ -593,14 +595,14 @@ export function TrialProtectionSection() {
               <>
                 <div className="list">
                   {[
-                    { title: "Решение",    value: openedEvent.decision,      side: renderDecisionChip(openedEvent.decision) },
-                    { title: "Причина",    value: openedEvent.reason || "—" },
-                    { title: "Устройство", value: openedEvent.device_token || "—", cls: "feed__fulltext" },
+                    { title: t("admin.trial.event.decision"), value: openedEvent.decision,      side: renderDecisionChip(openedEvent.decision) },
+                    { title: t("admin.trial.event.reason"),   value: openedEvent.reason || "—" },
+                    { title: t("admin.trial.event.device"),   value: openedEvent.device_token || "—", cls: "feed__fulltext" },
                     { title: "IP",         value: openedEvent.ip || "—" },
                     { title: "User ID",    value: String(openedEvent.user_id ?? "—") },
                     { title: "Service ID", value: String(serviceId ?? "—") },
                     { title: "Trial group", value: String(trialGroup ?? "—") },
-                    { title: "Период",     value: String(periodHuman ?? "—") },
+                    { title: t("admin.trial.event.period"), value: String(periodHuman ?? "—") },
                     { title: "Meta JSON",  value: openedEvent.meta_json || "—", cls: "feed__fulltext" },
                   ].map(({ title, value, side, cls }) => (
                     <div key={title} className="list__item admin-tightItem">
@@ -613,8 +615,8 @@ export function TrialProtectionSection() {
                   ))}
                 </div>
                 <div className="actions actions--2 admin-gap-top-lg">
-                  <button className="btn" type="button" onClick={() => copyText(openedEvent.device_token || "")}>Скопировать device</button>
-                  <button className="btn" type="button" onClick={() => copyText(openedEvent.meta_json || "")}>Скопировать meta</button>
+                  <button className="btn" type="button" onClick={() => copyText(openedEvent.device_token || "")}>{t("admin.trial.event.copy_device")}</button>
+                  <button className="btn" type="button" onClick={() => copyText(openedEvent.meta_json || "")}>{t("admin.trial.event.copy_meta")}</button>
                 </div>
               </>
             );
@@ -633,8 +635,8 @@ export function TrialProtectionSection() {
             {[
               { title: "Device token",          value: openedDevice.device_token, cls: "feed__fulltext" },
               { title: "User ID",               value: String(openedDevice.last_user_id ?? openedDevice.trial_user_id ?? "—") },
-              { title: "Статус",                value: `manual block: ${Number(openedDevice.is_blocked ?? 0) === 1 ? "yes" : "no"}` },
-              { title: "Последний trial usage", value: formatDateTime(openedDevice.last_trial_used_at) },
+              { title: t("admin.trial.device.status"),                value: `manual block: ${Number(openedDevice.is_blocked ?? 0) === 1 ? "yes" : "no"}` },
+              { title: t("admin.trial.device.last_usage"), value: formatDateTime(openedDevice.last_trial_used_at) },
             ].map(({ title, value, cls }) => (
               <div key={title} className="list__item admin-tightItem">
                 <div className="list__main">
@@ -652,7 +654,7 @@ export function TrialProtectionSection() {
               </div>
             </div>
             <details className="admin-details admin-gap-top-sm">
-              <summary className="admin-details__summary">Дополнительные данные</summary>
+              <summary className="admin-details__summary">{t("admin.trial.device.extra")}</summary>
               <div className="list admin-gap-top-sm">
                 {[
                   { title: "First seen",  value: formatDateTime(openedDevice.first_seen_at) },
@@ -673,19 +675,19 @@ export function TrialProtectionSection() {
 
           <div className="actions actions--2 admin-gap-top-lg">
             <button className="btn" type="button" onClick={() => copyText(openedDevice.device_token)}>
-              Скопировать token
+              {t("admin.trial.device.copy_token")}
             </button>
             {Number(openedDevice.is_blocked ?? 0) === 1 ? (
               <button className="btn" type="button"
                 disabled={unblockingDevice === openedDevice.device_token}
                 onClick={() => void unblockDevice(openedDevice.device_token)}>
-                {unblockingDevice === openedDevice.device_token ? "Снятие…" : "Разблокировать"}
+                {unblockingDevice === openedDevice.device_token ? t("admin.trial.action.unblocking") : t("admin.trial.action.unblock")}
               </button>
             ) : (
               <button className="btn" type="button"
                 disabled={blockingDevice === openedDevice.device_token}
                 onClick={() => void blockDevice(openedDevice.device_token)}>
-                {blockingDevice === openedDevice.device_token ? "Блок…" : "Заблокировать"}
+                {blockingDevice === openedDevice.device_token ? t("admin.trial.action.blocking") : t("admin.trial.action.block")}
               </button>
             )}
           </div>
@@ -693,12 +695,12 @@ export function TrialProtectionSection() {
             <button className="btn" type="button"
               disabled={resettingDevice === openedDevice.device_token}
               onClick={() => void resetTrial(openedDevice.device_token)}>
-              {resettingDevice === openedDevice.device_token ? "Сброс…" : "Сбросить trial"}
+              {resettingDevice === openedDevice.device_token ? t("admin.trial.action.resetting") : t("admin.trial.action.reset_trial")}
             </button>
             <button className="btn btn--danger" type="button"
               disabled={deletingDevice === openedDevice.device_token}
               onClick={() => void deleteDevice(openedDevice.device_token)}>
-              {deletingDevice === openedDevice.device_token ? "Удаление…" : "Удалить устройство"}
+              {deletingDevice === openedDevice.device_token ? t("admin.trial.action.deleting") : t("admin.trial.action.delete_device")}
             </button>
           </div>
         </ModalShell>

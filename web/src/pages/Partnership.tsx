@@ -8,6 +8,7 @@ import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { apiFetch } from "../shared/api/client";
 import { PageBackButton } from "../shared/ui/PageBackButton";
 import { toast } from "../shared/ui/toast";
+import { useI18n } from "../shared/i18n";
 import {
   ATTACHMENT_ACCEPT,
   buildMessageFormData,
@@ -40,54 +41,31 @@ type UserTicket = {
 };
 
 const PROPOSAL_TYPES = [
-  { key: "blogger", label: "Блогер / автор" },
-  { key: "channel", label: "Telegram-канал / сообщество" },
-  { key: "youtube", label: "YouTube / Twitch" },
-  { key: "site", label: "Сайт / проект" },
-  { key: "other", label: "Другое" },
+  { key: "blogger", labelKey: "partnership.type.blogger" },
+  { key: "channel", labelKey: "partnership.type.channel" },
+  { key: "youtube", labelKey: "partnership.type.youtube" },
+  { key: "site", labelKey: "partnership.type.site" },
+  { key: "other", labelKey: "partnership.type.other" },
 ];
 
-const OFFERS = [
-  "🔗 индивидуальную ссылку",
-  "🎁 промокод или специальное предложение",
-  "📊 статистику по переходам и пользователям",
-  "💰 партнёрское вознаграждение",
-  "⚙️ индивидуальные условия",
+const OFFER_KEYS = [
+  { icon: "🔗", key: "partnership.offer.individual_link" },
+  { icon: "🎁", key: "partnership.offer.promo" },
+  { icon: "📊", key: "partnership.offer.stats" },
+  { icon: "💰", key: "partnership.offer.reward" },
+  { icon: "⚙️", key: "partnership.offer.custom" },
 ];
 
-const PRINCIPLES = [
-  "честная аудитория",
-  "прозрачная статистика",
-  "понятные условия",
-  "без накруток и ботов",
-  "без сомнительных схем с предоплатой",
+const PRINCIPLE_KEYS = [
+  "partnership.principle.audience",
+  "partnership.principle.stats",
+  "partnership.principle.terms",
+  "partnership.principle.no_bots",
+  "partnership.principle.no_prepay",
 ];
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
-}
-
-function fmt(value?: string | null) {
-  if (!value) return "—";
-  const iso = value.includes("T") ? value : `${value.replace(" ", "T")}Z`;
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? value : d.toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
-}
-
-function Bubble({ message }: { message: TicketMessage }) {
-  const isUser = message.authorType === "user";
-  const isSystem = message.authorType === "system";
-  const cls = isSystem ? "supportMsg supportMsg--system" : isUser ? "supportMsg supportMsg--user" : "supportMsg supportMsg--staff";
-  return (
-    <div className={cls}>
-      <div className="supportMsg__meta">
-        <strong>{isUser ? "Вы" : isSystem ? "Система" : "Команда Shpun"}</strong>
-        <span className="supportMsg__time">{fmt(message.createdAt)}</span>
-      </div>
-      {message.text ? <div className="supportMsg__text">{message.text}</div> : null}
-      <AttachmentList attachments={message.attachments} />
-    </div>
-  );
 }
 
 type Form = {
@@ -101,6 +79,7 @@ type Form = {
 const EMPTY_FORM: Form = { proposalType: "channel", platformUrl: "", audienceSize: "", offer: "", comment: "" };
 
 export function Partnership() {
+  const { t, formatDate } = useI18n();
   const [view, setView] = useState<"conditions" | "form" | "summary" | "list" | "detail">("conditions");
   const [form, setForm] = useState<Form>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
@@ -114,6 +93,32 @@ export function Partnership() {
   const [sending, setSending] = useState(false);
   const threadRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  function fmt(value?: string | null) {
+    if (!value) return "—";
+    const iso = value.includes("T") ? value : `${value.replace(" ", "T")}Z`;
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime())
+      ? value
+      : formatDate(d, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  }
+
+  function Bubble({ message }: { message: TicketMessage }) {
+    const isUser = message.authorType === "user";
+    const isSystem = message.authorType === "system";
+    const cls = isSystem ? "supportMsg supportMsg--system" : isUser ? "supportMsg supportMsg--user" : "supportMsg supportMsg--staff";
+    const author = isUser ? t("support.author.you") : isSystem ? t("support.author.system") : t("partnership.team");
+    return (
+      <div className={cls}>
+        <div className="supportMsg__meta">
+          <strong>{author}</strong>
+          <span className="supportMsg__time">{fmt(message.createdAt)}</span>
+        </div>
+        {message.text ? <div className="supportMsg__text">{message.text}</div> : null}
+        <AttachmentList attachments={message.attachments} />
+      </div>
+    );
+  }
 
   useEffect(() => {
     if (view === "list") void loadList();
@@ -131,7 +136,7 @@ export function Partnership() {
       const r = await apiFetch<{ ok: true; items: UserTicket[] }>("/support/tickets?kind=partnership", { method: "GET" });
       setTickets(r.items ?? []);
     } catch (e) {
-      setError(errorMessage(e, "Не удалось загрузить предложения."));
+      setError(errorMessage(e, t("partnership.load_failed")));
     } finally {
       setLoading(false);
     }
@@ -151,11 +156,11 @@ export function Partnership() {
           comment: form.comment.trim() || null,
         },
       });
-      toast.success("Предложение отправлено", { description: "Мы свяжемся с вами." });
+      toast.success(t("partnership.sent"), { description: t("partnership.sent_desc") });
       setForm(EMPTY_FORM);
       setView("list");
     } catch (e) {
-      setError(errorMessage(e, "Не удалось отправить предложение."));
+      setError(errorMessage(e, t("partnership.submit_failed")));
     } finally {
       setSubmitting(false);
     }
@@ -168,7 +173,7 @@ export function Partnership() {
       setReplyText("");
       setView("detail");
     } catch (e) {
-      setError(errorMessage(e, "Не удалось открыть предложение."));
+      setError(errorMessage(e, t("partnership.open_failed")));
     }
   }
 
@@ -188,7 +193,7 @@ export function Partnership() {
       setPending([]);
       setReplyText("");
     } catch (e) {
-      setError(errorMessage(e, "Не удалось отправить сообщение."));
+      setError(errorMessage(e, t("support.send_failed")));
     } finally {
       setSending(false);
     }
@@ -211,55 +216,43 @@ export function Partnership() {
   }
 
   const formValid = form.platformUrl.trim().length >= 2 && form.offer.trim().length >= 10;
+  const statusLabel = (status?: string) =>
+    status === "closed" ? t("partnership.status.closed") : t("partnership.status.open");
 
   if (view === "conditions") {
     return (
       <div className="section miniPage support-page">
-        <PageBackButton onClick={() => window.history.back()} label="Назад" />
+        <PageBackButton onClick={() => window.history.back()} label={t("common.back")} />
         <div className="card miniPage__hero">
           <div className="card__body">
-            <h1 className="h1">🤝 Реклама и сотрудничество</h1>
-            <p className="p">Мы открыты к разным форматам сотрудничества.</p>
-            <p className="p admin-gap-top-sm">
-              Это могут быть блогеры, каналы, сайты, сообщества, сервисы, проекты или любые другие площадки
-              и идеи. Если вы видите, как можем быть полезны друг другу — присылайте предложение.
-            </p>
-            <p className="p admin-gap-top-sm">
-              Особенно хорошо подходят проекты с живой аудиторией, которой могут быть интересны VPN, технологии,
-              приватность, роутеры, gaming, YouTube/Twitch, удалённая работа и похожие темы. Но этим список
-              не ограничивается.
-            </p>
+            <h1 className="h1">🤝 {t("partnership.title")}</h1>
+            <p className="p">{t("partnership.intro1")}</p>
+            <p className="p admin-gap-top-sm">{t("partnership.intro2")}</p>
+            <p className="p admin-gap-top-sm">{t("partnership.intro3")}</p>
           </div>
         </div>
 
         <div className="card admin-gap-top-md">
           <div className="card__body">
-            <h2 className="h2">Что можем предложить</h2>
+            <h2 className="h2">{t("partnership.offers_title")}</h2>
             <ul className="supportBullets supportBullets--plain">
-              {OFFERS.map((o) => <li key={o}>{o}</li>)}
+              {OFFER_KEYS.map((o) => <li key={o.key}>{o.icon} {t(o.key)}</li>)}
             </ul>
 
-            <h2 className="h2 admin-gap-top-md">Для нас главное</h2>
+            <h2 className="h2 admin-gap-top-md">{t("partnership.principles_title")}</h2>
             <ul className="supportBullets supportBullets--plain">
-              {PRINCIPLES.map((p) => <li key={p}>✅ {p}</li>)}
+              {PRINCIPLE_KEYS.map((key) => <li key={key}>✅ {t(key)}</li>)}
             </ul>
 
-            <p className="p admin-gap-top-md">
-              Формат оплаты обсуждаем индивидуально: после размещения, по результату, RevShare или другая
-              понятная модель.
-            </p>
-
-            <p className="p admin-gap-top-md">
-              Даже если ваш формат не указан выше — всё равно отправляйте предложение. Рассматриваем любые
-              адекватные варианты сотрудничества.
-            </p>
+            <p className="p admin-gap-top-md">{t("partnership.payment_note")}</p>
+            <p className="p admin-gap-top-md">{t("partnership.any_format_note")}</p>
 
             <div className="actions actions--2 admin-gap-top-md">
               <button className="btn btn--primary" type="button" onClick={() => { setView("form"); setError(""); }}>
-                🤝 Предложить сотрудничество
+                🤝 {t("partnership.cta")}
               </button>
               <button className="btn" type="button" onClick={() => setView("list")}>
-                Мои предложения
+                {t("partnership.my")}
               </button>
             </div>
           </div>
@@ -271,47 +264,47 @@ export function Partnership() {
   if (view === "form") {
     return (
       <div className="section miniPage support-page">
-        <PageBackButton onClick={() => setView("conditions")} label="К условиям" />
+        <PageBackButton onClick={() => setView("conditions")} label={t("partnership.to_conditions")} />
         <div className="card">
           <div className="card__body">
-            <h1 className="h1">Предложение</h1>
+            <h1 className="h1">{t("partnership.form_title")}</h1>
 
             <div className="admin-gap-top-md">
-              <div className="kicker">Тип</div>
+              <div className="kicker">{t("partnership.type")}</div>
               <div className="supportChips">
-                {PROPOSAL_TYPES.map((t) => (
-                  <button key={t.key} className={`chipBtn${form.proposalType === t.key ? " chipBtn--active" : ""}`} type="button" onClick={() => setForm((p) => ({ ...p, proposalType: t.key }))}>
-                    {t.label}
+                {PROPOSAL_TYPES.map((item) => (
+                  <button key={item.key} className={`chipBtn${form.proposalType === item.key ? " chipBtn--active" : ""}`} type="button" onClick={() => setForm((p) => ({ ...p, proposalType: item.key }))}>
+                    {t(item.labelKey)}
                   </button>
                 ))}
               </div>
             </div>
 
             <label className="field admin-gap-top-md">
-              <span className="field__label">Площадка (ссылка / @username)</span>
-              <input className="input" value={form.platformUrl} maxLength={300} placeholder="@example или https://..." onChange={(e) => setForm((p) => ({ ...p, platformUrl: e.target.value }))} />
+              <span className="field__label">{t("partnership.platform_label")}</span>
+              <input className="input" value={form.platformUrl} maxLength={300} placeholder={t("partnership.platform_ph")} onChange={(e) => setForm((p) => ({ ...p, platformUrl: e.target.value }))} />
             </label>
 
             <label className="field admin-gap-top-sm">
-              <span className="field__label">Аудитория (примерно, по желанию)</span>
-              <input className="input" value={form.audienceSize} maxLength={100} placeholder="~15 000" onChange={(e) => setForm((p) => ({ ...p, audienceSize: e.target.value }))} />
+              <span className="field__label">{t("partnership.audience_label")}</span>
+              <input className="input" value={form.audienceSize} maxLength={100} placeholder={t("partnership.audience_ph")} onChange={(e) => setForm((p) => ({ ...p, audienceSize: e.target.value }))} />
             </label>
 
             <label className="field admin-gap-top-sm">
-              <span className="field__label">Предложение: что предлагаете, формат, оплата</span>
-              <textarea className="input supportDetail__input" value={form.offer} maxLength={2000} placeholder="Опишите площадку, формат размещения и ожидаемую модель оплаты" onChange={(e) => setForm((p) => ({ ...p, offer: e.target.value }))} />
+              <span className="field__label">{t("partnership.offer_label")}</span>
+              <textarea className="input supportDetail__input" value={form.offer} maxLength={2000} placeholder={t("partnership.offer_ph")} onChange={(e) => setForm((p) => ({ ...p, offer: e.target.value }))} />
             </label>
 
             <label className="field admin-gap-top-sm">
-              <span className="field__label">Комментарий (по желанию)</span>
+              <span className="field__label">{t("partnership.comment_label")}</span>
               <textarea className="input supportDetail__input" style={{ minHeight: 64 }} value={form.comment} maxLength={500} onChange={(e) => setForm((p) => ({ ...p, comment: e.target.value }))} />
             </label>
 
             {error ? <div className="pre admin-gap-top-md">{error}</div> : null}
 
             <div className="actions actions--2 admin-gap-top-md">
-              <button className="btn btn--primary" type="button" disabled={!formValid} onClick={() => setView("summary")}>Проверить заявку</button>
-              <button className="btn" type="button" onClick={() => setView("conditions")}>Отмена</button>
+              <button className="btn btn--primary" type="button" disabled={!formValid} onClick={() => setView("summary")}>{t("partnership.check")}</button>
+              <button className="btn" type="button" onClick={() => setView("conditions")}>{t("common.cancel")}</button>
             </div>
           </div>
         </div>
@@ -320,25 +313,25 @@ export function Partnership() {
   }
 
   if (view === "summary") {
-    const typeLabel = PROPOSAL_TYPES.find((t) => t.key === form.proposalType)?.label ?? form.proposalType;
+    const typeLabel = t(PROPOSAL_TYPES.find((item) => item.key === form.proposalType)?.labelKey ?? "partnership.type.other");
     return (
       <div className="section miniPage support-page">
-        <PageBackButton onClick={() => setView("form")} label="Изменить" />
+        <PageBackButton onClick={() => setView("form")} label={t("partnership.edit")} />
         <div className="card">
           <div className="card__body">
-            <h1 className="h1">Проверить заявку</h1>
+            <h1 className="h1">{t("partnership.summary_title")}</h1>
             <div className="supportDiag__grid admin-gap-top-md">
-              <div className="supportDiag__cell"><div className="supportDiag__label">Тип</div><div className="supportDiag__value">{typeLabel}</div></div>
-              <div className="supportDiag__cell"><div className="supportDiag__label">Площадка</div><div className="supportDiag__value">{form.platformUrl}</div></div>
-              <div className="supportDiag__cell"><div className="supportDiag__label">Аудитория</div><div className="supportDiag__value">{form.audienceSize || "—"}</div></div>
+              <div className="supportDiag__cell"><div className="supportDiag__label">{t("partnership.summary.type")}</div><div className="supportDiag__value">{typeLabel}</div></div>
+              <div className="supportDiag__cell"><div className="supportDiag__label">{t("partnership.summary.platform")}</div><div className="supportDiag__value">{form.platformUrl}</div></div>
+              <div className="supportDiag__cell"><div className="supportDiag__label">{t("partnership.summary.audience")}</div><div className="supportDiag__value">{form.audienceSize || "—"}</div></div>
             </div>
             <div className="admin-gap-top-sm">
-              <div className="supportDiag__label">Предложение</div>
+              <div className="supportDiag__label">{t("partnership.summary.offer")}</div>
               <div className="supportDiag__value" style={{ whiteSpace: "pre-wrap" }}>{form.offer}</div>
             </div>
             {form.comment ? (
               <div className="admin-gap-top-sm">
-                <div className="supportDiag__label">Комментарий</div>
+                <div className="supportDiag__label">{t("partnership.summary.comment")}</div>
                 <div className="supportDiag__value" style={{ whiteSpace: "pre-wrap" }}>{form.comment}</div>
               </div>
             ) : null}
@@ -347,12 +340,12 @@ export function Partnership() {
 
             <div className="actions actions--2 admin-gap-top-md">
               <button className="btn btn--primary" type="button" disabled={submitting} onClick={() => void submit()}>
-                {submitting ? "Отправляю…" : "Отправить"}
+                {submitting ? t("partnership.submitting") : t("partnership.submit")}
               </button>
-              <button className="btn" type="button" disabled={submitting} onClick={() => setView("form")}>Изменить</button>
+              <button className="btn" type="button" disabled={submitting} onClick={() => setView("form")}>{t("partnership.edit")}</button>
             </div>
             <div className="actions actions--1 admin-gap-top-sm">
-              <button className="btn btn--soft" type="button" disabled={submitting} onClick={() => { setForm(EMPTY_FORM); setView("conditions"); }}>Отмена</button>
+              <button className="btn btn--soft" type="button" disabled={submitting} onClick={() => { setForm(EMPTY_FORM); setView("conditions"); }}>{t("common.cancel")}</button>
             </div>
           </div>
         </div>
@@ -363,13 +356,13 @@ export function Partnership() {
   if (view === "list") {
     return (
       <div className="section miniPage support-page">
-        <PageBackButton onClick={() => setView("conditions")} label="К условиям" />
+        <PageBackButton onClick={() => setView("conditions")} label={t("partnership.to_conditions")} />
         <div className="card miniPage__hero">
           <div className="card__body">
-            <h1 className="h1">Мои предложения</h1>
+            <h1 className="h1">{t("partnership.my")}</h1>
             <div className="actions actions--2 miniPage__actions">
-              <button className="btn btn--primary" type="button" onClick={() => { setView("form"); setError(""); }}>➕ Новое предложение</button>
-              <button className="btn" type="button" onClick={() => void loadList()} disabled={loading}>{loading ? "Обновляю…" : "Обновить"}</button>
+              <button className="btn btn--primary" type="button" onClick={() => { setView("form"); setError(""); }}>➕ {t("partnership.new")}</button>
+              <button className="btn" type="button" onClick={() => void loadList()} disabled={loading}>{loading ? t("common.refreshing") : t("common.refresh")}</button>
             </div>
           </div>
         </div>
@@ -381,21 +374,21 @@ export function Partnership() {
             {loading ? (
               <div className="list"><div className="skeleton h1" /><div className="skeleton p" /></div>
             ) : tickets.length === 0 ? (
-              <p className="p">Предложений пока нет.</p>
+              <p className="p">{t("partnership.empty")}</p>
             ) : (
               <div className="list">
-                {tickets.map((t) => (
-                  <div key={t.id} className="list__item is-clickable admin-tightItem" role="button" tabIndex={0}
-                    onClick={() => void openTicket(t.id)}
-                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") void openTicket(t.id); }}>
+                {tickets.map((ticket) => (
+                  <div key={ticket.id} className="list__item is-clickable admin-tightItem" role="button" tabIndex={0}
+                    onClick={() => void openTicket(ticket.id)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") void openTicket(ticket.id); }}>
                     <div className="list__main">
                       <div className="list__title">
-                        {t.unread ? <span className="supportUnreadDot" /> : null}
-                        #{t.publicNo} · {t.subject || "Предложение"}
+                        {ticket.unread ? <span className="supportUnreadDot" aria-label={t("support.unread")} /> : null}
+                        #{ticket.publicNo} · {ticket.subject || t("partnership.default_subject")}
                       </div>
-                      <div className="list__sub" style={{ marginTop: 6 }}>{fmt(t.lastMessageAt)}</div>
+                      <div className="list__sub" style={{ marginTop: 6 }}>{fmt(ticket.lastMessageAt)}</div>
                     </div>
-                    <div className="list__side"><span className="chip chip--soft">{t.status === "closed" ? "Закрыто" : "Открыто"}</span></div>
+                    <div className="list__side"><span className="chip chip--soft">{statusLabel(ticket.status)}</span></div>
                   </div>
                 ))}
               </div>
@@ -409,12 +402,12 @@ export function Partnership() {
   // detail
   return (
     <div className="section miniPage support-page">
-      <PageBackButton onClick={() => { setView("list"); void loadList(); }} label="К предложениям" />
+      <PageBackButton onClick={() => { setView("list"); void loadList(); }} label={t("partnership.to_proposals")} />
       <div className="card">
         <div className="card__body">
           <div className="supportDetail__headerRow">
             <h1 className="h1">#{opened?.publicNo}</h1>
-            <span className="chip chip--soft">{opened?.status === "closed" ? "Закрыто" : "Открыто"}</span>
+            <span className="chip chip--soft">{statusLabel(opened?.status)}</span>
           </div>
 
           <div className="supportDetail__thread" ref={threadRef}>
@@ -424,23 +417,23 @@ export function Partnership() {
           {error ? <div className="pre admin-gap-top-sm">{error}</div> : null}
 
           {opened?.status === "closed" ? (
-            <div className="supportClosedNotice">🔒 Обращение закрыто</div>
+            <div className="supportClosedNotice">🔒 {t("support.closed_notice")}</div>
           ) : (
             <div className="supportDetail__composer">
               <PendingFiles files={pending} onRemove={removePending} disabled={sending} />
               <div className="composerRow">
-                <button className="composerAttach" type="button" aria-label="Прикрепить файл" disabled={sending || pending.length >= 5} onClick={() => fileInputRef.current?.click()}>
+                <button className="composerAttach" type="button" aria-label={t("support.attach")} disabled={sending || pending.length >= 5} onClick={() => fileInputRef.current?.click()}>
                   📎
                 </button>
                 <input ref={fileInputRef} type="file" multiple accept={ATTACHMENT_ACCEPT} style={{ display: "none" }} onChange={onPickFiles} />
-                <textarea className="input supportDetail__input" value={replyText} maxLength={4000} disabled={sending} placeholder="Ваше сообщение" onChange={(e) => setReplyText(e.target.value)} />
+                <textarea className="input supportDetail__input" value={replyText} maxLength={4000} disabled={sending} placeholder={t("support.reply_ph")} onChange={(e) => setReplyText(e.target.value)} />
               </div>
               <div className="actions actions--1 admin-gap-top-sm">
                 <button className="btn btn--primary" type="button" disabled={sending || (replyText.trim().length < 2 && pending.length === 0)} onClick={() => void sendReply()}>
-                  {sending ? "Отправляю…" : "Отправить"}
+                  {sending ? t("common.sending") : t("common.send")}
                 </button>
               </div>
-              <div className="composerHint">Вложения хранятся до 180 дней и затем автоматически удаляются.</div>
+              <div className="composerHint">{t("support.retention")}</div>
             </div>
           )}
         </div>

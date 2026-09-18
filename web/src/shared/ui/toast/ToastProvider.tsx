@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
 import { toastStore } from "./toast";
 import type { ToastItem } from "./toast";
+import { useI18n } from "../../i18n";
 import "./toast.css";
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
+  const { t } = useI18n();
   const [items, setItems] = useState<ToastItem[]>([]);
 
   // timers + pause/resume bookkeeping
@@ -88,32 +90,32 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     <>
       {children}
       <div className="toast-viewport" aria-live="polite" aria-relevant="additions removals">
-        {items.map((t) => (
+        {items.map((item) => (
           <div
-            key={t.id}
-            className={`toast-card toast-${t.variant}`}
+            key={item.id}
+            className={`toast-card toast-${item.variant}`}
             role="status"
-            onMouseEnter={() => pause(t.id)}
-            onMouseLeave={() => resume(t.id)}
+            onMouseEnter={() => pause(item.id)}
+            onMouseLeave={() => resume(item.id)}
           >
             <div className="toast-bar" />
             <div className="toast-body">
-              <div className="toast-title">{t.title}</div>
-              {t.description ? <div className="toast-desc">{t.description}</div> : null}
-              {t.actionLabel && t.onAction ? (
+              <div className="toast-title">{item.title}</div>
+              {item.description ? <div className="toast-desc">{item.description}</div> : null}
+              {item.actionLabel && item.onAction ? (
                 <button
                   className="toast-action"
                   type="button"
                   onClick={() => {
-                    close(t.id);
-                    t.onAction?.();
+                    close(item.id);
+                    item.onAction?.();
                   }}
                 >
-                  {t.actionLabel}
+                  {item.actionLabel}
                 </button>
               ) : null}
             </div>
-            <button className="toast-close" onClick={() => close(t.id)} aria-label="Закрыть">
+            <button className="toast-close" onClick={() => close(item.id)} aria-label={t("common.close")}>
               ×
             </button>
           </div>
