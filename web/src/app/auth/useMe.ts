@@ -1,4 +1,4 @@
-﻿// web/src/app/auth/useMe.ts
+// web/src/app/auth/useMe.ts
 
 import { useEffect, useState } from "react";
 import { apiFetch, isNotAuthenticated } from "../../shared/api/client";
@@ -67,6 +67,10 @@ let state: State = {
   lastFetchedAt: 0,
 };
 
+// Monotonic epoch so an in-flight `/me` can never resurrect a session that was
+// cleared by logout. `clearMe()` bumps it; stale responses are ignored.
+let epoch = 0;
+
 type Listener = (s: State) => void;
 const listeners = new Set<Listener>();
 
@@ -93,8 +97,36 @@ function hasFreshAuthPending(): boolean {
 
 let inFlight: Promise<MeResponse | null> | null = null;
 
+/** Snapshot for non-React consumers and tests. */
+export function getMeState(): State {
+  return state;
+}
+
+/**
+ * Hard reset of the authenticated frontend state.
+ *
+ * Called on logout and whenever the server reports an unauthenticated session.
+ * It immediately drops `me` (and therefore admin flags), marks the session as
+ * required and invalidates any in-flight `/me` request so it cannot restore the
+ * stale authenticated shell.
+ */
+export function clearMe(): void {
+  epoch += 1;
+  inFlight = null;
+  state = {
+    me: null,
+    loading: false,
+    error: null,
+    authRequired: true,
+    lastFetchedAt: Date.now(),
+  };
+  emit();
+}
+
 async function doFetchMe(): Promise<MeResponse | null> {
   if (inFlight) return inFlight;
+
+  const myEpoch = epoch;
 
   inFlight = (async () => {
     // Если me уже загружен — не показываем лоадер (фоновое обновление).
@@ -104,6 +136,7 @@ async function doFetchMe(): Promise<MeResponse | null> {
 
     try {
       const data = await apiFetch<MeResponse>("/me", { method: "GET" });
+      if (myEpoch !== epoch) return null;
       setState({
         me: data,
         loading: false,
@@ -113,21 +146,34 @@ async function doFetchMe(): Promise<MeResponse | null> {
       });
       return data;
     } catch (e: any) {
+      if (myEpoch !== epoch) return null;
+
       const authRequired = isNotAuthenticated(e);
       const err: Error = e instanceof Error ? e : new Error(String(e?.message || "me_failed"));
-      const hasLoadedMeBefore = !!state.me;
 
+      if (authRequired) {
+        // Server explicitly said "not authenticated": never keep a stale `me`.
+        setState({
+          me: null,
+          loading: false,
+          error: err,
+          authRequired: true,
+          lastFetchedAt: Date.now(),
+        });
+        return null;
+      }
+
+      // Transient (network/5xx): keep the previous identity for resilience.
       setState({
-        me: hasLoadedMeBefore ? state.me : null,
+        me: state.me,
         loading: false,
         error: err,
-        authRequired: hasLoadedMeBefore ? false : authRequired,
+        authRequired: state.me ? false : state.authRequired,
         lastFetchedAt: Date.now(),
       });
-
-      return hasLoadedMeBefore ? state.me : null;
+      return state.me;
     } finally {
-      inFlight = null;
+      if (myEpoch === epoch) inFlight = null;
     }
   })();
 

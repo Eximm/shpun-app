@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useMe } from "../app/auth/useMe";
+import { resetAuthenticatedClientState } from "../app/auth/authState";
 import { apiFetch } from "../shared/api/client";
 import type { PasswordSetResponse, UserEmailResponse } from "../shared/api/types";
 import { useI18n } from "../shared/i18n";
@@ -795,6 +796,7 @@ export function Profile() {
         clearTelegramMiniAppSession();
       } catch { /* ignore */ }
       try { await apiFetch("/logout", { method: "POST" }); } catch { /* ignore */ }
+      resetAuthenticatedClientState();
       nav("/login?reason=pwd_changed", { replace: true, state: { from: "/profile" } });
     } catch (e: unknown) {
       const n = normalizeError(e);
@@ -825,7 +827,14 @@ export function Profile() {
         clearTelegramMiniAppSession();
       } catch { /* ignore */ }
       await apiFetch("/logout", { method: "POST" });
-    } finally { setLoggingOut(false); nav("/login", { replace: true }); }
+    } catch { /* ignore */ }
+    finally {
+      // Drop the authenticated client state BEFORE navigating so a stale
+      // `me`, admin flag, bell badge or notification cannot flash on /login.
+      resetAuthenticatedClientState();
+      setLoggingOut(false);
+      nav("/login", { replace: true });
+    }
   }
 
   // PWA

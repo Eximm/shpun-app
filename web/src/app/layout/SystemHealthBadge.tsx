@@ -10,7 +10,6 @@
 import { useEffect, useRef, useState } from "react";
 import { apiFetch } from "../../shared/api/client";
 import { useI18n } from "../../shared/i18n";
-import { useMe } from "../auth/useMe";
 
 type SystemHealthStatus = "ok" | "degraded" | "down" | "unknown";
 
@@ -20,16 +19,15 @@ function isStatus(value: unknown): value is SystemHealthStatus {
 
 export function SystemHealthBadge() {
   const { t, formatDate } = useI18n();
-  const { me } = useMe();
   const [status, setStatus] = useState<SystemHealthStatus>("unknown");
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
 
-  const enabled = Boolean(me);
-
+  // Public endpoint: the badge is shown on the landing/login screen too, so it
+  // must not depend on auth. It never receives server details — only the
+  // aggregated status.
   useEffect(() => {
-    if (!enabled) return;
     let cancelled = false;
 
     async function load() {
@@ -55,7 +53,7 @@ export function SystemHealthBadge() {
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [enabled]);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -74,8 +72,6 @@ export function SystemHealthBadge() {
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);
-
-  if (!enabled) return null;
 
   const safeStatus: SystemHealthStatus = status === "ok" || status === "degraded" || status === "down" ? status : "unknown";
   const label = t(`system_health.${safeStatus}`);

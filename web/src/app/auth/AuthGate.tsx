@@ -3,6 +3,7 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMe, refetchMe } from "./useMe";
+import { resetAuthenticatedClientState } from "./authState";
 import { FirstLoginOnboardingModal } from "./FirstLoginOnboardingModal";
 import { FirstPayBonusModal } from "./FirstPayBonusModal";
 import { useOnboardingPromptSlot } from "../../shared/onboardingPromptCoordinator";
@@ -513,11 +514,22 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!me || !uid) {
       onboardingCheckedForUidRef.current = 0;
+      notifiedRef.current = false;
+      successShownRef.current = false;
       setPushPromptOpen(false);
       setPushPromptBusy(false);
       setPushGuideOpen(false);
     }
   }, [me, uid]);
+
+  // Global 401 handler: any API call reporting a dead session immediately drops
+  // all authenticated client state (identity, admin flags, unread, toasts) so
+  // stale protected screens/callbacks cannot survive the auth transition.
+  useEffect(() => {
+    const onUnauthorized = () => resetAuthenticatedClientState();
+    window.addEventListener("shpun:unauthorized", onUnauthorized);
+    return () => window.removeEventListener("shpun:unauthorized", onUnauthorized);
+  }, []);
 
   // ── Push/install онбординг ────────────────────────────────────────────────
   useEffect(() => {

@@ -3,7 +3,7 @@ import test from "node:test";
 
 const { aggregateHealthStatus } = await import("./health.js");
 
-type Check = { kind: "vpn" | "infra"; online: boolean | null; loadPct: number | null };
+type Check = { kind: "vpn" | "infra"; online: boolean | null; loadPct?: number | null };
 
 function c(kind: "vpn" | "infra", online: boolean | null, loadPct: number | null = null): Check {
   return { kind, online, loadPct };
@@ -21,12 +21,27 @@ test("all online is ok", () => {
   assert.equal(aggregateHealthStatus([c("infra", true), c("vpn", true), c("vpn", true)]), "ok");
 });
 
-test("a single offline VPN node is degraded, never a full outage", () => {
-  assert.equal(aggregateHealthStatus([c("infra", true), c("vpn", true), c("vpn", false)]), "degraded");
+test("high load alone never degrades public health", () => {
+  assert.equal(aggregateHealthStatus([c("infra", true, 96), c("vpn", true, 92)]), "ok");
 });
 
-test("all known nodes offline with no infra is down", () => {
-  assert.equal(aggregateHealthStatus([c("vpn", false), c("vpn", false)]), "down");
+test("a single offline VPN node among several stays ok", () => {
+  assert.equal(
+    aggregateHealthStatus([c("infra", true), c("vpn", true), c("vpn", true), c("vpn", true), c("vpn", false)]),
+    "ok",
+  );
+});
+
+test("a significant share of VPN nodes offline is degraded", () => {
+  assert.equal(aggregateHealthStatus([c("infra", true), c("vpn", true), c("vpn", false)]), "degraded");
+  assert.equal(
+    aggregateHealthStatus([c("infra", true), c("vpn", true), c("vpn", false), c("vpn", false)]),
+    "degraded",
+  );
+});
+
+test("all VPN nodes offline is down even if the account is online", () => {
+  assert.equal(aggregateHealthStatus([c("infra", true), c("vpn", false), c("vpn", false)]), "down");
 });
 
 test("fully offline critical tier is down even if VPN nodes are online", () => {
@@ -41,10 +56,6 @@ test("critical tier with no confirmed state is degraded, not green", () => {
   assert.equal(aggregateHealthStatus([c("infra", null), c("vpn", true)]), "degraded");
 });
 
-test("overloaded node is degraded", () => {
-  assert.equal(aggregateHealthStatus([c("infra", true), c("vpn", true, 90)]), "degraded");
-});
-
-test("healthy nodes with moderate load stay ok", () => {
-  assert.equal(aggregateHealthStatus([c("infra", true, 40), c("vpn", true, 84)]), "ok");
+test("high load does not turn a significant outage into something worse", () => {
+  assert.equal(aggregateHealthStatus([c("infra", false, 10), c("vpn", true, 99)]), "down");
 });

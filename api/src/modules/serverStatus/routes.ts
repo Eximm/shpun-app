@@ -25,12 +25,10 @@ function int(v: unknown, fallback = 0) {
 export async function serverStatusRoutes(app: FastifyInstance) {
   startServerStatusMonitor(() => listMonitoredServers(), app.log);
 
-  // Minimal, public-safe status for the app header badge. Aggregated only:
-  // no hostnames, IPs, exporter URLs, raw metrics or node topology.
-  app.get("/health", async (req, reply) => {
-    const s = getSessionFromRequest(req) as any;
-    if (!s?.shmSessionId) return reply.code(401).send({ ok: false, error: "unauthorized" });
-
+  // Minimal, public-safe status for the app header badge (visible pre-auth).
+  // Aggregated only: no hostnames, IPs, exporter URLs, raw metrics, node
+  // counts or topology. Safe to serve to unauthenticated clients.
+  app.get("/health", async (_req, reply) => {
     const rows = listMonitoredServers();
     const checks = getServerStatusSnapshot(rows);
     if (!getServerStatusMeta().updatedAt) void requestServerStatusRefresh(rows, app.log);

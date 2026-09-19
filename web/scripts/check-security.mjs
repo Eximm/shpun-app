@@ -1,12 +1,8 @@
 #!/usr/bin/env node
-// Lightweight static guard for frontend security invariants.
+// Lightweight static guard for frontend security/state invariants.
 //
-// The real boundary is server-side (see api tests). This script only protects
-// against accidental frontend regressions:
-//   1. SupportBell renders nothing and issues no admin request for non-admins.
-//   2. The header health badge talks ONLY to the public /health endpoint.
-//   3. /admin redirects non-admins instead of rendering the admin shell.
-//   4. The legacy "Бета" badge is gone.
+// The real boundary is server-side (see api tests). This script protects
+// against accidental frontend regressions in the auth/notification layer.
 //
 // It is intentionally simple string matching — no parser, no new dependencies.
 
@@ -41,13 +37,14 @@ function expect(rel, ok, message) {
   expect(rel, /\/admin\?tab=support/.test(src), "expected admin deep-link for the bell");
 }
 
-/* 2. Health badge — public-safe endpoint only. */
+/* 2. Health badge — public-safe endpoint only, no auth dependency. */
 {
   const rel = "app/layout/SystemHealthBadge.tsx";
   const src = read(rel);
   expect(rel, /"\/health"/.test(src), "must call the public /health endpoint");
   expect(rel, !/\/admin/.test(src), "must not call any /admin endpoint");
   expect(rel, !/supportUnread|useSupportUnread/.test(src), "must not read support unread counts");
+  expect(rel, !/useMe/.test(src), "must be visible pre-auth (no useMe gating)");
 }
 
 /* 3. /admin redirects non-admins (no admin shell flash). */
@@ -63,15 +60,54 @@ function expect(rel, ok, message) {
   const rel = "main.tsx";
   const src = read(rel);
   expect(rel, /<SystemHealthBadge\s*\/>/.test(src), "header must render SystemHealthBadge");
+  expect(rel, /<SupportBell\s*\/>/.test(src), "header must render SupportBell");
   expect(rel, !/app\.beta/.test(src), "legacy app.beta badge must be removed");
 }
 
+/* 5. Auth state is hard-resettable and logout clears it. */
+{
+  const rel = "app/auth/useMe.ts";
+  const src = read(rel);
+  expect(rel, /export function clearMe\(/.test(src), "must export clearMe()");
+  expect(rel, /authRequired:\s*true/.test(src), "clearMe must mark the session as required");
+  expect(rel, /epoch\s*\+=\s*1/.test(src), "clearMe must invalidate in-flight /me (epoch bump)");
+}
+
+{
+  const rel = "app/auth/authState.ts";
+  const src = read(rel);
+  expect(rel, /clearMe\(\)/.test(src), "must clear the identity");
+  expect(rel, /clearSupportUnread\(\)/.test(src), "must clear admin unread state");
+  expect(rel, /toastStore\.clear\(\)/.test(src), "must clear visible account toasts");
+}
+
+{
+  const rel = "pages/Profile.tsx";
+  const src = read(rel);
+  expect(rel, /resetAuthenticatedClientState\(\)/.test(src), "logout must reset authenticated client state");
+}
+
+/* 6. Global 401 transitions to unauthenticated (403 must not log out). */
+{
+  const rel = "shared/api/client.ts";
+  const src = read(rel);
+  expect(rel, /shpun:unauthorized/.test(src), "must broadcast 401 as shpun:unauthorized");
+  expect(rel, /if\s*\(status === 401\)/.test(src), "only 401 may trigger the auth reset event");
+}
+
+{
+  const rel = "app/auth/AuthGate.tsx";
+  const src = read(rel);
+  expect(rel, /resetAuthenticatedClientState\(\)/.test(src), "AuthGate must react to auth loss");
+  expect(rel, /addEventListener\("shpun:unauthorized"/.test(src), "AuthGate must listen for shpun:unauthorized");
+}
+
 if (problems.length) {
-  console.log("=== frontend security invariants ===");
+  console.log("=== frontend security/state invariants ===");
   for (const p of problems) console.log(`- ${p}`);
   console.log(`\nFAIL: ${problems.length} invariant(s) violated`);
   process.exit(1);
 }
 
-console.log("=== frontend security invariants ===");
-console.log("OK: SupportBell admin-gated, health badge public-only, /admin redirects, beta removed");
+console.log("=== frontend security/state invariants ===");
+console.log("OK: bell admin-gated, health badge public-only, logout resets auth state, /admin redirects");

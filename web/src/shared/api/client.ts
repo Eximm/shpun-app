@@ -217,6 +217,18 @@ export async function apiFetch<T = unknown>(path: string, init: ApiFetchInit = {
 
     const userMsg = pickUserMessage(data, fallback);
 
+    // A real 401 means the server session is gone. 403 is authorization, not
+    // authentication, so it must NOT log the user out. Broadcast 401 only.
+    if (status === 401) {
+      try {
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("shpun:unauthorized"));
+        }
+      } catch {
+        // ignore
+      }
+    }
+
     throw new ApiError(userMsg, {
       status,
       code,

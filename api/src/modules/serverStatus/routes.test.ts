@@ -29,19 +29,40 @@ function headers(sid: string) {
   return { "x-app-sid": sid };
 }
 
-test("public health requires a session", async () => {
+test("public health is reachable without a session", async () => {
   const response = await app.inject({ method: "GET", url: "/api/health" });
-  assert.equal(response.statusCode, 401);
+  assert.equal(response.statusCode, 200);
 });
 
 test("public health returns an aggregated safe status", async () => {
-  const response = await app.inject({ method: "GET", url: "/api/health", headers: headers("sid-user") });
+  const response = await app.inject({ method: "GET", url: "/api/health" });
   assert.equal(response.statusCode, 200);
   const body = response.json();
   assert.equal(body.ok, true);
   // No servers configured yet -> honest unknown, never a hardcoded green.
   assert.equal(body.status, "unknown");
+  // Strict allowlist: nothing but the aggregate may be exposed publicly.
   assert.deepEqual(Object.keys(body).sort(), ["ok", "status", "updatedAt"]);
+  assert.ok(["ok", "degraded", "down", "unknown"].includes(body.status));
+  assert.ok(body.updatedAt === null || typeof body.updatedAt === "string");
+});
+
+test("public health never contains raw server fields", async () => {
+  const created = createMonitoredServer({
+    title: "Sensitive node",
+    host: "internal-10-0-0-5.local",
+    exporterUrl: "http://internal-10-0-0-5.local:9100/metrics",
+    kind: "infra",
+    countryCode: "DE",
+  });
+  assert.equal(created.ok, true);
+
+  const response = await app.inject({ method: "GET", url: "/api/health" });
+  assert.equal(response.statusCode, 200);
+  const serialized = JSON.stringify(response.json());
+  for (const forbidden of ["host", "exporter", "internal", "10.0.0.5", "metrics", "cpu", "ram", "memory"]) {
+    assert.equal(serialized.toLowerCase().includes(forbidden.toLowerCase()), false, `health payload must not expose ${forbidden}`);
+  }
 });
 
 test("user server-status payload is sanitized", async () => {

@@ -7,27 +7,30 @@
 // a header badge or a public status line. This module derives an aggregated
 // status and a minimal public projection from the existing monitor snapshot.
 //
-// Aggregation model (critical vs non-critical):
+// Aggregation model (availability, not observability):
 //   - kind = "infra"  -> critical tier (account / subscriptions / auth).
 //   - kind = "vpn"    -> individual VPN node, non-critical on its own.
-//   - loadPct >= 85   -> degraded (node overloaded).
+//   - loadPct          -> observability ONLY, intentionally ignored here.
 //
 // States:
 //   unknown  -> no configured servers, or no server produced a known state yet.
-//   down     -> the critical tier is fully offline, or (when no infra is
-//               configured) all known nodes are offline.
-//   degraded -> the critical tier is partially offline or unverified, any VPN
-//               node is offline, or any node is overloaded.
-//   ok       -> at least one known state and no issues above.
+//   down     -> the critical tier is fully offline, or the VPN infrastructure is
+//               fully offline.
+//   degraded -> the critical tier is partially offline or unverified, or a
+//               significant share (>= 50%) of known VPN nodes is offline.
+//   ok       -> at least one known state and no issue above. A single offline
+//               VPN node or a busy node is NOT a service problem.
 //
-// A single offline test/VPN node is NEVER treated as a full outage.
+// A busy (high-load) node is normal operations and must never flip the public
+// badge to "Eсть проблемы". Load/CPU/RAM/network stay in admin diagnostics.
 
 export type SystemHealthStatus = "ok" | "degraded" | "down" | "unknown";
 
 export type HealthCheckInput = {
   kind: "vpn" | "infra";
   online: boolean | null;
-  loadPct: number | null;
+  /** Observability only — deliberately unused by public aggregation. */
+  loadPct?: number | null;
 };
 
 export type PublicServerCheck = {
@@ -71,16 +74,19 @@ export function aggregateHealthStatus(checks: HealthCheckInput[]): SystemHealthS
   if (known.length === 0) return "unknown";
 
   const infra = checks.filter((c) => c.kind === "infra");
+  const vpn = checks.filter((c) => c.kind === "vpn");
   const infraKnown = infra.filter((c) => c.online != null);
+  const vpnKnown = vpn.filter((c) => c.online != null);
   const infraOffline = infraKnown.filter((c) => c.online === false).length;
+  const vpnOffline = vpnKnown.filter((c) => c.online === false).length;
 
   // Critical tier fully offline.
   if (infra.length > 0 && infraKnown.length > 0 && infraOffline === infraKnown.length) {
     return "down";
   }
 
-  // No critical tier configured: a full wipe-out of all known nodes is an outage.
-  if (infra.length === 0 && known.length > 0 && known.every((c) => c.online === false)) {
+  // VPN infrastructure fully offline (all known VPN nodes down).
+  if (vpn.length > 0 && vpnKnown.length > 0 && vpnOffline === vpnKnown.length) {
     return "down";
   }
 
@@ -89,10 +95,13 @@ export function aggregateHealthStatus(checks: HealthCheckInput[]): SystemHealthS
     return "degraded";
   }
 
-  const vpnOffline = checks.filter((c) => c.kind === "vpn" && c.online === false).length;
-  const overloaded = checks.filter((c) => (c.loadPct ?? 0) >= 85).length;
+  // Partially offline critical tier.
+  if (infraOffline > 0) {
+    return "degraded";
+  }
 
-  if (infraOffline > 0 || vpnOffline > 0 || overloaded > 0) {
+  // Significant share of VPN nodes offline (>= 50% of known VPN nodes).
+  if (vpnKnown.length > 0 && vpnOffline > 0 && vpnOffline / vpnKnown.length >= 0.5) {
     return "degraded";
   }
 

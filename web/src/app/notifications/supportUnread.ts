@@ -37,6 +37,15 @@ export function getSupportUnread(): SupportUnreadState {
   return state;
 }
 
+/**
+ * Drop the cached admin unread counters on auth transition
+ * (logout / session loss) so a stale account never keeps its badges.
+ */
+export function clearSupportUnread(): void {
+  state = { ...EMPTY, loading: false, lastFetchedAt: 0 };
+  emit();
+}
+
 export async function refreshSupportUnread(): Promise<SupportUnreadCounts> {
   state = { ...state, loading: true };
   emit();
