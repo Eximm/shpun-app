@@ -2,9 +2,6 @@
   "name": "shpun",
   "private": true,
   "type": "module",
-  "scripts": {
-    "audit:shm3": "node deploy/audit-shm3-source.mjs"
-  },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
     "@fastify/formbody": "^7.4.0",

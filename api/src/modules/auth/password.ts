@@ -10,11 +10,9 @@ type SetPasswordResult =
 
 export async function setPassword(
   req: FastifyRequest,
-  password: string,
-  oldPassword?: string
+  password: string
 ): Promise<SetPasswordResult> {
   const pwd = String(password || "").trim();
-  const oldPwd = String(oldPassword || "");
 
   if (!pwd || pwd.length < 8) {
     return { ok: false, status: 400, error: "password_too_short" };
@@ -29,24 +27,14 @@ export async function setPassword(
   // Используем shmFetch — единственный транспорт к SHM (таймаут, логирование, нормализация).
   const r = await shmFetch<any>(s.shmSessionId, "v1/user/passwd", {
     method: "POST",
-    body: {
-      password: pwd,
-      ...(oldPwd ? { old_password: oldPwd } : {}),
-    },
+    body: { password: pwd },
   });
 
-  const upstream = JSON.stringify(r.json ?? r.text ?? "").toUpperCase();
-  const semanticError = upstream.includes("OLD_PASSWORD_REQUIRED") || upstream.includes("INVALID_OLD_PASSWORD");
-  if (!r.ok || semanticError) {
-    const error = upstream.includes("OLD_PASSWORD_REQUIRED")
-      ? "old_password_required"
-      : upstream.includes("INVALID_OLD_PASSWORD")
-        ? "invalid_old_password"
-        : "shm_passwd_failed";
+  if (!r.ok) {
     return {
       ok: false,
       status: r.status || 502,
-      error,
+      error: "shm_passwd_failed",
       detail: r.json ?? r.text,
     };
   }

@@ -30,8 +30,6 @@ type BeforeInstallPromptEvent = Event & {
 
 type VerifyModalState = "idle" | "sent" | "success";
 type ProfileScreen = "main" | "settings" | "about";
-type OAuthProvider = "yandex" | "google" | "github";
-type LinkedAccount = { login: string; type: string; primary?: boolean };
 
 function readEnv(key: string): string {
   const v = (import.meta as any).env?.[key];
@@ -742,51 +740,6 @@ export function Profile() {
   useEffect(() => { void loadEmail(); }, []);
   useEffect(() => { if (!emailModal) { setEmailDraft(email || ""); setEmailError(null); setEmailSaved(false); } }, [emailModal, email]);
 
-  // SHM 3.x linked accounts / OAuth providers. Both endpoints degrade safely
-  // to empty data while production is still on SHM 2.x.
-  const [oauthProviders, setOauthProviders] = useState<OAuthProvider[]>([]);
-  const [linkedAccounts, setLinkedAccounts] = useState<LinkedAccount[]>([]);
-  const [oauthError, setOauthError] = useState<string | null>(null);
-
-  async function loadLinkedAccounts() {
-    const [providerResult, accountResult] = await Promise.allSettled([
-      apiFetch<{ providers?: string[] }>("/auth/oauth/providers"),
-      apiFetch<{ accounts?: LinkedAccount[] }>("/user/accounts"),
-    ]);
-    if (providerResult.status === "fulfilled") {
-      const values = Array.isArray(providerResult.value?.providers) ? providerResult.value.providers : [];
-      setOauthProviders(values.filter((item): item is OAuthProvider =>
-        item === "yandex" || item === "google" || item === "github"
-      ));
-    }
-    if (accountResult.status === "fulfilled") {
-      setLinkedAccounts(Array.isArray(accountResult.value?.accounts) ? accountResult.value.accounts : []);
-    }
-  }
-
-  useEffect(() => { void loadLinkedAccounts(); }, []);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const status = String(params.get("oauth_status") ?? "");
-    if (!status) return;
-    params.delete("oauth_status");
-    params.delete("provider");
-    window.history.replaceState(null, "", window.location.pathname + (params.toString() ? `?${params}` : ""));
-    if (status === "success") {
-      showToast(t("profile.oauth.linked"));
-      void loadLinkedAccounts();
-    } else {
-      setOauthError(t("profile.oauth.error"));
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const linkedOauthProviders = useMemo(() => new Set(
-    linkedAccounts
-      .map((account) => account.type.match(/^(yandex|google|github)_oauth2$/)?.[1] ?? "")
-      .filter(Boolean)
-  ), [linkedAccounts]);
-
   function getEmailError(err: unknown): string {
     const shaped = err as any;
     const raw = [shaped?.message, shaped?.code, shaped?.data?.error]
@@ -818,7 +771,6 @@ export function Profile() {
 
   // Password
   const [pwdModal, setPwdModal] = useState(false);
-  const [oldPwd,   setOldPwd]   = useState("");
   const [pwd1,     setPwd1]     = useState("");
   const [pwd2,     setPwd2]     = useState("");
   const [showPwd1, setShowPwd1] = useState(false);
@@ -826,19 +778,16 @@ export function Profile() {
   const [pwdBusy,  setPwdBusy]  = useState(false);
   const [pwdError, setPwdError] = useState<string | null>(null);
 
-  useEffect(() => { if (!pwdModal) { setOldPwd(""); setPwd1(""); setPwd2(""); setShowPwd1(false); setShowPwd2(false); setPwdError(null); setPwdBusy(false); } }, [pwdModal]);
+  useEffect(() => { if (!pwdModal) { setPwd1(""); setPwd2(""); setShowPwd1(false); setShowPwd2(false); setPwdError(null); setPwdBusy(false); } }, [pwdModal]);
 
   const pwdStrength     = useMemo(() => pwdScore(pwd1), [pwd1]);
-  const canSavePassword = oldPwd.length > 0 && pwd1.trim().length >= 8 && pwd2.length > 0 && pwd1 === pwd2 && !pwdBusy;
+  const canSavePassword = pwd1.trim().length >= 8 && pwd2.length > 0 && pwd1 === pwd2 && !pwdBusy;
 
   async function savePassword() {
     if (!canSavePassword) return;
     setPwdBusy(true); setPwdError(null);
     try {
-      const res = await apiFetch<PasswordSetResponse>("/auth/password/set", {
-        method: "POST",
-        body: { old_password: oldPwd, password: pwd1.trim() },
-      });
+      const res = await apiFetch<PasswordSetResponse>("/auth/password/set", { method: "POST", body: { password: pwd1.trim() } }) as any;
       if (!res?.ok) throw new Error(String(res?.error || "password_set_failed"));
       showToast(t("profile.password.toast.changed"));
       try {
@@ -851,12 +800,7 @@ export function Profile() {
       nav("/login?reason=pwd_changed", { replace: true, state: { from: "/profile" } });
     } catch (e: unknown) {
       const n = normalizeError(e);
-      const passwordMessage = n.code === "invalid_old_password"
-        ? t("profile.password.error.invalid_old")
-        : n.code === "old_password_required"
-          ? t("profile.password.error.old_required")
-          : n.description || t("profile.password.error.save");
-      setPwdError(passwordMessage);
+      setPwdError(n.description || t("profile.password.error.save"));
       toastApiError(e, { title: t("profile.password.error.save") });
     } finally { setPwdBusy(false); }
   }
@@ -1220,8 +1164,6 @@ export function Profile() {
       {/* ── Вход и привязки ── */}
       <SectionCard icon={<ProfileIcon name="lock" />} title={t("profile.auth.title")}>
 
-        {oauthError && <div className="pre" style={{ marginBottom: 8 }}>{oauthError}</div>}
-
         <PRow
           label={t("profile.auth.login2.title")}
           value={authLoginText || t("profile.auth.login2.empty")}
@@ -1255,29 +1197,8 @@ export function Profile() {
               <SmallBtn onClick={() => setTgModal(true)}>{telegramLogin ? t("profile.telegram.change") : t("profile.telegram.link")}</SmallBtn>
             </div>
           }
-          last={oauthProviders.length === 0}
+          last
         />
-
-        {oauthProviders.length > 0 && (
-          <PRow
-            label={t("profile.oauth.title")}
-            value={linkedOauthProviders.size > 0
-              ? [...linkedOauthProviders].map((provider) => t(`login.oauth.${provider}`)).join(", ")
-              : t("profile.oauth.none")}
-            muted={linkedOauthProviders.size === 0}
-            right={
-              <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                {oauthProviders.map((provider) => linkedOauthProviders.has(provider)
-                  ? <SmallBadge key={provider} text={t(`login.oauth.${provider}`)} tone="ok" />
-                  : <SmallBtn key={provider} onClick={() => window.location.assign(`/api/auth/oauth/${provider}/start?bind=1`)}>
-                      {t("profile.oauth.link").replace("{provider}", t(`login.oauth.${provider}`))}
-                    </SmallBtn>
-                )}
-              </div>
-            }
-            last
-          />
-        )}
       </SectionCard>
 
       {/* ── Настройки ── */}
@@ -1404,10 +1325,6 @@ export function Profile() {
       <Modal open={pwdModal} title={t("profile.password.modal.title")} onClose={() => setPwdModal(false)} closeLabel={t("profile.modal.close")}>
         <p className="p">{t("profile.password.modal.text")}</p>
         <label className="field" style={{ marginTop: 12 }}>
-          <span className="field__label">{t("profile.password.field.old")}</span>
-          <input className="input" placeholder={t("profile.password.field.old_ph")} value={oldPwd} onChange={(e) => setOldPwd(e.target.value)} type="password" autoComplete="current-password" disabled={pwdBusy} />
-        </label>
-        <label className="field" style={{ marginTop: 10 }}>
           <span className="field__label">{t("profile.password.field.p1")}</span>
           <div className="pwdfield">
             <input className="input" placeholder={t("profile.password.field.p1_ph")} value={pwd1} onChange={(e) => setPwd1(e.target.value)} type={showPwd1 ? "text" : "password"} autoComplete="new-password" disabled={pwdBusy} />

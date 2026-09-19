@@ -1,4 +1,4 @@
-FROM node:22-alpine@sha256:b6f26b36c8ff49624cfdac716b8ea1138d606df02586a77d364bb5536a634f85 AS build
+FROM node:22-alpine AS build
 
 WORKDIR /app
 
@@ -22,7 +22,7 @@ RUN npm ci
 COPY . ./
 RUN npm run build
 
-FROM nginx:alpine@sha256:62ff2089abf5a9ed33bd232895bef5e22f7bb4b200675cec49a5ebc48e3d4ac8
+FROM nginx:alpine
 
 # ВАЖНО: копируем весь dist, включая sw.mjs и manifest.webmanifest
 COPY --from=build /app/dist/ /usr/share/nginx/html/

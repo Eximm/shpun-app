@@ -53,15 +53,6 @@ export const RU: Dict = {
   "login.email.card_title": "Выберите действие",
   "login.email.card_text": "Telegram или e-mail — на следующем шаге.",
   "login.modal.email_divider": "или через e-mail",
-  "login.oauth.title": "Быстрый вход",
-  "login.oauth.yandex": "Яндекс",
-  "login.oauth.google": "Google",
-  "login.oauth.github": "GitHub",
-  "login.oauth.error.cancelled": "Вход отменён. Можно попробовать ещё раз.",
-  "login.oauth.error.link_required": "Аккаунт с таким email уже существует. Войдите обычным способом и привяжите этот сервис в профиле.",
-  "login.oauth.error.already_linked": "Этот способ входа уже привязан к другому аккаунту.",
-  "login.oauth.error.state": "Сессия входа устарела. Начните вход заново.",
-  "login.oauth.error.failed": "Не удалось завершить вход через внешний сервис. Попробуйте ещё раз.",
   "login.modal.telegram_register_divider": "или быстрее через Telegram",
   "login.hero.feature.1.title": "Видео",
   "login.hero.feature.2.title": "Связь",
@@ -175,7 +166,7 @@ export const RU: Dict = {
   "login.err.password_required": "Введите пароль.",
   "login.err.invalid_credentials": "Проверьте почту и пароль. Если забыли пароль — восстановите его ниже.",
   "login.err.shm_auth_unavailable": "Не удалось связаться с биллингом. Проверьте соединение и попробуйте ещё раз.",
-  "login.err.password_too_short": "Пароль слишком короткий. Для регистрации нужно минимум 10 символов.",
+  "login.err.password_too_short": "Пароль слишком короткий. Минимум 8 символов.",
   "login.err.login_taken": "Этот email уже привязан к другому аккаунту.",
   "login.err.not_authenticated": "Нужно войти заново.",
   "login.err.init_data_required": "Откройте приложение в Telegram для быстрого входа.",
@@ -376,11 +367,6 @@ export const RU: Dict = {
   "profile.auth.login2.badge": "Нельзя изменить",
   "profile.auth.login2.hint": "Логин для авторизации. Устанавливается при регистрации и не может быть изменён.",
   "profile.auth.login2.empty": "Не указан",
-  "profile.oauth.title": "Внешние аккаунты",
-  "profile.oauth.none": "Не привязаны",
-  "profile.oauth.link": "Привязать {provider}",
-  "profile.oauth.linked": "Способ входа успешно привязан",
-  "profile.oauth.error": "Не удалось привязать внешний аккаунт. Попробуйте ещё раз.",
 
   // profile — email
   "profile.email.title": "Email для восстановления",
@@ -563,9 +549,7 @@ export const RU: Dict = {
 
   // profile — password
   "profile.password.modal.title": "Сменить пароль",
-  "profile.password.modal.text": "Введите текущий и новый пароль. После сохранения нужно будет войти снова.",
-  "profile.password.field.old": "Текущий пароль",
-  "profile.password.field.old_ph": "Введите текущий пароль",
+  "profile.password.modal.text": "Введите новый пароль. После сохранения нужно будет войти снова.",
   "profile.password.field.p1": "Новый пароль",
   "profile.password.field.p1_ph": "Минимум 8 символов",
   "profile.password.field.p2": "Повторите пароль",
@@ -579,8 +563,6 @@ export const RU: Dict = {
   "profile.password.save": "Сменить пароль",
   "profile.password.toast.changed": "Пароль изменён",
   "profile.password.error.save": "Не удалось изменить пароль.",
-  "profile.password.error.invalid_old": "Текущий пароль указан неверно.",
-  "profile.password.error.old_required": "Введите текущий пароль.",
 
   // services
   "services.wl.badge": "WL",
@@ -2247,15 +2229,6 @@ export const EN: Dict = {
   "login.email.card_title": "Choose an action",
   "login.email.card_text": "Telegram or e-mail comes next.",
   "login.modal.email_divider": "or use e-mail",
-  "login.oauth.title": "Quick sign-in",
-  "login.oauth.yandex": "Yandex",
-  "login.oauth.google": "Google",
-  "login.oauth.github": "GitHub",
-  "login.oauth.error.cancelled": "Sign-in was cancelled. You can try again.",
-  "login.oauth.error.link_required": "An account with this e-mail already exists. Sign in normally and link this provider from your profile.",
-  "login.oauth.error.already_linked": "This sign-in method is already linked to another account.",
-  "login.oauth.error.state": "The sign-in session has expired. Start again.",
-  "login.oauth.error.failed": "Could not complete sign-in with the external provider. Please try again.",
   "login.modal.telegram_register_divider": "or sign up faster with Telegram",
   "login.hero.feature.1.title": "Video",
   "login.hero.feature.2.title": "Messaging",
@@ -2369,7 +2342,7 @@ export const EN: Dict = {
   "login.err.password_required": "Enter password.",
   "login.err.invalid_credentials": "Check your e-mail and password. If you forgot the password, reset it below.",
   "login.err.shm_auth_unavailable": "Could not reach billing. Check the connection and try again.",
-  "login.err.password_too_short": "Password is too short. Registration requires at least 10 characters.",
+  "login.err.password_too_short": "Password is too short. Minimum 8 characters.",
   "login.err.login_taken": "This e-mail is already taken.",
   "login.err.not_authenticated": "Please sign in again.",
   "login.err.init_data_required": "Open the app in Telegram for a quick sign-in.",
@@ -2570,11 +2543,6 @@ export const EN: Dict = {
   "profile.auth.login2.badge": "Cannot be changed",
   "profile.auth.login2.hint": "Login used for authorization. Set during registration and cannot be changed.",
   "profile.auth.login2.empty": "Not set",
-  "profile.oauth.title": "External accounts",
-  "profile.oauth.none": "Not linked",
-  "profile.oauth.link": "Link {provider}",
-  "profile.oauth.linked": "Sign-in method linked successfully",
-  "profile.oauth.error": "Could not link the external account. Please try again.",
 
   // profile — email
   "profile.email.title": "Recovery email",
@@ -2757,9 +2725,7 @@ export const EN: Dict = {
 
   // profile — password
   "profile.password.modal.title": "Change password",
-  "profile.password.modal.text": "Enter your current and new password. After saving you will need to sign in again.",
-  "profile.password.field.old": "Current password",
-  "profile.password.field.old_ph": "Enter current password",
+  "profile.password.modal.text": "Enter a new password. After saving you will need to sign in again.",
   "profile.password.field.p1": "New password",
   "profile.password.field.p1_ph": "Minimum 8 characters",
   "profile.password.field.p2": "Repeat password",
@@ -2773,8 +2739,6 @@ export const EN: Dict = {
   "profile.password.save": "Change password",
   "profile.password.toast.changed": "Password changed",
   "profile.password.error.save": "Could not change password.",
-  "profile.password.error.invalid_old": "The current password is incorrect.",
-  "profile.password.error.old_required": "Enter your current password.",
 
   // services
   "services.wl.badge": "WL",
