@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "check:i18n": "node scripts/check-i18n.mjs",
     "check:hardcoded": "node scripts/check-hardcoded.mjs",
-    "check:all": "npm run check:i18n && npm run check:hardcoded && npm run test:i18n",
+    "check:security": "node scripts/check-security.mjs",
+    "check:all": "npm run check:i18n && npm run check:hardcoded && npm run check:security && npm run test:i18n",
     "test:i18n": "node scripts/test-i18n-runtime.cjs",
     "lint": "eslint .",
     "preview": "vite preview"

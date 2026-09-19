@@ -8,18 +8,11 @@ type TFn = ReturnType<typeof useI18n>["t"];
 type StatusItem = {
   id: number;
   title: string;
-  host: string;
   kind: "vpn" | "infra";
   countryCode: string | null;
   online: boolean | null;
-  latencyMs: number | null;
   uptime: string | null;
   loadPct: number | null;
-  cpuLoadPct?: number | null;
-  uplinkLoadPct?: number | null;
-  memoryLoadPct?: number | null;
-  rxMbps?: number | null;
-  txMbps?: number | null;
   checkedAt: string | null;
 };
 
@@ -284,7 +277,7 @@ function regionForTitle(title: string) {
 
 function regionForItem(item: StatusItem) {
   const explicit = String(item.countryCode ?? "").trim().toUpperCase();
-  return /^[A-Z]{2}$/.test(explicit) ? explicit : regionForTitle(item.title || item.host);
+  return /^[A-Z]{2}$/.test(explicit) ? explicit : regionForTitle(item.title || "");
 }
 
 function ServerCard({ item }: { item: StatusItem }) {
@@ -296,7 +289,7 @@ function ServerCard({ item }: { item: StatusItem }) {
       <div className="serverStatus-card__top">
         <span className={`serverStatus-dot serverStatus-dot--${tone}`} />
         <span className="serverStatus-card__region" aria-hidden="true">{regionForItem(item)}</span>
-        <div className="serverStatus-card__title">{item.title || item.host}</div>
+        <div className="serverStatus-card__title">{item.title || "—"}</div>
       </div>
       <div className="serverStatus-card__line" aria-hidden="true">
         <span style={{ width: `${loadPct}%` }} />

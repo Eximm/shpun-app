@@ -33,6 +33,7 @@ import { LegalDocs }        from "./pages/LegalDocs";
 import { AuthGate }                from "./app/auth/AuthGate";
 import { BottomNav }               from "./app/layout/BottomNav";
 import { SupportBell }              from "./app/layout/SupportBell";
+import { SystemHealthBadge }        from "./app/layout/SystemHealthBadge";
 import { FloatingSupport }          from "./app/layout/FloatingSupport";
 import { PwaInstallPrompt }        from "./app/pwa/PwaInstallPrompt";
 import { ReferralNudge }           from "./app/referrals/ReferralNudge";
@@ -101,7 +102,6 @@ function routeRank(pathname: string) {
 /* ─── AppShell ───────────────────────────────────────────────────────────── */
 
 function AppShell({ children }: { children: React.ReactNode }) {
-  const { t } = useI18n();
   const loc   = useLocation();
   const assistantFlow = loc.pathname === "/assistant" || new URLSearchParams(loc.search).get("assistant") === "1";
   const hideNav = loc.pathname === "/login" || loc.pathname.startsWith("/legal") || assistantFlow;
@@ -121,7 +121,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
           </div>
           <div className="topbar__end">
             <SupportBell />
-            <span className="badge">{t("app.beta")}</span>
+            <SystemHealthBadge />
           </div>
         </div>
       </header>

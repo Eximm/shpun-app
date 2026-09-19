@@ -7736,6 +7736,62 @@ button.reviews-star:not(:disabled) {
 
 /* ── Support helpdesk (admin) ─────────────────────────────── */
 .topbar__end { display: flex; align-items: center; gap: 8px; }
+.healthBadgeWrap { position: relative; display: inline-flex; }
+.healthBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.10);
+  color: rgba(255,255,255,0.82);
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.12px;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+.healthBadge:hover { border-color: rgba(255,255,255,0.22); background: rgba(255,255,255,0.07); }
+.healthBadge__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.45);
+  flex: 0 0 auto;
+}
+.healthBadge--ok .healthBadge__dot { background: #2be38f; box-shadow: 0 0 12px rgba(43,227,143,0.45); }
+.healthBadge--degraded .healthBadge__dot { background: #f5b83d; box-shadow: 0 0 12px rgba(245,184,61,0.42); }
+.healthBadge--down .healthBadge__dot { background: #ff4d6d; box-shadow: 0 0 12px rgba(255,77,109,0.45); }
+.healthBadge--unknown .healthBadge__dot { background: rgba(255,255,255,0.45); }
+.healthBadge__short { display: none; }
+.healthBadgePopover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  width: 240px;
+  padding: 12px 13px;
+  border-radius: 14px;
+  background: rgba(17,22,33,0.98);
+  border: 1px solid rgba(255,255,255,0.12);
+  box-shadow: 0 18px 44px rgba(0,0,0,0.45);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+.healthBadgePopover__title { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 900; }
+.healthBadgePopover__title--ok { color: #8ff0c0; }
+.healthBadgePopover__title--degraded { color: #f7cf7b; }
+.healthBadgePopover__title--down { color: #ff9bb0; }
+.healthBadgePopover__title--unknown { color: rgba(255,255,255,0.80); }
+.healthBadgePopover__text { margin-top: 7px; font-size: 12.5px; line-height: 1.45; color: rgba(255,255,255,0.72); }
+.healthBadgePopover__meta { margin-top: 7px; font-size: 11px; color: rgba(255,255,255,0.48); }
+@media (max-width: 430px) {
+  .healthBadge { padding: 6px 9px; gap: 6px; }
+  .healthBadge__full { display: none; }
+  .healthBadge__short { display: inline; }
+  .healthBadgePopover { width: 210px; }
+}
 .topbar__bell {
   position: relative;
   width: 38px;

@@ -501,6 +501,77 @@ test("categories endpoint is available to authenticated users", async () => {
   assert.ok(response.json().items.some((c: any) => c.key === "connection"));
 });
 
+function pngBuffer(width = 4, height = 3): Buffer {
+  const buf = Buffer.alloc(24);
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(buf, 0);
+  buf.writeUInt32BE(13, 8);
+  Buffer.from("IHDR").copy(buf, 12);
+  buf.writeUInt32BE(width, 16);
+  buf.writeUInt32BE(height, 20);
+  return buf;
+}
+
+test("admin ticket detail, staff reply and patch are forbidden for non-admin", async () => {
+  const created = await createUserTicket("sid-user-201");
+  const ticketId = created.json().ticket.id;
+
+  const anon = await app.inject({ method: "GET", url: `/api/admin/support/tickets/${ticketId}` });
+  assert.equal(anon.statusCode, 401);
+
+  const detail = await app.inject({
+    method: "GET",
+    url: `/api/admin/support/tickets/${ticketId}`,
+    headers: userHeaders("sid-user-201"),
+  });
+  assert.equal(detail.statusCode, 403);
+
+  const reply = await app.inject({
+    method: "POST",
+    url: `/api/admin/support/tickets/${ticketId}/messages`,
+    headers: userHeaders("sid-user-201"),
+    payload: { text: "Попытка ответить от лица оператора" },
+  });
+  assert.equal(reply.statusCode, 403);
+
+  const patch = await app.inject({
+    method: "PATCH",
+    url: `/api/admin/support/tickets/${ticketId}`,
+    headers: userHeaders("sid-user-201"),
+    payload: { status: "closed" },
+  });
+  assert.equal(patch.statusCode, 403);
+});
+
+test("attachment download is owner/admin scoped (no IDOR)", async () => {
+  const { addUserMessageWithAttachments } = await import("./service.js");
+
+  const created = await createUserTicket("sid-user-201");
+  const ticketId = created.json().ticket.id;
+
+  const ticket = addUserMessageWithAttachments(ticketId, 201, "Файл к обращению", [
+    { filename: "photo.png", mimetype: "image/png", buffer: pngBuffer() },
+  ]);
+  const attachment = (ticket.messages ?? []).flatMap((m: any) => m.attachments ?? [])[0];
+  assert.ok(attachment, "expected a stored attachment");
+
+  const anon = await app.inject({ method: "GET", url: `/api/support/attachments/${attachment.id}` });
+  assert.equal(anon.statusCode, 401);
+
+  const foreign = await app.inject({
+    method: "GET",
+    url: `/api/support/attachments/${attachment.id}`,
+    headers: userHeaders("sid-user-202"),
+  });
+  assert.equal(foreign.statusCode, 403);
+
+  const owner = await app.inject({
+    method: "GET",
+    url: `/api/support/attachments/${attachment.id}`,
+    headers: userHeaders("sid-user-201"),
+  });
+  assert.equal(owner.statusCode, 200);
+});
+
 test.after(async () => {
   await app.close();
 });

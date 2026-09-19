@@ -3,7 +3,20 @@ export type Dict = Record<string, string>;
 
 export const RU: Dict = {
   // app
-  "app.beta": "Бета",
+  "system_health.ok": "Всё работает",
+  "system_health.degraded": "Есть проблемы",
+  "system_health.down": "Сбой",
+  "system_health.unknown": "Проверка...",
+  "system_health.short.ok": "OK",
+  "system_health.short.degraded": "Проблемы",
+  "system_health.short.down": "Сбой",
+  "system_health.short.unknown": "…",
+  "system_health.aria": "Состояние системы",
+  "system_health.popover.ok": "Все системы работают нормально.",
+  "system_health.popover.degraded": "Часть инфраструктуры работает с проблемами. Основной сервис продолжает работать.",
+  "system_health.popover.down": "Критическая часть сервиса недоступна.",
+  "system_health.popover.unknown": "Пока не удалось получить состояние системы.",
+  "system_health.updated": "Обновлено: {time}",
 
   // common errors
   "error.open_in_tg": "Откройте приложение в Telegram для быстрого входа.",
@@ -2151,7 +2164,20 @@ export const RU: Dict = {
 
 export const EN: Dict = {
   // app
-  "app.beta": "Beta",
+  "system_health.ok": "All systems operational",
+  "system_health.degraded": "Some issues",
+  "system_health.down": "Outage",
+  "system_health.unknown": "Checking...",
+  "system_health.short.ok": "OK",
+  "system_health.short.degraded": "Issues",
+  "system_health.short.down": "Outage",
+  "system_health.short.unknown": "…",
+  "system_health.aria": "System status",
+  "system_health.popover.ok": "All systems are operating normally.",
+  "system_health.popover.degraded": "Part of the infrastructure has issues. The main service keeps running.",
+  "system_health.popover.down": "A critical part of the service is unavailable.",
+  "system_health.popover.unknown": "System status could not be determined yet.",
+  "system_health.updated": "Updated: {time}",
 
   // common errors
   "error.open_in_tg": "Open the app in Telegram for a quick sign-in.",
