@@ -61,6 +61,7 @@
 
 ## Этап 3. Стенд SHM 3.x на копии production
 
+- Запустить `npm run audit:shm3 -- <путь-к-исходнику-SHM>`; critical FAIL запрещает продолжение. Подробности: `docs/shm-3-staging-runbook.md`.
 - Снять дамп БД, архив `shm-data`, compose, `.env`, активный template и digest всех образов.
 - Восстановить комплект в изолированном стенде без production webhook и платёжных callback.
 - Запустить зафиксированную версию SHM 3.x и дождаться завершения миграций.
