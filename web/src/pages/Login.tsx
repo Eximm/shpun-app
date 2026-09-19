@@ -39,6 +39,12 @@ import {
   savePendingReferralAlias,
   type CapturedReferral,
 } from "../shared/referrals/capture";
+import {
+  classifyRegisterError,
+  emailErrorKey,
+  mapEmailError,
+  type RegisterErrorField,
+} from "../shared/auth/registerErrors";
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 
@@ -252,20 +258,6 @@ function mapRedirectError(e: string, t: (k: string, fb?: string) => string): str
   }
 }
 
-function mapEmailError(code: string, t: (k: string, fb?: string) => string): string {
-  switch (String(code || "").trim()) {
-    case "email_required":            return t("login.err.email_required");
-    case "email_non_ascii":           return t("login.err.email_non_ascii");
-    case "email_invalid_format":      return t("login.err.email_invalid_format");
-    case "email_local_too_short":     return t("login.err.email_local_too_short");
-    case "email_local_invalid":       return t("login.err.email_local_invalid");
-    case "email_domain_invalid":      return t("login.err.email_domain_invalid");
-    case "email_domain_numeric":      return t("login.err.email_domain_invalid");
-    case "email_domain_not_allowed":  return t("login.err.email_domain_not_allowed");
-    default:                          return "";
-  }
-}
-
 function mapAuthError(raw: string, t: (k: string, fb?: string) => string): string {
   const code = String(raw || "").trim();
   if (!code) return t("login.err.unknown");
@@ -380,6 +372,8 @@ export function Login() {
   const [emailTouched,  setEmailTouched]  = useState(false);
   const [registerEmailServerCode, setRegisterEmailServerCode] =
     useState<RegisterEmailClientCode | null>(null);
+  const [registerError, setRegisterError] =
+    useState<{ field: RegisterErrorField; message: string } | null>(null);
 
   // ── Forgot password ───────────────────────────────────────────────────────
   const [forgotLogin,    setForgotLogin]    = useState("");
@@ -439,6 +433,15 @@ export function Login() {
     ? (registerEmailServerCode || validateRegisterEmailClient(login))
     : null;
   const registerEmailMessage = registerEmailCode ? mapEmailError(registerEmailCode, t) : "";
+  const emailFieldMessage = registerEmailMessage
+    || (authModal === "register" && registerError?.field === "email" ? registerError.message : "");
+  const passwordFieldError =
+    authModal === "register" && registerError?.field === "password"
+      ? registerError.message
+      : "";
+  const referralFieldError =
+    partnerError ??
+    (authModal === "register" && registerError?.field === "referral" ? registerError.message : "");
   const canPasswordRegister = login.trim().length > 0 && password.length > 0
     && password2.length > 0 && password === password2 && !registerEmailCode;
 
@@ -551,7 +554,7 @@ export function Login() {
     setAuthModal(next);
     setPassword(""); setPassword2(""); setShowPassword(false); setShowPassword2(false);
     setPasswordLoginError(null);
-    setEmailTouched(false); setRegisterEmailServerCode(null);
+    setEmailTouched(false); setRegisterEmailServerCode(null); setRegisterError(null);
     if (next !== "register") setClientName("");
     if (next === "register") {
       const p = readPendingPartnerId();
@@ -571,6 +574,7 @@ export function Login() {
     setPassword(""); setPassword2(""); setShowPassword(false); setShowPassword2(false);
     setPasswordLoginError(null);
     setClientName(""); setEmailTouched(false); setRegisterEmailServerCode(null); setForgotLoading(false);
+    setRegisterError(null);
     // Reset-state сбрасываем полностью
     setResetToken(""); setResetPwd1(""); setResetPwd2("");
     setResetShowPwd1(false); setResetShowPwd2(false);
@@ -781,14 +785,32 @@ export function Login() {
   async function passwordRegister() {
     if (mode === "telegram") { toast.error(t("login.toast.error_title"), { description: t("login.tg.only.password_disabled") }); return; }
     setEmailTouched(true);
-    if (registerEmailCode) { toastError(registerEmailCode); return; }
-    if (!canPasswordRegister) {
-      if (!login.trim() || !password) toastError("login_and_password_required");
-      else if (!passwordsMatch) toastError(t("login.password.mismatch"));
+    setRegisterError(null);
+
+    // Client-side validation is rendered inline, never via toast.
+    if (registerEmailCode) {
+      setRegisterError({ field: "email", message: registerEmailMessage || mapEmailError(registerEmailCode, t) });
+      return;
+    }
+    if (!login.trim()) {
+      setRegisterError({ field: "email", message: t("login.err.email_required") });
+      return;
+    }
+    if (!password) {
+      setRegisterError({ field: "password", message: t("login.err.password_required") });
+      return;
+    }
+    if (password2.length === 0 || !passwordsMatch) {
+      setRegisterError({ field: "password", message: t("login.password.mismatch") });
       return;
     }
     const finalPartnerId = normalizePartnerId(partnerIdInput);
-    if (partnerIdInput.trim() && finalPartnerId <= 0 && !referralAlias) { toastError(t("login.partner.invalid")); return; }
+    if (partnerIdInput.trim() && finalPartnerId <= 0 && !referralAlias) {
+      setPartnerError(t("login.partner.invalid"));
+      setRegisterError({ field: "referral", message: t("login.partner.invalid") });
+      return;
+    }
+
     setLoading(true);
     try {
       const referralPayload = await buildReferralAuthPayload();
@@ -800,15 +822,25 @@ export function Login() {
           ...referralPayload,
         },
       });
+      setRegisterError(null);
       await goAfterAuth(r, "password");
     } catch (e: unknown) {
       clearAuthPending();
-      const raw = errorToAuthRaw(e, t("error.password_register_failed"));
-      if (raw.startsWith("email_")) {
-        setRegisterEmailServerCode(raw as RegisterEmailClientCode);
+      // `register_failed` is a code-shaped fallback so classify() resolves it to
+      // the registration-specific text (never login.err.generic).
+      const raw = errorToAuthRaw(e, "register_failed");
+      const status = Number((e as any)?.status ?? 0) || 0;
+      const info = classifyRegisterError(raw, t);
+      if (info.field === "email") {
+        if (emailErrorKey(raw)) setRegisterEmailServerCode(raw as RegisterEmailClientCode);
         setEmailTouched(true);
       }
-      toastError(raw);
+      setRegisterError({ field: info.field, message: info.message });
+      try {
+        if (import.meta.env?.DEV) {
+          console.info(JSON.stringify({ event: "REGISTRATION_ERROR", code: raw, status, field: info.field }));
+        }
+      } catch { /* ignore */ }
     } finally { setLoading(false); }
   }
 
@@ -1290,7 +1322,7 @@ export function Login() {
                 </label>
                 <input
                   ref={loginInputRef}
-                  className={`input ${authModal === "register" && emailTouched && registerEmailCode ? "input--invalid" : ""}`}
+                  className={`input ${authModal === "register" && emailTouched && emailFieldMessage ? "input--invalid" : ""}`}
                   placeholder={authModal === "register" ? t("login.password.login_ph_register") : t("login.password.login_ph")}
                   value={login} onChange={(e) => {
                     setLogin(e.target.value);
@@ -1298,17 +1330,18 @@ export function Login() {
                     if (authModal === "register") {
                       setEmailTouched(false);
                       setRegisterEmailServerCode(null);
+                      if (registerError?.field === "email") setRegisterError(null);
                     }
                   }}
                   onBlur={() => { if (authModal === "register") setEmailTouched(true); }}
                   autoComplete="username" disabled={loading}
                   inputMode={authModal === "register" ? "email" : "text"}
-                  aria-invalid={authModal === "register" && emailTouched && Boolean(registerEmailCode)}
-                  aria-describedby={authModal === "register" && emailTouched && registerEmailMessage ? "register-email-error" : undefined}
+                  aria-invalid={authModal === "register" && emailTouched && Boolean(emailFieldMessage)}
+                  aria-describedby={authModal === "register" && emailTouched && emailFieldMessage ? "register-email-error" : undefined}
                 />
-                {authModal === "register" && emailTouched && registerEmailMessage && (
+                {authModal === "register" && emailTouched && emailFieldMessage && (
                   <div id="register-email-error" className="login__fieldError" role="alert">
-                    {registerEmailMessage}
+                    {emailFieldMessage}
                   </div>
                 )}
               </div>
@@ -1332,6 +1365,7 @@ export function Login() {
                     value={password} onChange={(e) => {
                       setPassword(e.target.value);
                       if (authModal === "login") setPasswordLoginError(null);
+                      if (authModal === "register" && registerError?.field === "password") setRegisterError(null);
                     }}
                     type={showPassword ? "text" : "password"}
                     autoComplete={authModal === "login" ? "current-password" : "new-password"}
@@ -1340,6 +1374,9 @@ export function Login() {
                     onClick={() => setShowPassword((v) => !v)} disabled={loading}
                     aria-label={showPassword ? t("login.password.hide") : t("login.password.show")}>👁</button>
                 </div>
+                {authModal === "register" && passwordFieldError && (
+                  <div className="login__fieldError" role="alert">{passwordFieldError}</div>
+                )}
               </div>
 
               {authModal === "login" && passwordLoginError && (
@@ -1364,13 +1401,19 @@ export function Login() {
                     <label className="field__label">{t("login.password.register_repeat")}</label>
                     <div className="pwdfield">
                       <input className="input" placeholder={t("login.password.repeat_ph")}
-                        value={password2} onChange={(e) => setPassword2(e.target.value)}
+                        value={password2} onChange={(e) => {
+                          setPassword2(e.target.value);
+                          if (authModal === "register" && registerError?.field === "password") setRegisterError(null);
+                        }}
                         type={showPassword2 ? "text" : "password"}
                         autoComplete="new-password" disabled={loading} />
                       <button type="button" className="btn pwdfield__btn"
                         onClick={() => setShowPassword2((v) => !v)} disabled={loading}
                         aria-label={showPassword2 ? t("login.password.hide") : t("login.password.show")}>👁</button>
                     </div>
+                    {password2.length > 0 && !passwordsMatch && (
+                      <div className="login__fieldError" role="alert">{t("login.password.mismatch")}</div>
+                    )}
                   </div>
                   <div className="loginPartnerCode">
                     {!partnerOpen ? (
@@ -1387,7 +1430,7 @@ export function Login() {
                           <input className={`input ${partnerError ? "input--invalid" : ""}`}
                             placeholder={t("login.partner.field_ph")}
                             value={partnerIdInput}
-                            onChange={(e) => { setPartnerError(null); setPartnerIdInput(String(e.target.value).trim()); }}
+                            onChange={(e) => { setPartnerError(null); if (registerError?.field === "referral") setRegisterError(null); setPartnerIdInput(String(e.target.value).trim()); }}
                             autoComplete="off" autoCapitalize="none" spellCheck={false}
                             disabled={loading || partnerApplying} />
                           {partnerError && (
@@ -1408,10 +1451,17 @@ export function Login() {
                       </div>
                     )}
                   </div>
-                  {password2.length > 0 && !passwordsMatch && (
-                    <div className="pre login__preMt12">{t("login.password.mismatch")}</div>
+                  {!partnerError && referralFieldError && (
+                    <div className="login__fieldError" role="alert">{referralFieldError}</div>
                   )}
                 </>
+              )}
+
+              {authModal === "register" && registerError && (
+                <div className="loginAuthError" role="alert" aria-live="assertive">
+                  <div className="loginAuthError__title">{t("login.register.error.title")}</div>
+                  <div className="loginAuthError__text">{registerError.message}</div>
+                </div>
               )}
 
               <div className="auth__actions">
