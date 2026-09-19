@@ -24,6 +24,21 @@ import signalIconUrl from "../assets/brand-icons/signal-bars.svg";
 import telegramIconUrl from "../assets/brand-icons/telegram.svg";
 import youtubeIconUrl from "../assets/brand-icons/youtube.svg";
 import allowedEmailDomains from "../shared/data/allowed-email-domains.json";
+import {
+  buildReferralPayload,
+  captureReferralFromLocation,
+  clearPendingPartnerId,
+  clearPendingReferralAlias,
+  isValidReferralAlias,
+  normalizePartnerId,
+  parseReferralFromHref,
+  readPendingPartnerId,
+  readPendingReferralAlias,
+  replaceReferralInUrl,
+  savePendingPartnerId,
+  savePendingReferralAlias,
+  type CapturedReferral,
+} from "../shared/referrals/capture";
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 
@@ -35,12 +50,14 @@ type RegisterEmailClientCode =
   | "email_required"
   | "email_invalid_format"
   | "email_non_ascii"
-  | "email_domain_not_allowed";
+  | "email_domain_not_allowed"
+  | "email_local_too_short"
+  | "email_local_invalid"
+  | "email_domain_invalid"
+  | "email_domain_numeric";
 
 /* ─── Constants ─────────────────────────────────────────────────────────── */
 
-const PARTNER_LS_KEY     = "partner_id_pending";
-const REFERRAL_ALIAS_LS_KEY = "referral_alias_pending";
 const AUTH_PENDING_KEY   = "auth:pending";
 const AUTH_PENDING_AT_KEY= "auth:pending_at";
 const AUTH_EVER_KEY      = "auth:ever_succeeded";
@@ -97,18 +114,6 @@ function clearAuthPending() {
 }
 function markAuthEverSucceeded() { try { localStorage.setItem(AUTH_EVER_KEY, "1"); } catch { /* ignore */ } }
 function hasEverSucceededAuth(): boolean { try { return localStorage.getItem(AUTH_EVER_KEY) === "1"; } catch { return false; } }
-function readPendingPartnerId(): number {
-  try { return normalizePartnerId(String(localStorage.getItem(PARTNER_LS_KEY) ?? "").trim()); } catch { return 0; }
-}
-function savePendingPartnerId(id: number) { try { if (id > 0) localStorage.setItem(PARTNER_LS_KEY, String(id)); } catch { /* ignore */ } }
-function clearPendingPartnerId() { try { localStorage.removeItem(PARTNER_LS_KEY); } catch { /* ignore */ } }
-function readPendingReferralAlias(): string {
-  try { return String(localStorage.getItem(REFERRAL_ALIAS_LS_KEY) ?? "").trim().toLowerCase(); } catch { return ""; }
-}
-function savePendingReferralAlias(alias: string) {
-  try { if (alias) localStorage.setItem(REFERRAL_ALIAS_LS_KEY, alias); } catch { /* ignore */ }
-}
-function clearPendingReferralAlias() { try { localStorage.removeItem(REFERRAL_ALIAS_LS_KEY); } catch { /* ignore */ } }
 
 /* ─── Utils ──────────────────────────────────────────────────────────────── */
 
@@ -175,39 +180,12 @@ async function waitTelegramInitData(timeoutMs = 1500): Promise<string | null> {
   return null;
 }
 
-function normalizePartnerId(v: unknown): number {
-  const n = Number(v ?? 0);
-  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : 0;
-}
-
-function getPartnerIdFromLocation(): number {
+function getReferralFromLocation(): CapturedReferral {
   try {
-    const fromSearch = normalizePartnerId(new URLSearchParams(window.location.search).get("partner_id"));
-    if (fromSearch > 0) return fromSearch;
-    const hash = String(window.location.hash ?? "");
-    const idx = hash.indexOf("?");
-    if (idx >= 0) {
-      const fromHash = normalizePartnerId(new URLSearchParams(hash.slice(idx + 1)).get("partner_id"));
-      if (fromHash > 0) return fromHash;
-    }
-  } catch { /* ignore */ }
-  return 0;
-}
-
-function getReferralAliasFromLocation(): string {
-  try {
-    const search = new URLSearchParams(window.location.search);
-    const explicit = String(search.get("ref") ?? search.get("referral") ?? "").trim().toLowerCase();
-    if (/^[a-z0-9][a-z0-9_-]{1,31}$/.test(explicit)) return explicit;
-
-    // Also support the compact campaign format: https://app.shpun.net/?druni4
-    for (const [key, value] of search.entries()) {
-      if (!value && /^[a-z][a-z0-9_-]{1,31}$/i.test(key) && key !== "partner_id") {
-        return key.toLowerCase();
-      }
-    }
-  } catch { /* ignore */ }
-  return "";
+    return parseReferralFromHref(window.location.href);
+  } catch {
+    return { partnerId: 0, alias: "" };
+  }
 }
 
 function looksLikeCode(s: string) {
@@ -274,10 +252,26 @@ function mapRedirectError(e: string, t: (k: string, fb?: string) => string): str
   }
 }
 
+function mapEmailError(code: string, t: (k: string, fb?: string) => string): string {
+  switch (String(code || "").trim()) {
+    case "email_required":            return t("login.err.email_required");
+    case "email_non_ascii":           return t("login.err.email_non_ascii");
+    case "email_invalid_format":      return t("login.err.email_invalid_format");
+    case "email_local_too_short":     return t("login.err.email_local_too_short");
+    case "email_local_invalid":       return t("login.err.email_local_invalid");
+    case "email_domain_invalid":      return t("login.err.email_domain_invalid");
+    case "email_domain_numeric":      return t("login.err.email_domain_invalid");
+    case "email_domain_not_allowed":  return t("login.err.email_domain_not_allowed");
+    default:                          return "";
+  }
+}
+
 function mapAuthError(raw: string, t: (k: string, fb?: string) => string): string {
   const code = String(raw || "").trim();
   if (!code) return t("login.err.unknown");
   if (!looksLikeCode(code)) return code;
+  const emailMsg = mapEmailError(code, t);
+  if (emailMsg) return emailMsg;
   switch (code) {
     case "login_and_password_required": return t("login.err.login_and_password_required");
     case "login_required":              return t("login.err.login_required");
@@ -292,13 +286,13 @@ function mapAuthError(raw: string, t: (k: string, fb?: string) => string): strin
     case "not_authenticated":           return t("login.err.not_authenticated");
     case "no_shm_session":              return t("login.err.no_shm_session");
     case "init_data_required":          return t("login.err.init_data_required");
+    case "telegram_login_not_allowed_in_regular_register":
+                                      return t("login.err.telegram_login_not_allowed");
     case "shm_telegram_auth_failed":
     case "shm_telegram_widget_auth_failed": return t("login.err.tg_failed");
     case "shm_register_failed":         return t("login.err.register_failed");
-    case "email_required":              return t("login.err.email_required");
-    case "email_non_ascii":             return t("login.err.email_non_ascii");
-    case "email_invalid_format":        return t("login.err.email_invalid_format");
-    case "email_domain_not_allowed":    return t("login.err.email_domain_not_allowed");
+    case "shm_register_exception":      return t("login.err.register_unavailable");
+    case "shm_auth_exception":          return t("login.err.shm_auth_unavailable");
     default:                            return t("login.err.generic");
   }
 }
@@ -420,6 +414,8 @@ export function Login() {
   });
   const [tgWidgetState, setTgWidgetState] = useState<TgWidgetState>("idle");
   const [partnerOpen,   setPartnerOpen]   = useState(false);
+  const [partnerApplying, setPartnerApplying] = useState(false);
+  const [partnerError,  setPartnerError]  = useState<string | null>(null);
 
   // ── Refs ──────────────────────────────────────────────────────────────────
   const authInProgressRef       = useRef(false);
@@ -428,6 +424,7 @@ export function Login() {
   const loginInputRef           = useRef<HTMLInputElement | null>(null);
   const passwordInputRef        = useRef<HTMLInputElement | null>(null);
   const referralHandledRef      = useRef(false);
+  const resolvedReferralRef     = useRef<{ alias: string; linkType: "partner" | "campaign"; partnerId: number } | null>(null);
   const authOkHandledRef        = useRef(false);
   const tokenHandledRef         = useRef(false);
   const redirectErrorHandledRef = useRef<string>("");
@@ -441,11 +438,7 @@ export function Login() {
   const registerEmailCode = authModal === "register"
     ? (registerEmailServerCode || validateRegisterEmailClient(login))
     : null;
-  const registerEmailMessage = registerEmailCode === "email_required"      ? t("login.err.email_required")
-    : registerEmailCode === "email_non_ascii"      ? t("login.err.email_non_ascii")
-    : registerEmailCode === "email_invalid_format" ? t("login.err.email_invalid_format")
-    : registerEmailCode === "email_domain_not_allowed" ? t("login.err.email_domain_not_allowed")
-    : "";
+  const registerEmailMessage = registerEmailCode ? mapEmailError(registerEmailCode, t) : "";
   const canPasswordRegister = login.trim().length > 0 && password.length > 0
     && password2.length > 0 && password === password2 && !registerEmailCode;
 
@@ -479,9 +472,34 @@ export function Login() {
     toast.error(t("login.toast.error_title"), { description: msg });
   }
 
+  async function resolveReferralAlias(
+    aliasRaw: string
+  ): Promise<{ ok: true; linkType: "partner" | "campaign"; partnerId: number } | { ok: false }> {
+    const alias = String(aliasRaw ?? "").trim().toLowerCase();
+    if (!alias) return { ok: false };
+    try {
+      const resolved = await apiFetch<{ ok: true; linkType: "partner" | "campaign"; partnerId: number }>(
+        `/referrals/resolve?alias=${encodeURIComponent(alias)}`,
+        { method: "GET" }
+      );
+      const normalized = {
+        linkType: resolved.linkType,
+        partnerId: normalizePartnerId(resolved.partnerId),
+      };
+      resolvedReferralRef.current = { alias, ...normalized };
+      return { ok: true, ...normalized };
+    } catch {
+      return { ok: false };
+    }
+  }
+
   async function buildReferralAuthPayload(): Promise<Record<string, any>> {
-    let id = getPartnerIdFromLocation() || readPendingPartnerId() || partnerId;
-    let alias = getReferralAliasFromLocation() || readPendingReferralAlias() || referralAlias;
+    // Capture synchronously first: even if the resolve request below fails,
+    // the alias is persisted and can be attributed by the backend claim path.
+    captureReferralFromLocation();
+
+    let id = getReferralFromLocation().partnerId || readPendingPartnerId() || partnerId;
+    let alias = getReferralFromLocation().alias || readPendingReferralAlias() || referralAlias;
 
     if (id > 0 && !alias) {
       clearPendingReferralAlias();
@@ -489,15 +507,21 @@ export function Login() {
     }
 
     if (alias) {
-      try {
-        const resolved = await apiFetch<{ ok: true; linkType: "partner" | "campaign"; partnerId: number }>(
-          `/referrals/resolve?alias=${encodeURIComponent(alias)}`,
-          { method: "GET" }
-        );
-        id = resolved.linkType === "partner" ? normalizePartnerId(resolved.partnerId) : 0;
-        if (resolved.linkType === "campaign") clearPendingPartnerId();
-      } catch {
-        alias = "";
+      // Avoid a second resolve (and a second visits_count tick) when this exact
+      // alias was already resolved during this Login session (auto-capture or
+      // manual apply).
+      const cached = resolvedReferralRef.current;
+      if (cached && cached.alias === alias) {
+        id = cached.linkType === "partner" ? cached.partnerId : 0;
+        if (cached.linkType === "campaign") clearPendingPartnerId();
+      } else {
+        const resolved = await resolveReferralAlias(alias);
+        if (resolved.ok) {
+          id = resolved.linkType === "partner" ? resolved.partnerId : 0;
+          if (resolved.linkType === "campaign") clearPendingPartnerId();
+        } else {
+          alias = "";
+        }
       }
     }
 
@@ -511,10 +535,7 @@ export function Login() {
       setReferralAlias(alias);
     }
 
-    return {
-      ...(id > 0 ? { partner_id: id } : {}),
-      ...(alias ? { referral_alias: alias } : {}),
-    };
+    return buildReferralPayload(id, alias);
   }
 
   // ── Modal controls ────────────────────────────────────────────────────────
@@ -556,20 +577,55 @@ export function Login() {
     setResetError(null); setResetDone(false); setResetVerifyError(null);
   }
 
-  function applyPartnerCode() {
-    const nextPartnerId = normalizePartnerId(partnerIdInput);
-    if (nextPartnerId <= 0) return;
-    setPartnerId(nextPartnerId);
-    savePendingPartnerId(nextPartnerId);
-    setReferralAlias("");
-    clearPendingReferralAlias();
-    setPartnerIdInput(String(nextPartnerId));
+  async function applyPartnerCode() {
+    const raw = partnerIdInput.trim();
+    setPartnerError(null);
+    const nextPartnerId = normalizePartnerId(raw);
+    if (nextPartnerId > 0) {
+      setPartnerId(nextPartnerId);
+      savePendingPartnerId(nextPartnerId);
+      setReferralAlias("");
+      clearPendingReferralAlias();
+      setPartnerIdInput(String(nextPartnerId));
+      replaceReferralInUrl("partner", String(nextPartnerId));
+      setPartnerOpen(false);
+      requestAnimationFrame(() => authModalBodyRef.current?.scrollTo({ top: 0, behavior: "smooth" }));
+      return;
+    }
+    if (!isValidReferralAlias(raw)) {
+      setPartnerError(t("login.partner.invalid"));
+      return;
+    }
+    const alias = raw.toLowerCase();
+    setPartnerApplying(true);
+    const resolved = await resolveReferralAlias(alias);
+    setPartnerApplying(false);
+    if (!resolved.ok) {
+      setPartnerError(t("login.partner.not_found"));
+      return;
+    }
+    if (resolved.linkType === "partner" && resolved.partnerId > 0) {
+      setPartnerId(resolved.partnerId);
+      savePendingPartnerId(resolved.partnerId);
+      setReferralAlias(alias);
+      savePendingReferralAlias(alias);
+      setPartnerIdInput(String(resolved.partnerId));
+    } else {
+      // Campaign alias: no partner id, but the alias drives backend attribution.
+      setPartnerId(0);
+      clearPendingPartnerId();
+      setReferralAlias(alias);
+      savePendingReferralAlias(alias);
+      setPartnerIdInput(alias);
+    }
+    replaceReferralInUrl("alias", alias);
     setPartnerOpen(false);
     requestAnimationFrame(() => authModalBodyRef.current?.scrollTo({ top: 0, behavior: "smooth" }));
   }
 
   function cancelPartnerCode() {
-    setPartnerIdInput(partnerId > 0 ? String(partnerId) : "");
+    setPartnerIdInput(partnerId > 0 ? String(partnerId) : referralAlias);
+    setPartnerError(null);
     setPartnerOpen(false);
   }
 
@@ -732,24 +788,24 @@ export function Login() {
       return;
     }
     const finalPartnerId = normalizePartnerId(partnerIdInput);
-    if (partnerIdInput.trim() && finalPartnerId <= 0) { toastError(t("login.partner.invalid")); return; }
+    if (partnerIdInput.trim() && finalPartnerId <= 0 && !referralAlias) { toastError(t("login.partner.invalid")); return; }
     setLoading(true);
     try {
+      const referralPayload = await buildReferralAuthPayload();
       const r = await apiFetch<AuthResponse>("/auth/password", {
         method: "POST",
         body: {
           login: normalizeEmailInput(login), password, mode: "register",
           client: clientName.trim() || normalizeEmailInput(login),
-          ...(finalPartnerId > 0 ? { partner_id: finalPartnerId } : {}),
-          ...(referralAlias ? { referral_alias: referralAlias } : {}),
+          ...referralPayload,
         },
       });
       await goAfterAuth(r, "password");
     } catch (e: unknown) {
       clearAuthPending();
       const raw = errorToAuthRaw(e, t("error.password_register_failed"));
-      if (raw === "email_domain_not_allowed") {
-        setRegisterEmailServerCode("email_domain_not_allowed");
+      if (raw.startsWith("email_")) {
+        setRegisterEmailServerCode(raw as RegisterEmailClientCode);
         setEmailTouched(true);
       }
       toastError(raw);
@@ -898,21 +954,23 @@ export function Login() {
     if (mode === "detecting") return;
     referralHandledRef.current = true;
     void (async () => {
-      let fromUrl = getPartnerIdFromLocation();
-      const alias = getReferralAliasFromLocation();
+      // Persist synchronously first so a failed resolve never loses attribution.
+      const captured = captureReferralFromLocation();
+      let fromUrl = captured.partnerId;
+      const alias = captured.alias;
+
       if (fromUrl > 0 && !alias) {
         clearPendingReferralAlias();
         setReferralAlias("");
       }
+
       let resolvedAlias = false;
+      let aliasKnownInvalid = false;
       if (alias) {
-        try {
-          const resolved = await apiFetch<{ ok: true; linkType: "partner" | "campaign"; partnerId: number }>(
-            `/referrals/resolve?alias=${encodeURIComponent(alias)}`,
-            { method: "GET" }
-          );
+        const resolved = await resolveReferralAlias(alias);
+        if (resolved.ok) {
           resolvedAlias = true;
-          fromUrl = resolved.linkType === "partner" ? normalizePartnerId(resolved.partnerId) : 0;
+          fromUrl = resolved.linkType === "partner" ? resolved.partnerId : 0;
           if (resolved.linkType === "campaign") {
             clearPendingPartnerId();
             setPartnerId(0);
@@ -920,14 +978,25 @@ export function Login() {
           }
           savePendingReferralAlias(alias);
           setReferralAlias(alias);
-        } catch { /* Unknown/disabled aliases behave like an ordinary visit. */ }
+        } else {
+          // Unknown/disabled alias: keep the normal registration possible and
+          // tell the user instead of silently dropping the invitation.
+          aliasKnownInvalid = true;
+          clearPendingReferralAlias();
+          setReferralAlias("");
+          setPartnerIdInput("");
+        }
       }
+
       const pending = readPendingPartnerId();
       const finalId = fromUrl > 0 ? fromUrl : pending;
       if (finalId > 0) {
         savePendingPartnerId(finalId);
         setPartnerId(finalId);
         setPartnerIdInput(String(finalId));
+      }
+      if (mode === "web" && aliasKnownInvalid) {
+        toast.error(t("login.partner.notice_title"), { description: t("login.partner.not_found") });
       }
       if (mode === "web" && (finalId > 0 || resolvedAlias)) openModal("register");
     })();
@@ -1195,7 +1264,7 @@ export function Login() {
               disabled={loading} aria-label={t("common.close")}>×</button>
           </div>
           <div className="modal__content">
-            {authModal === "register" && !partnerOpen && normalizePartnerId(partnerIdInput) > 0 && (
+            {authModal === "register" && !partnerOpen && (normalizePartnerId(partnerIdInput) > 0 || referralAlias) && (
               <div className="login__partnerInvite">
                 <div className="login__partnerInviteTitle">{t("login.partner.notice")}</div>
                 <div className="login__partnerInviteMeta">
@@ -1306,8 +1375,8 @@ export function Login() {
                   <div className="loginPartnerCode">
                     {!partnerOpen ? (
                       <button type="button" className="btn login__switchBtn"
-                        onClick={() => setPartnerOpen(true)} disabled={loading}>
-                        {normalizePartnerId(partnerIdInput) > 0
+                        onClick={() => { setPartnerError(null); setPartnerOpen(true); }} disabled={loading}>
+                        {normalizePartnerId(partnerIdInput) > 0 || referralAlias
                           ? t("login.partner.change")
                           : t("login.partner.have_code")}
                       </button>
@@ -1315,19 +1384,24 @@ export function Login() {
                       <div className="loginPartnerCode__editor">
                         <div className="field">
                           <label className="field__label">{t("login.partner.field")}</label>
-                          <input className="input" placeholder={t("login.partner.field_ph")}
+                          <input className={`input ${partnerError ? "input--invalid" : ""}`}
+                            placeholder={t("login.partner.field_ph")}
                             value={partnerIdInput}
-                            onChange={(e) => setPartnerIdInput(String(e.target.value).replace(/[^\d]/g, ""))}
-                            inputMode="numeric" autoComplete="off" disabled={loading} />
+                            onChange={(e) => { setPartnerError(null); setPartnerIdInput(String(e.target.value).trim()); }}
+                            autoComplete="off" autoCapitalize="none" spellCheck={false}
+                            disabled={loading || partnerApplying} />
+                          {partnerError && (
+                            <div className="login__fieldError" role="alert">{partnerError}</div>
+                          )}
                         </div>
                         <div className="loginPartnerCode__actions">
                           <button type="button" className="btn btn--accent"
-                            onClick={applyPartnerCode}
-                            disabled={loading || normalizePartnerId(partnerIdInput) <= 0}>
-                            {t("login.partner.apply")}
+                            onClick={() => void applyPartnerCode()}
+                            disabled={loading || partnerApplying || !partnerIdInput.trim()}>
+                            {partnerApplying ? t("login.partner.applying") : t("login.partner.apply")}
                           </button>
                           <button type="button" className="btn"
-                            onClick={cancelPartnerCode} disabled={loading}>
+                            onClick={cancelPartnerCode} disabled={loading || partnerApplying}>
                             {t("login.partner.cancel")}
                           </button>
                         </div>

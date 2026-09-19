@@ -19,7 +19,6 @@ import {
 } from "../../shared/shm/shmClient.js";
 import {
   findReferralAlias,
-  recordReferralAliasRegistration,
   recordReferralAliasRegistrationForUser,
 } from "../../shared/linkdb/referralAliasesRepo.js";
 
@@ -59,6 +58,35 @@ function dbg(req: any, label: string, extra?: Record<string, any>) {
         hasSidCookie: hasSid,
         ua,
         ...(extra ?? {}),
+      },
+    })
+  );
+}
+
+// Registration/referral diagnostics for development and test environments.
+// Enabled by AUTH_DEBUG or REFERRAL_DEBUG. Never logs passwords, cookies or secrets.
+function isReferralDebug(): boolean {
+  const v = String(process.env.REFERRAL_DEBUG ?? process.env.AUTH_DEBUG ?? "")
+    .trim()
+    .toLowerCase();
+  return v === "1" || v === "true" || v === "yes" || v === "on";
+}
+
+function safeAlias(value: unknown): string {
+  const a = String(value ?? "").trim().toLowerCase();
+  return /^[a-z0-9][a-z0-9_-]{1,31}$/.test(a) ? a : a ? "<invalid>" : "";
+}
+
+function regDbg(req: any, event: string, data?: Record<string, any>) {
+  if (!isReferralDebug()) return;
+  console.log(
+    JSON.stringify({
+      level: "info",
+      time: Date.now(),
+      referral: {
+        event,
+        reqId: req?.id ?? undefined,
+        ...(data ?? {}),
       },
     })
   );
@@ -233,10 +261,17 @@ async function tryAttachReferral(
   shmSessionId: string,
   partnerIdRaw: any,
   referralAliasRaw?: any,
-  options?: { allowCampaign?: boolean }
+  options?: { allowCampaign?: boolean; shmUserId?: number }
 ): Promise<void> {
   const referralAlias = String(referralAliasRaw ?? "").trim().toLowerCase();
   const campaign = referralAlias ? findReferralAlias(referralAlias) : null;
+  regDbg(null, "REFERRAL_RESOLVE", {
+    alias: safeAlias(referralAlias),
+    linkType: campaign?.link_type ?? "",
+    partnerId: Number(campaign?.partner_id ?? 0) || 0,
+    suppliedPartnerId: Number(partnerIdRaw ?? 0) || 0,
+    allowCampaign: Boolean(options?.allowCampaign),
+  });
   if (campaign?.link_type === "campaign") {
     if (!options?.allowCampaign) return;
     try {
@@ -275,12 +310,15 @@ async function tryAttachReferral(
     const claimData = (claimResult as any)?.data && typeof (claimResult as any).data === "object"
       ? (claimResult as any).data
       : claimResult;
+    // Idempotent per (alias, SHM user): a repeated claim or re-login must not
+    // increment the local counter twice. Requires partner_confirmed, which the
+    // billing template sets only when the effective partner matches.
     if (
       campaign &&
-      Number((claimData as any)?.campaign_initialized ?? 0) === 1 &&
-      Number((claimData as any)?.partner_confirmed ?? 0) === 1
+      Number((claimData as any)?.partner_confirmed ?? 0) === 1 &&
+      Number(options?.shmUserId ?? 0) > 0
     ) {
-      recordReferralAliasRegistration(campaign.alias);
+      recordReferralAliasRegistrationForUser(campaign.alias, options?.shmUserId);
     }
   } catch {
     // ignore
@@ -949,6 +987,7 @@ export async function authRoutes(app: FastifyInstance) {
     try {
       await tryAttachReferral(shmSessionId, body?.partner_id, body?.referral_alias, {
         allowCampaign: Boolean(resolved.registered),
+        shmUserId,
       });
     } catch {}
 
@@ -1018,6 +1057,7 @@ export async function authRoutes(app: FastifyInstance) {
     try {
       await tryAttachReferral(shmSessionId, body?.partner_id, body?.referral_alias, {
         allowCampaign: Boolean(resolved.registered),
+        shmUserId,
       });
     } catch {}
 
@@ -1078,6 +1118,7 @@ export async function authRoutes(app: FastifyInstance) {
     try {
       await tryAttachReferral(shmSessionId, payload?.partner_id, payload?.referral_alias, {
         allowCampaign: Boolean(resolved.registered),
+        shmUserId,
       });
     } catch {}
 
@@ -1113,12 +1154,34 @@ export async function authRoutes(app: FastifyInstance) {
     const modeRaw = String(body?.mode ?? "login").trim().toLowerCase();
     const mode = modeRaw === "register" ? "register" : "login";
 
+    regDbg(req, "REGISTRATION_START", {
+      mode,
+      loginDomain: String(body?.login ?? "").split("@")[1] ?? "",
+      hasPartnerId: Number(body?.partner_id ?? 0) > 0,
+      hasAlias: Boolean(String(body?.referral_alias ?? "").trim()),
+    });
+
+    // Alias, when present, is authoritative over a numeric partner_id supplied
+    // alongside it. Mirrors the Telegram registration path so the id written to
+    // SHM at creation and the id claimed afterwards can never diverge.
+    const registrationPartnerId = mode === "register"
+      ? resolvePartnerIdForInitialRegistration(body?.partner_id, body?.referral_alias)
+      : 0;
+
     const result = await handleAuth("password", {
       ...body,
+      ...(mode === "register" ? { partner_id: registrationPartnerId } : {}),
       mode,
       client_ip: getClientIp(req),
     });
     if (!result.ok) {
+      regDbg(req, "REGISTRATION_FAIL", {
+        mode,
+        error: String(result.error ?? ""),
+        status: Number(result.status ?? 0) || 0,
+        alias: safeAlias(body?.referral_alias),
+        hasPartnerId: Number(body?.partner_id ?? 0) > 0,
+      });
       return reply.code(result.status || 400).send(result);
     }
 
@@ -1143,8 +1206,14 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     if (mode === "register") {
+      regDbg(req, "REGISTRATION_REFERRAL", {
+        alias: safeAlias(body?.referral_alias),
+        partnerId: Number(body?.partner_id ?? 0) || 0,
+        userId: shmUserId,
+      });
       await tryAttachReferral(shmSessionId, body?.partner_id, body?.referral_alias, {
         allowCampaign: true,
+        shmUserId,
       });
     }
 
@@ -1152,6 +1221,10 @@ export async function authRoutes(app: FastifyInstance) {
     putSession(localSid, { shmSessionId, shmUserId, login, createdAt: Date.now() });
 
     await updateAuthMeta(shmSessionId, req, "password");
+
+    if (mode === "register") {
+      regDbg(req, "REGISTRATION_SUCCESS", { userId: shmUserId, login });
+    }
 
     return reply
       .setCookie("sid", localSid, cookieOptions(req))

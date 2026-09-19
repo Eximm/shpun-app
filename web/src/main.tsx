@@ -41,6 +41,14 @@ import { I18nProvider, useI18n }   from "./shared/i18n";
 import { ToastProvider }           from "./shared/ui/toast/ToastProvider";
 import { useBillingNotifications } from "./app/notifications/useBillingNotifications";
 import { apiFetch }                from "./shared/api/client";
+import { captureReferralFromLocation } from "./shared/referrals/capture";
+
+/* ─── Referral attribution ──────────────────────────────────────────────── */
+
+// Capture ?partner_id / ?ref= / bare ?alias before React Router can redirect
+// `/` -> `/login` and before any resolve request runs. Persisted in localStorage;
+// never blocks rendering.
+captureReferralFromLocation();
 
 /* ─── PWA install prompt ─────────────────────────────────────────────────── */
 

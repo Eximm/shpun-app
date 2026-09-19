@@ -9,8 +9,9 @@
     "check:i18n": "node scripts/check-i18n.mjs",
     "check:hardcoded": "node scripts/check-hardcoded.mjs",
     "check:security": "node scripts/check-security.mjs",
-    "check:all": "npm run check:i18n && npm run check:hardcoded && npm run check:security && npm run test:i18n",
+    "check:all": "npm run check:i18n && npm run check:hardcoded && npm run check:security && npm run test:i18n && npm run test:referral",
     "test:i18n": "node scripts/test-i18n-runtime.cjs",
+    "test:referral": "node scripts/test-referral-capture.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },
