@@ -1,7 +1,7 @@
 ﻿// api/src/modules/auth/routes.ts
 
 import type { FastifyInstance } from "fastify";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { setPassword } from "./password.js";
 import { handleAuth } from "./authService.js";
 import {
@@ -85,12 +85,17 @@ function readJsonBody(req: any): any {
   return {};
 }
 
+function shmResponseMessage(payload: any): string {
+  const source = payload?.data ?? payload ?? {};
+  const item = Array.isArray(source) ? source[0] ?? {} : source;
+  return String(item?.msg ?? item?.message ?? item?.error ?? "").trim();
+}
+
 async function shmGetUserIdentity(
   sessionId: string
 ): Promise<{ userId: number; login: string }> {
   const res = await shmFetch<any>(sessionId, "v1/user", {
     method: "GET",
-    query: { limit: 1, offset: 0 },
   });
   if (!res.ok) throw new Error(`shm_user_failed:${res.status}`);
   const j: any = res.json ?? {};
@@ -138,6 +143,57 @@ function reuseOrCreateSid(req: any): string {
   const parsed = String((req.cookies as any)?.sid ?? "").trim();
   const fromHdr = getSidFromCookieHeader(req);
   return (parsed || fromHdr).trim() || createLocalSid();
+}
+
+const OAUTH_FLOW_TTL_MS = 10 * 60 * 1000;
+const OAUTH_FLOW_COOKIE = "shpun_oauth_flow";
+const OAUTH_PROVIDERS = new Set(["yandex", "google", "github"]);
+const oauthFlows = new Map<string, {
+  provider: string;
+  browserNonce: string;
+  callbackUrl: string;
+  mode: "login" | "bind";
+  createdAt: number;
+}>();
+
+function enabledOauthProviders(): string[] {
+  const configured = String(process.env.SHM_OAUTH_PROVIDERS ?? "")
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter((item) => OAUTH_PROVIDERS.has(item));
+  return [...new Set(configured)];
+}
+
+function oauthCallbackUrl(provider: string): string {
+  const explicit = String(process.env.OAUTH_CALLBACK_BASE_URL ?? "").trim();
+  const appOrigin = String(process.env.APP_ORIGIN ?? "")
+    .split(",")[0]
+    .trim();
+  const base = (explicit || `${appOrigin.replace(/\/$/, "")}/api`).replace(/\/$/, "");
+  if (!/^https?:\/\//i.test(base)) throw new Error("oauth_callback_base_not_configured");
+  return `${base}/auth/oauth/${encodeURIComponent(provider)}/callback`;
+}
+
+function extractOauthSessionId(payload: any): string {
+  const source = payload?.data ?? payload ?? {};
+  const item = Array.isArray(source) ? source[0] ?? {} : source;
+  return String(item?.session_id ?? "").trim();
+}
+
+function oauthCookieOptions(req: any) {
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: isHttps(req),
+    path: "/api/auth/oauth",
+    maxAge: Math.floor(OAUTH_FLOW_TTL_MS / 1000),
+  };
+}
+
+function cleanupOauthFlows(now = Date.now()): void {
+  for (const [state, flow] of oauthFlows.entries()) {
+    if (now - flow.createdAt > OAUTH_FLOW_TTL_MS) oauthFlows.delete(state);
+  }
 }
 
 function isProbablyEmptyTelegramWidgetPayload(p: any): boolean {
@@ -344,15 +400,15 @@ async function markPasswordStep(
   }
 }
 
-function withAuthOk(url: string): string {
+function withAuthOk(url: string, provider = "tg"): string {
   try {
     const u = new URL(url, "http://local");
     u.searchParams.set("a", "auth_ok");
-    u.searchParams.set("p", "tg");
+    u.searchParams.set("p", provider);
     return u.pathname + u.search + u.hash;
   } catch {
     const sep = url.includes("?") ? "&" : "?";
-    return `${url}${sep}a=auth_ok&p=tg`;
+    return `${url}${sep}a=auth_ok&p=${encodeURIComponent(provider)}`;
   }
 }
 
@@ -378,7 +434,7 @@ function formatDateDDMMYYYY(date = new Date()): string {
 async function updateAuthMeta(
   shmSessionId: string,
   req: any,
-  source: "telegram" | "widget" | "password"
+  source: "telegram" | "widget" | "password" | "oauth_yandex" | "oauth_google" | "oauth_github"
 ): Promise<void> {
   try {
     await callShmTemplate(shmSessionId, "auth.meta.update", {
@@ -760,10 +816,8 @@ async function resolveTelegramWidgetSession(
     };
   }
 
-  const initialPartnerId = resolvePartnerIdForInitialRegistration(payload?.partner_id, payload?.referral_alias);
   rr = await shmTelegramWebAuthRegister(pickTelegramWidgetPayload(payload), {
     clientIp,
-    partnerId: initialPartnerId,
   });
   if (rr.ok && hasShmSession(rr)) {
     return {
@@ -1162,6 +1216,7 @@ export async function authRoutes(app: FastifyInstance) {
   app.post("/auth/password/set", async (req, reply) => {
     const body = readJsonBody(req);
     const password = String(body?.password ?? "");
+    const oldPassword = String(body?.old_password ?? "");
     const sid = String((req.cookies as any)?.sid ?? "").trim();
     const session = getSessionFromRequest(req) as any;
     const currentLogin = String(session?.login ?? "").trim();
@@ -1173,7 +1228,7 @@ export async function authRoutes(app: FastifyInstance) {
       oldSessionId: maskValue(oldSessionId),
     });
 
-    const r = await setPassword(req, password);
+    const r = await setPassword(req, password, oldPassword);
     if (!r.ok) {
       return reply.code(r.status || 400).send(r);
     }
@@ -1334,6 +1389,138 @@ export async function authRoutes(app: FastifyInstance) {
     });
   });
 
+  // ── SHM 3.x OAuth2 (off until SHM_OAUTH_PROVIDERS is configured) ─────────
+  app.get("/auth/oauth/providers", async (_req, reply) => {
+    return reply.send({ ok: true, providers: enabledOauthProviders() });
+  });
+
+  app.get("/auth/oauth/:provider/start", async (req, reply) => {
+    cleanupOauthFlows();
+    const provider = String((req.params as any)?.provider ?? "").trim().toLowerCase();
+    if (!enabledOauthProviders().includes(provider)) {
+      return reply.code(404).send({ ok: false, error: "oauth_provider_disabled" });
+    }
+
+    const wantsBind = String((req.query as any)?.bind ?? "") === "1";
+    const current = getSessionFromRequest(req) as any;
+    if (wantsBind && !current?.shmSessionId) {
+      return reply.redirect("/login?e=not_authenticated");
+    }
+
+    let callbackUrl = "";
+    try {
+      callbackUrl = oauthCallbackUrl(provider);
+    } catch {
+      return reply.code(503).send({ ok: false, error: "oauth_not_configured" });
+    }
+
+    const init = await shmFetch<any>(null, `v1/oauth2/init/${provider}`, {
+      method: "GET",
+      query: {
+        redirect_uri: callbackUrl,
+        ...(wantsBind ? {
+          bind_to_profile: true,
+          bind_only_if_new: true,
+          session_id: String(current.shmSessionId),
+        } : {}),
+      },
+    });
+    const payload: any = init.json ?? {};
+    const source = Array.isArray(payload?.data) ? payload.data[0] ?? {} : payload?.data ?? payload;
+    const authUrl = String(source?.auth_url ?? "").trim();
+    const state = String(source?.state ?? "").trim();
+    if (!init.ok || !authUrl || !state) {
+      return reply.redirect("/login?e=oauth_init_failed");
+    }
+
+    const browserNonce = randomBytes(24).toString("base64url");
+    oauthFlows.set(state, {
+      provider,
+      browserNonce,
+      callbackUrl,
+      mode: wantsBind ? "bind" : "login",
+      createdAt: Date.now(),
+    });
+
+    return reply
+      .setCookie(OAUTH_FLOW_COOKIE, browserNonce, oauthCookieOptions(req))
+      .redirect(authUrl);
+  });
+
+  app.get("/auth/oauth/:provider/callback", async (req, reply) => {
+    cleanupOauthFlows();
+    const provider = String((req.params as any)?.provider ?? "").trim().toLowerCase();
+    const query = (req.query ?? {}) as any;
+    const state = String(query?.state ?? "").trim();
+    const code = String(query?.code ?? "").trim();
+    const providerError = String(query?.error ?? "").trim();
+    const flow = state ? oauthFlows.get(state) : undefined;
+    if (state) oauthFlows.delete(state);
+
+    const cookieNonce = String((req.cookies as any)?.[OAUTH_FLOW_COOKIE] ?? "").trim();
+    reply.clearCookie(OAUTH_FLOW_COOKIE, { path: "/api/auth/oauth" });
+
+    if (providerError) return reply.redirect("/login?e=oauth_cancelled");
+    if (!flow || flow.provider !== provider || !cookieNonce || cookieNonce !== flow.browserNonce) {
+      return reply.redirect("/login?e=oauth_state_invalid");
+    }
+    if (!code) return reply.redirect("/login?e=oauth_code_missing");
+
+    const callback = await shmFetch<any>(null, `v1/oauth2/callback/${provider}`, {
+      method: "GET",
+      query: { code, state, redirect_uri: flow.callbackUrl },
+    });
+    const callbackMessage = shmResponseMessage(callback.json);
+    const callbackText = JSON.stringify(callback.json ?? callback.text ?? "").toLowerCase();
+
+    if (flow.mode === "bind") {
+      if (callback.ok && /successfully bound|already bound/i.test(callbackMessage)) {
+        return reply.redirect(`/profile?oauth_status=success&provider=${encodeURIComponent(provider)}`);
+      }
+      return reply.redirect(`/profile?oauth_status=error&provider=${encodeURIComponent(provider)}`);
+    }
+
+    if (!callback.ok || callbackText.includes('"error"')) {
+      const errorCode = callbackText.includes("not linked")
+        ? "oauth_link_required"
+        : callbackText.includes("already linked")
+          ? "oauth_already_linked"
+          : "oauth_callback_failed";
+      return reply.redirect(`/login?e=${encodeURIComponent(errorCode)}`);
+    }
+
+    const shmSessionId = extractOauthSessionId(callback.json);
+    if (!shmSessionId) return reply.redirect("/login?e=oauth_session_missing");
+
+    let identity: { userId: number; login: string };
+    try {
+      identity = await shmGetUserIdentity(shmSessionId);
+    } catch {
+      return reply.redirect("/login?e=oauth_user_lookup_failed");
+    }
+
+    const localSid = reuseOrCreateSid(req);
+    putSession(localSid, {
+      shmSessionId,
+      shmUserId: identity.userId,
+      login: identity.login,
+      createdAt: Date.now(),
+    });
+
+    // SHM creates OAuth users with an unknown random password. OAuth is their
+    // completed login method; a password can later be created through reset.
+    await Promise.allSettled([
+      callShmTemplate(shmSessionId, "password.mark_set"),
+      callShmTemplate(shmSessionId, "onboarding.mark", { step: "email" }),
+      callShmTemplate(shmSessionId, "onboarding.mark", { step: "password" }),
+      updateAuthMeta(shmSessionId, req, `oauth_${provider}` as any),
+    ]);
+
+    return reply
+      .setCookie("sid", localSid, cookieOptions(req))
+      .redirect(withAuthOk("/login", provider));
+  });
+
   // ── Onboarding mark ──────────────────────────────────────────────────────
   app.post("/auth/onboarding/mark", async (req, reply) => {
     const s = getSessionFromRequest(req) as any;
@@ -1463,6 +1650,7 @@ export async function authRoutes(app: FastifyInstance) {
   // Возвращает login2 пользователя чтобы показать его на странице сброса.
   app.get("/auth/password-reset/verify", async (req, reply) => {
     const token = String((req.query as any)?.token ?? "").trim();
+    const resetLogin = String((req.query as any)?.login ?? "").trim().toLowerCase();
 
     if (!token) {
       return reply.code(400).send({ ok: false, error: "token_required" });
@@ -1470,13 +1658,18 @@ export async function authRoutes(app: FastifyInstance) {
 
     const r = await shmFetch<any>(null, `v1/user/passwd/reset/verify`, {
       method: "GET",
-      query: { token },
+      query: { token, ...(resetLogin ? { login: resetLogin } : {}) },
     });
 
-    if (!r.ok) {
-      return reply.code(r.status === 400 ? 400 : 502).send({
+    const verifyMessage = shmResponseMessage(r.json).toLowerCase();
+    const verifyRejected = verifyMessage.includes("required") ||
+      verifyMessage.includes("invalid") ||
+      verifyMessage.includes("expired") ||
+      verifyMessage.includes("not found");
+    if (!r.ok || verifyRejected) {
+      return reply.code(r.status === 400 || verifyRejected ? 400 : 502).send({
         ok: false,
-        error: r.status === 400 ? "invalid_or_expired_token" : "shm_verify_failed",
+        error: r.status === 400 || verifyRejected ? "invalid_or_expired_token" : "shm_verify_failed",
       });
     }
 
@@ -1521,6 +1714,7 @@ export async function authRoutes(app: FastifyInstance) {
   app.post("/auth/password-reset/confirm", async (req, reply) => {
     const body     = readJsonBody(req);
     const token    = String(body?.token    ?? "").trim();
+    const resetLogin = String(body?.login ?? "").trim().toLowerCase();
     const password = String(body?.password ?? "").trim();
 
     if (!token) {
@@ -1532,13 +1726,18 @@ export async function authRoutes(app: FastifyInstance) {
 
     const r = await shmFetch<any>(null, "v1/user/passwd/reset/verify", {
       method: "POST",
-      body: { token, password },
+      body: { token, password, ...(resetLogin ? { login: resetLogin } : {}) },
     });
 
-    if (!r.ok) {
-      return reply.code(r.status === 400 ? 400 : 502).send({
+    const resetMessage = shmResponseMessage(r.json).toLowerCase();
+    const resetRejected = resetMessage.includes("required") ||
+      resetMessage.includes("invalid") ||
+      resetMessage.includes("expired") ||
+      resetMessage.includes("not found");
+    if (!r.ok || resetRejected) {
+      return reply.code(r.status === 400 || resetRejected ? 400 : 502).send({
         ok: false,
-        error: r.status === 400 ? "invalid_or_expired_token" : "shm_reset_failed",
+        error: r.status === 400 || resetRejected ? "invalid_or_expired_token" : "shm_reset_failed",
       });
     }
 

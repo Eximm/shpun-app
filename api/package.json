@@ -7,10 +7,11 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "test:email": "tsx --test src/shared/utils/email.test.ts src/modules/emailValidation/routes.test.ts",
+    "test:shm-compat": "tsx --test src/shared/shm/shmClient.compat.test.ts src/modules/auth/oauth.routes.test.ts",
     "test:reviews": "tsx --test src/modules/reviews/repo.test.ts src/modules/reviews/notifications.test.ts",
     "test:support": "tsx --test src/modules/support/repository.test.ts src/modules/support/service.test.ts src/modules/support/routes.test.ts src/modules/support/notifications.test.ts src/modules/support/telegram.test.ts src/modules/support/partnership.test.ts src/modules/support/attachments.test.ts src/modules/support/migration.test.ts src/modules/support/staffReplyNotifications.test.ts",
     "test:server-status": "tsx --test src/modules/serverStatus/health.test.ts src/modules/serverStatus/routes.test.ts",
-    "test": "npm run test:email && npm run test:reviews && npm run test:support && npm run test:server-status",
+    "test": "npm run test:email && npm run test:shm-compat && npm run test:reviews && npm run test:support && npm run test:server-status",
     "start": "node dist/index.js",
     "deps:check": "npm ls fastify @fastify/formbody @fastify/multipart"
   },

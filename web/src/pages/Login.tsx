@@ -31,6 +31,7 @@ type TgWebApp  = { initData?: string; ready?: () => void; expand?: () => void };
 type Mode      = "detecting" | "telegram" | "web";
 type AuthModal = "none" | "login" | "register" | "forgot" | "reset";
 type TgWidgetState           = "idle" | "loading" | "ready" | "failed";
+type OAuthProvider           = "yandex" | "google" | "github";
 type RegisterEmailClientCode =
   | "email_required"
   | "email_invalid_format"
@@ -270,6 +271,15 @@ function mapRedirectError(e: string, t: (k: string, fb?: string) => string): str
     case "user_lookup_failed":       return t("login.err.user_lookup_failed");
     case "not_authenticated":
     case "session_expired":          return t("login.err.not_authenticated");
+    case "oauth_cancelled":          return t("login.oauth.error.cancelled");
+    case "oauth_link_required":      return t("login.oauth.error.link_required");
+    case "oauth_already_linked":     return t("login.oauth.error.already_linked");
+    case "oauth_state_invalid":      return t("login.oauth.error.state");
+    case "oauth_init_failed":
+    case "oauth_code_missing":
+    case "oauth_callback_failed":
+    case "oauth_session_missing":
+    case "oauth_user_lookup_failed": return t("login.oauth.error.failed");
     default:                         return t("login.err.unknown");
   }
 }
@@ -396,6 +406,7 @@ export function Login() {
 
   // ── Reset password (по токену из письма) ──────────────────────────────────
   const [resetToken,       setResetToken]       = useState("");
+  const [resetLogin,       setResetLogin]       = useState("");
   const [resetPwd1,        setResetPwd1]        = useState("");
   const [resetPwd2,        setResetPwd2]        = useState("");
   const [resetShowPwd1,    setResetShowPwd1]    = useState(false);
@@ -434,6 +445,7 @@ export function Login() {
   const lastToastRef            = useRef<{ msg: string; at: number }>({ msg: "", at: 0 });
 
   const botUsername = useMemo(() => getTelegramBotUsername(), []);
+  const [oauthProviders, setOauthProviders] = useState<OAuthProvider[]>([]);
 
   // ── Derived ───────────────────────────────────────────────────────────────
   const canPasswordLogin    = login.trim().length > 0 && password.length > 0;
@@ -446,8 +458,13 @@ export function Login() {
     : registerEmailCode === "email_invalid_format" ? t("login.err.email_invalid_format")
     : registerEmailCode === "email_domain_not_allowed" ? t("login.err.email_domain_not_allowed")
     : "";
-  const canPasswordRegister = login.trim().length > 0 && password.length > 0
+  const canPasswordRegister = login.trim().length > 0 && password.length >= 10
     && password2.length > 0 && password === password2 && !registerEmailCode;
+
+  function startOauth(provider: OAuthProvider) {
+    setAuthPending(provider);
+    window.location.assign(`/api/auth/oauth/${encodeURIComponent(provider)}/start`);
+  }
 
   useEffect(() => {
     if (authModal === "none") return;
@@ -574,20 +591,23 @@ export function Login() {
   }
 
   // ── Reset password logic ──────────────────────────────────────────────────
-  function openResetModal(token: string) {
+  function openResetModal(token: string, login = "") {
     // Сбрасываем всё предыдущее
     setResetToken(token);
+    setResetLogin(login);
     setResetPwd1(""); setResetPwd2(""); setResetShowPwd1(false); setResetShowPwd2(false);
     setResetError(null); setResetDone(false); setResetVerifyError(null);
     setAuthModal("reset");
-    void verifyResetToken(token);
+    void verifyResetToken(token, login);
   }
 
-  async function verifyResetToken(token: string) {
+  async function verifyResetToken(token: string, login = "") {
     setResetVerifying(true);
     setResetVerifyError(null);
     try {
-      await apiFetch(`/auth/password-reset/verify?token=${encodeURIComponent(token)}`);
+      const query = new URLSearchParams({ token });
+      if (login) query.set("login", login);
+      await apiFetch(`/auth/password-reset/verify?${query.toString()}`);
     } catch (e: any) {
       const code = String(e?.code ?? e?.data?.error ?? "");
       setResetVerifyError(
@@ -607,7 +627,7 @@ export function Login() {
     try {
       await apiFetch("/auth/password-reset/confirm", {
         method: "POST",
-        body: { token: resetToken, password: resetPwd1.trim() },
+        body: { token: resetToken, login: resetLogin, password: resetPwd1.trim() },
       });
       setResetDone(true);
     } catch (e: any) {
@@ -846,18 +866,34 @@ export function Login() {
     return () => { cancelled = true; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    let cancelled = false;
+    void apiFetch<{ providers?: string[] }>("/auth/oauth/providers")
+      .then((result) => {
+        if (cancelled) return;
+        const providers = Array.isArray(result?.providers) ? result.providers : [];
+        setOauthProviders(providers.filter((item): item is OAuthProvider =>
+          item === "yandex" || item === "google" || item === "github"
+        ));
+      })
+      .catch(() => { if (!cancelled) setOauthProviders([]); });
+    return () => { cancelled = true; };
+  }, []);
+
   // ?token= — открываем модалку смены пароля
   useEffect(() => {
     if (tokenHandledRef.current) return;
     const sp    = new URLSearchParams(String(loc?.search ?? ""));
     const token = sp.get("token")?.trim();
+    const resetLogin = sp.get("login")?.trim() || "";
     if (!token) return;
     tokenHandledRef.current = true;
     // Убираем токен из URL
     sp.delete("token");
+    sp.delete("login");
     const nextSearch = sp.toString();
     window.history.replaceState(null, "", window.location.pathname + (nextSearch ? `?${nextSearch}` : ""));
-    openResetModal(token);
+    openResetModal(token, resetLogin);
   }, [loc?.search]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ?a=auth_ok — после редиректа из виджета
@@ -1202,6 +1238,24 @@ export function Login() {
                   {referralAlias
                     ? <>{t("login.partner.name")}: <b>{referralAlias}</b></>
                     : <>{t("login.partner.id")}: <b>{partnerIdInput}</b></>}
+                </div>
+              </div>
+            )}
+            {oauthProviders.length > 0 && (
+              <div className="loginOauth" aria-label={t("login.oauth.title")}>
+                <div className="loginOauth__title">{t("login.oauth.title")}</div>
+                <div className="loginOauth__buttons">
+                  {oauthProviders.map((provider) => (
+                    <button
+                      key={provider}
+                      type="button"
+                      className="btn loginOauth__button"
+                      onClick={() => startOauth(provider)}
+                      disabled={loading}
+                    >
+                      {t(`login.oauth.${provider}`)}
+                    </button>
+                  ))}
                 </div>
               </div>
             )}

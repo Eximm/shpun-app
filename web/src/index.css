@@ -2421,6 +2421,11 @@ button, a { -webkit-tap-highlight-color: transparent; }
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
+
+.loginOauth { margin-bottom: 16px; }
+.loginOauth__title { margin-bottom: 8px; color: rgba(255,255,255,.62); font-size: 12px; font-weight: 800; text-align: center; }
+.loginOauth__buttons { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
+.loginOauth__button { min-height: 42px; font-weight: 850; }
 .loginModalDivider::before,
 .loginModalDivider::after {
   content: "";

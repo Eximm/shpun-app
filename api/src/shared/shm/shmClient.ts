@@ -274,23 +274,24 @@ export async function shmTelegramWebAuthBind(
   sessionId: string,
   uid: number,
   widgetPayload: Record<string, any>,
-  clientIp?: string
+  clientIp?: string,
+  opts?: { accountsApi?: boolean }
 ) {
   return await shmFetch<any>(sessionId, 'v1/telegram/web/auth', {
     method: 'POST',
     headers: ipHeaders(clientIp),
     body: withTelegramProfile({
       ...(widgetPayload ?? {}),
-      uid,
-      bind_to_profile: 1,
-      bind_only_if_new: 1,
+      ...(opts?.accountsApi ? { session_id: sessionId } : { uid }),
+      bind_to_profile: true,
+      bind_only_if_new: true,
     }),
   })
 }
 
 export async function shmTelegramWebAuthRegister(
   widgetPayload: Record<string, any>,
-  opts?: { clientIp?: string; partnerId?: number }
+  opts?: { clientIp?: string }
 ) {
   return await shmFetch<{ session_id?: string }>(null, 'v1/telegram/web/auth', {
     method: 'POST',
@@ -298,7 +299,6 @@ export async function shmTelegramWebAuthRegister(
     body: withTelegramProfile({
       ...(widgetPayload ?? {}),
       register_if_not_exists: 1,
-      ...(opts?.partnerId ? { partner_id: opts.partnerId } : {}),
     }),
   })
 }
@@ -310,14 +310,12 @@ export async function shmTelegramWebAuthRegister(
 export async function shmGetMe(sessionId: string) {
   return await shmFetch<any>(sessionId, 'v1/user', {
     method: 'GET',
-    query: { limit: 1, offset: 0 },
   })
 }
 
 export async function shmGetUserEmail(sessionId: string) {
   return await shmFetch<any>(sessionId, 'v1/user/email', {
     method: 'GET',
-    query: { limit: 1, offset: 0 },
   })
 }
 
@@ -328,16 +326,25 @@ export async function shmSetUserEmail(sessionId: string, email: string) {
   })
 }
 
-export async function shmDeleteUserEmail(sessionId: string) {
+export async function shmDeleteUserEmail(sessionId: string, email: string) {
   return await shmFetch<any>(sessionId, 'v1/user/email', {
     method: 'DELETE',
+    body: { email },
   })
 }
 
 export async function shmRequestUserEmailVerify(sessionId: string, payload?: Record<string, any>) {
-  return await shmFetch<any>(sessionId, 'v1/user/email/verify', {
+  // /user/email is supported by both SHM 2.x and 3.x. The legacy
+  // /user/email/verify alias was removed in SHM 3.0.
+  return await shmFetch<any>(sessionId, 'v1/user/email', {
     method: 'POST',
     body: payload ?? {},
+  })
+}
+
+export async function shmGetUserAccounts(sessionId: string) {
+  return await shmFetch<any>(sessionId, 'v1/user/accounts', {
+    method: 'GET',
   })
 }
 
@@ -422,21 +429,23 @@ export async function shmCreateServiceOrder(sessionId: string, service_id: numbe
 // PAYMENTS
 // =====================
 
-export async function shmGetPaySystems(sessionId: string, opts?: { limit?: number; offset?: number }) {
-  const limit = opts?.limit ?? 50
-  const offset = opts?.offset ?? 0
+export async function shmGetPaySystems(
+  sessionId: string,
+  opts?: { amount?: number; paysystem?: string; pp?: boolean }
+) {
   return await shmFetch<any>(sessionId, 'v1/user/pay/paysystems', {
     method: 'GET',
-    query: { limit, offset },
+    query: opts,
   })
 }
 
-export async function shmGetPayForecast(sessionId: string, opts?: { limit?: number; offset?: number }) {
-  const limit = opts?.limit ?? 25
-  const offset = opts?.offset ?? 0
+export async function shmGetPayForecast(
+  sessionId: string,
+  opts?: { days?: number; consider_today?: boolean; blocked?: boolean }
+) {
   return await shmFetch<any>(sessionId, 'v1/user/pay/forecast', {
     method: 'GET',
-    query: { limit, offset },
+    query: opts,
   })
 }
 

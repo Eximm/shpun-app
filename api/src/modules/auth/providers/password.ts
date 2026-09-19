@@ -165,7 +165,6 @@ async function shmLogin(
   try {
     const meR = await shmFetch<any>(sessionId, "v1/user", {
       method: "GET",
-      query: { limit: 1, offset: 0 },
       signal,
     });
 
@@ -192,9 +191,21 @@ async function shmSetClientName(
   signal: AbortSignal
 ) {
   if (!client) return;
-  await shmFetch(sessionId, "v1/user", {
+  const legacy = await shmFetch(sessionId, "v1/user", {
     method: "POST",
     body: { full_name: client },
+    signal,
+  });
+  if (legacy.ok || (legacy.status !== 404 && legacy.status !== 405)) return;
+
+  await shmFetch(null, "v1/template/shpun_app", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: toFormUrlEncoded({
+      session_id: sessionId,
+      action: "profile.set",
+      full_name: client,
+    }),
     signal,
   });
 }
@@ -265,6 +276,10 @@ export async function passwordAuth(body: any): Promise<AuthResult> {
   }
 
   if (mode === "register") {
+    if (password.length < 10) {
+      return { ok: false, status: 400, error: "password_too_short" };
+    }
+
     if (isTelegramStyleLogin(login)) {
       return {
         ok: false,

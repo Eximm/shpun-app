@@ -5,6 +5,7 @@ import { getSessionFromRequest } from "../../shared/session/sessionStore.js";
 import { fetchMe } from "./me.js";
 import {
   shmDeleteUserEmail,
+  shmGetUserAccounts,
   shmFetch,
   shmRequestUserEmailVerify,
   shmSetUserEmail,
@@ -160,7 +161,7 @@ async function readCurrentEmail(sessionId: string): Promise<{
   emailVerified: boolean | null;
 }> {
   const r = await shmFetch<any>(sessionId, "v1/user/email", {
-    method: "GET", query: { limit: 1, offset: 0 },
+    method: "GET",
   });
   if (!r.ok) throw new Error("shm_email_get_failed");
   return {
@@ -306,8 +307,14 @@ export async function userRoutes(app: FastifyInstance) {
     if (!full_name && !phone) {
       return reply.code(400).send({ ok: false, error: "empty_update" });
     }
+    if (full_name.length > 64) {
+      return reply.code(400).send({ ok: false, error: "full_name_too_long" });
+    }
+    if (phone.length > 16) {
+      return reply.code(400).send({ ok: false, error: "phone_too_long" });
+    }
 
-    const r = await shmFetch<any>(s.shmSessionId, "v1/user", {
+    let r = await shmFetch<any>(s.shmSessionId, "v1/user", {
       method: "POST",
       body: {
         ...(full_name ? { full_name } : {}),
@@ -315,9 +322,21 @@ export async function userRoutes(app: FastifyInstance) {
       },
     });
 
-    if (!r.ok) {
+    // SHM 3.x removed POST /user. Keep the direct request for the current
+    // SHM 2.x deployment and fall back to our update-safe billing template.
+    if (!r.ok && (r.status === 404 || r.status === 405)) {
+      r = await callShpunAppAction(s.shmSessionId, "profile.set", {
+        ...(full_name ? { full_name } : {}),
+        ...(phone ? { phone } : {}),
+      });
+    }
+
+    if (!r.ok || (r.json && (r.json as any).ok === 0)) {
       return reply.code(r.status || 502).send({
-        ok: false, error: "shm_update_failed", shm: { status: r.status }, text: r.text,
+        ok: false,
+        error: (r.json as any)?.error || "shm_update_failed",
+        shm: { status: r.status },
+        text: r.text,
       });
     }
 
@@ -406,7 +425,12 @@ export async function userRoutes(app: FastifyInstance) {
       return reply.code(401).send({ ok: false, error: "not_authenticated" });
     }
 
-    const r = await shmDeleteUserEmail(s.shmSessionId);
+    const current = await readCurrentEmail(s.shmSessionId).catch(() => ({ email: null }));
+    if (!current.email) {
+      return reply.code(400).send({ ok: false, error: "no_email_set" });
+    }
+
+    const r = await shmDeleteUserEmail(s.shmSessionId, current.email);
     if (!r.ok) {
       return reply.code(r.status || 502).send({
         ok: false, error: "shm_email_delete_failed", shm: { status: r.status }, text: r.text,
@@ -414,6 +438,36 @@ export async function userRoutes(app: FastifyInstance) {
     }
 
     return reply.send({ ok: true });
+  });
+
+  // GET /user/accounts — SHM 3.x linked login methods. On SHM 2.x this is a
+  // capability-safe empty response so the same ShpunApp build can be deployed first.
+  app.get("/user/accounts", async (req, reply) => {
+    const s = getSessionFromRequest(req);
+    if (!s?.shmSessionId) {
+      return reply.code(401).send({ ok: false, error: "not_authenticated" });
+    }
+
+    const r = await shmGetUserAccounts(s.shmSessionId);
+    if (!r.ok && r.status === 404) {
+      return reply.send({ ok: true, supported: false, accounts: [] });
+    }
+    if (!r.ok) {
+      return reply.code(r.status || 502).send({
+        ok: false,
+        error: "shm_accounts_failed",
+        shm: { status: r.status },
+      });
+    }
+
+    const rows = Array.isArray((r.json as any)?.data) ? (r.json as any).data : [];
+    const accounts = rows.map((item: any) => ({
+      login: String(item?.login ?? ""),
+      type: String(item?.type ?? ""),
+      primary: Boolean(item?.primary),
+    })).filter((item: any) => item.login && item.type);
+
+    return reply.send({ ok: true, supported: true, accounts });
   });
 
   // POST /user/email/verify — оставляем как был (legacy, не используется фронтом напрямую)
@@ -436,7 +490,10 @@ export async function userRoutes(app: FastifyInstance) {
       });
     }
 
-    const r = await shmRequestUserEmailVerify(s.shmSessionId, payload);
+    const r = await shmRequestUserEmailVerify(s.shmSessionId, {
+      ...payload,
+      email: current.email,
+    });
     if (!r.ok) {
       return reply.code(r.status || 502).send({
         ok: false, error: "shm_email_verify_failed", shm: { status: r.status }, text: r.text,
@@ -447,7 +504,7 @@ export async function userRoutes(app: FastifyInstance) {
   });
 
   // POST /user/email/send-code — отправить письмо с кодом верификации
-  // Вызывает POST /shm/v1/user/email/verify — биллинг шлёт письмо с кодом.
+  // POST /shm/v1/user/email поддерживается и SHM 2.x, и SHM 3.x.
   app.post("/user/email/send-code", async (req, reply) => {
     const s = getSessionFromRequest(req);
     if (!s?.shmSessionId) {
@@ -470,10 +527,7 @@ export async function userRoutes(app: FastifyInstance) {
       return reply.code(400).send({ ok: false, error: "email_already_verified" });
     }
 
-    const r = await shmFetch<any>(s.shmSessionId, "v1/user/email/verify", {
-      method: "POST",
-      body: { email: current.email },
-    });
+    const r = await shmRequestUserEmailVerify(s.shmSessionId, { email: current.email });
 
     if (!r.ok) {
       return reply.code(r.status || 502).send({
@@ -485,7 +539,7 @@ export async function userRoutes(app: FastifyInstance) {
   });
 
   // POST /user/email/confirm — подтвердить email кодом из письма
-  // Принимает { code }. Вызывает POST /shm/v1/user/email/verify.
+  // Принимает { code }. SHM 3.x требует передать email вместе с кодом.
   app.post("/user/email/confirm", async (req, reply) => {
     const s = getSessionFromRequest(req);
     if (!s?.shmSessionId) {
@@ -509,9 +563,9 @@ export async function userRoutes(app: FastifyInstance) {
       });
     }
 
-    const r = await shmFetch<any>(s.shmSessionId, "v1/user/email/verify", {
-      method: "POST",
-      body: { code },
+    const r = await shmRequestUserEmailVerify(s.shmSessionId, {
+      email: storedEmail.email,
+      code,
     });
 
     if (!r.ok) {
@@ -625,11 +679,24 @@ export async function userRoutes(app: FastifyInstance) {
       return reply.code(502).send({ ok: false, error: "shm_user_lookup_failed" });
     }
 
+    // Capability probe before the mutation: SHM 3.x has /user/accounts,
+    // SHM 2.x answers 404 and still expects the legacy uid argument.
+    const accountsCapability = await shmGetUserAccounts(s.shmSessionId);
+    if (!accountsCapability.ok && accountsCapability.status !== 404) {
+      return reply.code(accountsCapability.status || 502).send({
+        ok: false,
+        error: "telegram_accounts_check_failed",
+        shm: { status: accountsCapability.status },
+      });
+    }
+    const usesAccountsApi = accountsCapability.ok;
+
     const r = await shmTelegramWebAuthBind(
       s.shmSessionId,
       uid,
       pickTelegramWidgetPayload(body),
-      getClientIp(req)
+      getClientIp(req),
+      { accountsApi: usesAccountsApi }
     );
 
     const msg = extractShmMessage(r.json);
@@ -664,23 +731,52 @@ export async function userRoutes(app: FastifyInstance) {
       }
     }
 
-    // SHM официально ищет Telegram-пользователя через login="@id" или login2="@id".
-    // Пользовательский /v1/user молча игнорирует login2, поэтому фиксируем его
-    // через наш billing-шаблон: он выполняется внутри SHM и вызывает u.set(login2).
-    const login2Res = await callShpunAppAction(s.shmSessionId, "auth.telegram", {
-      telegram_id: telegramId,
-      telegram_login: String(body?.username ?? "").trim(),
-    });
-    const login2Msg = extractShmMessage(login2Res.json);
-    const login2ApiError = String((login2Res.json as any)?.error ?? "").trim();
-    if (!login2Res.ok || login2ApiError) {
-      return reply.code(login2Res.status === 409 ? 409 : login2Res.status || 502).send({
+    // SHM 3.x создаёт account(type=telegram) штатно при bind_to_profile.
+    // В SHM 2.x /user/accounts отсутствует, поэтому только там сохраняем
+    // прежний login2 через billing-template.
+    const accountsRes = usesAccountsApi
+      ? await shmGetUserAccounts(s.shmSessionId)
+      : accountsCapability;
+    const accounts = Array.isArray((accountsRes.json as any)?.data)
+      ? (accountsRes.json as any).data
+      : [];
+    const nativeTelegramBound = accountsRes.ok && accounts.some((account: any) =>
+      String(account?.type ?? "").toLowerCase() === "telegram" &&
+      String(account?.login ?? "").replace(/^@/, "") === telegramId
+    );
+
+    if (accountsRes.ok && !nativeTelegramBound) {
+      return reply.code(502).send({
         ok: false,
-        error: login2ApiError || login2Msg || "telegram_login_bind_failed",
-        message: login2Msg || null,
-        details: "telegram_login_is_already_used_or_rejected",
-        shm: { status: login2Res.status },
+        error: "telegram_account_not_persisted",
+        details: "SHM accepted the bind but did not create a telegram account.",
       });
+    }
+
+    if (!accountsRes.ok && accountsRes.status !== 404) {
+      return reply.code(accountsRes.status || 502).send({
+        ok: false,
+        error: "telegram_accounts_check_failed",
+        shm: { status: accountsRes.status },
+      });
+    }
+
+    if (!accountsRes.ok) {
+      const login2Res = await callShpunAppAction(s.shmSessionId, "auth.telegram", {
+        telegram_id: telegramId,
+        telegram_login: String(body?.username ?? "").trim(),
+      });
+      const login2Msg = extractShmMessage(login2Res.json);
+      const login2ApiError = String((login2Res.json as any)?.error ?? "").trim();
+      if (!login2Res.ok || login2ApiError) {
+        return reply.code(login2Res.status === 409 ? 409 : login2Res.status || 502).send({
+          ok: false,
+          error: login2ApiError || login2Msg || "telegram_login_bind_failed",
+          message: login2Msg || null,
+          details: "telegram_login_is_already_used_or_rejected",
+          shm: { status: login2Res.status },
+        });
+      }
     }
 
     const tg = await fetchTelegramUser(s.shmSessionId);
