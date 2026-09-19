@@ -34,7 +34,7 @@ export default defineConfig({
         name: "ShpunApp",
         short_name: "ShpunApp",
         description:
-          "Shpun SDN System — кабинет, баланс, услуги и управление подпиской.",
+          "Shpun — интернет и подключение: услуги, баланс и управление подпиской в одном приложении.",
 
         start_url: "/",
         id: "/",
