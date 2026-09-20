@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../../shared/api/client";
 import { useI18n } from "../../shared/i18n";
 import { refreshAdminOverview } from "../../app/notifications/adminOverview";
-import { AdminSectionHeader } from "./shared";
+import { AdminSectionHeader, ADMIN_SECTION_ICON } from "./shared";
 import type { AdminSettingsResp } from "./types";
 
 type RewardStatus = "none" | "processing" | "rewarded" | "failed";
@@ -142,6 +142,7 @@ export function ReviewsSection() {
   return (
     <div className="card"><div className="card__body">
       <AdminSectionHeader
+          icon={ADMIN_SECTION_ICON.reviews}
         kicker={t("admin.tab.reviews")}
         title={t("admin.section.reviews.title")}
         subtitle={t("admin.section.reviews.subtitle")}

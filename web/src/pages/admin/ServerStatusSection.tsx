@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../../shared/api/client";
 import { useI18n } from "../../shared/i18n";
-import { AdminSectionHeader } from "./shared";
+import { AdminSectionHeader, ADMIN_SECTION_ICON } from "./shared";
 
 type TFn = ReturnType<typeof useI18n>["t"];
 
@@ -265,6 +265,7 @@ export function ServerStatusSection() {
       <div className="card">
         <div className="card__body">
           <AdminSectionHeader
+          icon={ADMIN_SECTION_ICON.serverStatus}
             kicker={t("admin.tab.serverStatus")}
             title={t("admin.section.servers.title")}
             subtitle={loading ? t("common.loading") : t("admin.section.servers.nodes", { count: items.length })}

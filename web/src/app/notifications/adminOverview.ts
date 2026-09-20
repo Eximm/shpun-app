@@ -1,7 +1,8 @@
 // web/src/app/notifications/adminOverview.ts
 //
 // Shared admin operational dashboard aggregate.
-// Backend: GET /api/admin/overview -> { ok, attention, system, summary, errors }.
+// Backend: GET /api/admin/overview ->
+//   { ok, updatedAt, attention, system, summary, today, activity, errors }.
 //
 // Single source of truth for the admin overview cards, the nav badges and the
 // topbar bell. Admin-only: the store is only fetched when `enabled` (isAdmin)
@@ -34,17 +35,39 @@ export type AdminOverviewSummary = {
   campaigns: number;
 };
 
+export type AdminOverviewToday = {
+  supportTickets: number;
+  partnershipTickets: number;
+  referrals: number;
+  reviews: number;
+};
+
+export type AdminOverviewActivityItem = {
+  type: string;
+  ts: number;
+  reason?: string;
+  ticketId?: number;
+  publicNo?: string;
+  reviewId?: number;
+  alias?: string;
+};
+
 export type AdminOverviewErrors = {
   support: boolean;
   reviews: boolean;
   system: boolean;
   summary: boolean;
+  today: boolean;
+  activity: boolean;
 };
 
 export type AdminOverview = {
   attention: AdminOverviewAttention;
   system: AdminOverviewSystem;
   summary: AdminOverviewSummary;
+  today: AdminOverviewToday;
+  activity: AdminOverviewActivityItem[];
+  updatedAt: string;
   errors: AdminOverviewErrors;
 };
 
@@ -59,7 +82,10 @@ export const EMPTY_ADMIN_OVERVIEW: AdminOverview = {
   attention: { total: 0, support: 0, partnership: 0, reviews: 0 },
   system: { status: "unknown", offline: 0, hot: 0, issues: 0, total: 0 },
   summary: { aliases: 0, enabledAliases: 0, partners: 0, campaigns: 0 },
-  errors: { support: false, reviews: false, system: false, summary: false },
+  today: { supportTickets: 0, partnershipTickets: 0, referrals: 0, reviews: 0 },
+  activity: [],
+  updatedAt: "",
+  errors: { support: false, reviews: false, system: false, summary: false, today: false, activity: false },
 };
 
 function toCount(value: unknown): number {
@@ -74,6 +100,23 @@ function toBool(value: unknown): boolean {
 function toSystemStatus(value: unknown): AdminOverviewSystemStatus {
   const s = String(value ?? "").trim();
   return s === "ok" || s === "degraded" || s === "down" || s === "unknown" ? s : "unknown";
+}
+
+function toActivityItem(raw: unknown): AdminOverviewActivityItem | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const type = String(r.type ?? "").trim();
+  const ts = toCount(r.ts);
+  if (!type || ts <= 0) return null;
+  return {
+    type,
+    ts,
+    ...(r.reason ? { reason: String(r.reason) } : {}),
+    ...(toCount(r.ticketId) ? { ticketId: toCount(r.ticketId) } : {}),
+    ...(r.publicNo ? { publicNo: String(r.publicNo) } : {}),
+    ...(toCount(r.reviewId) ? { reviewId: toCount(r.reviewId) } : {}),
+    ...(r.alias ? { alias: String(r.alias) } : {}),
+  };
 }
 
 let state: AdminOverviewState = {
@@ -104,9 +147,12 @@ export async function refreshAdminOverview(): Promise<AdminOverview> {
   try {
     const response = await apiFetch<{
       ok: true;
+      updatedAt?: string;
       attention?: Partial<AdminOverviewAttention>;
       system?: Partial<AdminOverviewSystem>;
       summary?: Partial<AdminOverviewSummary>;
+      today?: Partial<AdminOverviewToday>;
+      activity?: unknown[];
       errors?: Partial<AdminOverviewErrors>;
     }>("/admin/overview", { method: "GET" });
 
@@ -130,11 +176,23 @@ export async function refreshAdminOverview(): Promise<AdminOverview> {
         partners: toCount(response?.summary?.partners),
         campaigns: toCount(response?.summary?.campaigns),
       },
+      today: {
+        supportTickets: toCount(response?.today?.supportTickets),
+        partnershipTickets: toCount(response?.today?.partnershipTickets),
+        referrals: toCount(response?.today?.referrals),
+        reviews: toCount(response?.today?.reviews),
+      },
+      activity: Array.isArray(response?.activity)
+        ? response!.activity!.map(toActivityItem).filter((x): x is AdminOverviewActivityItem => x !== null).slice(0, 8)
+        : [],
+      updatedAt: typeof response?.updatedAt === "string" ? response.updatedAt : new Date().toISOString(),
       errors: {
         support: toBool(response?.errors?.support),
         reviews: toBool(response?.errors?.reviews),
         system: toBool(response?.errors?.system),
         summary: toBool(response?.errors?.summary),
+        today: toBool(response?.errors?.today),
+        activity: toBool(response?.errors?.activity),
       },
     };
 
@@ -153,24 +211,40 @@ let subscriberCount = 0;
 let pollTimer: number | null = null;
 let visibilityHandler: (() => void) | null = null;
 
+function startPollTimer(): void {
+  if (pollTimer != null) return;
+  pollTimer = window.setInterval(() => void refreshAdminOverview(), 60_000);
+}
+
+function stopPollTimer(): void {
+  if (pollTimer == null) return;
+  window.clearInterval(pollTimer);
+  pollTimer = null;
+}
+
+function handleVisibility(): void {
+  if (document.visibilityState === "visible") {
+    void refreshAdminOverview();
+    startPollTimer();
+  } else {
+    // Hidden tab: stop useless polling, refresh immediately on return.
+    stopPollTimer();
+  }
+}
+
 function subscribePolling(): void {
   subscriberCount += 1;
-  if (subscriberCount > 1 || pollTimer != null) return;
+  if (subscriberCount > 1) return;
   void refreshAdminOverview();
-  pollTimer = window.setInterval(() => void refreshAdminOverview(), 60_000);
-  visibilityHandler = () => {
-    if (document.visibilityState === "visible") void refreshAdminOverview();
-  };
+  if (document.visibilityState === "visible") startPollTimer();
+  visibilityHandler = handleVisibility;
   document.addEventListener("visibilitychange", visibilityHandler);
 }
 
 function unsubscribePolling(): void {
   subscriberCount = Math.max(0, subscriberCount - 1);
   if (subscriberCount > 0) return;
-  if (pollTimer != null) {
-    window.clearInterval(pollTimer);
-    pollTimer = null;
-  }
+  stopPollTimer();
   if (visibilityHandler) {
     document.removeEventListener("visibilitychange", visibilityHandler);
     visibilityHandler = null;

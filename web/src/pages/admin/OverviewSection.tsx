@@ -1,17 +1,22 @@
 // web/src/pages/admin/OverviewSection.tsx
 //
 // Admin operational dashboard ("control center"): what needs attention right
-// now, whether the service is healthy, and where to click to fix it.
-// Aggregates the existing admin overview endpoint (counts only) and links into
-// the existing URL-driven admin tabs. No business logic lives here.
+// now, what happened recently, and what happened in the last 24 hours.
+// Aggregates the existing admin overview endpoint (counts + activity only) and
+// links into the existing URL-driven admin tabs. No business logic lives here.
 
-import type { AdminOverviewState, AdminOverviewSystemStatus } from "../../app/notifications/adminOverview";
+import type {
+  AdminOverviewActivityItem,
+  AdminOverviewState,
+  AdminOverviewSystemStatus,
+} from "../../app/notifications/adminOverview";
 import { refreshAdminOverview } from "../../app/notifications/adminOverview";
 import { useI18n } from "../../shared/i18n";
-import { AdminSectionHeader, AdminSectionIcon, type AdminNavIconName } from "./shared";
+import { AdminSectionHeader, AdminSectionIcon, ADMIN_SECTION_ICON, activityIconName, type AdminNavIconName } from "./shared";
 import type { AdminTab } from "./types";
 
 type Tone = "critical" | "attention" | "normal" | "muted";
+type OpenTarget = { tab: AdminTab; extra?: Record<string, string> };
 
 function DashboardCard({
   icon,
@@ -59,12 +64,53 @@ function DashboardCard({
   );
 }
 
-function systemStatusText(status: AdminOverviewSystemStatus, t: (k: string, p?: Record<string, string | number>) => string): string {
+function systemStatusText(
+  status: AdminOverviewSystemStatus,
+  t: (k: string, p?: Record<string, string | number>) => string
+): string {
   switch (status) {
     case "ok":       return t("admin.overview.system.ok");
     case "degraded": return t("admin.overview.system.degraded");
     case "down":     return t("admin.overview.system.down");
     default:         return t("admin.overview.system.unknown");
+  }
+}
+
+/** Map an activity item to a label, optional context and a destination. */
+function activityText(
+  item: AdminOverviewActivityItem,
+  t: (k: string, p?: Record<string, string | number>) => string
+): { title: string; context?: string; to: OpenTarget | null } {
+  const no = item.publicNo || (item.ticketId ? String(item.ticketId) : "");
+  switch (item.type) {
+    case "support.ticket":
+      return {
+        title: item.reason === "message"
+          ? t("admin.overview.activity.support.message")
+          : t("admin.overview.activity.support.created"),
+        context: no ? t("admin.overview.activity.ticket_ref", { no }) : undefined,
+        to: item.ticketId ? { tab: "support", extra: { ticket: String(item.ticketId) } } : { tab: "support" },
+      };
+    case "partnership.ticket":
+      return {
+        title: item.reason === "message"
+          ? t("admin.overview.activity.partnership.message")
+          : t("admin.overview.activity.partnership.created"),
+        context: no ? t("admin.overview.activity.ticket_ref", { no }) : undefined,
+        to: item.ticketId
+          ? { tab: "support", extra: { kind: "partnership", ticket: String(item.ticketId) } }
+          : { tab: "support", extra: { kind: "partnership" } },
+      };
+    case "review.new":
+      return { title: t("admin.overview.activity.review.new"), to: { tab: "reviews" } };
+    case "referral.registration":
+      return {
+        title: t("admin.overview.activity.referral"),
+        context: item.alias || undefined,
+        to: { tab: "referralAliases" },
+      };
+    default:
+      return { title: t("admin.overview.activity.unknown"), to: null };
   }
 }
 
@@ -75,13 +121,15 @@ export function OverviewSection({
   overview: AdminOverviewState;
   onOpen: (tab: AdminTab, extra?: Record<string, string>) => void;
 }) {
-  const { t } = useI18n();
+  const { t, formatDate, formatRelative } = useI18n();
   const data = overview.data;
   const stale = overview.failed;
   const supportDown = stale || data.errors.support;
   const reviewsDown = stale || data.errors.reviews;
   const systemDown = stale || data.errors.system;
   const summaryDown = stale || data.errors.summary;
+  const todayDown = stale || data.errors.today;
+  const activityDown = stale || data.errors.activity;
 
   const loadingFirst = overview.loading && overview.lastFetchedAt === 0;
   const attentionTotal = data.attention.total;
@@ -117,6 +165,10 @@ export function OverviewSection({
         ? "attention"
         : "normal";
 
+  const updatedLabel = data.updatedAt
+    ? t("admin.overview.updated", { time: formatDate(data.updatedAt, { hour: "2-digit", minute: "2-digit" }) })
+    : "";
+
   return (
     <div className="card">
       <div className="card__body">
@@ -125,21 +177,30 @@ export function OverviewSection({
           title={t("admin.overview.title")}
           subtitle={t("admin.overview.subtitle")}
           actions={
-            <button
-              className="btn btn--soft"
-              type="button"
-              onClick={() => void refreshAdminOverview()}
-              aria-label={t("common.refresh")}
-              title={t("common.refresh")}
-            >
-              ↻
-            </button>
+            <div className="admin-refreshBox">
+              {updatedLabel ? <span className="admin-refreshBox__time">{updatedLabel}</span> : null}
+              <button
+                className={`btn btn--soft admin-refreshBox__btn${overview.loading ? " is-refreshing" : ""}`}
+                type="button"
+                onClick={() => void refreshAdminOverview()}
+                aria-label={t("common.refresh")}
+                title={t("common.refresh")}
+              >
+                <AdminSectionIcon name="refresh" size={16} />
+              </button>
+            </div>
           }
         />
 
+        {stale && (
+          <p className="p admin-staleNote admin-gap-top-sm">{t("admin.overview.stale")}</p>
+        )}
+
         {allCalm && (
           <div className="admin-allCalm admin-gap-top-md">
-            <span className="admin-allCalm__icon" aria-hidden="true">✓</span>
+            <span className="admin-allCalm__icon" aria-hidden="true">
+              <AdminSectionIcon name="check" size={18} />
+            </span>
             <div>
               <div className="admin-allCalm__title">{t("admin.overview.allgood.title")}</div>
               <div className="admin-allCalm__text">{t("admin.overview.allgood.text")}</div>
@@ -158,7 +219,7 @@ export function OverviewSection({
         ) : (
           <div className="admin-dashGrid admin-gap-top-sm">
             <DashboardCard
-              icon="support"
+              icon={ADMIN_SECTION_ICON.support}
               title={t("admin.overview.support")}
               status={supportStatus}
               count={supportDown ? 0 : data.attention.support}
@@ -166,7 +227,7 @@ export function OverviewSection({
               onClick={() => onOpen("support")}
             />
             <DashboardCard
-              icon="referral"
+              icon={activityIconName("partnership.ticket")}
               title={t("admin.overview.partnership")}
               status={partnershipStatus}
               count={supportDown ? 0 : data.attention.partnership}
@@ -174,7 +235,7 @@ export function OverviewSection({
               onClick={() => onOpen("support", { kind: "partnership" })}
             />
             <DashboardCard
-              icon="reviews"
+              icon={ADMIN_SECTION_ICON.reviews}
               title={t("admin.overview.reviews")}
               status={reviewsStatus}
               count={reviewsDown ? 0 : data.attention.reviews}
@@ -182,7 +243,7 @@ export function OverviewSection({
               onClick={() => onOpen("reviews")}
             />
             <DashboardCard
-              icon="servers"
+              icon={ADMIN_SECTION_ICON.serverStatus}
               title={t("admin.overview.system")}
               status={systemStatus}
               count={systemDown ? 0 : data.system.issues}
@@ -193,7 +254,89 @@ export function OverviewSection({
           </div>
         )}
 
-        <h3 className="h2 admin-gap-top-md">{t("admin.overview.project.title")}</h3>
+        <h3 className="h2 admin-gap-top-md">
+          <span className="admin-blockTitle">
+            <AdminSectionIcon name="activity" size={16} />
+            {t("admin.overview.activity.title")}
+          </span>
+        </h3>
+        {activityDown ? (
+          <p className="p admin-gap-top-sm">{t("admin.overview.unavailable")}</p>
+        ) : loadingFirst ? (
+          <div className="list admin-gap-top-sm">
+            <div className="skeleton p" />
+            <div className="skeleton p" />
+            <div className="skeleton p" />
+          </div>
+        ) : data.activity.length === 0 ? (
+          <p className="p admin-gap-top-sm">{t("admin.overview.activity.empty")}</p>
+        ) : (
+          <div className="admin-activityList admin-gap-top-sm">
+            {data.activity.map((item, index) => {
+              const meta = activityText(item, t);
+              const clickable = Boolean(meta.to);
+              return (
+                <div
+                  key={`${item.type}:${item.ts}:${index}`}
+                  className={`admin-activityRow${clickable ? " admin-activityRow--clickable" : ""}`}
+                  role={clickable ? "button" : undefined}
+                  tabIndex={clickable ? 0 : undefined}
+                  onClick={clickable && meta.to ? () => onOpen(meta.to!.tab, meta.to!.extra) : undefined}
+                  onKeyDown={clickable && meta.to ? (event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onOpen(meta.to!.tab, meta.to!.extra);
+                    }
+                  } : undefined}
+                >
+                  <span className="admin-activityRow__icon" aria-hidden="true">
+                    <AdminSectionIcon name={activityIconName(item.type)} size={16} />
+                  </span>
+                  <span className="admin-activityRow__body">
+                    <span className="admin-activityRow__title">{meta.title}</span>
+                    {meta.context ? <span className="admin-activityRow__context">{meta.context}</span> : null}
+                  </span>
+                  <span className="admin-activityRow__time">{formatRelative(item.ts)}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <h3 className="h2 admin-gap-top-md">
+          <span className="admin-blockTitle">
+            <AdminSectionIcon name="clock" size={16} />
+            {t("admin.overview.today.title")}
+          </span>
+        </h3>
+        {todayDown ? (
+          <p className="p admin-gap-top-sm">{t("admin.overview.unavailable")}</p>
+        ) : (
+          <div className="admin-todayGrid admin-gap-top-sm">
+            <div className="admin-todayStat">
+              <AdminSectionIcon name={ADMIN_SECTION_ICON.support} size={16} />
+              <span className="admin-todayStat__value">{data.today.supportTickets}</span>
+              <span className="admin-todayStat__label">{t("admin.overview.today.support")}</span>
+            </div>
+            <div className="admin-todayStat">
+              <AdminSectionIcon name={activityIconName("partnership.ticket")} size={16} />
+              <span className="admin-todayStat__value">{data.today.partnershipTickets}</span>
+              <span className="admin-todayStat__label">{t("admin.overview.today.partnership")}</span>
+            </div>
+            <div className="admin-todayStat">
+              <AdminSectionIcon name={ADMIN_SECTION_ICON.referralAliases} size={16} />
+              <span className="admin-todayStat__value">{data.today.referrals}</span>
+              <span className="admin-todayStat__label">{t("admin.overview.today.referrals")}</span>
+            </div>
+            <div className="admin-todayStat">
+              <AdminSectionIcon name={ADMIN_SECTION_ICON.reviews} size={16} />
+              <span className="admin-todayStat__value">{data.today.reviews}</span>
+              <span className="admin-todayStat__label">{t("admin.overview.today.reviews")}</span>
+            </div>
+          </div>
+        )}
+
+        <h3 className="admin-projectTitle admin-gap-top-md">{t("admin.overview.project.title")}</h3>
         {summaryDown ? (
           <p className="p admin-gap-top-sm">{t("admin.overview.unavailable")}</p>
         ) : (
@@ -216,12 +359,6 @@ export function OverviewSection({
             </div>
           </div>
         )}
-
-        <div className="admin-gap-top-md">
-          <button className="btn btn--soft" type="button" onClick={() => onOpen("support")}>
-            {t("admin.overview.open_support")}
-          </button>
-        </div>
       </div>
     </div>
   );

@@ -653,3 +653,17 @@ export class SqliteTicketRepository implements TicketRepository {
 }
 
 export const sqliteTicketRepository = new SqliteTicketRepository();
+
+/**
+ * Cheap dashboard counter: tickets of a kind created at/after a UTC cutoff.
+ * Uses the indexed support_tickets table directly (SQLite backend).
+ */
+export function countTicketsCreatedSince(kind: "support" | "partnership", since: string): number {
+  const cutoff = String(since ?? "").trim();
+  if (!cutoff) return 0;
+  const k = kind === "partnership" ? "partnership" : "support";
+  const row = linkDb
+    .prepare(`SELECT COUNT(*) AS n FROM support_tickets WHERE kind = ? AND datetime(created_at) >= datetime(?)`)
+    .get(k, cutoff) as { n?: number } | undefined;
+  return Math.trunc(Number(row?.n ?? 0)) || 0;
+}

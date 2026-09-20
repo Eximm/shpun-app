@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../../shared/api/client";
 import { useI18n } from "../../shared/i18n";
-import { AdminSectionHeader, ModalShell } from "./shared";
+import { AdminSectionHeader, ModalShell, ADMIN_SECTION_ICON } from "./shared";
 import { formatDateTime, truncateText } from "./utils";
 import type { BroadcastItem, DeleteResp, HideResp, UpdateResp, ListResp } from "./types";
 
@@ -179,6 +179,7 @@ export function BroadcastsSection() {
       <div className="card">
         <div className="card__body">
           <AdminSectionHeader
+          icon={ADMIN_SECTION_ICON.broadcasts}
             kicker={t("admin.tab.broadcasts")}
             title={t("admin.section.broadcasts.title")}
             subtitle={t("admin.section.broadcasts.subtitle")}

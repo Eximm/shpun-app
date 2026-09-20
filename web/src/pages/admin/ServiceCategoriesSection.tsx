@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../../shared/api/client";
 import { useI18n } from "../../shared/i18n";
-import { AdminSectionHeader, ModalShell } from "./shared";
+import { AdminSectionHeader, ModalShell, ADMIN_SECTION_ICON } from "./shared";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -265,6 +265,7 @@ export function ServiceCategoriesSection() {
       <div className="card">
         <div className="card__body">
           <AdminSectionHeader
+          icon={ADMIN_SECTION_ICON.serviceCategories}
             kicker={t("admin.tab.categories")}
             title={t("admin.section.categories.title")}
             subtitle={t("admin.section.categories.subtitle")}

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../../shared/api/client";
 import { useI18n } from "../../shared/i18n";
-import { AdminSectionHeader } from "./shared";
+import { refreshAdminOverview } from "../../app/notifications/adminOverview";
+import { AdminSectionHeader, ADMIN_SECTION_ICON } from "./shared";
 
 type AliasItem = {
   id: number;
@@ -213,6 +214,7 @@ export function ReferralAliasesSection() {
       });
       clearForm();
       await load();
+      void refreshAdminOverview();
       setMessage(form.linkType === "campaign" ? t("admin.referral.msg.saved_campaign") : t("admin.referral.msg.saved_partner"));
     } catch (error: unknown) {
       setMessage(error instanceof Error ? error.message : t("admin.referral.err.save"));
@@ -222,6 +224,7 @@ export function ReferralAliasesSection() {
   async function remove(id: number) {
     await apiFetch(`/admin/referral-aliases/${id}`, { method: "DELETE" });
     await load();
+    void refreshAdminOverview();
   }
 
   const campaignItems = items.filter((item) => item.link_type === "campaign");
@@ -266,6 +269,7 @@ export function ReferralAliasesSection() {
   return (
     <div className="card"><div className="card__body">
       <AdminSectionHeader
+          icon={ADMIN_SECTION_ICON.referralAliases}
         kicker={t("admin.tab.referral")}
         title={t("admin.section.referral.title")}
         subtitle={t("admin.section.referral.subtitle")}

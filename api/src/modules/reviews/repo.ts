@@ -229,6 +229,27 @@ export function countReviewsByStatus(status: string): number {
   return Math.trunc(Number(row?.n ?? 0)) || 0;
 }
 
+/** Reviews created at/after a UTC cutoff (ISO or SQLite timestamp). */
+export function countReviewsSince(since: string): number {
+  const cutoff = String(since ?? "").trim();
+  if (!cutoff) return 0;
+  const row = linkDb.prepare(`SELECT COUNT(*) AS n FROM reviews WHERE datetime(created_at) >= datetime(?)`).get(cutoff) as
+    | { n?: number }
+    | undefined;
+  return Math.trunc(Number(row?.n ?? 0)) || 0;
+}
+
+/** Recent reviews (minimal projection) for the admin activity feed. */
+export function listRecentReviews(limit = 6): Array<{ id: number; status: string; createdAt: string }> {
+  const safe = Math.min(Math.max(toInt(limit, 6), 1), 20);
+  const rows = linkDb.prepare(`
+    SELECT id, status, created_at FROM reviews
+    ORDER BY datetime(created_at) DESC, id DESC
+    LIMIT ?
+  `).all(safe) as Array<{ id: number; status: string; created_at: string }>;
+  return rows.map((r) => ({ id: Number(r.id), status: String(r.status), createdAt: String(r.created_at) }));
+}
+
 export function createReview(input: {
   userId: number;
   userLogin: string;

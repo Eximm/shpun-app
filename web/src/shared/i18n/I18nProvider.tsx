@@ -24,6 +24,8 @@ type I18nCtx = {
   formatNumber: (value: number, options?: Intl.NumberFormatOptions) => string;
   formatCurrency: (value: number, currency?: string) => string;
   formatBytes: (bytes: number) => string;
+  /** Relative time ("5 мин назад"). Accepts seconds, ms or Date. */
+  formatRelative: (value: number | Date | string) => string;
 };
 
 const Ctx = createContext<I18nCtx | null>(null);
@@ -110,6 +112,19 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
       return `${formatNumber(n / (1024 * 1024), { maximumFractionDigits: 1 })} MB`;
     };
 
+    const formatRelative: I18nCtx["formatRelative"] = (value) => {
+      const raw = value instanceof Date ? value.getTime() : Number(value);
+      const ms = Number.isFinite(raw) ? (Math.abs(raw) < 1e12 ? raw * 1000 : raw) : NaN;
+      if (!Number.isFinite(ms)) return "";
+      const diffSec = Math.round((ms - Date.now()) / 1000);
+      const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto", style: "short" });
+      const abs = Math.abs(diffSec);
+      if (abs < 60) return rtf.format(Math.round(diffSec), "second");
+      if (abs < 3600) return rtf.format(Math.round(diffSec / 60), "minute");
+      if (abs < 86400) return rtf.format(Math.round(diffSec / 3600), "hour");
+      return rtf.format(Math.round(diffSec / 86400), "day");
+    };
+
     return {
       lang,
       setLang: (l: Lang) => {
@@ -127,6 +142,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
       formatNumber,
       formatCurrency,
       formatBytes,
+      formatRelative,
     };
   }, [lang]);
 

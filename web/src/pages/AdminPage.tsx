@@ -12,7 +12,7 @@ import { useAdminOverview } from "../app/notifications/adminOverview";
 import { useI18n } from "../shared/i18n";
 import { PageBackButton } from "../shared/ui/PageBackButton";
 
-import { AdminSectionIcon, UnreadMarker, type AdminNavItem } from "./admin/shared";
+import { AdminSectionIcon, UnreadMarker, ADMIN_SECTION_ICON, type AdminNavItem } from "./admin/shared";
 import { OverviewSection } from "./admin/OverviewSection";
 import { BroadcastsSection } from "./admin/BroadcastsSection";
 import { OrderRulesSection } from "./admin/OrderRulesSection";
@@ -52,15 +52,15 @@ export function AdminPage() {
 
   // Single source of truth for navigation, overview shortcuts and mobile picker.
   const navItems: AdminNavItem[] = [
-    { tab: "overview", title: t("admin.tab.overview"), subtitle: t("admin.tab.overview.sub"), icon: "overview", badge: overview.data.attention.total },
-    { tab: "reviews", title: t("admin.tab.reviews"), subtitle: t("admin.tab.reviews.sub"), icon: "reviews", badge: overview.data.attention.reviews },
-    { tab: "broadcasts", title: t("admin.tab.broadcasts"), subtitle: t("admin.tab.broadcasts.sub"), icon: "broadcasts" },
-    { tab: "orderRules", title: t("admin.tab.orders"), subtitle: t("admin.tab.orders.sub"), icon: "orders" },
-    { tab: "trialProtection", title: t("admin.tab.trial"), subtitle: t("admin.tab.trial.sub"), icon: "trial" },
-    { tab: "serviceCategories", title: t("admin.tab.categories"), subtitle: t("admin.tab.categories.sub"), icon: "categories" },
-    { tab: "referralAliases", title: t("admin.tab.referral"), subtitle: t("admin.tab.referral.sub"), icon: "referral" },
-    { tab: "support", title: t("admin.tab.support"), subtitle: t("admin.tab.support.sub"), icon: "support", badge: overview.data.attention.support + overview.data.attention.partnership },
-    { tab: "serverStatus", title: t("admin.tab.serverStatus"), subtitle: t("admin.tab.serverStatus.sub"), icon: "servers" },
+    { tab: "overview", title: t("admin.tab.overview"), subtitle: t("admin.tab.overview.sub"), icon: ADMIN_SECTION_ICON.overview, badge: overview.data.attention.total },
+    { tab: "reviews", title: t("admin.tab.reviews"), subtitle: t("admin.tab.reviews.sub"), icon: ADMIN_SECTION_ICON.reviews, badge: overview.data.attention.reviews },
+    { tab: "broadcasts", title: t("admin.tab.broadcasts"), subtitle: t("admin.tab.broadcasts.sub"), icon: ADMIN_SECTION_ICON.broadcasts },
+    { tab: "orderRules", title: t("admin.tab.orders"), subtitle: t("admin.tab.orders.sub"), icon: ADMIN_SECTION_ICON.orderRules },
+    { tab: "trialProtection", title: t("admin.tab.trial"), subtitle: t("admin.tab.trial.sub"), icon: ADMIN_SECTION_ICON.trialProtection },
+    { tab: "serviceCategories", title: t("admin.tab.categories"), subtitle: t("admin.tab.categories.sub"), icon: ADMIN_SECTION_ICON.serviceCategories },
+    { tab: "referralAliases", title: t("admin.tab.referral"), subtitle: t("admin.tab.referral.sub"), icon: ADMIN_SECTION_ICON.referralAliases },
+    { tab: "support", title: t("admin.tab.support"), subtitle: t("admin.tab.support.sub"), icon: ADMIN_SECTION_ICON.support, badge: overview.data.attention.support + overview.data.attention.partnership },
+    { tab: "serverStatus", title: t("admin.tab.serverStatus"), subtitle: t("admin.tab.serverStatus.sub"), icon: ADMIN_SECTION_ICON.serverStatus },
   ];
   const activeItem = navItems.find((item) => item.tab === activeTab) ?? navItems[0];
 

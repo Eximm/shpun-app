@@ -43,14 +43,18 @@ import {
   deleteServiceCategory,
 } from "../../shared/linkdb/serviceCategoriesRepo.js";
 import {
+  countReferralRegistrationsSince,
   deleteReferralAlias,
   getReferralAliasById,
   isValidReferralAlias,
+  listRecentReferralRegistrations,
   listReferralAliases,
   saveReferralAlias,
 } from "../../shared/linkdb/referralAliasesRepo.js";
 import { countSupportUnreadBreakdown } from "../support/notifyRepo.js";
-import { countReviewsByStatus } from "../reviews/repo.js";
+import { listAdminTickets } from "../support/service.js";
+import { countTicketsCreatedSince } from "../support/sqliteRepository.js";
+import { countReviewsByStatus, countReviewsSince, listRecentReviews } from "../reviews/repo.js";
 import { listMonitoredServers } from "../serverStatus/repo.js";
 import { getServerStatusSnapshot } from "../serverStatus/monitor.js";
 import { aggregateHealthStatus } from "../serverStatus/health.js";
@@ -152,6 +156,22 @@ function normalizeIdList(value: unknown, max = 1000): number[] {
     if (out.length >= max) break;
   }
   return out;
+}
+
+/** SQLite `datetime('now')` timestamps are UTC without a timezone suffix. */
+function sqliteUtcToSeconds(value: unknown): number {
+  const s = String(value ?? "").trim();
+  if (!s) return 0;
+  const iso = s.includes("T") ? s : s.replace(" ", "T");
+  const withZone = /[zZ]|[+-]\d{2}:?\d{2}$/.test(iso) ? iso : `${iso}Z`;
+  const ms = new Date(withZone).getTime();
+  return Number.isFinite(ms) ? Math.floor(ms / 1000) : 0;
+}
+
+/** UTC cutoff string comparable with SQLite datetime(created_at). */
+function sqliteUtcCutoff(hoursAgo: number): string {
+  const d = new Date(Date.now() - Math.max(1, hoursAgo) * 3600 * 1000);
+  return d.toISOString().slice(0, 19).replace("T", " ");
 }
 
 function unwrapTemplateJson(json: any): any {
@@ -346,7 +366,7 @@ export async function adminRoutes(app: FastifyInstance) {
     if (!(await ensureAdmin(s.shmSessionId))) return reply.code(403).send({ ok: false, error: "not_admin" });
 
     const userId = Number(s.shmUserId ?? 0) || 0;
-    const errors = { support: false, reviews: false, system: false, summary: false };
+    const errors = { support: false, reviews: false, system: false, summary: false, today: false, activity: false };
 
     let unread = { total: 0, support: 0, partnership: 0 };
     try {
@@ -388,8 +408,67 @@ export async function adminRoutes(app: FastifyInstance) {
       errors.summary = true;
     }
 
+    // "Today" = last 24 hours (unambiguous across server timezones).
+    const cutoff = sqliteUtcCutoff(24);
+    let today = { supportTickets: 0, partnershipTickets: 0, referrals: 0, reviews: 0 };
+    try {
+      today = {
+        supportTickets: countTicketsCreatedSince("support", cutoff),
+        partnershipTickets: countTicketsCreatedSince("partnership", cutoff),
+        referrals: countReferralRegistrationsSince(cutoff),
+        reviews: countReviewsSince(cutoff),
+      };
+    } catch {
+      errors.today = true;
+    }
+
+    // Recent activity = informational feed (NOT the bell / action counter).
+    type ActivityItem = {
+      type: string;
+      ts: number;
+      reason?: "created" | "message";
+      ticketId?: number;
+      publicNo?: string;
+      reviewId?: number;
+      alias?: string;
+    };
+    let activity: ActivityItem[] = [];
+    try {
+      const items: ActivityItem[] = [];
+
+      for (const ticket of listAdminTickets({ limit: 6 }).items.slice(0, 6)) {
+        const created = sqliteUtcToSeconds(ticket.createdAt);
+        const last = sqliteUtcToSeconds(ticket.lastMessageAt || ticket.updatedAt || ticket.createdAt);
+        const ts = Math.max(created, last);
+        if (!ts) continue;
+        items.push({
+          type: ticket.kind === "partnership" ? "partnership.ticket" : "support.ticket",
+          ts,
+          reason: created > 0 && Math.abs(last - created) <= 2 ? "created" : "message",
+          ticketId: ticket.id,
+          publicNo: String(ticket.publicNo ?? ""),
+        });
+      }
+
+      for (const review of listRecentReviews(6)) {
+        const ts = sqliteUtcToSeconds(review.createdAt);
+        if (ts) items.push({ type: "review.new", ts, reviewId: review.id });
+      }
+
+      for (const reg of listRecentReferralRegistrations(6)) {
+        const ts = sqliteUtcToSeconds(reg.createdAt);
+        if (ts) items.push({ type: "referral.registration", ts, alias: reg.alias });
+      }
+
+      items.sort((a, b) => b.ts - a.ts);
+      activity = items.slice(0, 8);
+    } catch {
+      errors.activity = true;
+    }
+
     return reply.send({
       ok: true,
+      updatedAt: new Date().toISOString(),
       attention: {
         total: unread.support + unread.partnership + reviews,
         support: unread.support,
@@ -398,6 +477,8 @@ export async function adminRoutes(app: FastifyInstance) {
       },
       system,
       summary,
+      today,
+      activity,
       errors,
     });
   });

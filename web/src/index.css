@@ -7209,12 +7209,53 @@ button.reviews-star:not(:disabled) {
   .admin-projectGrid { grid-template-columns: repeat(4, minmax(0,1fr)); }
 }
 
+/* Live dashboard: refresh state, activity feed, last-24h stats. */
+.admin-refreshBox { display: inline-flex; align-items: center; gap: 8px; }
+.admin-refreshBox__time { font-size: 11.5px; font-weight: 800; color: rgba(255,255,255,0.45); white-space: nowrap; }
+.admin-refreshBox__btn { display: inline-flex; align-items: center; justify-content: center; width: 34px; min-width: 34px; height: 34px; padding: 0; }
+.admin-refreshBox__btn.is-refreshing svg { animation: admin-spin 0.9s linear infinite; }
+@keyframes admin-spin { to { transform: rotate(360deg); } }
+.admin-staleNote { color: rgba(245,158,11,0.88); font-size: 12px; font-weight: 700; }
+.admin-blockTitle { display: inline-flex; align-items: center; gap: 7px; }
+.admin-blockTitle svg { color: rgba(255,255,255,0.55); }
+.admin-projectTitle { margin: 0; font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255,255,255,0.38); }
+.admin-activityList { display: flex; flex-direction: column; gap: 2px; }
+.admin-activityRow {
+  display: flex; align-items: center; gap: 10px; width: 100%; box-sizing: border-box;
+  padding: 9px 10px; border-radius: 11px; border: 0.5px solid transparent;
+}
+.admin-activityRow--clickable { cursor: pointer; }
+.admin-activityRow--clickable:hover { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.08); }
+.admin-activityRow:focus-visible { outline: 2px solid rgba(124,92,255,0.65); outline-offset: 2px; }
+.admin-activityRow__icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; flex-shrink: 0; border-radius: 9px;
+  background: rgba(255,255,255,0.05); border: 0.5px solid rgba(255,255,255,0.09);
+  color: rgba(255,255,255,0.78);
+}
+.admin-activityRow__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.admin-activityRow__title { font-size: 13px; font-weight: 800; color: rgba(255,255,255,0.88); }
+.admin-activityRow__context { font-size: 11.5px; font-weight: 700; color: rgba(255,255,255,0.45); }
+.admin-activityRow__time { flex-shrink: 0; font-size: 11.5px; font-weight: 700; color: rgba(255,255,255,0.42); white-space: nowrap; }
+.admin-todayGrid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
+.admin-todayStat {
+  display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px;
+  border: 0.5px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.028);
+  color: rgba(255,255,255,0.6);
+}
+.admin-todayStat__value { font-size: 18px; font-weight: 950; color: rgba(255,255,255,0.92); }
+.admin-todayStat__label { margin-left: auto; font-size: 11px; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; color: rgba(255,255,255,0.45); text-align: right; }
+@media (min-width: 640px) {
+  .admin-todayGrid { grid-template-columns: repeat(4, minmax(0,1fr)); }
+}
+
 /* Compact admin surface + section header (one pattern for all sections).
    :not excludes nested modal bodies so their own padding rules still apply. */
 .admin-workspace .card__body:not(.admin-modal__body) { padding: 14px; }
 .admin-sectionHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .admin-sectionHeader__main { min-width: 0; }
-.admin-sectionHeader__kicker { font-size: 11px; font-weight: 900; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255,255,255,0.55); }
+.admin-sectionHeader__kicker { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 900; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255,255,255,0.55); }
+.admin-sectionHeader__kicker svg { color: rgba(255,255,255,0.62); flex-shrink: 0; }
 .admin-sectionHeader__title { margin: 2px 0 0; font-size: 18px; font-weight: 950; line-height: 1.2; letter-spacing: -0.01em; }
 .admin-sectionHeader__sub { margin: 4px 0 0; font-size: 12.5px; line-height: 1.4; color: rgba(255,255,255,0.60); }
 .admin-sectionHeader__actions { display: flex; flex-wrap: wrap; gap: 8px; flex: 0 0 auto; }

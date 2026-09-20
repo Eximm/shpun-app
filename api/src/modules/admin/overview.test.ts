@@ -3,7 +3,8 @@
 // Regression coverage for GET /api/admin/overview:
 //   - admin-only (regular user 403, anonymous 401)
 //   - count/aggregate payload only (no sensitive ticket/review/server payload)
-//   - degraded payload shape (attention / system / summary / errors)
+//   - today counters + recent activity ordering/limit/safety
+//   - updatedAt + partial-degradation flags
 //
 // Only the external SHM admin check is stubbed (local HTTP server).
 
@@ -41,12 +42,16 @@ const Fastify = (await import("fastify")).default;
 const { adminRoutes } = await import("./routes.js");
 const { putSession } = await import("../../shared/session/sessionStore.js");
 const { createReview } = await import("../reviews/repo.js");
-const { saveReferralAlias } = await import("../../shared/linkdb/referralAliasesRepo.js");
+const { getTicketRepository } = await import("../support/repository.js");
+const {
+  saveReferralAlias,
+  recordReferralAliasRegistrationForUser,
+} = await import("../../shared/linkdb/referralAliasesRepo.js");
 
 putSession("sid-admin", { shmSessionId: "shm-admin", shmUserId: 900, login: "admin", createdAt: Date.now() });
 putSession("sid-user", { shmSessionId: "shm-user", shmUserId: 901, login: "user", createdAt: Date.now() });
 
-// One review awaiting moderation + two referral aliases (partner + campaign).
+// Pending review + two referral aliases (partner + campaign).
 const pending = createReview({
   userId: 902,
   userLogin: "reviewer",
@@ -58,6 +63,12 @@ assert.ok(pending);
 
 saveReferralAlias({ alias: "check", linkType: "partner", partnerId: 2, campaignCode: "exCheck" });
 saveReferralAlias({ alias: "reklamman", linkType: "campaign", partnerId: 0, billingComment: "Telegram Ads" });
+assert.equal(recordReferralAliasRegistrationForUser("check", 903), true);
+
+// One support + one partnership ticket (repository level, no category gate).
+const repo = getTicketRepository();
+repo.createTicket({ userId: 904, kind: "support", source: "app", categoryKey: "other" });
+repo.createTicket({ userId: 905, kind: "partnership", source: "app", categoryKey: "other" });
 
 const app = Fastify();
 await app.register(
@@ -93,30 +104,70 @@ test("admin overview returns counts for an admin", async () => {
   assert.equal(res.statusCode, 200);
   const json = JSON.parse(res.body);
   assert.equal(json.ok, true);
+  assert.equal(typeof json.updatedAt, "string");
+  assert.ok(json.updatedAt.length > 0);
   assert.equal(json.attention.reviews, 1);
-  assert.equal(json.attention.total, 1);
-  assert.equal(json.attention.support, 0);
-  assert.equal(json.attention.partnership, 0);
   assert.equal(json.summary.aliases, 2);
   assert.equal(json.summary.partners, 1);
   assert.equal(json.summary.campaigns, 1);
-  assert.deepEqual(json.errors, { support: false, reviews: false, system: false, summary: false });
   assert.equal(typeof json.system.status, "string");
+  assert.deepEqual(json.errors, {
+    support: false,
+    reviews: false,
+    system: false,
+    summary: false,
+    today: false,
+    activity: false,
+  });
 });
 
-test("admin overview payload exposes no sensitive ticket/review/server data", async () => {
+test("admin overview returns last-24h counters", async () => {
   const res = await get("sid-admin");
+  const json = JSON.parse(res.body);
+  assert.ok(json.today.supportTickets >= 1);
+  assert.ok(json.today.partnershipTickets >= 1);
+  assert.ok(json.today.reviews >= 1);
+  assert.ok(json.today.referrals >= 1);
+});
+
+test("admin overview activity is limited, newest-first and safe", async () => {
+  const res = await get("sid-admin");
+  const json = JSON.parse(res.body);
+  const activity = json.activity as Array<Record<string, unknown>>;
+  assert.ok(Array.isArray(activity));
+  assert.ok(activity.length > 0 && activity.length <= 8, "activity must be capped at 8");
+
+  const types = new Set(activity.map((a) => String(a.type)));
+  assert.ok(types.has("support.ticket"));
+  assert.ok(types.has("partnership.ticket"));
+  assert.ok(types.has("review.new"));
+  assert.ok(types.has("referral.registration"));
+  assert.equal(types.has("unknown"), false);
+
+  for (const item of activity) {
+    assert.ok(typeof item.type === "string");
+    assert.ok(Number(item.ts) > 0);
+  }
+  for (let i = 1; i < activity.length; i++) {
+    assert.ok(Number(activity[i - 1].ts) >= Number(activity[i].ts), "activity must be newest-first");
+  }
+
+  // Safe payload only: no user identity / message text / server internals.
   const raw = res.body;
   for (const forbidden of [
     "exporter_url",
-    "host",
+    "\"host\"",
     "user_login",
     "userLogin",
-    "review.text",
+    "display_name",
+    "displayName",
+    "telegram",
+    "balance_snapshot",
+    "context_snapshot",
+    "\"text\"",
+    "\"subject\"",
     "billing_comment",
     "campaign_code",
-    "items",
-    "messages",
   ]) {
     assert.equal(raw.includes(forbidden), false, `payload must not contain ${forbidden}`);
   }

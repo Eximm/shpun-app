@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../../shared/api/client";
-import { AdminMetric, AdminSectionHeader, ModalShell } from "./shared";
+import { AdminMetric, AdminSectionHeader, ModalShell, ADMIN_SECTION_ICON } from "./shared";
 import { useI18n } from "../../shared/i18n";
 import { copyText, formatDateTime, parseMetaJson, shortDeviceToken } from "./utils";
 import type {
@@ -233,6 +233,7 @@ export function TrialProtectionSection() {
       <div className="card">
         <div className="card__body">
           <AdminSectionHeader
+          icon={ADMIN_SECTION_ICON.trialProtection}
             kicker={t("admin.tab.trial")}
             title={t("admin.section.trial.title")}
             subtitle={t("admin.section.trial.subtitle")}

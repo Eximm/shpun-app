@@ -191,3 +191,27 @@ export function recordReferralAliasRegistrationForUser(alias: unknown, shmUserId
     return inserted;
   })();
 }
+
+/** Referral registrations at/after a UTC cutoff (dashboard "recent"). */
+export function countReferralRegistrationsSince(since: string): number {
+  const cutoff = String(since ?? "").trim();
+  if (!cutoff) return 0;
+  const row = linkDb.prepare(`
+    SELECT COUNT(*) AS n FROM referral_alias_registrations
+    WHERE datetime(created_at) >= datetime(?)
+  `).get(cutoff) as { n?: number } | undefined;
+  return Math.trunc(Number(row?.n ?? 0)) || 0;
+}
+
+/** Recent referral registrations (alias + timestamp only) for the activity feed. */
+export function listRecentReferralRegistrations(limit = 6): Array<{ alias: string; createdAt: string }> {
+  const safe = Math.min(Math.max(Math.trunc(Number(limit)) || 6, 1), 20);
+  const rows = linkDb.prepare(`
+    SELECT a.alias AS alias, r.created_at AS created_at
+    FROM referral_alias_registrations r
+    JOIN referral_aliases a ON a.id = r.alias_id
+    ORDER BY datetime(r.created_at) DESC, r.shm_user_id DESC
+    LIMIT ?
+  `).all(safe) as Array<{ alias: string; created_at: string }>;
+  return rows.map((r) => ({ alias: String(r.alias || ""), createdAt: String(r.created_at || "") }));
+}

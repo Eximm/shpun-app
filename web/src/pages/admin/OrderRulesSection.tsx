@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../../shared/api/client";
 import { useI18n } from "../../shared/i18n";
-import { AdminSectionHeader } from "./shared";
+import { AdminSectionHeader, ADMIN_SECTION_ICON } from "./shared";
 import type { AdminSettingsResp, AdminSettingsSaveResp, OrderBlockMode } from "./types";
 
 function errorMessage(error: unknown, fallback: string) {
@@ -51,6 +51,7 @@ export function OrderRulesSection() {
     <div className="card">
       <div className="card__body">
         <AdminSectionHeader
+          icon={ADMIN_SECTION_ICON.orderRules}
           kicker={t("admin.tab.orders")}
           title={t("admin.section.orders.title")}
           subtitle={t("admin.section.orders.subtitle")}

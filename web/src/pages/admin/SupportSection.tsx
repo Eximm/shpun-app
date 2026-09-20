@@ -19,7 +19,7 @@ import {
   type TicketAttachment,
 } from "../../shared/support/attachments";
 import { AttachmentList, PendingFiles } from "../../shared/support/AttachmentViews";
-import { AdminFilterBar, AdminSectionHeader, ModalShell, PartnershipTabIcon, SupportTabIcon, UnreadMarker } from "./shared";
+import { AdminFilterBar, AdminSectionHeader, ModalShell, PartnershipTabIcon, SupportTabIcon, UnreadMarker, ADMIN_SECTION_ICON } from "./shared";
 import { ticketStatusLabel, TICKET_STATUSES } from "../../shared/support/ticketLabels";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -652,6 +652,8 @@ export function SupportSection({
       setComposerText("");
       setNotice(internal ? t("support.admin.note_added") : t("support.admin.reply_sent"));
       void loadTickets({ silent: true });
+      void refreshSupportUnread();
+      void refreshAdminOverview();
     } catch (error) {
       if (openedIdRef.current === ticketId) {
         setOpenedError(errorMessage(error, internal ? t("support.admin.note_failed") : t("support.admin.reply_failed")));
@@ -725,6 +727,7 @@ export function SupportSection({
     <div className="card">
       <div className="card__body">
         <AdminSectionHeader
+          icon={ADMIN_SECTION_ICON.support}
           kicker={t("support.admin.kicker")}
           title={t("support.admin.title")}
           subtitle={kind === "partnership"
