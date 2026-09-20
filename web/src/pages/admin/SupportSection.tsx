@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { apiFetch } from "../../shared/api/client";
 import { refreshSupportUnread, useSupportUnread } from "../../app/notifications/supportUnread";
+import { refreshAdminOverview } from "../../app/notifications/adminOverview";
 import { useI18n } from "../../shared/i18n";
 import {
   ATTACHMENT_ACCEPT,
@@ -606,6 +607,7 @@ export function SupportSection({
       // already marked the ticket read when it served the detail request.
       setItems((prev) => prev.map((t) => (t.id === id ? { ...t, unread: false } : t)));
       void refreshSupportUnread();
+      void refreshAdminOverview();
     } catch (error) {
       setOpenedError(errorMessage(error, t("support.admin.open_failed")));
     } finally {

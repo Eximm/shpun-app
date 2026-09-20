@@ -219,6 +219,16 @@ export function hasReviewByUserId(userId: number) {
   `).get(userId));
 }
 
+/** Cheap pending/published/hidden counter for the admin dashboard. */
+export function countReviewsByStatus(status: string): number {
+  const normalized = String(status ?? "").trim();
+  if (!["pending", "published", "hidden"].includes(normalized)) return 0;
+  const row = linkDb.prepare(`SELECT COUNT(*) AS n FROM reviews WHERE status = ?`).get(normalized) as
+    | { n?: number }
+    | undefined;
+  return Math.trunc(Number(row?.n ?? 0)) || 0;
+}
+
 export function createReview(input: {
   userId: number;
   userLogin: string;

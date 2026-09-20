@@ -33,8 +33,17 @@ function expect(rel, ok, message) {
   const rel = "app/layout/SupportBell.tsx";
   const src = read(rel);
   expect(rel, /if\s*\(!isAdmin\)\s*return null;/.test(src), "must return null for non-admins");
-  expect(rel, /useSupportUnread\(\s*isAdmin\s*\)/.test(src), "unread hook must be gated by isAdmin");
-  expect(rel, /\/admin\?tab=support/.test(src), "expected admin deep-link for the bell");
+  expect(rel, /useAdminOverview\(\s*isAdmin\s*\)/.test(src), "overview hook must be gated by isAdmin");
+  expect(rel, /navigate\(\s*"\/admin"\s*\)/.test(src), "expected admin overview deep-link for the bell");
+}
+
+/* 1b. Admin overview store — admin-guarded, count-only endpoint. */
+{
+  const rel = "app/notifications/adminOverview.ts";
+  const src = read(rel);
+  expect(rel, /"\/admin\/overview"/.test(src), "must call the admin overview endpoint");
+  expect(rel, /if\s*\(!enabled\)\s*return;/.test(src), "overview fetch must be gated by enabled/isAdmin");
+  expect(rel, /export function clearAdminOverview\(/.test(src), "must expose clearAdminOverview for logout");
 }
 
 /* 2. Health badge — public-safe endpoint only, no auth dependency. */
@@ -52,7 +61,7 @@ function expect(rel, ok, message) {
   const rel = "pages/AdminPage.tsx";
   const src = read(rel);
   expect(rel, /if\s*\(!isAdmin\)\s*return\s*<Navigate\s+to="\/profile"\s+replace\s*\/>/.test(src), "must redirect non-admins");
-  expect(rel, /useSupportUnread\(\s*isAdmin\s*\)/.test(src), "unread polling must be gated by isAdmin");
+  expect(rel, /useAdminOverview\(\s*isAdmin\s*\)/.test(src), "overview polling must be gated by isAdmin");
 }
 
 /* 4. Legacy beta badge removed, health badge wired into the header. */
@@ -78,6 +87,7 @@ function expect(rel, ok, message) {
   const src = read(rel);
   expect(rel, /clearMe\(\)/.test(src), "must clear the identity");
   expect(rel, /clearSupportUnread\(\)/.test(src), "must clear admin unread state");
+  expect(rel, /clearAdminOverview\(\)/.test(src), "must clear admin overview state");
   expect(rel, /toastStore\.clear\(\)/.test(src), "must clear visible account toasts");
 }
 

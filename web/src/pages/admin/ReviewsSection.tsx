@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../../shared/api/client";
 import { useI18n } from "../../shared/i18n";
+import { refreshAdminOverview } from "../../app/notifications/adminOverview";
 import { AdminSectionHeader } from "./shared";
 import type { AdminSettingsResp } from "./types";
 
@@ -113,6 +114,7 @@ export function ReviewsSection() {
       });
       setMessage(response.message || t("admin.reviews.approved_fallback"));
       await load();
+      void refreshAdminOverview();
     } catch (e: unknown) {
       setError(errorMessage(e, t("admin.reviews.err.accrual")));
       await load();
@@ -129,6 +131,7 @@ export function ReviewsSection() {
       await apiFetch(`/reviews/${id}/status`, { method: "PATCH", body: { status: "hidden" } });
       setMessage(t("admin.reviews.msg.rejected"));
       await load();
+      void refreshAdminOverview();
     } catch (e: unknown) {
       setError(errorMessage(e, t("admin.reviews.err.hide")));
     } finally {

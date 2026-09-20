@@ -7133,6 +7133,82 @@ button.reviews-star:not(:disabled) {
 .admin-summary__value { font-size: 22px; font-weight: 950; line-height: 1.1; }
 .admin-summary__hint { font-size: 11.5px; font-weight: 700; color: rgba(255,255,255,0.50); }
 
+/* Operational admin dashboard (overview action center). */
+.admin-dashGrid { display: grid; grid-template-columns: 1fr; gap: 8px; }
+.admin-dashCard {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 13px 14px;
+  border-radius: 15px;
+  border: 1px solid rgba(255,255,255,0.09);
+  background: rgba(255,255,255,0.035);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+.admin-dashCard:hover { transform: translateY(-1px); border-color: rgba(255,255,255,0.16); }
+.admin-dashCard:focus-visible { outline: 2px solid rgba(124,92,255,0.70); outline-offset: 2px; }
+.admin-dashCard__icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; flex-shrink: 0;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.06);
+  border: 0.5px solid rgba(255,255,255,0.10);
+  color: rgba(255,255,255,0.82);
+}
+.admin-dashCard__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.admin-dashCard__title { font-size: 14px; font-weight: 900; color: rgba(255,255,255,0.92); }
+.admin-dashCard__status { font-size: 12px; font-weight: 700; line-height: 1.35; color: rgba(255,255,255,0.52); }
+.admin-dashCard__count {
+  flex-shrink: 0;
+  min-width: 26px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+  text-align: center;
+  background: rgba(255,255,255,0.08);
+  border: 0.5px solid rgba(255,255,255,0.16);
+  color: rgba(255,255,255,0.85);
+}
+.admin-dashCard__arrow { flex-shrink: 0; font-size: 18px; line-height: 1; color: rgba(255,255,255,0.34); }
+.admin-dashCard--attention { border-color: rgba(245,158,11,0.34); background: rgba(245,158,11,0.07); }
+.admin-dashCard--attention .admin-dashCard__status { color: rgba(245,158,11,0.90); }
+.admin-dashCard--attention .admin-dashCard__count { background: rgba(245,158,11,0.16); border-color: rgba(245,158,11,0.42); color: #f5b64a; }
+.admin-dashCard--critical { border-color: rgba(255,77,109,0.42); background: rgba(255,77,109,0.09); }
+.admin-dashCard--critical .admin-dashCard__status { color: rgba(255,130,155,0.95); }
+.admin-dashCard--critical .admin-dashCard__count { background: rgba(255,77,109,0.18); border-color: rgba(255,77,109,0.45); color: #ff8fa5; }
+.admin-dashCard--normal .admin-dashCard__icon { color: rgba(43,227,143,0.85); }
+.admin-dashCard--muted { opacity: 0.72; }
+.admin-dashSkeleton { height: 66px; border-radius: 15px; }
+.admin-allCalm {
+  display: flex; align-items: center; gap: 11px;
+  padding: 12px 14px; border-radius: 14px;
+  border: 1px solid rgba(43,227,143,0.28);
+  background: rgba(43,227,143,0.08);
+}
+.admin-allCalm__icon { font-size: 20px; line-height: 1; color: #2be38f; }
+.admin-allCalm__title { font-size: 13.5px; font-weight: 900; color: rgba(255,255,255,0.92); }
+.admin-allCalm__text { font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.54); margin-top: 2px; }
+.admin-projectGrid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
+.admin-projectStat {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 11px 13px; border-radius: 13px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+}
+.admin-projectStat__value { font-size: 20px; font-weight: 950; line-height: 1.1; color: rgba(255,255,255,0.92); }
+.admin-projectStat__label { font-size: 11px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: rgba(255,255,255,0.46); }
+@media (min-width: 640px) {
+  .admin-dashGrid { grid-template-columns: repeat(3, minmax(0,1fr)); }
+  .admin-dashCard--wide { grid-column: 1 / -1; }
+  .admin-projectGrid { grid-template-columns: repeat(4, minmax(0,1fr)); }
+}
+
 /* Compact admin surface + section header (one pattern for all sections).
    :not excludes nested modal bodies so their own padding rules still apply. */
 .admin-workspace .card__body:not(.admin-modal__body) { padding: 14px; }

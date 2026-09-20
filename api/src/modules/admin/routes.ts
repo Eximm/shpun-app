@@ -49,6 +49,11 @@ import {
   listReferralAliases,
   saveReferralAlias,
 } from "../../shared/linkdb/referralAliasesRepo.js";
+import { countSupportUnreadBreakdown } from "../support/notifyRepo.js";
+import { countReviewsByStatus } from "../reviews/repo.js";
+import { listMonitoredServers } from "../serverStatus/repo.js";
+import { getServerStatusSnapshot } from "../serverStatus/monitor.js";
+import { aggregateHealthStatus } from "../serverStatus/health.js";
 
 export async function ensureAdmin(shmSessionId: string) {
   const r = await shmShpunAppAdminStatus(shmSessionId);
@@ -331,6 +336,72 @@ async function countActivePartnerUsersByServices(shmSessionId: string, userIds: 
 }
 
 export async function adminRoutes(app: FastifyInstance) {
+  // Lightweight operational dashboard aggregate. Counts only — no tickets,
+  // reviews or server snapshots. Admin-only (ensureAdmin server-side).
+  // Each section degrades independently so one failing source never breaks
+  // the whole overview.
+  app.get("/admin/overview", async (req, reply) => {
+    const s = getSessionFromRequest(req);
+    if (!s?.shmSessionId) return reply.code(401).send({ ok: false, error: "not_authenticated" });
+    if (!(await ensureAdmin(s.shmSessionId))) return reply.code(403).send({ ok: false, error: "not_admin" });
+
+    const userId = Number(s.shmUserId ?? 0) || 0;
+    const errors = { support: false, reviews: false, system: false, summary: false };
+
+    let unread = { total: 0, support: 0, partnership: 0 };
+    try {
+      unread = countSupportUnreadBreakdown(userId);
+    } catch {
+      errors.support = true;
+    }
+
+    let reviews = 0;
+    try {
+      reviews = countReviewsByStatus("pending");
+    } catch {
+      errors.reviews = true;
+    }
+
+    let system = { status: "unknown" as string, offline: 0, hot: 0, issues: 0, total: 0 };
+    try {
+      const checks = getServerStatusSnapshot(listMonitoredServers());
+      const status = aggregateHealthStatus(checks.map((c) => ({ kind: c.kind, online: c.online })));
+      const offline = checks.filter((c) => c.online === false).length;
+      const hot = checks.filter(
+        (c) => c.online !== false && typeof c.loadPct === "number" && c.loadPct >= 85
+      ).length;
+      system = { status, offline, hot, issues: offline + hot, total: checks.length };
+    } catch {
+      errors.system = true;
+    }
+
+    let summary = { aliases: 0, enabledAliases: 0, partners: 0, campaigns: 0 };
+    try {
+      const aliases = listReferralAliases();
+      summary = {
+        aliases: aliases.length,
+        enabledAliases: aliases.filter((a) => a.enabled).length,
+        partners: aliases.filter((a) => a.link_type === "partner").length,
+        campaigns: aliases.filter((a) => a.link_type === "campaign").length,
+      };
+    } catch {
+      errors.summary = true;
+    }
+
+    return reply.send({
+      ok: true,
+      attention: {
+        total: unread.support + unread.partnership + reviews,
+        support: unread.support,
+        partnership: unread.partnership,
+        reviews,
+      },
+      system,
+      summary,
+      errors,
+    });
+  });
+
   app.get("/admin/referral-aliases", async (req, reply) => {
     const s = getSessionFromRequest(req);
     if (!s?.shmSessionId) return reply.code(401).send({ ok: false });

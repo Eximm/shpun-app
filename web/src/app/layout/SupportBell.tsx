@@ -5,7 +5,7 @@
 
 import { useNavigate } from "react-router-dom";
 import { useMe } from "../auth/useMe";
-import { useSupportUnread } from "../notifications/supportUnread";
+import { useAdminOverview } from "../notifications/adminOverview";
 import { useI18n } from "../../shared/i18n";
 
 function BellIcon() {
@@ -26,20 +26,21 @@ export function SupportBell() {
   const { me } = useMe();
   const { t, tp } = useI18n();
   const isAdmin = Boolean(me?.profile?.isAdmin || me?.admin?.isAdmin);
-  const { total: count } = useSupportUnread(isAdmin);
+  const { data } = useAdminOverview(isAdmin);
+  const count = data.attention.total;
   const navigate = useNavigate();
 
   if (!isAdmin) return null;
 
-  const label = count > 0 ? tp("support.bell.unread", count) : t("support.title");
+  const label = count > 0 ? tp("admin.bell.unread", count) : t("admin.bell.title");
 
   return (
     <button
       className="topbar__bell"
       type="button"
       aria-label={label}
-      title={t("support.bell.title")}
-      onClick={() => navigate("/admin?tab=support")}
+      title={t("admin.bell.title")}
+      onClick={() => navigate("/admin")}
     >
       <BellIcon />
       {count > 0 && <span className="topbar__bellBadge">{count > 99 ? "99+" : count}</span>}

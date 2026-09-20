@@ -8,6 +8,7 @@
 
 import { clearMe } from "./useMe";
 import { clearSupportUnread } from "../notifications/supportUnread";
+import { clearAdminOverview } from "../notifications/adminOverview";
 import { toastStore } from "../../shared/ui/toast";
 
 let lastResetAt = 0;
@@ -31,6 +32,8 @@ export function resetAuthenticatedClientState(): void {
   clearMe();
   // 2. Admin unread counters (bell badges / inbox tabs).
   clearSupportUnread();
+  // 2b. Admin overview aggregate (dashboard cards / nav badges).
+  clearAdminOverview();
   // 3. Any visible toasts may contain account data.
   try {
     toastStore.clear();
