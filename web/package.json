@@ -9,11 +9,12 @@
     "check:i18n": "node scripts/check-i18n.mjs",
     "check:hardcoded": "node scripts/check-hardcoded.mjs",
     "check:security": "node scripts/check-security.mjs",
-    "check:all": "npm run check:i18n && npm run check:hardcoded && npm run check:security && npm run test:i18n && npm run test:referral && npm run test:register-errors && npm run test:admin-icons",
+    "check:all": "npm run check:i18n && npm run check:hardcoded && npm run check:security && npm run test:i18n && npm run test:referral && npm run test:register-errors && npm run test:admin-icons && npm run test:clipboard",
     "test:i18n": "node scripts/test-i18n-runtime.cjs",
     "test:referral": "node scripts/test-referral-capture.mjs",
     "test:register-errors": "node scripts/test-registration-errors.mjs",
     "test:admin-icons": "node scripts/test-admin-icons.mjs",
+    "test:clipboard": "node scripts/test-clipboard-attachments.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },

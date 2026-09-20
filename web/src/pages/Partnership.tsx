@@ -4,7 +4,7 @@
 // Flow: conditions -> short form -> summary -> submit -> my proposals + chat.
 // Stored as tickets with kind=partnership (same infra as support, separate UI).
 
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiFetch } from "../shared/api/client";
 import { PageBackButton } from "../shared/ui/PageBackButton";
 import { toast } from "../shared/ui/toast";
@@ -12,12 +12,10 @@ import { useI18n } from "../shared/i18n";
 import {
   ATTACHMENT_ACCEPT,
   buildMessageFormData,
-  releasePendingFiles,
-  toPendingFiles,
-  type PendingFile,
   type TicketAttachment,
 } from "../shared/support/attachments";
 import { AttachmentList, PendingFiles } from "../shared/support/AttachmentViews";
+import { useAttachmentComposer, type AttachmentAddError } from "../shared/support/useAttachmentComposer";
 
 type TicketMessage = {
   id: number;
@@ -89,7 +87,8 @@ export function Partnership() {
   const [loading, setLoading] = useState(false);
   const [opened, setOpened] = useState<UserTicket | null>(null);
   const [replyText, setReplyText] = useState("");
-  const [pending, setPending] = useState<PendingFile[]>([]);
+  const [attachError, setAttachError] = useState<AttachmentAddError | null>(null);
+  const attach = useAttachmentComposer({ onError: setAttachError });
   const [sending, setSending] = useState(false);
   const threadRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -180,17 +179,17 @@ export function Partnership() {
   async function sendReply() {
     if (!opened || sending) return;
     const text = replyText.trim();
-    if (text.length < 2 && pending.length === 0) return;
+    if (text.length < 2 && attach.pending.length === 0) return;
     setSending(true);
     setError("");
     try {
-      const body = pending.length
-        ? buildMessageFormData(text, pending.map((f) => f.file))
+      const body = attach.pending.length
+        ? buildMessageFormData(text, attach.pending.map((f) => f.file))
         : { text };
       const r = await apiFetch<{ ok: true; ticket: UserTicket }>(`/support/tickets/${opened.id}/messages`, { method: "POST", body });
       setOpened(r.ticket);
-      releasePendingFiles(pending);
-      setPending([]);
+      attach.clearPending();
+      setAttachError(null);
       setReplyText("");
     } catch (e) {
       setError(errorMessage(e, t("support.send_failed")));
@@ -199,20 +198,19 @@ export function Partnership() {
     }
   }
 
-  function onPickFiles(event: ChangeEvent<HTMLInputElement>) {
-    const picked = toPendingFiles(event.target.files);
-    setPending((prev) => [...prev, ...picked].slice(0, 5));
-    event.target.value = "";
+  function handlePickFiles(event: React.ChangeEvent<HTMLInputElement>) {
+    setAttachError(null);
+    attach.onPickFiles(event);
   }
 
-  function removePending(id: string) {
-    setPending((prev) => {
-      const target = prev.find((f) => f.id === id);
-      if (target?.previewUrl) {
-        try { URL.revokeObjectURL(target.previewUrl); } catch { /* ignore */ }
-      }
-      return prev.filter((f) => f.id !== id);
-    });
+  function handlePaste(event: React.ClipboardEvent<HTMLTextAreaElement>) {
+    setAttachError(null);
+    attach.onPaste(event);
+  }
+
+  function handleRemovePending(id: string) {
+    setAttachError(null);
+    attach.removePending(id);
   }
 
   const formValid = form.platformUrl.trim().length >= 2 && form.offer.trim().length >= 10;
@@ -420,16 +418,20 @@ export function Partnership() {
             <div className="supportClosedNotice">🔒 {t("support.closed_notice")}</div>
           ) : (
             <div className="supportDetail__composer">
-              <PendingFiles files={pending} onRemove={removePending} disabled={sending} />
+              <PendingFiles files={attach.pending} onRemove={handleRemovePending} disabled={sending} />
+              {attachError && (
+                <div className="attachError" role="alert">{t(`support.attach.error.${attachError}`)}</div>
+              )}
               <div className="composerRow">
-                <button className="composerAttach" type="button" aria-label={t("support.attach")} disabled={sending || pending.length >= 5} onClick={() => fileInputRef.current?.click()}>
+                <button className="composerAttach" type="button" aria-label={t("support.attach")} disabled={sending || attach.atMaxFiles} onClick={() => fileInputRef.current?.click()}>
                   📎
                 </button>
-                <input ref={fileInputRef} type="file" multiple accept={ATTACHMENT_ACCEPT} style={{ display: "none" }} onChange={onPickFiles} />
-                <textarea className="input supportDetail__input" value={replyText} maxLength={4000} disabled={sending} placeholder={t("support.reply_ph")} onChange={(e) => setReplyText(e.target.value)} />
+                <input ref={fileInputRef} type="file" multiple accept={ATTACHMENT_ACCEPT} style={{ display: "none" }} onChange={handlePickFiles} />
+                <textarea className="input supportDetail__input" value={replyText} maxLength={4000} disabled={sending} placeholder={t("support.reply_ph")} onChange={(e) => setReplyText(e.target.value)} onPaste={handlePaste} />
               </div>
+              <div className="composerAttachHint">{t("support.attach.hint")}</div>
               <div className="actions actions--1 admin-gap-top-sm">
-                <button className="btn btn--primary" type="button" disabled={sending || (replyText.trim().length < 2 && pending.length === 0)} onClick={() => void sendReply()}>
+                <button className="btn btn--primary" type="button" disabled={sending || (replyText.trim().length < 2 && attach.pending.length === 0)} onClick={() => void sendReply()}>
                   {sending ? t("common.sending") : t("common.send")}
                 </button>
               </div>

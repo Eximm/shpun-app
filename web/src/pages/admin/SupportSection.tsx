@@ -5,7 +5,7 @@
 // composer, diagnostics tucked into a collapsible. Uses the existing backend
 // support admin API (no contract changes).
 
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "../../shared/api/client";
 import { refreshSupportUnread, useSupportUnread } from "../../app/notifications/supportUnread";
 import { refreshAdminOverview } from "../../app/notifications/adminOverview";
@@ -13,12 +13,10 @@ import { useI18n } from "../../shared/i18n";
 import {
   ATTACHMENT_ACCEPT,
   buildMessageFormData,
-  releasePendingFiles,
-  toPendingFiles,
-  type PendingFile,
   type TicketAttachment,
 } from "../../shared/support/attachments";
 import { AttachmentList, PendingFiles } from "../../shared/support/AttachmentViews";
+import { useAttachmentComposer, type AttachmentAddError } from "../../shared/support/useAttachmentComposer";
 import { AdminFilterBar, AdminSectionHeader, ModalShell, PartnershipTabIcon, SupportTabIcon, UnreadMarker, ADMIN_SECTION_ICON } from "./shared";
 import { ticketStatusLabel, TICKET_STATUSES } from "../../shared/support/ticketLabels";
 
@@ -486,7 +484,8 @@ export function SupportSection({
 
   const [composerMode, setComposerMode] = useState<"reply" | "note">("reply");
   const [composerText, setComposerText] = useState("");
-  const [pending, setPending] = useState<PendingFile[]>([]);
+  const [attachError, setAttachError] = useState<AttachmentAddError | null>(null);
+  const attach = useAttachmentComposer({ onError: setAttachError });
   const [sending, setSending] = useState(false);
   const [patching, setPatching] = useState(false);
   const [assigneeDraft, setAssigneeDraft] = useState("");
@@ -625,7 +624,7 @@ export function SupportSection({
   async function sendComposer() {
     if (!opened) return;
     const payload = composerText.trim();
-    if (payload.length < 2 && pending.length === 0) {
+    if (payload.length < 2 && attach.pending.length === 0) {
       setOpenedError(t("support.admin.too_short"));
       return;
     }
@@ -638,8 +637,8 @@ export function SupportSection({
     const internal = composerMode === "note";
     const ticketId = opened.id;
     try {
-      const body = pending.length
-        ? buildMessageFormData(payload, pending.map((f) => f.file), { internal: internal ? "1" : "0" })
+      const body = attach.pending.length
+        ? buildMessageFormData(payload, attach.pending.map((f) => f.file), { internal: internal ? "1" : "0" })
         : { text: payload, internal };
       const response = await apiFetch<{ ok: true; ticket: AdminTicket }>(
         `/admin/support/tickets/${ticketId}/messages`,
@@ -647,8 +646,8 @@ export function SupportSection({
       );
       if (openedIdRef.current !== ticketId) return;
       setOpened(response.ticket);
-      releasePendingFiles(pending);
-      setPending([]);
+      attach.clearPending();
+      setAttachError(null);
       setComposerText("");
       setNotice(internal ? t("support.admin.note_added") : t("support.admin.reply_sent"));
       void loadTickets({ silent: true });
@@ -664,20 +663,19 @@ export function SupportSection({
     }
   }
 
-  function onPickFiles(event: ChangeEvent<HTMLInputElement>) {
-    const picked = toPendingFiles(event.target.files);
-    setPending((prev) => [...prev, ...picked].slice(0, 5));
-    event.target.value = "";
+  function handlePickFiles(event: React.ChangeEvent<HTMLInputElement>) {
+    setAttachError(null);
+    attach.onPickFiles(event);
   }
 
-  function removePending(id: string) {
-    setPending((prev) => {
-      const target = prev.find((f) => f.id === id);
-      if (target?.previewUrl) {
-        try { URL.revokeObjectURL(target.previewUrl); } catch { /* ignore */ }
-      }
-      return prev.filter((f) => f.id !== id);
-    });
+  function handlePaste(event: React.ClipboardEvent<HTMLTextAreaElement>) {
+    setAttachError(null);
+    attach.onPaste(event);
+  }
+
+  function handleRemovePending(id: string) {
+    setAttachError(null);
+    attach.removePending(id);
   }
 
   async function patchTicket(patch: Record<string, unknown>) {
@@ -1003,30 +1001,35 @@ export function SupportSection({
               disabled={sending}
               placeholder={composerMode === "note" ? t("support.admin.composer.note_ph") : t("support.admin.composer.reply_ph")}
               onChange={(e) => setComposerText(e.target.value)}
+              onPaste={handlePaste}
             />
 
-            <PendingFiles files={pending} onRemove={removePending} disabled={sending} />
+            <PendingFiles files={attach.pending} onRemove={handleRemovePending} disabled={sending} />
+            {attachError && (
+              <div className="attachError" role="alert">{t(`support.attach.error.${attachError}`)}</div>
+            )}
 
             <div className="supportComposer__toolbar">
               <button
                 className="composerAttach"
                 type="button"
                 aria-label={t("support.attach")}
-                disabled={sending || pending.length >= 5}
+                disabled={sending || attach.atMaxFiles}
                 onClick={() => fileInputRef.current?.click()}
               >
                 📎
               </button>
-              <input ref={fileInputRef} type="file" multiple accept={ATTACHMENT_ACCEPT} style={{ display: "none" }} onChange={onPickFiles} />
+              <input ref={fileInputRef} type="file" multiple accept={ATTACHMENT_ACCEPT} style={{ display: "none" }} onChange={handlePickFiles} />
               <button
                 className={`btn ${composerMode === "note" ? "btn--soft" : "btn--primary"}`}
                 type="button"
-                disabled={sending || (composerText.trim().length < 2 && pending.length === 0)}
+                disabled={sending || (composerText.trim().length < 2 && attach.pending.length === 0)}
                 onClick={() => void sendComposer()}
               >
                 {sending ? t("common.sending") : composerMode === "note" ? t("support.admin.save_note") : t("support.admin.send_reply")}
               </button>
             </div>
+            <div className="composerAttachHint">{t("support.attach.hint")}</div>
             <div className="composerHint">{t("support.retention")}</div>
           </div>
         </ModalShell>

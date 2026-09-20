@@ -16,8 +16,23 @@ export type PendingFile = {
   previewUrl?: string;
 };
 
-export const ATTACHMENT_ACCEPT =
-  "image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf,text/plain";
+/**
+ * Canonical frontend attachment MIME allowlist.
+ * Mirrors the backend allowlist (api attachmentStorage ALLOWED_MIME) and is the
+ * only list used by both the file picker (`ATTACHMENT_ACCEPT`) and the
+ * clipboard image extraction.
+ */
+export const ATTACHMENT_MIME_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+  "application/pdf",
+  "text/plain",
+] as const;
+
+export const ATTACHMENT_ACCEPT = ATTACHMENT_MIME_TYPES.join(",");
 
 export function formatBytes(n: number): string {
   const bytes = Number(n) || 0;
