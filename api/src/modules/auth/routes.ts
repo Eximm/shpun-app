@@ -20,6 +20,7 @@ import {
 import {
   findReferralAlias,
   recordReferralAliasRegistrationForUser,
+  referralComment,
 } from "../../shared/linkdb/referralAliasesRepo.js";
 
 /* ============================================================
@@ -277,7 +278,7 @@ async function tryAttachReferral(
     try {
       const claimResult = await callShmTemplate(shmSessionId, "campaign.claim", {
         campaign_alias: campaign.alias,
-        campaign_comment: campaign.billing_comment ?? "",
+        campaign_comment: referralComment(campaign),
         referral_secret: String(process.env.SHM_REFERRAL_SECRET ?? ""),
       });
       const claimData = (claimResult as any)?.data && typeof (claimResult as any).data === "object"
@@ -303,7 +304,8 @@ async function tryAttachReferral(
       ...(campaign ? {
         referral_alias: campaign.alias,
         first_pay: campaign.first_payment_bonus_percent,
-        first_pay_campaign: campaign.campaign_code ?? campaign.alias,
+        first_pay_campaign: referralComment(campaign),
+        referral_comment: referralComment(campaign),
         referral_secret: String(process.env.SHM_REFERRAL_SECRET ?? ""),
       } : {}),
     });

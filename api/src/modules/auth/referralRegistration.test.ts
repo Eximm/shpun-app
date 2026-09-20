@@ -90,6 +90,7 @@ process.env.SHM_BASE = `http://127.0.0.1:${shmPort}/shm/`;
 process.env.NODE_ENV = "development";
 process.env.AUTH_DEBUG = "0";
 process.env.REFERRAL_DEBUG = "0";
+process.env.SHM_REFERRAL_SECRET = "test-referral-secret";
 
 const { buildServer } = await import("../../app/server.js");
 const { saveReferralAlias, findReferralAlias } = await import("../../shared/linkdb/referralAliasesRepo.js");
@@ -356,6 +357,193 @@ test("disabled aliases are not resolvable", async () => {
   saveReferralAlias({ alias: "disabled_one", linkType: "partner", partnerId: 888, enabled: false });
   const res = await app.inject({ method: "GET", url: "/api/referrals/resolve?alias=disabled_one" });
   assert.equal(res.statusCode, 404);
+});
+
+/* ── Telegram internal endpoints (bot -> app) ───────────────────────────── */
+
+function telegramGet(path: string, host = "shpun-app-api") {
+  return app.inject({ method: "GET", url: `/api${path}`, headers: { host } });
+}
+
+function shmTemplateCalls(action: string): ShmCall[] {
+  return shmStub.calls.filter(
+    (c) => c.path.endsWith("/v1/template/shpun_app") && c.body.includes(`action=${action}`)
+  );
+}
+
+test("internal telegram-resolve returns partner data and counts a visit", async () => {
+  const before = findReferralAlias("blogger_one")?.visits_count ?? 0;
+  const res = await telegramGet("/internal/referrals/telegram-resolve?alias=blogger_one");
+  assert.equal(res.statusCode, 200);
+  const json = JSON.parse(res.body);
+  assert.equal(json.ok, true);
+  assert.equal(json.linkType, "partner");
+  assert.equal(json.alias, "blogger_one");
+  assert.equal(json.partnerId, 777);
+  assert.equal(json.campaign_code, "");
+  assert.equal(json.comment, "blogger_one");
+  assert.equal(findReferralAlias("blogger_one")?.visits_count, before + 1);
+});
+
+test("internal telegram-resolve?visit=0 canonicalizes without counting a visit", async () => {
+  const before = findReferralAlias("blogger_one")?.visits_count ?? 0;
+  const res = await telegramGet("/internal/referrals/telegram-resolve?alias=blogger_one&visit=0");
+  assert.equal(res.statusCode, 200);
+  const json = JSON.parse(res.body);
+  assert.equal(json.linkType, "partner");
+  assert.equal(json.partnerId, 777);
+  assert.equal(findReferralAlias("blogger_one")?.visits_count, before, "visit=0 must not increment the counter");
+});
+
+test("internal telegram-resolve rejects disabled aliases (no injected partner bypass)", async () => {
+  saveReferralAlias({ alias: "paused_partner", linkType: "partner", partnerId: 777, enabled: false });
+  const res = await telegramGet("/internal/referrals/telegram-resolve?alias=paused_partner&visit=0");
+  assert.equal(res.statusCode, 404);
+  assert.equal(JSON.parse(res.body).error, "alias_not_found");
+});
+
+test("internal telegram-resolve returns the campaign billing comment", async () => {
+  const res = await telegramGet("/internal/referrals/telegram-resolve?alias=telegram_news");
+  assert.equal(res.statusCode, 200);
+  const json = JSON.parse(res.body);
+  assert.equal(json.linkType, "campaign");
+  assert.equal(json.partnerId, 0);
+  assert.equal(json.billing_comment, "Реклама Telegram");
+  assert.equal(json.billingComment, "Реклама Telegram");
+  assert.equal(json.comment, "Реклама Telegram");
+});
+
+test("internal telegram-resolve exposes the partner comment source (campaign_code)", async () => {
+  saveReferralAlias({
+    alias: "partner_named",
+    linkType: "partner",
+    partnerId: 777,
+    campaignCode: "Blogger One",
+    enabled: true,
+  });
+  const res = await telegramGet("/internal/referrals/telegram-resolve?alias=partner_named&visit=0");
+  assert.equal(res.statusCode, 200);
+  const json = JSON.parse(res.body);
+  assert.equal(json.linkType, "partner");
+  assert.equal(json.alias, "partner_named");
+  assert.equal(json.partnerId, 777);
+  assert.equal(json.billing_comment, "");
+  assert.equal(json.campaign_code, "Blogger One");
+  assert.equal(json.campaignCode, "Blogger One");
+  assert.equal(json.comment, "Blogger One");
+});
+
+test("internal telegram-resolve rejects invalid and unknown aliases", async () => {
+  const invalid = await telegramGet("/internal/referrals/telegram-resolve?alias=%20%21");
+  assert.equal(invalid.statusCode, 400);
+  const unknown = await telegramGet("/internal/referrals/telegram-resolve?alias=ghost_tg");
+  assert.equal(unknown.statusCode, 404);
+});
+
+test("internal telegram endpoints reject non-internal hosts", async () => {
+  const resolve = await telegramGet("/internal/referrals/telegram-resolve?alias=blogger_one", "app.shpun.net");
+  assert.equal(resolve.statusCode, 404);
+  const claim = await telegramGet(
+    "/internal/referrals/telegram-claim?alias=blogger_one&session_id=s&user_id=1",
+    "app.shpun.net"
+  );
+  assert.equal(claim.statusCode, 404);
+});
+
+test("internal telegram-claim confirms a partner alias and forwards the secret", async () => {
+  const res = await telegramGet(
+    "/internal/referrals/telegram-claim?alias=blogger_one&session_id=shm-sess-1&user_id=4242"
+  );
+  assert.equal(res.statusCode, 200);
+  const json = JSON.parse(res.body);
+  assert.equal(json.ok, true);
+  assert.equal(json.linkType, "partner");
+  assert.equal(json.partnerId, 777);
+
+  const claims = shmTemplateCalls("referrals.claim");
+  assert.ok(claims.length > 0, "SHM referrals.claim must be called");
+  const body = claims[claims.length - 1].body;
+  assert.ok(body.includes("partner_id=777"), "claim must carry the partner id");
+  assert.ok(body.includes("referral_alias=blogger_one"), "claim must carry the alias");
+  assert.ok(body.includes("referral_secret=test-referral-secret"), "claim must forward SHM_REFERRAL_SECRET");
+});
+
+test("internal telegram-claim writes a campaign comment", async () => {
+  const res = await telegramGet(
+    "/internal/referrals/telegram-claim?alias=telegram_news&session_id=shm-sess-1&user_id=4242"
+  );
+  assert.equal(res.statusCode, 200);
+  const json = JSON.parse(res.body);
+  assert.equal(json.ok, true);
+  assert.equal(json.linkType, "campaign");
+
+  const claims = shmTemplateCalls("campaign.claim");
+  assert.ok(claims.length > 0, "SHM campaign.claim must be called");
+  const body = claims[claims.length - 1].body;
+  assert.ok(body.includes("campaign_alias=telegram_news"));
+  assert.ok(body.includes("campaign_comment="));
+  assert.ok(body.includes("referral_secret=test-referral-secret"));
+});
+
+test("internal telegram-claim forwards the partner campaign_code as first_pay_campaign", async () => {
+  const res = await telegramGet(
+    "/internal/referrals/telegram-claim?alias=partner_named&session_id=shm-sess-1&user_id=4242"
+  );
+  assert.equal(res.statusCode, 200);
+  const claims = shmTemplateCalls("referrals.claim");
+  assert.ok(claims.length > 0);
+  const params = new URLSearchParams(claims[claims.length - 1].body);
+  assert.equal(params.get("partner_id"), "777");
+  assert.equal(params.get("first_pay_campaign"), "Blogger One");
+  assert.equal(params.get("referral_comment"), "Blogger One");
+});
+
+/* ── Cross-transport canonical comment ──────────────────────────────────── */
+
+test("cross-transport: web registration sends the canonical partner comment", async () => {
+  const res = await register({
+    login: "webref@gmail.com",
+    password: "supersecret1",
+    mode: "register",
+    referral_alias: "partner_named",
+  });
+  assert.equal(res.statusCode, 200);
+  const claims = shmTemplateCalls("referrals.claim");
+  const params = new URLSearchParams(claims[claims.length - 1].body);
+  assert.equal(params.get("partner_id"), "777");
+  assert.equal(params.get("first_pay_campaign"), "Blogger One");
+  assert.equal(params.get("referral_comment"), "Blogger One");
+});
+
+test("cross-transport: partner without campaign_code falls back to alias", async () => {
+  const res = await register({
+    login: "webref2@gmail.com",
+    password: "supersecret1",
+    mode: "register",
+    referral_alias: "blogger_one",
+  });
+  assert.equal(res.statusCode, 200);
+  const params = new URLSearchParams(shmTemplateCalls("referrals.claim").pop()!.body);
+  assert.equal(params.get("first_pay_campaign"), "blogger_one");
+  assert.equal(params.get("referral_comment"), "blogger_one");
+});
+
+test("cross-transport: campaign comment is the billing_comment (never alias)", async () => {
+  const res = await register({
+    login: "webrefc@gmail.com",
+    password: "supersecret1",
+    mode: "register",
+    referral_alias: "telegram_news",
+  });
+  assert.equal(res.statusCode, 200);
+  const params = new URLSearchParams(shmTemplateCalls("campaign.claim").pop()!.body);
+  assert.equal(params.get("campaign_comment"), "Реклама Telegram");
+});
+
+test("internal telegram-claim requires a session id", async () => {
+  const res = await telegramGet("/internal/referrals/telegram-claim?alias=blogger_one");
+  assert.equal(res.statusCode, 400);
+  assert.equal(JSON.parse(res.body).error, "missing_session_id");
 });
 
 test.after(async () => {

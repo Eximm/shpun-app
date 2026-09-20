@@ -13,6 +13,7 @@ import {
   isValidReferralAlias,
   recordReferralAliasRegistrationForUser,
   recordReferralAliasVisit,
+  referralComment,
 } from "../../shared/linkdb/referralAliasesRepo.js";
 
 function isPrivateAddress(value: unknown): boolean {
@@ -38,33 +39,86 @@ function toInt(v: any, def: number) {
   return Math.trunc(n);
 }
 
+// Telegram referral diagnostics (development/test). Enabled by REFERRAL_DEBUG
+// or AUTH_DEBUG. Never logs secrets, tokens or session ids.
+function isReferralDebug(): boolean {
+  const v = String(process.env.REFERRAL_DEBUG ?? process.env.AUTH_DEBUG ?? "")
+    .trim()
+    .toLowerCase();
+  return v === "1" || v === "true" || v === "yes" || v === "on";
+}
+
+function safeAlias(value: unknown): string {
+  const a = String(value ?? "").trim().toLowerCase();
+  return /^[a-z0-9][a-z0-9_-]{1,31}$/.test(a) ? a : a ? "<invalid>" : "";
+}
+
+function refDbg(event: string, data?: Record<string, any>) {
+  if (!isReferralDebug()) return;
+  console.log(
+    JSON.stringify({ level: "info", time: Date.now(), referral: { event, source: "telegram", ...(data ?? {}) } })
+  );
+}
+
 export async function referralsRoutes(app: FastifyInstance) {
   app.get("/internal/referrals/telegram-resolve", async (req, reply) => {
     if (!isInternalRequest(req)) {
+      refDbg("TELEGRAM_REFERRAL_FAIL", {
+        phase: "resolve",
+        reason: "not_internal",
+        host: String(req.headers.host ?? "").split(":", 1)[0],
+      });
       return reply.code(404).send({ ok: false, error: "not_found" });
     }
 
     const alias = String((req.query as any)?.alias ?? "").trim().toLowerCase();
     if (!isValidReferralAlias(alias)) {
+      refDbg("TELEGRAM_REFERRAL_FAIL", { phase: "resolve", reason: "invalid_alias", alias: safeAlias(alias) });
       return reply.code(400).send({ ok: false, error: "invalid_alias" });
     }
 
     const item = findReferralAlias(alias);
-    if (!item) return reply.code(404).send({ ok: false, error: "alias_not_found" });
-    recordReferralAliasVisit(alias);
+    if (!item) {
+      refDbg("TELEGRAM_REFERRAL_FAIL", { phase: "resolve", reason: "alias_not_found", alias: safeAlias(alias) });
+      return reply.code(404).send({ ok: false, error: "alias_not_found" });
+    }
+
+    // `visit=0` marks a canonicalization-only resolve (e.g. before bot
+    // registration) that must not increment the landing counter. Default counts.
+    const visitRaw = String((req.query as any)?.visit ?? "").trim().toLowerCase();
+    const countVisit = !(visitRaw === "0" || visitRaw === "false" || visitRaw === "no");
+    if (countVisit) recordReferralAliasVisit(alias);
+
+    refDbg("TELEGRAM_REFERRAL_RESOLVE", {
+      alias: item.alias,
+      linkType: item.link_type,
+      partnerId: item.link_type === "partner" ? item.partner_id : 0,
+      countVisit,
+    });
 
     return reply.send({
       ok: true,
       alias: item.alias,
       linkType: item.link_type,
       partnerId: item.link_type === "partner" ? item.partner_id : 0,
+      // Canonical SHM comment, computed by ShpunApp so no consumer has to know
+      // the partner/campaign rule.
+      comment: referralComment(item),
+      // Backward-compatible / diagnostics fields.
       billingComment: item.billing_comment ?? "",
       billing_comment: item.billing_comment ?? "",
+      campaignCode: item.campaign_code ?? "",
+      campaign_code: item.campaign_code ?? "",
     });
   });
 
   app.get("/internal/referrals/telegram-claim", async (req, reply) => {
     if (!isInternalRequest(req)) {
+      refDbg("TELEGRAM_REFERRAL_FAIL", {
+        phase: "claim",
+        reason: "not_internal",
+        host: String(req.headers.host ?? "").split(":", 1)[0],
+      });
       return reply.code(404).send({ ok: false, error: "not_found" });
     }
 
@@ -74,14 +128,24 @@ export async function referralsRoutes(app: FastifyInstance) {
     const botUserId = toInt(query.user_id, 0);
     const botCommentWritten = toInt(query.bot_comment_written, 0) === 1;
     if (!isValidReferralAlias(alias)) {
+      refDbg("TELEGRAM_REFERRAL_FAIL", { phase: "claim", reason: "invalid_alias", alias: safeAlias(alias) });
       return reply.code(400).send({ ok: false, error: "invalid_alias" });
     }
     if (!shmSessionId) {
+      refDbg("TELEGRAM_REFERRAL_FAIL", { phase: "claim", reason: "missing_session_id", alias: safeAlias(alias) });
       return reply.code(400).send({ ok: false, error: "missing_session_id" });
     }
 
     const item = findReferralAlias(alias);
-    if (!item) return reply.code(404).send({ ok: false, error: "alias_not_found" });
+    if (!item) {
+      refDbg("TELEGRAM_REFERRAL_FAIL", {
+        phase: "claim",
+        reason: "alias_not_found",
+        alias: safeAlias(alias),
+        userId: botUserId,
+      });
+      return reply.code(404).send({ ok: false, error: "alias_not_found" });
+    }
     if (item.link_type === "campaign" && botCommentWritten && botUserId > 0) {
       recordReferralAliasRegistrationForUser(item.alias, botUserId);
     }
@@ -90,10 +154,19 @@ export async function referralsRoutes(app: FastifyInstance) {
         partner_id: item.partner_id,
         referral_alias: item.alias,
         first_pay: item.first_payment_bonus_percent,
-        first_pay_campaign: item.campaign_code ?? item.alias,
+        first_pay_campaign: referralComment(item),
+        referral_comment: referralComment(item),
         referral_secret: String(process.env.SHM_REFERRAL_SECRET ?? ""),
       });
       if (!claimResult.ok) {
+        refDbg("TELEGRAM_REFERRAL_FAIL", {
+          phase: "claim",
+          reason: "shm_failed",
+          alias: item.alias,
+          partnerId: item.partner_id,
+          userId: botUserId,
+          status: Number(claimResult.status ?? 0) || 0,
+        });
         return reply.code(502).send({ ok: false, error: "shm_failed", status: claimResult.status });
       }
 
@@ -104,6 +177,15 @@ export async function referralsRoutes(app: FastifyInstance) {
       if (registered) {
         recordReferralAliasRegistrationForUser(item.alias, claimData?.user_id);
       }
+
+      refDbg("TELEGRAM_REFERRAL_CLAIM", {
+        alias: item.alias,
+        linkType: item.link_type,
+        partnerId: item.partner_id,
+        userId: Number(claimData?.user_id ?? botUserId) || 0,
+        reason: String(claimData?.reason ?? ""),
+        registered: registered ? 1 : 0,
+      });
 
       return reply.send({
         ok: true,
@@ -117,10 +199,18 @@ export async function referralsRoutes(app: FastifyInstance) {
 
     const claimResult = await shmShpunAppTemplate<any>(shmSessionId, "campaign.claim", {
       campaign_alias: item.alias,
-      campaign_comment: item.billing_comment ?? "",
+      campaign_comment: referralComment(item),
       referral_secret: String(process.env.SHM_REFERRAL_SECRET ?? ""),
     });
     if (!claimResult.ok) {
+      refDbg("TELEGRAM_REFERRAL_FAIL", {
+        phase: "claim",
+        reason: "shm_failed",
+        alias: item.alias,
+        linkType: "campaign",
+        userId: botUserId,
+        status: Number(claimResult.status ?? 0) || 0,
+      });
       return reply.code(502).send({ ok: false, error: "shm_failed", status: claimResult.status });
     }
 
@@ -130,6 +220,13 @@ export async function referralsRoutes(app: FastifyInstance) {
     if (commentWritten || (botCommentWritten && botUserId > 0)) {
       recordReferralAliasRegistrationForUser(item.alias, claimData?.user_id ?? botUserId);
     }
+
+    refDbg("TELEGRAM_REFERRAL_CLAIM", {
+      alias: item.alias,
+      linkType: "campaign",
+      userId: Number(claimData?.user_id ?? botUserId) || 0,
+      commentWritten: (commentWritten || botCommentWritten) ? 1 : 0,
+    });
 
     return reply.send({
       ok: true,

@@ -62,6 +62,21 @@ function mapRow(row: any): ReferralAlias {
   };
 }
 
+/**
+ * Canonical SHM user comment for a referral alias. Single source of truth for
+ * web, Telegram widget and Telegram bot registration + claim/backfill:
+ *
+ *   partner  -> campaign_code ("Имя партнёра или кампании") || alias
+ *   campaign -> billing_comment ("Комментарий в биллинге")
+ */
+export function referralComment(
+  item: Pick<ReferralAlias, "link_type" | "campaign_code" | "billing_comment" | "alias">
+): string {
+  if (item.link_type === "campaign") return String(item.billing_comment ?? "").trim();
+  const campaignCode = String(item.campaign_code ?? "").trim();
+  return campaignCode || String(item.alias ?? "").trim();
+}
+
 export function isValidReferralAlias(value: unknown): boolean {
   return /^[a-z0-9][a-z0-9_-]{1,31}$/.test(normalizeAlias(value));
 }

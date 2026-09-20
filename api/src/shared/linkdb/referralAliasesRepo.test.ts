@@ -40,3 +40,30 @@ test("partner links retain their existing validation and defaults", async () => 
   assert.equal(partner.partner_id, 123);
   assert.equal(partner.partner_reward_percent, 30);
 });
+
+test("referralComment is the single canonical comment rule", async () => {
+  const repo = await import("./referralAliasesRepo.js");
+
+  const named = repo.saveReferralAlias({
+    alias: "check",
+    linkType: "partner",
+    partnerId: 2,
+    campaignCode: "exCheck",
+  });
+  assert.equal(repo.referralComment(named), "exCheck");
+
+  const plain = repo.saveReferralAlias({
+    alias: "plain",
+    linkType: "partner",
+    partnerId: 3,
+  });
+  assert.equal(repo.referralComment(plain), "plain");
+
+  const campaign = repo.saveReferralAlias({
+    alias: "reklamman",
+    linkType: "campaign",
+    partnerId: 0,
+    billingComment: "Telegram Ads",
+  });
+  assert.equal(repo.referralComment(campaign), "Telegram Ads");
+});
