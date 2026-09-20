@@ -19,8 +19,13 @@ import { apiFetch } from "../../shared/api/client";
 import { useI18n } from "../../shared/i18n";
 import { isTelegramMiniAppEnv } from "../../shared/telegram/sdk";
 import { hasSeenOnboardingPrompt, markOnboardingPromptSeen } from "../../shared/onboardingPromptSession";
+import {
+  captureReferralFromLocation,
+  parseReferralFromSearch,
+  readPendingPartnerId,
+  readPendingReferralAlias,
+} from "../../shared/referrals/capture";
 
-const PARTNER_LS_KEY = "partner_id_pending";
 const AUTH_PENDING_KEY = "auth:pending";
 const AUTH_PENDING_AT_KEY = "auth:pending_at";
 const AUTH_SESSION_ID_PREFIX = "auth.session.id:u:";
@@ -154,19 +159,9 @@ function isPushActive(s: PushState): boolean {
 }
 
 function hasReferralContext(search: string): boolean {
-  try {
-    const pid = Number(new URLSearchParams(String(search || "")).get("partner_id") || "0");
-    if (Number.isFinite(pid) && pid > 0) return true;
-  } catch {
-    // ignore
-  }
-  try {
-    const pending = Number(localStorage.getItem(PARTNER_LS_KEY) || "0");
-    if (Number.isFinite(pending) && pending > 0) return true;
-  } catch {
-    // ignore
-  }
-  return false;
+  const captured = parseReferralFromSearch(search);
+  return captured.partnerId > 0 || Boolean(captured.alias) ||
+    readPendingPartnerId() > 0 || Boolean(readPendingReferralAlias());
 }
 
 function shouldNotifyExpiredSession(pathname: string, search: string): boolean {
@@ -176,41 +171,6 @@ function shouldNotifyExpiredSession(pathname: string, search: string): boolean {
   if (hasReferralContext(search)) return false;
   if (!hasEverSucceededAuth()) return false;
   return true;
-}
-
-function parsePartnerIdFromUrl(): number {
-  try {
-    const direct = new URLSearchParams(window.location.search || "");
-    const v1 = direct.get("partner_id");
-    if (v1) {
-      const n = Number(v1);
-      if (Number.isFinite(n) && n > 0) return Math.trunc(n);
-    }
-    const h = String(window.location.hash || "");
-    const qIdx = h.indexOf("?");
-    if (qIdx >= 0) {
-      const v2 = new URLSearchParams(h.slice(qIdx + 1)).get("partner_id");
-      if (v2) {
-        const n = Number(v2);
-        if (Number.isFinite(n) && n > 0) return Math.trunc(n);
-      }
-    }
-  } catch {
-    // ignore
-  }
-  return 0;
-}
-
-function rememberPartnerIdFromUrl() {
-  const pid = parsePartnerIdFromUrl();
-  if (!pid) return;
-  const existing = Number(localStorage.getItem(PARTNER_LS_KEY) || "0");
-  if (Number.isFinite(existing) && existing > 0) return;
-  try {
-    localStorage.setItem(PARTNER_LS_KEY, String(pid));
-  } catch {
-    // ignore
-  }
 }
 
 // ─── PushOnboardingModal ──────────────────────────────────────────────────────
@@ -447,7 +407,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   // ── Effects ───────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    rememberPartnerIdFromUrl();
+    captureReferralFromLocation();
   }, []);
 
   useEffect(() => {
