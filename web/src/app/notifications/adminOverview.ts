@@ -18,6 +18,7 @@ export type AdminOverviewAttention = {
   support: number;
   partnership: number;
   reviews: number;
+  monitoring: number;
 };
 
 export type AdminOverviewSystem = {
@@ -26,6 +27,9 @@ export type AdminOverviewSystem = {
   hot: number;
   issues: number;
   total: number;
+  incidents: number;
+  warnings: number;
+  criticals: number;
 };
 
 export type AdminOverviewSummary = {
@@ -50,6 +54,7 @@ export type AdminOverviewActivityItem = {
   publicNo?: string;
   reviewId?: number;
   alias?: string;
+  message?: string;
 };
 
 export type AdminOverviewErrors = {
@@ -79,8 +84,8 @@ export type AdminOverviewState = {
 };
 
 export const EMPTY_ADMIN_OVERVIEW: AdminOverview = {
-  attention: { total: 0, support: 0, partnership: 0, reviews: 0 },
-  system: { status: "unknown", offline: 0, hot: 0, issues: 0, total: 0 },
+  attention: { total: 0, support: 0, partnership: 0, reviews: 0, monitoring: 0 },
+  system: { status: "unknown", offline: 0, hot: 0, issues: 0, total: 0, incidents: 0, warnings: 0, criticals: 0 },
   summary: { aliases: 0, enabledAliases: 0, partners: 0, campaigns: 0 },
   today: { supportTickets: 0, partnershipTickets: 0, referrals: 0, reviews: 0 },
   activity: [],
@@ -116,6 +121,7 @@ function toActivityItem(raw: unknown): AdminOverviewActivityItem | null {
     ...(r.publicNo ? { publicNo: String(r.publicNo) } : {}),
     ...(toCount(r.reviewId) ? { reviewId: toCount(r.reviewId) } : {}),
     ...(r.alias ? { alias: String(r.alias) } : {}),
+    ...(r.message ? { message: String(r.message) } : {}),
   };
 }
 
@@ -162,6 +168,7 @@ export async function refreshAdminOverview(): Promise<AdminOverview> {
         support: toCount(response?.attention?.support),
         partnership: toCount(response?.attention?.partnership),
         reviews: toCount(response?.attention?.reviews),
+        monitoring: toCount(response?.attention?.monitoring),
       },
       system: {
         status: toSystemStatus(response?.system?.status),
@@ -169,6 +176,9 @@ export async function refreshAdminOverview(): Promise<AdminOverview> {
         hot: toCount(response?.system?.hot),
         issues: toCount(response?.system?.issues),
         total: toCount(response?.system?.total),
+        incidents: toCount(response?.system?.incidents),
+        warnings: toCount(response?.system?.warnings),
+        criticals: toCount(response?.system?.criticals),
       },
       summary: {
         aliases: toCount(response?.summary?.aliases),

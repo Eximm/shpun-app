@@ -24,7 +24,15 @@ export type AdminNavIconName =
   | "card"
   | "refresh"
   | "check"
-  | "alert";
+  | "alert"
+  | "monitoring"
+  | "integration"
+  | "gateway"
+  | "critical"
+  | "history"
+  | "network"
+  | "cpu"
+  | "disk";
 
 /** Canonical section -> icon mapping (single entity, single icon). */
 export const ADMIN_SECTION_ICON: Record<AdminTab, AdminNavIconName> = {
@@ -46,6 +54,8 @@ export function activityIconName(type: string): AdminNavIconName {
     case "partnership.ticket":    return "handshake";
     case "review.new":            return "star";
     case "referral.registration": return "share";
+    case "monitoring.incident":   return "monitoring";
+    case "monitoring.event":      return "activity";
     default:                      return "activity";
   }
 }

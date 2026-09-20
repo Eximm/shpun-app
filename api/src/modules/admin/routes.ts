@@ -55,9 +55,10 @@ import { countSupportUnreadBreakdown } from "../support/notifyRepo.js";
 import { listAdminTickets } from "../support/service.js";
 import { countTicketsCreatedSince } from "../support/sqliteRepository.js";
 import { countReviewsByStatus, countReviewsSince, listRecentReviews } from "../reviews/repo.js";
-import { listMonitoredServers } from "../serverStatus/repo.js";
+import { listHealthServers } from "../serverStatus/repo.js";
 import { getServerStatusSnapshot } from "../serverStatus/monitor.js";
 import { aggregateHealthStatus } from "../serverStatus/health.js";
+import { countActiveIncidents, listRecentEvents, listRecentIncidents } from "../serverStatus/incidentsRepo.js";
 
 export async function ensureAdmin(shmSessionId: string) {
   const r = await shmShpunAppAdminStatus(shmSessionId);
@@ -382,15 +383,42 @@ export async function adminRoutes(app: FastifyInstance) {
       errors.reviews = true;
     }
 
-    let system = { status: "unknown" as string, offline: 0, hot: 0, issues: 0, total: 0 };
+    let system = {
+      status: "unknown" as string,
+      offline: 0,
+      hot: 0,
+      issues: 0,
+      total: 0,
+      incidents: 0,
+      warnings: 0,
+      criticals: 0,
+    };
     try {
-      const checks = getServerStatusSnapshot(listMonitoredServers());
-      const status = aggregateHealthStatus(checks.map((c) => ({ kind: c.kind, online: c.online })));
+      const healthRows = listHealthServers();
+      const checks = getServerStatusSnapshot(healthRows);
+      const status = aggregateHealthStatus(
+        checks.map((c) => ({
+          kind: c.kind,
+          online: c.online,
+          visibility: healthRows.find((r) => r.id === c.id)?.visibility,
+          affectsPublicHealth: healthRows.find((r) => r.id === c.id)?.affects_public_health === 1,
+        })),
+      );
       const offline = checks.filter((c) => c.online === false).length;
       const hot = checks.filter(
         (c) => c.online !== false && typeof c.loadPct === "number" && c.loadPct >= 85
       ).length;
-      system = { status, offline, hot, issues: offline + hot, total: checks.length };
+      const incidentCounts = countActiveIncidents();
+      system = {
+        status,
+        offline,
+        hot,
+        issues: offline + hot,
+        total: checks.length,
+        incidents: incidentCounts.total,
+        warnings: incidentCounts.warning,
+        criticals: incidentCounts.critical,
+      };
     } catch {
       errors.system = true;
     }
@@ -431,6 +459,7 @@ export async function adminRoutes(app: FastifyInstance) {
       publicNo?: string;
       reviewId?: number;
       alias?: string;
+      message?: string;
     };
     let activity: ActivityItem[] = [];
     try {
@@ -460,20 +489,40 @@ export async function adminRoutes(app: FastifyInstance) {
         if (ts) items.push({ type: "referral.registration", ts, alias: reg.alias });
       }
 
+      // Monitoring incidents / informational events (reboots). Only real
+      // lifecycle transitions reach this feed — never per-sample anomalies.
+      for (const incident of listRecentIncidents(8)) {
+        const ts = incident.resolved_at ?? incident.last_seen_at;
+        if (!ts) continue;
+        items.push({ type: "monitoring.incident", ts, reason: incident.resolved_at ? "created" : "message", message: incident.message });
+      }
+      for (const event of listRecentEvents(4)) {
+        if (event.ts) items.push({ type: "monitoring.event", ts: event.ts, message: event.message });
+      }
+
       items.sort((a, b) => b.ts - a.ts);
       activity = items.slice(0, 8);
     } catch {
       errors.activity = true;
     }
 
+    const incidentAttention = (() => {
+      try {
+        return countActiveIncidents().total;
+      } catch {
+        return 0;
+      }
+    })();
+
     return reply.send({
       ok: true,
       updatedAt: new Date().toISOString(),
       attention: {
-        total: unread.support + unread.partnership + reviews,
+        total: unread.support + unread.partnership + reviews + incidentAttention,
         support: unread.support,
         partnership: unread.partnership,
         reviews,
+        monitoring: incidentAttention,
       },
       system,
       summary,

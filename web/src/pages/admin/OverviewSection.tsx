@@ -109,6 +109,16 @@ function activityText(
         context: item.alias || undefined,
         to: { tab: "referralAliases" },
       };
+    case "monitoring.incident":
+      return {
+        title: item.message || t("admin.overview.activity.monitoring.incident"),
+        to: { tab: "serverStatus" },
+      };
+    case "monitoring.event":
+      return {
+        title: item.message || t("admin.overview.activity.monitoring.event"),
+        to: { tab: "serverStatus" },
+      };
     default:
       return { title: t("admin.overview.activity.unknown"), to: null };
   }
@@ -153,15 +163,17 @@ export function OverviewSection({
       : t("admin.overview.none");
   const systemStatus = systemDown
     ? t("admin.overview.unavailable")
-    : data.system.issues > 0
-      ? t("admin.overview.system.issues", { count: data.system.issues })
-      : systemStatusText(data.system.status, t);
+    : data.system.incidents > 0
+      ? t("admin.overview.system.monitoring", { count: data.system.incidents })
+      : data.system.issues > 0
+        ? t("admin.overview.system.issues", { count: data.system.issues })
+        : systemStatusText(data.system.status, t);
 
   const systemTone: Tone = systemDown
     ? "muted"
     : data.system.status === "down"
       ? "critical"
-      : data.system.status === "degraded" || data.system.issues > 0
+      : data.system.status === "degraded" || data.system.issues > 0 || data.system.incidents > 0
         ? "attention"
         : "normal";
 
@@ -246,7 +258,7 @@ export function OverviewSection({
               icon={ADMIN_SECTION_ICON.serverStatus}
               title={t("admin.overview.system")}
               status={systemStatus}
-              count={systemDown ? 0 : data.system.issues}
+              count={systemDown ? 0 : data.system.incidents || data.system.issues}
               tone={systemTone}
               wide
               onClick={() => onOpen("serverStatus")}

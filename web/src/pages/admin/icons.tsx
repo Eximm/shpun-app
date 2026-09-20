@@ -172,6 +172,70 @@ export function AdminSectionIcon({ name, size = 18 }: { name: AdminNavIconName; 
           <path d="M12 10v4M12 17h.01" />
         </svg>
       );
+    case "monitoring":
+      return (
+        <svg {...common}>
+          <path d="M3 12h3.5l2-5 3 10 2.2-5H21" />
+          <circle cx="12" cy="19.5" r="0.6" />
+        </svg>
+      );
+    case "integration":
+      return (
+        <svg {...common}>
+          <rect x="3" y="4" width="7" height="7" rx="1.8" />
+          <rect x="14" y="13" width="7" height="7" rx="1.8" />
+          <path d="M10 7.5h4a3 3 0 0 1 3 3v2.5" />
+          <path d="M14 16.5h-4a3 3 0 0 1-3-3V11" />
+        </svg>
+      );
+    case "gateway":
+      return (
+        <svg {...common}>
+          <rect x="3" y="8" width="18" height="8" rx="2" />
+          <path d="M7 12h.01M10.5 12h.01M14 12h.01" />
+          <path d="M12 4v4M12 16v4" opacity="0.7" />
+        </svg>
+      );
+    case "critical":
+      return (
+        <svg {...common}>
+          <path d="M12 3.5 21.5 20H2.5L12 3.5Z" />
+          <path d="M12 10v4.5M12 17.5h.01" />
+        </svg>
+      );
+    case "history":
+      return (
+        <svg {...common}>
+          <path d="M3.5 12a8.5 8.5 0 1 0 2.5-6" />
+          <path d="M3.5 4v4.5H8" />
+          <path d="M12 8v4.5l3 1.8" />
+        </svg>
+      );
+    case "network":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="5" r="2" />
+          <circle cx="5" cy="19" r="2" />
+          <circle cx="19" cy="19" r="2" />
+          <path d="M12 7v4M12 11l-5.5 6M12 11l5.5 6" />
+        </svg>
+      );
+    case "cpu":
+      return (
+        <svg {...common}>
+          <rect x="6" y="6" width="12" height="12" rx="2" />
+          <rect x="9.5" y="9.5" width="5" height="5" rx="1" />
+          <path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3" />
+        </svg>
+      );
+    case "disk":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="8.5" />
+          <circle cx="12" cy="12" r="2.4" />
+          <path d="M12 9.6V5.5M17.4 9.2l-3.2 1.9M14.2 15.9l2 3.4M9.8 15.9l-2 3.4M6.6 9.2l3.2 1.9" opacity="0.8" />
+        </svg>
+      );
     default:
       return null;
   }
