@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../../shared/api/client";
 import { useI18n } from "../../shared/i18n";
 import { AdminSectionHeader, AdminSectionIcon, ADMIN_SECTION_ICON, ModalShell } from "./shared";
+import { formatBitrate, formatLoad, formatPct, shouldShowRemnawaveUsers } from "./monitoringFormat";
 
 type TFn = ReturnType<typeof useI18n>["t"];
 
@@ -27,6 +28,7 @@ type MonitoredServer = {
   remnawave_integration_id: number | null;
   remnawave_node_uuid: string | null;
   thresholds_json: string | null;
+  current?: CurrentCheck | null;
 };
 
 type MonitoringSummary = {
@@ -191,7 +193,7 @@ function Gauge({ label, value, tone = "ok" }: { label: string; value: number | n
     <div className="mon-gauge">
       <div className="mon-gauge__head">
         <span className="mon-gauge__label">{label}</span>
-        <span className="mon-gauge__value">{value == null ? "—" : `${Math.round(value)}%`}</span>
+        <span className="mon-gauge__value">{formatPct(value)}</span>
       </div>
       <div className="mon-gauge__track"><div className={`mon-gauge__fill ${cls}`} style={{ width: `${pct}%` }} /></div>
     </div>
@@ -243,6 +245,7 @@ export function ServerStatusSection() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [menuOpenId, setMenuOpenId] = useState<number | null>(null);
   const [detail, setDetail] = useState<{ current: CurrentCheck | null; activeIncidents: Incident[]; recentIncidents: Incident[] } | null>(null);
   const [historyRange, setHistoryRange] = useState<"1h" | "24h" | "7d">("1h");
   const [history, setHistory] = useState<HistoryPoint[]>([]);
@@ -602,10 +605,18 @@ export function ServerStatusSection() {
               {group.items.length === 0 && <div className="pre">{t("admin.servers.empty")}</div>}
               {group.items.map((item) => {
                 const expanded = expandedId === item.id;
-                const current = expanded ? detail?.current ?? null : null;
+                // Compact rows use the current snapshot delivered with the admin
+                // list; expanding only enriches with incidents/history and must
+                // never be required to see CPU/RAM/Disk/load/network.
+                const current = expanded ? detail?.current ?? item.current ?? null : item.current ?? null;
                 const users = current?.onlineUsers;
+                const rowState = !Number(item.active) || current?.online === false
+                  ? "is-offline"
+                  : current?.remnawaveOnline === false
+                    ? "is-warn"
+                    : "";
                 return (
-                  <div key={item.id} className={`mon-row${expanded ? " is-expanded" : ""}`}>
+                  <div key={item.id} className={`mon-row${expanded ? " is-expanded" : ""}${rowState ? ` ${rowState}` : ""}`}>
                     <div className="mon-row__main" role="button" tabIndex={0} onClick={() => void toggleExpand(item.id)} onKeyDown={(e) => { if (e.key === "Enter") void toggleExpand(item.id); }}>
                       <div className="mon-row__identity">
                         <div className="mon-row__title">
@@ -613,6 +624,7 @@ export function ServerStatusSection() {
                           {item.country_code ? `${countryFlag(item.country_code)} ` : ""}{item.title || item.host}
                         </div>
                         <div className="mon-row__badges">
+                          <span className={`chip ${current?.online === false ? "chip--bad" : "chip--soft"}`}>{stateLabel(current?.online)}</span>
                           <span className="chip chip--soft">{t(kindKey(item.kind))}</span>
                           <span className={`chip ${item.visibility === "admin_only" ? "chip--warn" : "chip--ok"}`}>
                             {item.visibility === "admin_only" ? `🔒 ${t("admin.monitoring.badge.internal")}` : t("admin.monitoring.badge.public")}
@@ -620,20 +632,39 @@ export function ServerStatusSection() {
                           {Number(item.affects_public_health) === 1 && item.visibility === "admin_only" && (
                             <span className="chip chip--soft">{t("admin.monitoring.badge.affects_health")}</span>
                           )}
-                          {users != null && <span className="chip chip--ok">{t("admin.monitoring.badge.users", { count: users })}</span>}
+                          {shouldShowRemnawaveUsers(Boolean(item.remnawave_node_uuid), users) && (
+                            <span className="chip chip--ok">{t("admin.monitoring.badge.connections", { count: users ?? 0 })}</span>
+                          )}
                         </div>
                       </div>
                       <div className="mon-row__metrics">
                         <Gauge label={t("admin.monitoring.metric.cpu_short")} value={current?.cpuLoadPct ?? null} />
                         <Gauge label={t("admin.monitoring.metric.ram_short")} value={current?.memoryLoadPct ?? null} />
                         <Gauge label={t("admin.monitoring.metric.disk_short")} value={current?.diskLoadPct ?? null} />
-                        <span className="mon-row__plain">{`Load ${current?.load1 != null ? current.load1.toFixed(2) : "—"}`}</span>
-                        <span className="mon-row__plain">{`↓${current?.rxMbps != null ? current.rxMbps.toFixed(1) : "—"} ↑${current?.txMbps != null ? current.txMbps.toFixed(1) : "—"} Mbps`}</span>
+                        <span className="mon-row__plain">{t("admin.monitoring.metric.load_short", { value: formatLoad(current?.load1) })}</span>
+                        <span className="mon-row__plain">{`↓ ${formatBitrate(current?.rxMbps)}   ↑ ${formatBitrate(current?.txMbps)}`}</span>
                         <span className="mon-row__plain">{current?.uptime ? t("admin.monitoring.metric.uptime_short", { value: current.uptime }) : "—"}</span>
+                        <span className={`mon-row__plain mon-row__fresh${current?.online === false ? " is-stale" : ""}`}>{t("admin.monitoring.metric.freshness", { value: fmtRelative(current?.checkedAt ?? null, t) })}</span>
                       </div>
-                      <div className="actions mon-row__actions">
+                      <div className="actions mon-row__actions mon-row__actions--desktop">
                         <button className="btn btn--soft" type="button" onClick={(e) => { e.stopPropagation(); edit(item); }}>{t("common.edit")}</button>
                         <button className="btn btn--danger" type="button" onClick={(e) => { e.stopPropagation(); void remove(item.id); }}>{t("common.delete")}</button>
+                      </div>
+                      <div className="mon-row__overflow" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          className="btn btn--soft mon-row__overflowBtn"
+                          type="button"
+                          aria-label={t("admin.monitoring.action.menu")}
+                          aria-haspopup="menu"
+                          aria-expanded={menuOpenId === item.id}
+                          onClick={() => setMenuOpenId(menuOpenId === item.id ? null : item.id)}
+                        >⋮</button>
+                        {menuOpenId === item.id && (
+                          <div className="mon-row__overflowMenu" role="menu">
+                            <button className="btn btn--soft" role="menuitem" type="button" onClick={() => { setMenuOpenId(null); edit(item); }}>{t("common.edit")}</button>
+                            <button className="btn btn--danger" role="menuitem" type="button" onClick={() => { setMenuOpenId(null); void remove(item.id); }}>{t("common.delete")}</button>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -661,8 +692,8 @@ export function ServerStatusSection() {
                             <div className="mon-detail__section">
                               <div className="mon-detail__heading">{t("admin.monitoring.section.network")}</div>
                               <div className="mon-kv">
-                                <span>{t("admin.monitoring.metric.rx")}</span><b>{current.rxMbps != null ? `${current.rxMbps.toFixed(2)} Mbps` : "—"}</b>
-                                <span>{t("admin.monitoring.metric.tx")}</span><b>{current.txMbps != null ? `${current.txMbps.toFixed(2)} Mbps` : "—"}</b>
+                                <span>{t("admin.monitoring.metric.rx")}</span><b>{formatBitrate(current.rxMbps)}</b>
+                                <span>{t("admin.monitoring.metric.tx")}</span><b>{formatBitrate(current.txMbps)}</b>
                                 <span>{t("admin.monitoring.metric.uplink")}</span><b>{current.uplinkLoadPct ?? "—"}%</b>
                                 <span>{t("admin.monitoring.metric.drops")}</span><b>{`${current.rxDropsDelta ?? "—"} / ${current.txDropsDelta ?? "—"}`}</b>
                                 <span>{t("admin.monitoring.metric.errors")}</span><b>{`${current.rxErrorsDelta ?? "—"} / ${current.txErrorsDelta ?? "—"}`}</b>

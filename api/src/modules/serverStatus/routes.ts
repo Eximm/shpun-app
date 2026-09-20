@@ -149,7 +149,15 @@ export async function serverStatusRoutes(app: FastifyInstance) {
   app.get("/admin/monitored-servers", async (req, reply) => {
     if (!(await requireAdmin(req, reply))) return;
     const rows = listMonitoredServers({ includeInactive: true });
-    return reply.send({ ok: true, items: rows.map(toAdminServer) });
+    // One request, one snapshot: every server carries its compact-safe current
+    // status so the admin can read all nodes at a glance without expanding and
+    // without an N-request fan-out.
+    const snapshot = new Map(getServerStatusSnapshot(rows).map((c) => [c.id, c]));
+    return reply.send({
+      ok: true,
+      updatedAt: getServerStatusMeta().updatedAt,
+      items: rows.map((row) => ({ ...toAdminServer(row), current: snapshot.get(row.id) ?? null })),
+    });
   });
 
   app.post("/admin/monitored-servers", async (req, reply) => {
