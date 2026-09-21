@@ -101,7 +101,6 @@ assert("compact uses shared formatBitrate", src.includes("formatBitrate(current?
 assert("compact uses shared formatLoad", src.includes('formatLoad(current?.load1)'));
 assert("compact does not hardcode Mbps decimals", !src.includes("rxMbps.toFixed(1)"));
 assert("mobile actions use an overflow menu", src.includes("mon-row__overflow") && src.includes('aria-haspopup="menu"'));
-assert("desktop actions kept separate", src.includes("mon-row__actions--desktop"));
 assert("expanded diagnostics still present", src.includes("admin.monitoring.section.history") && src.includes("mon-detail"));
 assert("expansion still lazy-loads detail", src.includes("/admin/monitoring/servers/${id}/detail"));
 
@@ -113,6 +112,10 @@ assert("explicit force-check endpoint is separate", src.includes("/admin/monitor
 assert("compact row uses the explicit persisted state", src.includes("currentStateChip(current?.state)"));
 assert("polling only refetches persisted state", src.includes("setInterval(() => void loadAll({ silent: true })"));
 assert("collector observability surfaced", src.includes("admin.monitoring.collector.title"));
+assert("top panel uses grouped dashboard panels", src.includes("mon-dashboard") && src.includes("mon-panel__label"));
+assert("server summary is one grouped block", src.includes("mon-panel__big") && src.includes("mon-panel__sub"));
+assert("collector status is a compact operational row", src.includes("mon-collectorRow") && src.includes("mon-statusDot"));
+assert("collapsed card uses compact metrics, not gauges", !src.includes("Gauge") && src.includes("mon-metric") && src.includes("mon-row__traffic"));
 
 const shared = fs.readFileSync(path.join(webRoot, "src", "pages", "admin", "shared.tsx"), "utf8");
 const actionMenu = fs.readFileSync(path.join(webRoot, "src", "pages", "admin", "ActionMenu.tsx"), "utf8");
@@ -131,7 +134,7 @@ assert("action menu is a viewport-aware portal", actionMenu.includes("createPort
 
 // Global incidents + graph integration.
 assert("global incidents section wired in", src.includes("<MonitoringIncidents") && src.includes("openIncident"));
-assert("summary incident cards are clickable", src.includes("focusIncidents") && src.includes("mon-summary__stat is-clickable"));
+assert("summary incident cards are clickable", src.includes("focusIncidents") && src.includes("mon-stat"));
 assert("compact row shows the top active issue", src.includes("mon-row__issue") && src.includes("globalActive.filter"));
 assert("incident click targets the server card", src.includes("mon-server-${inc.serverId}"));
 assert("graph focuses the incident metric", src.includes("incidentMetricKey(inc.ruleType)"));
@@ -152,6 +155,9 @@ const incidentsComp = fs.readFileSync(path.join(webRoot, "src", "pages", "admin"
 assert("mobile single-column details", css.includes(".mon-detail { grid-template-columns: 1fr; }"));
 assert("safe-area bottom padding for the bottom nav", css.includes("var(--nav-h) + env(safe-area-inset-bottom)"));
 assert("no horizontal overflow guard", css.includes(".admin-stack, .mon-row, .mon-detail, .mon-graph, .mon-kv, .mon-incidentCard { min-width: 0; }"));
+assert("dashboard groups side-by-side on wide screens", css.includes("grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr)") && css.includes("mon-panel--collector"));
+assert("old summary tiles and gauges removed", !css.includes(".mon-summary__stat") && !css.includes(".mon-gauge"));
+assert("collapsed card has compact metric + traffic rows", css.includes(".mon-metric") && css.includes(".mon-row__traffic"));
 
 // Incident/history mobile isolation + richer history.
 assert("incident meta no longer refuses to wrap", !css.includes(".mon-incident__meta { color: var(--muted); font-size: 11px; white-space: nowrap; }"));

@@ -167,18 +167,20 @@ function fmtBytes(v: number | null) {
   return `${n.toFixed(n < 10 && i > 0 ? 1 : 0)} ${units[i]}`;
 }
 
-function Gauge({ label, value }: { label: string; value: number | null }) {
-  const pct = value == null ? 0 : Math.min(100, Math.max(0, value));
-  const cls = value == null ? "is-empty" : value >= 90 ? "is-bad" : value >= 75 ? "is-warn" : "is-ok";
-  return (
-    <div className="mon-gauge">
-      <div className="mon-gauge__head">
-        <span className="mon-gauge__label">{label}</span>
-        <span className="mon-gauge__value">{formatPct(value)}</span>
-      </div>
-      <div className="mon-gauge__track"><div className={`mon-gauge__fill ${cls}`} style={{ width: `${pct}%` }} /></div>
-    </div>
-  );
+function metricTone(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(v)) return "";
+  if (v >= 90) return " is-bad";
+  if (v >= 75) return " is-warn";
+  return "";
+}
+
+function collectorHealth(c: CollectorState | null): { tone: string; labelKey: string } | null {
+  if (!c) return null;
+  if (c.collectorRunning) return { tone: "run", labelKey: "admin.monitoring.collector.status.running" };
+  if (c.lastCycleAt == null) return { tone: "idle", labelKey: "admin.monitoring.collector.status.no_data" };
+  const ageMs = Date.now() - c.lastCycleAt * 1000;
+  if (ageMs <= 180_000) return { tone: "ok", labelKey: "admin.monitoring.collector.status.ok" };
+  return { tone: "stale", labelKey: "admin.monitoring.collector.status.stale" };
 }
 
 export function ServerStatusSection() {
@@ -535,6 +537,10 @@ export function ServerStatusSection() {
     { kind: "infra", items: items.filter((i) => i.kind === "infra") },
   ];
 
+  const staleCount = summary?.totals.stale ?? 0;
+  const offlineCount = summary?.totals.offline ?? 0;
+  const collectorState = collectorHealth(collector);
+
   return (
     <div className="admin-stack">
       <div className="card">
@@ -557,53 +563,73 @@ export function ServerStatusSection() {
           {notice && <div className="pre admin-gap-top-sm">{notice}</div>}
 
           {summary && (
-            <>
-              <div className="mon-summary admin-gap-top-md">
-                <div className="mon-summary__stat">
-                  <span className="mon-summary__value">{summary.totals.online}/{summary.totals.all}</span>
-                  <span className="mon-summary__label">{t("admin.monitoring.summary.online")}</span>
+            <div className="mon-dashboard admin-gap-top-md">
+              <section className="mon-panel">
+                <div className="mon-panel__label">{t("admin.monitoring.panel.servers")}</div>
+                <div className="mon-panel__lead">
+                  <span className="mon-panel__big">{summary.totals.online}/{summary.totals.all}</span>
+                  <span className="mon-panel__unit">{t("admin.monitoring.summary.online")}</span>
+                  {offlineCount > 0 && <span className="chip chip--bad">{t("admin.monitoring.panel.offline", { count: offlineCount })}</span>}
+                  {staleCount > 0 && <span className="chip chip--warn">{`${t("admin.monitoring.state.stale")} ${staleCount}`}</span>}
+                  {offlineCount === 0 && staleCount === 0 && summary.totals.all > 0 && (
+                    <span className="chip chip--ok">{t("admin.monitoring.panel.all_fresh")}</span>
+                  )}
                 </div>
-                <div className="mon-summary__stat">
-                  <span className="mon-summary__value">{summary.totals.vpn}</span>
-                  <span className="mon-summary__label">{t("admin.servers.kind.vpn")}</span>
+                <div className="mon-panel__sub">
+                  {`${summary.totals.vpn} ${t("admin.servers.kind.vpn")} · ${summary.totals.gateway} ${t("admin.servers.kind.gateway")} · ${summary.totals.infra} ${t("admin.servers.kind.infra")}`}
                 </div>
-                <div className="mon-summary__stat">
-                  <span className="mon-summary__value">{summary.totals.gateway}</span>
-                  <span className="mon-summary__label">{t("admin.servers.kind.gateway")}</span>
+              </section>
+
+              <section className="mon-panel">
+                <div className="mon-panel__label">{t("admin.monitoring.panel.state")}</div>
+                <div className="mon-panel__stats">
+                  <button
+                    type="button"
+                    className={`mon-stat${summary.incidents.total > 0 ? " is-warn" : ""}`}
+                    onClick={() => focusIncidents("all")}
+                  >
+                    <span className="mon-stat__value">{summary.incidents.total}</span>
+                    <span className="mon-stat__label">{t("admin.monitoring.summary.incidents")}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`mon-stat${summary.incidents.warning > 0 ? " is-warn" : ""}`}
+                    onClick={() => focusIncidents("warning")}
+                  >
+                    <span className="mon-stat__value">{summary.incidents.warning}</span>
+                    <span className="mon-stat__label">{t("admin.monitoring.summary.warnings")}</span>
+                  </button>
+                  {summary.incidents.critical > 0 && (
+                    <span className="chip chip--bad">{`${t("admin.monitoring.incident.severity.critical")} ${summary.incidents.critical}`}</span>
+                  )}
                 </div>
-                <div className="mon-summary__stat">
-                  <span className="mon-summary__value">{summary.totals.infra}</span>
-                  <span className="mon-summary__label">{t("admin.servers.kind.infra")}</span>
+                <div className="mon-panel__sub">
+                  {summary.incidents.total === 0
+                    ? t("admin.monitoring.panel.state_ok")
+                    : t("admin.monitoring.panel.state_attention")}
                 </div>
-                <div className={`mon-summary__stat${(summary.totals.stale ?? 0) > 0 ? " is-warn" : ""}`}>
-                  <span className="mon-summary__value">{summary.totals.stale ?? 0}</span>
-                  <span className="mon-summary__label">{t("admin.monitoring.state.stale")}</span>
-                </div>
-                <button
-                  type="button"
-                  className={`mon-summary__stat is-clickable${summary.incidents.critical > 0 ? " is-bad" : summary.incidents.total > 0 ? " is-warn" : ""}`}
-                  onClick={() => focusIncidents("all")}
-                >
-                  <span className="mon-summary__value">{summary.incidents.total}</span>
-                  <span className="mon-summary__label">{t("admin.monitoring.summary.incidents")}</span>
-                </button>
-                <button type="button" className="mon-summary__stat is-clickable" onClick={() => focusIncidents("warning")}>
-                  <span className="mon-summary__value">{summary.incidents.warning}</span>
-                  <span className="mon-summary__label">{t("admin.monitoring.summary.warnings")}</span>
-                </button>
-              </div>
-              {collector && (
-                <div className="mon-collector admin-gap-top-sm">
-                  <span className={`mon-collector__dot ${collector.collectorRunning ? "is-run" : collector.lastCycleAt ? "is-ok" : "is-idle"}`} />
-                  <span className="mon-collector__label">{t("admin.monitoring.collector.title")}</span>
-                  <span className="mon-collector__meta">
-                    {collector.lastCycleAt ? t("admin.monitoring.collector.last", { value: fmtRelative(new Date(collector.lastCycleAt * 1000).toISOString(), t) }) : "—"}
-                    {collector.lastCycleDurationMs != null ? ` · ${t("admin.monitoring.collector.duration", { value: collector.lastCycleDurationMs })}` : ""}
-                    {` · ${t("admin.monitoring.collector.exporters", { ok: collector.serversSucceeded, total: collector.serversAttempted })}`}
-                  </span>
-                </div>
+              </section>
+
+              {collector && collectorState && (
+                <section className="mon-panel mon-panel--collector">
+                  <div className="mon-panel__label">{t("admin.monitoring.collector.title")}</div>
+                  <div className="mon-collectorRow">
+                    <span className={`mon-statusDot is-${collectorState.tone}`} />
+                    <span className="mon-collectorRow__status">{t(collectorState.labelKey)}</span>
+                    <span className="mon-collectorRow__sep">·</span>
+                    <span>{collector.lastCycleAt ? t("admin.monitoring.collector.last", { value: fmtRelative(new Date(collector.lastCycleAt * 1000).toISOString(), t) }) : t("admin.monitoring.collector.none")}</span>
+                    {collector.lastCycleDurationMs != null && (
+                      <>
+                        <span className="mon-collectorRow__sep">·</span>
+                        <span>{t("admin.monitoring.collector.duration", { value: collector.lastCycleDurationMs })}</span>
+                      </>
+                    )}
+                    <span className="mon-collectorRow__sep">·</span>
+                    <span>{t("admin.monitoring.collector.exporters", { ok: collector.serversSucceeded, total: collector.serversAttempted })}</span>
+                  </div>
+                </section>
               )}
-            </>
+            </div>
           )}
 
           <MonitoringIncidents
@@ -660,13 +686,16 @@ export function ServerStatusSection() {
                         </div>
                       </div>
                       <div className="mon-row__metrics">
-                        <Gauge label={t("admin.monitoring.metric.cpu_short")} value={current?.cpuLoadPct ?? null} />
-                        <Gauge label={t("admin.monitoring.metric.ram_short")} value={current?.memoryLoadPct ?? null} />
-                        <Gauge label={t("admin.monitoring.metric.disk_short")} value={current?.diskLoadPct ?? null} />
-                        <span className="mon-row__plain">{t("admin.monitoring.metric.load_short", { value: formatLoad(current?.load1) })}</span>
-                        <span className="mon-row__plain">{`↓ ${formatBitrate(current?.rxMbps)}   ↑ ${formatBitrate(current?.txMbps)}`}</span>
-                        <span className="mon-row__plain">{current?.uptime ? t("admin.monitoring.metric.uptime_short", { value: current.uptime }) : "—"}</span>
-                        <span className={`mon-row__plain mon-row__fresh${current?.state === "stale" || current?.state === "offline" ? " is-stale" : ""}`}>{t("admin.monitoring.metric.freshness", { value: fmtRelative(current?.checkedAt ?? null, t) })}</span>
+                        <span className={`mon-metric${metricTone(current?.cpuLoadPct)}`}>{`CPU ${formatPct(current?.cpuLoadPct)}`}</span>
+                        <span className={`mon-metric${metricTone(current?.memoryLoadPct)}`}>{`RAM ${formatPct(current?.memoryLoadPct)}`}</span>
+                        <span className={`mon-metric${metricTone(current?.diskLoadPct)}`}>{`Disk ${formatPct(current?.diskLoadPct)}`}</span>
+                        <span className="mon-metric">{t("admin.monitoring.metric.load_short", { value: formatLoad(current?.load1) })}</span>
+                      </div>
+                      <div className="mon-row__traffic">
+                        <span>{`↓ ${formatBitrate(current?.rxMbps)}`}</span>
+                        <span>{`↑ ${formatBitrate(current?.txMbps)}`}</span>
+                        <span className={`mon-metric${metricTone(current?.uplinkLoadPct)}`}>{`${t("admin.monitoring.metric.uplink")} ${formatPct(current?.uplinkLoadPct)}`}</span>
+                        <span className={`mon-row__fresh${current?.state === "stale" || current?.state === "offline" ? " is-stale" : ""}`}>{t("admin.monitoring.metric.freshness", { value: fmtRelative(current?.checkedAt ?? null, t) })}</span>
                       </div>
                       {topIssue && (
                         <div className={`mon-row__issue mon-row__issue--${topIssue.severity}`}>
@@ -678,10 +707,6 @@ export function ServerStatusSection() {
                           {activeIssues.length > 1 ? ` · +${activeIssues.length - 1}` : ""}
                         </div>
                       )}
-                      <div className="actions mon-row__actions mon-row__actions--desktop">
-                        <button className="btn btn--soft" type="button" onClick={(e) => { e.stopPropagation(); edit(item); }}>{t("common.edit")}</button>
-                        <button className="btn btn--danger" type="button" onClick={(e) => { e.stopPropagation(); void remove(item.id); }}>{t("common.delete")}</button>
-                      </div>
                       <button
                         className="mon-row__chevron"
                         type="button"
