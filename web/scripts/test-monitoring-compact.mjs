@@ -157,6 +157,16 @@ assert("no horizontal overflow guard", css.includes(".admin-stack, .mon-row, .mo
 assert("incident meta no longer refuses to wrap", !css.includes(".mon-incident__meta { color: var(--muted); font-size: 11px; white-space: nowrap; }"));
 assert("detail grid children can shrink", css.includes(".mon-detail > * { min-width: 0; }"));
 assert("incident and history sections are separated on mobile", css.includes(".mon-detail__section + .mon-detail__section"));
+assert(
+  "history section spans the detail grid so graphs get real width",
+  css.includes(".mon-detail__section--history { grid-column: 1 / -1; container-type: inline-size; container-name: mon-history; }"),
+);
+assert(
+  "history graphs switch to two columns by container width",
+  css.includes("@container mon-history (min-width: 560px)") && css.includes("grid-template-columns: repeat(2, minmax(0, 1fr));"),
+);
+assert("history graph layout has a no-container-query fallback", css.includes("@supports not (container-type: inline-size)"));
+assert("history section carries the responsive modifier", src.includes("mon-detail__section mon-detail__section--history"));
 assert("history shows peak and threshold", incidentsComp.includes("incident.peak") && incidentsComp.includes("incident.threshold"));
 assert("active incidents distinguish was/now", incidentsComp.includes("incident.was") && incidentsComp.includes("incident.now"));
 assert("history marks the final state", incidentsComp.includes("incident.state.resolved"));

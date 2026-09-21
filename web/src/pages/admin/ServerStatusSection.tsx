@@ -788,7 +788,7 @@ export function ServerStatusSection() {
                               )}
                             </div>
 
-                            <div className="mon-detail__section">
+                            <div className="mon-detail__section mon-detail__section--history">
                               <div className="mon-detail__heading">{t("admin.monitoring.section.history")}</div>
                               <div className="actions actions--3 admin-gap-top-sm mon-rangeButtons">
                                 {(["1h", "24h", "7d"] as const).map((range) => (
