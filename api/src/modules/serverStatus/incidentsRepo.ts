@@ -25,6 +25,8 @@ export type MonitoringIncidentRow = {
   resolved_at: number | null;
   last_seen_at: number;
   value: number | null;
+  trigger_value: number | null;
+  peak_value: number | null;
   threshold: number | null;
   message: string;
   context_json: string | null;
@@ -71,6 +73,8 @@ CREATE INDEX IF NOT EXISTS idx_monitoring_incidents_state
  */
 try { linkDb.exec(`ALTER TABLE monitoring_incidents ADD COLUMN server_title TEXT`); } catch { /* exists */ }
 try { linkDb.exec(`ALTER TABLE monitoring_incidents ADD COLUMN server_kind TEXT`); } catch { /* exists */ }
+try { linkDb.exec(`ALTER TABLE monitoring_incidents ADD COLUMN trigger_value REAL`); } catch { /* exists */ }
+try { linkDb.exec(`ALTER TABLE monitoring_incidents ADD COLUMN peak_value REAL`); } catch { /* exists */ }
 linkDb.exec(`CREATE INDEX IF NOT EXISTS idx_monitoring_incidents_opened ON monitoring_incidents(opened_at);`);
 
 linkDb.exec(`
@@ -114,8 +118,8 @@ export function createPendingIncident(input: {
   const info = linkDb
     .prepare(`
       INSERT INTO monitoring_incidents
-        (server_id, server_title, server_kind, rule_type, severity, state, opened_at, last_seen_at, value, threshold, message, context_json, streak, recover_streak)
-      VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, 1, 0)
+        (server_id, server_title, server_kind, rule_type, severity, state, opened_at, last_seen_at, value, trigger_value, peak_value, threshold, message, context_json, streak, recover_streak)
+      VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, 1, 0)
     `)
     .run(
       input.serverId,
@@ -125,6 +129,8 @@ export function createPendingIncident(input: {
       input.severity,
       input.ts,
       input.ts,
+      input.value,
+      input.value,
       input.value,
       input.threshold,
       input.message.slice(0, 300),
@@ -143,6 +149,7 @@ export function markIncidentSeen(
       UPDATE monitoring_incidents
       SET last_seen_at = ?,
           value = ?,
+          peak_value = CASE WHEN ? IS NULL THEN peak_value ELSE MAX(COALESCE(peak_value, ?), ?) END,
           severity = COALESCE(?, severity),
           message = COALESCE(?, message),
           context_json = COALESCE(?, context_json),
@@ -152,6 +159,9 @@ export function markIncidentSeen(
     `)
     .run(
       input.ts,
+      input.value,
+      input.value,
+      input.value,
       input.value,
       input.severity ?? null,
       input.message ? input.message.slice(0, 300) : null,

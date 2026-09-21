@@ -162,6 +162,25 @@ test("counts expose active incidents for dashboard/bell", () => {
   assert.ok(recent.length > 0);
 });
 
+test("trigger_value keeps the initial reading and peak_value tracks the maximum", () => {
+  const rule = { ruleType: "high_cpu", severity: "warning", active: true, hold: true, value: 80, threshold: 75, message: "cpu", confirmAfterChecks: 1 };
+  evaluate(111, T0, [rule]);
+  let inc = findActiveIncident(111, "high_cpu")!;
+  assert.equal(inc.trigger_value, 80);
+  assert.equal(inc.peak_value, 80);
+
+  evaluate(111, T0 + 60, [{ ...rule, value: 99 }]);
+  inc = findActiveIncident(111, "high_cpu")!;
+  assert.equal(inc.value, 99);
+  assert.equal(inc.peak_value, 99);
+  assert.equal(inc.trigger_value, 80, "trigger stays at the initial value");
+
+  evaluate(111, T0 + 120, [{ ...rule, value: 90 }]);
+  inc = findActiveIncident(111, "high_cpu")!;
+  assert.equal(inc.value, 90);
+  assert.equal(inc.peak_value, 99, "peak keeps the maximum");
+});
+
 test("duration formatting is human friendly", () => {
   assert.equal(formatDuration(45), "45с");
   assert.equal(formatDuration(4 * 60 + 37), "4м 37с");

@@ -662,6 +662,15 @@ export function ServerStatusSection() {
     return ruleType === "network_errors" ? "count" : "percent";
   }
 
+  function fmtClockLocal(ts: number) {
+    const d = new Date(ts * 1000);
+    return `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  }
+
+  function capacityBpsLabel(bps: number | null): string {
+    return bps != null ? formatBitrate((bps * 8) / 1_000_000) : "—";
+  }
+
   function focusIncidents(sev: IncidentSeverityFilter) {
     setIncidentTab("active");
     setIncidentSeverity(sev);
@@ -916,17 +925,33 @@ export function ServerStatusSection() {
                               <div className="mon-detail__heading">{t("admin.monitoring.section.incidents")}</div>
                               {detail?.activeIncidents.length ? (
                                 <div className="mon-incidentList">
-                                  {detail.activeIncidents.map((inc) => (
-                                    <div key={inc.id} className={`mon-incident mon-incident--${inc.severity}`}>
-                                      <span className="mon-incident__rule">{t(incidentRuleKey(inc.ruleType))}</span>
-                                      <span className="mon-incident__meta">{`${t(`admin.monitoring.incident.severity.${inc.severity}`)} · ${t(`admin.monitoring.incident.state.${inc.state}`)}`}</span>
-                                      <span className="mon-incident__meta">
-                                        {inc.value != null ? `${t("admin.monitoring.incident.current")} ${formatIncidentValue(inc.value, incidentUnit(inc.ruleType))}` : ""}
-                                        {inc.threshold != null ? ` · ${t("admin.monitoring.incident.threshold")} ${formatIncidentValue(inc.threshold, incidentUnit(inc.ruleType))}` : ""}
-                                        {` · ${formatDuration(inc.durationSec)}`}
-                                      </span>
-                                    </div>
-                                  ))}
+                                  {detail.activeIncidents.map((inc) => {
+                                    const unit = incidentUnit(inc.ruleType);
+                                    const showWas = inc.triggerValue != null && inc.value != null && inc.triggerValue !== inc.value;
+                                    return (
+                                      <div key={inc.id} className={`mon-incident mon-incident--${inc.severity}`}>
+                                        <div className="mon-incident__row">
+                                          <span className="mon-incident__rule">{t(incidentRuleKey(inc.ruleType))}</span>
+                                          <span className="mon-incident__badge">{`${t(`admin.monitoring.incident.severity.${inc.severity}`)} · ${t(`admin.monitoring.incident.state.${inc.state}`)}`}</span>
+                                        </div>
+                                        <div className="mon-incident__values">
+                                          {showWas ? `${t("admin.monitoring.incident.was")} ${formatIncidentValue(inc.triggerValue, unit)} · ` : ""}
+                                          {inc.value != null ? `${t("admin.monitoring.incident.now")} ${formatIncidentValue(inc.value, unit)}` : ""}
+                                          {inc.peakValue != null && inc.peakValue !== inc.value ? ` · ${t("admin.monitoring.incident.peak")} ${formatIncidentValue(inc.peakValue, unit)}` : ""}
+                                          {inc.threshold != null ? ` · ${t("admin.monitoring.incident.threshold")} ${formatIncidentValue(inc.threshold, unit)}` : ""}
+                                        </div>
+                                        <div className="mon-incident__meta">{`${t("admin.monitoring.incident.started")} ${fmtClockLocal(inc.openedAt)} · ${t("admin.monitoring.incident.duration")} ${formatDuration(inc.durationSec)}`}</div>
+                                        {inc.context && (
+                                          <div className="mon-kv mon-incident__context">
+                                            <span>{t("admin.monitoring.metric.rx")}</span><b>{capacityBpsLabel(inc.context.rxBps)}</b>
+                                            <span>{t("admin.monitoring.metric.tx")}</span><b>{capacityBpsLabel(inc.context.txBps)}</b>
+                                            <span>{t("admin.monitoring.metric.capacity")}</span><b>{capacityBpsLabel(inc.context.capacityBps)}</b>
+                                            <span>{t("admin.monitoring.capacity.source")}</span><b>{t(`admin.monitoring.capacity.source.${inc.context.capacitySource}`)}</b>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               ) : (
                                 <div className="mon-kv"><span>{t("admin.monitoring.incidents.none")}</span><b>—</b></div>

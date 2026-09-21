@@ -78,6 +78,8 @@ test("active list matches summary counts and carries server snapshot", async () 
   assert.equal(f2.context.capacitySource, "configured");
   assert.equal(f2.context.calculatedPct, 100);
   assert.equal(f2.context.capacityBps, 125_000_000);
+  assert.equal(f2.triggerValue, 100);
+  assert.equal(f2.peakValue, 100);
 });
 
 test("severity filter narrows the active list", async () => {

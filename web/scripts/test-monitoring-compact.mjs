@@ -154,9 +154,20 @@ assert("graph includes the uplink metric", graph.includes('key: "uplink"'));
 assert("graph gaps on null samples", graph.includes("segments"));
 
 const css = fs.readFileSync(path.join(webRoot, "src", "index.css"), "utf8");
+const incidentsComp = fs.readFileSync(path.join(webRoot, "src", "pages", "admin", "MonitoringIncidents.tsx"), "utf8");
 assert("mobile single-column details", css.includes(".mon-detail { grid-template-columns: 1fr; }"));
 assert("safe-area bottom padding for the bottom nav", css.includes("var(--nav-h) + env(safe-area-inset-bottom)"));
 assert("no horizontal overflow guard", css.includes(".admin-stack, .mon-row, .mon-detail, .mon-graph, .mon-kv, .mon-incidentCard { min-width: 0; }"));
+
+// Incident/history mobile isolation + richer history.
+assert("incident meta no longer refuses to wrap", !css.includes(".mon-incident__meta { color: var(--muted); font-size: 11px; white-space: nowrap; }"));
+assert("detail grid children can shrink", css.includes(".mon-detail > * { min-width: 0; }"));
+assert("incident and history sections are separated on mobile", css.includes(".mon-detail__section + .mon-detail__section"));
+assert("history shows peak and threshold", incidentsComp.includes("incident.peak") && incidentsComp.includes("incident.threshold"));
+assert("active incidents distinguish was/now", incidentsComp.includes("incident.was") && incidentsComp.includes("incident.now"));
+assert("history marks the final state", incidentsComp.includes("incident.state.resolved"));
+assert("uplink diagnostics collapse into details", incidentsComp.includes("UplinkDiagnostics") && incidentsComp.includes("mon-incidentCard__details"));
+assert("cards are not nested buttons", incidentsComp.includes("mon-incidentCard__main"));
 
 if (failures > 0) {
   console.error(`\nFAILED: ${failures} check(s)`);

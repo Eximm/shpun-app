@@ -90,6 +90,8 @@ function toIncidentDto(row: MonitoringIncidentRow, fallbackTitle?: string | null
     resolvedAt: row.resolved_at,
     lastSeenAt: row.last_seen_at,
     value: row.value,
+    triggerValue: row.trigger_value ?? null,
+    peakValue: row.peak_value ?? row.value ?? null,
     threshold: row.threshold,
     message: row.message,
     context: safeUplinkContext(row),
