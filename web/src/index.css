@@ -8313,7 +8313,7 @@ button.reviews-star:not(:disabled) {
   letter-spacing: .05em; color: var(--muted); margin-bottom: 6px;
 }
 .mon-panel__lead { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
-.mon-panel__big { font-size: 24px; font-weight: 800; line-height: 1; }
+.mon-panel__big { font-size: 26px; font-weight: 850; line-height: 1; color: var(--text); letter-spacing: -0.02em; }
 .mon-panel__unit { font-size: 12px; color: var(--muted); }
 .mon-panel__sub { margin-top: 6px; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
 .mon-panel__stats { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
@@ -8325,7 +8325,7 @@ button.reviews-star:not(:disabled) {
 }
 .mon-stat:hover { border-color: var(--accent); }
 .mon-stat:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.mon-stat__value { font-size: 18px; font-weight: 800; }
+.mon-stat__value { font-size: 18px; font-weight: 800; color: var(--text); }
 .mon-stat__label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
 .mon-stat.is-warn .mon-stat__value { color: var(--warn); }
 @media (min-width: 720px) {
@@ -8346,11 +8346,37 @@ button.reviews-star:not(:disabled) {
 .mon-row__identity { flex: 1 1 200px; min-width: 160px; display: flex; flex-direction: column; gap: 5px; }
 .mon-row__title { font-weight: 700; display: flex; align-items: center; gap: 8px; min-width: 0; overflow-wrap: anywhere; }
 .mon-row__badges { display: flex; flex-wrap: wrap; gap: 6px; }
-.mon-row__metrics { flex: 1 1 260px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; min-width: 0; }
-.mon-row__traffic { flex: 1 1 260px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; min-width: 0; font-size: 12px; color: var(--muted); }
-.mon-metric { font-size: 12px; color: var(--text); white-space: nowrap; }
-.mon-metric.is-warn { color: var(--warn); }
-.mon-metric.is-bad { color: var(--danger); }
+.mon-row__metrics { flex: 1 1 280px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.mon-row__traffic { flex: 1 1 280px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; }
+.mon-metric {
+  display: inline-flex; align-items: baseline; gap: 5px;
+  padding: 3px 8px; min-width: 0;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: rgba(255,255,255,0.04);
+  white-space: nowrap;
+}
+.mon-metric__label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.mon-metric__value { font-size: 13px; font-weight: 800; color: var(--text); }
+.mon-metric.is-warn { border-color: rgba(245,158,11,.55); background: rgba(245,158,11,.10); }
+.mon-metric.is-warn .mon-metric__value { color: var(--warn); }
+.mon-metric.is-bad { border-color: rgba(255,77,109,.6); background: rgba(255,77,109,.12); }
+.mon-metric.is-bad .mon-metric__value { color: var(--danger); }
+.mon-traffic { display: inline-flex; align-items: baseline; gap: 4px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.mon-traffic__arrow { color: var(--muted); }
+.mon-traffic__value { color: var(--text); font-weight: 700; }
+.mon-fresh { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.mon-fresh.is-stale { color: var(--danger); }
+
+/* Collected action toolbar */
+.mon-toolbar {
+  display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px;
+  max-width: 100%; padding: 4px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: rgba(255,255,255,0.03);
+}
+.mon-toolbar .btn { min-height: 36px; height: 36px; padding: 0 12px; font-size: 13px; flex: 0 0 auto; }
+.mon-toolbar .mon-btn--quiet { background: transparent; border-color: transparent; color: var(--muted); }
+.mon-toolbar .mon-btn--quiet:hover { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.12); color: var(--text); }
 
 .mon-detail {
   border-top: 1px solid var(--border);
@@ -8394,8 +8420,6 @@ button.reviews-star:not(:disabled) {
 /* ── Monitoring compact rows + mobile actions ──────────────────────────── */
 .mon-row.is-offline { border-color: rgba(255, 77, 109, .45); }
 .mon-row.is-warn { border-color: rgba(245, 158, 11, .40); }
-.mon-row__fresh { color: var(--muted); }
-.mon-row__fresh.is-stale { color: var(--danger); }
 
 .mon-row__overflow { position: relative; display: block; }
 .mon-row__overflowBtn {

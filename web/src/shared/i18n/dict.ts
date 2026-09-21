@@ -1904,6 +1904,7 @@ export const RU: Dict = {
   "admin.servers.field.override_disk": "Диск override, %",
 
   "admin.monitoring.title": "Мониторинг серверов",
+  "admin.monitoring.toolbar.aria": "Действия мониторинга",
   "admin.monitoring.subtitle": "Системные метрики, VPN-ноды и инциденты",
   "admin.monitoring.summary.online": "Онлайн",
   "admin.monitoring.summary.incidents": "Инциденты",
@@ -4318,6 +4319,7 @@ export const EN: Dict = {
   "admin.servers.field.override_disk": "Disk override, %",
 
   "admin.monitoring.title": "Server monitoring",
+  "admin.monitoring.toolbar.aria": "Monitoring actions",
   "admin.monitoring.subtitle": "System metrics, VPN nodes and incidents",
   "admin.monitoring.summary.online": "Online",
   "admin.monitoring.summary.incidents": "Incidents",

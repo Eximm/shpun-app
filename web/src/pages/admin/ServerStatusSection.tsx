@@ -551,11 +551,11 @@ export function ServerStatusSection() {
             title={t("admin.monitoring.title")}
             subtitle={loading ? t("common.loading") : t("admin.monitoring.subtitle")}
             actions={
-              <>
-                <button className="btn" type="button" onClick={() => void loadAll({ silent: true })} disabled={refreshing}>{t("common.refresh")}</button>
+              <div className="mon-toolbar" role="group" aria-label={t("admin.monitoring.toolbar.aria")}>
+                <button className="btn mon-btn--quiet" type="button" onClick={() => void loadAll({ silent: true })} disabled={refreshing}>{t("common.refresh")}</button>
                 <button className="btn btn--soft" type="button" onClick={() => void forceCollect()} disabled={forceBusy}>{t("admin.monitoring.force_check")}</button>
                 <button className="btn btn--primary" type="button" onClick={startCreate}>{t("admin.servers.new")}</button>
-              </>
+              </div>
             }
           />
 
@@ -686,16 +686,31 @@ export function ServerStatusSection() {
                         </div>
                       </div>
                       <div className="mon-row__metrics">
-                        <span className={`mon-metric${metricTone(current?.cpuLoadPct)}`}>{`CPU ${formatPct(current?.cpuLoadPct)}`}</span>
-                        <span className={`mon-metric${metricTone(current?.memoryLoadPct)}`}>{`RAM ${formatPct(current?.memoryLoadPct)}`}</span>
-                        <span className={`mon-metric${metricTone(current?.diskLoadPct)}`}>{`Disk ${formatPct(current?.diskLoadPct)}`}</span>
-                        <span className="mon-metric">{t("admin.monitoring.metric.load_short", { value: formatLoad(current?.load1) })}</span>
+                        <span className={`mon-metric${metricTone(current?.cpuLoadPct)}`}>
+                          <span className="mon-metric__label">{t("admin.monitoring.metric.cpu_short")}</span>
+                          <span className="mon-metric__value">{formatPct(current?.cpuLoadPct)}</span>
+                        </span>
+                        <span className={`mon-metric${metricTone(current?.memoryLoadPct)}`}>
+                          <span className="mon-metric__label">{t("admin.monitoring.metric.ram_short")}</span>
+                          <span className="mon-metric__value">{formatPct(current?.memoryLoadPct)}</span>
+                        </span>
+                        <span className={`mon-metric${metricTone(current?.diskLoadPct)}`}>
+                          <span className="mon-metric__label">{t("admin.monitoring.metric.disk_short")}</span>
+                          <span className="mon-metric__value">{formatPct(current?.diskLoadPct)}</span>
+                        </span>
+                        <span className="mon-metric">
+                          <span className="mon-metric__label">{t("admin.monitoring.metric.load")}</span>
+                          <span className="mon-metric__value">{formatLoad(current?.load1)}</span>
+                        </span>
                       </div>
                       <div className="mon-row__traffic">
-                        <span>{`↓ ${formatBitrate(current?.rxMbps)}`}</span>
-                        <span>{`↑ ${formatBitrate(current?.txMbps)}`}</span>
-                        <span className={`mon-metric${metricTone(current?.uplinkLoadPct)}`}>{`${t("admin.monitoring.metric.uplink")} ${formatPct(current?.uplinkLoadPct)}`}</span>
-                        <span className={`mon-row__fresh${current?.state === "stale" || current?.state === "offline" ? " is-stale" : ""}`}>{t("admin.monitoring.metric.freshness", { value: fmtRelative(current?.checkedAt ?? null, t) })}</span>
+                        <span className="mon-traffic"><span className="mon-traffic__arrow">↓</span><span className="mon-traffic__value">{formatBitrate(current?.rxMbps)}</span></span>
+                        <span className="mon-traffic"><span className="mon-traffic__arrow">↑</span><span className="mon-traffic__value">{formatBitrate(current?.txMbps)}</span></span>
+                        <span className={`mon-metric${metricTone(current?.uplinkLoadPct)}`}>
+                          <span className="mon-metric__label">{t("admin.monitoring.metric.uplink")}</span>
+                          <span className="mon-metric__value">{formatPct(current?.uplinkLoadPct)}</span>
+                        </span>
+                        <span className={`mon-fresh${current?.state === "stale" || current?.state === "offline" ? " is-stale" : ""}`}>{t("admin.monitoring.metric.freshness", { value: fmtRelative(current?.checkedAt ?? null, t) })}</span>
                       </div>
                       {topIssue && (
                         <div className={`mon-row__issue mon-row__issue--${topIssue.severity}`}>

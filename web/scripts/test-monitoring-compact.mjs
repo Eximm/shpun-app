@@ -113,6 +113,7 @@ assert("compact row uses the explicit persisted state", src.includes("currentSta
 assert("polling only refetches persisted state", src.includes("setInterval(() => void loadAll({ silent: true })"));
 assert("collector observability surfaced", src.includes("admin.monitoring.collector.title"));
 assert("top panel uses grouped dashboard panels", src.includes("mon-dashboard") && src.includes("mon-panel__label"));
+assert("action toolbar is one grouped control row", src.includes("mon-toolbar") && src.includes("mon-btn--quiet"));
 assert("server summary is one grouped block", src.includes("mon-panel__big") && src.includes("mon-panel__sub"));
 assert("collector status is a compact operational row", src.includes("mon-collectorRow") && src.includes("mon-statusDot"));
 assert("collapsed card uses compact metrics, not gauges", !src.includes("Gauge") && src.includes("mon-metric") && src.includes("mon-row__traffic"));
@@ -158,6 +159,9 @@ assert("no horizontal overflow guard", css.includes(".admin-stack, .mon-row, .mo
 assert("dashboard groups side-by-side on wide screens", css.includes("grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr)") && css.includes("mon-panel--collector"));
 assert("old summary tiles and gauges removed", !css.includes(".mon-summary__stat") && !css.includes(".mon-gauge"));
 assert("collapsed card has compact metric + traffic rows", css.includes(".mon-metric") && css.includes(".mon-row__traffic"));
+assert("metric pills separate label and value", css.includes(".mon-metric__label") && css.includes(".mon-metric__value"));
+assert("traffic row has distinct tokens", css.includes(".mon-traffic__value") && css.includes(".mon-fresh"));
+assert("toolbar buttons share one height", css.includes(".mon-toolbar .btn { min-height: 36px; height: 36px;"));
 
 // Incident/history mobile isolation + richer history.
 assert("incident meta no longer refuses to wrap", !css.includes(".mon-incident__meta { color: var(--muted); font-size: 11px; white-space: nowrap; }"));
