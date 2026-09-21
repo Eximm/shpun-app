@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode, type Ref } from "react";
+import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import { useI18n } from "../../shared/i18n";
 import type { AdminTab } from "./types";
 
@@ -118,7 +118,16 @@ export function ModalShell({
   contentRef?: Ref<HTMLDivElement>;
 }) {
   const { t } = useI18n();
+  // Keep the latest onClose without re-running the lock effect on every render
+  // (an unstable onClose used to re-lock/unlock scroll repeatedly, which could
+  // reset the viewport and jump the page to the top).
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
     const prevBodyOverflow = document.body.style.overflow;
     const prevHtmlOverflow = document.documentElement.style.overflow;
 
@@ -126,17 +135,33 @@ export function ModalShell({
     document.documentElement.style.overflow = "hidden";
 
     const onKeyDown = (ev: KeyboardEvent) => {
-      if (ev.key === "Escape") onClose();
+      if (ev.key === "Escape") onCloseRef.current();
     };
-
     document.addEventListener("keydown", onKeyDown);
 
     return () => {
       document.body.style.overflow = prevBodyOverflow;
       document.documentElement.style.overflow = prevHtmlOverflow;
       document.removeEventListener("keydown", onKeyDown);
+
+      // Restore the exact viewport the user had before opening the modal, and
+      // return focus to the trigger without scrolling it into view.
+      const restore = () => {
+        if (window.scrollX !== scrollX || window.scrollY !== scrollY) {
+          window.scrollTo({ left: scrollX, top: scrollY, behavior: "auto" });
+        }
+      };
+      restore();
+      window.requestAnimationFrame(() => {
+        restore();
+        try {
+          previouslyFocused?.focus?.({ preventScroll: true });
+        } catch {
+          /* focus restore is best-effort */
+        }
+      });
     };
-  }, [onClose]);
+  }, []);
 
   return (
     <div className="modal admin-modal" role="dialog" aria-modal="true" onClick={onClose}>

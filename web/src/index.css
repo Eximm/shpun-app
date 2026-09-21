@@ -8410,3 +8410,21 @@ button.reviews-star:not(:disabled) {
   .mon-row__actions--desktop { display: none; }
   .mon-row__overflow { display: block; margin-left: auto; }
 }
+
+/* ── Monitoring 2.0 stabilization: states + collector status ───────────── */
+.mon-row.is-stale { border-color: rgba(245, 158, 11, .40); }
+.mon-row.is-nodata { border-color: var(--border); }
+.mon-collector {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.mon-collector__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.mon-collector__dot.is-ok { background: var(--ok); }
+.mon-collector__dot.is-run { background: var(--info); }
+.mon-collector__dot.is-idle { background: var(--warn); }
+.mon-collector__label { font-weight: 700; color: var(--text); }
+.mon-collector__meta { color: var(--muted); }

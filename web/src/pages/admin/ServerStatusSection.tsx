@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../../shared/api/client";
 import { useI18n } from "../../shared/i18n";
 import { AdminSectionHeader, AdminSectionIcon, ADMIN_SECTION_ICON, ModalShell } from "./shared";
-import { formatBitrate, formatLoad, formatPct, shouldShowRemnawaveUsers } from "./monitoringFormat";
+import { formatBitrate, formatLoad, formatPct, shouldShowRemnawaveUsers, stateTone } from "./monitoringFormat";
 
 type TFn = ReturnType<typeof useI18n>["t"];
 
@@ -32,9 +32,21 @@ type MonitoredServer = {
 };
 
 type MonitoringSummary = {
-  totals: { all: number; online: number; offline: number; vpn: number; gateway: number; infra: number; public: number; adminOnly: number };
+  totals: { all: number; online: number; offline: number; stale?: number; noData?: number; vpn: number; gateway: number; infra: number; public: number; adminOnly: number };
   incidents: { critical: number; warning: number; total: number };
   globalOnlineUsers: number | null;
+};
+
+type CollectorState = {
+  lastCycleAt: number | null;
+  lastCycleDurationMs: number | null;
+  collectorRunning: boolean;
+  serversAttempted: number;
+  serversSucceeded: number;
+  serversFailed: number;
+  remnawaveAttempted: number;
+  remnawaveSucceeded: number;
+  remnawaveFailed: number;
 };
 
 type Integration = {
@@ -86,6 +98,14 @@ type CurrentCheck = {
   exporterStatus: "ok" | "error" | "disabled";
   lastError: string | null;
   checkedAt: string | null;
+  state: "fresh" | "stale" | "offline" | "no_data";
+  stale: boolean;
+  consecutiveFailures: number;
+  lastAttemptAt: number | null;
+  lastSuccessAt: number | null;
+  memoryTotalBytes: number | null;
+  memoryAvailableBytes: number | null;
+  remnawaveStatus: "ok" | "error" | "unknown" | "disabled";
 };
 
 type Incident = {
@@ -241,6 +261,9 @@ export function ServerStatusSection() {
   const [probeDiag, setProbeDiag] = useState<Record<number, { metricFamilies: string[]; labelKeys: string[]; nodeUuidCount: number } | null>>({});
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [forceBusy, setForceBusy] = useState(false);
+  const [collector, setCollector] = useState<CollectorState | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -251,33 +274,72 @@ export function ServerStatusSection() {
   const [history, setHistory] = useState<HistoryPoint[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  const countryOptionsList = useMemo(
-    () => COUNTRY_CODES.map((code) => ({ code })).sort((a, b) => a.code.localeCompare(b.code, locale)),
+  const countryOptionsList = useMemo(    () => COUNTRY_CODES.map((code) => ({ code })).sort((a, b) => a.code.localeCompare(b.code, locale)),
     [locale],
   );
 
-  async function loadAll() {
-    setLoading(true);
+  /**
+   * Stale-while-revalidate loader. The authoritative list/summary are replaced
+   * atomically only on success; a partial or failed revalidation keeps the
+   * previous metrics on screen and never blanks the list.
+   */
+  async function loadAll(opts: { silent?: boolean } = {}) {
+    if (!opts.silent) setLoading(true);
+    setRefreshing(true);
     setError(null);
+
+    const [serversR, sumR, intsR, setsR] = await Promise.allSettled([
+      apiFetch<{ ok: true; items: MonitoredServer[] }>("/admin/monitored-servers", { method: "GET" }),
+      apiFetch<{ ok: true } & MonitoringSummary>("/admin/monitoring/summary", { method: "GET" }),
+      apiFetch<{ ok: true; items: Integration[] }>("/admin/monitoring/integrations", { method: "GET" }),
+      apiFetch<{ ok: true; thresholds: Thresholds }>("/admin/monitoring/settings", { method: "GET" }),
+    ]);
+
+    if (serversR.status === "fulfilled") setItems(serversR.value.items ?? []);
+    if (sumR.status === "fulfilled") {
+      setSummary({ totals: sumR.value.totals, incidents: sumR.value.incidents, globalOnlineUsers: sumR.value.globalOnlineUsers });
+      setCollector((sumR.value as any).collector ?? null);
+    }
+    if (intsR.status === "fulfilled") setIntegrations(intsR.value.items ?? []);
+    if (setsR.status === "fulfilled") setSettings(setsR.value.thresholds ?? null);
+
+    if ([serversR, sumR, intsR, setsR].some((r) => r.status === "rejected")) {
+      setError(t("admin.servers.err.load"));
+    }
+
+    setRefreshing(false);
+    if (!opts.silent) setLoading(false);
+  }
+
+  async function forceCollect() {
+    if (forceBusy) return;
+    setForceBusy(true);
+    setError(null);
+    setNotice(null);
     try {
-      const [servers, sum, ints, sets] = await Promise.all([
-        apiFetch<{ ok: true; items: MonitoredServer[] }>("/admin/monitored-servers", { method: "GET" }),
-        apiFetch<{ ok: true } & MonitoringSummary>("/admin/monitoring/summary", { method: "GET" }),
-        apiFetch<{ ok: true; items: Integration[] }>("/admin/monitoring/integrations", { method: "GET" }),
-        apiFetch<{ ok: true; thresholds: Thresholds }>("/admin/monitoring/settings", { method: "GET" }),
-      ]);
-      setItems(servers.items ?? []);
-      setSummary({ totals: sum.totals, incidents: sum.incidents, globalOnlineUsers: sum.globalOnlineUsers });
-      setIntegrations(ints.items ?? []);
-      setSettings(sets.thresholds ?? null);
+      const r = await apiFetch<{ ok: true; collect: { started: boolean; reason: string } }>("/admin/monitoring/collect-now", { method: "POST" });
+      await loadAll({ silent: true });
+      setNotice(r.collect.started ? t("admin.monitoring.force_check.done") : t("admin.monitoring.force_check.cooldown"));
     } catch (e: any) {
       setError(e?.message || t("admin.servers.err.load"));
     } finally {
-      setLoading(false);
+      setForceBusy(false);
     }
   }
 
   useEffect(() => { void loadAll(); }, []);
+
+  // Light polling: refetch the persisted state every 60s (cheap DB reads).
+  // Never triggers a scrape; the background collector owns that.
+  useEffect(() => {
+    const timer = window.setInterval(() => void loadAll({ silent: true }), 60_000);
+    const onVisibility = () => { if (document.visibilityState === "visible") void loadAll({ silent: true }); };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, []);
 
   /* ── Server editor ─────────────────────────────────────────────────────── */
 
@@ -367,7 +429,7 @@ export function ServerStatusSection() {
       if (editingId) await apiFetch(`/admin/monitored-servers/${editingId}`, { method: "PUT", body });
       else await apiFetch("/admin/monitored-servers", { method: "POST", body });
       setEditorOpen(false);
-      await loadAll();
+      await loadAll({ silent: true });
     } catch (e: any) {
       setError(e?.message || t("admin.servers.err.save"));
     } finally {
@@ -378,7 +440,7 @@ export function ServerStatusSection() {
   async function remove(id: number) {
     if (!window.confirm(t("admin.servers.confirm.delete"))) return;
     await apiFetch(`/admin/monitored-servers/${id}`, { method: "DELETE" });
-    await loadAll();
+    await loadAll({ silent: true });
   }
 
   async function testNodeExporter(id: number) {
@@ -432,7 +494,7 @@ export function ServerStatusSection() {
       if (editingIntegrationId) await apiFetch(`/admin/monitoring/integrations/${editingIntegrationId}`, { method: "PUT", body });
       else await apiFetch("/admin/monitoring/integrations", { method: "POST", body });
       setIntegrationOpen(false);
-      await loadAll();
+      await loadAll({ silent: true });
     } catch (e: any) {
       setError(e?.message || t("admin.monitoring.integrations.err.save"));
     } finally {
@@ -443,7 +505,7 @@ export function ServerStatusSection() {
   async function removeIntegration(id: number) {
     if (!window.confirm(t("admin.monitoring.integrations.confirm.delete"))) return;
     await apiFetch(`/admin/monitoring/integrations/${id}`, { method: "DELETE" });
-    await loadAll();
+    await loadAll({ silent: true });
   }
 
   async function testIntegration(id: number) {
@@ -541,6 +603,17 @@ export function ServerStatusSection() {
     return t("admin.monitoring.state.unknown");
   }
 
+  function currentStateLabel(state: CurrentCheck["state"] | undefined) {
+    if (state === "fresh") return t("admin.monitoring.state.fresh");
+    if (state === "stale") return t("admin.monitoring.state.stale");
+    if (state === "offline") return t("admin.monitoring.state.offline");
+    return t("admin.monitoring.state.no_data");
+  }
+
+  function currentStateChip(state: CurrentCheck["state"] | undefined) {
+    return `chip--${stateTone(state)}`;
+  }
+
   return (
     <div className="admin-stack">
       <div className="card">
@@ -552,7 +625,8 @@ export function ServerStatusSection() {
             subtitle={loading ? t("common.loading") : t("admin.monitoring.subtitle")}
             actions={
               <>
-                <button className="btn" type="button" onClick={() => void loadAll()} disabled={loading}>{t("common.refresh")}</button>
+                <button className="btn" type="button" onClick={() => void loadAll({ silent: true })} disabled={refreshing}>{t("common.refresh")}</button>
+                <button className="btn btn--soft" type="button" onClick={() => void forceCollect()} disabled={forceBusy}>{t("admin.monitoring.force_check")}</button>
                 <button className="btn btn--primary" type="button" onClick={startCreate}>{t("admin.servers.new")}</button>
               </>
             }
@@ -562,38 +636,56 @@ export function ServerStatusSection() {
           {notice && <div className="pre admin-gap-top-sm">{notice}</div>}
 
           {summary && (
-            <div className="mon-summary admin-gap-top-md">
-              <div className="mon-summary__stat">
-                <span className="mon-summary__value">{summary.totals.online}/{summary.totals.all}</span>
-                <span className="mon-summary__label">{t("admin.monitoring.summary.online")}</span>
-              </div>
-              <div className="mon-summary__stat">
-                <span className="mon-summary__value">{summary.totals.vpn}</span>
-                <span className="mon-summary__label">{t("admin.servers.kind.vpn")}</span>
-              </div>
-              <div className="mon-summary__stat">
-                <span className="mon-summary__value">{summary.totals.gateway}</span>
-                <span className="mon-summary__label">{t("admin.servers.kind.gateway")}</span>
-              </div>
-              <div className="mon-summary__stat">
-                <span className="mon-summary__value">{summary.totals.infra}</span>
-                <span className="mon-summary__label">{t("admin.servers.kind.infra")}</span>
-              </div>
-              <div className={`mon-summary__stat${summary.incidents.critical > 0 ? " is-bad" : summary.incidents.total > 0 ? " is-warn" : ""}`}>
-                <span className="mon-summary__value">{summary.incidents.total}</span>
-                <span className="mon-summary__label">{t("admin.monitoring.summary.incidents")}</span>
-              </div>
-              <div className="mon-summary__stat">
-                <span className="mon-summary__value">{summary.incidents.warning}</span>
-                <span className="mon-summary__label">{t("admin.monitoring.summary.warnings")}</span>
-              </div>
-              {summary.globalOnlineUsers != null && (
+            <>
+              <div className="mon-summary admin-gap-top-md">
                 <div className="mon-summary__stat">
-                  <span className="mon-summary__value">{summary.globalOnlineUsers}</span>
-                  <span className="mon-summary__label">{t("admin.monitoring.summary.global_users")}</span>
+                  <span className="mon-summary__value">{summary.totals.online}/{summary.totals.all}</span>
+                  <span className="mon-summary__label">{t("admin.monitoring.summary.online")}</span>
+                </div>
+                <div className="mon-summary__stat">
+                  <span className="mon-summary__value">{summary.totals.vpn}</span>
+                  <span className="mon-summary__label">{t("admin.servers.kind.vpn")}</span>
+                </div>
+                <div className="mon-summary__stat">
+                  <span className="mon-summary__value">{summary.totals.gateway}</span>
+                  <span className="mon-summary__label">{t("admin.servers.kind.gateway")}</span>
+                </div>
+                <div className="mon-summary__stat">
+                  <span className="mon-summary__value">{summary.totals.infra}</span>
+                  <span className="mon-summary__label">{t("admin.servers.kind.infra")}</span>
+                </div>
+                <div className={`mon-summary__stat${(summary.totals.stale ?? 0) > 0 ? " is-warn" : ""}`}>
+                  <span className="mon-summary__value">{summary.totals.stale ?? 0}</span>
+                  <span className="mon-summary__label">{t("admin.monitoring.state.stale")}</span>
+                </div>
+                <div className={`mon-summary__stat${summary.incidents.critical > 0 ? " is-bad" : summary.incidents.total > 0 ? " is-warn" : ""}`}>
+                  <span className="mon-summary__value">{summary.incidents.total}</span>
+                  <span className="mon-summary__label">{t("admin.monitoring.summary.incidents")}</span>
+                </div>
+                <div className="mon-summary__stat">
+                  <span className="mon-summary__value">{summary.incidents.warning}</span>
+                  <span className="mon-summary__label">{t("admin.monitoring.summary.warnings")}</span>
+                </div>
+                {summary.globalOnlineUsers != null && (
+                  <div className="mon-summary__stat">
+                    <span className="mon-summary__value">{summary.globalOnlineUsers}</span>
+                    <span className="mon-summary__label">{t("admin.monitoring.summary.global_users")}</span>
+                  </div>
+                )}
+              </div>
+              {collector && (
+                <div className="mon-collector admin-gap-top-sm">
+                  <span className={`mon-collector__dot ${collector.collectorRunning ? "is-run" : collector.lastCycleAt ? "is-ok" : "is-idle"}`} />
+                  <span className="mon-collector__label">{t("admin.monitoring.collector.title")}</span>
+                  <span className="mon-collector__meta">
+                    {collector.lastCycleAt ? t("admin.monitoring.collector.last", { value: fmtRelative(new Date(collector.lastCycleAt * 1000).toISOString(), t) }) : "—"}
+                    {collector.lastCycleDurationMs != null ? ` · ${t("admin.monitoring.collector.duration", { value: collector.lastCycleDurationMs })}` : ""}
+                    {` · ${t("admin.monitoring.collector.exporters", { ok: collector.serversSucceeded, total: collector.serversAttempted })}`}
+                    {` · ${t("admin.monitoring.collector.remnawave", { ok: collector.remnawaveSucceeded, total: collector.remnawaveAttempted })}`}
+                  </span>
                 </div>
               )}
-            </div>
+            </>
           )}
 
           {groups.map((group) => (
@@ -610,11 +702,13 @@ export function ServerStatusSection() {
                 // never be required to see CPU/RAM/Disk/load/network.
                 const current = expanded ? detail?.current ?? item.current ?? null : item.current ?? null;
                 const users = current?.onlineUsers;
-                const rowState = !Number(item.active) || current?.online === false
+                const rowState = current?.state === "offline"
                   ? "is-offline"
-                  : current?.remnawaveOnline === false
-                    ? "is-warn"
-                    : "";
+                  : current?.state === "stale"
+                    ? "is-stale"
+                    : current?.state === "no_data"
+                      ? "is-nodata"
+                      : "";
                 return (
                   <div key={item.id} className={`mon-row${expanded ? " is-expanded" : ""}${rowState ? ` ${rowState}` : ""}`}>
                     <div className="mon-row__main" role="button" tabIndex={0} onClick={() => void toggleExpand(item.id)} onKeyDown={(e) => { if (e.key === "Enter") void toggleExpand(item.id); }}>
@@ -624,7 +718,7 @@ export function ServerStatusSection() {
                           {item.country_code ? `${countryFlag(item.country_code)} ` : ""}{item.title || item.host}
                         </div>
                         <div className="mon-row__badges">
-                          <span className={`chip ${current?.online === false ? "chip--bad" : "chip--soft"}`}>{stateLabel(current?.online)}</span>
+                          <span className={`chip ${currentStateChip(current?.state)}`}>{currentStateLabel(current?.state)}</span>
                           <span className="chip chip--soft">{t(kindKey(item.kind))}</span>
                           <span className={`chip ${item.visibility === "admin_only" ? "chip--warn" : "chip--ok"}`}>
                             {item.visibility === "admin_only" ? `🔒 ${t("admin.monitoring.badge.internal")}` : t("admin.monitoring.badge.public")}
@@ -644,7 +738,7 @@ export function ServerStatusSection() {
                         <span className="mon-row__plain">{t("admin.monitoring.metric.load_short", { value: formatLoad(current?.load1) })}</span>
                         <span className="mon-row__plain">{`↓ ${formatBitrate(current?.rxMbps)}   ↑ ${formatBitrate(current?.txMbps)}`}</span>
                         <span className="mon-row__plain">{current?.uptime ? t("admin.monitoring.metric.uptime_short", { value: current.uptime }) : "—"}</span>
-                        <span className={`mon-row__plain mon-row__fresh${current?.online === false ? " is-stale" : ""}`}>{t("admin.monitoring.metric.freshness", { value: fmtRelative(current?.checkedAt ?? null, t) })}</span>
+                        <span className={`mon-row__plain mon-row__fresh${current?.state === "stale" || current?.state === "offline" ? " is-stale" : ""}`}>{t("admin.monitoring.metric.freshness", { value: fmtRelative(current?.checkedAt ?? null, t) })}</span>
                       </div>
                       <div className="actions mon-row__actions mon-row__actions--desktop">
                         <button className="btn btn--soft" type="button" onClick={(e) => { e.stopPropagation(); edit(item); }}>{t("common.edit")}</button>

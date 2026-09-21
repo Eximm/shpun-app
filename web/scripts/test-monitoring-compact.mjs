@@ -36,7 +36,7 @@ await build({
   logLevel: "silent",
 });
 
-const { formatBitrate, formatPct, formatLoad, shouldShowRemnawaveUsers } = await import(pathToFileURL(outfile).href);
+const { formatBitrate, formatPct, formatLoad, shouldShowRemnawaveUsers, stateTone } = await import(pathToFileURL(outfile).href);
 
 let failures = 0;
 function check(name, actual, expected) {
@@ -71,6 +71,12 @@ check("remnawave users shown for mapped real zero", shouldShowRemnawaveUsers(tru
 check("remnawave users hidden when unknown", shouldShowRemnawaveUsers(true, null), false);
 check("remnawave users hidden when unmapped", shouldShowRemnawaveUsers(false, 5), false);
 
+check("state fresh -> ok", stateTone("fresh"), "ok");
+check("state stale -> warn", stateTone("stale"), "warn");
+check("state offline -> bad", stateTone("offline"), "bad");
+check("state no_data -> soft (never green)", stateTone("no_data"), "soft");
+check("state null -> soft", stateTone(null), "soft");
+
 /* ─ Component wiring (static) ───────────────────────────────────────────── */
 
 const src = fs.readFileSync(path.join(webRoot, "src", "pages", "admin", "ServerStatusSection.tsx"), "utf8");
@@ -91,6 +97,21 @@ assert("mobile actions use an overflow menu", src.includes("mon-row__overflow") 
 assert("desktop actions kept separate", src.includes("mon-row__actions--desktop"));
 assert("expanded diagnostics still present", src.includes("admin.monitoring.section.history") && src.includes("mon-detail"));
 assert("expansion still lazy-loads detail", src.includes("/admin/monitoring/servers/${id}/detail"));
+
+// Stabilization: stale-while-revalidate mutation flow + explicit force check.
+assert("loader uses Promise.allSettled (partial failure keeps data)", src.includes("Promise.allSettled"));
+assert("loader never clears the list", !src.includes("setItems([])"));
+assert("mutations revalidate silently", src.includes("loadAll({ silent: true })"));
+assert("explicit force-check endpoint is separate", src.includes("/admin/monitoring/collect-now"));
+assert("compact row uses the explicit persisted state", src.includes("currentStateChip(current?.state)"));
+assert("polling only refetches persisted state", src.includes("setInterval(() => void loadAll({ silent: true })"));
+assert("collector observability surfaced", src.includes("admin.monitoring.collector.title"));
+
+const shared = fs.readFileSync(path.join(webRoot, "src", "pages", "admin", "shared.tsx"), "utf8");
+assert("modal captures viewport before locking", shared.includes("const scrollY = window.scrollY"));
+assert("modal restores the exact viewport", shared.includes("window.scrollTo({ left: scrollX, top: scrollY"));
+assert("modal restores focus without scrolling", shared.includes("preventScroll: true"));
+assert("modal lock effect is stable across renders", shared.includes("onCloseRef.current"));
 
 if (failures > 0) {
   console.error(`\nFAILED: ${failures} check(s)`);

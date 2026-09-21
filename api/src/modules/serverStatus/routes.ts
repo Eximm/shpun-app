@@ -12,16 +12,17 @@ import {
 } from "./repo.js";
 import {
   applyCollectionInterval,
+  getCollectorObservability,
   getRemnawaveGlobalStates,
   getRemnawaveNodes,
   getServerStatusMeta,
   getServerStatusSnapshot,
   probeNodeExporter,
-  requestManualServerStatusRefresh,
-  requestServerStatusRefresh,
+  requestForcedCollection,
   setMonitoringIncidentHandler,
   startServerStatusMonitor,
 } from "./monitor.js";
+import { deleteCurrent } from "./currentRepo.js";
 import { aggregateHealthStatus, toPublicCheck } from "./health.js";
 import { isServerStatusAdmin } from "./adminGuard.js";
 import {
@@ -92,8 +93,8 @@ export async function serverStatusRoutes(app: FastifyInstance) {
   // being revealed.
   app.get("/health", async (_req, reply) => {
     const rows = listHealthServers();
+    const byId = new Map(rows.map((r) => [r.id, r]));
     const checks = getServerStatusSnapshot(rows);
-    if (!getServerStatusMeta().updatedAt) void requestServerStatusRefresh(listMonitoredServers(), app.log);
     const meta = getServerStatusMeta();
     return reply.send({
       ok: true,
@@ -101,8 +102,8 @@ export async function serverStatusRoutes(app: FastifyInstance) {
         checks.map((c) => ({
           kind: c.kind,
           online: c.online,
-          visibility: rows.find((r) => r.id === c.id)?.visibility,
-          affectsPublicHealth: rows.find((r) => r.id === c.id)?.affects_public_health === 1,
+          visibility: byId.get(c.id)?.visibility,
+          affectsPublicHealth: byId.get(c.id)?.affects_public_health === 1,
         })),
       ),
       updatedAt: meta.updatedAt,
@@ -110,13 +111,13 @@ export async function serverStatusRoutes(app: FastifyInstance) {
   });
 
   // User-facing status page data. Public visibility only; sanitized projection.
+  // Pure DB read — never triggers a scrape.
   app.get("/server-status", async (req, reply) => {
     const s = getSessionFromRequest(req) as any;
     if (!s?.shmSessionId) return reply.code(401).send({ ok: false, error: "unauthorized" });
 
     const rows = listPublicServers();
     const checks = getServerStatusSnapshot(rows);
-    if (!getServerStatusMeta().updatedAt) void requestServerStatusRefresh(listMonitoredServers(), app.log);
     const meta = getServerStatusMeta();
     const publicChecks = checks.map(toPublicCheck);
     return reply.send({
@@ -129,14 +130,14 @@ export async function serverStatusRoutes(app: FastifyInstance) {
     });
   });
 
-  // Manual refresh can trigger a full scrape cycle, so it is admin-only.
+  // Read-only "re-read latest state". Kept for backward compatibility with any
+  // client that used to trigger a scrape here; it no longer touches the network.
   app.post("/server-status/refresh", async (req, reply) => {
     if (!(await requireAdmin(req, reply))) return;
-    const result = await requestManualServerStatusRefresh(listMonitoredServers(), app.log);
     const meta = getServerStatusMeta();
     return reply.send({
       ok: true,
-      refresh: result,
+      refresh: { started: false, reason: "read_only" },
       updatedAt: meta.updatedAt,
       refreshing: meta.refreshing,
       refreshIntervalMs: meta.refreshIntervalMs,
@@ -164,7 +165,8 @@ export async function serverStatusRoutes(app: FastifyInstance) {
     if (!(await requireAdmin(req, reply))) return;
     const result = createMonitoredServer((req.body ?? {}) as any);
     if (!result.ok) return reply.code(400).send({ ok: false, error: result.error });
-    void requestServerStatusRefresh(listMonitoredServers(), app.log);
+    // No scrape here: the background collector picks up the new server on the
+    // next cycle (current may be null until then).
     return reply.send({ ok: true, item: toAdminServer(result.item) });
   });
 
@@ -173,7 +175,8 @@ export async function serverStatusRoutes(app: FastifyInstance) {
     const id = int((req.params as any)?.id);
     const result = updateMonitoredServer(id, (req.body ?? {}) as any);
     if (!result.ok) return reply.code(result.error === "not_found" ? 404 : 400).send({ ok: false, error: result.error });
-    void requestServerStatusRefresh(listMonitoredServers(), app.log);
+    // Config-only mutation: existing monitoring_current for this and every
+    // other server is preserved; the collector refreshes it on the next cycle.
     return reply.send({ ok: true, item: toAdminServer(result.item) });
   });
 
@@ -182,7 +185,9 @@ export async function serverStatusRoutes(app: FastifyInstance) {
     const item = getMonitoredServer(int((req.params as any)?.id));
     if (!item) return reply.code(404).send({ ok: false, error: "not_found" });
     const deleted = deleteMonitoredServer(item.id);
-    void requestServerStatusRefresh(listMonitoredServers(), app.log);
+    // Remove only this server's current row; history/incidents stay for
+    // retention/evidence.
+    deleteCurrent(item.id);
     return reply.send({ ok: true, deleted });
   });
 
@@ -322,6 +327,15 @@ export async function serverStatusRoutes(app: FastifyInstance) {
     });
   });
 
+  // Explicit admin "check now". Rate-limited, admin-only, respects the
+  // single-collector lease and the in-flight guard. Never used by normal UI
+  // refresh (which only re-reads persisted state).
+  app.post("/admin/monitoring/collect-now", async (req, reply) => {
+    if (!(await requireAdmin(req, reply))) return;
+    const result = await requestForcedCollection(listMonitoredServers(), app.log);
+    return reply.send({ ok: true, collect: result, collector: getCollectorObservability() });
+  });
+
   app.get("/admin/monitoring/summary", async (req, reply) => {
     if (!(await requireAdmin(req, reply))) return;
     const rows = listMonitoredServers({ includeInactive: true });
@@ -340,6 +354,8 @@ export async function serverStatusRoutes(app: FastifyInstance) {
         all: activeRows.length,
         online: checks.filter((c) => c.online === true).length,
         offline: checks.filter((c) => c.online === false).length,
+        stale: checks.filter((c) => c.state === "stale").length,
+        noData: checks.filter((c) => c.state === "no_data").length,
         vpn: activeRows.filter((r) => r.kind === "vpn").length,
         gateway: activeRows.filter((r) => r.kind === "gateway").length,
         infra: activeRows.filter((r) => r.kind === "infra").length,
@@ -350,6 +366,7 @@ export async function serverStatusRoutes(app: FastifyInstance) {
       globalOnlineUsers,
       integrations: listPublicIntegrations(),
       remnawaveStates: getRemnawaveGlobalStates(),
+      collector: getCollectorObservability(),
     });
   });
 }

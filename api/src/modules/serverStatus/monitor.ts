@@ -29,8 +29,20 @@ import { getGlobalThresholds, resolveThresholds, type MonitoringThresholds } fro
 import { insertSample, recentSamples, runDownsampling, runRetention, type MonitoringSample } from "./historyRepo.js";
 import { evaluateServerIncidents, type IncidentEvent, type RuleEvaluation } from "./incidents.js";
 import { insertEvent, resolveIncidentsForMissingServers } from "./incidentsRepo.js";
-import { acquireCollectorLease } from "./collectorLock.js";
+import { acquireCollectorLease, collectorLeaseOwner } from "./collectorLock.js";
 import { createRestartableTimer, type RestartableTimer } from "./restartableTimer.js";
+import {
+  computeState,
+  getCollectorState,
+  getCurrent,
+  getCurrentMany,
+  lastCurrentUpdatedAt,
+  pruneCurrent,
+  upsertCurrent,
+  writeCollectorState,
+  type CurrentRecord,
+  type CurrentState,
+} from "./currentRepo.js";
 
 export type { ServerKind } from "./repo.js";
 
@@ -73,6 +85,15 @@ export type ServerCheckResult = {
   exporterStatus: "ok" | "error" | "disabled";
   lastError: string | null;
   checkedAt: string | null;
+  // Persistent current-state metadata (see currentRepo.ts).
+  state: CurrentState;
+  stale: boolean;
+  consecutiveFailures: number;
+  lastAttemptAt: number | null;
+  lastSuccessAt: number | null;
+  memoryTotalBytes: number | null;
+  memoryAvailableBytes: number | null;
+  remnawaveStatus: "ok" | "error" | "unknown" | "disabled";
 };
 
 export type RemnawaveGlobalState = {
@@ -84,15 +105,13 @@ export type RemnawaveGlobalState = {
   nodeCount: number;
 };
 
-const SCRAPE_CACHE_MS = 20_000;
 const STATUS_REFRESH_MS_FALLBACK = 60_000;
 const MANUAL_REFRESH_MIN_MS = 15_000;
+const FORCE_CHECK_MIN_MS = 15_000;
 const DEFAULT_TIMEOUT_MS = 4_000;
 
 const prevCache = new Map<number, { ts: number; node: NodeExporterPrevious; uptime: number | null; bootTime: number | null }>();
 const sampleBuffers = new Map<number, MonitoringSample[]>();
-const scrapeCache = new Map<number, { ts: number; value: ServerCheckResult }>();
-const statusCache = new Map<number, ServerCheckResult>();
 const remnawaveCache = new Map<number, { ts: number; nodes: Map<string, RemnawaveNodeMetric>; global: RemnawaveGlobalState }>();
 
 let refreshInFlight: Promise<{ started: boolean; reason: string }> | null = null;
@@ -202,19 +221,83 @@ function emptyResult(row: MonitoredServerRow): ServerCheckResult {
     exporterStatus: "disabled",
     lastError: null,
     checkedAt: null,
+    state: "no_data",
+    stale: false,
+    consecutiveFailures: 0,
+    lastAttemptAt: null,
+    lastSuccessAt: null,
+    memoryTotalBytes: null,
+    memoryAvailableBytes: null,
+    remnawaveStatus: "disabled",
+  };
+}
+
+/** Build the display shape from the persisted canonical current record. */
+function currentToCheck(row: MonitoredServerRow, rec: CurrentRecord | null): ServerCheckResult {
+  const base = emptyResult(row);
+  if (!rec) return base;
+  return {
+    ...base,
+    online: rec.online,
+    latencyMs: rec.nodeExporterLatencyMs,
+    uptime: fmtUptime(rec.systemUptimeSec),
+    uptimeSeconds: rec.systemUptimeSec,
+    loadPct: rec.cpuPct,
+    cpuLoadPct: rec.cpuPct,
+    iowaitPct: rec.iowaitPct,
+    load1: rec.load1,
+    load5: rec.load5,
+    load15: rec.load15,
+    cpuCores: rec.cpuCores,
+    uplinkLoadPct: rec.uplinkUsedPct,
+    memoryLoadPct: rec.memoryUsedPct,
+    swapLoadPct: rec.swapUsedPct,
+    diskLoadPct: rec.diskUsedPct,
+    diskFreeBytes: rec.diskFreeBytes,
+    inodeLoadPct: rec.inodeUsedPct,
+    rxMbps: rec.rxBps != null ? (rec.rxBps * 8) / 1_000_000 : null,
+    txMbps: rec.txBps != null ? (rec.txBps * 8) / 1_000_000 : null,
+    rxErrorsDelta: rec.rxErrorsDelta,
+    txErrorsDelta: rec.txErrorsDelta,
+    rxDropsDelta: rec.rxDropsDelta,
+    txDropsDelta: rec.txDropsDelta,
+    fileDescriptors: rec.fileDescriptors,
+    sockets: rec.sockets,
+    rebootDetected: rec.rebootDetected,
+    remnawaveOnline: rec.remnawaveStatus === "ok" ? true : rec.remnawaveStatus === "error" ? false : null,
+    onlineUsers: rec.onlineUsers,
+    remnawaveIntegrationId: row.remnawave_integration_id,
+    remnawaveNodeUuid: row.remnawave_node_uuid,
+    exporterStatus: rec.nodeExporterStatus === "disabled" ? "disabled" : rec.nodeExporterStatus === "ok" ? "ok" : "error",
+    lastError: rec.lastErrorCode,
+    checkedAt: rec.checkedAt,
+    state: rec.state,
+    stale: rec.stale,
+    consecutiveFailures: rec.consecutiveFailures,
+    lastAttemptAt: rec.lastAttemptAt,
+    lastSuccessAt: rec.lastSuccessAt,
+    memoryTotalBytes: rec.memoryTotalBytes,
+    memoryAvailableBytes: rec.memoryAvailableBytes,
+    remnawaveStatus: rec.remnawaveStatus === "ok" || rec.remnawaveStatus === "error" ? rec.remnawaveStatus : rec.remnawaveStatus === "disabled" ? "disabled" : "unknown",
   };
 }
 
 /* ── Remnawave ───────────────────────────────────────────────────────────── */
 
-async function collectRemnawave(thresholds: MonitoringThresholds, log?: Pick<Console, "warn">) {
+async function collectRemnawave(
+  thresholds: MonitoringThresholds,
+  log?: Pick<Console, "warn">,
+): Promise<{ attempted: number; succeeded: number; failed: number }> {
   const integrations = listIntegrations({ includeDisabled: false }).filter((i) => i.type === "remnawave");
+  let succeeded = 0;
+  let failed = 0;
   await runPool(integrations, Math.min(4, thresholds.collectorConcurrency), async (integration) => {
     const creds = getIntegrationCredentials(integration);
     const url = integration.metrics_url || integration.base_url;
     const ts = Math.floor(Date.now() / 1000);
 
     if (!url) {
+      failed += 1;
       remnawaveCache.set(integration.id, {
         ts,
         nodes: new Map(),
@@ -227,6 +310,7 @@ async function collectRemnawave(thresholds: MonitoringThresholds, log?: Pick<Con
     // a configuration problem, not a network error. Never attempt the request
     // and never expose the crypto error.
     if (creds.passwordDecryptFailed || creds.apiTokenDecryptFailed) {
+      failed += 1;
       remnawaveCache.set(integration.id, {
         ts,
         nodes: new Map(),
@@ -261,7 +345,9 @@ async function collectRemnawave(thresholds: MonitoringThresholds, log?: Pick<Con
         },
       });
       recordIntegrationCheck(integration.id, "ok", null);
+      succeeded += 1;
     } catch (e) {
+      failed += 1;
       const code = errorCodeFromError(e);
       remnawaveCache.set(integration.id, {
         ts,
@@ -272,6 +358,7 @@ async function collectRemnawave(thresholds: MonitoringThresholds, log?: Pick<Con
       log?.warn?.({ integrationId: integration.id, code }, "MONITOR_INTEGRATION_FAIL");
     }
   });
+  return { attempted: integrations.length, succeeded, failed };
 }
 
 /* ── Node Exporter ───────────────────────────────────────────────────────── */
@@ -283,6 +370,7 @@ type ScrapeOutcome = {
   online: boolean;
   errorCode: string | null;
   dataAgeSec: number | null;
+  rebootDetected: boolean;
 };
 
 async function scrapeNodeExporter(row: MonitoredServerRow, thresholds: MonitoringThresholds): Promise<ScrapeOutcome> {
@@ -310,7 +398,9 @@ async function scrapeNodeExporter(row: MonitoredServerRow, thresholds: Monitorin
     const dataAgeSec = nodeTime != null ? Math.max(0, Math.round(now / 1000 - nodeTime)) : null;
 
     // Reboot detection: uptime dropped compared to the previous sample.
+    let rebootDetected = false;
     if (prev && prev.uptime != null && sample.uptimeSeconds != null && sample.uptimeSeconds + 60 < prev.uptime) {
+      rebootDetected = true;
       insertEvent({
         serverId: row.id,
         type: "reboot",
@@ -320,9 +410,9 @@ async function scrapeNodeExporter(row: MonitoredServerRow, thresholds: Monitorin
       });
     }
 
-    return { row, sample, latencyMs: Date.now() - started, online: true, errorCode: null, dataAgeSec };
+    return { row, sample, latencyMs: Date.now() - started, online: true, errorCode: null, dataAgeSec, rebootDetected };
   } catch (e) {
-    return { row, sample: null, latencyMs: Date.now() - started, online: false, errorCode: errorCodeFromError(e), dataAgeSec: null };
+    return { row, sample: null, latencyMs: Date.now() - started, online: false, errorCode: errorCodeFromError(e), dataAgeSec: null, rebootDetected: false };
   }
 }
 
@@ -345,18 +435,26 @@ function buildRules(params: {
   result: ServerCheckResult;
   thresholds: MonitoringThresholds;
   scrape: ScrapeOutcome | null;
-  }): RuleEvaluation[] {
-  const { row, result, thresholds, scrape } = params;
+  exporterEnabled: boolean;
+  exporterSucceeded: boolean;
+}): RuleEvaluation[] {
+  const { row, result, thresholds, scrape, exporterEnabled, exporterSucceeded } = params;
   const rules: RuleEvaluation[] = [];
 
-  // Availability. Only when we actually have an exporter or Remnawave source.
-  if (result.exporterStatus === "ok" || result.remnawaveOnline != null) {
-    const offline = result.online === false || result.remnawaveOnline === false;
+  // Availability: host-level source failed. A single failed scrape is NOT
+  // offline — the incident engine confirms only after `offlineFailChecks`.
+  const remnawaveMapped = Boolean(result.remnawaveNodeUuid);
+  const hostSourceFailed = exporterEnabled
+    ? !exporterSucceeded
+    : remnawaveMapped
+      ? result.remnawaveStatus === "error"
+      : false;
+  if (exporterEnabled || remnawaveMapped) {
     rules.push({
       ruleType: "offline",
       severity: "critical",
-      active: offline,
-      hold: offline,
+      active: hostSourceFailed,
+      hold: hostSourceFailed,
       value: null,
       threshold: thresholds.offlineFailChecks,
       confirmAfterChecks: thresholds.offlineFailChecks,
@@ -466,7 +564,7 @@ function buildRules(params: {
   }
 
   // Service-level: Remnawave says the node is down while the system is alive.
-  if (result.remnawaveOnline === false && result.exporterStatus === "ok" && result.online === true) {
+  if (result.remnawaveStatus === "error" && exporterEnabled && exporterSucceeded) {
     rules.push({
       ruleType: "remnawave_offline",
       severity: "warning",
@@ -487,134 +585,209 @@ function buildRules(params: {
 async function collectServer(
   row: MonitoredServerRow,
   remnawaveNodes: Map<number, Map<string, RemnawaveNodeMetric>>,
-): Promise<{ result: ServerCheckResult; events: IncidentEvent[] }> {
+): Promise<{ result: ServerCheckResult; events: IncidentEvent[]; succeeded: boolean }> {
   const thresholds = resolveThresholds(row.thresholds_json);
-  const result = emptyResult(row);
-  result.remnawaveIntegrationId = row.remnawave_integration_id;
-  result.remnawaveNodeUuid = row.remnawave_node_uuid;
+  const prev = getCurrent(row.id);
+  const nowMs = Date.now();
+  const nowSec = Math.floor(nowMs / 1000);
+  const exporterEnabled = Number(row.node_exporter_enabled) === 1 && Boolean(row.exporter_url);
+  const remnawaveMapped = Boolean(row.remnawave_integration_id && row.remnawave_node_uuid);
+
+  // Remnawave node state from this cycle's single integration fetch.
+  let remnawaveStatus: "ok" | "error" | "unknown" | "disabled" = remnawaveMapped ? "unknown" : "disabled";
+  let onlineUsers: number | null = remnawaveMapped ? prev?.onlineUsers ?? null : null;
+  if (remnawaveMapped) {
+    const node = remnawaveNodes.get(row.remnawave_integration_id!)?.get(row.remnawave_node_uuid!) ?? null;
+    if (node) {
+      remnawaveStatus = node.up === false ? "error" : "ok";
+      onlineUsers = node.onlineUsers;
+    } else if (remnawaveNodes.has(row.remnawave_integration_id!)) {
+      remnawaveStatus = "error";
+    } else {
+      // Integration unavailable this cycle -> keep last known users, do not
+      // mistake it for the host being down.
+      remnawaveStatus = "unknown";
+    }
+  }
 
   let scrape: ScrapeOutcome | null = null;
-
-  if (Number(row.node_exporter_enabled) === 1 && row.exporter_url) {
+  let exporterSucceeded = false;
+  if (exporterEnabled) {
     scrape = await scrapeNodeExporter(row, thresholds);
-    result.latencyMs = scrape.latencyMs;
-    result.online = scrape.online;
-    result.exporterStatus = scrape.online ? "ok" : "error";
-    result.lastError = scrape.errorCode;
+    exporterSucceeded = Boolean(scrape.sample);
+  }
 
-    if (scrape.sample) {
-      const s = scrape.sample;
-      const uplinkBytes = s.maxUplinkSpeedBytes ?? null;
-      const configuredUplinkBytes = row.uplink_mbps && row.uplink_mbps > 0 ? (row.uplink_mbps * 1_000_000) / 8 : null;
-      const effectiveUplinkBytes = uplinkBytes && uplinkBytes > 0 ? uplinkBytes : configuredUplinkBytes;
-      const rxMbps = s.rxBytesPerSec != null ? (s.rxBytesPerSec * 8) / 1_000_000 : null;
-      const txMbps = s.txBytesPerSec != null ? (s.txBytesPerSec * 8) / 1_000_000 : null;
-      const uplinkLoadPct =
-        effectiveUplinkBytes && s.rxBytesPerSec != null && s.txBytesPerSec != null
-          ? Math.min(100, Math.round(((s.rxBytesPerSec + s.txBytesPerSec) / effectiveUplinkBytes) * 100))
-          : null;
-      const loadBasedPct =
-        s.load1 != null && s.cpuCores && s.cpuCores > 0
-          ? Math.min(100, Math.round((s.load1 / s.cpuCores) * 100))
-          : null;
+  const succeeded = exporterEnabled ? exporterSucceeded : remnawaveMapped && remnawaveStatus === "ok";
+  const s = scrape?.sample ?? null;
+  const carry = (v: number | null | undefined, pv: number | null | undefined) => (v != null ? v : pv ?? null);
 
-      result.uptimeSeconds = s.uptimeSeconds;
-      result.uptime = fmtUptime(s.uptimeSeconds);
-      result.cpuLoadPct = s.cpuBusyPct ?? loadBasedPct;
-      result.loadPct = result.cpuLoadPct;
-      result.iowaitPct = s.iowaitPct;
-      result.load1 = s.load1;
-      result.load5 = s.load5;
-      result.load15 = s.load15;
-      result.cpuCores = s.cpuCores;
-      result.memoryLoadPct = s.memoryUsedPct;
-      result.swapLoadPct = s.swapUsedPct;
-      result.diskLoadPct = s.diskUsedPct;
-      result.diskFreeBytes = s.diskFreeBytes;
-      result.inodeLoadPct = s.inodeUsedPct;
-      result.rxMbps = rxMbps;
-      result.txMbps = txMbps;
-      result.uplinkLoadPct = uplinkLoadPct;
-      result.rxErrorsDelta = s.rxErrorsDelta;
-      result.txErrorsDelta = s.txErrorsDelta;
-      result.rxDropsDelta = s.rxDropsDelta;
-      result.txDropsDelta = s.txDropsDelta;
-      result.fileDescriptors = s.fileDescriptors;
-      result.sockets = s.sockets;
-      result.rebootDetected = false;
-    }
+  let record: CurrentRecord;
+
+  if (succeeded) {
+    const configuredUplinkBytes = row.uplink_mbps && row.uplink_mbps > 0 ? (row.uplink_mbps * 1_000_000) / 8 : null;
+    const uplinkBytes = s?.maxUplinkSpeedBytes ?? null;
+    const effectiveUplinkBytes = uplinkBytes && uplinkBytes > 0 ? uplinkBytes : configuredUplinkBytes;
+    const rxBps = s?.rxBytesPerSec ?? null;
+    const txBps = s?.txBytesPerSec ?? null;
+    const uplinkUsedPct =
+      effectiveUplinkBytes && rxBps != null && txBps != null
+        ? Math.min(100, Math.round(((rxBps + txBps) / effectiveUplinkBytes) * 100))
+        : prev?.uplinkUsedPct ?? null;
+    const cpuPct =
+      s?.cpuBusyPct ??
+      (s?.load1 != null && s.cpuCores && s.cpuCores > 0 ? Math.min(100, Math.round((s.load1 / s.cpuCores) * 100)) : null);
+
+    record = {
+      serverId: row.id,
+      updatedAt: nowSec,
+      lastAttemptAt: nowSec,
+      lastSuccessAt: nowSec,
+      state: "fresh",
+      online: true,
+      stale: false,
+      consecutiveFailures: 0,
+      lastErrorCode: null,
+      cpuPct: carry(cpuPct, prev?.cpuPct),
+      iowaitPct: carry(s?.iowaitPct, prev?.iowaitPct),
+      load1: carry(s?.load1, prev?.load1),
+      load5: carry(s?.load5, prev?.load5),
+      load15: carry(s?.load15, prev?.load15),
+      cpuCores: carry(s?.cpuCores, prev?.cpuCores),
+      memoryUsedPct: carry(s?.memoryUsedPct, prev?.memoryUsedPct),
+      memoryTotalBytes: carry(s?.memTotalBytes, prev?.memoryTotalBytes),
+      memoryAvailableBytes: carry(s?.memAvailableBytes, prev?.memoryAvailableBytes),
+      swapUsedPct: carry(s?.swapUsedPct, prev?.swapUsedPct),
+      diskUsedPct: carry(s?.diskUsedPct, prev?.diskUsedPct),
+      diskFreeBytes: carry(s?.diskFreeBytes, prev?.diskFreeBytes),
+      inodeUsedPct: carry(s?.inodeUsedPct, prev?.inodeUsedPct),
+      rxBps: carry(rxBps, prev?.rxBps),
+      txBps: carry(txBps, prev?.txBps),
+      uplinkUsedPct,
+      rxDropsDelta: carry(s?.rxDropsDelta, prev?.rxDropsDelta),
+      txDropsDelta: carry(s?.txDropsDelta, prev?.txDropsDelta),
+      rxErrorsDelta: carry(s?.rxErrorsDelta, prev?.rxErrorsDelta),
+      txErrorsDelta: carry(s?.txErrorsDelta, prev?.txErrorsDelta),
+      systemUptimeSec: carry(s?.uptimeSeconds, prev?.systemUptimeSec),
+      rebootDetected: Boolean(scrape?.rebootDetected),
+      nodeExporterStatus: exporterEnabled ? "ok" : "disabled",
+      nodeExporterLatencyMs: scrape?.latencyMs ?? null,
+      remnawaveStatus,
+      onlineUsers,
+      fileDescriptors: carry(s?.fileDescriptors, prev?.fileDescriptors),
+      sockets: carry(s?.sockets, prev?.sockets),
+      source: exporterSucceeded && remnawaveMapped ? "both" : exporterSucceeded ? "node_exporter" : "remnawave",
+      checkedAt: new Date(nowMs).toISOString(),
+    };
   } else {
-    result.exporterStatus = "disabled";
+    // Transient failure: NEVER blank the last known metrics. A single failed
+    // scrape is not offline — offline is confirmed only after the threshold.
+    const failures = (prev?.consecutiveFailures ?? 0) + 1;
+    const confirmedOffline = failures >= thresholds.offlineFailChecks;
+    const online = confirmedOffline ? false : prev?.online ?? null;
+    const stale = !confirmedOffline && (prev?.lastSuccessAt ?? null) != null;
+    record = {
+      serverId: row.id,
+      updatedAt: nowSec,
+      lastAttemptAt: nowSec,
+      lastSuccessAt: prev?.lastSuccessAt ?? null,
+      state: computeState(online, stale),
+      online,
+      stale,
+      consecutiveFailures: failures,
+      lastErrorCode:
+        scrape?.errorCode ??
+        (exporterEnabled ? "unreachable" : remnawaveMapped ? "remnawave_unavailable" : prev?.lastErrorCode ?? null),
+      cpuPct: prev?.cpuPct ?? null,
+      iowaitPct: prev?.iowaitPct ?? null,
+      load1: prev?.load1 ?? null,
+      load5: prev?.load5 ?? null,
+      load15: prev?.load15 ?? null,
+      cpuCores: prev?.cpuCores ?? null,
+      memoryUsedPct: prev?.memoryUsedPct ?? null,
+      memoryTotalBytes: prev?.memoryTotalBytes ?? null,
+      memoryAvailableBytes: prev?.memoryAvailableBytes ?? null,
+      swapUsedPct: prev?.swapUsedPct ?? null,
+      diskUsedPct: prev?.diskUsedPct ?? null,
+      diskFreeBytes: prev?.diskFreeBytes ?? null,
+      inodeUsedPct: prev?.inodeUsedPct ?? null,
+      rxBps: prev?.rxBps ?? null,
+      txBps: prev?.txBps ?? null,
+      uplinkUsedPct: prev?.uplinkUsedPct ?? null,
+      rxDropsDelta: prev?.rxDropsDelta ?? null,
+      txDropsDelta: prev?.txDropsDelta ?? null,
+      rxErrorsDelta: prev?.rxErrorsDelta ?? null,
+      txErrorsDelta: prev?.txErrorsDelta ?? null,
+      systemUptimeSec: prev?.systemUptimeSec ?? null,
+      rebootDetected: false,
+      nodeExporterStatus: exporterEnabled ? "error" : prev?.nodeExporterStatus ?? "disabled",
+      nodeExporterLatencyMs: scrape?.latencyMs ?? null,
+      remnawaveStatus,
+      onlineUsers,
+      fileDescriptors: prev?.fileDescriptors ?? null,
+      sockets: prev?.sockets ?? null,
+      source: prev?.source ?? "none",
+      checkedAt: prev?.checkedAt ?? null,
+    };
   }
 
-  // Merge Remnawave node metrics by stable UUID.
-  if (row.remnawave_integration_id && row.remnawave_node_uuid) {
-    const node = remnawaveNodes.get(row.remnawave_integration_id)?.get(row.remnawave_node_uuid) ?? null;
-    if (node) {
-      result.remnawaveOnline = node.up ?? true;
-      result.onlineUsers = node.onlineUsers;
-      if (result.online == null) result.online = node.up ?? true;
-    } else if (remnawaveNodes.has(row.remnawave_integration_id)) {
-      result.remnawaveOnline = null;
-    }
+  try {
+    upsertCurrent(record);
+  } catch {
+    /* current persist failure must not break the cycle */
   }
 
-  if (result.online == null) result.online = false;
-  result.checkedAt = new Date().toISOString();
+  const result = currentToCheck(row, record);
 
-  const sample = buildMonitoringSample(result, thresholds);
-  const events = evaluateServerIncidents({
-    serverId: row.id,
-    serverTitle: row.title || row.host,
-    ts: Math.floor(Date.now() / 1000),
-    thresholds,
-    rules: buildRules({ row, result, thresholds, scrape }),
-  });
-
+  const sample = sampleFromRecord(record, succeeded);
   sampleBuffers.set(row.id, [...(sampleBuffers.get(row.id) ?? []), sample].slice(-30));
   try {
-    insertSample(row.id, Math.floor(Date.now() / 1000), sample);
+    insertSample(row.id, nowSec, sample);
   } catch {
     /* history write failure must not destroy the current snapshot */
   }
 
-  return { result, events };
+  let events: IncidentEvent[] = [];
+  try {
+    events = evaluateServerIncidents({
+      serverId: row.id,
+      serverTitle: row.title || row.host,
+      ts: nowSec,
+      thresholds,
+      rules: buildRules({ row, result, thresholds, scrape, exporterEnabled, exporterSucceeded }),
+    });
+  } catch {
+    /* incident engine failure must not destroy current/history */
+  }
+
+  return { result, events, succeeded };
 }
 
-function buildMonitoringSample(result: ServerCheckResult, _thresholds: MonitoringThresholds): MonitoringSample {
-  const source: MonitoringSample["source"] =
-    result.exporterStatus === "ok" && result.remnawaveOnline != null
-      ? "both"
-      : result.exporterStatus === "ok"
-        ? "node_exporter"
-        : result.remnawaveOnline != null
-          ? "remnawave"
-          : "none";
+function sampleFromRecord(record: CurrentRecord, succeeded: boolean): MonitoringSample {
   return {
-    online: result.online,
-    latencyMs: result.latencyMs,
-    cpuPct: result.cpuLoadPct,
-    iowaitPct: result.iowaitPct,
-    load1: result.load1,
-    load5: result.load5,
-    load15: result.load15,
-    memoryUsedPct: result.memoryLoadPct,
-    swapUsedPct: result.swapLoadPct,
-    diskUsedPct: result.diskLoadPct,
-    diskFreeBytes: result.diskFreeBytes,
-    inodeUsedPct: result.inodeLoadPct,
-    rxBps: result.rxMbps != null ? (result.rxMbps * 1_000_000) / 8 : null,
-    txBps: result.txMbps != null ? (result.txMbps * 1_000_000) / 8 : null,
-    uplinkUsedPct: result.uplinkLoadPct,
-    rxDropsDelta: result.rxDropsDelta,
-    txDropsDelta: result.txDropsDelta,
-    rxErrorsDelta: result.rxErrorsDelta,
-    txErrorsDelta: result.txErrorsDelta,
-    systemUptimeSec: result.uptimeSeconds,
-    rebootDetected: result.rebootDetected,
-    remnawaveOnline: result.remnawaveOnline,
-    onlineUsers: result.onlineUsers,
-    source,
+    online: record.online,
+    latencyMs: record.nodeExporterLatencyMs,
+    cpuPct: succeeded ? record.cpuPct : null,
+    iowaitPct: succeeded ? record.iowaitPct : null,
+    load1: succeeded ? record.load1 : null,
+    load5: succeeded ? record.load5 : null,
+    load15: succeeded ? record.load15 : null,
+    memoryUsedPct: succeeded ? record.memoryUsedPct : null,
+    swapUsedPct: succeeded ? record.swapUsedPct : null,
+    diskUsedPct: succeeded ? record.diskUsedPct : null,
+    diskFreeBytes: succeeded ? record.diskFreeBytes : null,
+    inodeUsedPct: succeeded ? record.inodeUsedPct : null,
+    rxBps: succeeded ? record.rxBps : null,
+    txBps: succeeded ? record.txBps : null,
+    uplinkUsedPct: succeeded ? record.uplinkUsedPct : null,
+    rxDropsDelta: succeeded ? record.rxDropsDelta : null,
+    txDropsDelta: succeeded ? record.txDropsDelta : null,
+    rxErrorsDelta: succeeded ? record.rxErrorsDelta : null,
+    txErrorsDelta: succeeded ? record.txErrorsDelta : null,
+    systemUptimeSec: succeeded ? record.systemUptimeSec : null,
+    rebootDetected: record.rebootDetected,
+    remnawaveOnline: record.remnawaveStatus === "ok" ? true : record.remnawaveStatus === "error" ? false : null,
+    onlineUsers: record.onlineUsers,
+    source: (record.source as MonitoringSample["source"]) ?? "none",
   };
 }
 
@@ -644,38 +817,38 @@ async function runCollectionCycle(
   log?: Pick<Console, "warn">,
 ): Promise<{ started: boolean; reason: string }> {
   const baseThresholds = getGlobalThresholds();
+  const startedAt = Date.now();
 
   if (!acquireCollectorLease(Math.max(30, baseThresholds.collectionIntervalSec * 2))) {
     return { started: false, reason: "lease_held_elsewhere" };
   }
 
-  // Remnawave once per integration/cycle.
-  await collectRemnawave(baseThresholds, log);
-
+  // Remnawave: exactly one fetch per enabled integration per cycle.
+  const remnawave = await collectRemnawave(baseThresholds, log);
   const remnawaveNodes = new Map<number, Map<string, RemnawaveNodeMetric>>();
   for (const [integrationId, entry] of remnawaveCache) remnawaveNodes.set(integrationId, entry.nodes);
 
   const activeRows = rows.filter((row) => Number(row.active) !== 0);
   const allEvents: IncidentEvent[] = [];
+  let serversSucceeded = 0;
+  let serversFailed = 0;
 
   await runPool(activeRows, baseThresholds.collectorConcurrency, async (row) => {
     try {
-      const { result, events } = await collectServer(row, remnawaveNodes);
-      statusCache.set(row.id, result);
-      scrapeCache.set(row.id, { ts: Date.now(), value: result });
+      const { events, succeeded } = await collectServer(row, remnawaveNodes);
+      if (succeeded) serversSucceeded += 1;
+      else serversFailed += 1;
       allEvents.push(...events);
     } catch (e) {
+      serversFailed += 1;
       log?.warn?.({ err: e, serverId: row.id }, "MONITOR_SCRAPE_FAIL");
     }
   });
 
-  // Drop current state for servers that no longer exist.
+  // Drop persisted current rows for servers that no longer exist. History and
+  // incidents are intentionally kept (retention handles them).
   const activeIds = new Set(activeRows.map((r) => r.id));
-  for (const id of statusCache.keys()) if (!activeIds.has(id)) statusCache.delete(id);
-  for (const id of scrapeCache.keys()) if (!activeIds.has(id)) scrapeCache.delete(id);
-  for (const id of sampleBuffers.keys()) if (!activeIds.has(id)) sampleBuffers.delete(id);
-  for (const id of prevCache.keys()) if (!activeIds.has(id)) prevCache.delete(id);
-
+  pruneCurrent([...activeIds]);
   resolveIncidentsForMissingServers([...activeIds], Math.floor(Date.now() / 1000));
 
   if (allEvents.length > 0) {
@@ -698,45 +871,56 @@ async function runCollectionCycle(
     }
   }
 
-  lastCycleAt = Date.now();
+  const finishedAt = Date.now();
+  lastCycleAt = finishedAt;
   lastCycleError = null;
+  try {
+    writeCollectorState({
+      lastCycleAt: Math.floor(finishedAt / 1000),
+      lastCycleStartedAt: Math.floor(startedAt / 1000),
+      lastCycleDurationMs: finishedAt - startedAt,
+      serversAttempted: activeRows.length,
+      serversSucceeded,
+      serversFailed,
+      remnawaveAttempted: remnawave.attempted,
+      remnawaveSucceeded: remnawave.succeeded,
+      remnawaveFailed: remnawave.failed,
+    });
+  } catch {
+    /* observability write failure must not break the cycle */
+  }
+
   return { started: true, reason: "started" };
 }
 
 /* ── Public API (kept stable for existing consumers) ─────────────────────── */
 
 export async function checkServer(row: MonitoredServerRow): Promise<ServerCheckResult> {
-  const cached = scrapeCache.get(row.id);
-  if (cached && Date.now() - cached.ts < SCRAPE_CACHE_MS) return cached.value;
-  const thresholds = resolveThresholds(row.thresholds_json);
-
   const remnawaveNodes = new Map<number, Map<string, RemnawaveNodeMetric>>();
   for (const [integrationId, entry] of remnawaveCache) remnawaveNodes.set(integrationId, entry.nodes);
-
   const { result } = await collectServer(row, remnawaveNodes);
-  statusCache.set(row.id, result);
-  scrapeCache.set(row.id, { ts: Date.now(), value: result });
   return result;
 }
 
+/**
+ * Canonical read: build the display shape from the persistent
+ * `monitoring_current` table. Never scrapes. Safe after a restart.
+ */
 export function getServerStatusSnapshot(rows: MonitoredServerRow[]) {
-  const activeIds = new Set(rows.map((row) => row.id));
-  for (const id of statusCache.keys()) if (!activeIds.has(id)) statusCache.delete(id);
+  const current = getCurrentMany(rows.map((r) => r.id));
+  return rows.map((row) => currentToCheck(row, current.get(row.id) ?? null));
+}
 
-  return rows.map((row) => {
-    const cached = statusCache.get(row.id);
-    if (!cached) return { ...emptyResult(row), checkedAt: null };
-    return {
-      ...cached,
-      id: row.id,
-      title: row.title,
-      host: row.host,
-      kind: row.kind,
-      countryCode: row.country_code,
-      remnawaveIntegrationId: row.remnawave_integration_id,
-      remnawaveNodeUuid: row.remnawave_node_uuid,
-    };
-  });
+/** Safe collector observability (no URLs/secrets). */
+export function getCollectorObservability() {
+  const persisted = getCollectorState();
+  const lease = collectorLeaseOwner();
+  return {
+    ...persisted,
+    collectorRunning: Boolean(refreshInFlight),
+    leaseOwner: lease?.owner ?? null,
+    leaseExpiresAt: lease?.expires_at ?? null,
+  };
 }
 
 export function requestServerStatusRefresh(
@@ -772,6 +956,24 @@ export function requestServerStatusRefresh(
 
 export function requestManualServerStatusRefresh(rows: MonitoredServerRow[], log?: Pick<Console, "warn">) {
   return requestServerStatusRefresh(rows, log, { minIntervalMs: MANUAL_REFRESH_MIN_MS, force: true });
+}
+
+let lastForceCheckAt = 0;
+
+/**
+ * Explicit admin "check now": rate-limited, respects the single-collector
+ * lease and the in-flight guard. Not used by normal UI refresh.
+ */
+export function requestForcedCollection(
+  rows: MonitoredServerRow[],
+  log?: Pick<Console, "warn">,
+): Promise<{ started: boolean; reason: string }> {
+  const now = Date.now();
+  if (now - lastForceCheckAt < FORCE_CHECK_MIN_MS) {
+    return Promise.resolve({ started: false, reason: "cooldown" });
+  }
+  lastForceCheckAt = now;
+  return requestServerStatusRefresh(rows, log, { force: true });
 }
 
 export function startServerStatusMonitor(loadRows: () => MonitoredServerRow[], log?: Pick<Console, "warn">) {
@@ -831,13 +1033,15 @@ export function getCollectorTimerState() {
 
 export function getServerStatusMeta() {
   const intervalMs = collectorTimer?.isActive() ? collectorTimer.intervalMs() : currentIntervalMs();
+  const dbTs = lastCurrentUpdatedAt();
+  const collector = getCollectorState();
   return {
-    updatedAt: lastRefreshAt,
+    updatedAt: dbTs ? new Date(dbTs * 1000).toISOString() : lastRefreshAt,
     refreshing: Boolean(refreshInFlight),
     refreshIntervalMs: intervalMs,
     manualCooldownMs: MANUAL_REFRESH_MIN_MS,
     lastRefreshStartedAt: lastRefreshStartedAt ? new Date(lastRefreshStartedAt).toISOString() : null,
-    lastCycleAt: lastCycleAt ? new Date(lastCycleAt).toISOString() : null,
+    lastCycleAt: collector.lastCycleAt ? new Date(collector.lastCycleAt * 1000).toISOString() : lastCycleAt ? new Date(lastCycleAt).toISOString() : null,
     lastCycleError,
   };
 }
