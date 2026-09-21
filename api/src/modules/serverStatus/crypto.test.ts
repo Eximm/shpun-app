@@ -10,13 +10,12 @@ process.env.SHPUN_CREDENTIALS_MASTER_KEY = "test-master-key-0123456789";
 
 const { encryptSecret, decryptSecret, isCredentialsKeyConfigured, redact } = await import("./crypto.js");
 const {
-  createIntegration,
-  updateIntegration,
-  getIntegration,
-  listPublicIntegrations,
-  getIntegrationCredentials,
-  deleteIntegration,
-} = await import("./integrationsRepo.js");
+  createMonitoredServer,
+  updateMonitoredServer,
+  getMonitoredServer,
+  getExporterCredentials,
+  toAdminServer,
+} = await import("./repo.js");
 const { linkDb } = await import("../../shared/linkdb/db.js");
 
 test("credentials key is reported as configured", () => {
@@ -54,65 +53,55 @@ test("redact hides secrets but keeps a short tail", () => {
   assert.equal(out.includes("supersecrettoken"), false);
 });
 
-test("integration secrets are encrypted at rest and never returned", () => {
-  const created = createIntegration({
-    name: "Remnawave Main",
-    type: "remnawave",
-    metricsUrl: "https://remnawave.example/metrics",
-    username: "metrics",
-    password: "super-secret-password",
-    apiToken: "super-secret-token",
+test("node exporter basic-auth password is encrypted at rest and never returned", () => {
+  const created = createMonitoredServer({
+    title: "Secured",
+    host: "secured.example",
+    kind: "vpn",
+    exporterAuthType: "basic",
+    exporterUsername: "metrics",
+    exporterPassword: "super-secret-password",
   });
   assert.equal(created.ok, true);
-  const row = getIntegration(created.ok ? created.item.id : 0)!;
+  const id = created.ok ? created.item.id : 0;
+  const row = getMonitoredServer(id)!;
 
-  // Raw row must not contain plaintext.
-  const raw = JSON.stringify(row);
-  assert.equal(raw.includes("super-secret-password"), false);
-  assert.equal(raw.includes("super-secret-token"), false);
-  assert.ok(row.password_encrypted?.startsWith("v1:"));
-  assert.ok(row.api_token_encrypted?.startsWith("v1:"));
+  assert.equal(JSON.stringify(row).includes("super-secret-password"), false);
+  assert.ok(row.exporter_password_encrypted?.startsWith("v1:"));
 
-  const publicItem = listPublicIntegrations().find((i) => i.id === row.id)!;
-  assert.equal(publicItem.hasPassword, true);
-  assert.equal(publicItem.hasApiToken, true);
-  const publicJson = JSON.stringify(publicItem);
-  assert.equal(publicJson.includes("super-secret-password"), false);
-  assert.equal(publicJson.includes("super-secret-token"), false);
-  assert.equal("password" in (publicItem as any), false);
-  assert.equal("apiToken" in (publicItem as any), false);
+  const dto = toAdminServer(row);
+  assert.equal(dto.hasExporterPassword, true);
+  assert.equal("exporter_password_encrypted" in dto, false);
+  assert.equal(JSON.stringify(dto).includes("super-secret-password"), false);
 
-  // Credentials are still readable server-side for outbound calls.
-  const creds = getIntegrationCredentials(row);
-  assert.equal(creds.password, "super-secret-password");
-  assert.equal(creds.apiToken, "super-secret-token");
+  assert.equal(getExporterCredentials(row).password, "super-secret-password");
 });
 
-test("empty password on update preserves the stored secret", () => {
-  const created = createIntegration({ name: "Keep", type: "remnawave", metricsUrl: "https://x.example/metrics", password: "keep-me" });
+test("empty exporter password on update preserves the stored secret", () => {
+  const created = createMonitoredServer({ title: "Keep", host: "keep.example", kind: "vpn", exporterAuthType: "basic", exporterPassword: "keep-me" });
   assert.equal(created.ok, true);
   const id = created.ok ? created.item.id : 0;
-  updateIntegration(id, { name: "Keep renamed", password: "" });
-  assert.equal(getIntegrationCredentials(getIntegration(id)!).password, "keep-me");
+  updateMonitoredServer(id, { exporterUsername: "renamed", exporterPassword: "" });
+  assert.equal(getExporterCredentials(getMonitoredServer(id)!).password, "keep-me");
 });
 
-test("new password on update replaces the secret; clear removes it", () => {
-  const created = createIntegration({ name: "Replace", type: "remnawave", metricsUrl: "https://y.example/metrics", password: "old" });
+test("new exporter password replaces the secret; switching to none clears it", () => {
+  const created = createMonitoredServer({ title: "Replace", host: "replace.example", kind: "vpn", exporterAuthType: "basic", exporterPassword: "old" });
   assert.equal(created.ok, true);
   const id = created.ok ? created.item.id : 0;
 
-  updateIntegration(id, { password: "new" });
-  assert.equal(getIntegrationCredentials(getIntegration(id)!).password, "new");
+  updateMonitoredServer(id, { exporterPassword: "new" });
+  assert.equal(getExporterCredentials(getMonitoredServer(id)!).password, "new");
 
-  updateIntegration(id, { clearPassword: true });
-  assert.equal(getIntegration(id)!.password_encrypted, null);
-  assert.equal(listPublicIntegrations().find((i) => i.id === id)!.hasPassword, false);
-  deleteIntegration(id);
+  updateMonitoredServer(id, { exporterAuthType: "none" });
+  assert.equal(getMonitoredServer(id)!.exporter_password_encrypted, null);
+  assert.equal(toAdminServer(getMonitoredServer(id)!).hasExporterPassword, false);
 });
 
-test("integration rejects an invalid url", () => {
-  const created = createIntegration({ name: "Bad", type: "remnawave", metricsUrl: "ftp://bad" });
+test("exporter password requires basic auth", () => {
+  const created = createMonitoredServer({ title: "Bad", host: "bad.example", kind: "vpn", exporterAuthType: "none", exporterPassword: "x" });
   assert.equal(created.ok, false);
+  assert.equal(created.ok ? "" : created.error, "exporter_password_requires_basic");
 });
 
 test("production save without a master key fails loudly and stores no plaintext", () => {
@@ -121,20 +110,21 @@ test("production save without a master key fails loudly and stores no plaintext"
   process.env.SHPUN_CREDENTIALS_MASTER_KEY = "";
   process.env.NODE_ENV = "production";
   try {
-    const denied = createIntegration({
-      name: "NoKey",
-      type: "remnawave",
-      metricsUrl: "https://nokey.example/metrics",
-      password: "plaintext-should-never-persist",
+    const denied = createMonitoredServer({
+      title: "NoKey",
+      host: "nokey.example",
+      kind: "vpn",
+      exporterAuthType: "basic",
+      exporterPassword: "plaintext-should-never-persist",
     });
     assert.equal(denied.ok, false);
     assert.equal(denied.ok ? "" : denied.error, "credentials_key_missing");
 
-    const rows = linkDb.prepare(`SELECT * FROM monitoring_integrations WHERE name = 'NoKey'`).all() as any[];
+    const rows = linkDb.prepare(`SELECT * FROM monitored_servers WHERE title = 'NoKey'`).all() as any[];
     assert.equal(rows.length, 0, "no row may be written without a master key");
 
-    // Monitoring without credentials keeps working in production.
-    const plain = createIntegration({ name: "Plain", type: "remnawave", metricsUrl: "https://plain.example/metrics" });
+    // A server without exporter credentials keeps working in production.
+    const plain = createMonitoredServer({ title: "Plain", host: "plain.example", kind: "vpn" });
     assert.equal(plain.ok, true);
   } finally {
     process.env.SHPUN_CREDENTIALS_MASTER_KEY = prevKey;
@@ -142,35 +132,22 @@ test("production save without a master key fails loudly and stores no plaintext"
   }
 });
 
-test("wrong master key on read is reported as a flag, never thrown, never leaked", () => {
-  const created = createIntegration({
-    name: "WrongKey",
-    type: "remnawave",
-    metricsUrl: "https://wrongkey.example/metrics",
-    password: "topsecret-value",
-  });
+test("wrong master key on read is reported safely, never leaked", () => {
+  const created = createMonitoredServer({ title: "WrongKey", host: "wrongkey.example", kind: "vpn", exporterAuthType: "basic", exporterPassword: "topsecret-value" });
   assert.equal(created.ok, true);
   const id = created.ok ? created.item.id : 0;
-  const row = getIntegration(id)!;
 
   const prevKey = process.env.SHPUN_CREDENTIALS_MASTER_KEY;
   process.env.SHPUN_CREDENTIALS_MASTER_KEY = "a-totally-different-master-key";
   try {
-    const creds = getIntegrationCredentials(row);
+    const creds = getExporterCredentials(getMonitoredServer(id)!);
     assert.equal(creds.password, null);
-    assert.equal(creds.passwordDecryptFailed, true);
     assert.equal(JSON.stringify(creds).includes("topsecret-value"), false);
-    // The public projection still only exposes the presence flag.
-    const pub = listPublicIntegrations().find((i) => i.id === id)!;
-    assert.equal(pub.hasPassword, true);
-    assert.equal(JSON.stringify(pub).includes("topsecret-value"), false);
   } finally {
     process.env.SHPUN_CREDENTIALS_MASTER_KEY = prevKey;
   }
 
-  // With the correct key back, the secret is readable again.
-  assert.equal(getIntegrationCredentials(getIntegration(id)!).password, "topsecret-value");
-  deleteIntegration(id);
+  assert.equal(getExporterCredentials(getMonitoredServer(id)!).password, "topsecret-value");
 });
 
 test.after(() => {

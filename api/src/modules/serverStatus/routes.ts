@@ -13,8 +13,6 @@ import {
 import {
   applyCollectionInterval,
   getCollectorObservability,
-  getRemnawaveGlobalStates,
-  getRemnawaveNodes,
   getServerStatusMeta,
   getServerStatusSnapshot,
   probeNodeExporter,
@@ -25,16 +23,6 @@ import {
 import { deleteCurrent, getCurrent } from "./currentRepo.js";
 import { aggregateHealthStatus, toPublicCheck } from "./health.js";
 import { isServerStatusAdmin } from "./adminGuard.js";
-import {
-  createIntegration,
-  deleteIntegration,
-  getIntegration,
-  getIntegrationCredentials,
-  listPublicIntegrations,
-  toPublicIntegration,
-  updateIntegration,
-} from "./integrationsRepo.js";
-import { probeRemnawaveMetrics } from "./remnawaveMetrics.js";
 import { getGlobalThresholds, resolveThresholds, setGlobalThresholds } from "./settingsRepo.js";
 import { historyStats, querySeries, querySeriesMeta } from "./historyRepo.js";
 import {
@@ -266,74 +254,6 @@ export async function serverStatusRoutes(app: FastifyInstance) {
     return reply.send({ ok: true, probe });
   });
 
-  /* ── Admin: integrations ───────────────────────────────────────────────── */
-
-  app.get("/admin/monitoring/integrations", async (req, reply) => {
-    if (!(await requireAdmin(req, reply))) return;
-    return reply.send({ ok: true, items: listPublicIntegrations(), states: getRemnawaveGlobalStates() });
-  });
-
-  app.post("/admin/monitoring/integrations", async (req, reply) => {
-    if (!(await requireAdmin(req, reply))) return;
-    const result = createIntegration((req.body ?? {}) as any);
-    if (!result.ok) return reply.code(400).send({ ok: false, error: result.error });
-    return reply.send({ ok: true, item: toPublicIntegration(result.item) });
-  });
-
-  app.put("/admin/monitoring/integrations/:id", async (req, reply) => {
-    if (!(await requireAdmin(req, reply))) return;
-    const result = updateIntegration(int((req.params as any)?.id), (req.body ?? {}) as any);
-    if (!result.ok) return reply.code(result.error === "not_found" ? 404 : 400).send({ ok: false, error: result.error });
-    return reply.send({ ok: true, item: toPublicIntegration(result.item) });
-  });
-
-  app.delete("/admin/monitoring/integrations/:id", async (req, reply) => {
-    if (!(await requireAdmin(req, reply))) return;
-    const deleted = deleteIntegration(int((req.params as any)?.id));
-    return reply.send({ ok: true, deleted });
-  });
-
-  app.post("/admin/monitoring/integrations/:id/test", async (req, reply) => {
-    if (!(await requireAdmin(req, reply))) return;
-    const integration = getIntegration(int((req.params as any)?.id));
-    if (!integration) return reply.code(404).send({ ok: false, error: "not_found" });
-
-    const creds = getIntegrationCredentials(integration);
-    const url = integration.metrics_url || integration.base_url;
-    if (!url) return reply.send({ ok: true, probe: { reachable: false, authOk: false, metricsReceived: false, nodeMetricsFound: false, onlineUsersMetricPresent: false, nodeCount: 0, presentMetrics: [], errorCode: "metrics_url_missing" } });
-    if (creds.passwordDecryptFailed || creds.apiTokenDecryptFailed) {
-      return reply.send({ ok: true, probe: { ...emptyProbe(), errorCode: "credential_decrypt_failed" } });
-    }
-
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 6000);
-    try {
-      const headers: Record<string, string> = {};
-      if (integration.username) {
-        headers.Authorization = `Basic ${Buffer.from(`${integration.username}:${creds.password ?? ""}`).toString("base64")}`;
-      }
-      const res = await fetch(url, { signal: controller.signal, headers });
-      if (!res.ok) {
-        return reply.send({ ok: true, probe: { ...emptyProbe(), errorCode: `http_${res.status}`, reachable: true } });
-      }
-      const text = await res.text();
-      return reply.send({ ok: true, probe: probeRemnawaveMetrics(text) });
-    } catch (e: any) {
-      const code = e?.name === "AbortError" ? "timeout" : /ENOTFOUND|getaddrinfo/i.test(String(e?.message)) ? "dns_failed" : "unreachable";
-      return reply.send({ ok: true, probe: { ...emptyProbe(), errorCode: code } });
-    } finally {
-      clearTimeout(timer);
-    }
-  });
-
-  app.get("/admin/monitoring/integrations/:id/nodes", async (req, reply) => {
-    if (!(await requireAdmin(req, reply))) return;
-    const id = int((req.params as any)?.id);
-    const integration = getIntegration(id);
-    if (!integration) return reply.code(404).send({ ok: false, error: "not_found" });
-    return reply.send({ ok: true, nodes: getRemnawaveNodes(id) });
-  });
-
   /* ── Admin: settings ──────────────────────────────────────────────────── */
 
   app.get("/admin/monitoring/settings", async (req, reply) => {
@@ -464,10 +384,6 @@ export async function serverStatusRoutes(app: FastifyInstance) {
     const activeRows = rows.filter((r) => Number(r.active) === 1);
     const checks = getServerStatusSnapshot(activeRows);
     const counts = countActiveIncidents();
-    const globalOnlineUsers = getRemnawaveGlobalStates().reduce<number | null>((acc, s) => {
-      if (s.globalOnlineUsers == null) return acc;
-      return acc == null ? s.globalOnlineUsers : Math.max(acc, s.globalOnlineUsers);
-    }, null);
 
     return reply.send({
       ok: true,
@@ -485,23 +401,7 @@ export async function serverStatusRoutes(app: FastifyInstance) {
         adminOnly: activeRows.filter((r) => r.visibility === "admin_only").length,
       },
       incidents: counts,
-      globalOnlineUsers,
-      integrations: listPublicIntegrations(),
-      remnawaveStates: getRemnawaveGlobalStates(),
       collector: getCollectorObservability(),
     });
   });
-}
-
-function emptyProbe() {
-  return {
-    reachable: false,
-    authOk: false,
-    metricsReceived: false,
-    nodeMetricsFound: false,
-    onlineUsersMetricPresent: false,
-    nodeCount: 0,
-    presentMetrics: [] as string[],
-    errorCode: null as string | null,
-  };
 }

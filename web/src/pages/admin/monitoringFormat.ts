@@ -34,14 +34,6 @@ export function formatLoad(v: number | null | undefined): string {
 }
 
 /**
- * Remnawave users/connections are shown only when the server is mapped AND the
- * value is actually known. An unmapped node must not show a fake "0".
- */
-export function shouldShowRemnawaveUsers(mapped: boolean, onlineUsers: number | null | undefined): boolean {
-  return mapped && onlineUsers != null && Number.isFinite(onlineUsers);
-}
-
-/**
  * Visual tone for the four explicit current states. Config existence is never
  * "online": no_data is neutral/soft, never green.
  */

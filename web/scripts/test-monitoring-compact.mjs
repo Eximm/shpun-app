@@ -3,7 +3,6 @@
 //
 // Verifies:
 //   1. Shared formatters: null -> "—", zero -> "0" (never "—"), auto units.
-//   2. Remnawave users are shown only when mapped AND the value is known.
 //   3. Compact rows read `item.current` (the list snapshot) instead of gating
 //      metrics on expansion.
 //   4. Mobile action buttons collapse into an overflow menu.
@@ -36,7 +35,7 @@ await build({
   logLevel: "silent",
 });
 
-const { formatBitrate, formatPct, formatLoad, shouldShowRemnawaveUsers, stateTone, formatDuration, formatIncidentValue, percentCeiling, incidentRuleKey, incidentMetricKey } = await import(pathToFileURL(outfile).href);
+const { formatBitrate, formatPct, formatLoad, stateTone, formatDuration, formatIncidentValue, percentCeiling, incidentRuleKey, incidentMetricKey } = await import(pathToFileURL(outfile).href);
 
 let failures = 0;
 function check(name, actual, expected) {
@@ -67,10 +66,6 @@ check("pct above 100 is preserved", formatPct(150), "150%");
 check("load 0 -> 0", formatLoad(0), "0");
 check("load 0.0123 -> 0.01", formatLoad(0.0123), "0.01");
 check("load null -> dash", formatLoad(null), "—");
-
-check("remnawave users shown for mapped real zero", shouldShowRemnawaveUsers(true, 0), true);
-check("remnawave users hidden when unknown", shouldShowRemnawaveUsers(true, null), false);
-check("remnawave users hidden when unmapped", shouldShowRemnawaveUsers(false, 5), false);
 
 check("state fresh -> ok", stateTone("fresh"), "ok");
 check("state stale -> warn", stateTone("stale"), "warn");
@@ -105,7 +100,6 @@ assert(
 assert("compact uses shared formatBitrate", src.includes("formatBitrate(current?.rxMbps)"));
 assert("compact uses shared formatLoad", src.includes('formatLoad(current?.load1)'));
 assert("compact does not hardcode Mbps decimals", !src.includes("rxMbps.toFixed(1)"));
-assert("remnawave users gated by mapping helper", src.includes("shouldShowRemnawaveUsers(Boolean(item.remnawave_node_uuid), users)"));
 assert("mobile actions use an overflow menu", src.includes("mon-row__overflow") && src.includes('aria-haspopup="menu"'));
 assert("desktop actions kept separate", src.includes("mon-row__actions--desktop"));
 assert("expanded diagnostics still present", src.includes("admin.monitoring.section.history") && src.includes("mon-detail"));

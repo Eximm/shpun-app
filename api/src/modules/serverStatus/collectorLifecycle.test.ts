@@ -2,7 +2,6 @@
 //   - only the background collector scrapes; GET endpoints are pure DB reads;
 //   - monitoring_current is canonical and survives a "restart" (no memory);
 //   - transient scrape failures keep last-known metrics, stale then offline;
-//   - one Remnawave fetch per cycle, distributed to mapped node UUIDs;
 //   - collector lease blocks a second scraper.
 
 import assert from "node:assert/strict";
@@ -65,21 +64,6 @@ const exporter = http.createServer((_req, res) => {
 await new Promise<void>((resolve) => exporter.listen(0, "127.0.0.1", resolve));
 const exporterUrl = `http://127.0.0.1:${(exporter.address() as { port: number }).port}/metrics`;
 
-/* ─ Fake Remnawave /metrics ────────────────────────────────────────────── */
-let remnawaveRequests = 0;
-const remnawave = http.createServer((_req, res) => {
-  remnawaveRequests += 1;
-  res.setHeader("content-type", "text/plain");
-  res.end(`
-remnawave_node_online_users{node_uuid="uuid-a"} 11
-remnawave_node_online_users{node_uuid="uuid-b"} 22
-remnawave_node_up{node_uuid="uuid-a"} 1
-remnawave_node_up{node_uuid="uuid-b"} 1
-`);
-});
-await new Promise<void>((resolve) => remnawave.listen(0, "127.0.0.1", resolve));
-const remnawaveUrl = `http://127.0.0.1:${(remnawave.address() as { port: number }).port}/metrics`;
-
 /* ── App ─────────────────────────────────────────────────────────────────── */
 const Fastify = (await import("fastify")).default;
 const { serverStatusRoutes } = await import("./routes.js");
@@ -89,7 +73,6 @@ const { createMonitoredServer, listMonitoredServers, getMonitoredServer } = awai
 const { requestServerStatusRefresh, getServerStatusSnapshot, getCollectorObservability, stopServerStatusMonitor } = await import("./monitor.js");
 const { upsertCurrent, getCurrent } = await import("./currentRepo.js");
 const { acquireCollectorLease, collectorLeaseOwner } = await import("./collectorLock.js");
-const { createIntegration } = await import("./integrationsRepo.js");
 const { putSession } = await import("../../shared/session/sessionStore.js");
 const { linkDb } = await import("../../shared/linkdb/db.js");
 
@@ -237,52 +220,6 @@ test("transient failure keeps last-known metrics; confirmed offline after thresh
   exporterHealthy = true;
 });
 
-test("one Remnawave fetch per cycle is distributed across mapped UUIDs", async () => {
-  const integration = createIntegration({ name: "RW", type: "remnawave", metricsUrl: remnawaveUrl });
-  assert.equal(integration.ok, true);
-  const integrationId = integration.ok ? integration.item.id : 0;
-
-  const a = createMonitoredServer({ title: "RW A", host: "a.example", kind: "vpn", nodeExporterEnabled: false, remnawaveIntegrationId: integrationId, remnawaveNodeUuid: "uuid-a" });
-  const b = createMonitoredServer({ title: "RW B", host: "b.example", kind: "vpn", nodeExporterEnabled: false, remnawaveIntegrationId: integrationId, remnawaveNodeUuid: "uuid-b" });
-  assert.equal(a.ok && b.ok, true);
-
-  const before = remnawaveRequests;
-  await requestServerStatusRefresh(listMonitoredServers(), undefined, { force: true });
-  assert.equal(remnawaveRequests - before, 1, "exactly one Remnawave fetch per cycle");
-
-  const checkA = getServerStatusSnapshot([getMonitoredServer(a.ok ? a.item.id : 0)!])[0];
-  const checkB = getServerStatusSnapshot([getMonitoredServer(b.ok ? b.item.id : 0)!])[0];
-  assert.equal(checkA.onlineUsers, 11);
-  assert.equal(checkB.onlineUsers, 22);
-  assert.equal(checkA.remnawaveStatus, "ok");
-  assert.equal(checkB.remnawaveStatus, "ok");
-});
-
-test("Remnawave failure does not erase Node Exporter metrics", async () => {
-  const integration = createIntegration({ name: "RW bad", type: "remnawave", metricsUrl: "http://127.0.0.1:9/metrics" });
-  assert.equal(integration.ok, true);
-  const integrationId = integration.ok ? integration.item.id : 0;
-
-  const created = createMonitoredServer({
-    title: "Both Sources",
-    host: "127.0.0.1",
-    exporterUrl,
-    kind: "vpn",
-    nodeExporterEnabled: true,
-    remnawaveIntegrationId: integrationId,
-    remnawaveNodeUuid: "uuid-x",
-  });
-  assert.equal(created.ok, true);
-  const id = created.ok ? created.item.id : 0;
-
-  exporterHealthy = true;
-  await requestServerStatusRefresh(listMonitoredServers(), undefined, { force: true });
-  const check = getServerStatusSnapshot([getMonitoredServer(id)!])[0];
-  assert.equal(check.online, true);
-  assert.equal(check.exporterStatus, "ok");
-  assert.equal(check.memoryLoadPct, 50, "node exporter metrics survive remnawave failure");
-});
-
 test("collector lease blocks a second scraper while alive", () => {
   // This process owns the lease after the cycles above.
   const owner = collectorLeaseOwner();
@@ -312,6 +249,5 @@ test.after(async () => {
   stopServerStatusMonitor();
   linkDb.close();
   await new Promise<void>((resolve) => exporter.close(() => resolve()));
-  await new Promise<void>((resolve) => remnawave.close(() => resolve()));
   await new Promise<void>((resolve) => shm.close(() => resolve()));
 });

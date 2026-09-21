@@ -41,7 +41,6 @@ legacy.close();
 const repo = await import("./repo.js");
 // Importing the repositories triggers creation of the Monitoring 2.0 tables
 // (the same modules are imported by the app at startup).
-await import("./integrationsRepo.js");
 await import("./historyRepo.js");
 await import("./incidentsRepo.js");
 await import("./settingsRepo.js");
@@ -158,7 +157,6 @@ test("new monitoring tables exist", () => {
     (linkDb.prepare(`SELECT name FROM sqlite_master WHERE type='table'`).all() as any[]).map((t) => String(t.name)),
   );
   for (const name of [
-    "monitoring_integrations",
     "monitoring_samples",
     "monitoring_aggregates",
     "monitoring_incidents",

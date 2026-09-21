@@ -122,13 +122,6 @@ function exporterFromHost(host: string, exporterUrl?: string, nodeExporterEnable
   return h ? `http://${h}:9100/metrics` : "";
 }
 
-function uuid(v: unknown): string | null {
-  const s = clean(v, 64);
-  if (!s) return null;
-  // Remnawave node UUIDs are stable identifiers; accept any sane id charset.
-  return /^[A-Za-z0-9._:-]{4,64}$/.test(s) ? s : null;
-}
-
 export function listMonitoredServers(
   { includeInactive = false, visibility: vis }: { includeInactive?: boolean; visibility?: ServerVisibility } = {},
 ) {
@@ -169,7 +162,9 @@ export function getMonitoredServer(id: number) {
 
 /** Public projection for admin API list (secrets stay server-side). */
 export function toAdminServer(row: MonitoredServerRow) {
-  const { exporter_password_encrypted, ...rest } = row;
+  const { exporter_password_encrypted, remnawave_integration_id, remnawave_node_uuid, ...rest } = row;
+  void remnawave_integration_id;
+  void remnawave_node_uuid;
   return {
     ...rest,
     hasExporterPassword: Boolean(exporter_password_encrypted),
@@ -199,8 +194,6 @@ export function createMonitoredServer(input: {
   exporterAuthType?: unknown;
   exporterUsername?: unknown;
   exporterPassword?: unknown;
-  remnawaveIntegrationId?: unknown;
-  remnawaveNodeUuid?: unknown;
   thresholds?: unknown;
   thresholdsJson?: unknown;
 }) {
@@ -232,9 +225,8 @@ export function createMonitoredServer(input: {
     INSERT INTO monitored_servers
       (title, host, exporter_url, kind, country_code, active, sort_order, uplink_mbps,
        visibility, affects_public_health, node_exporter_enabled, exporter_auth_type,
-       exporter_username, exporter_password_encrypted, remnawave_integration_id,
-       remnawave_node_uuid, thresholds_json)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       exporter_username, exporter_password_encrypted, thresholds_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     title,
     host,
@@ -250,10 +242,6 @@ export function createMonitoredServer(input: {
     authType,
     clean(input.exporterUsername, 200),
     password ? encryptSecret(password) : null,
-    Number.isFinite(Number(input.remnawaveIntegrationId)) && Number(input.remnawaveIntegrationId) > 0
-      ? Math.trunc(Number(input.remnawaveIntegrationId))
-      : null,
-    uuid(input.remnawaveNodeUuid),
     thresholds.json,
   );
 
@@ -296,15 +284,6 @@ export function updateMonitoredServer(id: number, input: Record<string, unknown>
   }
   if (authType === "none") passwordEncrypted = null;
 
-  const remnawaveIntegrationId =
-    "remnawaveIntegrationId" in input
-      ? (Number.isFinite(Number(input.remnawaveIntegrationId)) && Number(input.remnawaveIntegrationId) > 0
-          ? Math.trunc(Number(input.remnawaveIntegrationId))
-          : null)
-      : current.remnawave_integration_id;
-  const remnawaveNodeUuid =
-    "remnawaveNodeUuid" in input ? uuid(input.remnawaveNodeUuid) : current.remnawave_node_uuid;
-
   let thresholdsJson = current.thresholds_json;
   if ("thresholdsJson" in input || "thresholds" in input) {
     const sanitized = sanitizePerNodeThresholds(input.thresholdsJson ?? input.thresholds);
@@ -328,8 +307,6 @@ export function updateMonitoredServer(id: number, input: Record<string, unknown>
         exporter_auth_type = ?,
         exporter_username = ?,
         exporter_password_encrypted = ?,
-        remnawave_integration_id = ?,
-        remnawave_node_uuid = ?,
         thresholds_json = ?,
         updated_at = datetime('now')
     WHERE id = ?
@@ -350,8 +327,6 @@ export function updateMonitoredServer(id: number, input: Record<string, unknown>
     authType,
     "exporterUsername" in input ? clean(input.exporterUsername, 200) : current.exporter_username,
     passwordEncrypted,
-    remnawaveIntegrationId,
-    remnawaveNodeUuid,
     thresholdsJson,
     id,
   );

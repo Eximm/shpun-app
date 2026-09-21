@@ -4,7 +4,14 @@ import { useI18n } from "../../shared/i18n";
 import { AdminSectionHeader, AdminSectionIcon, ADMIN_SECTION_ICON, ModalShell } from "./shared";
 import { ActionMenu } from "./ActionMenu";
 import { MonitoringGraph, MONITORING_METRICS, type GraphIncident, type GraphPoint } from "./MonitoringGraph";
-import { MonitoringIncidents, type IncidentCounts, type IncidentDto, type IncidentRange, type IncidentSeverityFilter, type IncidentTab } from "./MonitoringIncidents";
+import {
+  MonitoringIncidents,
+  type IncidentCounts,
+  type IncidentDto,
+  type IncidentRange,
+  type IncidentSeverityFilter,
+  type IncidentTab,
+} from "./MonitoringIncidents";
 import {
   formatBitrate,
   formatDuration,
@@ -13,7 +20,6 @@ import {
   formatPct,
   incidentMetricKey,
   incidentRuleKey,
-  shouldShowRemnawaveUsers,
   stateTone,
 } from "./monitoringFormat";
 
@@ -38,8 +44,6 @@ type MonitoredServer = {
   exporter_auth_type: "none" | "basic";
   exporter_username: string;
   hasExporterPassword: boolean;
-  remnawave_integration_id: number | null;
-  remnawave_node_uuid: string | null;
   thresholds_json: string | null;
   current?: CurrentCheck | null;
 };
@@ -47,7 +51,6 @@ type MonitoredServer = {
 type MonitoringSummary = {
   totals: { all: number; online: number; offline: number; stale?: number; noData?: number; vpn: number; gateway: number; infra: number; public: number; adminOnly: number };
   incidents: { critical: number; warning: number; total: number };
-  globalOnlineUsers: number | null;
 };
 
 type CollectorState = {
@@ -57,28 +60,7 @@ type CollectorState = {
   serversAttempted: number;
   serversSucceeded: number;
   serversFailed: number;
-  remnawaveAttempted: number;
-  remnawaveSucceeded: number;
-  remnawaveFailed: number;
 };
-
-type Integration = {
-  id: number;
-  name: string;
-  type: "remnawave" | "node_exporter";
-  enabled: boolean;
-  baseUrl: string;
-  metricsUrl: string;
-  apiUrl: string;
-  username: string;
-  hasPassword: boolean;
-  hasApiToken: boolean;
-  lastCheckAt: string | null;
-  lastCheckStatus: string | null;
-  lastErrorCode: string | null;
-};
-
-type RemnawaveNode = { nodeUuid: string; nodeName: string | null; onlineUsers: number | null; up: boolean | null };
 
 type CurrentCheck = {
   id: number;
@@ -100,14 +82,14 @@ type CurrentCheck = {
   rxMbps: number | null;
   txMbps: number | null;
   uplinkLoadPct: number | null;
+  uplinkCapacityBps: number | null;
+  uplinkCapacitySource: "configured" | "detected" | "unknown";
   rxErrorsDelta: number | null;
   txErrorsDelta: number | null;
   rxDropsDelta: number | null;
   txDropsDelta: number | null;
   fileDescriptors: number | null;
   sockets: number | null;
-  remnawaveOnline: boolean | null;
-  onlineUsers: number | null;
   exporterStatus: "ok" | "error" | "disabled";
   lastError: string | null;
   checkedAt: string | null;
@@ -118,15 +100,10 @@ type CurrentCheck = {
   lastSuccessAt: number | null;
   memoryTotalBytes: number | null;
   memoryAvailableBytes: number | null;
-  remnawaveStatus: "ok" | "error" | "unknown" | "disabled";
-  uplinkCapacityBps: number | null;
-  uplinkCapacitySource: "configured" | "detected" | "unknown";
 };
 
 type Incident = IncidentDto;
-
 type HistoryPoint = GraphPoint;
-
 type Thresholds = Record<string, number>;
 
 const EMPTY_FORM = {
@@ -144,24 +121,10 @@ const EMPTY_FORM = {
   exporterAuthType: "none" as "none" | "basic",
   exporterUsername: "",
   exporterPassword: "",
-  remnawaveIntegrationId: "",
-  remnawaveNodeUuid: "",
   overrideThresholds: false,
   overrideCpu: "",
   overrideMemory: "",
   overrideDisk: "",
-};
-
-const EMPTY_INTEGRATION = {
-  name: "",
-  type: "remnawave" as "remnawave" | "node_exporter",
-  metricsUrl: "",
-  baseUrl: "",
-  apiUrl: "",
-  username: "",
-  password: "",
-  apiToken: "",
-  enabled: true,
 };
 
 const COUNTRY_CODES = `AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ
@@ -204,9 +167,9 @@ function fmtBytes(v: number | null) {
   return `${n.toFixed(n < 10 && i > 0 ? 1 : 0)} ${units[i]}`;
 }
 
-function Gauge({ label, value, tone = "ok" }: { label: string; value: number | null; tone?: "ok" | "warn" | "bad" }) {
+function Gauge({ label, value }: { label: string; value: number | null }) {
   const pct = value == null ? 0 : Math.min(100, Math.max(0, value));
-  const cls = value == null ? "is-empty" : value >= 90 ? "is-bad" : value >= 75 ? "is-warn" : tone === "warn" ? "is-warn" : "is-ok";
+  const cls = value == null ? "is-empty" : value >= 90 ? "is-bad" : value >= 75 ? "is-warn" : "is-ok";
   return (
     <div className="mon-gauge">
       <div className="mon-gauge__head">
@@ -222,16 +185,10 @@ export function ServerStatusSection() {
   const { t, locale } = useI18n();
   const [items, setItems] = useState<MonitoredServer[]>([]);
   const [summary, setSummary] = useState<MonitoringSummary | null>(null);
-  const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [settings, setSettings] = useState<Thresholds | null>(null);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
-  const [integrationForm, setIntegrationForm] = useState({ ...EMPTY_INTEGRATION });
-  const [editingIntegrationId, setEditingIntegrationId] = useState<number | null>(null);
-  const [integrationOpen, setIntegrationOpen] = useState(false);
-  const [remnawaveNodes, setRemnawaveNodes] = useState<RemnawaveNode[]>([]);
-  const [probeDiag, setProbeDiag] = useState<Record<number, { metricFamilies: string[]; labelKeys: string[]; nodeUuidCount: number } | null>>({});
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -245,7 +202,6 @@ export function ServerStatusSection() {
   const [historyRange, setHistoryRange] = useState<"1h" | "24h" | "7d">("1h");
   const [history, setHistory] = useState<HistoryPoint[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
-  // Priority 1 UX: global incidents + graph focus.
   const [actionAnchor, setActionAnchor] = useState<HTMLElement | null>(null);
   const [actionServerId, setActionServerId] = useState<number | null>(null);
   const [focusMetric, setFocusMetric] = useState<string | null>(null);
@@ -258,6 +214,11 @@ export function ServerStatusSection() {
   const [incidentRange, setIncidentRange] = useState<IncidentRange>("24h");
   const [detailMeta, setDetailMeta] = useState<{ effectiveThresholds: Record<string, number>; uplinkMbps: number | null; uplinkCapacityBps: number | null; uplinkCapacitySource: string } | null>(null);
   const [historyIncidents, setHistoryIncidents] = useState<GraphIncident[]>([]);
+
+  const countryOptionsList = useMemo(
+    () => COUNTRY_CODES.map((code) => ({ code })).sort((a, b) => a.code.localeCompare(b.code, locale)),
+    [locale],
+  );
 
   async function loadIncidents(opts: { range?: IncidentRange } = {}) {
     const range = opts.range ?? incidentRange;
@@ -278,10 +239,6 @@ export function ServerStatusSection() {
     }
   }
 
-  const countryOptionsList = useMemo(    () => COUNTRY_CODES.map((code) => ({ code })).sort((a, b) => a.code.localeCompare(b.code, locale)),
-    [locale],
-  );
-
   /**
    * Stale-while-revalidate loader. The authoritative list/summary are replaced
    * atomically only on success; a partial or failed revalidation keeps the
@@ -292,22 +249,20 @@ export function ServerStatusSection() {
     setRefreshing(true);
     setError(null);
 
-    const [serversR, sumR, intsR, setsR] = await Promise.allSettled([
+    const [serversR, sumR, setsR] = await Promise.allSettled([
       apiFetch<{ ok: true; items: MonitoredServer[] }>("/admin/monitored-servers", { method: "GET" }),
       apiFetch<{ ok: true } & MonitoringSummary>("/admin/monitoring/summary", { method: "GET" }),
-      apiFetch<{ ok: true; items: Integration[] }>("/admin/monitoring/integrations", { method: "GET" }),
       apiFetch<{ ok: true; thresholds: Thresholds }>("/admin/monitoring/settings", { method: "GET" }),
     ]);
 
     if (serversR.status === "fulfilled") setItems(serversR.value.items ?? []);
     if (sumR.status === "fulfilled") {
-      setSummary({ totals: sumR.value.totals, incidents: sumR.value.incidents, globalOnlineUsers: sumR.value.globalOnlineUsers });
+      setSummary({ totals: sumR.value.totals, incidents: sumR.value.incidents });
       setCollector((sumR.value as any).collector ?? null);
     }
-    if (intsR.status === "fulfilled") setIntegrations(intsR.value.items ?? []);
     if (setsR.status === "fulfilled") setSettings(setsR.value.thresholds ?? null);
 
-    if ([serversR, sumR, intsR, setsR].some((r) => r.status === "rejected")) {
+    if ([serversR, sumR, setsR].some((r) => r.status === "rejected")) {
       setError(t("admin.servers.err.load"));
     }
 
@@ -334,8 +289,6 @@ export function ServerStatusSection() {
 
   useEffect(() => { void loadAll(); }, []);
 
-  // Light polling: refetch the persisted state every 60s (cheap DB reads).
-  // Never triggers a scrape; the background collector owns that.
   useEffect(() => {
     const timer = window.setInterval(() => void loadAll({ silent: true }), 60_000);
     const onVisibility = () => { if (document.visibilityState === "visible") void loadAll({ silent: true }); };
@@ -351,7 +304,6 @@ export function ServerStatusSection() {
   function startCreate() {
     setEditingId(null);
     setForm({ ...EMPTY_FORM });
-    setRemnawaveNodes([]);
     setEditorOpen(true);
   }
 
@@ -374,27 +326,12 @@ export function ServerStatusSection() {
       exporterAuthType: item.exporter_auth_type,
       exporterUsername: item.exporter_username || "",
       exporterPassword: "",
-      remnawaveIntegrationId: item.remnawave_integration_id ? String(item.remnawave_integration_id) : "",
-      remnawaveNodeUuid: item.remnawave_node_uuid || "",
       overrideThresholds: Boolean(item.thresholds_json),
       overrideCpu: override.cpuPct != null ? String(override.cpuPct) : "",
       overrideMemory: override.memoryWarnPct != null ? String(override.memoryWarnPct) : "",
       overrideDisk: override.diskWarnPct != null ? String(override.diskWarnPct) : "",
     });
-    setRemnawaveNodes([]);
     setEditorOpen(true);
-  }
-
-  async function loadRemnawaveNodes(integrationId: string) {
-    setRemnawaveNodes([]);
-    const id = Number(integrationId);
-    if (!id) return;
-    try {
-      const r = await apiFetch<{ ok: true; nodes: RemnawaveNode[] }>(`/admin/monitoring/integrations/${id}/nodes`, { method: "GET" });
-      setRemnawaveNodes(r.nodes ?? []);
-    } catch {
-      setRemnawaveNodes([]);
-    }
   }
 
   async function save() {
@@ -424,8 +361,6 @@ export function ServerStatusSection() {
       nodeExporterEnabled: form.nodeExporterEnabled,
       exporterAuthType: form.exporterAuthType,
       exporterUsername: form.exporterUsername,
-      remnawaveIntegrationId: form.remnawaveIntegrationId ? Number(form.remnawaveIntegrationId) : null,
-      remnawaveNodeUuid: form.remnawaveNodeUuid || null,
       thresholds: form.overrideThresholds ? override : null,
     };
     if (form.exporterPassword) body.exporterPassword = form.exporterPassword;
@@ -462,78 +397,6 @@ export function ServerStatusSection() {
       setError(e?.message || t("admin.servers.err.load"));
     }
   }
-
-  /* ── Integrations ──────────────────────────────────────────────────────── */
-
-  function startIntegrationCreate() {
-    setEditingIntegrationId(null);
-    setIntegrationForm({ ...EMPTY_INTEGRATION });
-    setIntegrationOpen(true);
-  }
-
-  function editIntegration(item: Integration) {
-    setEditingIntegrationId(item.id);
-    setIntegrationForm({
-      name: item.name,
-      type: item.type,
-      metricsUrl: item.metricsUrl,
-      baseUrl: item.baseUrl,
-      apiUrl: item.apiUrl,
-      username: item.username,
-      password: "",
-      apiToken: "",
-      enabled: item.enabled,
-    });
-    setIntegrationOpen(true);
-  }
-
-  async function saveIntegration() {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    setNotice(null);
-    const body: Record<string, unknown> = { ...integrationForm };
-    if (!integrationForm.password) delete body.password;
-    if (!integrationForm.apiToken) delete body.apiToken;
-    try {
-      if (editingIntegrationId) await apiFetch(`/admin/monitoring/integrations/${editingIntegrationId}`, { method: "PUT", body });
-      else await apiFetch("/admin/monitoring/integrations", { method: "POST", body });
-      setIntegrationOpen(false);
-      await loadAll({ silent: true });
-    } catch (e: any) {
-      setError(e?.message || t("admin.monitoring.integrations.err.save"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function removeIntegration(id: number) {
-    if (!window.confirm(t("admin.monitoring.integrations.confirm.delete"))) return;
-    await apiFetch(`/admin/monitoring/integrations/${id}`, { method: "DELETE" });
-    await loadAll({ silent: true });
-  }
-
-  async function testIntegration(id: number) {
-    setNotice(null);
-    setError(null);
-    try {
-      const r = await apiFetch<{ ok: true; probe: { reachable: boolean; nodeMetricsFound: boolean; onlineUsersMetricPresent: boolean; errorCode: string | null; nodeCount: number; diagnostics?: { metricFamilies: string[]; labelKeys: string[]; nodeUuidCount: number } } }>(
-        `/admin/monitoring/integrations/${id}/test`,
-        { method: "POST" },
-      );
-      const p = r.probe;
-      setProbeDiag((prev) => ({ ...prev, [id]: p.diagnostics ?? null }));
-      if (p.reachable && p.onlineUsersMetricPresent) {
-        setNotice(t("admin.monitoring.integrations.test.ok", { count: p.nodeCount }));
-      } else {
-        setNotice(t("admin.monitoring.integrations.test.fail", { code: p.errorCode || (p.nodeMetricsFound ? "metric_missing" : "no_nodes") }));
-      }
-    } catch (e: any) {
-      setError(e?.message || t("admin.monitoring.integrations.err.test"));
-    }
-  }
-
-  /* ── Settings ─────────────────────────────────────────────────────────── */
 
   async function saveSettings() {
     if (!settings || busy) return;
@@ -608,7 +471,6 @@ export function ServerStatusSection() {
     await loadDetail(expandedId, range);
   }
 
-  /** Incident -> server card -> relevant graph. Explicit user action. */
   function openIncident(inc: Incident) {
     if (!items.some((i) => i.id === inc.serverId)) {
       setNotice(t("admin.monitoring.incidents.server_deleted"));
@@ -631,20 +493,8 @@ export function ServerStatusSection() {
     });
   }
 
-  /* ── Grouping / rendering ──────────────────────────────────────────────── */
-
-  const groups: { kind: ServerKind; items: MonitoredServer[] }[] = [
-    { kind: "vpn", items: items.filter((i) => i.kind === "vpn") },
-    { kind: "gateway", items: items.filter((i) => i.kind === "gateway") },
-    { kind: "infra", items: items.filter((i) => i.kind === "infra") },
-  ];
-
-  function stateLabel(online: boolean | null | undefined) {    if (online === true) return t("admin.monitoring.state.online");
-    if (online === false) return t("admin.monitoring.state.offline");
-    return t("admin.monitoring.state.unknown");
-  }
-
-  function currentStateLabel(state: CurrentCheck["state"] | undefined) {    if (state === "fresh") return t("admin.monitoring.state.fresh");
+  function currentStateLabel(state: CurrentCheck["state"] | undefined) {
+    if (state === "fresh") return t("admin.monitoring.state.fresh");
     if (state === "stale") return t("admin.monitoring.state.stale");
     if (state === "offline") return t("admin.monitoring.state.offline");
     return t("admin.monitoring.state.no_data");
@@ -679,8 +529,15 @@ export function ServerStatusSection() {
     });
   }
 
+  const groups: { kind: ServerKind; items: MonitoredServer[] }[] = [
+    { kind: "vpn", items: items.filter((i) => i.kind === "vpn") },
+    { kind: "gateway", items: items.filter((i) => i.kind === "gateway") },
+    { kind: "infra", items: items.filter((i) => i.kind === "infra") },
+  ];
+
   return (
-    <div className="admin-stack">      <div className="card">
+    <div className="admin-stack">
+      <div className="card">
         <div className="card__body">
           <AdminSectionHeader
             icon={ADMIN_SECTION_ICON.serverStatus}
@@ -730,20 +587,10 @@ export function ServerStatusSection() {
                   <span className="mon-summary__value">{summary.incidents.total}</span>
                   <span className="mon-summary__label">{t("admin.monitoring.summary.incidents")}</span>
                 </button>
-                <button
-                  type="button"
-                  className="mon-summary__stat is-clickable"
-                  onClick={() => focusIncidents("warning")}
-                >
+                <button type="button" className="mon-summary__stat is-clickable" onClick={() => focusIncidents("warning")}>
                   <span className="mon-summary__value">{summary.incidents.warning}</span>
                   <span className="mon-summary__label">{t("admin.monitoring.summary.warnings")}</span>
                 </button>
-                {summary.globalOnlineUsers != null && (
-                  <div className="mon-summary__stat">
-                    <span className="mon-summary__value">{summary.globalOnlineUsers}</span>
-                    <span className="mon-summary__label">{t("admin.monitoring.summary.global_users")}</span>
-                  </div>
-                )}
               </div>
               {collector && (
                 <div className="mon-collector admin-gap-top-sm">
@@ -753,7 +600,6 @@ export function ServerStatusSection() {
                     {collector.lastCycleAt ? t("admin.monitoring.collector.last", { value: fmtRelative(new Date(collector.lastCycleAt * 1000).toISOString(), t) }) : "—"}
                     {collector.lastCycleDurationMs != null ? ` · ${t("admin.monitoring.collector.duration", { value: collector.lastCycleDurationMs })}` : ""}
                     {` · ${t("admin.monitoring.collector.exporters", { ok: collector.serversSucceeded, total: collector.serversAttempted })}`}
-                    {` · ${t("admin.monitoring.collector.remnawave", { ok: collector.remnawaveSucceeded, total: collector.remnawaveAttempted })}`}
                   </span>
                 </div>
               )}
@@ -784,11 +630,7 @@ export function ServerStatusSection() {
               {group.items.length === 0 && <div className="pre">{t("admin.servers.empty")}</div>}
               {group.items.map((item) => {
                 const expanded = expandedId === item.id;
-                // Compact rows use the current snapshot delivered with the admin
-                // list; expanding only enriches with incidents/history and must
-                // never be required to see CPU/RAM/Disk/load/network.
                 const current = expanded ? detail?.current ?? item.current ?? null : item.current ?? null;
-                const users = current?.onlineUsers;
                 const rowState = current?.state === "offline"
                   ? "is-offline"
                   : current?.state === "stale"
@@ -814,9 +656,6 @@ export function ServerStatusSection() {
                           </span>
                           {Number(item.affects_public_health) === 1 && item.visibility === "admin_only" && (
                             <span className="chip chip--soft">{t("admin.monitoring.badge.affects_health")}</span>
-                          )}
-                          {shouldShowRemnawaveUsers(Boolean(item.remnawave_node_uuid), users) && (
-                            <span className="chip chip--ok">{t("admin.monitoring.badge.connections", { count: users ?? 0 })}</span>
                           )}
                         </div>
                       </div>
@@ -871,14 +710,14 @@ export function ServerStatusSection() {
                             <div className="mon-detail__section">
                               <div className="mon-detail__heading">{t("admin.monitoring.section.system")}</div>
                               <div className="mon-kv">
-                                <span>{t("admin.monitoring.metric.cpu")}</span><b>{current.cpuLoadPct ?? "—"}%</b>
-                                <span>{t("admin.monitoring.metric.iowait")}</span><b>{current.iowaitPct ?? "—"}%</b>
+                                <span>{t("admin.monitoring.metric.cpu")}</span><b>{formatPct(current.cpuLoadPct)}</b>
+                                <span>{t("admin.monitoring.metric.iowait")}</span><b>{formatPct(current.iowaitPct)}</b>
                                 <span>{t("admin.monitoring.metric.load")}</span><b>{`${current.load1 ?? "—"} / ${current.load5 ?? "—"} / ${current.load15 ?? "—"}`}</b>
-                                <span>{t("admin.monitoring.metric.ram")}</span><b>{current.memoryLoadPct ?? "—"}%</b>
-                                <span>{t("admin.monitoring.metric.swap")}</span><b>{current.swapLoadPct ?? "—"}%</b>
-                                <span>{t("admin.monitoring.metric.disk")}</span><b>{current.diskLoadPct ?? "—"}%</b>
+                                <span>{t("admin.monitoring.metric.ram")}</span><b>{formatPct(current.memoryLoadPct)}</b>
+                                <span>{t("admin.monitoring.metric.swap")}</span><b>{formatPct(current.swapLoadPct)}</b>
+                                <span>{t("admin.monitoring.metric.disk")}</span><b>{formatPct(current.diskLoadPct)}</b>
                                 <span>{t("admin.monitoring.metric.disk_free")}</span><b>{fmtBytes(current.diskFreeBytes)}</b>
-                                <span>{t("admin.monitoring.metric.inode")}</span><b>{current.inodeLoadPct ?? "—"}%</b>
+                                <span>{t("admin.monitoring.metric.inode")}</span><b>{formatPct(current.inodeLoadPct)}</b>
                                 <span>{t("admin.monitoring.metric.uptime")}</span><b>{current.uptime ?? "—"}</b>
                                 <span>{t("admin.monitoring.metric.cpu_cores")}</span><b>{current.cpuCores ?? "—"}</b>
                               </div>
@@ -896,15 +735,6 @@ export function ServerStatusSection() {
                                 <span>{t("admin.monitoring.metric.errors")}</span><b>{`${current.rxErrorsDelta ?? "—"} / ${current.txErrorsDelta ?? "—"}`}</b>
                                 <span>{t("admin.monitoring.metric.fd")}</span><b>{current.fileDescriptors ?? "—"}</b>
                                 <span>{t("admin.monitoring.metric.sockets")}</span><b>{current.sockets ?? "—"}</b>
-                              </div>
-                            </div>
-
-                            <div className="mon-detail__section">
-                              <div className="mon-detail__heading">{t("admin.monitoring.section.remnawave")}</div>
-                              <div className="mon-kv">
-                                <span>{t("admin.monitoring.remnawave.state")}</span><b>{current.remnawaveOnline == null ? t("admin.monitoring.remnawave.not_bound") : stateLabel(current.remnawaveOnline)}</b>
-                                <span>{t("admin.monitoring.remnawave.users")}</span><b>{current.onlineUsers ?? "—"}</b>
-                                <span>{t("admin.monitoring.remnawave.node_uuid")}</span><b>{item.remnawave_node_uuid || "—"}</b>
                               </div>
                             </div>
 
@@ -1022,53 +852,6 @@ export function ServerStatusSection() {
         </div>
       </div>
 
-      {/* Integrations */}
-      <div className="card">
-        <div className="card__body">
-          <AdminSectionHeader
-            icon="integration"
-            kicker={t("admin.tab.serverStatus")}
-            title={t("admin.monitoring.integrations.title")}
-            subtitle={t("admin.monitoring.integrations.subtitle")}
-            actions={<button className="btn btn--primary" type="button" onClick={startIntegrationCreate}>{t("admin.monitoring.integrations.new")}</button>}
-          />
-          <div className="admin-serverStatus-list admin-gap-top-md">
-            {integrations.map((item) => (
-              <div className="admin-serverStatus-item" key={item.id}>
-                <div>
-                  <div className="admin-serverStatus-title">
-                    <span className={`serverStatus-dot serverStatus-dot--${item.lastCheckStatus === "error" ? "offline" : "online"}`} />
-                    {item.name}
-                  </div>
-                  <div className="list__sub">{item.type} · {item.metricsUrl || item.baseUrl}</div>
-                  <div className="list__sub">
-                    {item.hasPassword ? t("admin.monitoring.integrations.secret.set") : t("admin.monitoring.integrations.secret.none")}
-                    {" · "}
-                    {t("admin.monitoring.integrations.last_check", { value: item.lastCheckAt || "—" })}
-                    {item.lastErrorCode ? ` · ${item.lastErrorCode}` : ""}
-                  </div>
-                  {probeDiag[item.id] && (
-                    <div className="list__sub">
-                      {t("admin.monitoring.integrations.diag.metrics")}: {probeDiag[item.id]!.metricFamilies.join(", ") || "—"}
-                      <br />
-                      {t("admin.monitoring.integrations.diag.labels")}: {probeDiag[item.id]!.labelKeys.join(", ") || "—"}
-                      <br />
-                      {t("admin.monitoring.integrations.diag.uuid")}: {probeDiag[item.id]!.nodeUuidCount}
-                    </div>
-                  )}
-                </div>
-                <div className="actions">
-                  <button className="btn btn--soft" type="button" onClick={() => void testIntegration(item.id)}>{t("admin.monitoring.integrations.test")}</button>
-                  <button className="btn btn--soft" type="button" onClick={() => editIntegration(item)}>{t("common.edit")}</button>
-                  <button className="btn btn--danger" type="button" onClick={() => void removeIntegration(item.id)}>{t("common.delete")}</button>
-                </div>
-              </div>
-            ))}
-            {integrations.length === 0 && <div className="pre">{t("admin.monitoring.integrations.empty")}</div>}
-          </div>
-        </div>
-      </div>
-
       {/* Global thresholds */}
       <div className="card">
         <div className="card__body">
@@ -1181,28 +964,6 @@ export function ServerStatusSection() {
               <span className="field__label">{t("admin.servers.field.uplink")}</span>
               <input className="input" type="number" value={form.uplinkMbps} onChange={(e) => setForm((p) => ({ ...p, uplinkMbps: e.target.value }))} />
             </label>
-            <label className="field">
-              <span className="field__label">{t("admin.servers.field.remnawave_integration")}</span>
-              <select
-                className="input"
-                value={form.remnawaveIntegrationId}
-                onChange={(e) => { setForm((p) => ({ ...p, remnawaveIntegrationId: e.target.value, remnawaveNodeUuid: "" })); void loadRemnawaveNodes(e.target.value); }}
-              >
-                <option value="">{t("admin.servers.field.remnawave_none")}</option>
-                {integrations.filter((i) => i.type === "remnawave").map((i) => <option key={i.id} value={String(i.id)}>{i.name}</option>)}
-              </select>
-            </label>
-            <label className="field">
-              <span className="field__label">{t("admin.servers.field.remnawave_uuid")}</span>
-              {remnawaveNodes.length > 0 ? (
-                <select className="input" value={form.remnawaveNodeUuid} onChange={(e) => setForm((p) => ({ ...p, remnawaveNodeUuid: e.target.value }))}>
-                  <option value="">{t("admin.servers.field.remnawave_none")}</option>
-                  {remnawaveNodes.map((n) => <option key={n.nodeUuid} value={n.nodeUuid}>{`${n.nodeName || n.nodeUuid} · ${n.nodeUuid}`}</option>)}
-                </select>
-              ) : (
-                <input className="input" value={form.remnawaveNodeUuid} onChange={(e) => setForm((p) => ({ ...p, remnawaveNodeUuid: e.target.value }))} />
-              )}
-            </label>
             <label className="admin-serverStatus-check">
               <input type="checkbox" checked={form.active} onChange={(e) => setForm((p) => ({ ...p, active: e.target.checked }))} />
               {t("admin.servers.field.active")}
@@ -1222,37 +983,6 @@ export function ServerStatusSection() {
           <div className="actions actions--2 admin-gap-top-sm">
             <button className="btn btn--primary" type="button" onClick={() => void save()} disabled={busy || !form.host.trim()}>{editingId ? t("common.save") : t("admin.servers.action.add")}</button>
             <button className="btn" type="button" onClick={() => setEditorOpen(false)} disabled={busy}>{t("common.cancel")}</button>
-          </div>
-        </ModalShell>
-      )}
-
-      {/* Integration editor */}
-      {integrationOpen && (
-        <ModalShell
-          kicker={t("admin.monitoring.integrations.title")}
-          title={editingIntegrationId ? t("admin.monitoring.integrations.edit") : t("admin.monitoring.integrations.new")}
-          onClose={() => setIntegrationOpen(false)}
-        >
-          <div className="admin-serverStatus-form">
-            <label className="field"><span className="field__label">{t("admin.monitoring.integrations.field.name")}</span><input className="input" value={integrationForm.name} onChange={(e) => setIntegrationForm((p) => ({ ...p, name: e.target.value }))} /></label>
-            <label className="field">
-              <span className="field__label">{t("admin.monitoring.integrations.field.type")}</span>
-              <select className="input" value={integrationForm.type} onChange={(e) => setIntegrationForm((p) => ({ ...p, type: e.target.value === "node_exporter" ? "node_exporter" : "remnawave" }))}>
-                <option value="remnawave">{t("admin.monitoring.integrations.type.remnawave")}</option>
-                <option value="node_exporter">{t("admin.monitoring.integrations.type.node_exporter")}</option>
-              </select>
-            </label>
-            <label className="field admin-serverStatus-fieldWide"><span className="field__label">{t("admin.monitoring.integrations.field.metrics_url")}</span><input className="input" value={integrationForm.metricsUrl} onChange={(e) => setIntegrationForm((p) => ({ ...p, metricsUrl: e.target.value }))} /></label>
-            <label className="field admin-serverStatus-fieldWide"><span className="field__label">{t("admin.monitoring.integrations.field.base_url")}</span><input className="input" value={integrationForm.baseUrl} onChange={(e) => setIntegrationForm((p) => ({ ...p, baseUrl: e.target.value }))} /></label>
-            <label className="field admin-serverStatus-fieldWide"><span className="field__label">{t("admin.monitoring.integrations.field.api_url")}</span><input className="input" value={integrationForm.apiUrl} onChange={(e) => setIntegrationForm((p) => ({ ...p, apiUrl: e.target.value }))} /></label>
-            <label className="field"><span className="field__label">{t("admin.monitoring.integrations.field.username")}</span><input className="input" value={integrationForm.username} onChange={(e) => setIntegrationForm((p) => ({ ...p, username: e.target.value }))} /></label>
-            <label className="field"><span className="field__label">{t("admin.monitoring.integrations.field.password")}</span><input className="input" type="password" value={integrationForm.password} onChange={(e) => setIntegrationForm((p) => ({ ...p, password: e.target.value }))} placeholder={t("admin.monitoring.integrations.field.password_keep")} /></label>
-            <label className="field"><span className="field__label">{t("admin.monitoring.integrations.field.api_token")}</span><input className="input" type="password" value={integrationForm.apiToken} onChange={(e) => setIntegrationForm((p) => ({ ...p, apiToken: e.target.value }))} placeholder={t("admin.monitoring.integrations.field.token_keep")} /></label>
-            <label className="admin-serverStatus-check"><input type="checkbox" checked={integrationForm.enabled} onChange={(e) => setIntegrationForm((p) => ({ ...p, enabled: e.target.checked }))} />{t("admin.monitoring.integrations.field.enabled")}</label>
-          </div>
-          <div className="actions actions--2 admin-gap-top-sm">
-            <button className="btn btn--primary" type="button" onClick={() => void saveIntegration()} disabled={busy}>{t("common.save")}</button>
-            <button className="btn" type="button" onClick={() => setIntegrationOpen(false)} disabled={busy}>{t("common.cancel")}</button>
           </div>
         </ModalShell>
       )}

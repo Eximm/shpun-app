@@ -15,7 +15,6 @@ const { serverStatusRoutes } = await import("./routes.js");
 const { setServerStatusAdminChecker } = await import("./adminGuard.js");
 const { createMonitoredServer, listPublicServers, listHealthServers } = await import("./repo.js");
 const { aggregateHealthStatus } = await import("./health.js");
-const { createIntegration } = await import("./integrationsRepo.js");
 const { putSession } = await import("../../shared/session/sessionStore.js");
 
 putSession("sid-user", { shmSessionId: "shm-user", shmUserId: 301, login: "user301", createdAt: Date.now() });
@@ -133,53 +132,11 @@ test("admin monitored-servers includes all and never returns secrets", async () 
 test("non-admin cannot reach monitoring admin endpoints", async () => {
   for (const url of [
     "/api/admin/monitoring/summary",
-    "/api/admin/monitoring/integrations",
     "/api/admin/monitoring/settings",
     "/api/admin/monitoring/incidents",
   ]) {
     const res = await app.inject({ method: "GET", url, headers: headers("sid-user") });
     assert.equal(res.statusCode, 403, `${url} must be admin-only`);
-  }
-});
-
-test("integration secrets never leave the API", async () => {
-  const created = createIntegration({
-    name: "Remnawave Prod",
-    type: "remnawave",
-    metricsUrl: "https://rw.example/metrics",
-    username: "metrics",
-    password: "integration-plaintext-secret",
-  });
-  assert.equal(created.ok, true);
-
-  const res = await app.inject({ method: "GET", url: "/api/admin/monitoring/integrations", headers: headers("sid-admin") });
-  assert.equal(res.statusCode, 200);
-  const serialized = JSON.stringify(res.json());
-  assert.equal(serialized.includes("integration-plaintext-secret"), false);
-  const item = res.json().items.find((i: any) => i.name === "Remnawave Prod");
-  assert.equal(item.hasPassword, true);
-});
-
-test("a wrong master key surfaces as credential_decrypt_failed, not a crash or secret", async () => {
-  const created = createIntegration({
-    name: "RotatedKey",
-    type: "remnawave",
-    metricsUrl: "https://rotated.example/metrics",
-    username: "metrics",
-    password: "rotated-secret-value",
-  });
-  assert.equal(created.ok, true);
-  const id = created.ok ? created.item.id : 0;
-
-  const prev = process.env.SHPUN_CREDENTIALS_MASTER_KEY;
-  process.env.SHPUN_CREDENTIALS_MASTER_KEY = "some-other-master-key";
-  try {
-    const res = await app.inject({ method: "POST", url: `/api/admin/monitoring/integrations/${id}/test`, headers: headers("sid-admin") });
-    assert.equal(res.statusCode, 200);
-    assert.equal(res.json().probe.errorCode, "credential_decrypt_failed");
-    assert.equal(JSON.stringify(res.json()).includes("rotated-secret-value"), false);
-  } finally {
-    process.env.SHPUN_CREDENTIALS_MASTER_KEY = prev;
   }
 });
 

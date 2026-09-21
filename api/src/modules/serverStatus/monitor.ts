@@ -5,8 +5,6 @@
 // Responsibilities:
 //   - one 60s collection cycle (configurable) guarded by a SQLite lease;
 //   - Node Exporter scrape per enabled server (bounded concurrency + timeout);
-//   - Remnawave /metrics fetched once per integration per cycle and distributed
-//     to servers by stable node UUID;
 //   - normalized current snapshot + bounded history writes;
 //   - incident/anomaly evaluation with hysteresis and confirmation;
 //   - failure isolation: one bad exporter never blocks the cycle.
@@ -16,15 +14,7 @@
 
 import type { MonitoredServerRow } from "./repo.js";
 import { getExporterCredentials, listMonitoredServers } from "./repo.js";
-import {
-  parseNodeExporter,
-  rawCpuTotals,
-  toPreviousState,
-  type NodeExporterPrevious,
-  type NodeExporterSample,
-} from "./nodeExporter.js";
-import { parseRemnawaveMetrics, type RemnawaveNodeMetric } from "./remnawaveMetrics.js";
-import { getIntegration, getIntegrationCredentials, listIntegrations, recordIntegrationCheck } from "./integrationsRepo.js";
+import { parseNodeExporter, rawCpuTotals, toPreviousState, type NodeExporterPrevious, type NodeExporterSample } from "./nodeExporter.js";
 import { getGlobalThresholds, resolveThresholds, type MonitoringThresholds } from "./settingsRepo.js";
 import { insertSample, recentSamples, runDownsampling, runRetention, type MonitoringSample } from "./historyRepo.js";
 import { evaluateServerIncidents, type IncidentEvent, type RuleEvaluation } from "./incidents.js";
@@ -79,10 +69,6 @@ export type ServerCheckResult = {
   fileDescriptors: number | null;
   sockets: number | null;
   rebootDetected: boolean;
-  remnawaveOnline: boolean | null;
-  onlineUsers: number | null;
-  remnawaveIntegrationId: number | null;
-  remnawaveNodeUuid: string | null;
   exporterStatus: "ok" | "error" | "disabled";
   lastError: string | null;
   checkedAt: string | null;
@@ -94,18 +80,8 @@ export type ServerCheckResult = {
   lastSuccessAt: number | null;
   memoryTotalBytes: number | null;
   memoryAvailableBytes: number | null;
-  remnawaveStatus: "ok" | "error" | "unknown" | "disabled";
   uplinkCapacityBps: number | null;
   uplinkCapacitySource: "configured" | "detected" | "unknown";
-};
-
-export type RemnawaveGlobalState = {
-  integrationId: number;
-  status: "ok" | "error";
-  errorCode: string | null;
-  checkedAt: string | null;
-  globalOnlineUsers: number | null;
-  nodeCount: number;
 };
 
 const STATUS_REFRESH_MS_FALLBACK = 60_000;
@@ -115,7 +91,6 @@ const DEFAULT_TIMEOUT_MS = 4_000;
 
 const prevCache = new Map<number, { ts: number; node: NodeExporterPrevious; uptime: number | null; bootTime: number | null }>();
 const sampleBuffers = new Map<number, MonitoringSample[]>();
-const remnawaveCache = new Map<number, { ts: number; nodes: Map<string, RemnawaveNodeMetric>; global: RemnawaveGlobalState }>();
 
 let refreshInFlight: Promise<{ started: boolean; reason: string }> | null = null;
 let collectorTimer: RestartableTimer | null = null;
@@ -130,10 +105,6 @@ let incidentHandler: MonitoringIncidentHandler | null = null;
 
 export function setMonitoringIncidentHandler(handler: MonitoringIncidentHandler | null) {
   incidentHandler = handler;
-}
-
-export function getRemnawaveGlobalStates(): RemnawaveGlobalState[] {
-  return [...remnawaveCache.values()].map((v) => v.global).sort((a, b) => a.integrationId - b.integrationId);
 }
 
 function delay(ms: number) {
@@ -217,10 +188,6 @@ function emptyResult(row: MonitoredServerRow): ServerCheckResult {
     fileDescriptors: null,
     sockets: null,
     rebootDetected: false,
-    remnawaveOnline: null,
-    onlineUsers: null,
-    remnawaveIntegrationId: row.remnawave_integration_id,
-    remnawaveNodeUuid: row.remnawave_node_uuid,
     exporterStatus: "disabled",
     lastError: null,
     checkedAt: null,
@@ -231,7 +198,6 @@ function emptyResult(row: MonitoredServerRow): ServerCheckResult {
     lastSuccessAt: null,
     memoryTotalBytes: null,
     memoryAvailableBytes: null,
-    remnawaveStatus: "disabled",
     uplinkCapacityBps: null,
     uplinkCapacitySource: "unknown",
   };
@@ -269,10 +235,6 @@ function currentToCheck(row: MonitoredServerRow, rec: CurrentRecord | null): Ser
     fileDescriptors: rec.fileDescriptors,
     sockets: rec.sockets,
     rebootDetected: rec.rebootDetected,
-    remnawaveOnline: rec.remnawaveStatus === "ok" ? true : rec.remnawaveStatus === "error" ? false : null,
-    onlineUsers: rec.onlineUsers,
-    remnawaveIntegrationId: row.remnawave_integration_id,
-    remnawaveNodeUuid: row.remnawave_node_uuid,
     exporterStatus: rec.nodeExporterStatus === "disabled" ? "disabled" : rec.nodeExporterStatus === "ok" ? "ok" : "error",
     lastError: rec.lastErrorCode,
     checkedAt: rec.checkedAt,
@@ -283,89 +245,9 @@ function currentToCheck(row: MonitoredServerRow, rec: CurrentRecord | null): Ser
     lastSuccessAt: rec.lastSuccessAt,
     memoryTotalBytes: rec.memoryTotalBytes,
     memoryAvailableBytes: rec.memoryAvailableBytes,
-    remnawaveStatus: rec.remnawaveStatus === "ok" || rec.remnawaveStatus === "error" ? rec.remnawaveStatus : rec.remnawaveStatus === "disabled" ? "disabled" : "unknown",
     uplinkCapacityBps: rec.uplinkCapacityBps,
     uplinkCapacitySource: rec.uplinkCapacitySource === "configured" || rec.uplinkCapacitySource === "detected" ? rec.uplinkCapacitySource : "unknown",
   };
-}
-
-/* ── Remnawave ───────────────────────────────────────────────────────────── */
-
-async function collectRemnawave(
-  thresholds: MonitoringThresholds,
-  log?: Pick<Console, "warn">,
-): Promise<{ attempted: number; succeeded: number; failed: number }> {
-  const integrations = listIntegrations({ includeDisabled: false }).filter((i) => i.type === "remnawave");
-  let succeeded = 0;
-  let failed = 0;
-  await runPool(integrations, Math.min(4, thresholds.collectorConcurrency), async (integration) => {
-    const creds = getIntegrationCredentials(integration);
-    const url = integration.metrics_url || integration.base_url;
-    const ts = Math.floor(Date.now() / 1000);
-
-    if (!url) {
-      failed += 1;
-      remnawaveCache.set(integration.id, {
-        ts,
-        nodes: new Map(),
-        global: { integrationId: integration.id, status: "error", errorCode: "metrics_url_missing", checkedAt: null, globalOnlineUsers: null, nodeCount: 0 },
-      });
-      return;
-    }
-
-    // A stored secret that cannot be decrypted (missing/changed master key) is
-    // a configuration problem, not a network error. Never attempt the request
-    // and never expose the crypto error.
-    if (creds.passwordDecryptFailed || creds.apiTokenDecryptFailed) {
-      failed += 1;
-      remnawaveCache.set(integration.id, {
-        ts,
-        nodes: new Map(),
-        global: { integrationId: integration.id, status: "error", errorCode: "credential_decrypt_failed", checkedAt: new Date().toISOString(), globalOnlineUsers: null, nodeCount: 0 },
-      });
-      recordIntegrationCheck(integration.id, "error", "credential_decrypt_failed");
-      log?.warn?.({ integrationId: integration.id }, "MONITOR_INTEGRATION_FAIL credential_decrypt_failed");
-      return;
-    }
-
-    try {
-      const res = await fetchText(url, {
-        timeoutMs: thresholds.scrapeTimeoutMs,
-        username: integration.username || undefined,
-        password: creds.password ?? undefined,
-        token: creds.apiToken ?? undefined,
-      });
-      if (!res.ok) throw new Error(`exporter_http_${res.status}`);
-      const summary = parseRemnawaveMetrics(res.text);
-      const nodes = new Map<string, RemnawaveNodeMetric>();
-      for (const node of summary.nodes) nodes.set(node.nodeUuid, node);
-      remnawaveCache.set(integration.id, {
-        ts,
-        nodes,
-        global: {
-          integrationId: integration.id,
-          status: "ok",
-          errorCode: null,
-          checkedAt: new Date().toISOString(),
-          globalOnlineUsers: summary.globalOnlineUsers,
-          nodeCount: summary.nodes.length,
-        },
-      });
-      recordIntegrationCheck(integration.id, "ok", null);
-      succeeded += 1;
-    } catch (e) {
-      failed += 1;
-      const code = errorCodeFromError(e);
-      remnawaveCache.set(integration.id, {
-        ts,
-        nodes: new Map(),
-        global: { integrationId: integration.id, status: "error", errorCode: code, checkedAt: new Date().toISOString(), globalOnlineUsers: null, nodeCount: 0 },
-      });
-      recordIntegrationCheck(integration.id, "error", code);
-      log?.warn?.({ integrationId: integration.id, code }, "MONITOR_INTEGRATION_FAIL");
-    }
-  });
-  return { attempted: integrations.length, succeeded, failed };
 }
 
 /* ── Node Exporter ───────────────────────────────────────────────────────── */
@@ -450,13 +332,8 @@ function buildRules(params: {
 
   // Availability: host-level source failed. A single failed scrape is NOT
   // offline — the incident engine confirms only after `offlineFailChecks`.
-  const remnawaveMapped = Boolean(result.remnawaveNodeUuid);
-  const hostSourceFailed = exporterEnabled
-    ? !exporterSucceeded
-    : remnawaveMapped
-      ? result.remnawaveStatus === "error"
-      : false;
-  if (exporterEnabled || remnawaveMapped) {
+  const hostSourceFailed = exporterEnabled ? !exporterSucceeded : false;
+  if (exporterEnabled) {
     rules.push({
       ruleType: "offline",
       severity: "critical",
@@ -578,20 +455,6 @@ function buildRules(params: {
     });
   }
 
-  // Service-level: Remnawave says the node is down while the system is alive.
-  if (result.remnawaveStatus === "error" && exporterEnabled && exporterSucceeded) {
-    rules.push({
-      ruleType: "remnawave_offline",
-      severity: "warning",
-      active: true,
-      hold: true,
-      value: null,
-      threshold: null,
-      confirmAfterChecks: 2,
-      message: `Remnawave-нода ${row.title || row.host} неактивна`,
-    });
-  }
-
   return rules;
 }
 
@@ -599,31 +462,12 @@ function buildRules(params: {
 
 async function collectServer(
   row: MonitoredServerRow,
-  remnawaveNodes: Map<number, Map<string, RemnawaveNodeMetric>>,
 ): Promise<{ result: ServerCheckResult; events: IncidentEvent[]; succeeded: boolean }> {
   const thresholds = resolveThresholds(row.thresholds_json);
   const prev = getCurrent(row.id);
   const nowMs = Date.now();
   const nowSec = Math.floor(nowMs / 1000);
   const exporterEnabled = Number(row.node_exporter_enabled) === 1 && Boolean(row.exporter_url);
-  const remnawaveMapped = Boolean(row.remnawave_integration_id && row.remnawave_node_uuid);
-
-  // Remnawave node state from this cycle's single integration fetch.
-  let remnawaveStatus: "ok" | "error" | "unknown" | "disabled" = remnawaveMapped ? "unknown" : "disabled";
-  let onlineUsers: number | null = remnawaveMapped ? prev?.onlineUsers ?? null : null;
-  if (remnawaveMapped) {
-    const node = remnawaveNodes.get(row.remnawave_integration_id!)?.get(row.remnawave_node_uuid!) ?? null;
-    if (node) {
-      remnawaveStatus = node.up === false ? "error" : "ok";
-      onlineUsers = node.onlineUsers;
-    } else if (remnawaveNodes.has(row.remnawave_integration_id!)) {
-      remnawaveStatus = "error";
-    } else {
-      // Integration unavailable this cycle -> keep last known users, do not
-      // mistake it for the host being down.
-      remnawaveStatus = "unknown";
-    }
-  }
 
   let scrape: ScrapeOutcome | null = null;
   let exporterSucceeded = false;
@@ -632,7 +476,7 @@ async function collectServer(
     exporterSucceeded = Boolean(scrape.sample);
   }
 
-  const succeeded = exporterEnabled ? exporterSucceeded : remnawaveMapped && remnawaveStatus === "ok";
+  const succeeded = exporterEnabled ? exporterSucceeded : false;
   const s = scrape?.sample ?? null;
   const carry = (v: number | null | undefined, pv: number | null | undefined) => (v != null ? v : pv ?? null);
 
@@ -689,11 +533,11 @@ async function collectServer(
       rebootDetected: Boolean(scrape?.rebootDetected),
       nodeExporterStatus: exporterEnabled ? "ok" : "disabled",
       nodeExporterLatencyMs: scrape?.latencyMs ?? null,
-      remnawaveStatus,
-      onlineUsers,
+      remnawaveStatus: "disabled",
+      onlineUsers: null,
       fileDescriptors: carry(s?.fileDescriptors, prev?.fileDescriptors),
       sockets: carry(s?.sockets, prev?.sockets),
-      source: exporterSucceeded && remnawaveMapped ? "both" : exporterSucceeded ? "node_exporter" : "remnawave",
+      source: exporterSucceeded ? "node_exporter" : prev?.source ?? "none",
       checkedAt: new Date(nowMs).toISOString(),
     };
   } else {
@@ -714,7 +558,7 @@ async function collectServer(
       consecutiveFailures: failures,
       lastErrorCode:
         scrape?.errorCode ??
-        (exporterEnabled ? "unreachable" : remnawaveMapped ? "remnawave_unavailable" : prev?.lastErrorCode ?? null),
+        (exporterEnabled ? "unreachable" : prev?.lastErrorCode ?? null),
       cpuPct: prev?.cpuPct ?? null,
       iowaitPct: prev?.iowaitPct ?? null,
       load1: prev?.load1 ?? null,
@@ -741,8 +585,8 @@ async function collectServer(
       rebootDetected: false,
       nodeExporterStatus: exporterEnabled ? "error" : prev?.nodeExporterStatus ?? "disabled",
       nodeExporterLatencyMs: scrape?.latencyMs ?? null,
-      remnawaveStatus,
-      onlineUsers,
+      remnawaveStatus: "disabled",
+      onlineUsers: null,
       fileDescriptors: prev?.fileDescriptors ?? null,
       sockets: prev?.sockets ?? null,
       source: prev?.source ?? "none",
@@ -806,8 +650,8 @@ function sampleFromRecord(record: CurrentRecord, succeeded: boolean): Monitoring
     txErrorsDelta: succeeded ? record.txErrorsDelta : null,
     systemUptimeSec: succeeded ? record.systemUptimeSec : null,
     rebootDetected: record.rebootDetected,
-    remnawaveOnline: record.remnawaveStatus === "ok" ? true : record.remnawaveStatus === "error" ? false : null,
-    onlineUsers: record.onlineUsers,
+    remnawaveOnline: null,
+    onlineUsers: null,
     source: (record.source as MonitoringSample["source"]) ?? "none",
   };
 }
@@ -844,11 +688,7 @@ async function runCollectionCycle(
     return { started: false, reason: "lease_held_elsewhere" };
   }
 
-  // Remnawave: exactly one fetch per enabled integration per cycle.
-  const remnawave = await collectRemnawave(baseThresholds, log);
-  const remnawaveNodes = new Map<number, Map<string, RemnawaveNodeMetric>>();
-  for (const [integrationId, entry] of remnawaveCache) remnawaveNodes.set(integrationId, entry.nodes);
-
+  // Node Exporter is the only external monitoring scrape source.
   const activeRows = rows.filter((row) => Number(row.active) !== 0);
   const allEvents: IncidentEvent[] = [];
   let serversSucceeded = 0;
@@ -856,7 +696,7 @@ async function runCollectionCycle(
 
   await runPool(activeRows, baseThresholds.collectorConcurrency, async (row) => {
     try {
-      const { events, succeeded } = await collectServer(row, remnawaveNodes);
+      const { events, succeeded } = await collectServer(row);
       if (succeeded) serversSucceeded += 1;
       else serversFailed += 1;
       allEvents.push(...events);
@@ -903,9 +743,9 @@ async function runCollectionCycle(
       serversAttempted: activeRows.length,
       serversSucceeded,
       serversFailed,
-      remnawaveAttempted: remnawave.attempted,
-      remnawaveSucceeded: remnawave.succeeded,
-      remnawaveFailed: remnawave.failed,
+      remnawaveAttempted: 0,
+      remnawaveSucceeded: 0,
+      remnawaveFailed: 0,
     });
   } catch {
     /* observability write failure must not break the cycle */
@@ -917,9 +757,7 @@ async function runCollectionCycle(
 /* ── Public API (kept stable for existing consumers) ─────────────────────── */
 
 export async function checkServer(row: MonitoredServerRow): Promise<ServerCheckResult> {
-  const remnawaveNodes = new Map<number, Map<string, RemnawaveNodeMetric>>();
-  for (const [integrationId, entry] of remnawaveCache) remnawaveNodes.set(integrationId, entry.nodes);
-  const { result } = await collectServer(row, remnawaveNodes);
+  const { result } = await collectServer(row);
   return result;
 }
 
@@ -1072,12 +910,6 @@ export function getRecentSamples(serverId: number) {
   return recentSamples(serverId, 30);
 }
 
-/** Remnawave nodes discovered for an integration (for the mapping UI). */
-export function getRemnawaveNodes(integrationId: number): RemnawaveNodeMetric[] {
-  const entry = remnawaveCache.get(integrationId);
-  return entry ? [...entry.nodes.values()] : [];
-}
-
 /** Probe a server's Node Exporter without persisting anything. */
 export async function probeNodeExporter(row: MonitoredServerRow, timeoutMs = 5000) {
   const creds = getExporterCredentials(row);
@@ -1098,4 +930,4 @@ export async function probeNodeExporter(row: MonitoredServerRow, timeoutMs = 500
   }
 }
 
-export { listMonitoredServers, getIntegration };
+export { listMonitoredServers };
