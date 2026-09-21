@@ -66,6 +66,8 @@ export type RuleEvaluation = {
 type EvaluationInput = {
   serverId: number;
   serverTitle: string;
+  /** Optional kind snapshot stored on the incident for historical display. */
+  serverKind?: string;
   ts: number;
   thresholds: MonitoringThresholds;
   rules: RuleEvaluation[];
@@ -79,7 +81,7 @@ const HOUR = 3600;
  */
 export function evaluateServerIncidents(input: EvaluationInput): IncidentEvent[] {
   const events: IncidentEvent[] = [];
-  const { serverId, serverTitle, ts, thresholds } = input;
+  const { serverId, serverTitle, serverKind, ts, thresholds } = input;
 
   for (const rule of finalizeRules(input.rules)) {
     const active = findActiveIncident(serverId, rule.ruleType);
@@ -89,6 +91,8 @@ export function evaluateServerIncidents(input: EvaluationInput): IncidentEvent[]
       if (!rule.active) continue;
       const created = createPendingIncident({
         serverId,
+        serverTitle,
+        serverKind: serverKind ?? null,
         ruleType: rule.ruleType,
         severity: rule.severity,
         ts,

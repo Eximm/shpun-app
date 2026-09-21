@@ -36,7 +36,7 @@ await build({
   logLevel: "silent",
 });
 
-const { formatBitrate, formatPct, formatLoad, shouldShowRemnawaveUsers, stateTone } = await import(pathToFileURL(outfile).href);
+const { formatBitrate, formatPct, formatLoad, shouldShowRemnawaveUsers, stateTone, formatDuration, formatIncidentValue, percentCeiling, incidentRuleKey, incidentMetricKey } = await import(pathToFileURL(outfile).href);
 
 let failures = 0;
 function check(name, actual, expected) {
@@ -62,6 +62,7 @@ check("bitrate undefined -> dash", formatBitrate(undefined), "—");
 check("pct 0 -> 0%", formatPct(0), "0%");
 check("pct 52.4 -> 52.4%", formatPct(52.4), "52.4%");
 check("pct null -> dash", formatPct(null), "—");
+check("pct above 100 is preserved", formatPct(150), "150%");
 
 check("load 0 -> 0", formatLoad(0), "0");
 check("load 0.0123 -> 0.01", formatLoad(0.0123), "0.01");
@@ -76,6 +77,18 @@ check("state stale -> warn", stateTone("stale"), "warn");
 check("state offline -> bad", stateTone("offline"), "bad");
 check("state no_data -> soft (never green)", stateTone("no_data"), "soft");
 check("state null -> soft", stateTone(null), "soft");
+
+check("duration 300s -> 5m", formatDuration(300), "5m 0s");
+check("incident value 0 is zero, not dash", formatIncidentValue(0, "percent"), "0%");
+check("incident value null -> dash", formatIncidentValue(null, "percent"), "—");
+check("percent ceiling stays 100 for small values", percentCeiling(17), 100);
+check("percent ceiling stays 100 at 100", percentCeiling(100), 100);
+check("percent ceiling expands above 100", percentCeiling(120), 125);
+check("percent ceiling expands for 184", percentCeiling(184), 200);
+check("rule label maps only real rule types", incidentRuleKey("uplink_saturation"), "admin.monitoring.incident.rule.uplink");
+check("unknown rule type falls back safely", incidentRuleKey("made_up"), "admin.monitoring.incident.rule.unknown");
+check("uplink incident maps to the uplink graph", incidentMetricKey("uplink_saturation"), "uplink");
+check("offline incident has no metric graph", incidentMetricKey("offline"), null);
 
 /* ─ Component wiring (static) ───────────────────────────────────────────── */
 
@@ -108,10 +121,42 @@ assert("polling only refetches persisted state", src.includes("setInterval(() =>
 assert("collector observability surfaced", src.includes("admin.monitoring.collector.title"));
 
 const shared = fs.readFileSync(path.join(webRoot, "src", "pages", "admin", "shared.tsx"), "utf8");
+const actionMenu = fs.readFileSync(path.join(webRoot, "src", "pages", "admin", "ActionMenu.tsx"), "utf8");
 assert("modal captures viewport before locking", shared.includes("const scrollY = window.scrollY"));
 assert("modal restores the exact viewport", shared.includes("window.scrollTo({ left: scrollX, top: scrollY"));
 assert("modal restores focus without scrolling", shared.includes("preventScroll: true"));
 assert("modal lock effect is stable across renders", shared.includes("onCloseRef.current"));
+
+// Mobile interaction model: explicit chevron + separate actions menu.
+assert("explicit chevron control exists", src.includes("mon-row__chevron") && src.includes("aria-controls={`mon-detail-${item.id}`}"));
+assert("card header exposes aria-expanded", src.includes("aria-expanded={expanded}"));
+assert("overflow button opens the action menu without expanding", src.includes("setActionAnchor(e.currentTarget)"));
+assert("actions stop propagation", src.includes("mon-row__overflow") && src.includes("onClick={(e) => e.stopPropagation()}"));
+assert("focus restore after menu uses preventScroll", src.includes("preventScroll: true"));
+assert("action menu is a viewport-aware portal", actionMenu.includes("createPortal") && actionMenu.includes("getBoundingClientRect") && actionMenu.includes("window.innerHeight"));
+
+// Global incidents + graph integration.
+assert("global incidents section wired in", src.includes("<MonitoringIncidents") && src.includes("openIncident"));
+assert("summary incident cards are clickable", src.includes("focusIncidents") && src.includes("mon-summary__stat is-clickable"));
+assert("compact row shows the top active issue", src.includes("mon-row__issue") && src.includes("globalActive.filter"));
+assert("incident click targets the server card", src.includes("mon-server-${inc.serverId}"));
+assert("graph focuses the incident metric", src.includes("incidentMetricKey(inc.ruleType)"));
+assert("uplink diagnostics show the capacity source", src.includes("admin.monitoring.capacity.source") && src.includes("admin.monitoring.metric.capacity"));
+assert("above-100 hint is wired", src.includes("admin.monitoring.graph.above100"));
+
+const graph = fs.readFileSync(path.join(webRoot, "src", "pages", "admin", "MonitoringGraph.tsx"), "utf8");
+assert("graph has percentage-anchored ceilings", graph.includes("percentCeiling"));
+assert("graph renders threshold lines", graph.includes("mon-graph__thresholdLine"));
+assert("graph renders incident intervals", graph.includes("mon-graph__incident"));
+assert("graph has a time axis", graph.includes("formatAxisTime"));
+assert("graph has a tooltip", graph.includes("mon-graph__tooltip"));
+assert("graph includes the uplink metric", graph.includes('key: "uplink"'));
+assert("graph gaps on null samples", graph.includes("segments"));
+
+const css = fs.readFileSync(path.join(webRoot, "src", "index.css"), "utf8");
+assert("mobile single-column details", css.includes(".mon-detail { grid-template-columns: 1fr; }"));
+assert("safe-area bottom padding for the bottom nav", css.includes("var(--nav-h) + env(safe-area-inset-bottom)"));
+assert("no horizontal overflow guard", css.includes(".admin-stack, .mon-row, .mon-detail, .mon-graph, .mon-kv, .mon-incidentCard { min-width: 0; }"));
 
 if (failures > 0) {
   console.error(`\nFAILED: ${failures} check(s)`);

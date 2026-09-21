@@ -154,51 +154,92 @@ export function insertSample(serverId: number, ts: number, sample: MonitoringSam
 export type HistoryPoint = {
   ts: number;
   cpuAvg: number | null;
+  cpuMin: number | null;
+  cpuMax: number | null;
   memAvg: number | null;
+  memMin: number | null;
+  memMax: number | null;
   diskAvg: number | null;
+  diskMin: number | null;
+  diskMax: number | null;
   rxAvg: number | null;
+  rxMin: number | null;
+  rxMax: number | null;
   txAvg: number | null;
+  txMin: number | null;
+  txMax: number | null;
   load1Avg: number | null;
   uplinkAvg: number | null;
-  cpuMax: number | null;
-  memMax: number | null;
-  rxMax: number | null;
-  txMax: number | null;
+  uplinkMin: number | null;
+  uplinkMax: number | null;
 };
+
+export type HistoryResolution = "raw" | "5m" | "1h";
+
+export type HistorySeries = { points: HistoryPoint[]; resolution: HistoryResolution };
 
 function rowsToSeries(rows: any[]): HistoryPoint[] {
   return rows.map((r) => ({
     ts: Number(r.ts),
     cpuAvg: nullable(r.cpu_avg),
+    cpuMin: nullable(r.cpu_min ?? r.cpu_avg),
+    cpuMax: nullable(r.cpu_max ?? r.cpu_avg),
     memAvg: nullable(r.mem_avg),
+    memMin: nullable(r.mem_min ?? r.mem_avg),
+    memMax: nullable(r.mem_max ?? r.mem_avg),
     diskAvg: nullable(r.disk_avg),
+    diskMin: nullable(r.disk_min ?? r.disk_avg),
+    diskMax: nullable(r.disk_max ?? r.disk_avg),
     rxAvg: nullable(r.rx_avg),
+    rxMin: nullable(r.rx_min ?? r.rx_avg),
+    rxMax: nullable(r.rx_max ?? r.rx_avg),
     txAvg: nullable(r.tx_avg),
+    txMin: nullable(r.tx_min ?? r.tx_avg),
+    txMax: nullable(r.tx_max ?? r.tx_avg),
     load1Avg: nullable(r.load1_avg),
     uplinkAvg: nullable(r.uplink_avg),
-    cpuMax: nullable(r.cpu_max),
-    memMax: nullable(r.mem_max),
-    rxMax: nullable(r.rx_max),
-    txMax: nullable(r.tx_max),
+    uplinkMin: nullable(r.uplink_min ?? r.uplink_avg),
+    uplinkMax: nullable(r.uplink_max ?? r.uplink_avg),
   }));
 }
 
 function nullable(v: unknown): number | null {
+  if (v == null) return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 }
 
-function hasAnyMetric(v: number | null) {
-  return v !== null;
-}
+const RAW_SQL = `
+  SELECT ts,
+         cpu_pct AS cpu_avg, cpu_pct AS cpu_min, cpu_pct AS cpu_max,
+         memory_used_pct AS mem_avg, memory_used_pct AS mem_min, memory_used_pct AS mem_max,
+         disk_used_pct AS disk_avg, disk_used_pct AS disk_min, disk_used_pct AS disk_max,
+         rx_bps AS rx_avg, rx_bps AS rx_min, rx_bps AS rx_max,
+         tx_bps AS tx_avg, tx_bps AS tx_min, tx_bps AS tx_max,
+         load1 AS load1_avg,
+         uplink_used_pct AS uplink_avg, uplink_used_pct AS uplink_min, uplink_used_pct AS uplink_max
+  FROM monitoring_samples
+  WHERE server_id = ? AND ts >= ?
+  ORDER BY ts ASC
+`;
+
+const AGG_SQL = `
+  SELECT bucket_ts AS ts, sample_count,
+         cpu_avg, cpu_min, cpu_max, mem_avg, mem_min, mem_max,
+         disk_avg, disk_min, disk_max, rx_avg, rx_min, rx_max,
+         tx_avg, tx_min, tx_max, load1_avg, uplink_avg, uplink_min, uplink_max
+  FROM monitoring_aggregates
+  WHERE server_id = ? AND resolution = ? AND bucket_ts >= ?
+  ORDER BY bucket_ts ASC
+`;
 
 /**
- * Query a compact time series. `rangeKey` selects the natural resolution:
- *   "1h"  -> raw 1m
- *   "24h" -> 5m aggregates (fallback to raw when the aggregate is not built)
- *   "7d"  -> 1h aggregates (fallback to 5m)
+ * Query a compact time series with the resolution actually used.
+ *   "1h"  -> raw 1m samples.
+ *   "24h" -> 5m aggregates (fallback to raw while the downsampler catches up).
+ *   "7d"  -> 1h aggregates (fallback to 5m).
  */
-export function querySeries(serverId: number, rangeKey: "1h" | "24h" | "7d") {
+export function querySeriesMeta(serverId: number, rangeKey: "1h" | "24h" | "7d"): HistorySeries {
   const now = Math.floor(Date.now() / 1000);
   const spec = {
     "1h": { from: now - 3600, resolution: "raw" as const },
@@ -207,54 +248,21 @@ export function querySeries(serverId: number, rangeKey: "1h" | "24h" | "7d") {
   }[rangeKey];
 
   if (spec.resolution === "raw") {
-    const rows = linkDb
-      .prepare(`
-        SELECT ts,
-               cpu_pct AS cpu_avg, cpu_pct AS cpu_max,
-               memory_used_pct AS mem_avg, memory_used_pct AS mem_max,
-               disk_used_pct AS disk_avg,
-               rx_bps AS rx_avg, rx_bps AS rx_max,
-               tx_bps AS tx_avg, tx_bps AS tx_max,
-               load1 AS load1_avg,
-               uplink_used_pct AS uplink_avg
-        FROM monitoring_samples
-        WHERE server_id = ? AND ts >= ?
-        ORDER BY ts ASC
-      `)
-      .all(serverId, spec.from) as any[];
-    return rowsToSeries(rows);
+    const rows = linkDb.prepare(RAW_SQL).all(serverId, spec.from) as any[];
+    return { points: rowsToSeries(rows), resolution: "raw" };
   }
 
-  const primary = linkDb
-    .prepare(`
-      SELECT bucket_ts AS ts, sample_count,
-             cpu_avg, cpu_max, mem_avg, mem_max, disk_avg,
-             rx_avg, rx_max, tx_avg, tx_max, load1_avg, uplink_avg
-      FROM monitoring_aggregates
-      WHERE server_id = ? AND resolution = ? AND bucket_ts >= ?
-      ORDER BY bucket_ts ASC
-    `)
-    .all(serverId, spec.resolution, spec.from) as any[];
+  const primary = linkDb.prepare(AGG_SQL).all(serverId, spec.resolution, spec.from) as any[];
+  if (primary.length > 0) return { points: rowsToSeries(primary), resolution: spec.resolution };
 
-  if (primary.length > 0) return rowsToSeries(primary);
+  const fallback = spec.resolution === "5m" ? "1h" : "5m";
+  if (fallback === "1h") return querySeriesMeta(serverId, "1h");
+  const rows = linkDb.prepare(AGG_SQL).all(serverId, fallback, spec.from) as any[];
+  return { points: rowsToSeries(rows), resolution: "5m" };
+}
 
-  // Fallback to the next finer resolution so graphs still render while the
-  // downsampler catches up.
-  const fallback = spec.resolution === "5m" ? "raw" : "5m";
-  if (fallback === "raw") {
-    return querySeries(serverId, "1h");
-  }
-  const rows = linkDb
-    .prepare(`
-      SELECT bucket_ts AS ts,
-             cpu_avg, cpu_max, mem_avg, mem_max, disk_avg,
-             rx_avg, rx_max, tx_avg, tx_max, load1_avg, uplink_avg
-      FROM monitoring_aggregates
-      WHERE server_id = ? AND resolution = ? AND bucket_ts >= ?
-      ORDER BY bucket_ts ASC
-    `)
-    .all(serverId, fallback, spec.from) as any[];
-  return rowsToSeries(rows);
+export function querySeries(serverId: number, rangeKey: "1h" | "24h" | "7d") {
+  return querySeriesMeta(serverId, rangeKey).points;
 }
 
 /**

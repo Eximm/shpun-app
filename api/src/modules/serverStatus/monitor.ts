@@ -30,6 +30,7 @@ import { insertSample, recentSamples, runDownsampling, runRetention, type Monito
 import { evaluateServerIncidents, type IncidentEvent, type RuleEvaluation } from "./incidents.js";
 import { insertEvent, resolveIncidentsForMissingServers } from "./incidentsRepo.js";
 import { acquireCollectorLease, collectorLeaseOwner } from "./collectorLock.js";
+import { computeUplink } from "./uplink.js";
 import { createRestartableTimer, type RestartableTimer } from "./restartableTimer.js";
 import {
   computeState,
@@ -94,6 +95,8 @@ export type ServerCheckResult = {
   memoryTotalBytes: number | null;
   memoryAvailableBytes: number | null;
   remnawaveStatus: "ok" | "error" | "unknown" | "disabled";
+  uplinkCapacityBps: number | null;
+  uplinkCapacitySource: "configured" | "detected" | "unknown";
 };
 
 export type RemnawaveGlobalState = {
@@ -229,6 +232,8 @@ function emptyResult(row: MonitoredServerRow): ServerCheckResult {
     memoryTotalBytes: null,
     memoryAvailableBytes: null,
     remnawaveStatus: "disabled",
+    uplinkCapacityBps: null,
+    uplinkCapacitySource: "unknown",
   };
 }
 
@@ -279,6 +284,8 @@ function currentToCheck(row: MonitoredServerRow, rec: CurrentRecord | null): Ser
     memoryTotalBytes: rec.memoryTotalBytes,
     memoryAvailableBytes: rec.memoryAvailableBytes,
     remnawaveStatus: rec.remnawaveStatus === "ok" || rec.remnawaveStatus === "error" ? rec.remnawaveStatus : rec.remnawaveStatus === "disabled" ? "disabled" : "unknown",
+    uplinkCapacityBps: rec.uplinkCapacityBps,
+    uplinkCapacitySource: rec.uplinkCapacitySource === "configured" || rec.uplinkCapacitySource === "detected" ? rec.uplinkCapacitySource : "unknown",
   };
 }
 
@@ -543,6 +550,14 @@ function buildRules(params: {
       threshold: thresholds.uplinkWarnPct,
       confirmAfterSec: thresholds.uplinkDurationSec,
       message: `Канал ${row.title || row.host} загружен на ${result.uplinkLoadPct}%`,
+      context: {
+        rxBps: result.rxMbps != null ? (result.rxMbps * 1_000_000) / 8 : null,
+        txBps: result.txMbps != null ? (result.txMbps * 1_000_000) / 8 : null,
+        capacityBps: result.uplinkCapacityBps,
+        capacitySource: result.uplinkCapacitySource,
+        calculatedPct: result.uplinkLoadPct,
+        threshold: thresholds.uplinkWarnPct,
+      },
     });
   }
 
@@ -624,15 +639,16 @@ async function collectServer(
   let record: CurrentRecord;
 
   if (succeeded) {
-    const configuredUplinkBytes = row.uplink_mbps && row.uplink_mbps > 0 ? (row.uplink_mbps * 1_000_000) / 8 : null;
     const uplinkBytes = s?.maxUplinkSpeedBytes ?? null;
-    const effectiveUplinkBytes = uplinkBytes && uplinkBytes > 0 ? uplinkBytes : configuredUplinkBytes;
     const rxBps = s?.rxBytesPerSec ?? null;
     const txBps = s?.txBytesPerSec ?? null;
-    const uplinkUsedPct =
-      effectiveUplinkBytes && rxBps != null && txBps != null
-        ? Math.min(100, Math.round(((rxBps + txBps) / effectiveUplinkBytes) * 100))
-        : prev?.uplinkUsedPct ?? null;
+    const uplink = computeUplink({
+      rxBps,
+      txBps,
+      configuredUplinkMbps: row.uplink_mbps,
+      detectedUplinkSpeedBytes: uplinkBytes,
+    });
+    const uplinkUsedPct = uplink.pct ?? prev?.uplinkUsedPct ?? null;
     const cpuPct =
       s?.cpuBusyPct ??
       (s?.load1 != null && s.cpuCores && s.cpuCores > 0 ? Math.min(100, Math.round((s.load1 / s.cpuCores) * 100)) : null);
@@ -663,6 +679,8 @@ async function collectServer(
       rxBps: carry(rxBps, prev?.rxBps),
       txBps: carry(txBps, prev?.txBps),
       uplinkUsedPct,
+      uplinkCapacityBps: uplink.capacityBps,
+      uplinkCapacitySource: uplink.capacitySource,
       rxDropsDelta: carry(s?.rxDropsDelta, prev?.rxDropsDelta),
       txDropsDelta: carry(s?.txDropsDelta, prev?.txDropsDelta),
       rxErrorsDelta: carry(s?.rxErrorsDelta, prev?.rxErrorsDelta),
@@ -713,6 +731,8 @@ async function collectServer(
       rxBps: prev?.rxBps ?? null,
       txBps: prev?.txBps ?? null,
       uplinkUsedPct: prev?.uplinkUsedPct ?? null,
+      uplinkCapacityBps: prev?.uplinkCapacityBps ?? null,
+      uplinkCapacitySource: prev?.uplinkCapacitySource ?? "unknown",
       rxDropsDelta: prev?.rxDropsDelta ?? null,
       txDropsDelta: prev?.txDropsDelta ?? null,
       rxErrorsDelta: prev?.rxErrorsDelta ?? null,
@@ -751,6 +771,7 @@ async function collectServer(
     events = evaluateServerIncidents({
       serverId: row.id,
       serverTitle: row.title || row.host,
+      serverKind: row.kind,
       ts: nowSec,
       thresholds,
       rules: buildRules({ row, result, thresholds, scrape, exporterEnabled, exporterSucceeded }),

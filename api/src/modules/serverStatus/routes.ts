@@ -22,7 +22,7 @@ import {
   setMonitoringIncidentHandler,
   startServerStatusMonitor,
 } from "./monitor.js";
-import { deleteCurrent } from "./currentRepo.js";
+import { deleteCurrent, getCurrent } from "./currentRepo.js";
 import { aggregateHealthStatus, toPublicCheck } from "./health.js";
 import { isServerStatusAdmin } from "./adminGuard.js";
 import {
@@ -35,9 +35,18 @@ import {
   updateIntegration,
 } from "./integrationsRepo.js";
 import { probeRemnawaveMetrics } from "./remnawaveMetrics.js";
-import { getGlobalThresholds, setGlobalThresholds } from "./settingsRepo.js";
-import { historyStats, querySeries } from "./historyRepo.js";
-import { countActiveIncidents, listActiveIncidents, listRecentEvents, listRecentIncidents } from "./incidentsRepo.js";
+import { getGlobalThresholds, resolveThresholds, setGlobalThresholds } from "./settingsRepo.js";
+import { historyStats, querySeries, querySeriesMeta } from "./historyRepo.js";
+import {
+  countActiveIncidents,
+  countIncidents,
+  listActiveIncidents,
+  listIncidentsInRange,
+  listRecentEvents,
+  listRecentIncidents,
+  queryIncidents,
+  type MonitoringIncidentRow,
+} from "./incidentsRepo.js";
 import { deliverMonitoringIncidentEvents } from "./monitoringNotifications.js";
 
 function int(v: unknown, fallback = 0) {
@@ -56,6 +65,59 @@ async function requireAdmin(req: any, reply: any): Promise<boolean> {
     return false;
   }
   return true;
+}
+
+const RANGE_SECONDS = { "1h": 3600, "24h": 86400, "7d": 7 * 86400, "30d": 30 * 86400 } as const;
+type RangeKey = keyof typeof RANGE_SECONDS;
+
+function parseRange(v: unknown): RangeKey {
+  const s = String(v ?? "").trim();
+  return s === "1h" || s === "24h" || s === "7d" || s === "30d" ? s : "24h";
+}
+
+/** UI-oriented incident projection (admin-only, no raw context). */
+function toIncidentDto(row: MonitoringIncidentRow, fallbackTitle?: string | null) {
+  return {
+    id: row.id,
+    serverId: row.server_id,
+    serverTitle: row.server_title || fallbackTitle || `#${row.server_id}`,
+    serverKind: row.server_kind ?? null,
+    ruleType: row.rule_type,
+    severity: row.severity,
+    state: row.state,
+    openedAt: row.opened_at,
+    confirmedAt: row.confirmed_at,
+    resolvedAt: row.resolved_at,
+    lastSeenAt: row.last_seen_at,
+    value: row.value,
+    threshold: row.threshold,
+    message: row.message,
+    context: safeUplinkContext(row),
+    durationSec: Math.max(0, (row.resolved_at ?? Math.floor(Date.now() / 1000)) - row.opened_at),
+  };
+}
+
+/** Whitelisted, safe diagnostic context for uplink incidents only. */
+function safeUplinkContext(row: MonitoringIncidentRow) {
+  if (row.rule_type !== "uplink_saturation" || !row.context_json) return null;
+  try {
+    const c = JSON.parse(row.context_json) as Record<string, unknown>;
+    const num = (v: unknown) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    };
+    const source = String(c.capacitySource ?? "unknown");
+    return {
+      rxBps: num(c.rxBps),
+      txBps: num(c.txBps),
+      capacityBps: num(c.capacityBps),
+      capacitySource: source === "configured" || source === "detected" ? source : "unknown",
+      calculatedPct: num(c.calculatedPct),
+      threshold: num(c.threshold),
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function serverStatusRoutes(app: FastifyInstance) {
@@ -292,9 +354,35 @@ export async function serverStatusRoutes(app: FastifyInstance) {
     const id = int((req.params as any)?.id);
     const row = getMonitoredServer(id);
     if (!row) return reply.code(404).send({ ok: false, error: "not_found" });
-    const range = String((req.query as any)?.range ?? "1h");
-    const rangeKey = range === "24h" || range === "7d" ? range : "1h";
-    return reply.send({ ok: true, range: rangeKey, points: querySeries(id, rangeKey), stats: historyStats(id) });
+    const rangeKey = parseRange((req.query as any)?.range);
+    const series = querySeriesMeta(id, rangeKey === "30d" ? "7d" : rangeKey);
+    const thresholds = resolveThresholds(row.thresholds_json);
+    const now = Math.floor(Date.now() / 1000);
+    const from = now - RANGE_SECONDS[rangeKey];
+    const currentRow = getCurrent(id);
+    return reply.send({
+      ok: true,
+      range: rangeKey,
+      resolution: series.resolution,
+      points: series.points,
+      stats: historyStats(id),
+      meta: {
+        // Source of truth: the same resolveThresholds the incident engine uses.
+        effectiveThresholds: {
+          cpuPct: thresholds.cpuPct,
+          memoryWarnPct: thresholds.memoryWarnPct,
+          memoryCritPct: thresholds.memoryCritPct,
+          diskWarnPct: thresholds.diskWarnPct,
+          diskCritPct: thresholds.diskCritPct,
+          inodeWarnPct: thresholds.inodeWarnPct,
+          uplinkWarnPct: thresholds.uplinkWarnPct,
+        },
+        uplinkMbps: row.uplink_mbps,
+        uplinkCapacityBps: currentRow?.uplinkCapacityBps ?? null,
+        uplinkCapacitySource: currentRow?.uplinkCapacitySource ?? "unknown",
+      },
+      incidents: listIncidentsInRange(id, from, now).map((inc) => toIncidentDto(inc, row.title)),
+    });
   });
 
   app.get("/admin/monitoring/servers/:id/detail", async (req, reply) => {
@@ -303,27 +391,59 @@ export async function serverStatusRoutes(app: FastifyInstance) {
     const row = getMonitoredServer(id);
     if (!row) return reply.code(404).send({ ok: false, error: "not_found" });
     const current = getServerStatusSnapshot([row])[0] ?? null;
+    const thresholds = resolveThresholds(row.thresholds_json);
     return reply.send({
       ok: true,
       server: toAdminServer(row),
       current,
-      activeIncidents: listActiveIncidents(id),
-      recentIncidents: listRecentIncidents(20, id),
+      effectiveThresholds: {
+        cpuPct: thresholds.cpuPct,
+        memoryWarnPct: thresholds.memoryWarnPct,
+        memoryCritPct: thresholds.memoryCritPct,
+        diskWarnPct: thresholds.diskWarnPct,
+        diskCritPct: thresholds.diskCritPct,
+        inodeWarnPct: thresholds.inodeWarnPct,
+        uplinkWarnPct: thresholds.uplinkWarnPct,
+      },
+      activeIncidents: listActiveIncidents(id).map((inc) => toIncidentDto(inc, row.title)),
+      recentIncidents: listRecentIncidents(20, id).map((inc) => toIncidentDto(inc, row.title)),
       historyStats: historyStats(id),
     });
   });
 
   app.get("/admin/monitoring/incidents", async (req, reply) => {
     if (!(await requireAdmin(req, reply))) return;
-    const serverId = int((req.query as any)?.serverId);
-    const limit = int((req.query as any)?.limit, 50);
-    const active = serverId ? listActiveIncidents(serverId) : listActiveIncidents();
+    const q = (req.query ?? {}) as any;
+    const serverId = int(q.serverId);
+    const statusRaw = String(q.status ?? q.state ?? "").trim();
+    const status = statusRaw === "resolved" || statusRaw === "all" ? statusRaw : "active";
+    const severityRaw = String(q.severity ?? "").trim();
+    const severity = severityRaw === "critical" || severityRaw === "warning" || severityRaw === "info" ? severityRaw : undefined;
+    const rangeKey = parseRange(q.range ?? "7d");
+    const fromTs = status === "active" ? undefined : Math.floor(Date.now() / 1000) - RANGE_SECONDS[rangeKey];
+    const limit = Math.min(200, Math.max(1, int(q.limit, 50)));
+    const offset = Math.max(0, int(q.offset, 0));
+
+    const servers = listMonitoredServers({ includeInactive: true });
+    const titleById = new Map(servers.map((s) => [s.id, s.title]));
+    const dto = (inc: MonitoringIncidentRow) => toIncidentDto(inc, titleById.get(inc.server_id) ?? null);
+
+    const active = queryIncidents({ serverId: serverId || undefined, status: "active", severity, limit, offset });
+    const history = queryIncidents({ serverId: serverId || undefined, status: "resolved", severity, fromTs, limit, offset });
+    const totalHistory = countIncidents({ serverId: serverId || undefined, status: "resolved", severity, fromTs });
+
     return reply.send({
       ok: true,
-      active,
-      recent: listRecentIncidents(limit, serverId || undefined),
-      events: listRecentEvents(30),
+      status,
+      severity: severity ?? null,
+      range: rangeKey,
       counts: countActiveIncidents(),
+      total: totalHistory,
+      active: active.map(dto),
+      history: history.map(dto),
+      // Backward-compatible aliases for existing consumers.
+      recent: history.map(dto),
+      events: listRecentEvents(30),
     });
   });
 

@@ -176,6 +176,7 @@ test("a manually seeded current row is served without any cycle", () => {
     consecutiveFailures: 0, lastErrorCode: null, cpuPct: 42, iowaitPct: null, load1: 0.1, load5: null, load15: null,
     cpuCores: 4, memoryUsedPct: 33, memoryTotalBytes: null, memoryAvailableBytes: null, swapUsedPct: 0,
     diskUsedPct: 12, diskFreeBytes: null, inodeUsedPct: null, rxBps: null, txBps: null, uplinkUsedPct: null,
+    uplinkCapacityBps: null, uplinkCapacitySource: "unknown",
     rxDropsDelta: null, txDropsDelta: null, rxErrorsDelta: null, txErrorsDelta: null, systemUptimeSec: 100,
     rebootDetected: false, nodeExporterStatus: "disabled", nodeExporterLatencyMs: null, remnawaveStatus: "disabled",
     onlineUsers: null, fileDescriptors: null, sockets: null, source: "none", checkedAt: "2024-01-01T00:00:00.000Z",

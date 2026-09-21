@@ -43,6 +43,8 @@ export type CurrentRecord = {
   rxBps: number | null;
   txBps: number | null;
   uplinkUsedPct: number | null;
+  uplinkCapacityBps: number | null;
+  uplinkCapacitySource: string;
   rxDropsDelta: number | null;
   txDropsDelta: number | null;
   rxErrorsDelta: number | null;
@@ -108,6 +110,8 @@ CREATE TABLE IF NOT EXISTS monitoring_current (
   rx_bps REAL,
   tx_bps REAL,
   uplink_used_pct REAL,
+  uplink_capacity_bps REAL,
+  uplink_capacity_source TEXT NOT NULL DEFAULT 'unknown',
   rx_drops_delta REAL,
   tx_drops_delta REAL,
   rx_errors_delta REAL,
@@ -142,6 +146,10 @@ CREATE TABLE IF NOT EXISTS monitoring_collector_state (
 );
 `);
 
+/* Legacy-safe columns for existing databases (SQLite has no IF NOT EXISTS). */
+try { linkDb.exec(`ALTER TABLE monitoring_current ADD COLUMN uplink_capacity_bps REAL`); } catch { /* exists */ }
+try { linkDb.exec(`ALTER TABLE monitoring_current ADD COLUMN uplink_capacity_source TEXT NOT NULL DEFAULT 'unknown'`); } catch { /* exists */ }
+
 function num(v: number | null): number | null {
   return v != null && Number.isFinite(v) ? v : null;
 }
@@ -159,7 +167,7 @@ const upsertStmt = linkDb.prepare(`
     cpu_pct, iowait_pct, load1, load5, load15, cpu_cores,
     memory_used_pct, memory_total_bytes, memory_available_bytes, swap_used_pct,
     disk_used_pct, disk_free_bytes, inode_used_pct,
-    rx_bps, tx_bps, uplink_used_pct, rx_drops_delta, tx_drops_delta, rx_errors_delta, tx_errors_delta,
+    rx_bps, tx_bps, uplink_used_pct, uplink_capacity_bps, uplink_capacity_source, rx_drops_delta, tx_drops_delta, rx_errors_delta, tx_errors_delta,
     system_uptime_sec, reboot_detected,
     node_exporter_status, node_exporter_latency_ms, remnawave_status, online_users,
     file_descriptors, sockets, source, checked_at
@@ -169,7 +177,7 @@ const upsertStmt = linkDb.prepare(`
     @cpu_pct, @iowait_pct, @load1, @load5, @load15, @cpu_cores,
     @memory_used_pct, @memory_total_bytes, @memory_available_bytes, @swap_used_pct,
     @disk_used_pct, @disk_free_bytes, @inode_used_pct,
-    @rx_bps, @tx_bps, @uplink_used_pct, @rx_drops_delta, @tx_drops_delta, @rx_errors_delta, @tx_errors_delta,
+    @rx_bps, @tx_bps, @uplink_used_pct, @uplink_capacity_bps, @uplink_capacity_source, @rx_drops_delta, @tx_drops_delta, @rx_errors_delta, @tx_errors_delta,
     @system_uptime_sec, @reboot_detected,
     @node_exporter_status, @node_exporter_latency_ms, @remnawave_status, @online_users,
     @file_descriptors, @sockets, @source, @checked_at
@@ -195,6 +203,8 @@ const upsertStmt = linkDb.prepare(`
     inode_used_pct = excluded.inode_used_pct,
     rx_bps = excluded.rx_bps, tx_bps = excluded.tx_bps,
     uplink_used_pct = excluded.uplink_used_pct,
+    uplink_capacity_bps = excluded.uplink_capacity_bps,
+    uplink_capacity_source = excluded.uplink_capacity_source,
     rx_drops_delta = excluded.rx_drops_delta, tx_drops_delta = excluded.tx_drops_delta,
     rx_errors_delta = excluded.rx_errors_delta, tx_errors_delta = excluded.tx_errors_delta,
     system_uptime_sec = excluded.system_uptime_sec,
@@ -240,6 +250,8 @@ export function upsertCurrent(record: CurrentRecord): void {
     rx_bps: num(record.rxBps),
     tx_bps: num(record.txBps),
     uplink_used_pct: num(record.uplinkUsedPct),
+    uplink_capacity_bps: num(record.uplinkCapacityBps),
+    uplink_capacity_source: String(record.uplinkCapacitySource || "unknown").slice(0, 20),
     rx_drops_delta: num(record.rxDropsDelta),
     tx_drops_delta: num(record.txDropsDelta),
     rx_errors_delta: num(record.rxErrorsDelta),
@@ -284,6 +296,8 @@ function rowToRecord(r: any): CurrentRecord {
     rxBps: nullable(r.rx_bps),
     txBps: nullable(r.tx_bps),
     uplinkUsedPct: nullable(r.uplink_used_pct),
+    uplinkCapacityBps: nullable(r.uplink_capacity_bps),
+    uplinkCapacitySource: String(r.uplink_capacity_source ?? "unknown"),
     rxDropsDelta: nullable(r.rx_drops_delta),
     txDropsDelta: nullable(r.tx_drops_delta),
     rxErrorsDelta: nullable(r.rx_errors_delta),

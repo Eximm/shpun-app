@@ -8428,3 +8428,146 @@ button.reviews-star:not(:disabled) {
 .mon-collector__dot.is-idle { background: var(--warn); }
 .mon-collector__label { font-weight: 700; color: var(--text); }
 .mon-collector__meta { color: var(--muted); }
+
+/* ── Monitoring 2.0 UX pass: incidents, graphs, mobile actions ─────────── */
+.admin-stack, .mon-row, .mon-detail, .mon-graph, .mon-kv, .mon-incidentCard { min-width: 0; }
+.mon-kv { overflow-wrap: anywhere; }
+.mon-kv > b { min-width: 0; overflow-wrap: anywhere; }
+
+.mon-summary__stat.is-clickable { cursor: pointer; border: 1px solid var(--border); background: var(--surface); text-align: left; font: inherit; color: inherit; }
+.mon-summary__stat.is-clickable:hover { border-color: var(--accent); }
+.mon-summary__stat.is-clickable:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.mon-row__chevron,
+.mon-row__overflowBtn {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.mon-row__overflowBtn { font-size: 20px; }
+.mon-row__chevron:focus-visible,
+.mon-row__overflowBtn:focus-visible { outline: 2px solid var(--accent); }
+
+.mon-row__issue { flex-basis: 100%; font-size: 12px; font-weight: 700; color: var(--warn); }
+.mon-row__issue--critical { color: var(--danger); }
+
+.mon-actionMenu {
+  position: fixed;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+  box-shadow: var(--shadow);
+}
+.mon-actionMenu__item {
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px 12px;
+  min-height: 44px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.mon-actionMenu__item.is-danger { color: var(--danger); }
+.mon-actionMenu__item:hover { background: rgba(255,255,255,0.06); }
+.mon-actionMenu__item:focus-visible { outline: 2px solid var(--accent); }
+
+.mon-incidents { margin-top: 16px; }
+.mon-incidents__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.mon-incidents__title { margin: 0; }
+.mon-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.mon-tab {
+  min-height: 44px; padding: 8px 14px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  border-radius: 999px; font-weight: 600; cursor: pointer;
+}
+.mon-tab.is-active { border-color: var(--accent); background: rgba(124,92,255,.18); }
+.mon-incidents__filters { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+.mon-chipRow { display: flex; gap: 6px; flex-wrap: wrap; }
+.mon-chipFilter {
+  min-height: 36px; padding: 6px 12px;
+  border: 1px solid var(--border); background: transparent; color: var(--muted);
+  border-radius: 999px; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.mon-chipFilter.is-active { color: var(--text); border-color: var(--accent); }
+.mon-incidentList { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.mon-incidentCard {
+  display: flex; flex-direction: column; gap: 4px;
+  text-align: left; width: 100%;
+  border: 1px solid var(--border); border-left: 3px solid var(--warn);
+  background: var(--surface); border-radius: var(--radius-xs);
+  padding: 10px 12px; color: var(--text); cursor: pointer;
+}
+.mon-incidentCard--critical { border-left-color: var(--danger); }
+.mon-incidentCard.is-resolved { border-left-color: var(--ok); opacity: .92; }
+.mon-incidentCard__top { display: flex; justify-content: space-between; gap: 8px; font-weight: 700; }
+.mon-incidentCard__server { min-width: 0; overflow-wrap: anywhere; }
+.mon-incidentCard__rule { font-size: 13px; }
+.mon-incidentCard__meta { font-size: 12px; color: var(--muted); }
+.mon-incident__rule { font-weight: 700; }
+.mon-incidents__empty { margin-top: 10px; color: var(--muted); }
+.mon-incidents__more { font-size: 12px; color: var(--muted); }
+.mon-incidents__refreshing { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+.mon-graphs { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.mon-graph {
+  border: 1px solid var(--border); border-radius: var(--radius-xs);
+  padding: 10px; background: rgba(255,255,255,0.03);
+}
+.mon-graph.is-focus { border-color: var(--warn); }
+.mon-graph__head { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-weight: 700; font-size: 13px; }
+.mon-graph__threshold { color: var(--muted); font-weight: 600; }
+.mon-graph__stats { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 2px; }
+.mon-graph__stats b { color: var(--text); }
+.mon-graph__note { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.mon-graph__empty { font-size: 12px; color: var(--muted); padding: 12px 0; }
+.mon-graph__plot { position: relative; margin-top: 6px; }
+.mon-graph__plot svg { width: 100%; height: 88px; display: block; touch-action: none; }
+.mon-graph__line { fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.mon-graph__thresholdLine { stroke: var(--warn); stroke-width: 1; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; }
+.mon-graph__thresholdLine.is-critical { stroke: var(--danger); }
+.mon-graph__incident { fill: rgba(245,158,11,0.16); }
+.mon-graph__incident--critical { fill: rgba(255,77,109,0.18); }
+.mon-graph__cursor { fill: var(--text); }
+.mon-graph__axis { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin-top: 2px; }
+.mon-graph__tooltip {
+  position: absolute; top: 0; transform: translateX(-50%);
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  padding: 6px 8px; font-size: 11px; white-space: nowrap;
+  box-shadow: var(--shadow-sm); pointer-events: none; z-index: 3;
+}
+.mon-graph__tooltipTime { color: var(--muted); }
+.mon-rangeButtons { display: flex; gap: 6px; flex-wrap: wrap; }
+.mon-rangeBtn {
+  min-height: 44px; padding: 8px 14px;
+  border: 1px solid var(--border); background: transparent; color: var(--muted);
+  border-radius: 999px; font-weight: 600; cursor: pointer;
+}
+.mon-rangeBtn.is-active { color: var(--text); border-color: var(--accent); background: rgba(124,92,255,.18); }
+
+@media (max-width: 720px) {
+  .admin-page { padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 24px); }
+  .mon-graphs { grid-template-columns: 1fr; }
+  .mon-detail { grid-template-columns: 1fr; }
+  .mon-row__metrics { flex-basis: 100%; }
+  .mon-row__actions--desktop { display: none; }
+  .mon-row__overflow { display: block; margin-left: 0; }
+  .mon-row__main { gap: 6px; padding: 10px 12px; }
+  .mon-graph__plot svg { height: 96px; }
+}

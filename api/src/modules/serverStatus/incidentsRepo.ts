@@ -15,6 +15,8 @@ export type IncidentState = "pending" | "alerting" | "recovering" | "resolved";
 export type MonitoringIncidentRow = {
   id: number;
   server_id: number;
+  server_title: string | null;
+  server_kind: string | null;
   rule_type: string;
   severity: IncidentSeverity;
   state: IncidentState;
@@ -59,7 +61,19 @@ CREATE INDEX IF NOT EXISTS idx_monitoring_incidents_active
   ON monitoring_incidents(server_id, rule_type, resolved_at);
 CREATE INDEX IF NOT EXISTS idx_monitoring_incidents_state
   ON monitoring_incidents(state, severity, last_seen_at);
+`);
 
+/*
+ * Safe server name snapshot for historical display. A monitored server can be
+ * deleted later; the incident history must stay readable and must never rely
+ * on a hard FK to the live server row. Added idempotently (SQLite has no
+ * IF NOT EXISTS for columns) and index-safe.
+ */
+try { linkDb.exec(`ALTER TABLE monitoring_incidents ADD COLUMN server_title TEXT`); } catch { /* exists */ }
+try { linkDb.exec(`ALTER TABLE monitoring_incidents ADD COLUMN server_kind TEXT`); } catch { /* exists */ }
+linkDb.exec(`CREATE INDEX IF NOT EXISTS idx_monitoring_incidents_opened ON monitoring_incidents(opened_at);`);
+
+linkDb.exec(`
 CREATE TABLE IF NOT EXISTS monitoring_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   server_id INTEGER NOT NULL,
@@ -87,6 +101,8 @@ export function findActiveIncident(serverId: number, ruleType: string) {
 
 export function createPendingIncident(input: {
   serverId: number;
+  serverTitle?: string | null;
+  serverKind?: string | null;
   ruleType: string;
   severity: IncidentSeverity;
   ts: number;
@@ -98,11 +114,13 @@ export function createPendingIncident(input: {
   const info = linkDb
     .prepare(`
       INSERT INTO monitoring_incidents
-        (server_id, rule_type, severity, state, opened_at, last_seen_at, value, threshold, message, context_json, streak, recover_streak)
-      VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, 1, 0)
+        (server_id, server_title, server_kind, rule_type, severity, state, opened_at, last_seen_at, value, threshold, message, context_json, streak, recover_streak)
+      VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, 1, 0)
     `)
     .run(
       input.serverId,
+      input.serverTitle ? String(input.serverTitle).slice(0, 160) : null,
+      input.serverKind ? String(input.serverKind).slice(0, 20) : null,
       input.ruleType,
       input.severity,
       input.ts,
@@ -271,6 +289,76 @@ export function countActiveIncidents() {
 }
 
 /** Resolve stale incidents for servers that were removed/disabled. */
+export type IncidentQuery = {
+  serverId?: number;
+  status?: "active" | "resolved" | "all";
+  severity?: IncidentSeverity;
+  fromTs?: number;
+  toTs?: number;
+  limit?: number;
+  offset?: number;
+};
+
+/**
+ * UI-oriented incident query. Active = confirmed incidents only
+ * (alerting/recovering, resolved_at IS NULL) so it always matches the summary
+ * count. Resolved = history. Bounded by limit/offset.
+ */
+export function queryIncidents(params: IncidentQuery = {}) {
+  const where: string[] = [];
+  const values: any[] = [];
+  const status = params.status ?? "active";
+
+  if (status === "active") where.push(`resolved_at IS NULL AND state IN ('alerting','recovering')`);
+  else if (status === "resolved") where.push(`resolved_at IS NOT NULL`);
+  else where.push(`state IN ('alerting','recovering','resolved')`);
+
+  if (params.serverId) { where.push(`server_id = ?`); values.push(params.serverId); }
+  if (params.severity) { where.push(`severity = ?`); values.push(params.severity); }
+  if (params.fromTs) { where.push(`COALESCE(resolved_at, last_seen_at) >= ?`); values.push(params.fromTs); }
+  if (params.toTs) { where.push(`opened_at <= ?`); values.push(params.toTs); }
+
+  const limit = Math.max(1, Math.min(200, params.limit ?? 50));
+  const offset = Math.max(0, params.offset ?? 0);
+  const order = status === "active"
+    ? `CASE severity WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END, last_seen_at DESC`
+    : `COALESCE(resolved_at, last_seen_at) DESC, id DESC`;
+
+  return linkDb
+    .prepare(`SELECT * FROM monitoring_incidents WHERE ${where.join(" AND ")} ORDER BY ${order} LIMIT ? OFFSET ?`)
+    .all(...values, limit, offset) as MonitoringIncidentRow[];
+}
+
+/** Incidents that overlap a history range, for graph markers. */
+export function listIncidentsInRange(serverId: number, fromTs: number, toTs: number) {
+  return linkDb
+    .prepare(`
+      SELECT * FROM monitoring_incidents
+      WHERE server_id = ?
+        AND state IN ('alerting','recovering','resolved')
+        AND opened_at <= ?
+        AND (resolved_at IS NULL OR resolved_at >= ?)
+      ORDER BY opened_at ASC
+      LIMIT 200
+    `)
+    .all(serverId, toTs, fromTs) as MonitoringIncidentRow[];
+}
+
+export function countIncidents(params: IncidentQuery = {}) {
+  const where: string[] = [];
+  const values: any[] = [];
+  const status = params.status ?? "active";
+  if (status === "active") where.push(`resolved_at IS NULL AND state IN ('alerting','recovering')`);
+  else if (status === "resolved") where.push(`resolved_at IS NOT NULL`);
+  else where.push(`state IN ('alerting','recovering','resolved')`);
+  if (params.serverId) { where.push(`server_id = ?`); values.push(params.serverId); }
+  if (params.severity) { where.push(`severity = ?`); values.push(params.severity); }
+  if (params.fromTs) { where.push(`COALESCE(resolved_at, last_seen_at) >= ?`); values.push(params.fromTs); }
+  if (params.toTs) { where.push(`opened_at <= ?`); values.push(params.toTs); }
+  const row = linkDb.prepare(`SELECT COUNT(*) AS c FROM monitoring_incidents WHERE ${where.join(" AND ")}`).get(...values) as { c: number };
+  return Number(row?.c ?? 0);
+}
+
 export function resolveIncidentsForMissingServers(activeServerIds: number[], ts: number) {
   const ids = new Set(activeServerIds);
   const rows = listActiveIncidents();

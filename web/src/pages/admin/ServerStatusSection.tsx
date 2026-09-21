@@ -2,7 +2,20 @@ import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../../shared/api/client";
 import { useI18n } from "../../shared/i18n";
 import { AdminSectionHeader, AdminSectionIcon, ADMIN_SECTION_ICON, ModalShell } from "./shared";
-import { formatBitrate, formatLoad, formatPct, shouldShowRemnawaveUsers, stateTone } from "./monitoringFormat";
+import { ActionMenu } from "./ActionMenu";
+import { MonitoringGraph, MONITORING_METRICS, type GraphIncident, type GraphPoint } from "./MonitoringGraph";
+import { MonitoringIncidents, type IncidentCounts, type IncidentDto, type IncidentRange, type IncidentSeverityFilter, type IncidentTab } from "./MonitoringIncidents";
+import {
+  formatBitrate,
+  formatDuration,
+  formatIncidentValue,
+  formatLoad,
+  formatPct,
+  incidentMetricKey,
+  incidentRuleKey,
+  shouldShowRemnawaveUsers,
+  stateTone,
+} from "./monitoringFormat";
 
 type TFn = ReturnType<typeof useI18n>["t"];
 
@@ -106,28 +119,13 @@ type CurrentCheck = {
   memoryTotalBytes: number | null;
   memoryAvailableBytes: number | null;
   remnawaveStatus: "ok" | "error" | "unknown" | "disabled";
+  uplinkCapacityBps: number | null;
+  uplinkCapacitySource: "configured" | "detected" | "unknown";
 };
 
-type Incident = {
-  id: number;
-  rule_type: string;
-  severity: "info" | "warning" | "critical";
-  state: string;
-  opened_at: number;
-  resolved_at: number | null;
-  value: number | null;
-  message: string;
-};
+type Incident = IncidentDto;
 
-type HistoryPoint = {
-  ts: number;
-  cpuAvg: number | null;
-  memAvg: number | null;
-  diskAvg: number | null;
-  rxAvg: number | null;
-  txAvg: number | null;
-  load1Avg: number | null;
-};
+type HistoryPoint = GraphPoint;
 
 type Thresholds = Record<string, number>;
 
@@ -220,31 +218,6 @@ function Gauge({ label, value, tone = "ok" }: { label: string; value: number | n
   );
 }
 
-function Sparkline({ points, pick, label }: { points: HistoryPoint[]; pick: (p: HistoryPoint) => number | null; label: string }) {
-  const values = points.map(pick);
-  if (values.length < 2) return null;
-  const width = 240;
-  const height = 48;
-  const nums = values.filter((v): v is number => v != null);
-  if (nums.length < 2) return null;
-  const min = Math.min(...nums);
-  const max = Math.max(...nums);
-  const span = max - min || 1;
-  const step = width / (values.length - 1);
-  const coords = values
-    .map((v, i) => (v == null ? null : `${(i * step).toFixed(1)},${(height - ((v - min) / span) * height).toFixed(1)}`))
-    .filter((x): x is string => x != null);
-  return (
-    <div className="mon-chart">
-      <div className="mon-chart__label">{label}</div>
-      <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" role="img" aria-label={label}>
-        <polyline className="mon-chart__line" points={coords.join(" ")} />
-      </svg>
-      <div className="mon-chart__range">{`${Math.round(min)}–${Math.round(max)}`}</div>
-    </div>
-  );
-}
-
 export function ServerStatusSection() {
   const { t, locale } = useI18n();
   const [items, setItems] = useState<MonitoredServer[]>([]);
@@ -268,11 +241,42 @@ export function ServerStatusSection() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
-  const [menuOpenId, setMenuOpenId] = useState<number | null>(null);
   const [detail, setDetail] = useState<{ current: CurrentCheck | null; activeIncidents: Incident[]; recentIncidents: Incident[] } | null>(null);
   const [historyRange, setHistoryRange] = useState<"1h" | "24h" | "7d">("1h");
   const [history, setHistory] = useState<HistoryPoint[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
+  // Priority 1 UX: global incidents + graph focus.
+  const [actionAnchor, setActionAnchor] = useState<HTMLElement | null>(null);
+  const [actionServerId, setActionServerId] = useState<number | null>(null);
+  const [focusMetric, setFocusMetric] = useState<string | null>(null);
+  const [globalActive, setGlobalActive] = useState<IncidentDto[]>([]);
+  const [globalHistory, setGlobalHistory] = useState<IncidentDto[]>([]);
+  const [globalCounts, setGlobalCounts] = useState<IncidentCounts>({ critical: 0, warning: 0, total: 0 });
+  const [globalTotal, setGlobalTotal] = useState(0);
+  const [incidentTab, setIncidentTab] = useState<IncidentTab>("active");
+  const [incidentSeverity, setIncidentSeverity] = useState<IncidentSeverityFilter>("all");
+  const [incidentRange, setIncidentRange] = useState<IncidentRange>("24h");
+  const [detailMeta, setDetailMeta] = useState<{ effectiveThresholds: Record<string, number>; uplinkMbps: number | null; uplinkCapacityBps: number | null; uplinkCapacitySource: string } | null>(null);
+  const [historyIncidents, setHistoryIncidents] = useState<GraphIncident[]>([]);
+
+  async function loadIncidents(opts: { range?: IncidentRange } = {}) {
+    const range = opts.range ?? incidentRange;
+    try {
+      const qs = new URLSearchParams();
+      qs.set("range", range);
+      qs.set("limit", "50");
+      const r = await apiFetch<{ ok: true; active: IncidentDto[]; history: IncidentDto[]; counts: IncidentCounts; total: number }>(
+        `/admin/monitoring/incidents?${qs.toString()}`,
+        { method: "GET" },
+      );
+      setGlobalActive(r.active ?? []);
+      setGlobalHistory(r.history ?? []);
+      setGlobalCounts(r.counts ?? { critical: 0, warning: 0, total: 0 });
+      setGlobalTotal(r.total ?? 0);
+    } catch {
+      /* keep previous incident data */
+    }
+  }
 
   const countryOptionsList = useMemo(    () => COUNTRY_CODES.map((code) => ({ code })).sort((a, b) => a.code.localeCompare(b.code, locale)),
     [locale],
@@ -307,6 +311,7 @@ export function ServerStatusSection() {
       setError(t("admin.servers.err.load"));
     }
 
+    void loadIncidents();
     setRefreshing(false);
     if (!opts.silent) setLoading(false);
   }
@@ -552,6 +557,38 @@ export function ServerStatusSection() {
 
   /* ── Expanded detail ───────────────────────────────────────────────────── */
 
+  async function loadDetail(id: number, range: "1h" | "24h" | "7d" = historyRange) {
+    setDetailLoading(true);
+    try {
+      const [d, h] = await Promise.all([
+        apiFetch<{ ok: true; current: CurrentCheck | null; effectiveThresholds?: Record<string, number>; activeIncidents: Incident[]; recentIncidents: Incident[] }>(
+          `/admin/monitoring/servers/${id}/detail`,
+          { method: "GET" },
+        ),
+        apiFetch<{ ok: true; points: HistoryPoint[]; meta?: { effectiveThresholds: Record<string, number>; uplinkMbps: number | null; uplinkCapacityBps?: number | null; uplinkCapacitySource?: string }; incidents?: Incident[] }>(
+          `/admin/monitoring/servers/${id}/history?range=${range}`,
+          { method: "GET" },
+        ),
+      ]);
+      setDetail({ current: d.current, activeIncidents: d.activeIncidents ?? [], recentIncidents: d.recentIncidents ?? [] });
+      setDetailMeta(
+        h.meta
+          ? { effectiveThresholds: h.meta.effectiveThresholds, uplinkMbps: h.meta.uplinkMbps, uplinkCapacityBps: h.meta.uplinkCapacityBps ?? null, uplinkCapacitySource: h.meta.uplinkCapacitySource ?? "unknown" }
+          : d.effectiveThresholds
+            ? { effectiveThresholds: d.effectiveThresholds, uplinkMbps: null, uplinkCapacityBps: null, uplinkCapacitySource: "unknown" }
+            : null,
+      );
+      setHistory(h.points ?? []);
+      setHistoryIncidents((h.incidents ?? []).map((i) => ({ id: i.id, ruleType: i.ruleType, severity: i.severity, openedAt: i.openedAt, resolvedAt: i.resolvedAt })));
+    } catch {
+      setDetail({ current: null, activeIncidents: [], recentIncidents: [] });
+      setHistory([]);
+      setHistoryIncidents([]);
+    } finally {
+      setDetailLoading(false);
+    }
+  }
+
   async function toggleExpand(id: number) {
     if (expandedId === id) {
       setExpandedId(null);
@@ -560,33 +597,38 @@ export function ServerStatusSection() {
     setExpandedId(id);
     setDetail(null);
     setHistory([]);
-    setDetailLoading(true);
-    try {
-      const [d, h] = await Promise.all([
-        apiFetch<{ ok: true; current: CurrentCheck | null; activeIncidents: Incident[]; recentIncidents: Incident[] }>(
-          `/admin/monitoring/servers/${id}/detail`,
-          { method: "GET" },
-        ),
-        apiFetch<{ ok: true; points: HistoryPoint[] }>(`/admin/monitoring/servers/${id}/history?range=${historyRange}`, { method: "GET" }),
-      ]);
-      setDetail({ current: d.current, activeIncidents: d.activeIncidents ?? [], recentIncidents: d.recentIncidents ?? [] });
-      setHistory(h.points ?? []);
-    } catch {
-      setDetail({ current: null, activeIncidents: [], recentIncidents: [] });
-    } finally {
-      setDetailLoading(false);
-    }
+    setHistoryIncidents([]);
+    setDetailMeta(null);
+    await loadDetail(id, historyRange);
   }
 
   async function changeRange(range: "1h" | "24h" | "7d") {
     setHistoryRange(range);
     if (!expandedId) return;
-    try {
-      const h = await apiFetch<{ ok: true; points: HistoryPoint[] }>(`/admin/monitoring/servers/${expandedId}/history?range=${range}`, { method: "GET" });
-      setHistory(h.points ?? []);
-    } catch {
-      setHistory([]);
+    await loadDetail(expandedId, range);
+  }
+
+  /** Incident -> server card -> relevant graph. Explicit user action. */
+  function openIncident(inc: Incident) {
+    if (!items.some((i) => i.id === inc.serverId)) {
+      setNotice(t("admin.monitoring.incidents.server_deleted"));
+      return;
     }
+    setActionAnchor(null);
+    setActionServerId(null);
+    setExpandedId(inc.serverId);
+    setFocusMetric(incidentMetricKey(inc.ruleType));
+    const ageSec = Math.max(0, Math.floor(Date.now() / 1000) - inc.openedAt);
+    const range: "1h" | "24h" | "7d" = ageSec <= 3600 ? "1h" : ageSec <= 86400 ? "24h" : "7d";
+    setHistoryRange(range);
+    setDetail(null);
+    setHistory([]);
+    setHistoryIncidents([]);
+    setDetailMeta(null);
+    void loadDetail(inc.serverId, range);
+    window.requestAnimationFrame(() => {
+      document.getElementById(`mon-server-${inc.serverId}`)?.scrollIntoView({ block: "start", behavior: "auto" });
+    });
   }
 
   /* ── Grouping / rendering ──────────────────────────────────────────────── */
@@ -597,14 +639,12 @@ export function ServerStatusSection() {
     { kind: "infra", items: items.filter((i) => i.kind === "infra") },
   ];
 
-  function stateLabel(online: boolean | null | undefined) {
-    if (online === true) return t("admin.monitoring.state.online");
+  function stateLabel(online: boolean | null | undefined) {    if (online === true) return t("admin.monitoring.state.online");
     if (online === false) return t("admin.monitoring.state.offline");
     return t("admin.monitoring.state.unknown");
   }
 
-  function currentStateLabel(state: CurrentCheck["state"] | undefined) {
-    if (state === "fresh") return t("admin.monitoring.state.fresh");
+  function currentStateLabel(state: CurrentCheck["state"] | undefined) {    if (state === "fresh") return t("admin.monitoring.state.fresh");
     if (state === "stale") return t("admin.monitoring.state.stale");
     if (state === "offline") return t("admin.monitoring.state.offline");
     return t("admin.monitoring.state.no_data");
@@ -614,9 +654,24 @@ export function ServerStatusSection() {
     return `chip--${stateTone(state)}`;
   }
 
+  function severityRank(sev: string) {
+    return sev === "critical" ? 0 : sev === "warning" ? 1 : 2;
+  }
+
+  function incidentUnit(ruleType: string): "percent" | "count" {
+    return ruleType === "network_errors" ? "count" : "percent";
+  }
+
+  function focusIncidents(sev: IncidentSeverityFilter) {
+    setIncidentTab("active");
+    setIncidentSeverity(sev);
+    window.requestAnimationFrame(() => {
+      document.getElementById("mon-incidents")?.scrollIntoView({ block: "start", behavior: "auto" });
+    });
+  }
+
   return (
-    <div className="admin-stack">
-      <div className="card">
+    <div className="admin-stack">      <div className="card">
         <div className="card__body">
           <AdminSectionHeader
             icon={ADMIN_SECTION_ICON.serverStatus}
@@ -658,14 +713,22 @@ export function ServerStatusSection() {
                   <span className="mon-summary__value">{summary.totals.stale ?? 0}</span>
                   <span className="mon-summary__label">{t("admin.monitoring.state.stale")}</span>
                 </div>
-                <div className={`mon-summary__stat${summary.incidents.critical > 0 ? " is-bad" : summary.incidents.total > 0 ? " is-warn" : ""}`}>
+                <button
+                  type="button"
+                  className={`mon-summary__stat is-clickable${summary.incidents.critical > 0 ? " is-bad" : summary.incidents.total > 0 ? " is-warn" : ""}`}
+                  onClick={() => focusIncidents("all")}
+                >
                   <span className="mon-summary__value">{summary.incidents.total}</span>
                   <span className="mon-summary__label">{t("admin.monitoring.summary.incidents")}</span>
-                </div>
-                <div className="mon-summary__stat">
+                </button>
+                <button
+                  type="button"
+                  className="mon-summary__stat is-clickable"
+                  onClick={() => focusIncidents("warning")}
+                >
                   <span className="mon-summary__value">{summary.incidents.warning}</span>
                   <span className="mon-summary__label">{t("admin.monitoring.summary.warnings")}</span>
-                </div>
+                </button>
                 {summary.globalOnlineUsers != null && (
                   <div className="mon-summary__stat">
                     <span className="mon-summary__value">{summary.globalOnlineUsers}</span>
@@ -688,6 +751,21 @@ export function ServerStatusSection() {
             </>
           )}
 
+          <MonitoringIncidents
+            active={incidentSeverity === "all" ? globalActive : globalActive.filter((i) => i.severity === incidentSeverity)}
+            history={incidentSeverity === "all" ? globalHistory : globalHistory.filter((i) => i.severity === incidentSeverity)}
+            counts={globalCounts}
+            total={globalTotal}
+            tab={incidentTab}
+            onTab={setIncidentTab}
+            severity={incidentSeverity}
+            onSeverity={setIncidentSeverity}
+            range={incidentRange}
+            onRange={(r) => { setIncidentRange(r); void loadIncidents({ range: r }); }}
+            onOpenIncident={openIncident}
+            refreshing={refreshing}
+          />
+
           {groups.map((group) => (
             <section key={group.kind} className="mon-group admin-gap-top-md">
               <h3 className="h2 mon-group__title">
@@ -709,9 +787,11 @@ export function ServerStatusSection() {
                     : current?.state === "no_data"
                       ? "is-nodata"
                       : "";
+                const activeIssues = globalActive.filter((i) => i.serverId === item.id);
+                const topIssue = activeIssues.slice().sort((a, b) => severityRank(a.severity) - severityRank(b.severity))[0] ?? null;
                 return (
-                  <div key={item.id} className={`mon-row${expanded ? " is-expanded" : ""}${rowState ? ` ${rowState}` : ""}`}>
-                    <div className="mon-row__main" role="button" tabIndex={0} onClick={() => void toggleExpand(item.id)} onKeyDown={(e) => { if (e.key === "Enter") void toggleExpand(item.id); }}>
+                  <div key={item.id} id={`mon-server-${item.id}`} className={`mon-row${expanded ? " is-expanded" : ""}${rowState ? ` ${rowState}` : ""}`}>
+                    <div className="mon-row__main" role="button" tabIndex={0} onClick={() => void toggleExpand(item.id)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void toggleExpand(item.id); } }} aria-expanded={expanded} aria-controls={`mon-detail-${item.id}`}>
                       <div className="mon-row__identity">
                         <div className="mon-row__title">
                           <span className={`serverStatus-dot serverStatus-dot--${Number(item.active) ? "online" : "offline"}`} />
@@ -740,30 +820,42 @@ export function ServerStatusSection() {
                         <span className="mon-row__plain">{current?.uptime ? t("admin.monitoring.metric.uptime_short", { value: current.uptime }) : "—"}</span>
                         <span className={`mon-row__plain mon-row__fresh${current?.state === "stale" || current?.state === "offline" ? " is-stale" : ""}`}>{t("admin.monitoring.metric.freshness", { value: fmtRelative(current?.checkedAt ?? null, t) })}</span>
                       </div>
+                      {topIssue && (
+                        <div className={`mon-row__issue mon-row__issue--${topIssue.severity}`}>
+                          {`${topIssue.severity === "critical" ? "🔴" : "⚠"} ${t(incidentRuleKey(topIssue.ruleType))}`}
+                          {topIssue.value != null && topIssue.threshold != null
+                            ? `: ${formatIncidentValue(topIssue.value, incidentUnit(topIssue.ruleType))} · ${t("admin.monitoring.incident.threshold_short")} ${formatIncidentValue(topIssue.threshold, incidentUnit(topIssue.ruleType))}`
+                            : ""}
+                          {` · ${formatDuration(topIssue.durationSec)}`}
+                          {activeIssues.length > 1 ? ` · +${activeIssues.length - 1}` : ""}
+                        </div>
+                      )}
                       <div className="actions mon-row__actions mon-row__actions--desktop">
                         <button className="btn btn--soft" type="button" onClick={(e) => { e.stopPropagation(); edit(item); }}>{t("common.edit")}</button>
                         <button className="btn btn--danger" type="button" onClick={(e) => { e.stopPropagation(); void remove(item.id); }}>{t("common.delete")}</button>
                       </div>
+                      <button
+                        className="mon-row__chevron"
+                        type="button"
+                        aria-label={expanded ? t("admin.monitoring.row.collapse") : t("admin.monitoring.row.expand")}
+                        aria-expanded={expanded}
+                        aria-controls={`mon-detail-${item.id}`}
+                        onClick={(e) => { e.stopPropagation(); void toggleExpand(item.id); }}
+                      >{expanded ? "⌃" : "⌄"}</button>
                       <div className="mon-row__overflow" onClick={(e) => e.stopPropagation()}>
                         <button
-                          className="btn btn--soft mon-row__overflowBtn"
+                          className="mon-row__overflowBtn"
                           type="button"
                           aria-label={t("admin.monitoring.action.menu")}
                           aria-haspopup="menu"
-                          aria-expanded={menuOpenId === item.id}
-                          onClick={() => setMenuOpenId(menuOpenId === item.id ? null : item.id)}
+                          aria-expanded={actionServerId === item.id}
+                          onClick={(e) => { setActionAnchor(e.currentTarget); setActionServerId(item.id); }}
                         >⋮</button>
-                        {menuOpenId === item.id && (
-                          <div className="mon-row__overflowMenu" role="menu">
-                            <button className="btn btn--soft" role="menuitem" type="button" onClick={() => { setMenuOpenId(null); edit(item); }}>{t("common.edit")}</button>
-                            <button className="btn btn--danger" role="menuitem" type="button" onClick={() => { setMenuOpenId(null); void remove(item.id); }}>{t("common.delete")}</button>
-                          </div>
-                        )}
                       </div>
                     </div>
 
                     {expanded && (
-                      <div className="mon-detail">
+                      <div className="mon-detail" id={`mon-detail-${item.id}`}>
                         {detailLoading && <div className="pre">{t("common.loading")}</div>}
                         {current && (
                           <>
@@ -788,7 +880,9 @@ export function ServerStatusSection() {
                               <div className="mon-kv">
                                 <span>{t("admin.monitoring.metric.rx")}</span><b>{formatBitrate(current.rxMbps)}</b>
                                 <span>{t("admin.monitoring.metric.tx")}</span><b>{formatBitrate(current.txMbps)}</b>
-                                <span>{t("admin.monitoring.metric.uplink")}</span><b>{current.uplinkLoadPct ?? "—"}%</b>
+                                <span>{t("admin.monitoring.metric.uplink")}</span><b>{formatPct(current.uplinkLoadPct)}</b>
+                                <span>{t("admin.monitoring.metric.capacity")}</span><b>{detailMeta?.uplinkCapacityBps != null ? formatBitrate((detailMeta.uplinkCapacityBps * 8) / 1_000_000) : detailMeta?.uplinkMbps != null ? formatBitrate(detailMeta.uplinkMbps) : "—"}</b>
+                                <span>{t("admin.monitoring.capacity.source")}</span><b>{t(`admin.monitoring.capacity.source.${detailMeta?.uplinkCapacitySource === "configured" || detailMeta?.uplinkCapacitySource === "detected" ? detailMeta.uplinkCapacitySource : "unknown"}`)}</b>
                                 <span>{t("admin.monitoring.metric.drops")}</span><b>{`${current.rxDropsDelta ?? "—"} / ${current.txDropsDelta ?? "—"}`}</b>
                                 <span>{t("admin.monitoring.metric.errors")}</span><b>{`${current.rxErrorsDelta ?? "—"} / ${current.txErrorsDelta ?? "—"}`}</b>
                                 <span>{t("admin.monitoring.metric.fd")}</span><b>{current.fileDescriptors ?? "—"}</b>
@@ -824,8 +918,13 @@ export function ServerStatusSection() {
                                 <div className="mon-incidentList">
                                   {detail.activeIncidents.map((inc) => (
                                     <div key={inc.id} className={`mon-incident mon-incident--${inc.severity}`}>
-                                      <span>{inc.message}</span>
-                                      <span className="mon-incident__meta">{`${inc.severity} · ${inc.state}`}</span>
+                                      <span className="mon-incident__rule">{t(incidentRuleKey(inc.ruleType))}</span>
+                                      <span className="mon-incident__meta">{`${t(`admin.monitoring.incident.severity.${inc.severity}`)} · ${t(`admin.monitoring.incident.state.${inc.state}`)}`}</span>
+                                      <span className="mon-incident__meta">
+                                        {inc.value != null ? `${t("admin.monitoring.incident.current")} ${formatIncidentValue(inc.value, incidentUnit(inc.ruleType))}` : ""}
+                                        {inc.threshold != null ? ` · ${t("admin.monitoring.incident.threshold")} ${formatIncidentValue(inc.threshold, incidentUnit(inc.ruleType))}` : ""}
+                                        {` · ${formatDuration(inc.durationSec)}`}
+                                      </span>
                                     </div>
                                   ))}
                                 </div>
@@ -836,9 +935,9 @@ export function ServerStatusSection() {
 
                             <div className="mon-detail__section">
                               <div className="mon-detail__heading">{t("admin.monitoring.section.history")}</div>
-                              <div className="actions actions--3 admin-gap-top-sm">
+                              <div className="actions actions--3 admin-gap-top-sm mon-rangeButtons">
                                 {(["1h", "24h", "7d"] as const).map((range) => (
-                                  <button key={range} className={`btn ${historyRange === range ? "btn--primary" : "btn--soft"}`} type="button" onClick={() => void changeRange(range)}>
+                                  <button key={range} className={`mon-rangeBtn${historyRange === range ? " is-active" : ""}`} type="button" onClick={() => void changeRange(range)}>
                                     {t(`admin.monitoring.history.range.${range}`)}
                                   </button>
                                 ))}
@@ -846,12 +945,43 @@ export function ServerStatusSection() {
                               {history.length < 2 ? (
                                 <div className="pre admin-gap-top-sm">{t("admin.monitoring.history.empty")}</div>
                               ) : (
-                                <div className="mon-charts admin-gap-top-sm">
-                                  <Sparkline points={history} pick={(p) => p.cpuAvg} label={t("admin.monitoring.metric.cpu")} />
-                                  <Sparkline points={history} pick={(p) => p.memAvg} label={t("admin.monitoring.metric.ram")} />
-                                  <Sparkline points={history} pick={(p) => p.rxAvg} label={t("admin.monitoring.metric.rx")} />
-                                  <Sparkline points={history} pick={(p) => p.txAvg} label={t("admin.monitoring.metric.tx")} />
-                                  <Sparkline points={history} pick={(p) => p.diskAvg} label={t("admin.monitoring.metric.disk")} />
+                                <div className="mon-graphs admin-gap-top-sm">
+                                  {[...MONITORING_METRICS]
+                                    .sort((a, b) => (a.key === focusMetric ? -1 : b.key === focusMetric ? 1 : 0))
+                                    .map((metric) => {
+                                      const th = detailMeta?.effectiveThresholds ?? {};
+                                      const threshold = metric.key === "cpu" ? th.cpuPct
+                                        : metric.key === "ram" ? th.memoryWarnPct
+                                          : metric.key === "disk" ? th.diskWarnPct
+                                            : metric.key === "uplink" ? th.uplinkWarnPct
+                                              : null;
+                                      const thresholdCrit = metric.key === "ram" ? th.memoryCritPct
+                                        : metric.key === "disk" ? th.diskCritPct
+                                          : null;
+                                      const currentValue = metric.key === "cpu" ? current.cpuLoadPct
+                                        : metric.key === "ram" ? current.memoryLoadPct
+                                          : metric.key === "disk" ? current.diskLoadPct
+                                            : metric.key === "uplink" ? current.uplinkLoadPct
+                                              : metric.key === "rx" ? current.rxMbps
+                                                : metric.key === "tx" ? current.txMbps
+                                                  : null;
+                                      return (
+                                        <MonitoringGraph
+                                          key={metric.key}
+                                          metric={metric}
+                                          points={history}
+                                          current={currentValue}
+                                          threshold={threshold}
+                                          thresholdCrit={thresholdCrit}
+                                          incidents={historyIncidents.filter((i) => incidentMetricKey(i.ruleType) === metric.key)}
+                                          range={historyRange}
+                                          isFocus={focusMetric === metric.key}
+                                          note={metric.key === "uplink"
+                                            ? `${t("admin.monitoring.graph.capacity", { value: detailMeta?.uplinkCapacityBps != null ? formatBitrate((detailMeta.uplinkCapacityBps * 8) / 1_000_000) : detailMeta?.uplinkMbps != null ? formatBitrate(detailMeta.uplinkMbps) : "—" })} · ${t("admin.monitoring.capacity.source")}: ${t(`admin.monitoring.capacity.source.${detailMeta?.uplinkCapacitySource === "configured" || detailMeta?.uplinkCapacitySource === "detected" ? detailMeta.uplinkCapacitySource : "unknown"}`)}${currentValue != null && currentValue > 100 ? ` · ${t("admin.monitoring.graph.above100")}` : ""}`
+                                            : undefined}
+                                        />
+                                      );
+                                    })}
                                 </div>
                               )}
                             </div>
@@ -1101,6 +1231,28 @@ export function ServerStatusSection() {
           </div>
         </ModalShell>
       )}
+
+      <ActionMenu
+        anchorEl={actionAnchor}
+        open={actionServerId != null}
+        onClose={() => {
+          const el = actionAnchor;
+          setActionServerId(null);
+          setActionAnchor(null);
+          window.requestAnimationFrame(() => {
+            try { el?.focus?.({ preventScroll: true }); } catch { /* best-effort */ }
+          });
+        }}
+        items={(() => {
+          const it = items.find((x) => x.id === actionServerId);
+          return it
+            ? [
+                { label: t("common.edit"), onClick: () => edit(it) },
+                { label: t("common.delete"), danger: true, onClick: () => void remove(it.id) },
+              ]
+            : [];
+        })()}
+      />
     </div>
   );
 }
