@@ -7513,9 +7513,11 @@ button.reviews-star:not(:disabled) {
 }
 .refPartnerCard__link:hover { color: #75e4ff; }
 .refPartnerCard__campaign {
+  max-width: 100%;
   color: rgba(255,255,255,0.55);
   font-size: 12px;
   line-height: 1.3;
+  overflow-wrap: anywhere;
 }
 .refPartnerLinks {
   display: grid;
@@ -7564,9 +7566,10 @@ button.reviews-star:not(:disabled) {
 }
 .refPartnerCard__metrics {
   display: grid;
-  grid-template-columns: repeat(5, minmax(118px,1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
   margin-top: 14px;
+  min-width: 0;
 }
 .refPartnerCard__metric {
   display: flex;
@@ -7586,7 +7589,7 @@ button.reviews-star:not(:disabled) {
   font-size: 10px;
   font-weight: 800;
   line-height: 1.25;
-  overflow: hidden;
+  overflow-wrap: anywhere;
 }
 .refPartnerCard__metric strong {
   display: block;
@@ -7595,6 +7598,7 @@ button.reviews-star:not(:disabled) {
   font-size: 16px;
   font-weight: 950;
   line-height: 1;
+  overflow-wrap: anywhere;
 }
 .refPartnerCard__metric--active {
   border-color: rgba(34,197,94,0.14);
@@ -7737,6 +7741,7 @@ button.reviews-star:not(:disabled) {
   }
 }
 
+@media (max-width: 1100px) { .refPartnerCard__metrics { grid-template-columns: repeat(3, minmax(0,1fr)); } }
 @media (max-width: 900px) { .admin-metricsGrid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
 @media (max-width: 720px) {
   .admin-sectionHead, .admin-overviewGrid, .admin-compactGrid, .admin-metricsGrid { grid-template-columns: 1fr; }
