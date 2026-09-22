@@ -552,7 +552,7 @@ export function ServerStatusSection() {
             subtitle={loading ? t("common.loading") : t("admin.monitoring.subtitle")}
             actions={
               <div className="mon-toolbar" role="group" aria-label={t("admin.monitoring.toolbar.aria")}>
-                <button className="btn mon-btn--quiet" type="button" onClick={() => void loadAll({ silent: true })} disabled={refreshing}>{t("common.refresh")}</button>
+                <button className="btn mon-btn--quiet" type="button" onClick={() => void loadAll({ silent: true })} disabled={refreshing}><span className="mon-btn__text">{t("common.refresh")}</span></button>
                 <button className="btn btn--soft" type="button" onClick={() => void forceCollect()} disabled={forceBusy}>{t("admin.monitoring.force_check")}</button>
                 <button className="btn btn--primary" type="button" onClick={startCreate}>{t("admin.servers.new")}</button>
               </div>

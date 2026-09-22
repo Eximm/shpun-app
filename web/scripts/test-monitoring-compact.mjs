@@ -163,6 +163,14 @@ assert("metric pills separate label and value", css.includes(".mon-metric__label
 assert("traffic row has distinct tokens", css.includes(".mon-traffic__value") && css.includes(".mon-fresh"));
 assert("toolbar buttons share one height", css.includes(".mon-toolbar .btn { min-height: 36px; height: 36px;"));
 
+// Mobile-only composition (desktop pills retained).
+assert("mobile top summary is one bounded block", css.includes(".mon-dashboard {\n    gap: 0;") && css.includes("border-top: 1px solid var(--border);"));
+assert("mobile toolbar collapses refresh to an icon", css.includes(".mon-toolbar .mon-btn--quiet .mon-btn__text { display: none; }") && css.includes('.mon-toolbar .mon-btn--quiet::before { content: "↻"'));
+assert("mobile metrics drop bordered pills", css.includes(".mon-row__metrics .mon-metric,\n  .mon-row__traffic .mon-metric {"));
+assert("mobile badges become separator text", css.includes(".mon-row__badges .chip + .chip::before") && css.includes('content: "·"'));
+assert("desktop metric pills are retained", css.includes("border: 1px solid var(--border); border-radius: 8px;"));
+assert("mobile collapsed card keeps 3-4 logical rows", css.includes(".mon-row__main { padding: 9px 10px; gap: 5px; }") && src.includes("mon-row__metrics") && src.includes("mon-row__traffic"));
+
 // Incident/history mobile isolation + richer history.
 assert("incident meta no longer refuses to wrap", !css.includes(".mon-incident__meta { color: var(--muted); font-size: 11px; white-space: nowrap; }"));
 assert("detail grid children can shrink", css.includes(".mon-detail > * { min-width: 0; }"));
