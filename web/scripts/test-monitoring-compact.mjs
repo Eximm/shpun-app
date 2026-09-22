@@ -18,6 +18,10 @@ import { build } from "esbuild";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const webRoot = path.join(__dirname, "..");
+// Windows checkouts may carry CRLF. Normalize line endings once so that
+// multiline `includes(...)` assertions behave identically on every OS.
+const readNormalized = (relPath) =>
+  fs.readFileSync(path.join(webRoot, relPath), "utf8").replace(/\r\n?/g, "\n");
 const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "shpun-mon-compact-"));
 const outfile = path.join(outDir, "format.mjs");
 
@@ -87,7 +91,7 @@ check("offline incident has no metric graph", incidentMetricKey("offline"), null
 
 /* ─ Component wiring (static) ───────────────────────────────────────────── */
 
-const src = fs.readFileSync(path.join(webRoot, "src", "pages", "admin", "ServerStatusSection.tsx"), "utf8");
+const src = readNormalized("src/pages/admin/ServerStatusSection.tsx");
 
 assert(
   "compact row reads item.current from the list snapshot",
@@ -118,8 +122,8 @@ assert("server summary is one grouped block", src.includes("mon-panel__big") && 
 assert("collector status is a compact operational row", src.includes("mon-collectorRow") && src.includes("mon-statusDot"));
 assert("collapsed card uses compact metrics, not gauges", !src.includes("Gauge") && src.includes("mon-metric") && src.includes("mon-row__traffic"));
 
-const shared = fs.readFileSync(path.join(webRoot, "src", "pages", "admin", "shared.tsx"), "utf8");
-const actionMenu = fs.readFileSync(path.join(webRoot, "src", "pages", "admin", "ActionMenu.tsx"), "utf8");
+const shared = readNormalized("src/pages/admin/shared.tsx");
+const actionMenu = readNormalized("src/pages/admin/ActionMenu.tsx");
 assert("modal captures viewport before locking", shared.includes("const scrollY = window.scrollY"));
 assert("modal restores the exact viewport", shared.includes("window.scrollTo({ left: scrollX, top: scrollY"));
 assert("modal restores focus without scrolling", shared.includes("preventScroll: true"));
@@ -142,7 +146,7 @@ assert("graph focuses the incident metric", src.includes("incidentMetricKey(inc.
 assert("uplink diagnostics show the capacity source", src.includes("admin.monitoring.capacity.source") && src.includes("admin.monitoring.metric.capacity"));
 assert("above-100 hint is wired", src.includes("admin.monitoring.graph.above100"));
 
-const graph = fs.readFileSync(path.join(webRoot, "src", "pages", "admin", "MonitoringGraph.tsx"), "utf8");
+const graph = readNormalized("src/pages/admin/MonitoringGraph.tsx");
 assert("graph has percentage-anchored ceilings", graph.includes("percentCeiling"));
 assert("graph renders threshold lines", graph.includes("mon-graph__thresholdLine"));
 assert("graph renders incident intervals", graph.includes("mon-graph__incident"));
@@ -151,8 +155,8 @@ assert("graph has a tooltip", graph.includes("mon-graph__tooltip"));
 assert("graph includes the uplink metric", graph.includes('key: "uplink"'));
 assert("graph gaps on null samples", graph.includes("segments"));
 
-const css = fs.readFileSync(path.join(webRoot, "src", "index.css"), "utf8");
-const incidentsComp = fs.readFileSync(path.join(webRoot, "src", "pages", "admin", "MonitoringIncidents.tsx"), "utf8");
+const css = readNormalized("src/index.css");
+const incidentsComp = readNormalized("src/pages/admin/MonitoringIncidents.tsx");
 assert("mobile single-column details", css.includes(".mon-detail { grid-template-columns: 1fr; }"));
 assert("safe-area bottom padding for the bottom nav", css.includes("var(--nav-h) + env(safe-area-inset-bottom)"));
 assert("no horizontal overflow guard", css.includes(".admin-stack, .mon-row, .mon-detail, .mon-graph, .mon-kv, .mon-incidentCard { min-width: 0; }"));
