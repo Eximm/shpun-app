@@ -174,6 +174,23 @@ function metricTone(v: number | null | undefined): string {
   return "";
 }
 
+function barWidth(v: number | null | undefined): number {
+  if (v == null || !Number.isFinite(v)) return 0;
+  return Math.min(100, Math.max(0, v));
+}
+
+function MetricPill({ label, value, pct, tone = "" }: { label: string; value: string; pct?: number | null; tone?: string }) {
+  return (
+    <span className={`mon-metric${tone}`}>
+      <span className="mon-metric__label">{label}</span>
+      <span className="mon-metric__value">{value}</span>
+      {pct !== undefined && (
+        <span className="mon-metric__bar"><span className="mon-metric__barFill" style={{ width: `${barWidth(pct)}%` }} /></span>
+      )}
+    </span>
+  );
+}
+
 function collectorHealth(c: CollectorState | null): { tone: string; labelKey: string } | null {
   if (!c) return null;
   if (c.collectorRunning) return { tone: "run", labelKey: "admin.monitoring.collector.status.running" };
@@ -686,30 +703,21 @@ export function ServerStatusSection() {
                         </div>
                       </div>
                       <div className="mon-row__metrics">
-                        <span className={`mon-metric${metricTone(current?.cpuLoadPct)}`}>
-                          <span className="mon-metric__label">{t("admin.monitoring.metric.cpu_short")}</span>
-                          <span className="mon-metric__value">{formatPct(current?.cpuLoadPct)}</span>
-                        </span>
-                        <span className={`mon-metric${metricTone(current?.memoryLoadPct)}`}>
-                          <span className="mon-metric__label">{t("admin.monitoring.metric.ram_short")}</span>
-                          <span className="mon-metric__value">{formatPct(current?.memoryLoadPct)}</span>
-                        </span>
-                        <span className={`mon-metric${metricTone(current?.diskLoadPct)}`}>
-                          <span className="mon-metric__label">{t("admin.monitoring.metric.disk_short")}</span>
-                          <span className="mon-metric__value">{formatPct(current?.diskLoadPct)}</span>
-                        </span>
-                        <span className="mon-metric">
-                          <span className="mon-metric__label">{t("admin.monitoring.metric.load")}</span>
-                          <span className="mon-metric__value">{formatLoad(current?.load1)}</span>
-                        </span>
+                        <MetricPill label={t("admin.monitoring.metric.cpu_short")} value={formatPct(current?.cpuLoadPct)} pct={current?.cpuLoadPct} tone={metricTone(current?.cpuLoadPct)} />
+                        <MetricPill label={t("admin.monitoring.metric.ram_short")} value={formatPct(current?.memoryLoadPct)} pct={current?.memoryLoadPct} tone={metricTone(current?.memoryLoadPct)} />
+                        <MetricPill label={t("admin.monitoring.metric.disk_short")} value={formatPct(current?.diskLoadPct)} pct={current?.diskLoadPct} tone={metricTone(current?.diskLoadPct)} />
+                        <MetricPill label={t("admin.monitoring.metric.load")} value={formatLoad(current?.load1)} />
                       </div>
                       <div className="mon-row__traffic">
-                        <span className="mon-traffic"><span className="mon-traffic__arrow">↓</span><span className="mon-traffic__value">{formatBitrate(current?.rxMbps)}</span></span>
-                        <span className="mon-traffic"><span className="mon-traffic__arrow">↑</span><span className="mon-traffic__value">{formatBitrate(current?.txMbps)}</span></span>
-                        <span className={`mon-metric${metricTone(current?.uplinkLoadPct)}`}>
-                          <span className="mon-metric__label">{t("admin.monitoring.metric.uplink")}</span>
-                          <span className="mon-metric__value">{formatPct(current?.uplinkLoadPct)}</span>
+                        <span className="mon-traffic">
+                          <span className="mon-traffic__head"><span className="mon-traffic__arrow">↓</span><span className="mon-traffic__label">{t("admin.monitoring.metric.rx")}</span></span>
+                          <span className="mon-traffic__value">{formatBitrate(current?.rxMbps)}</span>
                         </span>
+                        <span className="mon-traffic">
+                          <span className="mon-traffic__head"><span className="mon-traffic__arrow">↑</span><span className="mon-traffic__label">{t("admin.monitoring.metric.tx")}</span></span>
+                          <span className="mon-traffic__value">{formatBitrate(current?.txMbps)}</span>
+                        </span>
+                        <MetricPill label={t("admin.monitoring.metric.uplink")} value={formatPct(current?.uplinkLoadPct)} pct={current?.uplinkLoadPct} tone={metricTone(current?.uplinkLoadPct)} />
                         <span className={`mon-fresh${current?.state === "stale" || current?.state === "offline" ? " is-stale" : ""}`}>{t("admin.monitoring.metric.freshness", { value: fmtRelative(current?.checkedAt ?? null, t) })}</span>
                       </div>
                       {topIssue && (

@@ -171,6 +171,16 @@ assert("mobile badges become separator text", css.includes(".mon-row__badges .ch
 assert("desktop metric pills are retained", css.includes("border: 1px solid var(--border); border-radius: 8px;"));
 assert("mobile collapsed card keeps 3-4 logical rows", css.includes(".mon-row__main { padding: 9px 10px; gap: 5px; }") && src.includes("mon-row__metrics") && src.includes("mon-row__traffic"));
 
+// Mobile mini-dashboard composition.
+assert("mobile card is a 4-zone grid", css.includes('"title  title  title  title  chev   more"') && css.includes('"rx     rx     tx     tx     uplink uplink"'));
+assert("mobile actions live in the header zone", css.includes(".mon-row__chevron { grid-area: chev") && css.includes(".mon-row__overflow { grid-area: more"));
+assert("mobile freshness sits in the meta row", css.includes(".mon-fresh { grid-area: fresh"));
+assert("mobile system metrics use a 4-column grid", css.includes("grid-template-columns: repeat(4, minmax(0, 1fr))"));
+assert("mobile network uses rx/tx/uplink areas", css.includes(".mon-row__traffic > .mon-traffic:nth-child(1) { grid-area: rx; }") && css.includes(".mon-row__traffic > .mon-metric { grid-area: uplink; }"));
+assert("mobile percentage metrics have a thin accent bar", css.includes(".mon-metric__barFill") && css.includes(".mon-metric.is-warn .mon-metric__barFill"));
+assert("desktop hides the mobile bar and traffic labels", css.includes(".mon-metric__bar { display: none; }") && css.includes(".mon-traffic__label { display: none; }"));
+assert("no plain-text wall: label/value spans kept", src.includes("mon-metric__label") && src.includes("mon-metric__value") && src.includes("mon-traffic__value"));
+
 // Incident/history mobile isolation + richer history.
 assert("incident meta no longer refuses to wrap", !css.includes(".mon-incident__meta { color: var(--muted); font-size: 11px; white-space: nowrap; }"));
 assert("detail grid children can shrink", css.includes(".mon-detail > * { min-width: 0; }"));

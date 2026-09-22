@@ -8671,3 +8671,71 @@ button.reviews-star:not(:disabled) {
   .mon-row__traffic { font-size: 11.5px; }
   .mon-fresh { font-size: 10.5px; }
 }
+
+/* ── Monitoring mobile mini-dashboard collapsed card ───────────────────── */
+.mon-metric__bar { display: none; }
+.mon-traffic__head { display: inline-flex; align-items: baseline; gap: 4px; }
+.mon-traffic__label { display: none; }
+
+@media (max-width: 720px) {
+  /* Whole card becomes a 4-zone mini-dashboard grid. */
+  .mon-row__main {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-areas:
+      "title  title  title  title  chev   more"
+      "badges badges badges badges fresh  fresh"
+      "metrics metrics metrics metrics metrics metrics"
+      "rx     rx     tx     tx     uplink uplink"
+      "issue  issue  issue  issue  issue  issue";
+    gap: 6px 6px;
+    align-items: start;
+  }
+  .mon-row__identity, .mon-row__traffic { display: contents; }
+  .mon-row__title { grid-area: title; min-width: 0; }
+  .mon-row__badges { grid-area: badges; min-width: 0; }
+  .mon-fresh { grid-area: fresh; justify-self: end; text-align: right; font-size: 10.5px; }
+  .mon-row__chevron { grid-area: chev; margin-left: 0; justify-self: end; }
+  .mon-row__overflow { grid-area: more; justify-self: end; }
+  .mon-row__issue { grid-area: issue; }
+
+  /* System metrics: one row, four equal cells. */
+  .mon-row__metrics {
+    grid-area: metrics;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px 8px;
+    flex: none;
+  }
+  .mon-row__metrics .mon-metric,
+  .mon-row__traffic .mon-metric {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 0; border: 0; border-radius: 0; background: transparent;
+    min-width: 0;
+  }
+  .mon-metric__label { font-size: 10px; }
+  .mon-metric__value { font-size: 13px; }
+
+  /* Network metrics: RX | TX | Uplink. */
+  .mon-row__traffic > .mon-traffic:nth-child(1) { grid-area: rx; }
+  .mon-row__traffic > .mon-traffic:nth-child(2) { grid-area: tx; }
+  .mon-row__traffic > .mon-metric { grid-area: uplink; }
+  .mon-traffic { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .mon-traffic__label { display: inline; }
+  .mon-traffic__value { font-size: 13px; }
+
+  /* Subtle percentage indicator (mobile only, thin). */
+  .mon-metric__bar {
+    display: block;
+    height: 3px;
+    margin-top: 3px;
+    border-radius: 99px;
+    background: rgba(255,255,255,0.10);
+    overflow: hidden;
+  }
+  .mon-metric__barFill { display: block; height: 100%; border-radius: 99px; background: var(--ok); }
+  .mon-metric.is-warn .mon-metric__barFill { background: var(--warn); }
+  .mon-metric.is-bad .mon-metric__barFill { background: var(--danger); }
+}
