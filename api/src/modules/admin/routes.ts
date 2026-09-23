@@ -52,6 +52,7 @@ import {
   saveReferralAlias,
 } from "../../shared/linkdb/referralAliasesRepo.js";
 import { countSupportUnreadBreakdown } from "../support/notifyRepo.js";
+import { buildReferralAnalytics, normalizePeriod } from "../referrals/analytics.js";
 import { listAdminTickets } from "../support/service.js";
 import { countTicketsCreatedSince } from "../support/sqliteRepository.js";
 import { countReviewsByStatus, countReviewsSince, listRecentReviews } from "../reviews/repo.js";
@@ -539,6 +540,24 @@ export async function adminRoutes(app: FastifyInstance) {
     return reply.send({ ok: true, items: listReferralAliases() });
   });
 
+  // Aggregated acquisition (and, when a finance provider exists, revenue)
+  // analytics for every alias. One grouped attribution query, no N+1.
+  app.get("/admin/referral-aliases/analytics", async (req, reply) => {
+    const s = getSessionFromRequest(req);
+    if (!s?.shmSessionId) return reply.code(401).send({ ok: false });
+    if (!(await ensureAdmin(s.shmSessionId))) return reply.code(403).send({ ok: false, error: "not_admin" });
+
+    const period = normalizePeriod((req.query as any)?.period);
+    const items = await buildReferralAnalytics(period);
+    return reply.send({
+      ok: true,
+      period,
+      periodModel: "cohort_registrations",
+      financeAvailable: items.some((item) => item.availability.finance),
+      items,
+    });
+  });
+
   app.get("/admin/referral-aliases/:id/stats", async (req, reply) => {
     const s = getSessionFromRequest(req);
     if (!s?.shmSessionId) return reply.code(401).send({ ok: false });
@@ -642,6 +661,12 @@ export async function adminRoutes(app: FastifyInstance) {
       if (linkType === "partner" && (!Number.isFinite(incomePercent) || incomePercent < 0 || incomePercent > 100)) {
         throw new Error("invalid_reward_percent");
       }
+      const adCostMinor = body.adCostMinor === undefined || body.adCostMinor === null || body.adCostMinor === ""
+        ? 0
+        : Math.trunc(Number(body.adCostMinor));
+      if (linkType === "campaign" && (!Number.isFinite(adCostMinor) || adCostMinor < 0)) {
+        throw new Error("invalid_ad_cost");
+      }
 
       if (linkType === "partner") {
         const shmResult = await shmShpunAppAdminPartnerPercentSet(
@@ -657,7 +682,7 @@ export async function adminRoutes(app: FastifyInstance) {
         }
       }
 
-      return reply.send({ ok: true, item: saveReferralAlias(body) });
+      return reply.send({ ok: true, item: saveReferralAlias({ ...body, adCostMinor }) });
     } catch (error: any) {
       const code = String(error?.message ?? "invalid_referral_alias");
       return reply.code(code.includes("UNIQUE") ? 409 : 400).send({ ok: false, error: code });

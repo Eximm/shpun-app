@@ -9,6 +9,7 @@ export type ReferralAlias = {
   billing_comment: string | null;
   first_payment_bonus_percent: number;
   partner_reward_percent: number;
+  ad_cost_minor: number;
   enabled: boolean;
   visits_count: number;
   registrations_count: number;
@@ -40,6 +41,9 @@ ensureColumn("visits_count", "INTEGER NOT NULL DEFAULT 0");
 ensureColumn("registrations_count", "INTEGER NOT NULL DEFAULT 0");
 ensureColumn("link_type", "TEXT NOT NULL DEFAULT 'partner'");
 ensureColumn("billing_comment", "TEXT");
+// Manual advertising spend for non-partner campaign links, stored in integer
+// minor units (kopecks) so money never goes through floating point.
+ensureColumn("ad_cost_minor", "INTEGER NOT NULL DEFAULT 0");
 
 linkDb.exec(`
 CREATE TABLE IF NOT EXISTS referral_alias_registrations (
@@ -58,6 +62,7 @@ function mapRow(row: any): ReferralAlias {
   return {
     ...row,
     link_type: row.link_type === "campaign" ? "campaign" : "partner",
+    ad_cost_minor: Math.max(0, Math.trunc(Number(row.ad_cost_minor ?? 0))) || 0,
     enabled: Boolean(row.enabled),
   };
 }
@@ -104,11 +109,12 @@ export function findReferralAlias(value: unknown): ReferralAlias | null {
 export function saveReferralAlias(input: {
   alias: unknown;
   linkType?: unknown;
-  partnerId: unknown;
+  partnerId?: unknown;
   campaignCode?: unknown;
   billingComment?: unknown;
   firstPaymentBonusPercent?: unknown;
   partnerRewardPercent?: unknown;
+  adCostMinor?: unknown;
   enabled?: unknown;
 }): ReferralAlias {
   const alias = normalizeAlias(input.alias);
@@ -118,6 +124,9 @@ export function saveReferralAlias(input: {
   const billingComment = String(input.billingComment ?? "").trim() || null;
   const bonus = linkType === "campaign" ? 0 : Math.trunc(Number(input.firstPaymentBonusPercent ?? 0));
   const reward = linkType === "campaign" ? 0 : Math.trunc(Number(input.partnerRewardPercent ?? 30));
+  // Manual ad cost only applies to campaign links; partner cost comes from the
+  // billing commission model, never from a hand-entered number.
+  const adCostMinor = linkType === "campaign" ? Math.trunc(Number(input.adCostMinor ?? 0)) : 0;
   const enabled = input.enabled === false ? 0 : 1;
 
   if (!isValidReferralAlias(alias)) throw new Error("invalid_alias");
@@ -129,12 +138,15 @@ export function saveReferralAlias(input: {
   }
   if (!Number.isFinite(bonus) || bonus < 0 || bonus > 100) throw new Error("invalid_bonus_percent");
   if (!Number.isFinite(reward) || reward < 0 || reward > 100) throw new Error("invalid_reward_percent");
+  if (!Number.isFinite(adCostMinor) || adCostMinor < 0 || adCostMinor > 1_000_000_000_00) {
+    throw new Error("invalid_ad_cost");
+  }
 
   linkDb.prepare(`
     INSERT INTO referral_aliases
       (alias, link_type, partner_id, campaign_code, billing_comment,
-       first_payment_bonus_percent, partner_reward_percent, enabled)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       first_payment_bonus_percent, partner_reward_percent, ad_cost_minor, enabled)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(alias) DO UPDATE SET
       link_type = excluded.link_type,
       partner_id = excluded.partner_id,
@@ -142,9 +154,10 @@ export function saveReferralAlias(input: {
       billing_comment = excluded.billing_comment,
       first_payment_bonus_percent = excluded.first_payment_bonus_percent,
       partner_reward_percent = excluded.partner_reward_percent,
+      ad_cost_minor = excluded.ad_cost_minor,
       enabled = excluded.enabled,
       updated_at = datetime('now')
-  `).run(alias, linkType, partnerId, campaignCode, billingComment, bonus, reward, enabled);
+  `).run(alias, linkType, partnerId, campaignCode, billingComment, bonus, reward, adCostMinor, enabled);
 
   return mapRow(linkDb.prepare(`SELECT * FROM referral_aliases WHERE alias = ? COLLATE NOCASE`).get(alias));
 }
@@ -201,6 +214,43 @@ export function countReferralRegistrationsSince(since: string): number {
     WHERE datetime(created_at) >= datetime(?)
   `).get(cutoff) as { n?: number } | undefined;
   return Math.trunc(Number(row?.n ?? 0)) || 0;
+}
+
+/**
+ * Attribution counts per alias for a cohort window. Returns a Map keyed by
+ * alias id so the analytics layer never runs a query per card (no N+1).
+ * `since = null` means all time.
+ */
+export function countReferralRegistrationsByAliasSince(since: string | null): Map<number, number> {
+  const rows = (since
+    ? linkDb.prepare(`
+        SELECT alias_id, COUNT(*) AS n FROM referral_alias_registrations
+        WHERE datetime(created_at) >= datetime(?)
+        GROUP BY alias_id
+      `).all(since)
+    : linkDb.prepare(`
+        SELECT alias_id, COUNT(*) AS n FROM referral_alias_registrations
+        GROUP BY alias_id
+      `).all()) as Array<{ alias_id: number; n: number }>;
+
+  const out = new Map<number, number>();
+  for (const row of rows) {
+    out.set(Number(row.alias_id), Math.trunc(Number(row.n ?? 0)) || 0);
+  }
+  return out;
+}
+
+/** Attributed SHM user ids for a single alias (ascending by registration). */
+export function listReferralAliasUserIds(aliasId: unknown): number[] {
+  const n = Math.trunc(Number(aliasId));
+  if (!Number.isFinite(n) || n <= 0) return [];
+  const rows = linkDb.prepare(`
+    SELECT shm_user_id FROM referral_alias_registrations
+    WHERE alias_id = ? ORDER BY datetime(created_at) ASC, shm_user_id ASC
+  `).all(n) as Array<{ shm_user_id: number }>;
+  return rows
+    .map((r) => Math.trunc(Number(r.shm_user_id)))
+    .filter((id) => Number.isFinite(id) && id > 0);
 }
 
 /** Recent referral registrations (alias + timestamp only) for the activity feed. */

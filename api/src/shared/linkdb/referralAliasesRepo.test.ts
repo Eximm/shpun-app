@@ -67,3 +67,27 @@ test("referralComment is the single canonical comment rule", async () => {
   });
   assert.equal(repo.referralComment(campaign), "Telegram Ads");
 });
+
+test("ad_cost_minor migration is additive and defaults to 0", async () => {
+  const { linkDb } = await import("./db.js");
+  const repo = await import("./referralAliasesRepo.js");
+
+  const columns = linkDb.prepare(`PRAGMA table_info(referral_aliases)`).all() as Array<{
+    name: string;
+    dflt_value: string | null;
+    notnull: number;
+  }>;
+  const column = columns.find((c) => c.name === "ad_cost_minor");
+  assert.ok(column, "ad_cost_minor column must exist");
+  assert.equal(Number(column!.notnull), 1);
+  assert.match(String(column!.dflt_value), /0/);
+
+  // A link saved without an explicit ad cost reads back as 0 (not null/NaN).
+  const legacy = repo.saveReferralAlias({
+    alias: "legacy_cost",
+    linkType: "campaign",
+    partnerId: 0,
+    billingComment: "Legacy",
+  });
+  assert.equal(legacy.ad_cost_minor, 0);
+});

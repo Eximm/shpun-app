@@ -7619,6 +7619,69 @@ button.reviews-star:not(:disabled) {
 }
 .refPartnerCard__delete:hover { border-color: rgba(255,77,109,0.34); background: rgba(255,77,109,0.12); }
 
+/* Compact financial strip: acquisition cost + result at a glance. */
+.refPartnerCard__finance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.07);
+}
+.refPartnerCard__financeItem { flex: 1 1 110px; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.refPartnerCard__financeItem span {
+  color: rgba(255,255,255,0.46);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.refPartnerCard__financeItem strong {
+  color: rgba(255,255,255,0.94);
+  font-size: 15px;
+  font-weight: 950;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+.refPartnerCard__financeItem strong.is-positive { color: rgba(179,255,204,0.94); }
+.refPartnerCard__financeItem strong.is-negative { color: rgba(255,181,195,0.94); }
+
+/* Detailed statistics modal (funnel / finance / efficiency). */
+.refAnalytics { display: flex; flex-direction: column; gap: 14px; }
+.refAnalytics__periods { display: flex; flex-wrap: wrap; gap: 6px; }
+.refAnalytics__periods .chip { font: inherit; cursor: pointer; border: 1px solid transparent; }
+.refAnalytics__note { margin: 0; color: rgba(255,255,255,0.52); font-size: 11.5px; line-height: 1.4; }
+.refAnalytics__note--warn { margin-top: 8px; color: rgba(255,214,150,0.86); }
+.refAnalytics__section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 13px;
+  background: rgba(8,12,20,0.24);
+}
+.refAnalytics__title {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  color: rgba(255,255,255,0.72);
+}
+.refAnalytics__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+  border-top: 1px solid rgba(255,255,255,0.045);
+}
+.refAnalytics__row:first-of-type { border-top: 0; }
+.refAnalytics__row span { min-width: 0; color: rgba(255,255,255,0.6); font-size: 12px; overflow-wrap: anywhere; }
+.refAnalytics__value { flex: 0 0 auto; color: rgba(255,255,255,0.95); font-size: 13px; font-weight: 900; }
+.refAnalytics__value.is-positive { color: rgba(179,255,204,0.94); }
+.refAnalytics__value.is-negative { color: rgba(255,181,195,0.94); }
+
 .login__partnerInvite {
   margin-bottom: 16px;
   padding: 12px 14px;
