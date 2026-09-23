@@ -53,6 +53,7 @@ import {
 } from "../../shared/linkdb/referralAliasesRepo.js";
 import { countSupportUnreadBreakdown } from "../support/notifyRepo.js";
 import { buildReferralAnalytics, normalizePeriod } from "../referrals/analytics.js";
+import { fetchReferralFinanceByAlias } from "../referrals/shmFinanceProvider.js";
 import { listAdminTickets } from "../support/service.js";
 import { countTicketsCreatedSince } from "../support/sqliteRepository.js";
 import { countReviewsByStatus, countReviewsSince, listRecentReviews } from "../reviews/repo.js";
@@ -548,7 +549,17 @@ export async function adminRoutes(app: FastifyInstance) {
     if (!(await ensureAdmin(s.shmSessionId))) return reply.code(403).send({ ok: false, error: "not_admin" });
 
     const period = normalizePeriod((req.query as any)?.period);
-    const items = await buildReferralAnalytics(period);
+    let items;
+    try {
+      items = await buildReferralAnalytics(period, (cohorts) =>
+        fetchReferralFinanceByAlias(s.shmSessionId!, cohorts)
+      );
+    } catch (error) {
+      // Keep the existing acquisition report usable while the billing template
+      // is unavailable or is still on an older contract.
+      app.log.warn({ err: error }, "referral finance feed unavailable");
+      items = await buildReferralAnalytics(period);
+    }
     return reply.send({
       ok: true,
       period,

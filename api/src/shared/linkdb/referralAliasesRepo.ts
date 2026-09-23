@@ -257,11 +257,17 @@ export function listReferralAliasUserIds(aliasId: unknown): number[] {
  * Attributed user ids grouped by alias in a single query (no N+1). Used by the
  * analytics finance seam so an adapter receives the exact user cohort per alias.
  */
-export function listReferralAliasUserIdsByAlias(): Map<number, number[]> {
-  const rows = linkDb.prepare(`
-    SELECT alias_id, shm_user_id FROM referral_alias_registrations
-    ORDER BY alias_id ASC, datetime(created_at) ASC, shm_user_id ASC
-  `).all() as Array<{ alias_id: number; shm_user_id: number }>;
+export function listReferralAliasUserIdsByAlias(since: string | null = null): Map<number, number[]> {
+  const rows = (since
+    ? linkDb.prepare(`
+        SELECT alias_id, shm_user_id FROM referral_alias_registrations
+        WHERE datetime(created_at) >= datetime(?)
+        ORDER BY alias_id ASC, datetime(created_at) ASC, shm_user_id ASC
+      `).all(since)
+    : linkDb.prepare(`
+        SELECT alias_id, shm_user_id FROM referral_alias_registrations
+        ORDER BY alias_id ASC, datetime(created_at) ASC, shm_user_id ASC
+      `).all()) as Array<{ alias_id: number; shm_user_id: number }>;
 
   const out = new Map<number, number[]>();
   for (const row of rows) {

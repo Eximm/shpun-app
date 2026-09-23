@@ -566,6 +566,25 @@ export async function shmShpunAppAdminCampaignStats(
   })
 }
 
+export type ShpunAppFinanceFeedKind = "pays" | "withdraws" | "bonuses";
+
+export async function shmShpunAppAdminFinanceFeed(
+  shmSessionId: string,
+  payload: {
+    kind: ShpunAppFinanceFeedKind;
+    userIds: number[];
+    limit?: number;
+    offset?: number;
+  }
+) {
+  return await shmShpunAppTemplate<any>(shmSessionId, "admin.finance.feed", {
+    kind: payload.kind,
+    user_ids: JSON.stringify(payload.userIds),
+    limit: payload.limit ?? 1000,
+    offset: payload.offset ?? 0,
+  })
+}
+
 export type ShmReviewRewardResp = {
   ok?: number | boolean
   error?: string

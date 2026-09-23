@@ -28,6 +28,7 @@ const {
 } = await import("../../shared/linkdb/referralAliasesRepo.js");
 const { computeReferralAnalytics, buildReferralAnalytics, periodSince, normalizePeriod } =
   await import("./analytics.js");
+const { aggregateReferralFinance } = await import("./financeAggregation.js");
 
 function fakeAlias(over: Partial<ReferralAlias> = {}): ReferralAlias {
   return {
@@ -282,6 +283,13 @@ test("buildReferralAnalytics isolates sources and applies cohort periods", async
   const weekA = week.find((r) => r.aliasId === a.id)!;
   assert.equal(weekA.acquisition.registrations, 1);
   assert.equal(week.find((r) => r.aliasId === b.id)!.acquisition.registrations, 1);
+
+  let weekCohort: number[] = [];
+  await buildReferralAnalytics("7d", (cohorts) => {
+    weekCohort = cohorts.find((cohort) => cohort.alias.id === a.id)?.attributedUserIds ?? [];
+    return new Map();
+  });
+  assert.deepEqual(weekCohort, [1002], "finance cohort must use the same period cutoff as registrations");
 });
 
 test("buildReferralAnalytics uses a batch finance provider when present", async () => {
@@ -289,18 +297,26 @@ test("buildReferralAnalytics uses a batch finance provider when present", async 
   recordReferralAliasRegistrationForUser("camp_fin", 3001);
 
   let seenUserIds: number[] | null = null;
-  const rows = await buildReferralAnalytics("all", (input) => {
-    if (input.alias.id !== alias.id) return null;
+  let providerCalls = 0;
+  const rows = await buildReferralAnalytics("all", (cohorts) => {
+    providerCalls += 1;
+    const input = cohorts.find((cohort) => cohort.alias.id === alias.id)!;
     seenUserIds = input.attributedUserIds;
-    return {
-      totalTopups: 1000,
-      serviceRevenue: 700,
-      bonusDebits: 100,
-      partnerCommissionAccrued: null,
-      partnerCommissionPaid: null,
-    };
+    return new Map([[alias.id, {
+      finance: {
+        totalTopups: 1000,
+        serviceRevenue: 700,
+        bonusDebits: 100,
+        partnerCommissionAccrued: null,
+        partnerCommissionPaid: null,
+      },
+      firstTopups: 1,
+      payingUsers: 1,
+      activeUsers: 1,
+    }]]);
   });
 
+  assert.equal(providerCalls, 1, "finance provider must be called once for all aliases");
   assert.deepEqual(seenUserIds, [3001], "finance seam must receive the alias cohort");
 
   const row = rows.find((r) => r.aliasId === alias.id)!;
@@ -311,6 +327,49 @@ test("buildReferralAnalytics uses a batch finance provider when present", async 
   assert.equal(row.finance.result, 650);
   assert.equal(row.efficiency.roasPct, 1400);
   assert.equal(row.efficiency.roiPct, 1300);
+});
+
+test("SHM finance aggregation uses ledger semantics and isolates aliases", () => {
+  const partner = fakeAlias({ id: 700, alias: "partner_fin", link_type: "partner", partner_id: 77 });
+  const campaign = fakeAlias({ id: 701, alias: "campaign_fin", link_type: "campaign", partner_id: 0 });
+  const cohorts = [
+    { alias: partner, attributedUserIds: [10, 11], period: "all" as const, since: null },
+    { alias: campaign, attributedUserIds: [20], period: "all" as const, since: null },
+  ];
+  const result = aggregateReferralFinance(cohorts, {
+    pays: [
+      { id: 1, user_id: 10, money: 100, date: "", pay_system_id: "manual" },
+      { id: 2, user_id: 10, money: -20, date: "", pay_system_id: "manual" },
+      { id: 3, user_id: 11, money: 0, date: "", pay_system_id: "declined" },
+      { id: 4, user_id: 20, money: 250, date: "", pay_system_id: "manual" },
+    ],
+    withdraws: [
+      { withdraw_id: 1, user_id: 10, total: 70, bonus: 10, paid: 1, withdraw_date: "2026-01-01" },
+      { withdraw_id: 2, user_id: 11, total: 50, bonus: 0, paid: 0, withdraw_date: "" },
+      { withdraw_id: 3, user_id: 20, total: 200, bonus: 25, paid: 1, withdraw_date: "2026-01-02" },
+    ],
+    bonuses: [
+      { id: 1, user_id: 77, bonus: 30, from_user_id: 10, percent: 30, partner_commission: 1 },
+      { id: 2, user_id: 77, bonus: 40, from_user_id: 999, percent: 30, partner_commission: 1 },
+      { id: 3, user_id: 77, bonus: -5, from_user_id: 11, percent: 30, partner_commission: 1 },
+    ],
+  });
+
+  assert.deepEqual(result.get(700), {
+    finance: {
+      totalTopups: 100,
+      serviceRevenue: 80,
+      bonusDebits: 10,
+      partnerCommissionAccrued: 30,
+      partnerCommissionPaid: null,
+    },
+    firstTopups: 1,
+    payingUsers: 1,
+    activeUsers: null,
+  });
+  assert.equal(result.get(701)?.finance.totalTopups, 250);
+  assert.equal(result.get(701)?.finance.serviceRevenue, 225);
+  assert.equal(result.get(701)?.finance.partnerCommissionAccrued, null);
 });
 
 /* ── HTTP route: admin-only + DTO shape ─────────────────────────────────── */

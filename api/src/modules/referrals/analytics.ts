@@ -8,12 +8,10 @@
 //
 // NOTE ON MONEY: ShpunApp does not store any financial/ledger tables locally.
 // Balance, top-ups, service debits, bonuses and partner commissions live in the
-// external SHM billing system, whose client (shmClient.ts) currently exposes
-// only acquisition aggregates (`admin.partner.stats` / `admin.campaign.stats`).
-// There is no admin-wide, user-attributed top-up / debit / commission feed, so
-// financial metrics are reported as `null` and flagged in `availability` rather
-// than invented. The `FinanceProvider` seam is the single place to plug a real
-// feed once SHM exposes one.
+// external SHM billing system. `shmFinanceProvider.ts` reads its bounded,
+// admin-only `admin.finance.feed` and maps ledger rows to this domain model.
+// If that feed is unavailable or on an incompatible template version, the
+// route deliberately falls back to `null` financial metrics.
 //
 // PERIOD MODEL: "cohort of registrations". A selected period means "users whose
 // attribution row was created during that period", NOT "financial events during
@@ -70,12 +68,24 @@ export type ReferralFinance = {
  * passed here. An adapter may aggregate per-user events (topups, service debits,
  * bonus debits, commission) but the seam only receives the domain result.
  */
-export type FinanceProvider = (input: {
+export type FinanceCohort = {
   alias: ReferralAlias;
   attributedUserIds: number[];
   period: AnalyticsPeriod;
   since: string | null;
-}) => Promise<ReferralFinance | null> | ReferralFinance | null;
+};
+
+export type ReferralFinanceSnapshot = {
+  finance: ReferralFinance;
+  firstTopups: number;
+  payingUsers: number;
+  activeUsers: number | null;
+};
+
+/** A provider receives every cohort at once so SHM can be queried in batches. */
+export type FinanceProvider = (
+  cohorts: FinanceCohort[]
+) => Promise<Map<number, ReferralFinanceSnapshot | null>> | Map<number, ReferralFinanceSnapshot | null>;
 
 export type ReferralAnalytics = {
   aliasId: number;
@@ -245,22 +255,30 @@ export async function buildReferralAnalytics(
   const since = periodSince(period);
   const counts = countReferralRegistrationsByAliasSince(since);
   // Only needed when a finance adapter is in play; one grouped query, no N+1.
-  const userIdsByAlias = provider ? listReferralAliasUserIdsByAlias() : null;
+  const userIdsByAlias = provider ? listReferralAliasUserIdsByAlias(since) : null;
+  const cohorts: FinanceCohort[] = provider
+    ? aliases.map((alias) => ({
+        alias,
+        attributedUserIds: userIdsByAlias?.get(alias.id) ?? [],
+        period,
+        since,
+      }))
+    : [];
+  const financeByAlias = provider ? await provider(cohorts) : new Map<number, ReferralFinanceSnapshot | null>();
 
-  const results = await Promise.all(
-    aliases.map(async (alias) => {
-      const registrations = counts.get(alias.id) ?? 0;
-      const finance = provider
-        ? await provider({
-            alias,
-            attributedUserIds: userIdsByAlias?.get(alias.id) ?? [],
-            period,
-            since,
-          })
-        : null;
-      return computeReferralAnalytics({ alias, registrations, period, finance });
-    })
-  );
+  const results = aliases.map((alias) => {
+    const registrations = counts.get(alias.id) ?? 0;
+    const snapshot = financeByAlias.get(alias.id) ?? null;
+    return computeReferralAnalytics({
+      alias,
+      registrations,
+      period,
+      finance: snapshot?.finance ?? null,
+      firstTopups: snapshot?.firstTopups ?? null,
+      payingUsers: snapshot?.payingUsers ?? null,
+      activeUsers: snapshot?.activeUsers ?? null,
+    });
+  });
 
   return results;
 }
