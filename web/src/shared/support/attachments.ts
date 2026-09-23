@@ -49,6 +49,10 @@ export function isImageAttachment(a: TicketAttachment): boolean {
   return String(a.mimeType || "").startsWith("image/");
 }
 
+export function isPdfAttachment(a: TicketAttachment): boolean {
+  return String(a.mimeType || "") === "application/pdf";
+}
+
 export function buildMessageFormData(text: string, files: File[], extra?: Record<string, string>): FormData {
   const fd = new FormData();
   if (text) fd.append("text", text);

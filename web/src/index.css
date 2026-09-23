@@ -8198,7 +8198,7 @@ button.reviews-star:not(:disabled) {
 }
 
 .attachList { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; max-width: 100%; }
-.attachImage { display: block; border-radius: 12px; overflow: hidden; border: 1px solid rgba(255,255,255,0.10); max-width: min(260px, 100%); }
+.attachImage { display: block; padding: 0; background: transparent; cursor: pointer; border-radius: 12px; overflow: hidden; border: 1px solid rgba(255,255,255,0.10); max-width: min(260px, 100%); }
 .attachImage img { display: block; width: 100%; max-height: 220px; object-fit: cover; }
 .attachItem {
   display: flex; align-items: center; gap: 10px;
@@ -8207,6 +8207,7 @@ button.reviews-star:not(:disabled) {
   background: rgba(255,255,255,0.04);
   color: rgba(255,255,255,0.88); text-decoration: none;
   max-width: min(280px, 100%); min-width: 0;
+  font: inherit; text-align: left; cursor: pointer;
 }
 .attachItem--expired { border-style: dashed; opacity: 0.7; }
 .attachItem__icon { flex: 0 0 auto; font-size: 18px; }
@@ -8214,6 +8215,45 @@ button.reviews-star:not(:disabled) {
 .attachItem__name { font-weight: 700; font-size: 13px; overflow-wrap: anywhere; }
 .attachItem__size { font-size: 11.5px; color: rgba(255,255,255,0.55); }
 .attachItem__note { font-size: 11.5px; color: rgba(255,255,255,0.55); font-style: italic; }
+
+/* In-app attachment viewer: keeps the SPA on the same thread/scroll position. */
+.attachViewer { padding: 14px; }
+.attachViewer__card {
+  position: relative; z-index: 1;
+  display: flex; flex-direction: column;
+  width: min(960px, 100%);
+  max-height: calc(100dvh - 28px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 16px;
+  background: linear-gradient(155deg, rgb(23,27,42), rgb(12,14,24));
+  box-shadow: 0 20px 60px rgba(0,0,0,0.55);
+  overflow: hidden;
+  animation: modal-card-in 240ms cubic-bezier(0.2,0.9,0.2,1) both;
+}
+.attachViewer__head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.attachViewer__name { min-width: 0; font-size: 13px; font-weight: 800; overflow-wrap: anywhere; }
+.attachViewer__actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.attachViewer__download { min-height: 38px; padding: 8px 12px; }
+.attachViewer__close { flex: 0 0 auto; width: 38px; min-width: 38px; padding: 0; }
+.attachViewer__body {
+  flex: 1 1 auto; min-height: 0;
+  display: flex; align-items: center; justify-content: center;
+  padding: 10px;
+  background: rgba(4,7,14,0.4);
+}
+.attachViewer__body--pdf { padding: 0; align-items: stretch; }
+.attachViewer__image { display: block; max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 10px; }
+.attachViewer__frame { display: block; flex: 1 1 auto; width: 100%; height: 100%; border: 0; background: #fff; }
+
+@media (max-width: 560px) {
+  .attachViewer { padding: 8px; }
+  .attachViewer__card { border-radius: 14px; max-height: calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
+  .attachViewer__head { padding: 8px 10px; }
+}
 
 .attachPending { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
 .attachPending__item {

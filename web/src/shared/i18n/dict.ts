@@ -1396,6 +1396,8 @@ export const RU: Dict = {
   "support.attachment.file": "Файл",
   "support.attachment.expired": "Удалено по истечении срока хранения.",
   "support.attachment.image_alt": "Вложение",
+  "support.attachment.open": "Открыть",
+  "support.attachment.download": "Скачать",
   "support.attachment.remove": "Убрать файл",
   "support.service_line": "Услуга #{id} · ",
 
@@ -3811,6 +3813,8 @@ export const EN: Dict = {
   "support.attachment.file": "File",
   "support.attachment.expired": "Deleted after the retention period.",
   "support.attachment.image_alt": "Attachment",
+  "support.attachment.open": "Open",
+  "support.attachment.download": "Download",
   "support.attachment.remove": "Remove file",
   "support.service_line": "Service #{id} · ",
 
