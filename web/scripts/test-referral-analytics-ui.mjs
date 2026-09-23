@@ -47,6 +47,17 @@ assert("modal renders efficiency section", section.includes('t("admin.referral.s
 assert("modal shows CAC / ARPPU / ROAS / ROI", ["cac", "arppu", "roas", "roi"].every((k) => section.includes(`admin.referral.metric.${k}`)));
 assert("modal flags unavailable finance instead of faking it", section.includes('t("admin.referral.finance.unavailable")'));
 assert("null values render as an em dash, not 0", section.includes('const dash = "—"') && section.includes("value === null ? dash"));
+assert("zero is formatted, not dashed", section.includes("value === null ? dash : formatCurrency(value)") && section.includes("value === null ? dash : formatNumber(value)"));
+
+/* ── Period semantics: clicks + ad cost are not leak across periods ──────── */
+
+assert("UI reads clicksPeriodLimited from availability", section.includes("availability.clicksPeriodLimited"));
+assert("UI reads adCostPeriodLimited from availability", section.includes("availability.adCostPeriodLimited"));
+assert("all-time clicks row exists", section.includes('t("admin.referral.metric.clicks_all_time")'));
+assert("all-time ad spend row exists", section.includes('t("admin.referral.metric.ad_cost_all_time")'));
+assert("clicks-period note is shown", section.includes('t("admin.referral.period.clicks_note")'));
+assert("ad-cost-period note is shown", section.includes('t("admin.referral.period.ad_cost_note")'));
+assert("period model is explicitly described", section.includes('t("admin.referral.period.model")'));
 
 /* ── Form: manual ad cost (campaign only) ─────────────────────────────────── */
 
@@ -71,9 +82,15 @@ for (const key of [
   "admin.referral.section.efficiency",
   "admin.referral.finance.unavailable",
   "admin.referral.field.ad_cost",
+  "admin.referral.metric.clicks_all_time",
+  "admin.referral.metric.ad_cost_all_time",
+  "admin.referral.period.clicks_note",
+  "admin.referral.period.ad_cost_note",
 ]) {
   assert(`RU has ${key}`, dict.includes(`"${key}":`));
 }
+assert("EN clicks_all_time present", dict.includes('"admin.referral.metric.clicks_all_time": "Clicks (all time)"'));
+assert("EN ad_cost_all_time present", dict.includes('"admin.referral.metric.ad_cost_all_time": "Ad spend (all time)"'));
 assert("EN action.stats present", dict.includes('"admin.referral.action.stats": "Statistics"'));
 assert("EN finance.unavailable present", dict.includes('"admin.referral.finance.unavailable":'));
 

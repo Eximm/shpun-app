@@ -253,6 +253,29 @@ export function listReferralAliasUserIds(aliasId: unknown): number[] {
     .filter((id) => Number.isFinite(id) && id > 0);
 }
 
+/**
+ * Attributed user ids grouped by alias in a single query (no N+1). Used by the
+ * analytics finance seam so an adapter receives the exact user cohort per alias.
+ */
+export function listReferralAliasUserIdsByAlias(): Map<number, number[]> {
+  const rows = linkDb.prepare(`
+    SELECT alias_id, shm_user_id FROM referral_alias_registrations
+    ORDER BY alias_id ASC, datetime(created_at) ASC, shm_user_id ASC
+  `).all() as Array<{ alias_id: number; shm_user_id: number }>;
+
+  const out = new Map<number, number[]>();
+  for (const row of rows) {
+    const aliasId = Math.trunc(Number(row.alias_id));
+    const userId = Math.trunc(Number(row.shm_user_id));
+    if (!Number.isFinite(aliasId) || aliasId <= 0) continue;
+    if (!Number.isFinite(userId) || userId <= 0) continue;
+    const bucket = out.get(aliasId);
+    if (bucket) bucket.push(userId);
+    else out.set(aliasId, [userId]);
+  }
+  return out;
+}
+
 /** Recent referral registrations (alias + timestamp only) for the activity feed. */
 export function listRecentReferralRegistrations(limit = 6): Array<{ alias: string; createdAt: string }> {
   const safe = Math.min(Math.max(Math.trunc(Number(limit)) || 6, 1), 20);

@@ -61,7 +61,8 @@ type ReferralAnalytics = {
   linkType: "partner" | "campaign";
   period: AnalyticsPeriod;
   acquisition: {
-    clicks: number;
+    clicks: number | null;
+    allTimeClicks: number;
     registrations: number;
     firstTopups: number | null;
     payingUsers: number | null;
@@ -74,6 +75,7 @@ type ReferralAnalytics = {
     serviceRevenue: number | null;
     bonusDebits: number | null;
     adCost: number | null;
+    allTimeAdCost: number | null;
     partnerCommissionAccrued: number | null;
     partnerCommissionPaid: number | null;
     acquisitionCost: number | null;
@@ -89,6 +91,8 @@ type ReferralAnalytics = {
     finance: boolean;
     reason: string | null;
     periodModel: string;
+    clicksPeriodLimited: boolean;
+    adCostPeriodLimited: boolean;
   };
 };
 
@@ -566,7 +570,10 @@ export function ReferralAliasesSection() {
               </div>
             </div>
             {itemAnalytics ? (
-              <div className="refPartnerCard__finance">
+              <div
+                className="refPartnerCard__finance"
+                title={itemAnalytics.availability.finance ? undefined : t("admin.referral.finance.unavailable")}
+              >
                 <div className="refPartnerCard__financeItem">
                   <span>{t("admin.referral.metric.reg_conversion")}</span>
                   <strong>{pct(itemAnalytics.acquisition.registrationsConversionPct)}</strong>
@@ -661,7 +668,10 @@ export function ReferralAliasesSection() {
             </div>
 
             {itemAnalytics ? (
-              <div className="refPartnerCard__finance">
+              <div
+                className="refPartnerCard__finance"
+                title={itemAnalytics.availability.finance ? undefined : t("admin.referral.finance.unavailable")}
+              >
                 <div className="refPartnerCard__financeItem">
                   <span>{t("admin.referral.metric.registrations")}</span>
                   <strong>{count(itemAnalytics.acquisition.registrations)}</strong>
@@ -731,11 +741,17 @@ export function ReferralAliasesSection() {
                 <section className="refAnalytics__section">
                   <h4 className="refAnalytics__title">{t("admin.referral.section.funnel")}</h4>
                   <AnalyticsRow label={t("admin.referral.metric.visits")} value={count(detailsAnalytics.acquisition.clicks)} />
+                  {detailsAnalytics.availability.clicksPeriodLimited ? (
+                    <AnalyticsRow label={t("admin.referral.metric.clicks_all_time")} value={count(detailsAnalytics.acquisition.allTimeClicks)} />
+                  ) : null}
                   <AnalyticsRow label={t("admin.referral.metric.registrations")} value={count(detailsAnalytics.acquisition.registrations)} />
                   <AnalyticsRow label={t("admin.referral.metric.paying")} value={count(detailsAnalytics.acquisition.payingUsers)} />
                   <AnalyticsRow label={t("admin.referral.metric.first_topup")} value={count(detailsAnalytics.acquisition.firstTopups)} />
                   <AnalyticsRow label={t("admin.referral.metric.reg_conversion")} value={pct(detailsAnalytics.acquisition.registrationsConversionPct)} />
                   <AnalyticsRow label={t("admin.referral.metric.paying_conversion")} value={pct(detailsAnalytics.acquisition.payingConversionPct)} />
+                  {detailsAnalytics.availability.clicksPeriodLimited ? (
+                    <p className="refAnalytics__note">{t("admin.referral.period.clicks_note")}</p>
+                  ) : null}
                 </section>
 
                 <section className="refAnalytics__section">
@@ -744,10 +760,16 @@ export function ReferralAliasesSection() {
                   <AnalyticsRow label={t("admin.referral.metric.service_revenue")} value={money(detailsAnalytics.finance.serviceRevenue)} />
                   <AnalyticsRow label={t("admin.referral.metric.bonus_debits")} value={money(detailsAnalytics.finance.bonusDebits)} />
                   <AnalyticsRow label={t("admin.referral.metric.ad_cost")} value={money(detailsAnalytics.finance.adCost)} />
+                  {detailsAnalytics.availability.adCostPeriodLimited && detailsAnalytics.finance.allTimeAdCost !== null ? (
+                    <AnalyticsRow label={t("admin.referral.metric.ad_cost_all_time")} value={money(detailsAnalytics.finance.allTimeAdCost)} />
+                  ) : null}
                   <AnalyticsRow label={t("admin.referral.metric.commission_accrued")} value={money(detailsAnalytics.finance.partnerCommissionAccrued)} />
                   <AnalyticsRow label={t("admin.referral.metric.commission_paid")} value={money(detailsAnalytics.finance.partnerCommissionPaid)} />
                   <AnalyticsRow label={t("admin.referral.metric.acquisition_cost")} value={money(detailsAnalytics.finance.acquisitionCost)} />
                   <AnalyticsRow label={t("admin.referral.metric.result")} value={money(detailsAnalytics.finance.result)} tone={tone(detailsAnalytics.finance.result)} />
+                  {detailsAnalytics.availability.adCostPeriodLimited ? (
+                    <p className="refAnalytics__note">{t("admin.referral.period.ad_cost_note")}</p>
+                  ) : null}
                   {!detailsAnalytics.availability.finance ? (
                     <p className="refAnalytics__note refAnalytics__note--warn">{t("admin.referral.finance.unavailable")}</p>
                   ) : null}

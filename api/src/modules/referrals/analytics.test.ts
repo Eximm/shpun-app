@@ -83,6 +83,74 @@ test("campaign: ad cost drives CAC/ROAS/ROI and contribution", () => {
   assert.equal(out.availability.finance, true);
 });
 
+test("clicks are period-scoped: conversion is null for sub-periods", () => {
+  const alias = fakeAlias({ link_type: "campaign", visits_count: 100 });
+
+  const all = computeReferralAnalytics({ alias, registrations: 20, period: "all" });
+  assert.equal(all.acquisition.clicks, 100);
+  assert.equal(all.acquisition.allTimeClicks, 100);
+  assert.equal(all.acquisition.registrations, 20);
+  assert.equal(all.acquisition.registrationsConversionPct, 20);
+  assert.equal(all.availability.clicksPeriodLimited, false);
+
+  const week = computeReferralAnalytics({ alias, registrations: 5, period: "7d" });
+  assert.equal(week.acquisition.clicks, null);
+  assert.equal(week.acquisition.allTimeClicks, 100);
+  assert.equal(week.acquisition.registrations, 5);
+  // Must NOT be 5 / 100 = 5% - that would mix a cohort with a lifetime counter.
+  assert.equal(week.acquisition.registrationsConversionPct, null);
+  assert.equal(week.availability.clicksPeriodLimited, true);
+});
+
+test("campaign ad cost only participates in the all-time period", () => {
+  const alias = fakeAlias({ link_type: "campaign", ad_cost_minor: 10_000_00, visits_count: 500 });
+  const finance = {
+    totalTopups: 30000,
+    serviceRevenue: 25000,
+    bonusDebits: 0,
+    partnerCommissionAccrued: null,
+    partnerCommissionPaid: null,
+  };
+
+  const all = computeReferralAnalytics({ alias, registrations: 20, period: "all", payingUsers: 10, finance });
+  assert.equal(all.finance.adCost, 10000);
+  assert.equal(all.finance.allTimeAdCost, 10000);
+  assert.equal(all.finance.acquisitionCost, 10000);
+  assert.equal(all.finance.result, 15000);
+  assert.equal(all.efficiency.cac, 1000);
+  assert.equal(all.efficiency.roasPct, 250);
+  assert.equal(all.efficiency.roiPct, 150);
+  assert.equal(all.availability.adCostPeriodLimited, false);
+
+  const month = computeReferralAnalytics({ alias, registrations: 5, period: "30d", payingUsers: 2, finance });
+  assert.equal(month.finance.adCost, null);
+  assert.equal(month.finance.allTimeAdCost, 10000);
+  assert.equal(month.finance.acquisitionCost, null);
+  assert.equal(month.finance.result, null);
+  assert.equal(month.efficiency.cac, null);
+  assert.equal(month.efficiency.roasPct, null);
+  assert.equal(month.efficiency.roiPct, null);
+  assert.equal(month.availability.adCostPeriodLimited, true);
+});
+
+test("partner with unavailable finance produces no fake ROI/result", () => {
+  const out = computeReferralAnalytics({
+    alias: fakeAlias({ link_type: "partner", partner_id: 7 }),
+    registrations: 4,
+    period: "all",
+    finance: null,
+  });
+
+  assert.equal(out.finance.adCost, null);
+  assert.equal(out.finance.allTimeAdCost, null);
+  assert.equal(out.finance.acquisitionCost, null);
+  assert.equal(out.finance.result, null);
+  assert.equal(out.efficiency.cac, null);
+  assert.equal(out.efficiency.roasPct, null);
+  assert.equal(out.efficiency.roiPct, null);
+  assert.equal(out.availability.adCostPeriodLimited, false);
+});
+
 test("division by zero never yields NaN/Infinity", () => {
   const out = computeReferralAnalytics({
     alias: fakeAlias({ visits_count: 0, ad_cost_minor: 0 }),
@@ -220,8 +288,10 @@ test("buildReferralAnalytics uses a batch finance provider when present", async 
   const alias = saveReferralAlias({ alias: "camp_fin", linkType: "campaign", billingComment: "F", adCostMinor: 50_00 });
   recordReferralAliasRegistrationForUser("camp_fin", 3001);
 
+  let seenUserIds: number[] | null = null;
   const rows = await buildReferralAnalytics("all", (input) => {
     if (input.alias.id !== alias.id) return null;
+    seenUserIds = input.attributedUserIds;
     return {
       totalTopups: 1000,
       serviceRevenue: 700,
@@ -230,6 +300,8 @@ test("buildReferralAnalytics uses a batch finance provider when present", async 
       partnerCommissionPaid: null,
     };
   });
+
+  assert.deepEqual(seenUserIds, [3001], "finance seam must receive the alias cohort");
 
   const row = rows.find((r) => r.aliasId === alias.id)!;
   assert.equal(row.availability.finance, true);
@@ -300,6 +372,28 @@ test("analytics endpoint returns DTO with explicit finance availability", async 
   assert.equal(row.finance.serviceRevenue, null);
   assert.equal(row.availability.finance, false);
   assert.equal(row.availability.reason, "external_billing_not_exposed");
+});
+
+test("analytics endpoint marks clicks/ad cost as period-limited for 7d", async () => {
+  const res = await app.inject({
+    method: "GET",
+    url: "/api/admin/referral-aliases/analytics?period=7d",
+    headers: { "x-app-sid": "sid-admin" },
+  });
+  assert.equal(res.statusCode, 200);
+  const body = JSON.parse(res.body);
+  assert.equal(body.period, "7d");
+  const row = body.items.find((r: any) => r.alias === "camp_a");
+  assert.ok(row);
+  // Clicks are not period-filterable -> null, never a lifetime value reused as period data.
+  assert.equal(row.acquisition.clicks, null);
+  assert.equal(row.acquisition.registrationsConversionPct, null);
+  assert.equal(row.availability.clicksPeriodLimited, true);
+  assert.equal(typeof row.acquisition.allTimeClicks, "number");
+  // Campaign total spend must not be attributed to the period.
+  assert.equal(row.finance.adCost, null);
+  assert.equal(row.finance.acquisitionCost, null);
+  assert.equal(row.availability.adCostPeriodLimited, true);
 });
 
 after(async () => {

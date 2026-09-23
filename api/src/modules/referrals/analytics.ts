@@ -15,14 +15,23 @@
 // than invented. The `FinanceProvider` seam is the single place to plug a real
 // feed once SHM exposes one.
 //
-// PERIOD MODEL: "cohort of registrations". For a selected period we take the
-// users whose attribution row was created during the period and report the
-// registrations in that cohort. Clicks are a lifetime counter without
-// timestamps, so they are always all-time; the UI labels this explicitly.
+// PERIOD MODEL: "cohort of registrations". A selected period means "users whose
+// attribution row was created during that period", NOT "financial events during
+// the period".
+//
+// TWO VALUES HAVE NO HISTORY:
+//   - visits_count (clicks) is a lifetime counter only. For 7d/30d/90d the
+//     period-scoped `clicks` is null and `registrationConversionPct` is null;
+//     the lifetime value is exposed separately as `allTimeClicks` (display only).
+//   - ad_cost_minor (campaign spend) is one total per campaign with no spend
+//     history. For 7d/30d/90d the period `adCost`/`acquisitionCost` are null and
+//     CAC/ROAS/ROI/result collapse to null; the total is exposed as
+//     `allTimeAdCost` (display only). Spend is never pro-rated over a period.
 
 import {
   listReferralAliases,
   countReferralRegistrationsByAliasSince,
+  listReferralAliasUserIdsByAlias,
   type ReferralAlias,
 } from "../../shared/linkdb/referralAliasesRepo.js";
 
@@ -53,6 +62,14 @@ export type ReferralFinance = {
   partnerCommissionPaid: number | null;
 };
 
+/**
+ * Finance seam. This is deliberately a DOMAIN contract (normalized aggregate
+ * values per alias), not a transport/DTO contract: it never mentions SHM
+ * actions, feed pages or response field names. When the billing contract is
+ * final, exactly one adapter (elsewhere) maps SHM -> ReferralFinance and is
+ * passed here. An adapter may aggregate per-user events (topups, service debits,
+ * bonus debits, commission) but the seam only receives the domain result.
+ */
 export type FinanceProvider = (input: {
   alias: ReferralAlias;
   attributedUserIds: number[];
@@ -66,13 +83,16 @@ export type ReferralAnalytics = {
   linkType: "partner" | "campaign";
   period: AnalyticsPeriod;
   acquisition: {
-    /** Lifetime landing counter (no timestamps -> never period-filtered). */
-    clicks: number;
+    /** Period-scoped clicks. `null` for 7d/30d/90d (no click history). */
+    clicks: number | null;
+    /** Lifetime landing counter; display-only, never used in period math. */
+    allTimeClicks: number;
     /** Attributed registrations within the selected cohort window. */
     registrations: number;
     firstTopups: number | null;
     payingUsers: number | null;
     activeUsers: number | null;
+    /** Only defined when period-scoped clicks exist (period === "all"). */
     registrationsConversionPct: number | null;
     payingConversionPct: number | null;
   };
@@ -80,7 +100,10 @@ export type ReferralAnalytics = {
     totalTopups: number | null;
     serviceRevenue: number | null;
     bonusDebits: number | null;
+    /** Period-scoped campaign spend. `null` unless period === "all". */
     adCost: number | null;
+    /** Campaign total spend; display-only, never used in period math. */
+    allTimeAdCost: number | null;
     partnerCommissionAccrued: number | null;
     partnerCommissionPaid: number | null;
     acquisitionCost: number | null;
@@ -96,6 +119,10 @@ export type ReferralAnalytics = {
     finance: boolean;
     reason: "external_billing_not_exposed" | "no_finance_data" | null;
     periodModel: "cohort_registrations";
+    /** True when period-scoped clicks are unavailable (7d/30d/90d). */
+    clicksPeriodLimited: boolean;
+    /** True when campaign spend is only available for the whole campaign. */
+    adCostPeriodLimited: boolean;
   };
 };
 
@@ -116,9 +143,17 @@ export function computeReferralAnalytics(input: {
   finance?: ReferralFinance | null;
 }): ReferralAnalytics {
   const { alias, period } = input;
-  const clicks = Math.max(0, Math.trunc(Number(alias.visits_count) || 0));
+  const allTimeClicks = Math.max(0, Math.trunc(Number(alias.visits_count) || 0));
+  // Period-scoped clicks exist only for the all-time view: the local model keeps
+  // no timestamped click history, so a 7d/30d/90d click count would be a lie.
+  const clicks = period === "all" ? allTimeClicks : null;
   const registrations = Math.max(0, Math.trunc(Number(input.registrations) || 0));
-  const adCost = alias.link_type === "campaign" ? Math.max(0, Number(alias.ad_cost_minor) || 0) / 100 : null;
+  const allTimeAdCost = alias.link_type === "campaign"
+    ? Math.max(0, Number(alias.ad_cost_minor) || 0) / 100
+    : null;
+  // Campaign spend is stored once for the whole campaign; it must not be
+  // attributed to a sub-period without a real spend history.
+  const adCost = period === "all" ? allTimeAdCost : null;
   const finance = input.finance ?? null;
 
   const totalTopups = finance ? finance.totalTopups : null;
@@ -163,6 +198,7 @@ export function computeReferralAnalytics(input: {
     period,
     acquisition: {
       clicks,
+      allTimeClicks,
       registrations,
       firstTopups: input.firstTopups ?? null,
       payingUsers: input.payingUsers ?? null,
@@ -175,6 +211,7 @@ export function computeReferralAnalytics(input: {
       serviceRevenue,
       bonusDebits,
       adCost,
+      allTimeAdCost,
       partnerCommissionAccrued,
       partnerCommissionPaid,
       acquisitionCost,
@@ -190,6 +227,8 @@ export function computeReferralAnalytics(input: {
       finance: financeAvailable,
       reason: financeAvailable ? null : "external_billing_not_exposed",
       periodModel: "cohort_registrations",
+      clicksPeriodLimited: period !== "all",
+      adCostPeriodLimited: alias.link_type === "campaign" && period !== "all",
     },
   };
 }
@@ -205,12 +244,19 @@ export async function buildReferralAnalytics(
   const aliases = listReferralAliases();
   const since = periodSince(period);
   const counts = countReferralRegistrationsByAliasSince(since);
+  // Only needed when a finance adapter is in play; one grouped query, no N+1.
+  const userIdsByAlias = provider ? listReferralAliasUserIdsByAlias() : null;
 
   const results = await Promise.all(
     aliases.map(async (alias) => {
       const registrations = counts.get(alias.id) ?? 0;
       const finance = provider
-        ? await provider({ alias, attributedUserIds: [], period, since })
+        ? await provider({
+            alias,
+            attributedUserIds: userIdsByAlias?.get(alias.id) ?? [],
+            period,
+            since,
+          })
         : null;
       return computeReferralAnalytics({ alias, registrations, period, finance });
     })
