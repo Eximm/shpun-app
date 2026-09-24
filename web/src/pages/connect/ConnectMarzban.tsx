@@ -36,6 +36,9 @@ type SubscriptionDevice = {
   updatedAt: string;
 };
 
+// First-run discoverability hint for QR / backup options. Client-side only.
+const QR_HINT_STORAGE_KEY = "shpun.connect.qr_hint_seen_v1";
+
 type ClientLinks = Record<Platform, {
   title: string;
   market: string;
@@ -284,6 +287,14 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
 
   const [platformPickerOpen, setPlatformPickerOpen] = useState(false);
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
+  const [clientHelpOpen, setClientHelpOpen] = useState(false);
+  const [qrHintSeen, setQrHintSeen] = useState<boolean>(() => {
+    try { return localStorage.getItem(QR_HINT_STORAGE_KEY) === "1"; } catch { return false; }
+  });
+  const dismissQrHint = useCallback(() => {
+    setQrHintSeen(true);
+    try { localStorage.setItem(QR_HINT_STORAGE_KEY, "1"); } catch { /* ignore */ }
+  }, []);
   const [client, setClient] = useState<ClientKind>("happ");
 
   const [subscriptionUrl, setSubscriptionUrl] = useState("");
@@ -558,6 +569,34 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
     }
   }
 
+  const manualQrBlock = ready ? (
+    <div className="cm__modalManual">
+      <div className="cm__extraSub">{happOnly ? t("connectMarzban.manual.happ_only_desc") : t("connectMarzban.manual.desc")}</div>
+      <div className="cm__extraSectionTitle">{t("connectMarzban.qr.primary_title")}</div>
+      <div className="actions actions--2 cm__extraSectionActions">
+        <button className="btn" type="button" onClick={() => void copySub(false)}>
+          {copiedPrimary ? `\u2705 ${t("connect.copied")}` : `\u{1F4CB} ${t("connectMarzban.manual.primary_link")}`}
+        </button>
+        <button className="btn" type="button" onClick={() => void openQr(false)}>
+          {"\u{1F4F1}"} {t("connectMarzban.manual.primary_qr")}
+        </button>
+      </div>
+      {reserveSubscriptionUrl && (
+        <div className="cm__manualReserve">
+          <div className="cm__extraSectionTitle">{t("connectMarzban.qr.reserve_title")}</div>
+          <div className="actions actions--2 cm__extraSectionActions">
+            <button className="btn" type="button" onClick={() => void copySub(true)}>
+              {copiedReserve ? `\u2705 ${t("connect.copied")}` : `\u{1F4CB} ${t("connectMarzban.manual.reserve_link")}`}
+            </button>
+            <button className="btn" type="button" onClick={() => void openQr(true)}>
+              {"\u{1F4F1}"} {t("connectMarzban.manual.reserve_qr")}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  ) : null;
+
   return (
     <div className={`cm${assistantMode && ready ? ` cm--assistant-focus cm--assistant-${assistantStep}` : ""}`}>
       <div className="pre" style={{
@@ -618,14 +657,41 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
         </div>
 
         <div className="cm__selectorItem">
-          <span className="p cawg__label">{t("connectMarzban.client.label")}</span>
+          <div className="cm__selectorLabelRow">
+            <span className="p cawg__label">{t("connectMarzban.client.label")}</span>
+            <button
+              className="cm__qrBtn"
+              type="button"
+              onClick={() => setClientHelpOpen(true)}
+              aria-label={t("connectMarzban.qr.button_aria")}
+            >
+              {"\u{1F4F1}"} {t("connectMarzban.qr.button")}
+            </button>
+          </div>
           <button className="btn cawg__deviceBtn cm__selectorBtn" type="button" onClick={() => setClientPickerOpen(true)} disabled={loading}>
-            {selectedClient.icon} {selectedClient.title}
-            {effectiveClient === "happ" && <span className="chip chip--ok">{t("connectMarzban.client.recommended")}</span>}
+            <span>{selectedClient.icon} {t("connectMarzban.client.button").replace("{client}", selectedClient.title)}</span>
             {" "}<span aria-hidden="true">{"\u25BE"}</span>
           </button>
         </div>
       </div>
+
+      {ready && !qrHintSeen && (
+        <div className="cm__qrHint" role="status">
+          <span className="cm__qrHintArrow" aria-hidden="true">{"\u2191"}</span>
+          <div className="cm__qrHintText">
+            <strong>{t("connectMarzban.qr.hint_title")}</strong>
+            <span>{t("connectMarzban.qr.hint_text")}</span>
+          </div>
+          <button
+            className="cm__qrHintClose"
+            type="button"
+            onClick={dismissQrHint}
+            aria-label={t("common.close")}
+          >
+            {"\u00D7"}
+          </button>
+        </div>
+      )}
 
       {assistantMode && ready && assistantStep !== "done" && (
         <div className="cm__assistantGuide" role="status">
@@ -760,32 +826,34 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
                     );
                   })}
                 </div>
-                {ready && (
-                  <div className="cm__modalManual">
-                    <div className="cm__extraTitle">{t("connect.more_methods")}</div>
-                    <div className="cm__extraSub">{happOnly ? t("connectMarzban.manual.happ_only_desc") : t("connectMarzban.manual.desc")}</div>
-                    <div className="actions actions--2 cm__extraSectionActions">
-                      <button className="btn" type="button" onClick={() => void copySub(false)}>
-                        {copiedPrimary ? `\u2705 ${t("connect.copied")}` : `\u{1F4CB} ${t("connectMarzban.manual.primary_link")}`}
-                      </button>
-                      <button className="btn" type="button" onClick={() => void openQr(false)}>
-                        {"\u{1F4F1}"} {t("connectMarzban.manual.primary_qr")}
-                      </button>
-                    </div>
-                    {reserveSubscriptionUrl && (
-                      <div className="cm__manualReserve">
-                        <div className="actions actions--2 cm__extraSectionActions">
-                          <button className="btn" type="button" onClick={() => void copySub(true)}>
-                            {copiedReserve ? `\u2705 ${t("connect.copied")}` : `\u{1F4CB} ${t("connectMarzban.manual.reserve_link")}`}
-                          </button>
-                          <button className="btn" type="button" onClick={() => void openQr(true)}>
-                            {"\u{1F4F1}"} {t("connectMarzban.manual.reserve_qr")}
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
+                {manualQrBlock}
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {clientHelpOpen && createPortal(
+        <div className="modal" role="dialog" aria-modal="true" onMouseDown={() => setClientHelpOpen(false)}>
+          <div className="card modal__card cm__clientHelpModal" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="card__body">
+              <div className="modal__head">
+                <div className="modal__title">{"\u{1F4F1}"} {t("connectMarzban.qr.title")}</div>
+                <button className="btn modal__close" type="button" onClick={() => setClientHelpOpen(false)} aria-label={t("common.close")}>{"\u00D7"}</button>
+              </div>
+              <div className="modal__content">
+                <p className="p">{t("connectMarzban.qr.hint_text")}</p>
+                {manualQrBlock}
+                <div className="pre cm__clientHelpRoute">{t("connectMarzban.client.help_route")}</div>
+                <div className="actions actions--1" style={{ marginTop: 14 }}>
+                  <button className="btn btn--primary" type="button" onClick={() => {
+                    setClientHelpOpen(false);
+                    setClientPickerOpen(true);
+                  }}>
+                    {t("connectMarzban.client.help_action")}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
