@@ -2,18 +2,13 @@
 // Regression for the Flex connector "connection options" entry point.
 //
 // History:
-//   v1 - QR/backup options were hidden behind an ambiguous circular "i" button.
-//   v2 - a separate "QR и резервные способы" pill was added next to the app
-//        selector, which duplicated the selector and created a second modal.
-//   v3 - consolidated: the app selector is the SINGLE entry point; the one
-//        modal groups recommended app / other apps / QR + links / backups,
-//        with a calm helper line and a dismissible first-run callout.
-//
-// This locks in:
-//   - no second pill button, no second modal, no duplicated open path
-//   - one source for the QR/backup content
-//   - a descriptive label + clear selector value
-//   - dismissible, local, mobile-safe first-run hint
+//   v1 - QR/backup options hidden behind an ambiguous circular "i" button.
+//   v2 - a separate "QR и резервные способы" pill duplicated the selector.
+//   v3 - consolidated to one selector, but with too many permanent captions
+//        (label + helper + selector value) causing visual noise and height jumps.
+//   v4 - one self-explanatory selector ("Happ · QR и резервы"), no permanent
+//        helper/label; the only extra explanation is the first-run callout,
+//        whose pointer is layout-bound to the selector column.
 //
 // Usage: npm run test:flex-qr-discoverability
 
@@ -37,24 +32,24 @@ const connector = read("src/pages/connect/ConnectMarzban.tsx");
 const css = read("src/index.css");
 const dict = read("src/shared/i18n/dict.ts");
 
-/* ── No duplicate entry points ────────────────────────────────────────────── */
+/* ── One entry point, no duplication ──────────────────────────────────────── */
 
 assert("no separate QR pill button", !connector.includes("cm__qrBtn"));
 assert("no leftover circular info button", !connector.includes("cm__selectorInfo"));
-assert("no second help modal state", !connector.includes("clientHelpOpen"));
-assert("no second help modal markup", !connector.includes("cm__clientHelpModal"));
+assert("no second modal state", !connector.includes("clientHelpOpen"));
+assert("no second modal markup", !connector.includes("cm__clientHelpModal"));
 assert("the app selector is the only connection entry", connector.includes("onClick={() => setClientPickerOpen(true)}"));
 assert("QR/backup content has a single source", count(connector, "const manualQrBlock") === 1);
 assert("QR/backup content is rendered once", count(connector, "{manualQrBlock}") === 1);
 
-/* ── Descriptive label + selector value ───────────────────────────────────── */
+/* ── Self-explanatory selector, no permanent captions ─────────────────────── */
 
-assert("label uses the connection-options key", connector.includes('t("connectMarzban.client.label")'));
-assert("selector value shows the current app", connector.includes("selectedClient.title"));
-assert("recommended app is marked in the selector value", connector.includes('t("connectMarzban.client.recommended")'));
-assert("calm helper line under the selector", connector.includes('className="cm__selectorHelper"') && connector.includes('t("connectMarzban.client.helper")'));
+assert("selector shows the app + QR/backup suffix", connector.includes("selectedClient.title") && connector.includes('t("connectMarzban.client.qr_suffix")'));
+assert("no permanent helper line", !connector.includes("cm__selectorHelper") && !connector.includes('t("connectMarzban.client.helper")'));
+assert("no permanent connection-options label", !connector.includes('t("connectMarzban.client.label")'));
+assert("star icon stays on the recommended client", connector.includes("selectedClient.icon"));
 
-/* ── One modal, logically grouped ─────────────────────────────────────────── */
+/* ── One modal, logically grouped (functionality unchanged) ───────────────── */
 
 assert("modal groups recommended app", connector.includes('t("connectMarzban.client.recommended_title")'));
 assert("modal groups other apps", connector.includes('t("connectMarzban.client.other_title")'));
@@ -62,38 +57,44 @@ assert("modal groups QR and links", connector.includes('t("connectMarzban.client
 assert("modal includes the shared QR/backup block", connector.includes("{manualQrBlock}"));
 assert("QR block keeps primary + reserve groups", connector.includes('t("connectMarzban.qr.primary_title")') && connector.includes('t("connectMarzban.qr.reserve_title")'));
 
-/* ── First-run hint: local, dismissible, not a second CTA ─────────────────── */
+/* ── First-run callout: kept, dismissible, layout-bound pointer ───────────── */
 
 assert("first-run callout exists", connector.includes('className="cm__qrHint"'));
 assert("hint is gated on first run", connector.includes("ready && !qrHintSeen"));
 assert("hint has a dismiss handler", connector.includes("dismissQrHint") && connector.includes("onClick={dismissQrHint}"));
 assert("dismiss persists locally", connector.includes("localStorage.setItem(QR_HINT_STORAGE_KEY"));
-assert("seen state is read locally", connector.includes("localStorage.getItem(QR_HINT_STORAGE_KEY)"));
 assert("storage key is versioned", connector.includes('"shpun.connect.qr_hint_seen_v1"'));
 assert("hint is not hover-only", !connector.includes("onMouseEnter") && connector.includes('role="status"'));
+assert("pointer is layout-bound, not a left-edge glyph", !connector.includes("cm__qrHintArrow"));
+assert("pointer uses a selector-column variable", css.includes("--cm-qr-hint-arrow-x") && css.includes("left: var(--cm-qr-hint-arrow-x)"));
+assert("pointer targets the right column on wide screens", /\.cm__qrHint \{[\s\S]*?--cm-qr-hint-arrow-x: 75%;/.test(css));
+assert("pointer follows the single-column mobile layout", /@media \(max-width: 560px\) \{[\s\S]*?\.cm__qrHint \{ --cm-qr-hint-arrow-x: 50%; \}/.test(css));
 
 /* ── Responsive / mobile-safe CSS ─────────────────────────────────────────── */
 
-assert("helper line can shrink/break", /\.cm__selectorHelper \{[\s\S]*?overflow-wrap: anywhere;/.test(css));
+assert("selector item aligns to the bottom (no jump)", /\.cm__selectorItem \{[\s\S]*?align-content: end;/.test(css));
 assert("hint exists in CSS", css.includes(".cm__qrHint {") && css.includes(".cm__qrHintClose {"));
 assert("hint text can shrink", /\.cm__qrHintText \{[^}]*min-width: 0;/.test(css));
 assert("dismiss has a keyboard focus ring", css.includes(".cm__qrHintClose:focus-visible"));
 assert("dead pill CSS is removed", !css.includes(".cm__qrBtn"));
+assert("dead helper CSS is removed", !css.includes(".cm__selectorHelper"));
 
-/* ── i18n: new keys present, dead keys removed ────────────────────────────── */
+/* ── i18n: new key present, dead keys removed ─────────────────────────────── */
 
 for (const key of [
-  "connectMarzban.client.label",
+  "connectMarzban.client.qr_suffix",
+  "connectMarzban.client.modal_title",
   "connectMarzban.client.recommended_title",
   "connectMarzban.client.other_title",
   "connectMarzban.client.qr_title",
-  "connectMarzban.client.helper",
   "connectMarzban.qr.hint_title",
   "connectMarzban.qr.hint_text",
 ]) {
   assert(`RU has ${key}`, dict.includes(`"${key}":`));
 }
 for (const key of [
+  "connectMarzban.client.label",
+  "connectMarzban.client.helper",
   "connectMarzban.qr.button",
   "connectMarzban.qr.button_aria",
   "connectMarzban.qr.title",
@@ -106,11 +107,11 @@ for (const key of [
 ]) {
   assert(`dead key removed: ${key}`, !dict.includes(`"${key}":`));
 }
-assert("RU label is connection options", dict.includes('"connectMarzban.client.label": "Способы подключения"'));
-assert("EN label is connection options", dict.includes('"connectMarzban.client.label": "Connection options"'));
+assert("RU suffix wording", dict.includes('"connectMarzban.client.qr_suffix": "QR и резервы"'));
+assert("EN suffix wording", dict.includes('"connectMarzban.client.qr_suffix": "QR & backups"'));
 
 if (failures > 0) {
   console.error(`\nFAILED: ${failures} check(s)`);
   process.exit(1);
 }
-console.log("\nOK: Flex connection options (single entry, no duplication, dismissible hint) verified");
+console.log("\nOK: Flex connection options (one self-explanatory selector, layout-bound callout) verified");

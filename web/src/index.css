@@ -3698,18 +3698,12 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .cm__selectorItem {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  align-content: end;
   gap: 6px;
   min-width: 0;
 }
-.cm__selectorHelper {
-  display: block;
-  margin-top: 5px;
-  font-size: 11.5px;
-  line-height: 1.35;
-  color: rgba(255,255,255,0.5);
-  overflow-wrap: anywhere;
-}
 .cm__qrHint {
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -3718,8 +3712,22 @@ button, a { -webkit-tap-highlight-color: transparent; }
   border: 1px solid rgba(77,215,255,0.34);
   border-radius: 14px;
   background: linear-gradient(135deg, rgba(77,215,255,0.12), rgba(124,92,255,0.07));
+  /* Pointer targets the right-column selector on wide screens (mirrors the
+     2-column .cm__selectorGrid) and its center on mobile. */
+  --cm-qr-hint-arrow-x: 75%;
 }
-.cm__qrHintArrow { flex: 0 0 auto; color: #78e4ff; font-size: 16px; line-height: 1.1; }
+.cm__qrHint::before {
+  content: "";
+  position: absolute;
+  top: -7px;
+  left: var(--cm-qr-hint-arrow-x);
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-bottom: 7px solid rgba(77,215,255,0.34);
+}
 .cm__qrHintText { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .cm__qrHintText strong { font-size: 12.5px; font-weight: 900; line-height: 1.2; }
 .cm__qrHintText span { font-size: 12px; line-height: 1.35; color: rgba(255,255,255,0.62); overflow-wrap: anywhere; }
@@ -3868,6 +3876,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .cm__selectorGrid {
     grid-template-columns: 1fr;
   }
+  .cm__qrHint { --cm-qr-hint-arrow-x: 50%; }
 }
 .cm__extraTitle {
   font-size: 13px;

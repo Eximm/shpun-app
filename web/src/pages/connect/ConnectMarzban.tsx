@@ -672,21 +672,17 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
         </div>
 
         <div className="cm__selectorItem">
-          <span className="p cawg__label">{t("connectMarzban.client.label")}</span>
           <button className="btn cawg__deviceBtn cm__selectorBtn" type="button" onClick={() => setClientPickerOpen(true)} disabled={loading}>
             <span>
-              {selectedClient.icon} {selectedClient.title}
-              {effectiveClient === "happ" ? ` — ${t("connectMarzban.client.recommended")}` : ""}
+              {selectedClient.icon} {selectedClient.title} · {t("connectMarzban.client.qr_suffix")}
             </span>
             {" "}<span aria-hidden="true">{"\u25BE"}</span>
           </button>
-          <span className="cm__selectorHelper">{t("connectMarzban.client.helper")}</span>
         </div>
       </div>
 
       {ready && !qrHintSeen && (
         <div className="cm__qrHint" role="status">
-          <span className="cm__qrHintArrow" aria-hidden="true">{"\u2191"}</span>
           <div className="cm__qrHintText">
             <strong>{t("connectMarzban.qr.hint_title")}</strong>
             <span>{t("connectMarzban.qr.hint_text")}</span>
