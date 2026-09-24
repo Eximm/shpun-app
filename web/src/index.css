@@ -3701,32 +3701,13 @@ button, a { -webkit-tap-highlight-color: transparent; }
   gap: 6px;
   min-width: 0;
 }
-.cm__selectorLabelRow {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  flex-wrap: wrap;
-}
-.cm__qrBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-height: 36px;
-  padding: 6px 12px;
-  border: 1px solid rgba(77,215,255,0.42);
-  border-radius: 999px;
-  background: rgba(77,215,255,0.10);
-  color: #78e4ff;
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1.2;
-  text-align: left;
-  cursor: pointer;
-  box-shadow: 0 0 18px rgba(77,215,255,0.10);
-}
-.cm__qrBtn:focus-visible {
-  outline: 2px solid rgba(77,215,255,0.78);
-  outline-offset: 2px;
+.cm__selectorHelper {
+  display: block;
+  margin-top: 5px;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: rgba(255,255,255,0.5);
+  overflow-wrap: anywhere;
 }
 .cm__qrHint {
   display: flex;
@@ -3892,6 +3873,8 @@ button, a { -webkit-tap-highlight-color: transparent; }
   font-size: 13px;
   font-weight: 900;
 }
+.modal__content .cm__extraTitle { margin-top: 16px; }
+.modal__content .cm__extraTitle:first-child { margin-top: 0; }
 .cm__extraSub {
   margin-top: 3px;
   font-size: 12px;

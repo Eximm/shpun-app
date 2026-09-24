@@ -287,7 +287,6 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
 
   const [platformPickerOpen, setPlatformPickerOpen] = useState(false);
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
-  const [clientHelpOpen, setClientHelpOpen] = useState(false);
   const [qrHintSeen, setQrHintSeen] = useState<boolean>(() => {
     try { return localStorage.getItem(QR_HINT_STORAGE_KEY) === "1"; } catch { return false; }
   });
@@ -569,6 +568,22 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
     }
   }
 
+  const renderClientOption = (kind: ClientKind) => {
+    const item = CLIENTS[kind];
+    return (
+      <button key={kind} className={`kv__item cawg__pickItem cm__clientPickItem${client === kind ? " is-active" : ""}`} type="button"
+        onClick={() => { setClient(kind); setClientPickerOpen(false); }}>
+        <div className="cm__clientPick">
+          <div>
+            <div className="kv__k">{item.icon} {item.title}</div>
+            <div className="kv__v">{t(item.noteKey)}</div>
+          </div>
+          {kind === "happ" && <span className="chip chip--ok">{t("connectMarzban.client.recommended")}</span>}
+        </div>
+      </button>
+    );
+  };
+
   const manualQrBlock = ready ? (
     <div className="cm__modalManual">
       <div className="cm__extraSub">{happOnly ? t("connectMarzban.manual.happ_only_desc") : t("connectMarzban.manual.desc")}</div>
@@ -657,21 +672,15 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
         </div>
 
         <div className="cm__selectorItem">
-          <div className="cm__selectorLabelRow">
-            <span className="p cawg__label">{t("connectMarzban.client.label")}</span>
-            <button
-              className="cm__qrBtn"
-              type="button"
-              onClick={() => setClientHelpOpen(true)}
-              aria-label={t("connectMarzban.qr.button_aria")}
-            >
-              {"\u{1F4F1}"} {t("connectMarzban.qr.button")}
-            </button>
-          </div>
+          <span className="p cawg__label">{t("connectMarzban.client.label")}</span>
           <button className="btn cawg__deviceBtn cm__selectorBtn" type="button" onClick={() => setClientPickerOpen(true)} disabled={loading}>
-            <span>{selectedClient.icon} {t("connectMarzban.client.button").replace("{client}", selectedClient.title)}</span>
+            <span>
+              {selectedClient.icon} {selectedClient.title}
+              {effectiveClient === "happ" ? ` — ${t("connectMarzban.client.recommended")}` : ""}
+            </span>
             {" "}<span aria-hidden="true">{"\u25BE"}</span>
           </button>
+          <span className="cm__selectorHelper">{t("connectMarzban.client.helper")}</span>
         </div>
       </div>
 
@@ -809,51 +818,16 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
                 <button className="btn modal__close" type="button" onClick={() => setClientPickerOpen(false)} aria-label={t("common.close")}>{"\u00D7"}</button>
               </div>
               <div className="modal__content">
-                <div className="kv">
-                  {availableClients.map((kind) => {
-                    const item = CLIENTS[kind];
-                    return (
-                      <button key={kind} className={`kv__item cawg__pickItem cm__clientPickItem${client === kind ? " is-active" : ""}`} type="button"
-                        onClick={() => { setClient(kind); setClientPickerOpen(false); }}>
-                        <div className="cm__clientPick">
-                          <div>
-                            <div className="kv__k">{item.icon} {item.title}</div>
-                            <div className="kv__v">{t(item.noteKey)}</div>
-                          </div>
-                          {kind === "happ" && <span className="chip chip--ok">{t("connectMarzban.client.recommended")}</span>}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
+                <div className="cm__extraTitle">{t("connectMarzban.client.recommended_title")}</div>
+                <div className="kv">{renderClientOption("happ")}</div>
+                {!happOnly && (
+                  <>
+                    <div className="cm__extraTitle">{t("connectMarzban.client.other_title")}</div>
+                    <div className="kv">{availableClients.filter((kind) => kind !== "happ").map(renderClientOption)}</div>
+                  </>
+                )}
+                <div className="cm__extraTitle">{t("connectMarzban.client.qr_title")}</div>
                 {manualQrBlock}
-              </div>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-
-      {clientHelpOpen && createPortal(
-        <div className="modal" role="dialog" aria-modal="true" onMouseDown={() => setClientHelpOpen(false)}>
-          <div className="card modal__card cm__clientHelpModal" onMouseDown={(e) => e.stopPropagation()}>
-            <div className="card__body">
-              <div className="modal__head">
-                <div className="modal__title">{"\u{1F4F1}"} {t("connectMarzban.qr.title")}</div>
-                <button className="btn modal__close" type="button" onClick={() => setClientHelpOpen(false)} aria-label={t("common.close")}>{"\u00D7"}</button>
-              </div>
-              <div className="modal__content">
-                <p className="p">{t("connectMarzban.qr.hint_text")}</p>
-                {manualQrBlock}
-                <div className="pre cm__clientHelpRoute">{t("connectMarzban.client.help_route")}</div>
-                <div className="actions actions--1" style={{ marginTop: 14 }}>
-                  <button className="btn btn--primary" type="button" onClick={() => {
-                    setClientHelpOpen(false);
-                    setClientPickerOpen(true);
-                  }}>
-                    {t("connectMarzban.client.help_action")}
-                  </button>
-                </div>
               </div>
             </div>
           </div>
