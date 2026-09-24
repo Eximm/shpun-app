@@ -586,29 +586,25 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
 
   const manualQrBlock = ready ? (
     <div className="cm__modalManual">
-      <div className="cm__extraSub">{happOnly ? t("connectMarzban.manual.happ_only_desc") : t("connectMarzban.manual.desc")}</div>
-      <div className="cm__extraSectionTitle">{t("connectMarzban.qr.primary_title")}</div>
-      <div className="actions actions--2 cm__extraSectionActions">
-        <button className="btn" type="button" onClick={() => void copySub(false)}>
+      <div className="cm__extraSub">{t("connectMarzban.qr.helper")}</div>
+      <div className="cm__qrGrid">
+        <button className="btn cm__qrAction" type="button" onClick={() => void copySub(false)}>
           {copiedPrimary ? `\u2705 ${t("connect.copied")}` : `\u{1F4CB} ${t("connectMarzban.manual.primary_link")}`}
         </button>
-        <button className="btn" type="button" onClick={() => void openQr(false)}>
+        {reserveSubscriptionUrl && (
+          <button className="btn cm__qrAction cm__qrAction--secondary" type="button" onClick={() => void copySub(true)}>
+            {copiedReserve ? `\u2705 ${t("connect.copied")}` : `\u{1F4CB} ${t("connectMarzban.manual.reserve_link")}`}
+          </button>
+        )}
+        <button className="btn cm__qrAction" type="button" onClick={() => void openQr(false)}>
           {"\u{1F4F1}"} {t("connectMarzban.manual.primary_qr")}
         </button>
+        {reserveSubscriptionUrl && (
+          <button className="btn cm__qrAction cm__qrAction--secondary" type="button" onClick={() => void openQr(true)}>
+            {"\u{1F4F1}"} {t("connectMarzban.manual.reserve_qr")}
+          </button>
+        )}
       </div>
-      {reserveSubscriptionUrl && (
-        <div className="cm__manualReserve">
-          <div className="cm__extraSectionTitle">{t("connectMarzban.qr.reserve_title")}</div>
-          <div className="actions actions--2 cm__extraSectionActions">
-            <button className="btn" type="button" onClick={() => void copySub(true)}>
-              {copiedReserve ? `\u2705 ${t("connect.copied")}` : `\u{1F4CB} ${t("connectMarzban.manual.reserve_link")}`}
-            </button>
-            <button className="btn" type="button" onClick={() => void openQr(true)}>
-              {"\u{1F4F1}"} {t("connectMarzban.manual.reserve_qr")}
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   ) : null;
 

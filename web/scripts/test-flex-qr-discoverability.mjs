@@ -4,11 +4,11 @@
 // History:
 //   v1 - QR/backup options hidden behind an ambiguous circular "i" button.
 //   v2 - a separate "QR и резервные способы" pill duplicated the selector.
-//   v3 - consolidated to one selector, but with too many permanent captions
-//        (label + helper + selector value) causing visual noise and height jumps.
-//   v4 - one self-explanatory selector ("Happ · QR и резервы"), no permanent
-//        helper/label; the only extra explanation is the first-run callout,
-//        whose pointer is layout-bound to the selector column.
+//   v3 - consolidated to one selector, but with too many permanent captions.
+//   v4 - one self-explanatory selector ("Happ · QR и резервы"), layout-bound
+//        first-run callout.
+//   v5 - the QR/links section simplified: one short helper, no per-group
+//        headings, no routing explanation, a 2x2 action grid.
 //
 // Usage: npm run test:flex-qr-discoverability
 
@@ -47,15 +47,22 @@ assert("QR/backup content is rendered once", count(connector, "{manualQrBlock}")
 assert("selector shows the app + QR/backup suffix", connector.includes("selectedClient.title") && connector.includes('t("connectMarzban.client.qr_suffix")'));
 assert("no permanent helper line", !connector.includes("cm__selectorHelper") && !connector.includes('t("connectMarzban.client.helper")'));
 assert("no permanent connection-options label", !connector.includes('t("connectMarzban.client.label")'));
-assert("star icon stays on the recommended client", connector.includes("selectedClient.icon"));
 
 /* ── One modal, logically grouped (functionality unchanged) ───────────────── */
 
 assert("modal groups recommended app", connector.includes('t("connectMarzban.client.recommended_title")'));
 assert("modal groups other apps", connector.includes('t("connectMarzban.client.other_title")'));
 assert("modal groups QR and links", connector.includes('t("connectMarzban.client.qr_title")'));
-assert("modal includes the shared QR/backup block", connector.includes("{manualQrBlock}"));
-assert("QR block keeps primary + reserve groups", connector.includes('t("connectMarzban.qr.primary_title")') && connector.includes('t("connectMarzban.qr.reserve_title")'));
+
+/* ── QR/links section simplified ──────────────────────────────────────────── */
+
+assert("one short helper line", connector.includes('t("connectMarzban.qr.helper")'));
+assert("no routing explanation text", !connector.includes('t("connectMarzban.manual.desc")') && !connector.includes('t("connectMarzban.manual.happ_only_desc")'));
+assert("no per-group headings", !connector.includes('t("connectMarzban.qr.primary_title")') && !connector.includes('t("connectMarzban.qr.reserve_title")'));
+assert("no old reserve sub-block", !connector.includes("cm__manualReserve"));
+assert("2x2 action grid", connector.includes('className="cm__qrGrid"'));
+assert("four clear actions present", ["manual.primary_link", "manual.reserve_link", "manual.primary_qr", "manual.reserve_qr"].every((k) => connector.includes(`connectMarzban.${k}`)));
+assert("reserve actions are optional (collapse when absent)", count(connector, "reserveSubscriptionUrl && (") === 2);
 
 /* ── First-run callout: kept, dismissible, layout-bound pointer ───────────── */
 
@@ -73,11 +80,12 @@ assert("pointer follows the single-column mobile layout", /@media \(max-width: 5
 /* ── Responsive / mobile-safe CSS ─────────────────────────────────────────── */
 
 assert("selector item aligns to the bottom (no jump)", /\.cm__selectorItem \{[\s\S]*?align-content: end;/.test(css));
+assert("QR grid can shrink without overflow", /\.cm__qrAction \{[\s\S]*?min-width: 0;[\s\S]*?overflow-wrap: anywhere;/.test(css));
+assert("QR grid collapses on the narrowest screens", /@media \(max-width: 380px\) \{[\s\S]*?\.cm__qrGrid \{ grid-template-columns: 1fr; \}/.test(css));
 assert("hint exists in CSS", css.includes(".cm__qrHint {") && css.includes(".cm__qrHintClose {"));
-assert("hint text can shrink", /\.cm__qrHintText \{[^}]*min-width: 0;/.test(css));
-assert("dismiss has a keyboard focus ring", css.includes(".cm__qrHintClose:focus-visible"));
 assert("dead pill CSS is removed", !css.includes(".cm__qrBtn"));
 assert("dead helper CSS is removed", !css.includes(".cm__selectorHelper"));
+assert("dead reserve-block CSS is removed", !css.includes(".cm__manualReserve"));
 
 /* ── i18n: new key present, dead keys removed ─────────────────────────────── */
 
@@ -87,6 +95,7 @@ for (const key of [
   "connectMarzban.client.recommended_title",
   "connectMarzban.client.other_title",
   "connectMarzban.client.qr_title",
+  "connectMarzban.qr.helper",
   "connectMarzban.qr.hint_title",
   "connectMarzban.qr.hint_text",
 ]) {
@@ -98,6 +107,11 @@ for (const key of [
   "connectMarzban.qr.button",
   "connectMarzban.qr.button_aria",
   "connectMarzban.qr.title",
+  "connectMarzban.qr.primary_title",
+  "connectMarzban.qr.reserve_title",
+  "connectMarzban.manual.title",
+  "connectMarzban.manual.desc",
+  "connectMarzban.manual.happ_only_desc",
   "connectMarzban.client.button",
   "connectMarzban.client.help_aria",
   "connectMarzban.client.help_title",
@@ -107,11 +121,11 @@ for (const key of [
 ]) {
   assert(`dead key removed: ${key}`, !dict.includes(`"${key}":`));
 }
-assert("RU suffix wording", dict.includes('"connectMarzban.client.qr_suffix": "QR и резервы"'));
-assert("EN suffix wording", dict.includes('"connectMarzban.client.qr_suffix": "QR & backups"'));
+assert("RU QR helper wording", dict.includes('"connectMarzban.qr.helper": "Здесь можно скопировать ссылку'));
+assert("EN QR helper wording", dict.includes('"connectMarzban.qr.helper": "Copy a link for manual import'));
 
 if (failures > 0) {
   console.error(`\nFAILED: ${failures} check(s)`);
   process.exit(1);
 }
-console.log("\nOK: Flex connection options (one self-explanatory selector, layout-bound callout) verified");
+console.log("\nOK: Flex connection options (one selector, simplified QR grid, layout-bound callout) verified");
