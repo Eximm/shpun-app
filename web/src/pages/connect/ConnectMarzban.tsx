@@ -288,8 +288,8 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
 
   const [subscriptionUrl, setSubscriptionUrl] = useState("");
   const [subscriptionUrlMirror, setSubscriptionUrlMirror] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [copiedMirror, setCopiedMirror] = useState(false);
+  const [copiedPrimary, setCopiedPrimary] = useState(false);
+  const [copiedReserve, setCopiedReserve] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [deepLinkFallback, setDeepLinkFallback] = useState<DeepLinkFallback | null>(null);
@@ -315,6 +315,8 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
   const availableClients: ClientKind[] = happOnly ? ["happ"] : ["happ", "v2ray", "hiddify"];
   const selectedClient = CLIENTS[effectiveClient];
   const selectedLinks = selectedClient.links[platform];
+  const primarySubscriptionUrl = subscriptionUrlMirror || subscriptionUrl;
+  const reserveSubscriptionUrl = subscriptionUrlMirror ? subscriptionUrl : null;
 
   useEffect(() => {
     if (!happOnly) return;
@@ -418,8 +420,8 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
     }, 0);
   }
 
-  async function openImport(useMirror = false, client: ClientKind = "happ") {
-    const target = useMirror ? (subscriptionUrlMirror ?? "") : subscriptionUrl;
+  async function openImport(useReserve = false, client: ClientKind = "happ") {
+    const target = useReserve ? (reserveSubscriptionUrl ?? "") : primarySubscriptionUrl;
     if (!ready || !target) return;
     if (assistantMode) setAssistantStep("done");
     const targetClient: ClientKind = happOnly ? "happ" : client;
@@ -454,7 +456,7 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
   }
 
   async function openQr() {
-    const target = subscriptionUrl;
+    const target = primarySubscriptionUrl;
     if (!target) return;
     const title = t("connect.qr_title");
     const text = happOnly ? t("connectMarzban.manual.happ_only_qr_text") : t("connectMarzban.manual.qr_text");
@@ -473,12 +475,12 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
     }
   }
 
-  async function copySub(useMirror = false) {
-    const target = useMirror ? (subscriptionUrlMirror ?? "") : subscriptionUrl;
+  async function copySub(useReserve = false) {
+    const target = useReserve ? (reserveSubscriptionUrl ?? "") : primarySubscriptionUrl;
     if (!target) return;
     const ok = await copyToClipboard(target);
-    if (useMirror) { setCopiedMirror(ok); if (ok) setTimeout(() => setCopiedMirror(false), 1500); }
-    else { setCopied(ok); if (ok) setTimeout(() => setCopied(false), 1500); }
+    if (useReserve) { setCopiedReserve(ok); if (ok) setTimeout(() => setCopiedReserve(false), 1500); }
+    else { setCopiedPrimary(ok); if (ok) setTimeout(() => setCopiedPrimary(false), 1500); }
     ok
       ? toast.success(t("connect.copied"), { description: happOnly ? t("connectMarzban.manual.happ_only_copy_ok_desc") : t("connectMarzban.manual.copy_ok_desc") })
       : toast.error(t("connect.copy_link"), { description: t("connect.sub_prepare_error_desc") });
@@ -680,7 +682,7 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
         </div>
       </div>
 
-      {subscriptionUrlMirror && ready && (
+      {reserveSubscriptionUrl && ready && (
         <div className={`cm__priorityCard cm__priorityCard--mirror${assistantMode && assistantStep !== "done" ? " cm__assistantSecondary" : ""}`}>
           <div className="cm__priorityHead">
             <span className="cm__priorityIcon">{"\u2194"}</span>
@@ -777,16 +779,16 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
                     <div className="cm__extraSub">{happOnly ? t("connectMarzban.manual.happ_only_desc") : t("connectMarzban.manual.desc")}</div>
                     <div className="actions actions--2 cm__extraSectionActions">
                       <button className="btn" type="button" onClick={() => void copySub(false)}>
-                        {copied ? `\u2705 ${t("connect.copied")}` : `\u{1F4CB} ${t("connect.copy_link")}`}
+                        {copiedPrimary ? `\u2705 ${t("connect.copied")}` : `\u{1F4CB} ${t("connect.copy_link")}`}
                       </button>
                       <button className="btn" type="button" onClick={() => void openQr()}>
                         {"\u{1F4F1}"} {t("connect.show_qr")}
                       </button>
                     </div>
-                    {subscriptionUrlMirror && (
+                    {reserveSubscriptionUrl && (
                       <div className="actions actions--1 cm__extraSectionActions">
                         <button className="btn" type="button" onClick={() => void copySub(true)}>
-                          {copiedMirror ? `\u2705 ${t("connect.copied")}` : `\u{1F4CB} ${t("connect.copy_link")} (${t("connectMarzban.mirror.short")})`}
+                          {copiedReserve ? `\u2705 ${t("connect.copied")}` : `\u{1F4CB} ${t("connect.copy_link")} (${t("connectMarzban.mirror.short")})`}
                         </button>
                       </div>
                     )}
