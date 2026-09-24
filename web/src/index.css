@@ -3804,6 +3804,11 @@ button, a { -webkit-tap-highlight-color: transparent; }
   padding-top: 12px;
   border-top: 1px solid rgba(255,255,255,0.08);
 }
+.cm__manualReserve {
+  margin-top: 12px;
+  padding-top: 2px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
 @media (max-width: 560px) {
   .cm__selectorGrid {
     grid-template-columns: 1fr;

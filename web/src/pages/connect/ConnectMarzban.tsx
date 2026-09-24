@@ -291,6 +291,7 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
   const [copiedPrimary, setCopiedPrimary] = useState(false);
   const [copiedReserve, setCopiedReserve] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
+  const [qrReserve, setQrReserve] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [deepLinkFallback, setDeepLinkFallback] = useState<DeepLinkFallback | null>(null);
   const [devicesOpen, setDevicesOpen] = useState(false);
@@ -455,11 +456,13 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
     if (opened && platform !== "ios") toast.info(t("connect.open_client"), { description: t(CLIENTS[targetClient].importTextKey) });
   }
 
-  async function openQr() {
-    const target = primarySubscriptionUrl;
+  async function openQr(useReserve = false) {
+    const target = useReserve ? (reserveSubscriptionUrl ?? "") : primarySubscriptionUrl;
     if (!target) return;
-    const title = t("connect.qr_title");
-    const text = happOnly ? t("connectMarzban.manual.happ_only_qr_text") : t("connectMarzban.manual.qr_text");
+    const title = t(useReserve ? "connectMarzban.manual.reserve_qr_title" : "connect.qr_title");
+    const text = useReserve
+      ? t("connectMarzban.manual.reserve_qr_text")
+      : happOnly ? t("connectMarzban.manual.happ_only_qr_text") : t("connectMarzban.manual.qr_text");
     try {
       const dataUrl = await QRCode.toDataURL(target, {
         errorCorrectionLevel: "L",
@@ -468,6 +471,7 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
         color: { dark: "#000000", light: "#ffffff" },
       });
       setQrDataUrl(dataUrl);
+      setQrReserve(useReserve);
       setQrOpen(true);
       toast.info(title, { description: text });
     } catch {
@@ -682,23 +686,6 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
         </div>
       </div>
 
-      {reserveSubscriptionUrl && ready && (
-        <div className={`cm__priorityCard cm__priorityCard--mirror${assistantMode && assistantStep !== "done" ? " cm__assistantSecondary" : ""}`}>
-          <div className="cm__priorityHead">
-            <span className="cm__priorityIcon">{"\u2194"}</span>
-            <div>
-              <div className="cm__priorityTitle">{t("connectMarzban.mirror.title")}</div>
-              <div className="cm__prioritySub">{t("connectMarzban.mirror.sub")}</div>
-            </div>
-          </div>
-          <div className="actions actions--1 cm__priorityActions">
-            <button className="btn btn--primary" onClick={() => void openImport(true, effectiveClient)} type="button">
-              {"\u{1F504}"} {t("connectMarzban.mirror.cta")} {selectedLinks.title}
-            </button>
-          </div>
-        </div>
-      )}
-
       {ready && (
         <div className={`card cm__devicesCard${assistantMode && assistantStep !== "done" ? " cm__assistantSecondary" : ""}`}>
           <div className="card__body cm__devicesCardBody">
@@ -779,17 +766,22 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
                     <div className="cm__extraSub">{happOnly ? t("connectMarzban.manual.happ_only_desc") : t("connectMarzban.manual.desc")}</div>
                     <div className="actions actions--2 cm__extraSectionActions">
                       <button className="btn" type="button" onClick={() => void copySub(false)}>
-                        {copiedPrimary ? `\u2705 ${t("connect.copied")}` : `\u{1F4CB} ${t("connect.copy_link")}`}
+                        {copiedPrimary ? `\u2705 ${t("connect.copied")}` : `\u{1F4CB} ${t("connectMarzban.manual.primary_link")}`}
                       </button>
-                      <button className="btn" type="button" onClick={() => void openQr()}>
-                        {"\u{1F4F1}"} {t("connect.show_qr")}
+                      <button className="btn" type="button" onClick={() => void openQr(false)}>
+                        {"\u{1F4F1}"} {t("connectMarzban.manual.primary_qr")}
                       </button>
                     </div>
                     {reserveSubscriptionUrl && (
-                      <div className="actions actions--1 cm__extraSectionActions">
-                        <button className="btn" type="button" onClick={() => void copySub(true)}>
-                          {copiedReserve ? `\u2705 ${t("connect.copied")}` : `\u{1F4CB} ${t("connect.copy_link")} (${t("connectMarzban.mirror.short")})`}
-                        </button>
+                      <div className="cm__manualReserve">
+                        <div className="actions actions--2 cm__extraSectionActions">
+                          <button className="btn" type="button" onClick={() => void copySub(true)}>
+                            {copiedReserve ? `\u2705 ${t("connect.copied")}` : `\u{1F4CB} ${t("connectMarzban.manual.reserve_link")}`}
+                          </button>
+                          <button className="btn" type="button" onClick={() => void openQr(true)}>
+                            {"\u{1F4F1}"} {t("connectMarzban.manual.reserve_qr")}
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -885,11 +877,15 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
           <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()}>
             <div className="card__body">
               <div className="modal__head">
-                <div className="modal__title">{"\u{1F4F1}"} {t("connect.qr_title")}</div>
+                <div className="modal__title">{"\u{1F4F1}"} {t(qrReserve ? "connectMarzban.manual.reserve_qr_title" : "connect.qr_title")}</div>
                 <button className="btn modal__close" type="button" onClick={() => setQrOpen(false)} aria-label={t("common.close")}>{"\u00D7"}</button>
               </div>
               <div className="modal__content">
-                <p className="p">{happOnly ? t("connectMarzban.manual.happ_only_qr_text") : t("connectMarzban.manual.qr_text")}</p>
+                <p className="p">
+                  {qrReserve
+                    ? t("connectMarzban.manual.reserve_qr_text")
+                    : happOnly ? t("connectMarzban.manual.happ_only_qr_text") : t("connectMarzban.manual.qr_text")}
+                </p>
                 <div className="helperMedia helperMedia--qr">
                   {qrDataUrl && <img className="helperMedia__img" src={qrDataUrl} alt={t("connectAmneziaWG.qr.alt")} loading="lazy" width={320} />}
                 </div>
