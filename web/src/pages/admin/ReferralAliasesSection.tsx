@@ -323,7 +323,6 @@ export function ReferralAliasesSection() {
       enabled: item.enabled,
     });
     setMessage("");
-    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   async function save() {
@@ -599,126 +598,144 @@ export function ReferralAliasesSection() {
         }
       />
 
-      {(creating || editingAlias) && <>
-      <h3 className="h2 admin-gap-top-md">
-        {editingAlias
-          ? t("admin.referral.edit_title", { alias: editingAlias })
-          : form.linkType === "campaign" ? t("admin.referral.create_campaign") : t("admin.referral.create_partner")}
-      </h3>
-      <p className="p">
-        {form.linkType === "campaign"
-          ? t("admin.referral.hint.campaign")
-          : t("admin.referral.hint.partner")}
-      </p>
+      {(creating || editingAlias) ? (
+        <ModalShell
+          title={editingAlias
+            ? t("admin.referral.edit_title", { alias: editingAlias })
+            : form.linkType === "campaign" ? t("admin.referral.create_campaign") : t("admin.referral.create_partner")}
+          kicker={form.linkType === "campaign"
+            ? t("admin.referral.detail.type.campaign")
+            : t("admin.referral.detail.type.partner")}
+          onClose={clearForm}
+        >
+          <div className="refForm">
+            {!editingAlias ? (
+              <p className="refForm__hint">
+                {form.linkType === "campaign" ? t("admin.referral.hint.campaign") : t("admin.referral.hint.partner")}
+              </p>
+            ) : null}
 
-      <div className="grid2 admin-gap-top-md">
-        <label className="field">
-          <span className="field__label">{t("admin.referral.field.alias")}</span>
-          <input
-            className="input"
-            value={form.alias}
-            placeholder={t("admin.referral.field.alias_ph")}
-            disabled={Boolean(editingAlias)}
-            onChange={(event) => setForm({
-              ...form,
-              alias: event.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""),
-            })}
-          />
-        </label>
+            <section className="refAnalytics__section">
+              <h4 className="refAnalytics__title">{t("admin.referral.detailsModal.general")}</h4>
+              <div className="refForm__grid">
+                <label className="field">
+                  <span className="field__label">{t("admin.referral.field.alias")}</span>
+                  <input
+                    className="input"
+                    value={form.alias}
+                    placeholder={t("admin.referral.field.alias_ph")}
+                    disabled={Boolean(editingAlias)}
+                    onChange={(event) => setForm({
+                      ...form,
+                      alias: event.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""),
+                    })}
+                  />
+                </label>
 
-        {form.linkType === "partner" && <label className="field">
-          <span className="field__label">{t("admin.referral.field.partner_id")}</span>
-          <input
-            className="input"
-            inputMode="numeric"
-            value={form.partnerId}
-            placeholder={t("admin.referral.field.partner_id_ph")}
-            onChange={(event) => setForm({ ...form, partnerId: event.target.value.replace(/\D/g, "") })}
-          />
-        </label>}
+                {form.linkType === "partner" && <label className="field">
+                  <span className="field__label">{t("admin.referral.field.partner_id")}</span>
+                  <input
+                    className="input"
+                    inputMode="numeric"
+                    value={form.partnerId}
+                    placeholder={t("admin.referral.field.partner_id_ph")}
+                    onChange={(event) => setForm({ ...form, partnerId: event.target.value.replace(/\D/g, "") })}
+                  />
+                </label>}
 
-        {form.linkType === "partner" && <label className="field">
-          <span className="field__label">{t("admin.referral.field.campaign_code")}</span>
-          <input
-            className="input"
-            value={form.campaignCode}
-            placeholder={t("admin.referral.field.campaign_code_ph")}
-            onChange={(event) => setForm({ ...form, campaignCode: event.target.value })}
-          />
-        </label>}
+                {form.linkType === "partner" && <label className="field">
+                  <span className="field__label">{t("admin.referral.field.campaign_code")}</span>
+                  <input
+                    className="input"
+                    value={form.campaignCode}
+                    placeholder={t("admin.referral.field.campaign_code_ph")}
+                    onChange={(event) => setForm({ ...form, campaignCode: event.target.value })}
+                  />
+                </label>}
 
-        {form.linkType === "campaign" && <label className="field">
-          <span className="field__label">{t("admin.referral.field.billing_comment")}</span>
-          <input
-            className="input"
-            value={form.billingComment}
-            maxLength={255}
-            placeholder={t("admin.referral.field.billing_comment_ph")}
-            onChange={(event) => setForm({ ...form, billingComment: event.target.value })}
-          />
-        </label>}
+                {form.linkType === "campaign" && <label className="field">
+                  <span className="field__label">{t("admin.referral.field.billing_comment")}</span>
+                  <input
+                    className="input"
+                    value={form.billingComment}
+                    maxLength={255}
+                    placeholder={t("admin.referral.field.billing_comment_ph")}
+                    onChange={(event) => setForm({ ...form, billingComment: event.target.value })}
+                  />
+                </label>}
 
-        {form.linkType === "campaign" && <label className="field">
-          <span className="field__label">{t("admin.referral.field.ad_cost")}</span>
-          <input
-            className="input"
-            inputMode="decimal"
-            value={form.adCost}
-            placeholder={t("admin.referral.field.ad_cost_ph")}
-            onChange={(event) => setForm({ ...form, adCost: sanitizeMoneyInput(event.target.value) })}
-          />
-        </label>}
+                <label className="field">
+                  <span className="field__label">{t("admin.referral.field.state")}</span>
+                  <label className="checkRow">
+                    <input
+                      type="checkbox"
+                      checked={form.enabled}
+                      onChange={(event) => setForm({ ...form, enabled: event.target.checked })}
+                    />
+                    <span>{t("admin.referral.field.enabled")}</span>
+                  </label>
+                </label>
+              </div>
+            </section>
 
-        {form.linkType === "partner" && <label className="field">
-          <span className="field__label">{t("admin.referral.field.first_bonus")}</span>
-          <input
-            className="input"
-            inputMode="numeric"
-            value={form.firstPaymentBonusPercent}
-            placeholder={t("admin.referral.field.percent_ph")}
-            onChange={(event) => setForm({
-              ...form,
-              firstPaymentBonusPercent: event.target.value.replace(/\D/g, ""),
-            })}
-          />
-        </label>}
+            <section className="refAnalytics__section">
+              <h4 className="refAnalytics__title">{t("admin.referral.detailsModal.settings")}</h4>
+              <div className="refForm__grid">
+                {form.linkType === "partner" ? (
+                  <>
+                    <label className="field">
+                      <span className="field__label">{t("admin.referral.field.first_bonus")}</span>
+                      <input
+                        className="input"
+                        inputMode="numeric"
+                        value={form.firstPaymentBonusPercent}
+                        placeholder={t("admin.referral.field.percent_ph")}
+                        onChange={(event) => setForm({
+                          ...form,
+                          firstPaymentBonusPercent: event.target.value.replace(/\D/g, ""),
+                        })}
+                      />
+                    </label>
+                    <label className="field">
+                      <span className="field__label">{t("admin.referral.field.reward")}</span>
+                      <input
+                        className="input"
+                        inputMode="numeric"
+                        value={form.partnerRewardPercent}
+                        placeholder={t("admin.referral.field.percent_ph")}
+                        onChange={(event) => setForm({
+                          ...form,
+                          partnerRewardPercent: event.target.value.replace(/\D/g, ""),
+                        })}
+                      />
+                    </label>
+                  </>
+                ) : (
+                  <label className="field">
+                    <span className="field__label">{t("admin.referral.field.ad_cost")}</span>
+                    <input
+                      className="input"
+                      inputMode="decimal"
+                      value={form.adCost}
+                      placeholder={t("admin.referral.field.ad_cost_ph")}
+                      onChange={(event) => setForm({ ...form, adCost: sanitizeMoneyInput(event.target.value) })}
+                    />
+                  </label>
+                )}
+              </div>
+            </section>
+          </div>
 
-        {form.linkType === "partner" && <label className="field">
-          <span className="field__label">{t("admin.referral.field.reward")}</span>
-          <input
-            className="input"
-            inputMode="numeric"
-            value={form.partnerRewardPercent}
-            placeholder={t("admin.referral.field.percent_ph")}
-            onChange={(event) => setForm({
-              ...form,
-              partnerRewardPercent: event.target.value.replace(/\D/g, ""),
-            })}
-          />
-        </label>}
-
-        <label className="field">
-          <span className="field__label">{t("admin.referral.field.state")}</span>
-          <label className="checkRow">
-            <input
-              type="checkbox"
-              checked={form.enabled}
-              onChange={(event) => setForm({ ...form, enabled: event.target.checked })}
-            />
-            <span>{t("admin.referral.field.enabled")}</span>
-          </label>
-        </label>
-      </div>
-
-      <div className="row admin-gap-top-md">
-        <button className="btn btn--primary" type="button" onClick={() => void save()}>
-          {editingAlias
-            ? t("admin.referral.action.save_changes")
-            : form.linkType === "campaign" ? t("admin.referral.action.add_campaign") : t("admin.referral.action.add_partner")}
-        </button>
-        <button className="btn btn--soft" type="button" onClick={clearForm}>{t("common.cancel")}</button>
-      </div>
-      </>}
+          <div className="refForm__actions">
+            <button className="btn btn--primary" type="button" onClick={() => void save()}>
+              {editingAlias
+                ? t("admin.referral.action.save_changes")
+                : form.linkType === "campaign" ? t("admin.referral.action.add_campaign") : t("admin.referral.action.add_partner")}
+            </button>
+            <button className="btn btn--soft" type="button" onClick={clearForm}>{t("common.cancel")}</button>
+          </div>
+        </ModalShell>
+      ) : null}
       {message && <div className="refPartnerNotice">{message}</div>}
 
       <div className="refToolbar admin-gap-top-md">

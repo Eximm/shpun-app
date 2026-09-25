@@ -7844,6 +7844,12 @@ button.reviews-star:not(:disabled) {
 .refDetails { display: flex; flex-direction: column; gap: 14px; }
 .refDetails__actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .refDetails__actions .btn { flex: 1 1 auto; min-height: 44px; }
+.refForm { display: flex; flex-direction: column; gap: 14px; }
+.refForm__hint { margin: 0; color: rgba(255,255,255,0.6); font-size: 12px; line-height: 1.4; }
+.refForm__grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+@media (min-width: 720px) { .refForm__grid { grid-template-columns: 1fr 1fr; } }
+.refForm__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.refForm__actions .btn { flex: 1 1 auto; min-height: 44px; }
 
 @media (max-width: 480px) {
   .refToolbar__sort { margin-left: 0; width: 100%; }

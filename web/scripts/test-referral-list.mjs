@@ -62,6 +62,23 @@ assert("details modal groups general/links/settings", ["general", "links", "sett
 assert("details modal contains the links block", section.includes("placementLinks(infoItem"));
 assert("details modal shows partner/campaign settings", section.includes('t("admin.referral.field.first_bonus")') && section.includes('t("admin.referral.field.reward")') && section.includes('t("admin.referral.field.ad_cost")'));
 
+/* ── Edit modal: sibling of Details, no inline edit ───────────────────────── */
+
+assert("no inline edit form above the list", !section.includes('className="grid2 admin-gap-top-md"') && !section.includes("window.scrollTo({ top: 0"));
+assert("edit/create renders inside ModalShell", section.includes("(creating || editingAlias) ? (") && section.includes("<ModalShell") && section.includes('className="refForm"'));
+assert("edit modal reuses bounded sections", /refForm[\s\S]*?refAnalytics__section/.test(section));
+assert("edit modal header uses the type kicker", section.includes('kicker={form.linkType === "campaign"') && section.includes('t("admin.referral.detail.type.campaign")'));
+assert("details -> edit opens in one step", section.includes("setInfoItem(null); edit(infoItem);"));
+assert("actions menu -> edit wired", section.includes("onClick: () => edit(menuItem)"));
+assert("partner form shows partner-only fields", section.includes('t("admin.referral.field.partner_id")') && section.includes('t("admin.referral.field.campaign_code")') && section.includes('t("admin.referral.field.first_bonus")') && section.includes('t("admin.referral.field.reward")'));
+assert("campaign form shows campaign-only fields", section.includes('t("admin.referral.field.billing_comment")') && section.includes('t("admin.referral.field.ad_cost")'));
+assert("save reuses the existing handler", section.includes("onClick={() => void save()}"));
+assert("cancel closes the modal via clearForm", section.includes("onClick={clearForm}"));
+const clearFormStart = section.indexOf("function clearForm");
+const clearFormEnd = section.indexOf("\n  }", clearFormStart);
+const clearFormBody = clearFormStart >= 0 && clearFormEnd > clearFormStart ? section.slice(clearFormStart, clearFormEnd) : "";
+assert("cancel/edit does not reset search/filter/sort", !clearFormBody.includes("setQuery") && !clearFormBody.includes("setStatusFilter") && !clearFormBody.includes("setTypeFilter") && !clearFormBody.includes("setSort"));
+
 /* ── Analytics stays a separate modal ─────────────────────────────────────── */
 
 assert("analytics modal is separate", section.includes("analyticsItem") && section.includes("refAnalytics__periods"));
@@ -84,6 +101,7 @@ assert("kpis wrap and shrink", /\.refCard__kpis \{[^}]*flex-wrap: wrap;/.test(cs
 assert("summary row is a real button reset", /\.refCard__summary \{[\s\S]*?border: 0;[\s\S]*?cursor: pointer;/.test(css));
 assert("menu button is an accessible tap target", /\.refCard__menuBtn \{[\s\S]*?width: 40px;[\s\S]*?height: 40px;/.test(css));
 assert("toolbar wraps on narrow screens", /@media \(max-width: 480px\) \{[\s\S]*?\.refToolbar__sort \{ margin-left: 0; width: 100%; \}/.test(css));
+assert("edit form grid stacks on mobile", /\.refForm__grid \{ display: grid; grid-template-columns: 1fr;/.test(css) && /@media \(min-width: 720px\) \{ \.refForm__grid \{ grid-template-columns: 1fr 1fr; \} \}/.test(css));
 
 if (failures > 0) {
   console.error(`\nFAILED: ${failures} check(s)`);
