@@ -3,6 +3,7 @@ import { apiFetch } from "../../shared/api/client";
 import { useI18n } from "../../shared/i18n";
 import { refreshAdminOverview } from "../../app/notifications/adminOverview";
 import { AdminSectionHeader, ADMIN_SECTION_ICON, ModalShell } from "./shared";
+import { ActionMenu } from "./ActionMenu";
 
 type AliasItem = {
   id: number;
@@ -17,6 +18,7 @@ type AliasItem = {
   enabled: boolean;
   visits_count: number;
   registrations_count: number;
+  created_at: string;
 };
 
 type PartnerForm = {
@@ -52,6 +54,10 @@ type TFn = ReturnType<typeof useI18n>["t"];
 
 type AnalyticsPeriod = "7d" | "30d" | "90d" | "all";
 const ANALYTICS_PERIODS: AnalyticsPeriod[] = ["7d", "30d", "90d", "all"];
+
+type StatusFilter = "all" | "active" | "inactive";
+type TypeFilter = "all" | "partner" | "campaign";
+type SortKey = "new" | "name" | "visits" | "registrations";
 
 // Mirrors the backend ReferralAnalytics DTO (see api/src/modules/referrals/analytics.ts).
 // `null` means "not available" - never rendered as 0.
@@ -134,6 +140,15 @@ function buildAppLink(alias: string): string {
   return `https://app.shpun.net/?${alias}`;
 }
 
+/** SQLite `datetime('now')` is "YYYY-MM-DD HH:MM:SS" (UTC); normalise before parsing. */
+function parseSqliteDate(value: string | null | undefined): Date | null {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  const iso = raw.includes("T") ? raw : raw.replace(" ", "T") + "Z";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 /** Keep the ad-spend input to a non-negative money string with max 2 decimals. */
 function sanitizeMoneyInput(value: string): string {
   const cleaned = String(value ?? "").replace(/[^\d.]/g, "");
@@ -168,7 +183,7 @@ function activeStatsTitle(stats: PartnerStats | undefined, t: TFn): string {
   return "";
 }
 
-function AnalyticsRow({ label, value, tone }: { label: string; value: string; tone?: string }) {
+function InfoRow({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
     <div className="refAnalytics__row">
       <span>{label}</span>
@@ -178,7 +193,7 @@ function AnalyticsRow({ label, value, tone }: { label: string; value: string; to
 }
 
 export function ReferralAliasesSection() {
-  const { t, formatCurrency, formatNumber } = useI18n();
+  const { t, formatCurrency, formatNumber, formatDate } = useI18n();
   const [items, setItems] = useState<AliasItem[]>([]);
   const [form, setForm] = useState<PartnerForm>(createEmptyForm);
   const [editingAlias, setEditingAlias] = useState("");
@@ -187,10 +202,18 @@ export function ReferralAliasesSection() {
   const [stats, setStats] = useState<Record<number, PartnerStats>>({});
   const [statsLoading, setStatsLoading] = useState<Record<number, boolean>>({});
   const [analytics, setAnalytics] = useState<Record<number, ReferralAnalytics>>({});
-  const [detailsItem, setDetailsItem] = useState<AliasItem | null>(null);
-  const [detailsPeriod, setDetailsPeriod] = useState<AnalyticsPeriod>("all");
-  const [detailsAnalytics, setDetailsAnalytics] = useState<ReferralAnalytics | null>(null);
-  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [analyticsItem, setAnalyticsItem] = useState<AliasItem | null>(null);
+  const [analyticsPeriod, setAnalyticsPeriod] = useState<AnalyticsPeriod>("all");
+  const [analyticsData, setAnalyticsData] = useState<ReferralAnalytics | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [infoItem, setInfoItem] = useState<AliasItem | null>(null);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [menuItem, setMenuItem] = useState<AliasItem | null>(null);
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [sort, setSort] = useState<SortKey>("new");
   const [copiedLink, setCopiedLink] = useState("");
   const botUsername = useMemo(() => getTelegramBotUsername(), []);
 
@@ -202,25 +225,25 @@ export function ReferralAliasesSection() {
     return Array.isArray(response.items) ? response.items : [];
   }
 
-  // Details view: refetch when the alias or period changes. Cancellation avoids
-  // a stale response overwriting a newer period selection.
+  // Analytics modal: refetch when the alias or period changes. Cancellation
+  // avoids a stale response overwriting a newer period selection.
   useEffect(() => {
-    if (!detailsItem) return;
+    if (!analyticsItem) return;
     let cancelled = false;
-    setDetailsLoading(true);
-    setDetailsAnalytics(null);
-    fetchAnalytics(detailsPeriod)
+    setAnalyticsLoading(true);
+    setAnalyticsData(null);
+    fetchAnalytics(analyticsPeriod)
       .then((rows) => {
-        if (!cancelled) setDetailsAnalytics(rows.find((row) => row.aliasId === detailsItem.id) ?? null);
+        if (!cancelled) setAnalyticsData(rows.find((row) => row.aliasId === analyticsItem.id) ?? null);
       })
       .catch(() => {
-        if (!cancelled) setDetailsAnalytics(null);
+        if (!cancelled) setAnalyticsData(null);
       })
       .finally(() => {
-        if (!cancelled) setDetailsLoading(false);
+        if (!cancelled) setAnalyticsLoading(false);
       });
     return () => { cancelled = true; };
-  }, [detailsItem, detailsPeriod]);
+  }, [analyticsItem, analyticsPeriod]);
 
   async function copyLink(key: string, value: string) {
     const ok = await copyToClipboard(value);
@@ -337,8 +360,62 @@ export function ReferralAliasesSection() {
     void refreshAdminOverview();
   }
 
-  const campaignItems = items.filter((item) => item.link_type === "campaign");
-  const partnerItems = items.filter((item) => item.link_type !== "campaign");
+  async function confirmRemove(item: AliasItem) {
+    if (!window.confirm(t("admin.referral.confirm.delete", { alias: item.alias }))) return;
+    await remove(item.id);
+    setInfoItem((current) => (current && current.id === item.id ? null : current));
+  }
+
+  function openAnalytics(item: AliasItem) {
+    setAnalyticsPeriod("all");
+    setAnalyticsItem(item);
+  }
+
+  function openMenu(item: AliasItem, anchor: HTMLElement) {
+    setMenuItem(item);
+    setMenuAnchor(anchor);
+  }
+
+  const dash = "—";
+  const money = (value: number | null) => (value === null ? dash : formatCurrency(value));
+  const count = (value: number | null) => (value === null ? dash : formatNumber(value));
+  const pct = (value: number | null) =>
+    value === null ? dash : `${formatNumber(value, { maximumFractionDigits: 1 })}%`;
+  const tone = (value: number | null) =>
+    value === null || value === 0 ? "" : value > 0 ? " is-positive" : " is-negative";
+  const createdLabel = (value: string) => {
+    const d = parseSqliteDate(value);
+    return d ? formatDate(d, { day: "2-digit", month: "2-digit", year: "numeric" }) : dash;
+  };
+
+  const visibleItems = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const filtered = items.filter((item) => {
+      if (statusFilter === "active" && !item.enabled) return false;
+      if (statusFilter === "inactive" && item.enabled) return false;
+      if (typeFilter !== "all" && item.link_type !== typeFilter) return false;
+      if (!q) return true;
+      const haystack = [
+        item.alias,
+        item.partner_id > 0 ? `#${item.partner_id}` : "",
+        item.partner_id > 0 ? String(item.partner_id) : "",
+        item.campaign_code || "",
+        item.billing_comment || "",
+      ].join(" ").toLowerCase();
+      return haystack.includes(q);
+    });
+
+    const sorted = [...filtered];
+    if (sort === "name") sorted.sort((a, b) => a.alias.localeCompare(b.alias));
+    else if (sort === "visits") sorted.sort((a, b) => (b.visits_count || 0) - (a.visits_count || 0));
+    else if (sort === "registrations") sorted.sort((a, b) => (b.registrations_count || 0) - (a.registrations_count || 0));
+    else sorted.sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
+    return sorted;
+  }, [items, query, statusFilter, typeFilter, sort]);
+
+  const campaignItems = visibleItems.filter((item) => item.link_type === "campaign");
+  const partnerItems = visibleItems.filter((item) => item.link_type !== "campaign");
+  const hasFilter = query.trim() !== "" || statusFilter !== "all" || typeFilter !== "all";
 
   function statusChip(enabled: boolean) {
     return (
@@ -351,7 +428,6 @@ export function ReferralAliasesSection() {
   function placementLinks(item: AliasItem, appLink: string, botLink: string) {
     return (
       <div className="refPartnerLinks" aria-label={t("admin.referral.links.aria")}>
-        <div className="refPartnerLinks__title">{t("admin.referral.links.title")}</div>
         <div className="refPartnerLinks__row">
           <div className="refPartnerLinks__body">
             <span>{t("admin.referral.links.app")}</span>
@@ -376,17 +452,130 @@ export function ReferralAliasesSection() {
     );
   }
 
-  const dash = "—";
-  const money = (value: number | null) => (value === null ? dash : formatCurrency(value));
-  const count = (value: number | null) => (value === null ? dash : formatNumber(value));
-  const pct = (value: number | null) =>
-    value === null ? dash : `${formatNumber(value, { maximumFractionDigits: 1 })}%`;
-  const tone = (value: number | null) =>
-    value === null || value === 0 ? "" : value > 0 ? " is-positive" : " is-negative";
+  function renderKpis(item: AliasItem, isPartner: boolean, activeTitle: string) {
+    const itemStats = stats[item.id];
+    const itemAnalytics = analytics[item.id];
+    const kpis: Array<{ key: string; label: string; value: string; tone: string; title?: string }> = [
+      { key: "visits", label: t("admin.referral.metric.visits"), value: count(item.visits_count || 0), tone: "" },
+      { key: "regs", label: t("admin.referral.metric.registrations"), value: count(item.registrations_count || 0), tone: "" },
+    ];
 
-  function openDetails(item: AliasItem) {
-    setDetailsPeriod("all");
-    setDetailsItem(item);
+    if (isPartner) {
+      kpis.push({
+        key: "active",
+        label: t("admin.referral.metric.active_short"),
+        value: statsLoading[item.id] ? "…" : (itemStats ? count(itemStats.activeUsers) : dash),
+        tone: "",
+        title: activeTitle || undefined,
+      });
+      if (itemAnalytics?.availability.finance) {
+        kpis.push({ key: "result", label: t("admin.referral.metric.result"), value: money(itemAnalytics.finance.result), tone: tone(itemAnalytics.finance.result) });
+      }
+    } else {
+      kpis.push({ key: "conv", label: t("admin.referral.metric.reg_conversion"), value: pct(itemAnalytics?.acquisition.registrationsConversionPct ?? null), tone: "" });
+      kpis.push({ key: "cost", label: t("admin.referral.metric.ad_cost"), value: money(itemAnalytics?.finance.adCost ?? null), tone: "" });
+      if (itemAnalytics?.availability.finance) {
+        kpis.push({ key: "roi", label: t("admin.referral.metric.roi"), value: pct(itemAnalytics.efficiency.roiPct), tone: tone(itemAnalytics.efficiency.roiPct) });
+      }
+    }
+
+    return (
+      <div className="refCard__kpis">
+        {kpis.map((kpi) => (
+          <span className="refCard__kpi" key={kpi.key} title={kpi.title}>
+            <strong className={kpi.tone}>{kpi.value}</strong>
+            <span>{kpi.label}</span>
+          </span>
+        ))}
+      </div>
+    );
+  }
+
+  function renderCard(item: AliasItem) {
+    const isPartner = item.link_type === "partner";
+    const expanded = expandedId === item.id;
+    const itemStats = stats[item.id];
+    const itemAnalytics = analytics[item.id];
+    const activeTitle = activeStatsTitle(itemStats, t);
+    const created = createdLabel(item.created_at);
+
+    return (
+      <article className={`refCard${item.enabled ? "" : " is-off"}${expanded ? " is-expanded" : ""}`} key={item.id}>
+        <div className="refCard__top">
+          <button
+            type="button"
+            className="refCard__summary"
+            onClick={() => setExpandedId(expanded ? null : item.id)}
+            aria-expanded={expanded}
+            aria-controls={`ref-card-${item.id}`}
+          >
+            <span className={`refCard__dot${item.enabled ? " is-on" : " is-off"}`} aria-hidden="true" />
+            <span className="refCard__identity">
+              <span className="refCard__name">{item.alias}</span>
+              <span className="refCard__meta">
+                {isPartner ? `#${item.partner_id}` : t("admin.referral.detail.type.campaign")}
+                {item.campaign_code ? ` · ${item.campaign_code}` : ""}
+                {item.billing_comment ? ` · ${item.billing_comment}` : ""}
+                {` · ${created}`}
+              </span>
+            </span>
+            {statusChip(item.enabled)}
+            <span className="refCard__chevron" aria-hidden="true">{"\u25BE"}</span>
+          </button>
+        </div>
+
+        {renderKpis(item, isPartner, activeTitle)}
+
+        {expanded && (
+          <div className="refCard__details" id={`ref-card-${item.id}`}>
+            <span className="refCard__detail">
+              <span>{t("admin.referral.detail.type")}</span>
+              <strong>{isPartner ? t("admin.referral.detail.type.partner") : t("admin.referral.detail.type.campaign")}</strong>
+            </span>
+            <span className="refCard__detail">
+              <span>{t("admin.referral.detail.created")}</span>
+              <strong>{created}</strong>
+            </span>
+            {isPartner ? (
+              <>
+                <span className="refCard__detail">
+                  <span>{t("admin.referral.field.first_bonus")}</span>
+                  <strong>+{item.first_payment_bonus_percent}%</strong>
+                </span>
+                <span className="refCard__detail">
+                  <span>{t("admin.referral.field.reward")}</span>
+                  <strong>{item.partner_reward_percent}%</strong>
+                </span>
+              </>
+            ) : (
+              <span className="refCard__detail">
+                <span>{t("admin.referral.field.ad_cost")}</span>
+                <strong>{money(itemAnalytics?.finance.allTimeAdCost ?? null)}</strong>
+              </span>
+            )}
+            <button className="btn btn--soft refCard__detailsBtn" type="button" onClick={() => setInfoItem(item)}>
+              {t("admin.referral.action.details")}
+            </button>
+          </div>
+        )}
+
+        <div className="refCard__actions">
+          <button className="btn btn--soft" type="button" onClick={() => openAnalytics(item)}>
+            {t("admin.referral.action.stats")}
+          </button>
+          <button
+            className="refCard__menuBtn"
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={menuItem?.id === item.id}
+            aria-label={t("admin.referral.actions.menu")}
+            onClick={(event) => openMenu(item, event.currentTarget)}
+          >
+            {"\u22EE"}
+          </button>
+        </div>
+      </article>
+    );
   }
 
   return (
@@ -532,78 +721,62 @@ export function ReferralAliasesSection() {
       </>}
       {message && <div className="refPartnerNotice">{message}</div>}
 
+      <div className="refToolbar admin-gap-top-md">
+        <input
+          className="input refToolbar__search"
+          type="search"
+          value={query}
+          placeholder={t("admin.referral.search.placeholder")}
+          aria-label={t("admin.referral.search.placeholder")}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+        <div className="refToolbar__group" role="group" aria-label={t("admin.referral.filter.status.all")}>
+          {(["all", "active", "inactive"] as StatusFilter[]).map((value) => (
+            <button
+              key={value}
+              type="button"
+              className={`chip ${statusFilter === value ? "chip--ok" : "chip--soft"}`}
+              aria-pressed={statusFilter === value}
+              onClick={() => setStatusFilter(value)}
+            >
+              {t(`admin.referral.filter.status.${value}`)}
+            </button>
+          ))}
+        </div>
+        <div className="refToolbar__group" role="group" aria-label={t("admin.referral.filter.type.all")}>
+          {(["all", "partner", "campaign"] as TypeFilter[]).map((value) => (
+            <button
+              key={value}
+              type="button"
+              className={`chip ${typeFilter === value ? "chip--ok" : "chip--soft"}`}
+              aria-pressed={typeFilter === value}
+              onClick={() => setTypeFilter(value)}
+            >
+              {t(`admin.referral.filter.type.${value}`)}
+            </button>
+          ))}
+        </div>
+        <label className="refToolbar__sort">
+          <span>{t("admin.referral.sort.label")}</span>
+          <select className="input" value={sort} onChange={(event) => setSort(event.target.value as SortKey)}>
+            <option value="new">{t("admin.referral.sort.new")}</option>
+            <option value="name">{t("admin.referral.sort.name")}</option>
+            <option value="visits">{t("admin.referral.sort.visits")}</option>
+            <option value="registrations">{t("admin.referral.sort.registrations")}</option>
+          </select>
+        </label>
+      </div>
+
+      {hasFilter && visibleItems.length === 0 ? <p className="p admin-gap-top-md">{t("admin.referral.empty.filtered")}</p> : null}
+
       <div className="refPartnerList admin-gap-top-md">
         <div className="refPartnerList__head">
           <h3 className="h2">{t("admin.referral.campaigns_title")}</h3>
           {campaignItems.length > 0 && <span className="chip chip--soft">{campaignItems.length}</span>}
         </div>
         <p className="p">{t("admin.referral.campaigns_hint")}</p>
-        {campaignItems.length === 0 && <p className="p">{t("admin.referral.campaigns_empty")}</p>}
-        {campaignItems.map((item) => {
-          const itemStats = stats[item.id];
-          const itemAnalytics = analytics[item.id];
-          const appLink = buildAppLink(item.alias);
-          const botLink = buildTelegramBotLink(botUsername, item);
-          return (
-          <article className="refPartnerCard" key={item.id}>
-            <div className="refPartnerCard__head">
-              <div className="refPartnerCard__identity">
-                <span className="refPartnerCard__eyebrow">{t("admin.referral.eyebrow.campaign")}</span>
-                <strong className="refPartnerCard__title">{item.alias}</strong>
-                <span className="refPartnerCard__campaign">{t("admin.referral.comment", { text: item.billing_comment || "—" })}</span>
-              </div>
-              {statusChip(item.enabled)}
-            </div>
-            {placementLinks(item, appLink, botLink)}
-            <div className="refPartnerCard__metrics">
-              <div className="refPartnerCard__metric">
-                <span>{t("admin.referral.metric.visits")}</span>
-                <strong>{item.visits_count || 0}</strong>
-              </div>
-              <div className="refPartnerCard__metric refPartnerCard__metric--active">
-                <span>{t("admin.referral.metric.comments")}</span>
-                <strong>
-                  {statsLoading[item.id]
-                    ? "…"
-                    : itemStats ? itemStats.totalUsers : item.registrations_count || 0}
-                </strong>
-              </div>
-            </div>
-            {itemAnalytics ? (
-              <div
-                className="refPartnerCard__finance"
-                title={itemAnalytics.availability.finance ? undefined : t("admin.referral.finance.unavailable")}
-              >
-                <div className="refPartnerCard__financeItem">
-                  <span>{t("admin.referral.metric.reg_conversion")}</span>
-                  <strong>{pct(itemAnalytics.acquisition.registrationsConversionPct)}</strong>
-                </div>
-                <div className="refPartnerCard__financeItem">
-                  <span>{t("admin.referral.metric.ad_cost")}</span>
-                  <strong>{money(itemAnalytics.finance.adCost)}</strong>
-                </div>
-                <div className="refPartnerCard__financeItem">
-                  <span>{t("admin.referral.metric.roi")}</span>
-                  <strong className={tone(itemAnalytics.efficiency.roiPct)}>{pct(itemAnalytics.efficiency.roiPct)}</strong>
-                </div>
-              </div>
-            ) : null}
-            <div className="refPartnerCard__actions">
-              <button className="btn btn--soft" type="button" onClick={() => openDetails(item)}>{t("admin.referral.action.stats")}</button>
-              <button className="btn btn--soft" type="button" onClick={() => edit(item)}>{t("common.edit")}</button>
-              <button
-                className="btn btn--soft"
-                type="button"
-                disabled={Boolean(statsLoading[item.id])}
-                onClick={() => void loadStats(item)}
-              >
-                {t("common.refresh")}
-              </button>
-              <button className="btn refPartnerCard__delete" type="button" onClick={() => void remove(item.id)}>{t("common.delete")}</button>
-            </div>
-          </article>
-          );
-        })}
+        {campaignItems.length === 0 && !hasFilter && <p className="p">{t("admin.referral.campaigns_empty")}</p>}
+        {campaignItems.map((item) => renderCard(item))}
       </div>
 
       <div className="refPartnerList admin-gap-top-md">
@@ -611,110 +784,84 @@ export function ReferralAliasesSection() {
           <h3 className="h2">{t("admin.referral.partners_title")}</h3>
           {partnerItems.length > 0 && <span className="chip chip--soft">{partnerItems.length}</span>}
         </div>
-        {partnerItems.length === 0 && <p className="p">{t("admin.referral.partners_empty")}</p>}
-        {partnerItems.map((item) => {
-          const itemStats = stats[item.id];
-          const itemAnalytics = analytics[item.id];
-          const activeTitle = activeStatsTitle(itemStats, t);
-          const appLink = buildAppLink(item.alias);
-          const botLink = buildTelegramBotLink(botUsername, item);
-          return (
-          <article className="refPartnerCard" key={item.id}>
-            <div className="refPartnerCard__head">
-              <div className="refPartnerCard__identity">
-                <span className="refPartnerCard__eyebrow">{t("admin.referral.eyebrow.partner", { id: item.partner_id })}</span>
-                <strong className="refPartnerCard__title">{item.alias}</strong>
-                {item.campaign_code && (
-                  <span className="refPartnerCard__campaign">{item.campaign_code}</span>
-                )}
-              </div>
-              {statusChip(item.enabled)}
-            </div>
-            {placementLinks(item, appLink, botLink)}
-
-            <div className="refPartnerCard__metrics">
-              <div className="refPartnerCard__metric">
-                <span>{t("admin.referral.metric.first_topup")}</span>
-                <strong>+{item.first_payment_bonus_percent}%</strong>
-              </div>
-              <div className="refPartnerCard__metric">
-                <span>{t("admin.referral.metric.to_partner")}</span>
-                <strong>{item.partner_reward_percent}%</strong>
-              </div>
-              <div className="refPartnerCard__metric">
-                <span>{t("admin.referral.metric.visits")}</span>
-                <strong>{item.visits_count || 0}</strong>
-              </div>
-              <div className="refPartnerCard__metric">
-                <span>{t("admin.referral.metric.billing_clients")}</span>
-                <strong>
-                  {statsLoading[item.id]
-                    ? "…"
-                    : itemStats
-                      ? itemStats.totalUsers
-                      : "—"}
-                </strong>
-              </div>
-              <div className="refPartnerCard__metric refPartnerCard__metric--active" title={activeTitle || undefined}>
-                <span>{t("admin.referral.metric.active_services")}</span>
-                <strong>
-                  {statsLoading[item.id]
-                    ? "…"
-                    : itemStats
-                      ? itemStats.activeUsers
-                      : "—"}
-                </strong>
-              </div>
-            </div>
-
-            {itemAnalytics ? (
-              <div
-                className="refPartnerCard__finance"
-                title={itemAnalytics.availability.finance ? undefined : t("admin.referral.finance.unavailable")}
-              >
-                <div className="refPartnerCard__financeItem">
-                  <span>{t("admin.referral.metric.registrations")}</span>
-                  <strong>{count(itemAnalytics.acquisition.registrations)}</strong>
-                </div>
-                <div className="refPartnerCard__financeItem">
-                  <span>{t("admin.referral.metric.commission_accrued")}</span>
-                  <strong>{money(itemAnalytics.finance.partnerCommissionAccrued)}</strong>
-                </div>
-                <div className="refPartnerCard__financeItem">
-                  <span>{t("admin.referral.metric.commission_paid")}</span>
-                  <strong>{money(itemAnalytics.finance.partnerCommissionPaid)}</strong>
-                </div>
-                <div className="refPartnerCard__financeItem">
-                  <span>{t("admin.referral.metric.result")}</span>
-                  <strong className={tone(itemAnalytics.finance.result)}>{money(itemAnalytics.finance.result)}</strong>
-                </div>
-              </div>
-            ) : null}
-
-            <div className="refPartnerCard__actions">
-              <button className="btn btn--soft" type="button" onClick={() => openDetails(item)}>{t("admin.referral.action.stats")}</button>
-              <button
-                className="btn btn--soft"
-                type="button"
-                disabled={Boolean(statsLoading[item.id])}
-                onClick={() => void loadStats(item)}
-              >
-                {t("common.refresh")}
-              </button>
-              <button className="btn btn--soft" type="button" onClick={() => edit(item)}>{t("common.edit")}</button>
-              <button className="btn refPartnerCard__delete" type="button" onClick={() => void remove(item.id)}>{t("common.delete")}</button>
-            </div>
-          </article>
-        )})}
+        {partnerItems.length === 0 && !hasFilter && <p className="p">{t("admin.referral.partners_empty")}</p>}
+        {partnerItems.map((item) => renderCard(item))}
       </div>
 
-      {detailsItem ? (
+      {infoItem ? (
         <ModalShell
-          title={t("admin.referral.details.title", { alias: detailsItem.alias })}
-          kicker={detailsItem.link_type === "campaign"
-            ? t("admin.referral.eyebrow.campaign")
-            : t("admin.referral.eyebrow.partner", { id: detailsItem.partner_id })}
-          onClose={() => setDetailsItem(null)}
+          title={t("admin.referral.detailsModal.title", { alias: infoItem.alias })}
+          kicker={infoItem.link_type === "campaign"
+            ? t("admin.referral.detail.type.campaign")
+            : t("admin.referral.detail.type.partner")}
+          onClose={() => setInfoItem(null)}
+        >
+          <div className="refDetails">
+            <section className="refAnalytics__section">
+              <h4 className="refAnalytics__title">{t("admin.referral.detailsModal.general")}</h4>
+              <InfoRow
+                label={t("admin.referral.detail.id")}
+                value={infoItem.link_type === "partner" ? `#${infoItem.partner_id}` : infoItem.alias}
+              />
+              <InfoRow
+                label={t("admin.referral.detail.type")}
+                value={infoItem.link_type === "campaign"
+                  ? t("admin.referral.detail.type.campaign")
+                  : t("admin.referral.detail.type.partner")}
+              />
+              <InfoRow
+                label={t("admin.referral.detail.comment")}
+                value={(infoItem.link_type === "campaign" ? infoItem.billing_comment : infoItem.campaign_code) || dash}
+              />
+              <InfoRow
+                label={t("admin.referral.detail.status")}
+                value={infoItem.enabled ? t("admin.referral.status.active") : t("admin.referral.status.off")}
+              />
+              <InfoRow label={t("admin.referral.detail.created")} value={createdLabel(infoItem.created_at)} />
+            </section>
+
+            <section className="refAnalytics__section">
+              <h4 className="refAnalytics__title">{t("admin.referral.detailsModal.links")}</h4>
+              {placementLinks(infoItem, buildAppLink(infoItem.alias), buildTelegramBotLink(botUsername, infoItem))}
+            </section>
+
+            <section className="refAnalytics__section">
+              <h4 className="refAnalytics__title">{t("admin.referral.detailsModal.settings")}</h4>
+              {infoItem.link_type === "partner" ? (
+                <>
+                  <InfoRow label={t("admin.referral.field.first_bonus")} value={`+${infoItem.first_payment_bonus_percent}%`} />
+                  <InfoRow label={t("admin.referral.field.reward")} value={`${infoItem.partner_reward_percent}%`} />
+                </>
+              ) : (
+                <InfoRow
+                  label={t("admin.referral.field.ad_cost")}
+                  value={money(analytics[infoItem.id]?.finance.allTimeAdCost ?? null)}
+                />
+              )}
+            </section>
+
+            <div className="refDetails__actions">
+              <button className="btn btn--primary" type="button" onClick={() => { setInfoItem(null); edit(infoItem); }}>
+                {t("common.edit")}
+              </button>
+              <button className="btn btn--soft" type="button" onClick={() => void loadStats(infoItem)}>
+                {t("common.refresh")}
+              </button>
+              <button className="btn refPartnerCard__delete" type="button" onClick={() => void confirmRemove(infoItem)}>
+                {t("common.delete")}
+              </button>
+            </div>
+          </div>
+        </ModalShell>
+      ) : null}
+
+      {analyticsItem ? (
+        <ModalShell
+          title={t("admin.referral.details.title", { alias: analyticsItem.alias })}
+          kicker={analyticsItem.link_type === "campaign"
+            ? t("admin.referral.detail.type.campaign")
+            : t("admin.referral.detail.type.partner")}
+          onClose={() => setAnalyticsItem(null)}
         >
           <div className="refAnalytics">
             <div className="refAnalytics__periods" role="group" aria-label={t("admin.referral.period.label")}>
@@ -722,9 +869,9 @@ export function ReferralAliasesSection() {
                 <button
                   key={period}
                   type="button"
-                  className={`chip ${detailsPeriod === period ? "chip--ok" : "chip--soft"}`}
-                  aria-pressed={detailsPeriod === period}
-                  onClick={() => setDetailsPeriod(period)}
+                  className={`chip ${analyticsPeriod === period ? "chip--ok" : "chip--soft"}`}
+                  aria-pressed={analyticsPeriod === period}
+                  onClick={() => setAnalyticsPeriod(period)}
                 >
                   {t(`admin.referral.period.${period}`)}
                 </button>
@@ -732,61 +879,73 @@ export function ReferralAliasesSection() {
             </div>
             <p className="refAnalytics__note">{t("admin.referral.period.model")}</p>
 
-            {detailsLoading ? (
+            {analyticsLoading ? (
               <p className="p">{t("common.loading")}</p>
-            ) : !detailsAnalytics ? (
+            ) : !analyticsData ? (
               <p className="p">{t("admin.referral.details.empty")}</p>
             ) : (
               <>
                 <section className="refAnalytics__section">
                   <h4 className="refAnalytics__title">{t("admin.referral.section.funnel")}</h4>
-                  <AnalyticsRow label={t("admin.referral.metric.visits")} value={count(detailsAnalytics.acquisition.clicks)} />
-                  {detailsAnalytics.availability.clicksPeriodLimited ? (
-                    <AnalyticsRow label={t("admin.referral.metric.clicks_all_time")} value={count(detailsAnalytics.acquisition.allTimeClicks)} />
+                  <InfoRow label={t("admin.referral.metric.visits")} value={count(analyticsData.acquisition.clicks)} />
+                  {analyticsData.availability.clicksPeriodLimited ? (
+                    <InfoRow label={t("admin.referral.metric.clicks_all_time")} value={count(analyticsData.acquisition.allTimeClicks)} />
                   ) : null}
-                  <AnalyticsRow label={t("admin.referral.metric.registrations")} value={count(detailsAnalytics.acquisition.registrations)} />
-                  <AnalyticsRow label={t("admin.referral.metric.paying")} value={count(detailsAnalytics.acquisition.payingUsers)} />
-                  <AnalyticsRow label={t("admin.referral.metric.first_topup")} value={count(detailsAnalytics.acquisition.firstTopups)} />
-                  <AnalyticsRow label={t("admin.referral.metric.reg_conversion")} value={pct(detailsAnalytics.acquisition.registrationsConversionPct)} />
-                  <AnalyticsRow label={t("admin.referral.metric.paying_conversion")} value={pct(detailsAnalytics.acquisition.payingConversionPct)} />
-                  {detailsAnalytics.availability.clicksPeriodLimited ? (
+                  <InfoRow label={t("admin.referral.metric.registrations")} value={count(analyticsData.acquisition.registrations)} />
+                  <InfoRow label={t("admin.referral.metric.paying")} value={count(analyticsData.acquisition.payingUsers)} />
+                  <InfoRow label={t("admin.referral.metric.first_topup")} value={count(analyticsData.acquisition.firstTopups)} />
+                  <InfoRow label={t("admin.referral.metric.reg_conversion")} value={pct(analyticsData.acquisition.registrationsConversionPct)} />
+                  <InfoRow label={t("admin.referral.metric.paying_conversion")} value={pct(analyticsData.acquisition.payingConversionPct)} />
+                  {analyticsData.availability.clicksPeriodLimited ? (
                     <p className="refAnalytics__note">{t("admin.referral.period.clicks_note")}</p>
                   ) : null}
                 </section>
 
                 <section className="refAnalytics__section">
                   <h4 className="refAnalytics__title">{t("admin.referral.section.finance")}</h4>
-                  <AnalyticsRow label={t("admin.referral.metric.total_topups")} value={money(detailsAnalytics.finance.totalTopups)} />
-                  <AnalyticsRow label={t("admin.referral.metric.service_revenue")} value={money(detailsAnalytics.finance.serviceRevenue)} />
-                  <AnalyticsRow label={t("admin.referral.metric.bonus_debits")} value={money(detailsAnalytics.finance.bonusDebits)} />
-                  <AnalyticsRow label={t("admin.referral.metric.ad_cost")} value={money(detailsAnalytics.finance.adCost)} />
-                  {detailsAnalytics.availability.adCostPeriodLimited && detailsAnalytics.finance.allTimeAdCost !== null ? (
-                    <AnalyticsRow label={t("admin.referral.metric.ad_cost_all_time")} value={money(detailsAnalytics.finance.allTimeAdCost)} />
+                  <InfoRow label={t("admin.referral.metric.total_topups")} value={money(analyticsData.finance.totalTopups)} />
+                  <InfoRow label={t("admin.referral.metric.service_revenue")} value={money(analyticsData.finance.serviceRevenue)} />
+                  <InfoRow label={t("admin.referral.metric.bonus_debits")} value={money(analyticsData.finance.bonusDebits)} />
+                  <InfoRow label={t("admin.referral.metric.ad_cost")} value={money(analyticsData.finance.adCost)} />
+                  {analyticsData.availability.adCostPeriodLimited && analyticsData.finance.allTimeAdCost !== null ? (
+                    <InfoRow label={t("admin.referral.metric.ad_cost_all_time")} value={money(analyticsData.finance.allTimeAdCost)} />
                   ) : null}
-                  <AnalyticsRow label={t("admin.referral.metric.commission_accrued")} value={money(detailsAnalytics.finance.partnerCommissionAccrued)} />
-                  <AnalyticsRow label={t("admin.referral.metric.commission_paid")} value={money(detailsAnalytics.finance.partnerCommissionPaid)} />
-                  <AnalyticsRow label={t("admin.referral.metric.acquisition_cost")} value={money(detailsAnalytics.finance.acquisitionCost)} />
-                  <AnalyticsRow label={t("admin.referral.metric.result")} value={money(detailsAnalytics.finance.result)} tone={tone(detailsAnalytics.finance.result)} />
-                  {detailsAnalytics.availability.adCostPeriodLimited ? (
+                  <InfoRow label={t("admin.referral.metric.commission_accrued")} value={money(analyticsData.finance.partnerCommissionAccrued)} />
+                  <InfoRow label={t("admin.referral.metric.commission_paid")} value={money(analyticsData.finance.partnerCommissionPaid)} />
+                  <InfoRow label={t("admin.referral.metric.acquisition_cost")} value={money(analyticsData.finance.acquisitionCost)} />
+                  <InfoRow label={t("admin.referral.metric.result")} value={money(analyticsData.finance.result)} tone={tone(analyticsData.finance.result)} />
+                  {analyticsData.availability.adCostPeriodLimited ? (
                     <p className="refAnalytics__note">{t("admin.referral.period.ad_cost_note")}</p>
                   ) : null}
-                  {!detailsAnalytics.availability.finance ? (
+                  {!analyticsData.availability.finance ? (
                     <p className="refAnalytics__note refAnalytics__note--warn">{t("admin.referral.finance.unavailable")}</p>
                   ) : null}
                 </section>
 
                 <section className="refAnalytics__section">
                   <h4 className="refAnalytics__title">{t("admin.referral.section.efficiency")}</h4>
-                  <AnalyticsRow label={t("admin.referral.metric.cac")} value={money(detailsAnalytics.efficiency.cac)} />
-                  <AnalyticsRow label={t("admin.referral.metric.arppu")} value={money(detailsAnalytics.efficiency.arppu)} />
-                  <AnalyticsRow label={t("admin.referral.metric.roas")} value={pct(detailsAnalytics.efficiency.roasPct)} />
-                  <AnalyticsRow label={t("admin.referral.metric.roi")} value={pct(detailsAnalytics.efficiency.roiPct)} tone={tone(detailsAnalytics.efficiency.roiPct)} />
+                  <InfoRow label={t("admin.referral.metric.cac")} value={money(analyticsData.efficiency.cac)} />
+                  <InfoRow label={t("admin.referral.metric.arppu")} value={money(analyticsData.efficiency.arppu)} />
+                  <InfoRow label={t("admin.referral.metric.roas")} value={pct(analyticsData.efficiency.roasPct)} />
+                  <InfoRow label={t("admin.referral.metric.roi")} value={pct(analyticsData.efficiency.roiPct)} tone={tone(analyticsData.efficiency.roiPct)} />
                 </section>
               </>
             )}
           </div>
         </ModalShell>
       ) : null}
+
+      <ActionMenu
+        anchorEl={menuAnchor}
+        open={Boolean(menuItem && menuAnchor)}
+        onClose={() => { setMenuItem(null); setMenuAnchor(null); }}
+        items={menuItem ? [
+          { label: t("admin.referral.action.details"), onClick: () => setInfoItem(menuItem) },
+          { label: t("common.refresh"), onClick: () => { void loadStats(menuItem); } },
+          { label: t("common.edit"), onClick: () => edit(menuItem) },
+          { label: t("common.delete"), danger: true, onClick: () => { void confirmRemove(menuItem); } },
+        ] : []}
+      />
     </div></div>
   );
 }

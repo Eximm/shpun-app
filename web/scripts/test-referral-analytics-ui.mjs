@@ -31,16 +31,16 @@ const dict = read("src/shared/i18n/dict.ts");
 
 /* ── Card summary ─────────────────────────────────────────────────────────── */
 
-assert("card shows a compact finance strip", section.includes('className="refPartnerCard__finance"'));
+assert("card shows a compact KPI row", section.includes('className="refCard__kpis"'));
 assert("campaign card exposes ad spend", section.includes('t("admin.referral.metric.ad_cost")'));
-assert("partner card exposes accrued/paid commission", section.includes('t("admin.referral.metric.commission_accrued")') && section.includes('t("admin.referral.metric.commission_paid")'));
+assert("finance KPIs are gated on availability", section.includes("itemAnalytics?.availability.finance"));
 assert("card exposes a positive/negative tone helper", section.includes("is-positive") && section.includes("is-negative"));
 
 /* ── Details action + modal ───────────────────────────────────────────────── */
 
 assert("cards have a Statistics action", section.includes('t("admin.referral.action.stats")'));
-assert("Statistics opens a modal", section.includes("<ModalShell") && section.includes("setDetailsItem(item)"));
-assert("modal has a period selector", section.includes("ANALYTICS_PERIODS.map") && section.includes("setDetailsPeriod"));
+assert("Statistics opens a modal", section.includes("<ModalShell") && section.includes("setAnalyticsItem(item)"));
+assert("modal has a period selector", section.includes("ANALYTICS_PERIODS.map") && section.includes("setAnalyticsPeriod"));
 assert("modal renders funnel section", section.includes('t("admin.referral.section.funnel")'));
 assert("modal renders finance section", section.includes('t("admin.referral.section.finance")'));
 assert("modal renders efficiency section", section.includes('t("admin.referral.section.efficiency")'));
@@ -67,8 +67,8 @@ assert("ad cost input is sanitized to money", section.includes("sanitizeMoneyInp
 
 /* ── Responsive, overflow-safe CSS ────────────────────────────────────────── */
 
-assert("finance strip wraps instead of overflowing", /\.refPartnerCard__finance \{[\s\S]*?flex-wrap: wrap;/.test(css));
-assert("finance items can shrink", /\.refPartnerCard__financeItem \{[^}]*min-width: 0;/.test(css));
+assert("card KPI row wraps instead of overflowing", /\.refCard__kpis \{[\s\S]*?flex-wrap: wrap;/.test(css));
+assert("card KPI items can shrink", /\.refCard__kpi \{[^}]*min-width: 0;/.test(css));
 assert("analytics rows allow label wrapping", /\.refAnalytics__row span \{[^}]*overflow-wrap: anywhere;/.test(css));
 assert("analytics modal sections exist", css.includes(".refAnalytics__section") && css.includes(".refAnalytics__value"));
 assert("period chip is a real button reset", css.includes(".refAnalytics__periods .chip { font: inherit;"));
