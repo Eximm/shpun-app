@@ -472,7 +472,7 @@ export function ReferralAliasesSection() {
       }
     } else {
       kpis.push({ key: "conv", label: t("admin.referral.metric.reg_conversion"), value: pct(itemAnalytics?.acquisition.registrationsConversionPct ?? null), tone: "" });
-      kpis.push({ key: "cost", label: t("admin.referral.metric.ad_cost"), value: money(itemAnalytics?.finance.adCost ?? null), tone: "" });
+      kpis.push({ key: "cost", label: t("admin.referral.metric.spend_short"), value: money(itemAnalytics?.finance.adCost ?? null), tone: "" });
       if (itemAnalytics?.availability.finance) {
         kpis.push({ key: "roi", label: t("admin.referral.metric.roi"), value: pct(itemAnalytics.efficiency.roiPct), tone: tone(itemAnalytics.efficiency.roiPct) });
       }
@@ -527,31 +527,33 @@ export function ReferralAliasesSection() {
 
         {expanded && (
           <div className="refCard__details" id={`ref-card-${item.id}`}>
-            <span className="refCard__detail">
-              <span>{t("admin.referral.detail.type")}</span>
-              <strong>{isPartner ? t("admin.referral.detail.type.partner") : t("admin.referral.detail.type.campaign")}</strong>
-            </span>
-            <span className="refCard__detail">
-              <span>{t("admin.referral.detail.created")}</span>
-              <strong>{created}</strong>
-            </span>
-            {isPartner ? (
-              <>
-                <span className="refCard__detail">
-                  <span>{t("admin.referral.field.first_bonus")}</span>
-                  <strong>+{item.first_payment_bonus_percent}%</strong>
-                </span>
-                <span className="refCard__detail">
-                  <span>{t("admin.referral.field.reward")}</span>
-                  <strong>{item.partner_reward_percent}%</strong>
-                </span>
-              </>
-            ) : (
+            <div className="refCard__detailGrid">
               <span className="refCard__detail">
-                <span>{t("admin.referral.field.ad_cost")}</span>
-                <strong>{money(itemAnalytics?.finance.allTimeAdCost ?? null)}</strong>
+                <span>{t("admin.referral.detail.type")}</span>
+                <strong>{isPartner ? t("admin.referral.detail.type.partner") : t("admin.referral.detail.type.campaign")}</strong>
               </span>
-            )}
+              <span className="refCard__detail">
+                <span>{t("admin.referral.detail.created")}</span>
+                <strong>{created}</strong>
+              </span>
+              {isPartner ? (
+                <>
+                  <span className="refCard__detail">
+                    <span>{t("admin.referral.field.first_bonus")}</span>
+                    <strong>+{item.first_payment_bonus_percent}%</strong>
+                  </span>
+                  <span className="refCard__detail">
+                    <span>{t("admin.referral.field.reward")}</span>
+                    <strong>{item.partner_reward_percent}%</strong>
+                  </span>
+                </>
+              ) : (
+                <span className="refCard__detail">
+                  <span>{t("admin.referral.metric.ad_cost")}</span>
+                  <strong>{money(itemAnalytics?.finance.allTimeAdCost ?? null)}</strong>
+                </span>
+              )}
+            </div>
             <button className="btn btn--soft refCard__detailsBtn" type="button" onClick={() => setInfoItem(item)}>
               {t("admin.referral.action.details")}
             </button>

@@ -38,6 +38,14 @@ assert("card has an expand summary with aria state", section.includes('className
 assert("card shows identity + meta", section.includes('className="refCard__identity"') && section.includes('className="refCard__meta"'));
 assert("card meta includes the created date", section.includes("· ${created}"));
 assert("card shows a compact KPI row", section.includes('className="refCard__kpis"') && section.includes('className="refCard__kpi"'));
+assert("KPI cells stack value over label", /\.refCard__kpi \{[\s\S]*?flex-direction: column;/.test(css) && /\.refCard__kpi > span \{[^}]*font-size: 10px;/.test(css));
+assert("KPI cells are light soft tiles", /\.refCard__kpi \{[\s\S]*?border-radius: 9px;/.test(css));
+assert("campaign summary uses the short spend label", section.includes('t("admin.referral.metric.spend_short")') && dict.includes('"admin.referral.metric.spend_short"'));
+assert("financial KPI label is shortened", dict.includes('"admin.referral.metric.result": "Результат"'));
+assert("expanded details use a definition grid", section.includes('className="refCard__detailGrid"') && /\.refCard__detailGrid \{[\s\S]*?grid-template-columns: repeat\(auto-fit/.test(css));
+assert("expanded detail cells stack label over value", /\.refCard__detail \{[^}]*flex-direction: column;/.test(css));
+assert("partner detail labels are short", dict.includes('"admin.referral.field.first_bonus": "Бонус клиенту"') && dict.includes('"admin.referral.field.reward": "Вознаграждение партнёру"'));
+assert("no redundant ', %' in labels", !dict.includes("первое пополнение, %") && !dict.includes("партнёра, %") && !dict.includes("partner reward, %"));
 
 /* ── No links/copy in the collapsed state ─────────────────────────────────── */
 
