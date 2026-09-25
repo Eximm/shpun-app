@@ -6959,6 +6959,8 @@ button.reviews-star:not(:disabled) {
   font-size: 13px;
   line-height: 1.55;
 }
+.legal-cta { margin-top: 14px; }
+.legal-cta .btn { min-height: 44px; }
 
 @media (max-width: 680px) {
   .legal-hero__top {

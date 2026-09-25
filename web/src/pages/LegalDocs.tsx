@@ -11,6 +11,7 @@ type LegalSection = {
   list?: string[];
   callout?: string;
   faq?: LegalFaqItem[];
+  cta?: { label: string; to: string };
 };
 
 type LegalDoc = {
@@ -24,7 +25,6 @@ type LegalDoc = {
 // Single source of truth for the documents revision date.
 const EDITION_DATE = "25.09.2026";
 const SERVICE_NAME = "ShpunApp / Shpun SDN System";
-const SUPPORT_TELEGRAM = "https://t.me/shpun_staff";
 const SUPPORT_EMAIL = "shpynsdn@gmail.com";
 
 const docs: LegalDoc[] = [
@@ -340,14 +340,15 @@ const docs: LegalDoc[] = [
       {
         title: "Поддержка",
         body: [
-          "Telegram: @shpun_staff",
-          `Email: ${SUPPORT_EMAIL}`,
+          "Проблемы с подключением, услугами, оплатой или работой Shpun.",
         ],
+        cta: { label: "Открыть поддержку", to: "/support" },
       },
       {
-        title: "По вопросам документов",
+        title: "Документы и общие вопросы",
         body: [
-          "Если у вас есть вопросы по обработке данных, оплате, техническому учёту, условиям использования или публичной оферте, направьте обращение через Telegram или email.",
+          `Email: ${SUPPORT_EMAIL}`,
+          "По вопросам обработки данных, технического учёта, условий использования или публичной оферты.",
           "Вопросы по балансу, бонусам, подпискам и возвратам разобраны в разделе «Оплата и возвраты».",
         ],
       },
@@ -534,13 +535,6 @@ function LegalDocument({ doc }: { doc: LegalDoc }) {
             <div className="card__body">
               <h3 className="legal-section-title">{section.title}</h3>
               {section.body?.map((paragraph) => {
-                if (paragraph.startsWith("Telegram:")) {
-                  return (
-                    <p className="legal-p" key={paragraph}>
-                      Telegram: <a href={SUPPORT_TELEGRAM} target="_blank" rel="noopener noreferrer">@shpun_staff</a>
-                    </p>
-                  );
-                }
                 if (paragraph.startsWith("Email:")) {
                   return (
                     <p className="legal-p" key={paragraph}>
@@ -554,6 +548,11 @@ function LegalDocument({ doc }: { doc: LegalDoc }) {
                 <ul className="legal-list">
                   {section.list.map((item) => <li key={item}>{item}</li>)}
                 </ul>
+              ) : null}
+              {section.cta ? (
+                <div className="legal-cta">
+                  <Link className="btn btn--primary" to={section.cta.to}>{section.cta.label}</Link>
+                </div>
               ) : null}
               {section.callout ? <div className="legal-callout">{section.callout}</div> : null}
               {section.faq ? (
