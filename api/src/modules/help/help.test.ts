@@ -340,3 +340,52 @@ test("article view telemetry never breaks article opening", async () => {
     linkDb.exec("ALTER TABLE help_article_views_bak RENAME TO help_article_views");
   }
 });
+
+/* ── Placements ─────────────────────────────────────────────────────────── */
+
+test("placements: assign, publish visibility, atomic replace, delete", async () => {
+  const a = JSON.parse((await send("POST", "/api/admin/help/articles", { title: "Placement A", slug: "placement-a", status: "published", blocks: [] })).body).article;
+  const b = JSON.parse((await send("POST", "/api/admin/help/articles", { title: "Placement B", slug: "placement-b", status: "published", blocks: [] })).body).article;
+
+  assert.equal((await send("PUT", "/api/admin/help/placements/connect_ios_happ_install", { articleId: a.id })).statusCode, 200);
+  assert.equal(JSON.parse((await get("/api/help/placements/connect_ios_happ_install")).body).article.slug, "placement-a");
+
+  // Assigning a second article moves the single placement row atomically.
+  assert.equal((await send("PUT", "/api/admin/help/placements/connect_ios_happ_install", { articleId: b.id })).statusCode, 200);
+  assert.equal(JSON.parse((await get("/api/help/placements/connect_ios_happ_install")).body).article.slug, "placement-b");
+  const rows = JSON.parse((await adminGet("/api/admin/help/placements")).body).items;
+  assert.equal(rows.filter((p: any) => p.articleId === a.id).length, 0, "old holder released");
+  assert.equal(rows.find((p: any) => p.key === "connect_ios_happ_install").articleId, b.id);
+
+  // draft / hidden -> not public
+  await send("PUT", `/api/admin/help/articles/${b.id}`, { title: "Placement B", slug: "placement-b", status: "draft", blocks: [] });
+  assert.equal(JSON.parse((await get("/api/help/placements/connect_ios_happ_install")).body).article, null);
+  await send("PUT", `/api/admin/help/articles/${b.id}`, { title: "Placement B", slug: "placement-b", status: "hidden", blocks: [] });
+  assert.equal(JSON.parse((await get("/api/help/placements/connect_ios_happ_install")).body).article, null);
+
+  // published again -> returns
+  await send("PUT", `/api/admin/help/articles/${b.id}`, { title: "Placement B", slug: "placement-b", status: "published", blocks: [] });
+  assert.equal(JSON.parse((await get("/api/help/placements/connect_ios_happ_install")).body).article.slug, "placement-b");
+
+  // delete -> cascade + public returns null
+  await send("DELETE", `/api/admin/help/articles/${b.id}`);
+  assert.equal(JSON.parse((await get("/api/help/placements/connect_ios_happ_install")).body).article, null);
+});
+
+test("placements: key validation, admin-only, article save sync", async () => {
+  assert.equal((await send("PUT", "/api/admin/help/placements/made_up", { articleId: 1 })).statusCode, 400);
+  assert.equal((await get("/api/help/placements/made_up")).statusCode, 404);
+  assert.equal((await send("PUT", "/api/admin/help/placements/connect_ios_happ_install", { articleId: 1 }, asUser)).statusCode, 403);
+
+  const created = JSON.parse((await send("POST", "/api/admin/help/articles", {
+    title: "Placement C", slug: "placement-c", status: "published", blocks: [],
+    placements: ["connect_ios_happ_install"],
+  })).body).article;
+  const detail = JSON.parse((await adminGet(`/api/admin/help/articles/${created.id}`)).body);
+  assert.deepEqual(detail.placements, ["connect_ios_happ_install"]);
+  assert.equal(JSON.parse((await get("/api/help/placements/connect_ios_happ_install")).body).article.slug, "placement-c");
+
+  // Removing the placement in the editor clears it.
+  await send("PUT", `/api/admin/help/articles/${created.id}`, { title: "Placement C", slug: "placement-c", status: "published", blocks: [], placements: [] });
+  assert.equal(JSON.parse((await get("/api/help/placements/connect_ios_happ_install")).body).article, null);
+});

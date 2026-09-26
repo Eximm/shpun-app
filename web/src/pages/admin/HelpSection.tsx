@@ -9,6 +9,7 @@
 // never shrink the article.
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { apiFetch } from "../../shared/api/client";
 import { useI18n } from "../../shared/i18n";
 import { AdminSectionHeader, ADMIN_SECTION_ICON, ModalShell } from "./shared";
@@ -33,6 +34,7 @@ import {
 } from "./helpEditorModel";
 
 type HelpCategory = { id: number; slug: string; title: string; description: string | null; icon: string | null; sortOrder: number; isActive: boolean };
+type HelpPlacementRow = { key: string; titleKey: string; articleId: number | null; articleTitle: string | null; articleStatus: string | null };
 type HelpArticleRow = { id: number; slug: string; title: string; summary: string; categoryId: number | null; categoryTitle: string | null; status: HelpEditorStatus; isFeatured: boolean; updatedAt: string; blocksCount?: number };
 type HelpBlock = HelpEditorBlock & { id?: number };
 type HelpMedia = { id: number; kind: string; originalName: string; mimeType: string; sizeBytes: number; createdAt: string; url: string; usedBy: number };
@@ -102,22 +104,28 @@ export function HelpSection() {
   const [moreAnchor, setMoreAnchor] = useState<HTMLElement | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [draftPrompt, setDraftPrompt] = useState<{ form: HelpEditorForm; blocks: HelpBlock[] } | null>(null);
+  const [placements, setPlacements] = useState<HelpPlacementRow[]>([]);
+  const [formPlacements, setFormPlacements] = useState<string[]>([]);
+  const [rowMenu, setRowMenu] = useState<{ row: HelpArticleRow; anchor: HTMLElement } | null>(null);
+  const navigate = useNavigate();
 
   const saveSeqRef = useRef(0);
   const savingRef = useRef(false);
 
-  const snapshot = editorSnapshot(form, blocks);
+  const snapshot = editorSnapshot(form, blocks, formPlacements);
   const dirty = view === "editor" && isEditorDirty(snapshot, savedSnapshot);
 
   async function loadList() {
     setLoading(true);
     try {
-      const [cats, arts] = await Promise.all([
+      const [cats, arts, places] = await Promise.all([
         apiFetch<{ ok: true; items: HelpCategory[] }>("/admin/help/categories", { method: "GET" }),
         apiFetch<{ ok: true; items: HelpArticleRow[] }>("/admin/help/articles", { method: "GET" }),
+        apiFetch<{ ok: true; items: HelpPlacementRow[] }>("/admin/help/placements", { method: "GET" }),
       ]);
       setCategories(cats.items ?? []);
       setArticles(arts.items ?? []);
+      setPlacements(places.items ?? []);
     } catch { setMessage(t("admin.help.err.load")); }
     finally { setLoading(false); }
   }
@@ -140,11 +148,12 @@ export function HelpSection() {
     });
   }, [articles, query, statusFilter]);
 
-  function enterEditor(next: { id: number | null; form: HelpEditorForm; blocks: HelpBlock[] }) {
+  function enterEditor(next: { id: number | null; form: HelpEditorForm; blocks: HelpBlock[]; placements?: string[] }) {
     setEditingId(next.id);
     setForm(next.form);
     setBlocks(next.blocks);
-    setSavedSnapshot(editorSnapshot(next.form, next.blocks));
+    setFormPlacements(next.placements ?? []);
+    setSavedSnapshot(editorSnapshot(next.form, next.blocks, next.placements ?? []));
     setSaveState("saved");
     setSaveError("");
     setUploadState({});
@@ -156,14 +165,14 @@ export function HelpSection() {
 
   function openCreate() {
     const draft = loadLocalDraft(null);
-    enterEditor({ id: null, form: emptyForm(), blocks: [blockDefaults("paragraph")] });
+    enterEditor({ id: null, form: emptyForm(), blocks: [blockDefaults("paragraph")], placements: [] });
     if (draft) setDraftPrompt({ form: draft.form, blocks: draft.blocks });
   }
 
   async function openEdit(id: number) {
     setLoading(true);
     try {
-      const res = await apiFetch<{ ok: true; article: any; blocks: HelpBlock[] }>(`/admin/help/articles/${id}`, { method: "GET" });
+      const res = await apiFetch<{ ok: true; article: any; blocks: HelpBlock[]; placements?: string[] }>(`/admin/help/articles/${id}`, { method: "GET" });
       const serverForm: HelpEditorForm = {
         title: res.article.title,
         slug: res.article.slug,
@@ -174,7 +183,7 @@ export function HelpSection() {
         searchKeywords: res.article.searchKeywords ?? "",
       };
       const serverBlocks = (res.blocks ?? []).map((b) => ({ id: b.id, type: b.type, payload: b.payload ?? {} }));
-      enterEditor({ id, form: serverForm, blocks: serverBlocks });
+      enterEditor({ id, form: serverForm, blocks: serverBlocks, placements: res.placements ?? [] });
 
       const draft = loadLocalDraft(id);
       if (draft && isDraftNewerThanServer(draft.ts, res.article.updatedAt)) {
@@ -187,7 +196,7 @@ export function HelpSection() {
   /** Core save. Always snapshots the WHOLE editor state (title/summary/blocks). */
   async function persist(statusOverride?: HelpEditorStatus, opts?: { silent?: boolean }): Promise<boolean> {
     if (!hydrated) return false;
-    const payload = buildArticlePayload(form, blocks, statusOverride);
+    const payload = buildArticlePayload(form, blocks, statusOverride, formPlacements);
     if (!canSavePayload(payload)) {
       setSaveState("error");
       setSaveError(t("admin.help.err.save"));
@@ -197,7 +206,7 @@ export function HelpSection() {
     savingRef.current = true;
     setSaveState("saving");
     setSaveError("");
-    const snapshotAtSave = editorSnapshot(form, blocks);
+    const snapshotAtSave = editorSnapshot(form, blocks, formPlacements);
 
     try {
       let articleId = editingId;
@@ -392,6 +401,51 @@ export function HelpSection() {
 
   const dateLabel = (v: string) => { const d = parseSqliteDate(v); return d ? formatDate(d, { day: "2-digit", month: "2-digit", year: "numeric" }) : "—"; };
 
+  async function copyToClipboard(text: string): Promise<boolean> {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch { /* fall through to execCommand */ }
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+
+  // Origin is taken at runtime so production/staging/dev each copy their own link.
+  function articlePublicUrl(slug: string): string {
+    return `${window.location.origin}/help/a/${slug}`;
+  }
+
+  async function copyArticleLink(slug: string) {
+    const ok = await copyToClipboard(articlePublicUrl(slug));
+    setMessage(ok ? t("admin.help.msg.copied") : t("admin.help.msg.copy_failed"));
+  }
+
+  function togglePlacement(key: string, checked: boolean) {
+    const holder = placements.find((p) => p.key === key);
+    if (checked && holder?.articleId && holder.articleId !== editingId) {
+      if (!window.confirm(t("admin.help.placement.replace_confirm"))) return;
+    }
+    setFormPlacements((cur) => checked ? Array.from(new Set([...cur, key])) : cur.filter((k) => k !== key));
+  }
+
+  async function previewFromList(id: number) {
+    await openEdit(id);
+    setPreviewOpen(true);
+  }
+
   const previewBlocks = useMemo(() => resolvePreviewBlocks(blocks, media), [blocks, media]);
   const previewCategory = useMemo(
     () => categories.find((c) => String(c.id) === form.categoryId) ?? null,
@@ -456,11 +510,7 @@ export function HelpSection() {
                   </div>
                 </div>
                 <div className="admin-help-row__actions">
-                  <button className="btn btn--soft" type="button" onClick={() => void openEdit(a.id)}>{t("common.edit")}</button>
-                  <button className="btn btn--soft" type="button" onClick={() => void setStatus(a, a.status === "published" ? "draft" : "published")}>
-                    {a.status === "published" ? t("admin.help.action.unpublish") : t("admin.help.action.publish")}
-                  </button>
-                  <button className="btn refPartnerCard__delete" type="button" onClick={() => void removeArticle(a.id)}>{t("common.delete")}</button>
+                  <button className="refCard__menuBtn" type="button" aria-haspopup="menu" aria-label={t("admin.help.actions.menu")} onClick={(e) => setRowMenu({ row: a, anchor: e.currentTarget })}>{"\u22EE"}</button>
                 </div>
               </article>
             ))}
@@ -555,6 +605,19 @@ export function HelpSection() {
               <label className="field"><span className="field__label">{t("admin.help.field.keywords")}</span><input className="input" value={form.searchKeywords} onChange={(e) => setForm({ ...form, searchKeywords: e.target.value })} /></label>
             </div>
             <label className="checkRow admin-gap-top-md"><input type="checkbox" checked={form.isFeatured} onChange={(e) => setForm({ ...form, isFeatured: e.target.checked })} /><span>{t("admin.help.field.featured")}</span></label>
+            <div className="admin-help-placements admin-gap-top-md">
+              <div className="field__label">{t("admin.help.placement.title")}</div>
+              {placements.map((p) => {
+                const checked = formPlacements.includes(p.key);
+                const holder = p.articleId && p.articleId !== editingId ? p.articleTitle : null;
+                return (
+                  <label className="checkRow" key={p.key}>
+                    <input type="checkbox" checked={checked} onChange={(e) => togglePlacement(p.key, e.target.checked)} />
+                    <span>{t(p.titleKey)}{holder ? ` — ${t("admin.help.placement.used_by", { title: holder })}` : ""}</span>
+                  </label>
+                );
+              })}
+            </div>
           </details>
 
           <h3 className="h2 admin-gap-top-lg">{t("admin.help.content")}</h3>
@@ -585,9 +648,14 @@ export function HelpSection() {
           </div>
 
           <div className="helpEditor__footer">
-            <button className="btn btn--primary" type="button" disabled={!hydrated || form.title.trim() === ""} onClick={() => void persist()}>{t("common.save")}</button>
-            <button className="btn btn--soft" type="button" disabled={!hydrated || form.title.trim() === "" || saveState === "saving"} onClick={async () => { const ok = await persist("published"); if (ok) setView("list"); }}>{t("admin.help.action.publish")}</button>
             <button className="btn btn--soft" type="button" onClick={() => setPreviewOpen(true)}>{t("admin.help.preview")}</button>
+            {form.status === "published" && form.slug ? (
+              <button className="btn btn--soft" type="button" onClick={() => void copyArticleLink(form.slug)}>{t("admin.help.action.copy_link")}</button>
+            ) : null}
+            <button className="btn btn--primary" type="button" disabled={!hydrated || form.title.trim() === ""} onClick={() => void persist()}>{t("common.save")}</button>
+            {form.status !== "published" ? (
+              <button className="btn btn--soft" type="button" disabled={!hydrated || form.title.trim() === "" || saveState === "saving"} onClick={async () => { const ok = await persist("published"); if (ok) setView("list"); }}>{t("admin.help.action.publish")}</button>
+            ) : null}
             <button className="btn btn--soft" type="button" onClick={requestClose}>{t("common.cancel")}</button>
           </div>
         </div>
@@ -608,6 +676,21 @@ export function HelpSection() {
         { label: t("admin.help.block.duplicate"), onClick: () => duplicateBlock(blockMenu.index) },
         { label: t("common.delete"), danger: true, onClick: () => removeBlock(blockMenu.index) },
       ] : []} />
+
+      <ActionMenu anchorEl={rowMenu?.anchor ?? null} open={Boolean(rowMenu)} onClose={() => setRowMenu(null)} items={rowMenu ? (
+        rowMenu.row.status === "published" ? [
+          { label: t("admin.help.action.open"), onClick: () => navigate(`/help/a/${rowMenu.row.slug}`) },
+          { label: t("admin.help.action.copy_link"), onClick: () => void copyArticleLink(rowMenu.row.slug) },
+          { label: t("common.edit"), onClick: () => void openEdit(rowMenu.row.id) },
+          { label: t("admin.help.action.hide"), onClick: () => void setStatus(rowMenu.row, "hidden") },
+          { label: t("common.delete"), danger: true, onClick: () => void removeArticle(rowMenu.row.id) },
+        ] : [
+          { label: t("admin.help.preview"), onClick: () => void previewFromList(rowMenu.row.id) },
+          { label: t("common.edit"), onClick: () => void openEdit(rowMenu.row.id) },
+          { label: t("admin.help.action.publish"), onClick: () => void setStatus(rowMenu.row, "published") },
+          { label: t("common.delete"), danger: true, onClick: () => void removeArticle(rowMenu.row.id) },
+        ]
+      ) : []} />
 
       {previewOpen ? (
         <ModalShell

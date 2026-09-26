@@ -30,6 +30,7 @@ export type HelpArticlePayload = {
   isFeatured: boolean;
   searchKeywords: string;
   blocks: Array<{ type: string; payload: Record<string, unknown> }>;
+  placements: string[];
 };
 
 /**
@@ -41,6 +42,7 @@ export function buildArticlePayload(
   form: HelpEditorForm,
   blocks: HelpEditorBlock[],
   statusOverride?: HelpEditorStatus,
+  placements: string[] = [],
 ): HelpArticlePayload {
   return {
     title: String(form.title ?? ""),
@@ -54,6 +56,7 @@ export function buildArticlePayload(
       type: String(block.type),
       payload: { ...(block.payload ?? {}) },
     })),
+    placements: (Array.isArray(placements) ? placements : []).map(String),
   };
 }
 
@@ -92,8 +95,8 @@ export function normalizeUploadError(status: number, kind: "image" | "video"): U
 
 /* ── Dirty state ─────────────────────────────────────────────────────────── */
 
-export function editorSnapshot(form: HelpEditorForm, blocks: HelpEditorBlock[]): string {
-  return JSON.stringify({ form, blocks });
+export function editorSnapshot(form: HelpEditorForm, blocks: HelpEditorBlock[], placements: string[] = []): string {
+  return JSON.stringify({ form, blocks, placements });
 }
 
 export function isEditorDirty(snapshot: string, saved: string | null): boolean {

@@ -47,6 +47,9 @@ assert("payload keeps every block", payload.blocks.length === 3 && payload.block
 assert("payload carries title/summary/category/status", payload.title === "T" && payload.summary === "sum" && payload.categoryId === 3 && payload.status === "draft");
 assert("payload blocks are copies (no shared refs)", payload.blocks[0].payload !== blocks[0].payload);
 assert("empty block list still yields an array", Array.isArray(model.buildArticlePayload(form(), []).blocks));
+assert("payload defaults placements to an array", Array.isArray(payload.placements) && payload.placements.length === 0);
+assert("payload carries placements", model.buildArticlePayload(form(), blocks, undefined, ["connect_ios_happ_install"]).placements[0] === "connect_ios_happ_install");
+assert("placement change marks the editor dirty", model.editorSnapshot(form(), blocks, ["connect_ios_happ_install"]) !== model.editorSnapshot(form(), blocks, []));
 
 const published = model.buildArticlePayload(form(), blocks, "published");
 assert("publish override does not mutate the form status", published.status === "published" && form().status === "draft");
@@ -98,7 +101,7 @@ const renderer = read("src/shared/help/HelpArticleRenderer.tsx");
 const publicPage = read("src/pages/Help.tsx");
 
 assert("upload failure only touches upload state", /catch[\s\S]*?setUploadState[\s\S]*?lastFile: file/.test(editor) && !/catch[\s\S]*?setBlocks\(\[\]/.test(editor));
-assert("save builds payload from the full editor state", editor.includes("buildArticlePayload(form, blocks") && editor.includes("editorSnapshot(form, blocks)"));
+assert("save builds payload from the full editor state", editor.includes("buildArticlePayload(form, blocks") && editor.includes("editorSnapshot(form, blocks, formPlacements)"));
 assert("save is disabled until hydrated", editor.includes("disabled={!hydrated") );
 assert("autosave uses a debounce + sequence guard", editor.includes("AUTOSAVE_MS") && editor.includes("shouldAutosave") && editor.includes("saveSeqRef"));
 assert("save state indicator is rendered, not only a toast", editor.includes("saveLabel") && editor.includes("helpEditor__status"));

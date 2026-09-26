@@ -30,19 +30,25 @@ import {
   getCategoryBySlug,
   getHelpStorage,
   getMedia,
+  getPlacementArticle,
   helpImageMaxBytes,
   helpMediaMaxBytes,
   helpVideoMaxBytes,
+  isValidPlacementKey,
   listArticles,
   listBlocks,
   listCategories,
   listMedia,
+  listPlacements,
+  placementsForArticle,
   recordArticleView,
   reorderCategories,
   sanitizeMediaName,
   saveArticle,
   saveCategory,
   searchPublishedArticles,
+  setPlacement,
+  clearPlacement,
 } from "./helpStore.js";
 
 const MEDIA_URL = "/api/help/media";
@@ -176,6 +182,20 @@ export async function helpRoutes(app: FastifyInstance) {
     return reply.send({ ok: true, article: articleSummary({ ...article, categoryTitle: category?.title ?? null, categorySlug: category?.slug ?? null }), category, blocks });
   });
 
+  // Contextual Help placement. Always 200 with `article: null` when nothing
+  // published is assigned, so callers can hide the block without error handling.
+  app.get("/help/placements/:placementKey", async (req, reply) => {
+    const key = String((req.params as any)?.placementKey ?? "");
+    if (!isValidPlacementKey(key)) return reply.code(404).send({ ok: false, error: "placement_not_found" });
+    const article = getPlacementArticle(key);
+    if (!article) return reply.send({ ok: true, article: null });
+    const category = article.categoryId ? getCategory(article.categoryId) : null;
+    return reply.send({
+      ok: true,
+      article: articleSummary({ ...article, categoryTitle: category?.title ?? null, categorySlug: category?.slug ?? null }),
+    });
+  });
+
   app.get("/help/media/:id", async (req, reply) => {
     const media = getMedia((req.params as any)?.id);
     if (!media) return reply.code(404).send({ ok: false, error: "media_not_found" });
@@ -267,7 +287,7 @@ export async function helpRoutes(app: FastifyInstance) {
     if ((await requireAdmin(req, reply)) === null) return;
     const article = getArticleById(parseId((req.params as any)?.id));
     if (!article) return reply.code(404).send({ ok: false, error: "article_not_found" });
-    return reply.send({ ok: true, article, blocks: listBlocks(article.id) });
+    return reply.send({ ok: true, article, blocks: listBlocks(article.id), placements: placementsForArticle(article.id) });
   });
 
   app.post("/admin/help/articles", async (req, reply) => {
@@ -299,6 +319,27 @@ export async function helpRoutes(app: FastifyInstance) {
     return deleted
       ? reply.send({ ok: true })
       : reply.code(404).send({ ok: false, error: "article_not_found" });
+  });
+
+  /* ── Admin: placements ──────────────────────────────────────────────────── */
+
+  app.get("/admin/help/placements", async (req, reply) => {
+    if ((await requireAdmin(req, reply)) === null) return;
+    return reply.send({ ok: true, items: listPlacements() });
+  });
+
+  app.put("/admin/help/placements/:key", async (req, reply) => {
+    if ((await requireAdmin(req, reply)) === null) return;
+    const key = String((req.params as any)?.key ?? "");
+    if (!isValidPlacementKey(key)) return reply.code(400).send({ ok: false, error: "invalid_placement" });
+    const raw = readBody(req).articleId;
+    if (raw == null || raw === "") {
+      clearPlacement(key);
+      return reply.send({ ok: true, items: listPlacements() });
+    }
+    const id = parseId(raw);
+    if (!setPlacement(key, id)) return reply.code(404).send({ ok: false, error: "article_not_found" });
+    return reply.send({ ok: true, items: listPlacements() });
   });
 
   /* ── Admin: media ───────────────────────────────────────────────────────── */

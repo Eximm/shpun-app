@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Link } from "react-router-dom";
 import QRCode from "qrcode";
 import { apiFetch } from "../../shared/api/client";
 import { getMood } from "../../shared/payments-mood";
@@ -287,6 +288,7 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
 
   const [platformPickerOpen, setPlatformPickerOpen] = useState(false);
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
+  const [iosHappHelp, setIosHappHelp] = useState<{ slug: string; title: string; summary: string } | null>(null);
   const [qrHintSeen, setQrHintSeen] = useState<boolean>(() => {
     try { return localStorage.getItem(QR_HINT_STORAGE_KEY) === "1"; } catch { return false; }
   });
@@ -333,6 +335,22 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
     if (!happOnly) return;
     setClient("happ");
   }, [happOnly]);
+
+  // Contextual Help comes from a configurable placement (never a hardcoded slug).
+  useEffect(() => {
+    if (!(platform === "ios" && effectiveClient === "happ")) {
+      setIosHappHelp(null);
+      return;
+    }
+    let cancelled = false;
+    apiFetch<{ ok: true; article: { slug: string; title: string; summary: string } | null }>(
+      "/help/placements/connect_ios_happ_install",
+      { method: "GET" },
+    )
+      .then((res) => { if (!cancelled) setIosHappHelp(res.article ?? null); })
+      .catch(() => { if (!cancelled) setIosHappHelp(null); });
+    return () => { cancelled = true; };
+  }, [platform, effectiveClient]);
 
   function setAssistantStep(step: AssistantFocusStep) {
     setAssistantStepState(step);
@@ -740,6 +758,18 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
               style={{ marginTop: 10, borderColor: "rgba(255,184,77,0.3)", background: "rgba(255,184,77,0.07)" }}
             >
               <b>{"\u{1F34F}"} {t("connect.happ_global_notice")}</b>
+            </div>
+          ) : null}
+
+          {iosHappHelp ? (
+            <div className="cm__helpHint">
+              <div className="cm__helpHint__text">
+                <strong>{t("connect.help.ios_happ.title")}</strong>
+                <span>{iosHappHelp.title}</span>
+              </div>
+              <Link className="btn btn--soft cm__helpHint__btn" to={`/help/a/${iosHappHelp.slug}`}>
+                {t("connect.help.ios_happ.action")}
+              </Link>
             </div>
           ) : null}
 

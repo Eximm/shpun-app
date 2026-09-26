@@ -156,6 +156,15 @@ CREATE TABLE IF NOT EXISTS help_article_views (
   user_id    INTEGER
 );
 
+CREATE TABLE IF NOT EXISTS help_article_placements (
+  placement_key TEXT PRIMARY KEY,
+  article_id    INTEGER NOT NULL,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_help_placements_article ON help_article_placements(article_id);
+
 CREATE INDEX IF NOT EXISTS idx_help_articles_category ON help_articles(category_id, status);
 CREATE INDEX IF NOT EXISTS idx_help_articles_status ON help_articles(status, sort_order);
 CREATE INDEX IF NOT EXISTS idx_help_blocks_article ON help_article_blocks(article_id, sort_order);
@@ -442,6 +451,7 @@ export type SaveArticleInput = {
   isFeatured?: unknown;
   searchKeywords?: unknown;
   blocks?: unknown;
+  placements?: unknown;
 };
 
 /**
@@ -499,6 +509,10 @@ export function saveArticle(input: SaveArticleInput): { article: HelpArticle; bl
       insert.run(articleId, block.type, index + 1, JSON.stringify(block.payload ?? {}));
     });
 
+    // Only touch placements when the caller explicitly sends the set; status
+    // toggles from the list must not silently drop a placement.
+    if (input.placements !== undefined) syncArticlePlacements(articleId, input.placements);
+
     return { article: getArticleById(articleId) as HelpArticle, blocks: listBlocks(articleId) };
   })();
 }
@@ -509,6 +523,7 @@ export function deleteArticle(id: unknown): boolean {
   return linkDb.transaction(() => {
     linkDb.prepare(`DELETE FROM help_article_blocks WHERE article_id = ?`).run(n);
     linkDb.prepare(`DELETE FROM help_article_views WHERE article_id = ?`).run(n);
+    linkDb.prepare(`DELETE FROM help_article_placements WHERE article_id = ?`).run(n);
     return linkDb.prepare(`DELETE FROM help_articles WHERE id = ?`).run(n).changes > 0;
   })();
 }
@@ -665,6 +680,100 @@ export function deleteMedia(id: unknown): "deleted" | "not_found" | "in_use" {
   linkDb.prepare(`DELETE FROM help_media WHERE id = ?`).run(media.id);
   getHelpStorage().remove(media.storagePath);
   return "deleted";
+}
+
+/* ─── Placements ─────────────────────────────────────────────────────────── */
+
+/**
+ * Registry of known placement keys. The client can never invent a key: only
+ * these are accepted, and each has a human-readable i18n label for Admin.
+ */
+export type HelpPlacementDef = { key: string; titleKey: string };
+export const HELP_PLACEMENTS: readonly HelpPlacementDef[] = [
+  { key: "connect_ios_happ_install", titleKey: "admin.help.placement.connect_ios_happ_install" },
+];
+
+export function isValidPlacementKey(value: unknown): boolean {
+  const key = String(value ?? "");
+  return HELP_PLACEMENTS.some((p) => p.key === key);
+}
+
+export type HelpPlacementRow = HelpPlacementDef & {
+  articleId: number | null;
+  articleTitle: string | null;
+  articleStatus: HelpArticleStatus | null;
+};
+
+/** Registry + current holder, for Admin (never exposes extra article data). */
+export function listPlacements(): HelpPlacementRow[] {
+  const rows = linkDb.prepare(`
+    SELECT p.placement_key, p.article_id, a.title, a.status
+    FROM help_article_placements p
+    LEFT JOIN help_articles a ON a.id = p.article_id
+  `).all() as any[];
+  const byKey = new Map(rows.map((r) => [String(r.placement_key), r]));
+  return HELP_PLACEMENTS.map((def) => {
+    const row = byKey.get(def.key);
+    return {
+      ...def,
+      articleId: row ? Number(row.article_id) : null,
+      articleTitle: row?.title == null ? null : String(row.title),
+      articleStatus: row?.status == null ? null : normalizeStatus(row.status),
+    };
+  });
+}
+
+/** Published article for a placement, or null (draft/hidden/deleted all -> null). */
+export function getPlacementArticle(placementKey: unknown): HelpArticle | null {
+  if (!isValidPlacementKey(placementKey)) return null;
+  const row = linkDb.prepare(`
+    SELECT a.* FROM help_article_placements p
+    JOIN help_articles a ON a.id = p.article_id
+    WHERE p.placement_key = ?
+  `).get(String(placementKey));
+  if (!row) return null;
+  const article = mapArticle(row);
+  return article.status === "published" ? article : null;
+}
+
+/** Placement keys currently assigned to a specific article. */
+export function placementsForArticle(articleId: unknown): string[] {
+  const n = Math.trunc(Number(articleId));
+  if (!Number.isFinite(n) || n <= 0) return [];
+  const rows = linkDb.prepare(`SELECT placement_key FROM help_article_placements WHERE article_id = ?`).all(n) as any[];
+  return rows.map((r) => String(r.placement_key)).filter(isValidPlacementKey);
+}
+
+/**
+ * Replace the placement set of one article atomically. Assigning a placement
+ * that another article holds moves it (single row per placement_key).
+ */
+function syncArticlePlacements(articleId: number, keys: unknown): void {
+  const wanted = new Set((Array.isArray(keys) ? keys : []).map((k) => String(k)).filter(isValidPlacementKey));
+  linkDb.prepare(`DELETE FROM help_article_placements WHERE article_id = ?`).run(articleId);
+  const upsert = linkDb.prepare(`
+    INSERT INTO help_article_placements (placement_key, article_id)
+    VALUES (?, ?)
+    ON CONFLICT(placement_key) DO UPDATE SET article_id = excluded.article_id, updated_at = datetime('now')
+  `);
+  for (const key of wanted) upsert.run(key, articleId);
+}
+
+export function setPlacement(placementKey: unknown, articleId: unknown): boolean {
+  if (!isValidPlacementKey(placementKey)) return false;
+  const id = Math.trunc(Number(articleId));
+  if (!Number.isFinite(id) || id <= 0 || !getArticleById(id)) return false;
+  linkDb.prepare(`
+    INSERT INTO help_article_placements (placement_key, article_id)
+    VALUES (?, ?)
+    ON CONFLICT(placement_key) DO UPDATE SET article_id = excluded.article_id, updated_at = datetime('now')
+  `).run(String(placementKey), id);
+  return true;
+}
+
+export function clearPlacement(placementKey: unknown): void {
+  if (!isValidPlacementKey(placementKey)) return;
+  linkDb.prepare(`DELETE FROM help_article_placements WHERE placement_key = ?`).run(String(placementKey));
 }
 
 /* ─── Seed (idempotent) ──────────────────────────────────────────────────── */

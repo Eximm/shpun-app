@@ -41,6 +41,21 @@ const routes = read("../api/src/modules/help/helpRoutes.ts");
 assert("public help routes registered", ["/help", "/help/search", "/help/c/:categorySlug", "/help/a/:articleSlug"].every((r) => main.includes(`path="${r}"`)));
 assert("help is reachable from profile", profile.includes('profile.help.title') && profile.includes('nav("/help")'));
 assert("no hardcoded help article link from the connector", !connector.includes("/help/a/ios-happ-not-in-app-store") && !connector.includes("happ_not_in_store"));
+assert("connector fetches the placement, not a fixed slug", connector.includes("/help/placements/connect_ios_happ_install") && connector.includes("apiFetch"));
+assert("connector link is built from the returned slug", connector.includes("to={`/help/a/${iosHappHelp.slug}`}"));
+assert("connector hides the block when nothing is published", /iosHappHelp \? \(/.test(connector) && connector.includes("setIosHappHelp(null)"));
+
+/* ── Admin link actions + placements ─────────────────────────────────────── */
+
+assert("public link uses the current origin", adminHelp.includes("window.location.origin") && adminHelp.includes("/help/a/"));
+assert("published actions include open + copy link", adminHelp.includes('t("admin.help.action.open")') && adminHelp.includes('t("admin.help.action.copy_link")'));
+assert("draft actions include preview + publish, no copy", adminHelp.includes('t("admin.help.preview")') && adminHelp.includes('t("admin.help.action.publish")'));
+assert("copy link is gated to published in the editor", /form.status === "published" && form.slug \? \([\s\S]*?copy_link/.test(adminHelp));
+assert("copy uses a clipboard fallback + message", adminHelp.includes("navigator.clipboard") && adminHelp.includes("execCommand") && adminHelp.includes('t("admin.help.msg.copied")'));
+assert("admin placement UI exists", adminHelp.includes('t("admin.help.placement.title")') && adminHelp.includes("togglePlacement") && adminHelp.includes('t("admin.help.placement.replace_confirm")'));
+assert("placement endpoints exist", routes.includes('"/help/placements/:placementKey"') && routes.includes('"/admin/help/placements"') && routes.includes('"/admin/help/placements/:key"'));
+assert("public placement only returns published", store.includes("article.status === \"published\" ? article : null"));
+assert("delete cascades placements", /DELETE FROM help_article_placements WHERE article_id/.test(store));
 
 /* ── Public rendering ─────────────────────────────────────────────────────── */
 
