@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Link } from "react-router-dom";
 import QRCode from "qrcode";
 import { apiFetch } from "../../shared/api/client";
 import { getMood } from "../../shared/payments-mood";
@@ -48,7 +49,7 @@ type ClientLinks = Record<Platform, {
 
 const HAPP_LINKS: ClientLinks = {
   android: { title: "Happ", market: "https://play.google.com/store/apps/details?id=com.happproxy", direct: "https://github.com/Happ-proxy/happ-android/releases/latest/download/Happ.apk", storeLabelKey: "connectAmneziaWG.store.google_play" },
-  ios: { title: "Happ Lite", market: "https://apps.apple.com/ru/app/happ-lite/id6799917773", storeLabelKey: "connectAmneziaWG.store.app_store" },
+  ios: { title: "Happ", market: "https://apps.apple.com/us/app/happ-proxy-utility/id6504287215", storeLabelKey: "connectAmneziaWG.store.app_store" },
   windows: { title: "Happ", market: "https://www.happ.su/main", direct: "https://github.com/Happ-proxy/happ-desktop/releases/latest/download/setup-Happ.x64.exe", storeLabelKey: "connectAmneziaWG.store.download_page" },
   mac: { title: "Happ", market: "https://apps.apple.com/ru/app/happ-proxy-utility/id6783623643", direct: "https://github.com/Happ-proxy/happ-desktop/releases/latest/download/Happ.macOS.universal.dmg", storeLabelKey: "connectAmneziaWG.store.app_store" },
   linux: { title: "Happ", market: "https://www.happ.su/main", direct: "https://github.com/Happ-proxy/happ-desktop/releases/latest/download/Happ.linux.x64.deb", storeLabelKey: "connectAmneziaWG.store.download_page" },
@@ -732,6 +733,20 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
               </button>
             </div>
           )}
+
+          {platform === "ios" && effectiveClient === "happ" ? (
+            <div
+              className="pre"
+              role="note"
+              style={{ marginTop: 10, borderColor: "rgba(255,184,77,0.3)", background: "rgba(255,184,77,0.07)" }}
+            >
+              <b>{"\u{1F34F}"} {t("connect.happ_global_notice")}</b>
+              <br />
+              <Link className="cm__helpLink" to="/help/a/ios-happ-not-in-app-store">
+                {t("connect.happ_not_in_store")}
+              </Link>
+            </div>
+          ) : null}
 
           {assistantMode && ready && assistantStep === "install" && (
             <button className="btn cm__assistantContinue" type="button" onClick={() => setAssistantStep("import")}>

@@ -17,6 +17,7 @@ import { emailValidationRoutes } from '../../modules/emailValidation/routes.js'
 import { supportRoutes } from '../../modules/support/routes.js'
 import { supportInternalRoutes } from '../../modules/support/internalRoutes.js'
 import { supportAdminRoutes } from '../../modules/support/adminRoutes.js'
+import { helpRoutes } from '../../modules/help/helpRoutes.js'
 
 export async function registerRoutes(app: FastifyInstance) {
   await app.register(
@@ -35,6 +36,7 @@ export async function registerRoutes(app: FastifyInstance) {
       await supportRoutes(api)
       await supportInternalRoutes(api)
       await supportAdminRoutes(api)
+      await helpRoutes(api)
 
       // 🔔 Billing HTTP Push + Notifications
       await pushRoutes(api)

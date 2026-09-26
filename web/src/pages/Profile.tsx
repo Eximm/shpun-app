@@ -1033,6 +1033,7 @@ export function Profile() {
               <ProfileMenuItem icon={<ProfileIcon name="phone" />} title={t("profile.pwa.title")} subtitle={standalone ? t("profile.pwa.installed") : t("profile.pwa.not_installed")} badge={standalone ? <SmallBadge text={t("profile.pwa.installed")} tone="ok" /> : <SmallBtn primary>{deferredPrompt ? t("profile.pwa.button.install") : t("profile.pwa.button.how")}</SmallBtn>} onClick={() => void doInstallPwa()} />
               <ProfileMenuItem icon={<ProfileIcon name="bell" />} title={t("profile.push.title")} subtitle={<>{pushEnabled ? t("profile.push.enabled") : t("profile.push.disabled")} · {pushPermText}</>} badge={<ProfileSwitch checked={pushEnabled} disabled={!pushState.supported || pushState.permission === "denied" || pushLoading} />} onClick={() => void togglePush()} />
               <ProfileMenuItem icon={<ProfileIcon name="document" />} title={t("profile.legal.title")} subtitle={t("profile.legal.value")} onClick={() => nav("/legal")} />
+              <ProfileMenuItem icon={<ProfileIcon name="info" />} title={t("profile.help.title")} subtitle={t("profile.help.value")} onClick={() => nav("/help")} />
             </div>
           </div>
         </div>

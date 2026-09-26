@@ -236,6 +236,14 @@ export function AdminSectionIcon({ name, size = 18 }: { name: AdminNavIconName; 
           <path d="M12 9.6V5.5M17.4 9.2l-3.2 1.9M14.2 15.9l2 3.4M9.8 15.9l-2 3.4M6.6 9.2l3.2 1.9" opacity="0.8" />
         </svg>
       );
+    case "help":
+      return (
+        <svg {...common}>
+          <path d="M4 5.5A2 2 0 0 1 6 4h5v16H6a2 2 0 0 1-2-2V5.5Z" />
+          <path d="M20 5.5A2 2 0 0 0 18 4h-5v16h5a2 2 0 0 0 2-2V5.5Z" />
+          <path d="M7.5 8h2M14.5 8h2M7.5 11h2M14.5 11h2" opacity="0.7" />
+        </svg>
+      );
     default:
       return null;
   }

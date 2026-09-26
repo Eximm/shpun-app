@@ -32,7 +32,8 @@ export type AdminNavIconName =
   | "history"
   | "network"
   | "cpu"
-  | "disk";
+  | "disk"
+  | "help";
 
 /** Canonical section -> icon mapping (single entity, single icon). */
 export const ADMIN_SECTION_ICON: Record<AdminTab, AdminNavIconName> = {
@@ -44,6 +45,7 @@ export const ADMIN_SECTION_ICON: Record<AdminTab, AdminNavIconName> = {
   serviceCategories: "layers",
   referralAliases: "share",
   support: "lifebuoy",
+  help: "help",
   serverStatus: "server",
 };
 

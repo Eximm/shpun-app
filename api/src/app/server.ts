@@ -63,13 +63,18 @@ export async function buildServer() {
 
   await app.register(formbody)
 
-  // Global multipart limits: the largest consumer is support attachments
-  // (env-driven, safe defaults). Per-message total is enforced separately.
+  // Global multipart limits: the largest consumer is help media video
+  // (env-driven, safe defaults). Each consumer enforces its own limit.
   const supportMaxFileMb = Number(process.env.SUPPORT_ATTACHMENT_MAX_FILE_MB || 10);
   const supportMaxFiles = Number(process.env.SUPPORT_ATTACHMENT_MAX_FILES || 5);
+  const helpVideoMaxMb = Number(process.env.HELP_MEDIA_VIDEO_MAX_MB || 100);
+  const globalMaxFileMb = Math.max(
+    Number.isFinite(supportMaxFileMb) && supportMaxFileMb > 0 ? supportMaxFileMb : 10,
+    Number.isFinite(helpVideoMaxMb) && helpVideoMaxMb > 0 ? helpVideoMaxMb : 100,
+  );
   await app.register(multipart, {
     limits: {
-      fileSize: (Number.isFinite(supportMaxFileMb) && supportMaxFileMb > 0 ? supportMaxFileMb : 10) * 1024 * 1024,
+      fileSize: globalMaxFileMb * 1024 * 1024,
       files: Number.isFinite(supportMaxFiles) && supportMaxFiles > 0 ? Math.trunc(supportMaxFiles) : 5,
     },
   })
@@ -79,7 +84,14 @@ export async function buildServer() {
 
   // API responses can contain session and service data. Keep every response
   // out of browser, reverse-proxy, and CDN caches by default.
-  app.addHook('onSend', async (_req, reply, payload) => {
+  app.addHook('onSend', async (req, reply, payload) => {
+    // Public help media is immutable content and is safe to cache.
+    if (req.url.startsWith('/api/help/media/')) {
+      reply.header('Cache-Control', 'public, max-age=86400, immutable')
+      reply.header('Pragma', 'public')
+      reply.header('Expires', '86400')
+      return payload
+    }
     reply.header('Cache-Control', 'private, no-store, no-cache, max-age=0, must-revalidate')
     reply.header('CDN-Cache-Control', 'no-store')
     reply.header('Pragma', 'no-cache')

@@ -19,6 +19,7 @@ import { OrderRulesSection } from "./admin/OrderRulesSection";
 import { TrialProtectionSection } from "./admin/TrialProtectionSection";
 import { ServiceCategoriesSection } from "./admin/ServiceCategoriesSection";
 import { ReferralAliasesSection } from "./admin/ReferralAliasesSection";
+import { HelpSection } from "./admin/HelpSection";
 import { ServerStatusSection } from "./admin/ServerStatusSection";
 import { ReviewsSection } from "./admin/ReviewsSection";
 import { SupportSection } from "./admin/SupportSection";
@@ -59,6 +60,7 @@ export function AdminPage() {
     { tab: "trialProtection", title: t("admin.tab.trial"), subtitle: t("admin.tab.trial.sub"), icon: ADMIN_SECTION_ICON.trialProtection },
     { tab: "serviceCategories", title: t("admin.tab.categories"), subtitle: t("admin.tab.categories.sub"), icon: ADMIN_SECTION_ICON.serviceCategories },
     { tab: "referralAliases", title: t("admin.tab.referral"), subtitle: t("admin.tab.referral.sub"), icon: ADMIN_SECTION_ICON.referralAliases },
+    { tab: "help", title: t("admin.tab.help"), subtitle: t("admin.tab.help.sub"), icon: ADMIN_SECTION_ICON.help },
     { tab: "support", title: t("admin.tab.support"), subtitle: t("admin.tab.support.sub"), icon: ADMIN_SECTION_ICON.support, badge: overview.data.attention.support + overview.data.attention.partnership },
     { tab: "serverStatus", title: t("admin.tab.serverStatus"), subtitle: t("admin.tab.serverStatus.sub"), icon: ADMIN_SECTION_ICON.serverStatus },
   ];
@@ -179,6 +181,7 @@ export function AdminPage() {
           {activeTab === "trialProtection" && <TrialProtectionSection />}
           {activeTab === "serviceCategories" && <ServiceCategoriesSection />}
           {activeTab === "referralAliases" && <ReferralAliasesSection />}
+          {activeTab === "help" && <HelpSection />}
           {activeTab === "support" && (
             <SupportSection key={supportKey} initialKind={initialKind} initialTicketId={initialTicketId} />
           )}

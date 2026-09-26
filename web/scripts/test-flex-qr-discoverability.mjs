@@ -64,6 +64,14 @@ assert("2x2 action grid", connector.includes('className="cm__qrGrid"'));
 assert("four clear actions present", ["manual.primary_link", "manual.reserve_link", "manual.primary_qr", "manual.reserve_qr"].every((k) => connector.includes(`connectMarzban.${k}`)));
 assert("reserve actions are optional (collapse when absent)", count(connector, "reserveSubscriptionUrl && (") === 2);
 
+/* ── iOS Happ download stays on the global App Store release ─────────────── */
+
+assert("iOS uses the global Happ release", connector.includes("https://apps.apple.com/us/app/happ-proxy-utility/id6504287215"));
+assert("removed Happ Lite release is not used", !connector.includes("Happ Lite") && !connector.includes("id6799917773"));
+assert("Russian Apple ID notice is shown for iOS Happ", connector.includes('t("connect.happ_global_notice")'));
+assert("RU explains the Apple ID country requirement", dict.includes('"connect.happ_global_notice": "Для российского Apple ID Happ недоступен. Смените страну аккаунта, например на Казахстан."'));
+assert("EN explains the Apple ID country requirement", dict.includes('"connect.happ_global_notice": "Happ is unavailable with a Russian Apple ID. Change the account country, for example to Kazakhstan."'));
+
 /* ── First-run callout: kept, dismissible, layout-bound pointer ───────────── */
 
 assert("first-run callout exists", connector.includes('className="cm__qrHint"'));

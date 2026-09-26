@@ -29,6 +29,7 @@ import { PaymentsReceipts } from "./pages/PaymentsReceipts";
 import { ServicesRouter }   from "./pages/help/ServicesRouter";
 import { AdminPage }        from "./pages/AdminPage";
 import { LegalDocs }        from "./pages/LegalDocs";
+import { HelpHome, HelpSearchView, HelpCategoryView, HelpArticleView } from "./pages/Help";
 
 import { AuthGate }                from "./app/auth/AuthGate";
 import { BottomNav }               from "./app/layout/BottomNav";
@@ -334,6 +335,10 @@ if (happImportTarget) {
                   <Route path="/payments/history"  element={<PaymentsHistory />} />
                   <Route path="/payments/receipts" element={<PaymentsReceipts />} />
                   <Route path="/profile"           element={<Profile />} />
+                  <Route path="/help"              element={<HelpHome />} />
+                  <Route path="/help/search"       element={<HelpSearchView />} />
+                  <Route path="/help/c/:categorySlug" element={<HelpCategoryView />} />
+                  <Route path="/help/a/:articleSlug"  element={<HelpArticleView />} />
                   <Route path="/reviews"           element={<Reviews />} />
                   <Route path="/support"           element={<Support />} />
                   <Route path="/partnership"       element={<Partnership />} />

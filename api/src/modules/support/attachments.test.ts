@@ -223,3 +223,21 @@ test("one deletion failure does not stop the rest", async () => {
   // The other attachment was still processed.
   assert.ok(getAttachment(good.id)?.deletedAt);
 });
+
+test("default support file limit holds independently of the global multipart ceiling", () => {
+  // The help video upload raises the *global* multipart fileSize ceiling to
+  // ~100 MB. Support must still enforce its own (default 10 MB) limit at the
+  // domain layer, so a large file is not silently accepted.
+  const prev = process.env.SUPPORT_ATTACHMENT_MAX_FILE_MB;
+  delete process.env.SUPPORT_ATTACHMENT_MAX_FILE_MB;
+  try {
+    const big = Buffer.concat([JPEG, Buffer.alloc(11 * 1024 * 1024, 1)]);
+    assert.throws(
+      () => saveMessageAttachments({ ticketId: 1, messageId: 1, files: [upload("huge.jpg", big)] }),
+      (e: any) => e?.code === "file_too_large"
+    );
+  } finally {
+    if (prev === undefined) delete process.env.SUPPORT_ATTACHMENT_MAX_FILE_MB;
+    else process.env.SUPPORT_ATTACHMENT_MAX_FILE_MB = prev;
+  }
+});

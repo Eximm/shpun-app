@@ -172,6 +172,7 @@ export const ADMIN_TABS = [
   "trialProtection",
   "serviceCategories",
   "referralAliases",
+  "help",
   "serverStatus",
   "support",
 ] as const;
