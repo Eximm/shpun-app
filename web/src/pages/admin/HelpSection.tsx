@@ -1,12 +1,16 @@
 // web/src/pages/admin/HelpSection.tsx
 //
-// Admin -> База знаний. Manage help categories, block-based articles and media
-// without touching React code or redeploying.
+// Admin -> База знаний. CMS-style editor: write the guide, add photo/video,
+// save. Technical metadata lives under a collapsed "Дополнительно" section and
+// block controls live in a per-block menu, not on the screen.
+//
+// Backend/API/data model are untouched — this is presentation only.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "../../shared/api/client";
 import { useI18n } from "../../shared/i18n";
 import { AdminSectionHeader, ADMIN_SECTION_ICON } from "./shared";
+import { ActionMenu } from "./ActionMenu";
 
 type HelpCategory = { id: number; slug: string; title: string; description: string | null; icon: string | null; sortOrder: number; isActive: boolean };
 type HelpArticleStatus = "draft" | "published" | "hidden";
@@ -15,8 +19,6 @@ type HelpBlock = { id?: number; type: string; payload: Record<string, any> };
 type HelpMedia = { id: number; kind: string; originalName: string; mimeType: string; sizeBytes: number; createdAt: string; url: string; usedBy: number };
 
 type View = "list" | "editor" | "categories" | "media";
-
-const BLOCK_TYPES = ["paragraph", "heading", "bullet_list", "numbered_list", "steps", "callout", "image", "video", "button", "faq", "divider"] as const;
 
 function blockDefaults(type: string): HelpBlock {
   switch (type) {
@@ -62,7 +64,9 @@ export function HelpSection() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState({ title: "", slug: "", summary: "", categoryId: "" as string, status: "draft" as HelpArticleStatus, isFeatured: false, searchKeywords: "" });
   const [blocks, setBlocks] = useState<HelpBlock[]>([]);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [blockMenu, setBlockMenu] = useState<{ index: number; anchor: HTMLElement } | null>(null);
+  const [moreAnchor, setMoreAnchor] = useState<HTMLElement | null>(null);
 
   async function loadList() {
     setLoading(true);
@@ -99,6 +103,7 @@ export function HelpSection() {
     setEditingId(null);
     setForm({ title: "", slug: "", summary: "", categoryId: "", status: "draft", isFeatured: false, searchKeywords: "" });
     setBlocks([blockDefaults("paragraph")]);
+    setAdvancedOpen(false);
     setMessage("");
     setView("editor");
   }
@@ -118,20 +123,22 @@ export function HelpSection() {
         searchKeywords: res.article.searchKeywords ?? "",
       });
       setBlocks((res.blocks ?? []).map((b) => ({ type: b.type, payload: b.payload ?? {} })));
+      setAdvancedOpen(false);
       setMessage("");
       setView("editor");
     } catch { setMessage(t("admin.help.err.load")); }
     finally { setLoading(false); }
   }
 
-  async function saveArticle() {
+  async function saveArticle(statusOverride?: HelpArticleStatus) {
     setMessage("");
+    const status = statusOverride ?? form.status;
     const body = {
       title: form.title,
       slug: form.slug,
       summary: form.summary,
       categoryId: form.categoryId === "" ? null : Number(form.categoryId),
-      status: form.status,
+      status,
       isFeatured: form.isFeatured,
       searchKeywords: form.searchKeywords,
       blocks: blocks.map((b) => ({ type: b.type, payload: b.payload })),
@@ -169,6 +176,13 @@ export function HelpSection() {
       const target = index + dir;
       if (target < 0 || target >= next.length) return cur;
       [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }
+  function duplicateBlock(index: number) {
+    setBlocks((cur) => {
+      const next = [...cur];
+      next.splice(index + 1, 0, { type: cur[index].type, payload: { ...cur[index].payload } });
       return next;
     });
   }
@@ -316,7 +330,7 @@ export function HelpSection() {
           <div className="row">
             <label className="btn btn--primary">
               {t("admin.help.media.upload")}
-              <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) { void uploadMedia(f, -1); e.target.value = ""; } }} />
+              <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) { void uploadMedia(f, -1); e.target.value = ""; } }} />
             </label>
           </div>
           <div className="admin-help-mediaGrid admin-gap-top-md">
@@ -337,39 +351,66 @@ export function HelpSection() {
       ) : null}
 
       {view === "editor" ? (
-        <div className="admin-help-editor admin-gap-top-md">
-          <div className="grid2">
-            <label className="field"><span className="field__label">{t("admin.help.field.title")}</span><input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></label>
-            <label className="field"><span className="field__label">{t("admin.help.field.slug")}</span><input className="input" value={form.slug} placeholder={t("admin.help.field.slug_ph")} onChange={(e) => setForm({ ...form, slug: e.target.value })} /></label>
-            <label className="field"><span className="field__label">{t("admin.help.field.category")}</span>
-              <select className="input" value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })}>
-                <option value="">{t("admin.help.field.no_category")}</option>
-                {categories.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
-              </select>
-            </label>
-            <label className="field"><span className="field__label">{t("admin.help.field.status")}</span>
-              <select className="input" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as HelpArticleStatus })}>
-                {(["draft", "published", "hidden"] as const).map((s) => <option key={s} value={s}>{t(`admin.help.status.${s}`)}</option>)}
-              </select>
-            </label>
+        <div className="helpEditor admin-gap-top-md">
+          <div className="helpEditor__basics">
+            <label className="field"><span className="field__label">{t("admin.help.field.title")}</span><input className="input helpEditor__title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></label>
+            <div className="grid2 admin-gap-top-md">
+              <label className="field"><span className="field__label">{t("admin.help.field.category")}</span>
+                <select className="input" value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })}>
+                  <option value="">{t("admin.help.field.no_category")}</option>
+                  {categories.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
+                </select>
+              </label>
+              <label className="field"><span className="field__label">{t("admin.help.field.status")}</span>
+                <select className="input" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as HelpArticleStatus })}>
+                  {(["draft", "published", "hidden"] as const).map((s) => <option key={s} value={s}>{t(`admin.help.status.${s}`)}</option>)}
+                </select>
+              </label>
+            </div>
+            <label className="field admin-gap-top-md"><span className="field__label">{t("admin.help.field.summary")}</span><input className="input" value={form.summary} onChange={(e) => setForm({ ...form, summary: e.target.value })} /></label>
           </div>
-          <label className="field admin-gap-top-md"><span className="field__label">{t("admin.help.field.summary")}</span><input className="input" value={form.summary} onChange={(e) => setForm({ ...form, summary: e.target.value })} /></label>
-          <label className="field admin-gap-top-md"><span className="field__label">{t("admin.help.field.keywords")}</span><input className="input" value={form.searchKeywords} onChange={(e) => setForm({ ...form, searchKeywords: e.target.value })} /></label>
-          <label className="checkRow admin-gap-top-md"><input type="checkbox" checked={form.isFeatured} onChange={(e) => setForm({ ...form, isFeatured: e.target.checked })} /><span>{t("admin.help.field.featured")}</span></label>
+
+          <details className="helpEditor__advanced" open={advancedOpen} onToggle={(e) => setAdvancedOpen((e.target as HTMLDetailsElement).open)}>
+            <summary>{t("admin.help.advanced")}</summary>
+            <div className="grid2 admin-gap-top-md">
+              <label className="field"><span className="field__label">{t("admin.help.field.slug")}</span><input className="input" value={form.slug} placeholder={t("admin.help.field.slug_ph")} onChange={(e) => setForm({ ...form, slug: e.target.value })} /></label>
+              <label className="field"><span className="field__label">{t("admin.help.field.keywords")}</span><input className="input" value={form.searchKeywords} onChange={(e) => setForm({ ...form, searchKeywords: e.target.value })} /></label>
+            </div>
+            <label className="checkRow admin-gap-top-md"><input type="checkbox" checked={form.isFeatured} onChange={(e) => setForm({ ...form, isFeatured: e.target.checked })} /><span>{t("admin.help.field.featured")}</span></label>
+          </details>
 
           <h3 className="h2 admin-gap-top-lg">{t("admin.help.content")}</h3>
-          <div className="admin-help-blocks">
+
+          <div className="helpEditor__toolbar" role="toolbar" aria-label={t("admin.help.content")}>
+            <button className="btn btn--soft" type="button" onClick={() => addBlock("paragraph")}>+ {t("admin.help.block.paragraph")}</button>
+            <button className="btn btn--soft" type="button" onClick={() => addBlock("heading")}>+ {t("admin.help.block.heading")}</button>
+            <button className="btn btn--soft" type="button" onClick={() => addBlock("image")}>+ {t("admin.help.block.image")}</button>
+            <button className="btn btn--soft" type="button" onClick={() => addBlock("video")}>+ {t("admin.help.block.video")}</button>
+            <button className="btn btn--soft" type="button" onClick={() => addBlock("callout")}>+ {t("admin.help.callout.warning")}</button>
+            <button
+              className="btn btn--soft helpEditor__moreBtn"
+              type="button"
+              aria-haspopup="menu"
+              aria-label={t("admin.help.block.more")}
+              onClick={(e) => setMoreAnchor(e.currentTarget)}
+            >
+              {"\u22EE"}
+            </button>
+          </div>
+
+          <div className="helpEditor__blocks">
             {blocks.map((block, index) => (
-              <div className="admin-help-block" key={index}>
-                <div className="admin-help-block__head">
-                  <span className="chip chip--soft">{t(`admin.help.block.${block.type}`)}</span>
-                  <div className="admin-help-block__btns">
-                    <button className="btn btn--soft" type="button" onClick={() => moveBlock(index, -1)} aria-label={t("admin.help.block.up")}>↑</button>
-                    <button className="btn btn--soft" type="button" onClick={() => moveBlock(index, 1)} aria-label={t("admin.help.block.down")}>↓</button>
-                    <button className="btn refPartnerCard__delete" type="button" onClick={() => removeBlock(index)}>{t("common.delete")}</button>
-                  </div>
-                </div>
-                <HelpBlockFields
+              <div className="helpBlock" key={index}>
+                <button
+                  className="helpBlock__menuBtn"
+                  type="button"
+                  aria-haspopup="menu"
+                  aria-label={t("admin.help.block.menu")}
+                  onClick={(e) => setBlockMenu({ index, anchor: e.currentTarget })}
+                >
+                  {"\u22EE"}
+                </button>
+                <BlockBody
                   block={block}
                   media={media}
                   t={t}
@@ -379,26 +420,49 @@ export function HelpSection() {
               </div>
             ))}
           </div>
-          <div className="admin-help-addBlock admin-gap-top-md">
-            <select className="input" defaultValue="" onChange={(e) => { if (e.target.value) { addBlock(e.target.value); e.target.value = ""; } }}>
-              <option value="">{t("admin.help.block.add")}</option>
-              {BLOCK_TYPES.map((bt) => <option key={bt} value={bt}>{t(`admin.help.block.${bt}`)}</option>)}
-            </select>
-          </div>
 
-          <div className="row admin-gap-top-lg">
+          <div className="helpEditor__footer">
             <button className="btn btn--primary" type="button" onClick={() => void saveArticle()}>{t("common.save")}</button>
+            {form.status !== "published" ? (
+              <button className="btn btn--soft" type="button" onClick={() => void saveArticle("published")}>{t("admin.help.action.publish")}</button>
+            ) : null}
             <button className="btn btn--soft" type="button" onClick={() => setView("list")}>{t("common.cancel")}</button>
           </div>
         </div>
       ) : null}
+
+      <ActionMenu
+        anchorEl={moreAnchor}
+        open={Boolean(moreAnchor)}
+        onClose={() => setMoreAnchor(null)}
+        items={[
+          { label: t("admin.help.block.bullet_list"), onClick: () => addBlock("bullet_list") },
+          { label: t("admin.help.block.numbered_list"), onClick: () => addBlock("numbered_list") },
+          { label: t("admin.help.block.steps"), onClick: () => addBlock("steps") },
+          { label: t("admin.help.block.faq"), onClick: () => addBlock("faq") },
+          { label: t("admin.help.block.button"), onClick: () => addBlock("button") },
+          { label: t("admin.help.block.divider"), onClick: () => addBlock("divider") },
+        ]}
+      />
+
+      <ActionMenu
+        anchorEl={blockMenu?.anchor ?? null}
+        open={Boolean(blockMenu)}
+        onClose={() => setBlockMenu(null)}
+        items={blockMenu ? [
+          { label: t("admin.help.block.move_up"), onClick: () => moveBlock(blockMenu.index, -1) },
+          { label: t("admin.help.block.move_down"), onClick: () => moveBlock(blockMenu.index, 1) },
+          { label: t("admin.help.block.duplicate"), onClick: () => duplicateBlock(blockMenu.index) },
+          { label: t("common.delete"), danger: true, onClick: () => removeBlock(blockMenu.index) },
+        ] : []}
+      />
     </div></div>
   );
 }
 
-/* ── Block fields ─────────────────────────────────────────────────────────── */
+/* ── Block bodies (render like real content) ──────────────────────────────── */
 
-function HelpBlockFields({
+function BlockBody({
   block, media, t, onChange, onUpload,
 }: {
   block: HelpBlock;
@@ -408,77 +472,168 @@ function HelpBlockFields({
   onUpload: (file: File) => void;
 }) {
   const p = block.payload || {};
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const kind = block.type === "video" ? "video" : "image";
-  const options = media.filter((m) => m.kind === kind);
 
-  if (block.type === "divider") return <div className="admin-help-divider">—</div>;
-  if (["paragraph", "heading", "callout"].includes(block.type)) {
+  if (block.type === "divider") return <hr className="helpEditor__divider" />;
+
+  if (block.type === "paragraph") {
     return (
-      <div className="admin-help-field">
-        {block.type === "callout" ? (
-          <select className="input" value={String(p.tone ?? "info")} onChange={(e) => onChange({ ...p, tone: e.target.value })}>
-            {["info", "warning", "success"].map((tone) => <option key={tone} value={tone}>{t(`admin.help.callout.${tone}`)}</option>)}
-          </select>
-        ) : null}
-        <input className="input" value={String(p.text ?? "")} onChange={(e) => onChange({ ...p, text: e.target.value })} placeholder={t("admin.help.block.text")} />
+      <textarea
+        className="input helpEditor__textarea"
+        rows={3}
+        value={String(p.text ?? "")}
+        placeholder={t("admin.help.block.paragraph_ph")}
+        onChange={(e) => onChange({ ...p, text: e.target.value })}
+      />
+    );
+  }
+
+  if (block.type === "heading") {
+    return (
+      <input
+        className="input helpEditor__headingInput"
+        value={String(p.text ?? "")}
+        placeholder={t("admin.help.block.heading")}
+        onChange={(e) => onChange({ ...p, text: e.target.value })}
+      />
+    );
+  }
+
+  if (block.type === "callout") {
+    const tone = String(p.tone ?? "info");
+    return (
+      <div className={`helpEditor__callout helpEditor__callout--${tone}`}>
+        <select className="input helpEditor__calloutTone" value={tone} onChange={(e) => onChange({ ...p, tone: e.target.value })} aria-label={t("admin.help.block.callout")}>
+          {(["info", "warning", "success"] as const).map((v) => <option key={v} value={v}>{t(`admin.help.callout.${v}`)}</option>)}
+        </select>
+        <textarea
+          className="input helpEditor__textarea"
+          rows={2}
+          value={String(p.text ?? "")}
+          placeholder={t("admin.help.block.callout_ph")}
+          onChange={(e) => onChange({ ...p, text: e.target.value })}
+        />
       </div>
     );
   }
+
   if (["bullet_list", "numbered_list", "steps"].includes(block.type)) {
     const items: string[] = Array.isArray(p.items) ? p.items : [];
+    const isSteps = block.type === "steps";
     return (
-      <div className="admin-help-field">
+      <div className="helpEditor__items">
         {items.map((it, i) => (
-          <div className="admin-help-inline" key={i}>
-            <input className="input" value={it} onChange={(e) => { const next = [...items]; next[i] = e.target.value; onChange({ ...p, items: next }); }} />
-            <button className="btn refPartnerCard__delete" type="button" onClick={() => onChange({ ...p, items: items.filter((_, j) => j !== i) })}>×</button>
+          <div className="helpEditor__item" key={i}>
+            <span className="helpEditor__itemMark" aria-hidden="true">{isSteps ? i + 1 : (block.type === "numbered_list" ? i + 1 : "•")}</span>
+            <input
+              className="input"
+              value={it}
+              placeholder={isSteps ? t("admin.help.block.step_ph") : t("admin.help.block.item_ph")}
+              onChange={(e) => { const next = [...items]; next[i] = e.target.value; onChange({ ...p, items: next }); }}
+            />
+            <button className="helpEditor__itemRemove" type="button" aria-label={t("common.delete")} onClick={() => onChange({ ...p, items: items.filter((_, j) => j !== i) })}>×</button>
           </div>
         ))}
         <button className="btn btn--soft" type="button" onClick={() => onChange({ ...p, items: [...items, ""] })}>{t("admin.help.block.add_item")}</button>
       </div>
     );
   }
+
   if (block.type === "button") {
     return (
-      <div className="admin-help-field">
+      <div className="helpEditor__stack">
         <input className="input" value={String(p.label ?? "")} onChange={(e) => onChange({ ...p, label: e.target.value })} placeholder={t("admin.help.block.label")} />
         <input className="input" value={String(p.url ?? "")} onChange={(e) => onChange({ ...p, url: e.target.value })} placeholder={t("admin.help.block.url_ph")} />
       </div>
     );
   }
+
   if (block.type === "faq") {
     const items: Array<{ q: string; a: string }> = Array.isArray(p.items) ? p.items : [];
     return (
-      <div className="admin-help-field">
+      <div className="helpEditor__items">
         {items.map((it, i) => (
-          <div className="admin-help-inline" key={i}>
+          <div className="helpEditor__faqRow" key={i}>
             <input className="input" value={it.q} onChange={(e) => { const next = [...items]; next[i] = { ...next[i], q: e.target.value }; onChange({ ...p, items: next }); }} placeholder={t("admin.help.block.q")} />
             <input className="input" value={it.a} onChange={(e) => { const next = [...items]; next[i] = { ...next[i], a: e.target.value }; onChange({ ...p, items: next }); }} placeholder={t("admin.help.block.a")} />
-            <button className="btn refPartnerCard__delete" type="button" onClick={() => onChange({ ...p, items: items.filter((_, j) => j !== i) })}>×</button>
+            <button className="helpEditor__itemRemove" type="button" aria-label={t("common.delete")} onClick={() => onChange({ ...p, items: items.filter((_, j) => j !== i) })}>×</button>
           </div>
         ))}
         <button className="btn btn--soft" type="button" onClick={() => onChange({ ...p, items: [...items, { q: "", a: "" }] })}>{t("admin.help.block.add_item")}</button>
       </div>
     );
   }
-  if (kind === "image" || kind === "video") {
-    const selected = options.find((m) => m.id === Number(p.mediaId));
-    return (
-      <div className="admin-help-field">
-        <select className="input" value={String(p.mediaId ?? 0)} onChange={(e) => onChange({ ...p, mediaId: Number(e.target.value) })}>
-          <option value="0">{t("admin.help.media.pick")}</option>
-          {options.map((m) => <option key={m.id} value={m.id}>{m.originalName} ({fmtSize(m.sizeBytes)})</option>)}
-        </select>
-        <button className="btn btn--soft" type="button" onClick={() => inputRef.current?.click()}>{t("admin.help.media.upload_new")}</button>
-        <input ref={inputRef} type="file" hidden accept={kind === "video" ? "video/mp4,video/webm" : "image/jpeg,image/png,image/webp,image/gif"} onChange={(e) => { const f = e.target.files?.[0]; if (f) { onUpload(f); e.target.value = ""; } }} />
-        {block.type === "image" ? <input className="input" value={String(p.alt ?? "")} onChange={(e) => onChange({ ...p, alt: e.target.value })} placeholder={t("admin.help.block.alt")} /> : null}
-        <input className="input" value={String(p.caption ?? "")} onChange={(e) => onChange({ ...p, caption: e.target.value })} placeholder={t("admin.help.block.caption")} />
-        {selected ? <div className="admin-help-mediaHint">{selected.kind} · {selected.originalName}</div> : null}
-      </div>
-    );
+
+  if (block.type === "image" || block.type === "video") {
+    return <MediaBlock block={block} media={media} t={t} onChange={onChange} onUpload={onUpload} />;
   }
+
   return null;
+}
+
+function MediaBlock({
+  block, media, t, onChange, onUpload,
+}: {
+  block: HelpBlock;
+  media: HelpMedia[];
+  t: any;
+  onChange: (payload: Record<string, any>) => void;
+  onUpload: (file: File) => void;
+}) {
+  const [picking, setPicking] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const p = block.payload || {};
+  const isVideo = block.type === "video";
+  const options = media.filter((m) => m.kind === (isVideo ? "video" : "image"));
+  const selected = options.find((m) => m.id === Number(p.mediaId));
+
+  return (
+    <div className="helpEditor__media">
+      {selected ? (
+        <>
+          <div className="helpEditor__mediaHead">{isVideo ? "🎬" : "🖼"} {t(isVideo ? "admin.help.block.video" : "admin.help.block.image")}</div>
+          <div className="helpEditor__mediaPreview">
+            {isVideo
+              ? <video src={selected.url} controls playsInline preload="metadata" />
+              : <img src={selected.url} alt={String(p.alt ?? "")} />}
+          </div>
+          <input className="input" value={String(p.caption ?? "")} onChange={(e) => onChange({ ...p, caption: e.target.value })} placeholder={t("admin.help.block.caption")} />
+          {!isVideo ? <input className="input" value={String(p.alt ?? "")} onChange={(e) => onChange({ ...p, alt: e.target.value })} placeholder={t("admin.help.block.alt")} /> : null}
+          <div className="helpEditor__mediaActions">
+            <button className="btn btn--soft" type="button" onClick={() => inputRef.current?.click()}>{t("admin.help.media.replace")}</button>
+            <button className="btn btn--soft" type="button" onClick={() => setPicking((v) => !v)}>{t("admin.help.media.choose")}</button>
+          </div>
+        </>
+      ) : (
+        <div className="helpEditor__mediaEmpty">
+          <span className="helpEditor__mediaHead">{isVideo ? "🎬" : "🖼"} {t(isVideo ? "admin.help.block.video" : "admin.help.block.image")}</span>
+          <div className="helpEditor__mediaActions">
+            <button className="btn btn--primary" type="button" onClick={() => inputRef.current?.click()}>{t("admin.help.media.upload")}</button>
+            {options.length > 0 ? <button className="btn btn--soft" type="button" onClick={() => setPicking(true)}>{t("admin.help.media.choose")}</button> : null}
+          </div>
+        </div>
+      )}
+
+      <input
+        ref={inputRef}
+        type="file"
+        hidden
+        accept={isVideo ? "video/mp4,video/webm" : "image/jpeg,image/png,image/webp,image/gif"}
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) { onUpload(f); e.target.value = ""; } }}
+      />
+
+      {picking && options.length > 0 ? (
+        <select
+          className="input helpEditor__mediaSelect"
+          value={String(p.mediaId ?? 0)}
+          onChange={(e) => { onChange({ ...p, mediaId: Number(e.target.value) }); setPicking(false); }}
+          aria-label={t("admin.help.media.choose")}
+        >
+          <option value="0">{t("admin.help.media.pick")}</option>
+          {options.map((m) => <option key={m.id} value={m.id}>{m.originalName}</option>)}
+        </select>
+      ) : null}
+    </div>
+  );
 }
 
 export default HelpSection;

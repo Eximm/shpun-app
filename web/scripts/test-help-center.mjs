@@ -83,6 +83,23 @@ assert("help page is width bounded", css.includes(".help-page { display: flex; f
 assert("category cards stack on mobile", /@media \(max-width: 560px\) \{\s*\.help-categoryGrid \{ grid-template-columns: 1fr; \}/.test(css));
 assert("media previews are responsive", css.includes(".admin-help-media__preview img, .admin-help-media__preview video { width: 100%;"));
 
+/* ── Editor UX (CMS-style) ────────────────────────────────────────────────── */
+
+assert("editor keeps only basic fields up front", adminHelp.includes('className="helpEditor__basics"'));
+assert("advanced metadata is collapsible and closed by default", adminHelp.includes('className="helpEditor__advanced"') && adminHelp.includes("<details") && adminHelp.includes("open={advancedOpen}"));
+assert("slug/keywords/featured live under advanced", /helpEditor__advanced[\s\S]*?admin.help.field.slug[\s\S]*?admin.help.field.keywords[\s\S]*?admin.help.field.featured/.test(adminHelp));
+assert("no permanent move arrows", !adminHelp.includes('"↑"') && !adminHelp.includes('"↓"') && !adminHelp.includes("admin.help.block.up"));
+assert("block delete is only in the block menu", /danger: true, onClick: \(\) => removeBlock/.test(adminHelp));
+const helpBlockSlice = adminHelp.slice(adminHelp.indexOf('className="helpBlock"'), adminHelp.indexOf("<BlockBody"));
+assert("helpBlock has no permanent delete button", helpBlockSlice.length > 0 && !helpBlockSlice.includes("refPartnerCard__delete"));
+assert("block menu trigger exists", adminHelp.includes("helpBlock__menuBtn") && adminHelp.includes('aria-haspopup="menu"') && adminHelp.includes("admin.help.block.menu"));
+assert("main add buttons are visible in the toolbar", ["paragraph", "heading", "image", "video", "callout"].every((b) => adminHelp.includes(`addBlock("${b}")`)));
+assert("advanced block types live under the more menu", adminHelp.includes("setMoreAnchor") && ["bullet_list", "numbered_list", "steps", "faq", "button", "divider"].every((b) => adminHelp.includes(`addBlock("${b}")`)));
+assert("video block shows a preview + replace", adminHelp.includes("helpEditor__mediaPreview") && adminHelp.includes("<video") && adminHelp.includes("admin.help.media.replace"));
+assert("image block shows a preview + replace", adminHelp.includes("helpEditor__mediaPreview") && adminHelp.includes("<img") && adminHelp.includes("admin.help.media.replace"));
+assert("steps are edited as numbered rows", adminHelp.includes("helpEditor__itemMark") && adminHelp.includes("admin.help.block.step_ph"));
+assert("save semantics unchanged", adminHelp.includes("saveArticle") && adminHelp.includes('apiFetch("/admin/help/articles"') && adminHelp.includes("admin.help.action.publish"));
+
 if (failures > 0) {
   console.error(`\nFAILED: ${failures} check(s)`);
   process.exit(1);
