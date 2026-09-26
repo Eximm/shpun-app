@@ -20,6 +20,7 @@ import { TrialProtectionSection } from "./admin/TrialProtectionSection";
 import { ServiceCategoriesSection } from "./admin/ServiceCategoriesSection";
 import { ReferralAliasesSection } from "./admin/ReferralAliasesSection";
 import { HelpSection } from "./admin/HelpSection";
+import { isHelpEditorDirty } from "./admin/helpEditorGuard";
 import { ServerStatusSection } from "./admin/ServerStatusSection";
 import { ReviewsSection } from "./admin/ReviewsSection";
 import { SupportSection } from "./admin/SupportSection";
@@ -82,6 +83,8 @@ export function AdminPage() {
   }
 
   function openSection(next: AdminTab, extra?: Record<string, string>) {
+    // Warn when leaving an editor with unsaved help changes.
+    if (next !== activeTab && isHelpEditorDirty() && !window.confirm(t("admin.help.unsaved_confirm"))) return;
     setNavState({ tab: next, open: false });
     const params = new URLSearchParams();
     if (next !== "overview") params.set("tab", next);

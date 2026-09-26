@@ -24,6 +24,7 @@ function assert(name, cond) {
 }
 
 const help = read("src/pages/Help.tsx");
+const helpRenderer = read("src/shared/help/HelpArticleRenderer.tsx");
 const adminHelp = read("src/pages/admin/HelpSection.tsx");
 const main = read("src/main.tsx");
 const adminPage = read("src/pages/AdminPage.tsx");
@@ -44,9 +45,9 @@ assert("iOS/Happ contextual link exists", connector.includes("/help/a/ios-happ-n
 /* ── Public rendering ─────────────────────────────────────────────────────── */
 
 assert("home has search + categories + featured", help.includes('t("help.search.placeholder")') && help.includes('t("help.categories")') && help.includes('t("help.featured")'));
-assert("article renders steps and callouts", help.includes('case "steps"') && help.includes("help-callout--"));
-assert("video is native, no autoplay/loop", help.includes("<video") && help.includes("playsInline") && help.includes('preload="metadata"') && !help.includes("autoPlay") && !help.includes("loop"));
-assert("image lightbox exists", help.includes("ImageLightbox") && help.includes("createPortal"));
+assert("article renders steps and callouts", helpRenderer.includes('case "steps"') && helpRenderer.includes("help-callout--"));
+assert("video is native, no autoplay/loop", helpRenderer.includes("<video") && helpRenderer.includes("playsInline") && helpRenderer.includes('preload="metadata"') && !helpRenderer.includes("autoPlay") && !helpRenderer.includes("loop"));
+assert("image lightbox exists", helpRenderer.includes("ImageLightbox") && helpRenderer.includes("createPortal"));
 assert("article links to support", help.includes('to="/support"') && help.includes('t("help.create_ticket")'));
 
 /* ── Admin section ────────────────────────────────────────────────────────── */
@@ -85,7 +86,7 @@ assert("media previews are responsive", css.includes(".admin-help-media__preview
 
 /* ── Editor UX (CMS-style) ────────────────────────────────────────────────── */
 
-assert("editor keeps only basic fields up front", adminHelp.includes('className="helpEditor__basics"'));
+assert("editor keeps only basic fields up front", adminHelp.includes("helpEditor__basics"));
 assert("advanced metadata is collapsible and closed by default", adminHelp.includes('className="helpEditor__advanced"') && adminHelp.includes("<details") && adminHelp.includes("open={advancedOpen}"));
 assert("slug/keywords/featured live under advanced", /helpEditor__advanced[\s\S]*?admin.help.field.slug[\s\S]*?admin.help.field.keywords[\s\S]*?admin.help.field.featured/.test(adminHelp));
 assert("no permanent move arrows", !adminHelp.includes('"↑"') && !adminHelp.includes('"↓"') && !adminHelp.includes("admin.help.block.up"));
@@ -98,7 +99,7 @@ assert("advanced block types live under the more menu", adminHelp.includes("setM
 assert("video block shows a preview + replace", adminHelp.includes("helpEditor__mediaPreview") && adminHelp.includes("<video") && adminHelp.includes("admin.help.media.replace"));
 assert("image block shows a preview + replace", adminHelp.includes("helpEditor__mediaPreview") && adminHelp.includes("<img") && adminHelp.includes("admin.help.media.replace"));
 assert("steps are edited as numbered rows", adminHelp.includes("helpEditor__itemMark") && adminHelp.includes("admin.help.block.step_ph"));
-assert("save semantics unchanged", adminHelp.includes("saveArticle") && adminHelp.includes('apiFetch("/admin/help/articles"') && adminHelp.includes("admin.help.action.publish"));
+assert("save semantics unchanged", adminHelp.includes("persist") && adminHelp.includes("/admin/help/articles") && adminHelp.includes("admin.help.action.publish"));
 
 if (failures > 0) {
   console.error(`\nFAILED: ${failures} check(s)`);

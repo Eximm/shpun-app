@@ -7084,6 +7084,19 @@ button.reviews-star:not(:disabled) {
 .helpEditor__mediaSelect { max-width: 420px; }
 .helpEditor__footer { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
 .helpEditor__footer .btn { min-height: 44px; }
+.helpEditor__statusRow { display: flex; align-items: center; gap: 10px; }
+.helpEditor__status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 800; color: rgba(255,255,255,0.6); }
+.helpEditor__status::before { content: "●"; font-size: 10px; color: rgba(255,255,255,0.35); }
+.helpEditor__status--saved::before, .helpEditor__status.is-dirty::before { color: #2be38f; }
+.helpEditor__status--saving::before { color: #4dd7ff; }
+.helpEditor__status--error::before { color: #ff8098; }
+.helpEditor__retry { min-height: 32px; padding: 4px 10px; }
+.helpEditor__saveError { color: rgba(255,181,195,0.9); }
+.helpEditor__uploadInfo { color: rgba(77,215,255,0.9); font-size: 12px; font-weight: 800; }
+.helpEditor__uploadError { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid rgba(255,77,109,0.28); border-radius: 10px; background: rgba(255,77,109,0.08); color: rgba(255,209,218,0.92); font-size: 12.5px; }
+.helpEditor__uploadError .btn { min-height: 32px; padding: 4px 10px; }
+.helpEditor__preview { display: flex; flex-direction: column; gap: 12px; }
+.help-mediaMissing { margin-top: 14px; padding: 18px; border: 1px dashed rgba(255,255,255,0.18); border-radius: 12px; text-align: center; color: rgba(255,255,255,0.5); font-size: 13px; }
 @media (max-width: 480px) {
   .helpEditor__faqRow { grid-template-columns: minmax(0,1fr) 32px; }
   .helpEditor__faqRow .input:nth-child(2) { grid-column: 1 / -1; }
