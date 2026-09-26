@@ -121,14 +121,16 @@ function BlockView({ block, onImage }: { block: HelpRenderBlock; onImage: (url: 
     case "video":
       return block.media ? (
         <figure className="help-media">
-          <video
-            className="help-video"
-            src={block.media.url}
-            controls
-            playsInline
-            preload="metadata"
-            poster={String(p.posterUrl ?? "") || undefined}
-          />
+          <div className="helpVideoWrap">
+            <video
+              className="helpArticleVideo"
+              src={block.media.url}
+              controls
+              playsInline
+              preload="metadata"
+              poster={String(p.posterUrl ?? "") || undefined}
+            />
+          </div>
           {p.caption ? <figcaption className="help-media__caption">{String(p.caption)}</figcaption> : null}
         </figure>
       ) : null;

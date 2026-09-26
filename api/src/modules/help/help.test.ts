@@ -61,20 +61,15 @@ function multipartPng(filename: string, buffer?: Buffer) {
 
 /* ── Seed + public visibility ─────────────────────────────────────────────── */
 
-test("seed creates categories and the featured iOS/Happ article", async () => {
+test("fresh DB seeds categories but no articles", async () => {
   const cats = JSON.parse((await get("/api/help/categories")).body);
   assert.equal(cats.ok, true);
-  assert.ok(cats.items.length >= 8);
+  assert.ok(cats.items.length >= 8, "default categories are seeded");
 
+  // The seed never creates articles — Help content is admin-managed only.
   const list = JSON.parse((await get("/api/help/articles")).body);
-  const happ = list.items.find((a: any) => a.slug === "ios-happ-not-in-app-store");
-  assert.ok(happ, "featured Happ article must be published");
-  assert.equal(happ.isFeatured, true);
-
-  const detail = JSON.parse((await get("/api/help/articles/ios-happ-not-in-app-store")).body);
-  assert.equal(detail.ok, true);
-  assert.ok(detail.blocks.some((b: any) => b.type === "steps"));
-  assert.ok(detail.blocks.some((b: any) => b.type === "callout"));
+  assert.equal(list.items.length, 0, "fresh DB must contain zero help articles");
+  assert.equal((await get("/api/help/articles/ios-happ-not-in-app-store")).statusCode, 404);
 });
 
 test("draft and hidden articles are not public, published are", async () => {
@@ -260,7 +255,7 @@ function multipartVideo(filename: string) {
   return { boundary, body: Buffer.concat([head, data, tail]) };
 }
 
-test("restart does not overwrite admin edits to the seeded article", async () => {
+test("restart does not touch admin articles and never recreates a deleted one", async () => {
   const store = await import("./helpStore.js");
 
   const video = multipartVideo("demo.mp4");
@@ -273,39 +268,35 @@ test("restart does not overwrite admin edits to the seeded article", async () =>
   const media = JSON.parse(mediaRes.body).item;
   assert.equal(media.kind, "video");
 
-  const seeded = store.getArticleBySlug("ios-happ-not-in-app-store");
-  assert.ok(seeded);
-
-  const put = await send("PUT", `/api/admin/help/articles/${seeded!.id}`, {
-    title: "Admin edited title",
-    summary: "Admin edited summary",
-    status: "draft",
-    isFeatured: false,
-    categoryId: null,
+  const created = JSON.parse((await send("POST", "/api/admin/help/articles", {
+    title: "Restart article",
+    slug: "ios-happ-not-in-app-store",
+    summary: "admin managed",
+    status: "published",
     blocks: [
       { type: "paragraph", payload: { text: "admin body" } },
       { type: "video", payload: { mediaId: media.id } },
     ],
-  });
-  assert.equal(put.statusCode, 200);
+  })).body);
+  assert.equal(created.ok, true, "admin can create an article with the canonical slug");
 
   // Simulate an API restart / repository re-init.
   store.seedHelp();
 
   const after = store.getArticleBySlug("ios-happ-not-in-app-store");
-  assert.ok(after, "canonical slug must still resolve");
-  assert.equal(after!.id, seeded!.id, "seed must not create a duplicate article");
-  assert.equal(after!.title, "Admin edited title");
-  assert.equal(after!.summary, "Admin edited summary");
-  assert.equal(after!.status, "draft");
-  assert.equal(after!.isFeatured, false);
-  assert.equal(after!.categoryId, null);
-
+  assert.ok(after, "admin article must survive restart");
+  assert.equal(after!.id, created.article.id, "seed must not create a duplicate article");
+  assert.equal(after!.title, "Restart article");
   const blocks = store.listBlocks(after!.id);
   assert.equal(blocks.length, 2);
   assert.equal(blocks[0].payload.text, "admin body");
-  assert.equal(blocks[1].type, "video");
   assert.equal(Number(blocks[1].payload.mediaId), media.id, "admin mediaId must survive restart");
+
+  // Delete it, restart again: the seed must NOT recreate it.
+  assert.equal((await send("DELETE", `/api/admin/help/articles/${after!.id}`)).statusCode, 200);
+  store.seedHelp();
+  assert.equal(store.getArticleBySlug("ios-happ-not-in-app-store"), null, "deleted article must not be re-seeded");
+  assert.equal((await get("/api/help/articles/ios-happ-not-in-app-store")).statusCode, 404);
 });
 
 test("restart does not reset admin category edits", async () => {

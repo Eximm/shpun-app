@@ -40,13 +40,22 @@ const routes = read("../api/src/modules/help/helpRoutes.ts");
 
 assert("public help routes registered", ["/help", "/help/search", "/help/c/:categorySlug", "/help/a/:articleSlug"].every((r) => main.includes(`path="${r}"`)));
 assert("help is reachable from profile", profile.includes('profile.help.title') && profile.includes('nav("/help")'));
-assert("iOS/Happ contextual link exists", connector.includes("/help/a/ios-happ-not-in-app-store") && connector.includes("connect.happ_not_in_store"));
+assert("no hardcoded help article link from the connector", !connector.includes("/help/a/ios-happ-not-in-app-store") && !connector.includes("happ_not_in_store"));
 
 /* ── Public rendering ─────────────────────────────────────────────────────── */
 
 assert("home has search + categories + featured", help.includes('t("help.search.placeholder")') && help.includes('t("help.categories")') && help.includes('t("help.featured")'));
 assert("article renders steps and callouts", helpRenderer.includes('case "steps"') && helpRenderer.includes("help-callout--"));
 assert("video is native, no autoplay/loop", helpRenderer.includes("<video") && helpRenderer.includes("playsInline") && helpRenderer.includes('preload="metadata"') && !helpRenderer.includes("autoPlay") && !helpRenderer.includes("loop"));
+assert("video uses the shared responsive classes", helpRenderer.includes('className="helpArticleVideo"') && helpRenderer.includes('className="helpVideoWrap"'));
+assert("video wrapper centers + clips", /\.helpVideoWrap \{[\s\S]*?justify-content: center;[\s\S]*?overflow: hidden;/.test(css));
+const articleVideoBlock = (css.match(/\.helpArticleVideo \{[^}]*\}/) || [""])[0];
+assert("video is not forced to full width", articleVideoBlock.includes("width: auto;") && !/(^|\s)width:\s*100%/.test(articleVideoBlock));
+assert("video cap is viewport-aware", /\.helpArticleVideo \{[\s\S]*?max-width: 100%;[\s\S]*?max-height: min\(68dvh, 760px\);/.test(css));
+assert("video keeps aspect ratio", /\.helpArticleVideo \{[\s\S]*?object-fit: contain;/.test(css));
+assert("video stays compact on mobile", /@media \(max-width: 560px\) \{\s*\.helpArticleVideo \{ max-height: 62dvh; \}/.test(css) && /@media \(max-width: 400px\) \{\s*\.helpArticleVideo \{ max-height: 58dvh; \}/.test(css));
+assert("admin editor preview is more compact than the article", /\.helpEditor__mediaPreview video \{[^}]*max-width: min\(100%, 360px\);[^}]*max-height: min\(52dvh, 420px\)/.test(css));
+assert("modal height is dvh-aware", css.includes("max-height: calc(100dvh - 32px - env(safe-area-inset-top)"));
 assert("image lightbox exists", helpRenderer.includes("ImageLightbox") && helpRenderer.includes("createPortal"));
 assert("article links to support", help.includes('to="/support"') && help.includes('t("help.create_ticket")'));
 
@@ -74,9 +83,9 @@ assert("used media cannot be deleted server-side", routes.includes('error: "medi
 
 assert("media stored under uploads/help namespace", store.includes('"uploads", "help"') || store.includes("uploads/help"));
 assert("media filename is generated (original kept as metadata)", store.includes("storagePath") && store.includes("originalName"));
-assert("seed creates the iOS/Happ article", store.includes("ios-happ-not-in-app-store") && store.includes("Happ недоступен в App Store"));
-assert("seed contains the region-change steps", store.includes("Изменить страну или регион") && store.includes("Казахстан"));
-assert("seed warns about false payment data", store.includes("ложные платёжные данные"));
+const seedBody = store.slice(store.indexOf("export function seedHelp"), store.indexOf("seedHelp();", store.indexOf("export function seedHelp")));
+assert("seed seeds categories only", seedBody.includes("INSERT OR IGNORE INTO help_categories") && !seedBody.includes("saveArticle") && !seedBody.includes("ios-happ-not-in-app-store"));
+assert("seed never creates articles", !seedBody.includes("Happ недоступен в App Store"));
 
 /* ── Mobile safety ────────────────────────────────────────────────────────── */
 

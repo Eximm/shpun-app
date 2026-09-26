@@ -694,60 +694,9 @@ export function seedHelp(): void {
     });
   }
 
-  const hasHapp = getArticleBySlug("ios-happ-not-in-app-store");
-  if (!hasHapp) {
-    const ios = getCategoryBySlug("ios");
-    saveArticle({
-      slug: "ios-happ-not-in-app-store",
-      title: "Happ недоступен в App Store — как установить",
-      summary: "Если Happ не находится в App Store, покажем, как изменить регион магазина и установить приложение.",
-      categoryId: ios?.id ?? null,
-      status: "published",
-      isFeatured: true,
-      sortOrder: 1,
-      searchKeywords: "happ app store ios iphone ipad регион казахстан установка приложение",
-      blocks: [
-        { type: "paragraph", payload: { text: "Сначала попробуйте найти приложение по названию Happ - Proxy Utility (разработчик Flyfrog LLC)." } },
-        { type: "callout", payload: { tone: "info", text: "Happ - Proxy Utility · разработчик Flyfrog LLC" } },
-        { type: "heading", payload: { text: "Если приложение недоступно" } },
-        {
-          type: "steps",
-          payload: {
-            items: [
-              "Откройте «Настройки».",
-              "Перейдите в «Apple Account».",
-              "Откройте «Медиаматериалы и покупки».",
-              "Выберите «Просмотреть учётную запись».",
-              "Откройте «Страна/регион».",
-              "Нажмите «Изменить страну или регион».",
-              "Выберите Казахстан.",
-              "Примите условия Apple.",
-              "Заполните запрашиваемые данные.",
-              "Откройте App Store.",
-              "Найдите Happ - Proxy Utility.",
-              "Установите приложение.",
-              "Вернитесь в Shpun.",
-            ],
-          },
-        },
-        { type: "heading", payload: { text: "Не получается изменить регион?" } },
-        { type: "paragraph", payload: { text: "Причины могут включать:" } },
-        {
-          type: "bullet_list",
-          payload: {
-            items: [
-              "остаток средств на балансе Apple ID;",
-              "активные подписки;",
-              "незавершённые покупки или возвраты;",
-              "Family Sharing;",
-              "требования Apple к платёжным данным.",
-            ],
-          },
-        },
-        { type: "callout", payload: { tone: "warning", text: "Не советуем вводить заведомо ложные платёжные данные — это может привести к блокировке учётной записи." } },
-      ],
-    });
-  }
+  // Articles are intentionally NOT seeded. The whole Help content is
+  // managed manually from Admin; a fresh DB starts with zero articles.
+
 }
 
 seedHelp();

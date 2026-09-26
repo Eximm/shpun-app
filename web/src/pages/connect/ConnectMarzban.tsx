@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Link } from "react-router-dom";
 import QRCode from "qrcode";
 import { apiFetch } from "../../shared/api/client";
 import { getMood } from "../../shared/payments-mood";
@@ -741,10 +740,6 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
               style={{ marginTop: 10, borderColor: "rgba(255,184,77,0.3)", background: "rgba(255,184,77,0.07)" }}
             >
               <b>{"\u{1F34F}"} {t("connect.happ_global_notice")}</b>
-              <br />
-              <Link className="cm__helpLink" to="/help/a/ios-happ-not-in-app-store">
-                {t("connect.happ_not_in_store")}
-              </Link>
             </div>
           ) : null}
 
