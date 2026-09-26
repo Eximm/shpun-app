@@ -67,7 +67,7 @@ export function canSavePayload(payload: HelpArticlePayload): boolean {
 export const HELP_IMAGE_MAX_MB = 10;
 export const HELP_VIDEO_MAX_MB = 100;
 
-export type UploadErrorCode = "image_too_large" | "video_too_large" | "upload_too_large" | "upload_failed";
+export type UploadErrorCode = "image_too_large" | "video_too_large" | "server_rejected_size" | "upload_failed";
 export type UploadErrorInfo = { code: UploadErrorCode; maxMb: number };
 
 export function validateFileSize(bytes: number, kind: "image" | "video"): UploadErrorInfo | null {
@@ -79,12 +79,14 @@ export function validateFileSize(bytes: number, kind: "image" | "video"): Upload
 }
 
 /**
- * Normalize an upload failure into a user-facing code. May be called with a
- * network error (status 0). Never returns raw proxy/proxy HTML.
+ * Normalize a server-side upload failure. A 413 here is NEVER proof that the
+ * file exceeds the Help limit (the client already checked File.size): it means
+ * an upstream/reverse proxy refused the request body. Reporting "file > 100 MB"
+ * for a 2 MB file would be wrong, so we surface a distinct server-limit error.
  */
 export function normalizeUploadError(status: number, kind: "image" | "video"): UploadErrorInfo {
   const maxMb = kind === "video" ? HELP_VIDEO_MAX_MB : HELP_IMAGE_MAX_MB;
-  if (status === 413) return { code: "upload_too_large", maxMb };
+  if (status === 413) return { code: "server_rejected_size", maxMb };
   return { code: "upload_failed", maxMb };
 }
 

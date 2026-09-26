@@ -318,14 +318,12 @@ export function HelpSection() {
     setBlocks((cur) => [...cur, blockDefaults(type)]);
   }
 
-  function uploadErrorText(kind: "image" | "video", info: { code: string; maxMb: number }): string {
-    if (info.code === "upload_too_large") {
-      return kind === "video"
-        ? t("admin.help.upload.too_large_video", { max: info.maxMb })
-        : t("admin.help.upload.too_large_image", { max: info.maxMb });
-    }
+  function uploadErrorText(info: { code: string; maxMb: number }): string {
     if (info.code === "video_too_large") return t("admin.help.upload.too_large_video", { max: info.maxMb });
     if (info.code === "image_too_large") return t("admin.help.upload.too_large_image", { max: info.maxMb });
+    // A server/proxy 413 while File.size is within the Help limit is a server
+    // configuration issue, not an oversized file.
+    if (info.code === "server_rejected_size") return t("admin.help.upload.server_rejected");
     return t("admin.help.upload.failed");
   }
 
@@ -336,7 +334,7 @@ export function HelpSection() {
   async function uploadMedia(file: File, blockIndex: number, kind: "image" | "video") {
     const sizeErr = validateFileSize(file.size, kind);
     if (sizeErr) {
-      const text = uploadErrorText(kind, sizeErr);
+      const text = uploadErrorText(sizeErr);
       if (blockIndex < 0) setMessage(text);
       else setUploadState((s) => ({ ...s, [blockIndex]: { status: "error", text, lastFile: file } }));
       return;
@@ -357,7 +355,7 @@ export function HelpSection() {
       }
     } catch (e: any) {
       const info = normalizeUploadError(Number(e?.status ?? 0), kind);
-      const text = uploadErrorText(kind, info);
+      const text = uploadErrorText(info);
       if (blockIndex < 0) setMessage(text);
       else setUploadState((s) => ({ ...s, [blockIndex]: { status: "error", text, lastFile: file } }));
     }

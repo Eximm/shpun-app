@@ -59,9 +59,17 @@ assert("can save a valid payload", model.canSavePayload(payload) === true);
 assert("image over 10 MB is rejected client-side", model.validateFileSize(11 * 1024 * 1024, "image")?.code === "image_too_large");
 assert("video over 100 MB is rejected client-side", model.validateFileSize(101 * 1024 * 1024, "video")?.code === "video_too_large");
 assert("image under the limit passes", model.validateFileSize(5 * 1024 * 1024, "image") === null);
-assert("413 for video maps to a friendly code", model.normalizeUploadError(413, "video").code === "upload_too_large");
-assert("413 keeps the correct max for images", model.normalizeUploadError(413, "image").maxMb === 10);
+assert("2 MB file passes client-side validation", model.validateFileSize(2068774, "video") === null);
+
+// Regression: a 2 MB file that gets a 413 must NOT be reported as "> 100 MB".
+assert("413 is a server-limit error, not a Help-limit error", model.normalizeUploadError(413, "video").code === "server_rejected_size");
+assert("server-limit error is distinct from video_too_large", model.normalizeUploadError(413, "video").code !== "video_too_large");
+assert("413 keeps the max for the message context", model.normalizeUploadError(413, "image").maxMb === 10);
 assert("non-413 is a generic upload failure", model.normalizeUploadError(500, "video").code === "upload_failed");
+
+// A 101 MB file is rejected BEFORE any request is made.
+const oversized = model.validateFileSize(101 * 1024 * 1024, "video");
+assert("101 MB is rejected client-side with the 100 MB limit", oversized?.code === "video_too_large" && oversized?.maxMb === 100);
 
 /* ── Dirty state ─────────────────────────────────────────────────────────── */
 
@@ -101,6 +109,7 @@ assert("preview uses the shared renderer", editor.includes("HelpArticleRenderer"
 assert("public page uses the same shared renderer", publicPage.includes("HelpArticleRenderer"));
 assert("shared renderer is the only block renderer", publicPage.includes("from \"../shared/help/HelpArticleRenderer\"") && !publicPage.includes("function HelpBlockView"));
 assert("upload errors are normalized (no raw proxy HTML)", editor.includes("normalizeUploadError") && editor.includes("validateFileSize"));
+assert("server 413 shows a server-limit message, not the 100 MB one", editor.includes("server_rejected_size") && editor.includes("admin.help.upload.server_rejected"));
 assert("missing media has a placeholder in preview", renderer.includes("showMissingMedia") && renderer.includes("help.media.video_missing"));
 
 if (failures > 0) {
