@@ -294,7 +294,7 @@
         </div>
         <span class="status">Готов к работе</span>
       </div>
-      <p class="hero__text">Один установщик подходит для OpenWrt 24 и 25. Он сам проверит роутер и поставит нужную версию.</p>
+      <p class="hero__text">Сначала подготовьте роутер: на нём уже должна работать OpenWrt 24.x или 25.x. Её можно установить самостоятельно или купить готовый роутер. Дальше наша небольшая программа для Windows почти всё сделает за вас.</p>
       <div class="tags">
         <span class="tag">OpenWrt 24.x</span>
         <span class="tag">OpenWrt 25.x</span>
@@ -312,45 +312,46 @@
     <section class="page active" id="page-start">
       <div class="section section--accent">
         <h2>1. Подготовьте роутер</h2>
-        <p class="section__lead">Подключите роутер к интернету. Подключите компьютер к его Wi-Fi или кабелем.</p>
-        <div class="notice"><strong>Версию OpenWrt и модель узнавать не нужно.</strong> Установщик проверит их сам.</div>
+        <p class="section__lead">На роутере уже должна быть установлена OpenWrt 24.x или 25.x. Вы можете установить её на совместимый роутер самостоятельно или купить готовый роутер с OpenWrt.</p>
+        <div class="notice"><strong>Важно:</strong> программа установит Shpun Router, но не саму OpenWrt. OpenWrt должна быть установлена на роутере заранее.</div>
       </div>
 
       <div class="section section--accent">
         <h2>2. Запустите установщик</h2>
-        <p class="section__lead"><strong>Подходит для OpenWrt 24 и OpenWrt 25.</strong></p>
-        <div class="notice"><strong>Что сделает программа?</strong> Она найдёт роутер, выберет нужный пакет и установит его. Команды вводить не нужно.</div>
+        <p class="section__lead">Когда роутер с OpenWrt уже у вас, подключите его к интернету, а компьютер с Windows — к этому роутеру. Скачайте и запустите программу. Она сама найдёт роутер, подберёт и скачает нужный пакет Shpun Router, проверит старые VPN и предложит удалить их, если они могут мешать. После вашего подтверждения программа установит Shpun Router.</p>
         <ol class="steps">
-          <li class="step"><span class="step__num">1</span><div class="step__text"><h3>Выберите свою Windows</h3><p>Для Windows 10/11 нажмите первую кнопку. Для Windows 7/8 — вторую.</p></div></li>
-          <li class="step"><span class="step__num">2</span><div class="step__text"><h3>Запустите файл</h3><p>Если Windows покажет предупреждение, нажмите «Подробнее», затем «Выполнить в любом случае».</p></div></li>
-          <li class="step"><span class="step__num">3</span><div class="step__text"><h3>Подтвердите установку</h3><p>Если у роутера есть пароль, программа попросит его ввести.</p></div></li>
-          <li class="step"><span class="step__num">4</span><div class="step__text"><h3>Если найден другой VPN</h3><p>Лучше разрешить его удалить. Тогда он не будет мешать Shpun Router.</p></div></li>
-          <li class="step"><span class="step__num">5</span><div class="step__text"><h3>Дождитесь сообщения «Готово»</h3><p>Программа покажет код роутера и откроет ShpunApp.</p></div></li>
+          <li class="step"><span class="step__num">1</span><div class="step__text"><h3>Подключите всё необходимое</h3><p>Подключите роутер к интернету, а компьютер с Windows — к Wi-Fi или LAN-порту этого роутера.</p></div></li>
+          <li class="step"><span class="step__num">2</span><div class="step__text"><h3>Выберите свою Windows</h3><p>Для Windows 10/11 нажмите первую кнопку. Для Windows 7/8 — вторую.</p></div></li>
+          <li class="step"><span class="step__num">3</span><div class="step__text"><h3>Запустите файл</h3><p>Если Windows покажет предупреждение, нажмите «Подробнее», затем «Выполнить в любом случае».</p></div></li>
+          <li class="step"><span class="step__num">4</span><div class="step__text"><h3>Следуйте подсказкам программы</h3><p>Если на роутере есть пароль, введите его. Если программа найдёт другой VPN, она покажет его и спросит, можно ли удалить. Без вашего разрешения ничего удалено не будет.</p></div></li>
+          <li class="step"><span class="step__num">5</span><div class="step__text"><h3>Дождитесь сообщения «Готово»</h3><p>Программа установит Shpun Router, покажет код роутера и откроет ShpunApp.</p></div></li>
         </ol>
         <button class="button" type="button" onclick="ShpunRouterApp.openDownload('modern')">⬇️ Скачать для Windows 10/11</button>
         <button class="button" type="button" onclick="ShpunRouterApp.openDownload('legacy')">⬇️ Скачать для Windows 7/8</button>
       </div>
 
       <div class="section">
-        <h2>После установки</h2>
+        <h2>3. Последний шаг — привяжите роутер</h2>
         <ol class="steps">
-          <li class="step"><span class="step__num">1</span><div class="step__text"><h3>Найдите код</h3><p>На главной странице роутера найдите большой блок Shpun Router. В нём будет короткий код.</p></div></li>
-          <li class="step"><span class="step__num">2</span><div class="step__text"><h3>Введите код в приложении</h3><p>Закажите услугу Shpun Router и введите код. Роутер сам получит настройки и подключится.</p></div></li>
+          <li class="step"><span class="step__num">1</span><div class="step__text"><h3>Скопируйте код</h3><p>Программа покажет короткий код роутера. Этот же код можно найти в большом блоке Shpun Router на главной странице роутера.</p></div></li>
+          <li class="step"><span class="step__num">2</span><div class="step__text"><h3>Введите код в ShpunApp</h3><p>Закажите услугу Shpun Router и введите код. Роутер сам получит настройки и подключится.</p></div></li>
         </ol>
-        <div class="notice"><strong>Готово.</strong> Ничего настраивать вручную больше не нужно.</div>
+        <div class="notice"><strong>Готово.</strong> Теперь чистый интернет будет работать на всех устройствах, подключённых к роутеру.</div>
       </div>
 
     </section>
 
     <section class="page" id="page-router">
       <div class="section">
-        <h2>Какой роутер подойдёт</h2>
-        <p class="section__lead">Лучше выбрать современный роутер с Wi-Fi 6 и надписью AX3000. На нём VPN обычно работает быстро и без зависаний.</p>
+        <h2>Сначала нужен роутер с OpenWrt</h2>
+        <p class="section__lead">Для Shpun Router обязательно нужен роутер с OpenWrt 24.x или 25.x. OpenWrt можно установить самостоятельно на совместимую модель или купить роутер, где она уже установлена. Наша программа саму OpenWrt не устанавливает — она ставит пакет Shpun Router на подготовленный роутер.</p>
+        <div class="notice"><strong>Если не хотите прошивать роутер самостоятельно,</strong> проще купить готовый вариант с OpenWrt. Ниже показан один подходящий пример, но можно выбрать и другую модель.</div>
         <ul class="list">
-          <li><strong>Хороший выбор</strong><span>Современный роутер класса AX3000.</span></li>
-          <li><strong>Проще всего</strong><span>Купить роутер, на котором продавец уже установил OpenWrt 24 или 25.</span></li>
-          <li class="warning"><strong>Не рекомендуем</strong><span>Старые и самые дешёвые роутеры: VPN на них может работать медленно.</span></li>
+          <li><strong>Что должно быть готово</strong><span>К моменту установки Shpun Router на роутере уже должна работать OpenWrt 24.x или 25.x.</span></li>
+          <li><strong>Можно сделать самостоятельно</strong><span>Установить OpenWrt на совместимый роутер своими силами.</span></li>
+          <li><strong>Самый простой вариант для новичка</strong><span>Купить роутер с уже установленной OpenWrt.</span></li>
         </ul>
+        <button class="button button--secondary" type="button" onclick="ShpunRouterApp.openRouterExample()">🔎 Посмотреть пример подходящего роутера</button>
       </div>
     </section>
 
@@ -371,6 +372,7 @@
     const ShpunRouterApp = {
       installerUrl: "https://spb.shpyn.online/files/router/shpun-router-installer.exe",
       installerWin7Url: "https://spb.shpyn.online/files/router/shpun-router-installer-win7.exe",
+      routerExampleUrl: "https://routerich.ru/products/ax3000",
       tg: window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null,
 
       init() {
@@ -402,6 +404,14 @@
           return;
         }
         window.open(url, "_blank", "noopener,noreferrer");
+      },
+
+      openRouterExample() {
+        if (this.tg) {
+          this.tg.openLink(this.routerExampleUrl, { try_instant_view: false });
+          return;
+        }
+        window.open(this.routerExampleUrl, "_blank", "noopener,noreferrer");
       }
     };
 
