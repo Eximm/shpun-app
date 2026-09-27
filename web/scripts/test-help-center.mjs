@@ -56,6 +56,8 @@ assert("admin placement UI exists", adminHelp.includes('t("admin.help.placement.
 assert("placement endpoints exist", routes.includes('"/help/placements/:placementKey"') && routes.includes('"/admin/help/placements"') && routes.includes('"/admin/help/placements/:key"'));
 assert("public placement only returns published", store.includes("article.status === \"published\" ? article : null"));
 assert("delete cascades placements", /DELETE FROM help_article_placements WHERE article_id/.test(store));
+assert("blocks are only replaced when explicitly sent (no `?? []` footgun)", store.includes("if (input.blocks !== undefined)") && !/input\.blocks \?\? \[\]/.test(store));
+assert("status patch is metadata-only in the editor", adminHelp.includes("body: { status }"));
 
 /* ── Public rendering ─────────────────────────────────────────────────────── */
 

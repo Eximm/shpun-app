@@ -455,39 +455,88 @@ export type SaveArticleInput = {
 };
 
 /**
- * Create or update an article and replace its blocks atomically. Never leaves a
- * partially saved article: the whole operation runs in one SQLite transaction.
+ * Create or update an article atomically.
+ *
+ * Partial-update contract (data-loss guard):
+ *   - `blocks === undefined`  -> blocks are LEFT UNTOUCHED
+ *   - `blocks: []`            -> blocks are explicitly cleared (full editor save)
+ *   - `placements === undefined` -> placements are LEFT UNTOUCHED
+ *   - `placements: []`        -> all placements of this article are removed
+ *   - any metadata field omitted on update keeps its current value
+ * A metadata/status/placement patch can therefore never wipe article content.
  */
 export function saveArticle(input: SaveArticleInput): { article: HelpArticle; blocks: HelpBlock[] } {
-  const title = String(input.title ?? "").trim();
-  if (!title) throw new Error("title_required");
-  const summary = String(input.summary ?? "").trim();
-  const categoryIdRaw = input.categoryId;
-  const categoryId = categoryIdRaw == null || categoryIdRaw === "" ? null : Math.trunc(Number(categoryIdRaw));
-  if (categoryId != null && (!Number.isFinite(Number(categoryId)) || categoryId <= 0)) throw new Error("invalid_category");
-  const status = normalizeStatus(input.status);
-  const sortOrder = Number.isFinite(Number(input.sortOrder)) ? Math.trunc(Number(input.sortOrder)) : 0;
-  const isFeatured = input.isFeatured === true || input.isFeatured === 1 ? 1 : 0;
-  const searchKeywords = String(input.searchKeywords ?? "").trim() || null;
-  const blocks = sanitizeBlocks(input.blocks);
-
   const id = Math.trunc(Number(input.id ?? 0));
   return linkDb.transaction(() => {
     let articleId = id;
+    const insertBlock = linkDb.prepare(`
+      INSERT INTO help_article_blocks (article_id, type, sort_order, payload_json)
+      VALUES (?, ?, ?, ?)
+    `);
+
     if (id > 0) {
       const existing = getArticleById(id);
       if (!existing) throw new Error("article_not_found");
-      const requestedSlug = String(input.slug ?? "").trim();
+
+      const title = input.title === undefined ? existing.title : String(input.title).trim();
+      if (!title) throw new Error("title_required");
+
+      const summary = input.summary === undefined ? existing.summary : String(input.summary).trim();
+
+      let categoryId: number | null;
+      if (input.categoryId === undefined) {
+        categoryId = existing.categoryId;
+      } else {
+        const raw = input.categoryId;
+        categoryId = raw == null || raw === "" ? null : Math.trunc(Number(raw));
+        if (categoryId != null && (!Number.isFinite(Number(categoryId)) || categoryId <= 0)) throw new Error("invalid_category");
+      }
+
+      const status = input.status === undefined ? existing.status : normalizeStatus(input.status);
+      const sortOrder = input.sortOrder === undefined
+        ? existing.sortOrder
+        : (Number.isFinite(Number(input.sortOrder)) ? Math.trunc(Number(input.sortOrder)) : existing.sortOrder);
+      const isFeatured = input.isFeatured === undefined
+        ? (existing.isFeatured ? 1 : 0)
+        : (input.isFeatured === true || input.isFeatured === 1 ? 1 : 0);
+      const searchKeywords = input.searchKeywords === undefined
+        ? existing.searchKeywords
+        : (String(input.searchKeywords).trim() || null);
+
+      const requestedSlug = input.slug === undefined ? "" : String(input.slug).trim();
       const slug = requestedSlug && isValidSlug(requestedSlug) ? requestedSlug : existing.slug;
       const finalSlug = slug === existing.slug ? slug : uniqueSlug("help_articles", slug, id);
-      const publishedAt = status === "published" ? (existing.publishedAt ?? existing.updatedAt) : existing.publishedAt;
+
+      let publishedAt = existing.publishedAt;
+      if (status === "published" && !publishedAt) {
+        publishedAt = new Date().toISOString().slice(0, 19).replace("T", " ");
+      }
+
       linkDb.prepare(`
         UPDATE help_articles
         SET slug = ?, title = ?, summary = ?, category_id = ?, status = ?, sort_order = ?, is_featured = ?,
             search_keywords = ?, published_at = ?, updated_at = datetime('now')
         WHERE id = ?
       `).run(finalSlug, title, summary, categoryId, status, sortOrder, isFeatured, searchKeywords, publishedAt, id);
+
+      if (input.blocks !== undefined) {
+        const blocks = sanitizeBlocks(input.blocks);
+        linkDb.prepare(`DELETE FROM help_article_blocks WHERE article_id = ?`).run(id);
+        blocks.forEach((block, index) => insertBlock.run(id, block.type, index + 1, JSON.stringify(block.payload ?? {})));
+      }
+
+      if (input.placements !== undefined) syncArticlePlacements(id, input.placements);
     } else {
+      const title = String(input.title ?? "").trim();
+      if (!title) throw new Error("title_required");
+      const summary = String(input.summary ?? "").trim();
+      const rawCat = input.categoryId;
+      const categoryId = rawCat == null || rawCat === "" ? null : Math.trunc(Number(rawCat));
+      if (categoryId != null && (!Number.isFinite(Number(categoryId)) || categoryId <= 0)) throw new Error("invalid_category");
+      const status = normalizeStatus(input.status);
+      const sortOrder = Number.isFinite(Number(input.sortOrder)) ? Math.trunc(Number(input.sortOrder)) : 0;
+      const isFeatured = input.isFeatured === true || input.isFeatured === 1 ? 1 : 0;
+      const searchKeywords = String(input.searchKeywords ?? "").trim() || null;
       const requestedSlug = String(input.slug ?? "").trim();
       const slug = requestedSlug && isValidSlug(requestedSlug)
         ? uniqueSlug("help_articles", requestedSlug)
@@ -498,20 +547,12 @@ export function saveArticle(input: SaveArticleInput): { article: HelpArticle; bl
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(slug, title, summary, categoryId, status, sortOrder, isFeatured, searchKeywords, publishedAt);
       articleId = Number(info.lastInsertRowid);
+
+      const blocks = sanitizeBlocks(input.blocks);
+      blocks.forEach((block, index) => insertBlock.run(articleId, block.type, index + 1, JSON.stringify(block.payload ?? {})));
+
+      if (input.placements !== undefined) syncArticlePlacements(articleId, input.placements);
     }
-
-    linkDb.prepare(`DELETE FROM help_article_blocks WHERE article_id = ?`).run(articleId);
-    const insert = linkDb.prepare(`
-      INSERT INTO help_article_blocks (article_id, type, sort_order, payload_json)
-      VALUES (?, ?, ?, ?)
-    `);
-    blocks.forEach((block, index) => {
-      insert.run(articleId, block.type, index + 1, JSON.stringify(block.payload ?? {}));
-    });
-
-    // Only touch placements when the caller explicitly sends the set; status
-    // toggles from the list must not silently drop a placement.
-    if (input.placements !== undefined) syncArticlePlacements(articleId, input.placements);
 
     return { article: getArticleById(articleId) as HelpArticle, blocks: listBlocks(articleId) };
   })();

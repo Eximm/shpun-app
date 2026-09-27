@@ -102,6 +102,8 @@ const publicPage = read("src/pages/Help.tsx");
 
 assert("upload failure only touches upload state", /catch[\s\S]*?setUploadState[\s\S]*?lastFile: file/.test(editor) && !/catch[\s\S]*?setBlocks\(\[\]/.test(editor));
 assert("save builds payload from the full editor state", editor.includes("buildArticlePayload(form, blocks") && editor.includes("editorSnapshot(form, blocks, formPlacements)"));
+assert("status patch is metadata-only (no blocks)", editor.includes("body: { status }") && !/setStatus[\s\S]{0,240}blocks:/.test(editor));
+assert("backend only replaces blocks when explicitly sent", read("../api/src/modules/help/helpStore.ts").includes("if (input.blocks !== undefined)"));
 assert("save is disabled until hydrated", editor.includes("disabled={!hydrated") );
 assert("autosave uses a debounce + sequence guard", editor.includes("AUTOSAVE_MS") && editor.includes("shouldAutosave") && editor.includes("saveSeqRef"));
 assert("save state indicator is rendered, not only a toast", editor.includes("saveLabel") && editor.includes("helpEditor__status"));

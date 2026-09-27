@@ -287,7 +287,8 @@ export function HelpSection() {
   }
 
   async function setStatus(article: HelpArticleRow, status: HelpEditorStatus) {
-    await apiFetch(`/admin/help/articles/${article.id}`, { method: "PUT", body: { title: article.title, slug: article.slug, status } });
+    // Metadata-only patch: never send blocks, so content is preserved.
+    await apiFetch(`/admin/help/articles/${article.id}`, { method: "PUT", body: { status } });
     await loadList();
   }
 

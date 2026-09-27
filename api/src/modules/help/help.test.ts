@@ -389,3 +389,78 @@ test("placements: key validation, admin-only, article save sync", async () => {
   await send("PUT", `/api/admin/help/articles/${created.id}`, { title: "Placement C", slug: "placement-c", status: "published", blocks: [], placements: [] });
   assert.equal(JSON.parse((await get("/api/help/placements/connect_ios_happ_install")).body).article, null);
 });
+
+/* ── Data-loss guards: partial patches must never wipe content ───────────── */
+
+test("content survives placement/status patches; blocks only change when sent", async () => {
+  const video = multipartVideo("keep.mp4");
+  const mediaRes = await app.inject({
+    method: "POST",
+    url: "/api/admin/help/media",
+    headers: { ...admin, "content-type": `multipart/form-data; boundary=${video.boundary}` },
+    payload: video.body,
+  });
+  const media = JSON.parse(mediaRes.body).item;
+
+  const created = JSON.parse((await send("POST", "/api/admin/help/articles", {
+    title: "Full article",
+    slug: "full-article",
+    summary: "sum",
+    status: "published",
+    isFeatured: true,
+    searchKeywords: "kw",
+    placements: ["connect_ios_happ_install"],
+    blocks: [
+      { type: "paragraph", payload: { text: "p1" } },
+      { type: "heading", payload: { text: "h1" } },
+      { type: "steps", payload: { items: ["a", "b"] } },
+      { type: "callout", payload: { tone: "warning", text: "c1" } },
+      { type: "video", payload: { mediaId: media.id } },
+    ],
+  })).body);
+  assert.equal(created.ok, true);
+  const id = created.article.id;
+  const fullBlocks = created.blocks.map((b: any) => ({ type: b.type, payload: b.payload }));
+
+  // Full editor save that only removes the placement must keep every block.
+  await send("PUT", `/api/admin/help/articles/${id}`, {
+    title: "Full article", summary: "sum", status: "published", isFeatured: true, searchKeywords: "kw",
+    blocks: fullBlocks, placements: [],
+  });
+  let detail = JSON.parse((await adminGet(`/api/admin/help/articles/${id}`)).body);
+  assert.equal(detail.blocks.length, 5);
+  assert.equal(Number(detail.blocks[4].payload.mediaId), media.id);
+  assert.equal(detail.article.title, "Full article");
+  assert.equal(detail.article.summary, "sum");
+  assert.equal(detail.article.isFeatured, true);
+  assert.deepEqual(detail.placements, []);
+  assert.equal(JSON.parse((await get("/api/help/placements/connect_ios_happ_install")).body).article, null);
+
+  // Metadata-only patch WITHOUT blocks leaves blocks + metadata intact.
+  await send("PUT", `/api/admin/help/articles/${id}`, { status: "hidden" });
+  detail = JSON.parse((await adminGet(`/api/admin/help/articles/${id}`)).body);
+  assert.equal(detail.blocks.length, 5);
+  assert.equal(detail.article.status, "hidden");
+  assert.equal(detail.article.title, "Full article");
+  assert.equal(detail.article.summary, "sum");
+  assert.equal(detail.article.isFeatured, true);
+  assert.equal(detail.article.searchKeywords, "kw");
+
+  // Placement assign/unassign via the dedicated endpoint leaves content intact.
+  await send("PUT", "/api/admin/help/placements/connect_ios_happ_install", { articleId: id });
+  await send("PUT", "/api/admin/help/placements/connect_ios_happ_install", { articleId: null });
+  detail = JSON.parse((await adminGet(`/api/admin/help/articles/${id}`)).body);
+  assert.equal(detail.blocks.length, 5);
+  assert.equal(detail.article.title, "Full article");
+
+  // Re-publishing must not wipe blocks either.
+  await send("PUT", `/api/admin/help/articles/${id}`, { status: "published" });
+  detail = JSON.parse((await adminGet(`/api/admin/help/articles/${id}`)).body);
+  assert.equal(detail.blocks.length, 5);
+
+  // Explicit `blocks: []` is the only way to clear (full editor save).
+  await send("PUT", `/api/admin/help/articles/${id}`, { blocks: [] });
+  detail = JSON.parse((await adminGet(`/api/admin/help/articles/${id}`)).body);
+  assert.equal(detail.blocks.length, 0);
+  assert.equal(detail.article.title, "Full article", "metadata still intact after explicit clear");
+});
