@@ -73,7 +73,7 @@ function isWaiting(status: ServiceStatus) {
 }
 
 function isPayable(status: ServiceStatus) {
-  return status === "not_paid" || status === "blocked";
+  return status === "not_paid";
 }
 
 function needsSubscriptionLink(category: string): boolean {

@@ -43,6 +43,8 @@ assert("device choice keeps assistant mode", assistant.includes("&assistant=1&de
 assert("order continuation keeps the created service id", order.includes("/assistant?usi=${encodeURIComponent(String(created.userServiceId))}"));
 assert("payment return targets the assistant", assistant.includes('return: "/assistant"'));
 assert("payment state is polled after returning", order.includes("window.setInterval(check, 4000)") && /window\.addEventListener\(["']focus["'], check\)/.test(order));
+assert("only not-paid services are offered payment", /function isPayable\(status: ServiceStatus\) \{\s*return status === "not_paid";\s*\}/.test(assistant));
+assert("blocked services are never treated as unpaid", !assistant.includes('status === "not_paid" || status === "blocked"'));
 assert("pending service stays on the waiting screen", assistant.includes('status === "pending" || status === "init"'));
 assert("active Flex waits for a real subscription URL", assistant.includes("subscriptionReadyUsi !== current.userServiceId") && assistant.includes("subscriptionUrl"));
 assert("connector opens only after subscription readiness", assistant.includes("/services?usi=${encodeURIComponent(String(current.userServiceId))}&connect=1&assistant=1"));
