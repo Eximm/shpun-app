@@ -122,6 +122,42 @@ function exporterFromHost(host: string, exporterUrl?: string, nodeExporterEnable
   return h ? `http://${h}:9100/metrics` : "";
 }
 
+function hostname(value: string): string {
+  const raw = clean(value, 500);
+  if (!raw) return "";
+  try {
+    return new URL(/^https?:\/\//i.test(raw) ? raw : `http://${raw}`).hostname.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Keep the default Node Exporter endpoint attached to the server host. The
+ * editor submits both fields, so without this guard a host rename can leave an
+ * old exporter hostname active in the database. Deliberately separate proxy
+ * endpoints are preserved.
+ */
+function exporterForUpdate(current: MonitoredServerRow, nextHost: string, input: Record<string, unknown>, enabled: boolean) {
+  const submitted = clean(input.exporterUrl ?? current.exporter_url, 500);
+  const previousHostname = hostname(current.host);
+  const nextHostname = hostname(nextHost);
+
+  if (previousHostname && nextHostname && previousHostname !== nextHostname && submitted) {
+    try {
+      const url = new URL(submitted);
+      if (url.hostname.toLowerCase() === previousHostname) {
+        url.hostname = nextHostname;
+        return url.toString();
+      }
+    } catch {
+      // Validation below keeps the existing behaviour for malformed custom URLs.
+    }
+  }
+
+  return exporterFromHost(nextHost, submitted, enabled);
+}
+
 export function listMonitoredServers(
   { includeInactive = false, visibility: vis }: { includeInactive?: boolean; visibility?: ServerVisibility } = {},
 ) {
@@ -257,7 +293,7 @@ export function updateMonitoredServer(id: number, input: Record<string, unknown>
     "nodeExporterEnabled" in input ? boolInt(input.nodeExporterEnabled, 1) === 1 : Number(current.node_exporter_enabled) === 1;
   const exporterUrl =
     "exporterUrl" in input || "host" in input || "nodeExporterEnabled" in input
-      ? exporterFromHost(host, clean(input.exporterUrl ?? current.exporter_url, 500), nodeExporterEnabled)
+      ? exporterForUpdate(current, host, input, nodeExporterEnabled)
       : current.exporter_url;
   if (!host) return { ok: false as const, error: "host_required" };
   if (nodeExporterEnabled && !exporterUrl) return { ok: false as const, error: "host_required" };

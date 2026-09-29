@@ -381,3 +381,14 @@ export function resolveIncidentsForMissingServers(activeServerIds: number[], ts:
   }
   return resolved;
 }
+
+/** Close incidents whose evidence belongs to a replaced monitoring endpoint. */
+export function resolveIncidentsForServer(serverId: number, ts: number) {
+  let resolved = 0;
+  for (const row of listActiveIncidents()) {
+    if (row.server_id !== serverId) continue;
+    resolveIncident(row.id, ts);
+    resolved += 1;
+  }
+  return resolved;
+}

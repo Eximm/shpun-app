@@ -108,6 +108,12 @@ export function setMonitoringIncidentHandler(handler: MonitoringIncidentHandler 
   incidentHandler = handler;
 }
 
+/** Drop in-memory counter baselines when a server endpoint is changed. */
+export function resetServerMonitoringRuntime(serverId: number): void {
+  prevCache.delete(serverId);
+  sampleBuffers.delete(serverId);
+}
+
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }

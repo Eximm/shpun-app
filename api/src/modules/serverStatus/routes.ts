@@ -17,6 +17,7 @@ import {
   getServerStatusSnapshot,
   probeNodeExporter,
   requestForcedCollection,
+  resetServerMonitoringRuntime,
   setMonitoringIncidentHandler,
   startServerStatusMonitor,
 } from "./monitor.js";
@@ -33,6 +34,7 @@ import {
   listRecentEvents,
   listRecentIncidents,
   queryIncidents,
+  resolveIncidentsForServer,
   type MonitoringIncidentRow,
 } from "./incidentsRepo.js";
 import { deliverMonitoringIncidentEvents } from "./monitoringNotifications.js";
@@ -225,10 +227,20 @@ export async function serverStatusRoutes(app: FastifyInstance) {
   app.put("/admin/monitored-servers/:id", async (req, reply) => {
     if (!(await requireAdmin(req, reply))) return;
     const id = int((req.params as any)?.id);
+    const previous = getMonitoredServer(id);
     const result = updateMonitoredServer(id, (req.body ?? {}) as any);
     if (!result.ok) return reply.code(result.error === "not_found" ? 404 : 400).send({ ok: false, error: result.error });
-    // Config-only mutation: existing monitoring_current for this and every
-    // other server is preserved; the collector refreshes it on the next cycle.
+    const endpointChanged = previous != null && (
+      previous.host !== result.item.host ||
+      previous.exporter_url !== result.item.exporter_url ||
+      previous.node_exporter_enabled !== result.item.node_exporter_enabled ||
+      previous.active !== result.item.active
+    );
+    if (endpointChanged) {
+      resetServerMonitoringRuntime(id);
+      deleteCurrent(id);
+      resolveIncidentsForServer(id, Math.floor(Date.now() / 1000));
+    }
     return reply.send({ ok: true, item: toAdminServer(result.item) });
   });
 

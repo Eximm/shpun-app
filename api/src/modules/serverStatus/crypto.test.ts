@@ -85,6 +85,40 @@ test("empty exporter password on update preserves the stored secret", () => {
   assert.equal(getExporterCredentials(getMonitoredServer(id)!).password, "keep-me");
 });
 
+test("changing a server host also moves its default exporter URL", () => {
+  const created = createMonitoredServer({ title: "Rename", host: "old.example", kind: "vpn" });
+  assert.equal(created.ok, true);
+  const id = created.ok ? created.item.id : 0;
+
+  const updated = updateMonitoredServer(id, {
+    host: "new.example",
+    // The browser can still submit the value rendered before the host edit.
+    exporterUrl: "http://old.example:9100/metrics",
+  });
+
+  assert.equal(updated.ok, true);
+  assert.equal(getMonitoredServer(id)!.host, "new.example");
+  assert.equal(getMonitoredServer(id)!.exporter_url, "http://new.example:9100/metrics");
+});
+
+test("changing a server host preserves an intentional exporter proxy", () => {
+  const created = createMonitoredServer({
+    title: "Proxy",
+    host: "old-proxy-target.example",
+    kind: "vpn",
+    exporterUrl: "https://metrics.example/proxy/node-a",
+  });
+  assert.equal(created.ok, true);
+  const id = created.ok ? created.item.id : 0;
+
+  updateMonitoredServer(id, {
+    host: "new-proxy-target.example",
+    exporterUrl: "https://metrics.example/proxy/node-a",
+  });
+
+  assert.equal(getMonitoredServer(id)!.exporter_url, "https://metrics.example/proxy/node-a");
+});
+
 test("new exporter password replaces the secret; switching to none clears it", () => {
   const created = createMonitoredServer({ title: "Replace", host: "replace.example", kind: "vpn", exporterAuthType: "basic", exporterPassword: "old" });
   assert.equal(created.ok, true);
