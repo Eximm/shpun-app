@@ -15,6 +15,7 @@
 import type { MonitoredServerRow } from "./repo.js";
 import { getExporterCredentials, listMonitoredServers } from "./repo.js";
 import { parseNodeExporter, rawCpuTotals, toPreviousState, type NodeExporterPrevious, type NodeExporterSample } from "./nodeExporter.js";
+import { nodeExporterScrapeUrl } from "./nodeExporterUrl.js";
 import { getGlobalThresholds, resolveThresholds, type MonitoringThresholds } from "./settingsRepo.js";
 import { insertSample, recentSamples, runDownsampling, runRetention, type MonitoringSample } from "./historyRepo.js";
 import { evaluateServerIncidents, type IncidentEvent, type RuleEvaluation } from "./incidents.js";
@@ -266,7 +267,7 @@ async function scrapeNodeExporter(row: MonitoredServerRow, thresholds: Monitorin
   const creds = getExporterCredentials(row);
   const started = Date.now();
   try {
-    const res = await fetchText(row.exporter_url, {
+    const res = await fetchText(nodeExporterScrapeUrl(row.exporter_url), {
       timeoutMs: thresholds.scrapeTimeoutMs,
       username: creds.authType === "basic" ? creds.username : undefined,
       password: creds.authType === "basic" ? creds.password ?? undefined : undefined,
@@ -915,7 +916,7 @@ export async function probeNodeExporter(row: MonitoredServerRow, timeoutMs = 500
   const creds = getExporterCredentials(row);
   const started = Date.now();
   try {
-    const res = await fetchText(row.exporter_url, {
+    const res = await fetchText(nodeExporterScrapeUrl(row.exporter_url), {
       timeoutMs,
       username: creds.authType === "basic" ? creds.username : undefined,
       password: creds.authType === "basic" ? creds.password ?? undefined : undefined,

@@ -7,7 +7,7 @@ import test from "node:test";
 process.env.DATA_DIR = mkdtempSync(path.join(tmpdir(), "shpun-mon-notify-"));
 process.env.NODE_ENV = "development";
 
-const { deliverMonitoringIncidentEvents } = await import("./monitoringNotifications.js");
+const { deliverMonitoringIncidentEvents, monitoringDeliveryChannels } = await import("./monitoringNotifications.js");
 const { recordSupportNotifyRecipient } = await import("../support/notifyRepo.js");
 const { linkDb } = await import("../../shared/linkdb/db.js");
 
@@ -57,6 +57,11 @@ function countRows(eventId: string) {
 test("critical opened incident emits one in-app notification", () => {
   deliverMonitoringIncidentEvents([event("opened", "critical")]);
   assert.equal(countRows("u:900:monitoring:1:opened"), 1);
+});
+
+test("monitoring delivery stays inside the app and never includes Telegram", () => {
+  assert.deepEqual(monitoringDeliveryChannels(event("opened", "critical")), ["in_app", "web_push"]);
+  assert.deepEqual(monitoringDeliveryChannels(event("opened", "warning")), ["in_app"]);
 });
 
 test("re-delivering the same critical incident does not duplicate the notification", () => {

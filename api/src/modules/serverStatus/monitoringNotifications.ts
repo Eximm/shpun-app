@@ -1,17 +1,14 @@
 // api/src/modules/serverStatus/monitoringNotifications.ts
 //
-// Delivers confirmed monitoring incidents through the EXISTING admin
-// notification stack (no new bot / no new channel):
+// Delivers confirmed monitoring incidents through the app's admin
+// notification stack:
 //   - in-app admin notifications -> `notif_events` + admin recipients
 //     (`listSupportNotifyRecipients`), which also power the bell/inbox;
 //   - Web Push -> `sendWebPushToUser` (used by support notifications too);
-//   - Telegram -> the existing support admin chat list via
-//     `sendSupportTelegramMessage` (sent WITHOUT the support topic so
-//     monitoring does not pollute the support thread).
+//   - Telegram is intentionally not a monitoring delivery channel.
 //
 // Channels by severity:
-//   - critical: in-app + Web Push + Telegram (opened / escalated / resolved /
-//     reminder);
+//   - critical: in-app + Web Push (opened / escalated / resolved / reminder);
 //   - warning:  in-app only (opened / reminder);
 //   - info:     none (Recent Activity / monitoring_events only).
 //
@@ -22,16 +19,8 @@ import type { IncidentEvent } from "./incidents.js";
 import { putNotifEvent, type NotifEvent } from "../../shared/linkdb/notificationsRepo.js";
 import { listSupportNotifyRecipients } from "../support/notifyRepo.js";
 import { sendWebPushToUser } from "../notifications/webpush.js";
-import { sendSupportTelegramMessage, supportAdminChatIds } from "../support/telegram.js";
 
 type Logger = { info: (obj: unknown, msg?: string) => void; warn: (obj: unknown, msg?: string) => void };
-
-function esc(v: unknown): string {
-  return String(v ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
 
 function levelFor(severity: string): NotifEvent["level"] {
   return severity === "critical" ? "error" : "info";
@@ -52,23 +41,17 @@ function bodyFor(event: IncidentEvent): string {
   return event.incident.message;
 }
 
-function telegramText(event: IncidentEvent): string {
-  const icon = event.kind === "resolved" ? "" : event.severity === "critical" ? "🔴" : "⚠️";
-  const head = event.kind === "resolved" ? "Восстановлено" : event.severity === "critical" ? "Критический инцидент" : "Инцидент мониторинга";
-  return [
-    `${icon} <b>${head}</b>`,
-    `<b>${esc(event.serverTitle)}</b>`,
-    esc(event.incident.message),
-    `Правило: ${esc(event.ruleType)}${event.incident.value != null ? ` · значение ${esc(event.incident.value)}` : ""}`,
-  ].join("\n");
-}
-
 function shouldDeliver(event: IncidentEvent): boolean {
   if (event.kind === "resolved") return event.severity === "critical";
   if (event.kind === "opened" || event.kind === "escalated" || event.kind === "reminder") {
     return event.severity === "critical" || event.severity === "warning";
   }
   return false;
+}
+
+export function monitoringDeliveryChannels(event: IncidentEvent): Array<"in_app" | "web_push"> {
+  if (!shouldDeliver(event)) return [];
+  return event.severity === "critical" ? ["in_app", "web_push"] : ["in_app"];
 }
 
 function eventId(event: IncidentEvent): string {
@@ -113,27 +96,15 @@ function deliverInApp(event: IncidentEvent, logger?: Logger): void {
   }
 }
 
-async function deliverTelegram(event: IncidentEvent, logger?: Logger): Promise<void> {
-  const chats = supportAdminChatIds();
-  if (chats.length === 0) return;
-  const text = telegramText(event);
-  await Promise.allSettled(
-    chats.map((chatId) => sendSupportTelegramMessage(chatId, text, undefined, { threadId: null })),
-  );
-  logger?.info?.({ incidentId: event.incident.id, chats: chats.length }, "MONITOR_NOTIFY_TELEGRAM");
-}
-
 /** Deliver a batch of engine events. Best-effort; never throws. */
 export function deliverMonitoringIncidentEvents(events: IncidentEvent[], logger?: Logger): void {
   for (const event of events) {
-    if (!shouldDeliver(event)) continue;
+    const channels = monitoringDeliveryChannels(event);
+    if (!channels.includes("in_app")) continue;
     try {
       deliverInApp(event, logger);
     } catch (e) {
       logger?.warn?.({ err: e }, "MONITOR_NOTIFY_INAPP_FAIL");
-    }
-    if (event.severity === "critical") {
-      void deliverTelegram(event, logger).catch(() => {});
     }
   }
 }
