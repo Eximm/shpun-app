@@ -135,7 +135,6 @@ async function fetchText(
   opts: { timeoutMs: number; username?: string; password?: string; token?: string } = { timeoutMs: DEFAULT_TIMEOUT_MS },
 ): Promise<{ ok: boolean; status: number; text: string; latencyMs: number }> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), opts.timeoutMs);
   const started = Date.now();
   const headers: Record<string, string> = {};
   if (opts.username) {
@@ -143,12 +142,27 @@ async function fetchText(
   } else if (opts.token) {
     headers.Authorization = `Bearer ${opts.token}`;
   }
-  try {
+  const request = (async () => {
     const res = await fetch(url, { signal: controller.signal, headers });
     const text = await res.text();
     return { ok: res.ok, status: res.status, text, latencyMs: Date.now() - started };
+  })();
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      const error = new Error("timeout");
+      error.name = "AbortError";
+      reject(error);
+    }, Math.max(1, opts.timeoutMs));
+  });
+  try {
+    // The explicit race is intentional: some stalled HTTP streams have not
+    // settled promptly after AbortController.abort(), which used to freeze the
+    // entire collector behind one server forever.
+    return await Promise.race([request, deadline]);
   } finally {
-    clearTimeout(timer);
+    if (timer) clearTimeout(timer);
   }
 }
 
@@ -214,9 +228,16 @@ function emptyResult(row: MonitoredServerRow): ServerCheckResult {
 function currentToCheck(row: MonitoredServerRow, rec: CurrentRecord | null): ServerCheckResult {
   const base = emptyResult(row);
   if (!rec) return base;
+  const thresholds = resolveThresholds(row.thresholds_json);
+  const ageSec = rec.lastAttemptAt == null ? Number.POSITIVE_INFINITY : Math.max(0, Math.floor(Date.now() / 1000) - rec.lastAttemptAt);
+  const exporterEnabled = Number(row.node_exporter_enabled) === 1 && Boolean(row.exporter_url);
+  const collectorStale = exporterEnabled && ageSec >= thresholds.staleScrapeWarnSec;
   return {
     ...base,
-    online: rec.online,
+    // A persisted green result is not proof of current availability. If the
+    // collector itself stops, expose an unknown/stale state instead of keeping
+    // every server green indefinitely.
+    online: collectorStale ? null : rec.online,
     latencyMs: rec.nodeExporterLatencyMs,
     uptime: fmtUptime(rec.systemUptimeSec),
     uptimeSeconds: rec.systemUptimeSec,
@@ -242,11 +263,11 @@ function currentToCheck(row: MonitoredServerRow, rec: CurrentRecord | null): Ser
     fileDescriptors: rec.fileDescriptors,
     sockets: rec.sockets,
     rebootDetected: rec.rebootDetected,
-    exporterStatus: rec.nodeExporterStatus === "disabled" ? "disabled" : rec.nodeExporterStatus === "ok" ? "ok" : "error",
-    lastError: rec.lastErrorCode,
+    exporterStatus: collectorStale ? "error" : rec.nodeExporterStatus === "disabled" ? "disabled" : rec.nodeExporterStatus === "ok" ? "ok" : "error",
+    lastError: collectorStale ? "collector_stale" : rec.lastErrorCode,
     checkedAt: rec.checkedAt,
-    state: rec.state,
-    stale: rec.stale,
+    state: collectorStale ? "stale" : rec.state,
+    stale: collectorStale || rec.stale,
     consecutiveFailures: rec.consecutiveFailures,
     lastAttemptAt: rec.lastAttemptAt,
     lastSuccessAt: rec.lastSuccessAt,
@@ -781,9 +802,13 @@ export function getServerStatusSnapshot(rows: MonitoredServerRow[]) {
 export function getCollectorObservability() {
   const persisted = getCollectorState();
   const lease = collectorLeaseOwner();
+  const inFlight = Boolean(refreshInFlight);
+  const stuckAfterMs = Math.max(30_000, currentIntervalMs() * 2);
+  const collectorStuck = inFlight && lastRefreshStartedAt > 0 && Date.now() - lastRefreshStartedAt > stuckAfterMs;
   return {
     ...persisted,
-    collectorRunning: Boolean(refreshInFlight),
+    collectorRunning: inFlight && !collectorStuck,
+    collectorStuck,
     leaseOwner: lease?.owner ?? null,
     leaseExpiresAt: lease?.expires_at ?? null,
   };

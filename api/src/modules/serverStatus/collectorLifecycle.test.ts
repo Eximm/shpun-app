@@ -154,8 +154,9 @@ test("a manually seeded current row is served without any cycle", () => {
   assert.equal(created.ok, true);
   const id = created.ok ? created.item.id : 0;
 
+  const nowSec = Math.floor(Date.now() / 1000);
   upsertCurrent({
-    serverId: id, updatedAt: 1, lastAttemptAt: 1, lastSuccessAt: 1, state: "fresh", online: true, stale: false,
+    serverId: id, updatedAt: nowSec, lastAttemptAt: nowSec, lastSuccessAt: nowSec, state: "fresh", online: true, stale: false,
     consecutiveFailures: 0, lastErrorCode: null, cpuPct: 42, iowaitPct: null, load1: 0.1, load5: null, load15: null,
     cpuCores: 4, memoryUsedPct: 33, memoryTotalBytes: null, memoryAvailableBytes: null, swapUsedPct: 0,
     diskUsedPct: 12, diskFreeBytes: null, inodeUsedPct: null, rxBps: null, txBps: null, uplinkUsedPct: null,
@@ -170,6 +171,31 @@ test("a manually seeded current row is served without any cycle", () => {
   assert.equal(check.memoryLoadPct, 33);
   assert.equal(check.swapLoadPct, 0);
   assert.equal(check.state, "fresh");
+});
+
+test("an old persisted green result becomes stale instead of staying healthy forever", () => {
+  const created = createMonitoredServer({ title: "Stopped Collector", host: "stopped.example", kind: "gateway" });
+  assert.equal(created.ok, true);
+  const id = created.ok ? created.item.id : 0;
+  const old = Math.floor(Date.now() / 1000) - 3600;
+
+  upsertCurrent({
+    serverId: id, updatedAt: old, lastAttemptAt: old, lastSuccessAt: old, state: "fresh", online: true, stale: false,
+    consecutiveFailures: 0, lastErrorCode: null, cpuPct: 12, iowaitPct: null, load1: 0.1, load5: null, load15: null,
+    cpuCores: 2, memoryUsedPct: 30, memoryTotalBytes: null, memoryAvailableBytes: null, swapUsedPct: 0,
+    diskUsedPct: 20, diskFreeBytes: null, inodeUsedPct: null, rxBps: null, txBps: null, uplinkUsedPct: null,
+    uplinkCapacityBps: null, uplinkCapacitySource: "unknown",
+    rxDropsDelta: null, txDropsDelta: null, rxErrorsDelta: null, txErrorsDelta: null, systemUptimeSec: 100,
+    rebootDetected: false, nodeExporterStatus: "ok", nodeExporterLatencyMs: 10, remnawaveStatus: "disabled",
+    onlineUsers: null, fileDescriptors: null, sockets: null, source: "node_exporter", checkedAt: new Date(old * 1000).toISOString(),
+  });
+
+  const check = getServerStatusSnapshot([getMonitoredServer(id)!])[0];
+  assert.equal(check.online, null);
+  assert.equal(check.state, "stale");
+  assert.equal(check.stale, true);
+  assert.equal(check.exporterStatus, "error");
+  assert.equal(check.lastError, "collector_stale");
 });
 
 test("transient failure keeps last-known metrics; confirmed offline after threshold", async () => {
