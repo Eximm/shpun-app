@@ -144,6 +144,10 @@ export type TicketMessage = {
   text: string;
   isInternalNote: boolean;
   createdAt: string;
+  /** Soft-delete audit: set when an admin/support removes the message. */
+  deletedAt: string | null;
+  deletedBy: number | null;
+  deletedByName: string | null;
   attachments?: SupportAttachment[];
 };
 

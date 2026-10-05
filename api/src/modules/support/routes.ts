@@ -198,6 +198,13 @@ export async function supportRoutes(app: FastifyInstance) {
       const isAdmin = isOwner ? true : await isSupportAdmin(session?.shmSessionId);
       if (!isOwner && !isAdmin) return reply.code(403).send({ ok: false, error: "forbidden" });
 
+      // A soft-deleted message hides its attachments from every caller (the file
+      // itself is kept for retention/audit, but is no longer addressable).
+      const message = getTicketRepository().getMessage(attachment.messageId);
+      if (message?.deletedAt) {
+        return reply.code(404).send({ ok: false, error: "attachment_not_found" });
+      }
+
       if (attachment.deletedAt) {
         return reply.code(410).send({
           ok: false,

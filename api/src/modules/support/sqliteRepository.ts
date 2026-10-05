@@ -205,6 +205,10 @@ export function ensureSupportSchema(): void {
   linkDb.exec(BASE_SCHEMA);
   // Phase B: migrations (explicit column checks — never rely on try/catch).
   ensureColumn("support_tickets", "kind", "kind TEXT NOT NULL DEFAULT 'support'");
+  // Soft-delete audit trail for messages (never hard-delete a message row).
+  ensureColumn("support_ticket_messages", "deleted_at", "deleted_at TEXT");
+  ensureColumn("support_ticket_messages", "deleted_by", "deleted_by INTEGER");
+  ensureColumn("support_ticket_messages", "deleted_by_name", "deleted_by_name TEXT");
   // Phase B.2: keep public_no counters ahead of existing rows.
   reconcileTicketCounters();
   // Phase C: indexes that reference migrated columns.
@@ -257,6 +261,9 @@ type MessageRow = {
   text: string;
   is_internal_note: number;
   created_at: string;
+  deleted_at: string | null;
+  deleted_by: number | null;
+  deleted_by_name: string | null;
 };
 
 type CategoryRow = {
@@ -328,6 +335,9 @@ function mapMessage(row: MessageRow): TicketMessage {
     text: String(row.text),
     isInternalNote: Number(row.is_internal_note) === 1,
     createdAt: String(row.created_at),
+    deletedAt: row.deleted_at ?? null,
+    deletedBy: toNullableNumber(row.deleted_by),
+    deletedByName: row.deleted_by_name ?? null,
   };
 }
 
@@ -577,6 +587,28 @@ export class SqliteTicketRepository implements TicketRepository {
     if (!Number.isFinite(n) || n <= 0) return false;
     const info = linkDb.prepare(`DELETE FROM support_ticket_messages WHERE id = ?`).run(n);
     return Number(info.changes) > 0;
+  }
+
+  getMessage(id: number): TicketMessage | null {
+    const n = Math.trunc(Number(id));
+    if (!Number.isFinite(n) || n <= 0) return null;
+    const row = linkDb.prepare(`SELECT * FROM support_ticket_messages WHERE id = ?`).get(n) as MessageRow | undefined;
+    return row ? mapMessage(row) : null;
+  }
+
+  softDeleteMessage(id: number, deletedBy: number | null, deletedByName: string | null): TicketMessage | null {
+    const n = Math.trunc(Number(id));
+    if (!Number.isFinite(n) || n <= 0) return null;
+    // Idempotent: a second delete keeps the original audit trail.
+    linkDb.prepare(`
+      UPDATE support_ticket_messages
+      SET deleted_at = COALESCE(deleted_at, datetime('now')),
+          deleted_by = COALESCE(deleted_by, ?),
+          deleted_by_name = COALESCE(deleted_by_name, ?)
+      WHERE id = ? AND deleted_at IS NULL
+    `).run(deletedBy ?? null, deletedByName ?? null, n);
+    const row = linkDb.prepare(`SELECT * FROM support_ticket_messages WHERE id = ?`).get(n) as MessageRow | undefined;
+    return row ? mapMessage(row) : null;
   }
 
   listMessages(ticketId: number, options?: LoadMessagesOptions): TicketMessage[] {

@@ -35,6 +35,8 @@ export interface TicketRepository {
   addMessage(input: AddMessageInput): TicketMessage;
   addInternalNote(input: AddMessageInput): TicketMessage;
   listMessages(ticketId: number, options?: LoadMessagesOptions): TicketMessage[];
+  getMessage(id: number): TicketMessage | null;
+  softDeleteMessage(id: number, deletedBy: number | null, deletedByName: string | null): TicketMessage | null;
   deleteMessage(id: number): boolean;
 
   updateTicket(id: number, patch: TicketPatch): Ticket | null;

@@ -21,6 +21,7 @@ import {
 import { isTicketKind, isTicketPriority, isTicketStatus, type TicketPriority, type TicketStatus } from "./types.js";
 import {
   addStaffMessage,
+  deleteMessageByAdmin,
   getAdminTicket,
   listAdminTickets,
   listCategories,
@@ -181,6 +182,22 @@ export async function supportAdminRoutes(app: FastifyInstance) {
       });
       if (admin?.userId && !internal) markSupportTicketRead(admin.userId, ticket.id);
       return reply.code(201).send({ ok: true, ticket });
+    } catch (error) {
+      return sendSupportError(reply, error);
+    }
+  });
+
+  app.delete("/admin/support/messages/:messageId", async (req, reply) => {
+    try {
+      const session = await requireAdmin(req, reply);
+      if (!session) return;
+
+      const admin = sessionUser(session);
+      const ticket = deleteMessageByAdmin(
+        Number((req.params as any)?.messageId),
+        { id: admin?.userId ?? null, name: admin?.displayName ?? admin?.login ?? null },
+      );
+      return reply.send({ ok: true, ticket });
     } catch (error) {
       return sendSupportError(reply, error);
     }

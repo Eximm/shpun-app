@@ -634,3 +634,81 @@ test("partnership proposal validation returns a domain error", async () => {
   assert.equal(response.statusCode, 400);
   assert.equal(response.json().error, "invalid_offer");
 });
+
+/* ─── Message soft delete ───────────────────────────────────────────────── */
+
+test("admin soft-deletes a message; user hides it; admin sees an audit placeholder", async () => {
+  const { addUserMessageWithAttachments } = await import("./service.js");
+  const created = await createUserTicket("sid-user-201");
+  const ticketId = created.json().ticket.id;
+
+  const withFile = addUserMessageWithAttachments(ticketId, 201, "Сообщение с файлом", [
+    { filename: "photo.png", mimetype: "image/png", buffer: pngBuffer() },
+  ]);
+  const message = withFile.messages[withFile.messages.length - 1];
+  const attachment = (message.attachments ?? [])[0];
+  assert.ok(attachment, "expected a stored attachment");
+
+  const del = await app.inject({
+    method: "DELETE",
+    url: `/api/admin/support/messages/${message.id}`,
+    headers: userHeaders("sid-admin"),
+  });
+  assert.equal(del.statusCode, 200);
+  const adminMsg = del.json().ticket.messages.find((m: any) => m.id === message.id);
+  assert.ok(adminMsg, "admin still sees the row for audit");
+  assert.ok(adminMsg.deletedAt, "deleted_at is set");
+  assert.equal(adminMsg.deletedBy, 900);
+  assert.equal(adminMsg.text, "", "admin never receives the deleted body");
+  assert.deepEqual(adminMsg.attachments, [], "admin never receives deleted attachments");
+
+  const userView = await app.inject({
+    method: "GET",
+    url: `/api/support/tickets/${ticketId}`,
+    headers: userHeaders("sid-user-201"),
+  });
+  assert.ok(userView.json().ticket.messages.every((m: any) => m.id !== message.id), "deleted message hidden from user");
+
+  // Attachment is no longer addressable by anyone.
+  const att = await app.inject({
+    method: "GET",
+    url: `/api/support/attachments/${attachment.id}`,
+    headers: userHeaders("sid-user-201"),
+  });
+  assert.equal(att.statusCode, 404);
+
+  // Repeat delete is idempotent and keeps the audit trail.
+  const again = await app.inject({
+    method: "DELETE",
+    url: `/api/admin/support/messages/${message.id}`,
+    headers: userHeaders("sid-admin"),
+  });
+  assert.equal(again.statusCode, 200);
+  const againMsg = again.json().ticket.messages.find((m: any) => m.id === message.id);
+  assert.equal(againMsg.deletedAt, adminMsg.deletedAt);
+});
+
+test("message delete is admin-only and unknown messages are rejected", async () => {
+  const created = await createUserTicket("sid-user-201");
+  const ticketId = created.json().ticket.id;
+  const ticket = await app.inject({
+    method: "GET",
+    url: `/api/support/tickets/${ticketId}`,
+    headers: userHeaders("sid-user-201"),
+  });
+  const msg = ticket.json().ticket.messages[0];
+
+  const forbidden = await app.inject({
+    method: "DELETE",
+    url: `/api/admin/support/messages/${msg.id}`,
+    headers: userHeaders("sid-user-201"),
+  });
+  assert.equal(forbidden.statusCode, 403);
+
+  const missing = await app.inject({
+    method: "DELETE",
+    url: "/api/admin/support/messages/999999",
+    headers: userHeaders("sid-admin"),
+  });
+  assert.equal(missing.statusCode, 404);
+});

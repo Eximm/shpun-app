@@ -18,6 +18,7 @@ import {
 import { AttachmentList, PendingFiles } from "../../shared/support/AttachmentViews";
 import { useAttachmentComposer, type AttachmentAddError } from "../../shared/support/useAttachmentComposer";
 import { AdminFilterBar, AdminSectionHeader, ModalShell, PartnershipTabIcon, SupportTabIcon, UnreadMarker, ADMIN_SECTION_ICON } from "./shared";
+import { ActionMenu } from "./ActionMenu";
 import { ticketStatusLabel, TICKET_STATUSES } from "../../shared/support/ticketLabels";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -61,6 +62,9 @@ type TicketMessage = {
   text: string;
   isInternalNote: boolean;
   createdAt: string;
+  deletedAt?: string | null;
+  deletedBy?: number | null;
+  deletedByName?: string | null;
   attachments?: TicketAttachment[];
 };
 
@@ -290,10 +294,51 @@ function CopyTextButton({ text, label }: { text: string; label?: string }) {
 
 /* ─── Message bubble ─────────────────────────────────────────────────────── */
 
-function MessageBubble({ message }: { message: TicketMessage }) {
+function MessageBubble({ message, onDelete }: { message: TicketMessage; onDelete?: (message: TicketMessage) => void }) {
   const { t, formatDate } = useI18n();
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+
+  // Soft-deleted message: compact audit placeholder, never the original body.
+  if (message.deletedAt) {
+    return (
+      <div className="supportMsg supportMsg--deleted">
+        <div className="supportMsg__meta">
+          <strong>{t("support.admin.message_deleted")}</strong>
+          {message.deletedByName ? <span>· {t("support.admin.deleted_by", { name: message.deletedByName })}</span> : null}
+          <span className="supportMsg__time">{formatClock(message.deletedAt, formatDate)}</span>
+        </div>
+      </div>
+    );
+  }
+
   const isUser = message.authorType === "user";
   const isSystem = message.authorType === "system";
+
+  const menu = onDelete ? (
+    <ActionMenu
+      anchorEl={menuAnchor}
+      open={Boolean(menuAnchor)}
+      onClose={() => setMenuAnchor(null)}
+      items={[{ label: t("support.admin.action.delete_message"), danger: true, onClick: () => onDelete(message) }]}
+    />
+  ) : null;
+
+  const actions = (isUser && message.text.trim()) || onDelete ? (
+    <div className="supportMsg__actions">
+      {isUser && message.text.trim() ? <CopyTextButton text={message.text} /> : null}
+      {onDelete ? (
+        <button
+          type="button"
+          className="supportMsg__menuBtn"
+          aria-haspopup="menu"
+          aria-label={t("support.admin.message_actions")}
+          onClick={(e) => setMenuAnchor(e.currentTarget)}
+        >
+          {"\u22EE"}
+        </button>
+      ) : null}
+    </div>
+  ) : null;
 
   if (message.isInternalNote) {
     return (
@@ -305,6 +350,8 @@ function MessageBubble({ message }: { message: TicketMessage }) {
         </div>
         {message.text ? <div className="supportMsg__text">{message.text}</div> : null}
         <AttachmentList attachments={message.attachments} />
+        {actions}
+        {menu}
       </div>
     );
   }
@@ -320,11 +367,8 @@ function MessageBubble({ message }: { message: TicketMessage }) {
       </div>
       {message.text ? <div className="supportMsg__text">{message.text}</div> : null}
       <AttachmentList attachments={message.attachments} />
-      {isUser && message.text.trim() ? (
-        <div className="supportMsg__actions">
-          <CopyTextButton text={message.text} />
-        </div>
-      ) : null}
+      {actions}
+      {menu}
     </div>
   );
 }
@@ -489,6 +533,7 @@ export function SupportSection({
   const [sending, setSending] = useState(false);
   const [patching, setPatching] = useState(false);
   const [assigneeDraft, setAssigneeDraft] = useState("");
+  const [hasNewBelow, setHasNewBelow] = useState(false);
 
   // Synchronous locks prevent double-submit before React re-renders.
   const sendLock = useRef(false);
@@ -500,6 +545,10 @@ export function SupportSection({
   const modalContentRef = useRef<HTMLDivElement | null>(null);
   const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // Polling / scroll bookkeeping (merge by id, never resurrect deleted messages).
+  const prevCountRef = useRef(0);
+  const prevTicketIdRef = useRef<number | null>(null);
+  const nearBottomRef = useRef(true);
 
   const categoryTitles = useMemo(() => {
     const map = new Map<string, string>();
@@ -544,8 +593,41 @@ export function SupportSection({
   // Keep the conversation scrolled to the latest message.
   useEffect(() => {
     const el = modalContentRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    const onScroll = () => {
+      const near = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+      nearBottomRef.current = near;
+      if (near) setHasNewBelow(false);
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [opened?.id]);
+
+  // Auto-scroll only when the reader is already at the bottom. Otherwise show
+  // the "new message" affordance instead of yanking them away from history.
+  useEffect(() => {
+    const el = modalContentRef.current;
+    if (!el || !opened) return;
+    const count = opened.messages?.length ?? 0;
+    const sameTicket = prevTicketIdRef.current === opened.id;
+    const grew = sameTicket && count > prevCountRef.current;
+    prevTicketIdRef.current = opened.id;
+    prevCountRef.current = count;
+    if (!grew || nearBottomRef.current) {
+      el.scrollTop = el.scrollHeight;
+      nearBottomRef.current = true;
+      setHasNewBelow(false);
+    } else {
+      setHasNewBelow(true);
+    }
   }, [opened?.id, opened?.messages?.length]);
+
+  function scrollToNewest() {
+    const el = modalContentRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+    nearBottomRef.current = true;
+    setHasNewBelow(false);
+  }
 
   // Auto-grow the composer up to the CSS max-height, then scroll internally.
   // The scroll anchor is preserved so typing in a long message never jumps
@@ -560,6 +642,38 @@ export function SupportSection({
     el.style.height = `${Math.min(el.scrollHeight, cap)}px`;
     el.scrollTop = el.scrollHeight - el.clientHeight - fromBottom;
   }, [composerText, composerMode, opened?.id]);
+
+  // Background polling: the ticket list refreshes periodically, and the open
+  // ticket polls more often. Both pause while the tab is hidden.
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (!document.hidden) void loadTickets({ silent: true });
+    }, 12000);
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind, filters]);
+
+  useEffect(() => {
+    const openedId = opened?.id ?? null;
+    const timer = openedId
+      ? window.setInterval(() => {
+          if (!document.hidden) void loadOpenedSilently(openedId);
+        }, 4000)
+      : null;
+    const onFocus = () => {
+      if (openedId) void loadOpenedSilently(openedId);
+      void loadTickets({ silent: true });
+    };
+    const onVisibility = () => { if (!document.hidden) onFocus(); };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      if (timer) window.clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [opened?.id, kind, filters]);
 
   async function loadCategories() {
     try {
@@ -590,6 +704,44 @@ export function SupportSection({
     }
   }
 
+  // Merge by canonical message id: union of local+incoming, and a deleted
+  // message is never resurrected by a stale polling response.
+  function mergeMessages(local: TicketMessage[], incoming: TicketMessage[]): TicketMessage[] {
+    const map = new Map<number, TicketMessage>();
+    for (const m of local) map.set(m.id, m);
+    for (const m of incoming) {
+      const prev = map.get(m.id);
+      if (prev?.deletedAt && !m.deletedAt) continue;
+      map.set(m.id, m);
+    }
+    return Array.from(map.values()).sort((a, b) => a.id - b.id);
+  }
+
+  function mergeTicket(prev: AdminTicket, next: AdminTicket): AdminTicket {
+    if (prev.id !== next.id) return next;
+    return { ...next, messages: mergeMessages(prev.messages ?? [], next.messages ?? []) };
+  }
+
+  function applyTicketUpdate(next: AdminTicket) {
+    setOpened((prev) => (prev && prev.id === next.id ? mergeTicket(prev, next) : next));
+  }
+
+  async function loadOpenedSilently(id: number) {
+    try {
+      const response = await apiFetch<{ ok: true; ticket: AdminTicket }>(`/admin/support/tickets/${id}`, { method: "GET" });
+      if (openedIdRef.current !== id) return;
+      applyTicketUpdate(response.ticket);
+    } catch {
+      // Background refresh failed: keep the current view, retry on next tick.
+    }
+  }
+
+  function refreshAll() {
+    void loadTickets({ silent: true });
+    const id = openedIdRef.current;
+    if (id) void loadOpenedSilently(id);
+  }
+
   async function openTicket(id: number) {
     setOpenedLoading(true);
     setOpenedError("");
@@ -600,7 +752,7 @@ export function SupportSection({
         `/admin/support/tickets/${id}`,
         { method: "GET" },
       );
-      setOpened(response.ticket);
+      applyTicketUpdate(response.ticket);
       setComposerText("");
       // Clear the local unread marker and refresh the badge. The backend
       // already marked the ticket read when it served the detail request.
@@ -645,7 +797,7 @@ export function SupportSection({
         { method: "POST", body },
       );
       if (openedIdRef.current !== ticketId) return;
-      setOpened(response.ticket);
+      applyTicketUpdate(response.ticket);
       attach.clearPending();
       setAttachError(null);
       setComposerText("");
@@ -693,7 +845,7 @@ export function SupportSection({
         { method: "PATCH", body: patch },
       );
       if (openedIdRef.current !== ticketId) return;
-      setOpened(response.ticket);
+      applyTicketUpdate(response.ticket);
       setNotice(t("support.admin.updated"));
       void loadTickets({ silent: true });
     } catch (error) {
@@ -703,6 +855,28 @@ export function SupportSection({
     } finally {
       patchLock.current = false;
       setPatching(false);
+    }
+  }
+
+  async function deleteMessage(message: TicketMessage) {
+    if (!opened) return;
+    if (!window.confirm(t("support.admin.confirm_delete_message"))) return;
+    const ticketId = opened.id;
+    setOpenedError("");
+    setNotice("");
+    try {
+      const response = await apiFetch<{ ok: true; ticket: AdminTicket }>(
+        `/admin/support/messages/${message.id}`,
+        { method: "DELETE" },
+      );
+      if (openedIdRef.current !== ticketId) return;
+      applyTicketUpdate(response.ticket);
+      setNotice(t("support.admin.message_deleted"));
+      void loadTickets({ silent: true });
+    } catch (error) {
+      if (openedIdRef.current === ticketId) {
+        setOpenedError(errorMessage(error, t("support.admin.delete_failed")));
+      }
     }
   }
 
@@ -732,7 +906,7 @@ export function SupportSection({
             ? t("support.admin.partnership_subtitle")
             : t("support.admin.subtitle")}
           actions={
-            <button className="btn btn--soft" type="button" onClick={() => void loadTickets()} disabled={loading}>
+            <button className="btn btn--soft" type="button" onClick={refreshAll} disabled={loading}>
               {loading ? t("common.refreshing") : t("common.refresh")}
             </button>
           }
@@ -965,9 +1139,14 @@ export function SupportSection({
             {messages.length === 0 ? (
               <div className="supportDetail__empty">{t("support.no_messages")}</div>
             ) : (
-              messages.map((message) => <MessageBubble key={message.id} message={message} />)
+              messages.map((message) => <MessageBubble key={message.id} message={message} onDelete={deleteMessage} />)
             )}
           </div>
+          {hasNewBelow ? (
+            <button className="supportNewBelow" type="button" onClick={scrollToNewest}>
+              {t("support.admin.new_message")} ↓
+            </button>
+          ) : null}
 
           {/* Pinned composer */}
           <div className="supportDetail__composer">

@@ -260,7 +260,9 @@ export function getUserTicket(
   const ticket = repo.getTicket(ticketId);
   if (!ticket || ticket.userId !== requireUserId(userId)) return null;
 
-  const messages = enrichMessagesWithAttachments(repo.listMessages(ticket.id, { includeInternalNotes: false }));
+  const messages = enrichMessagesWithAttachments(repo.listMessages(ticket.id, { includeInternalNotes: false }))
+    // User-facing API never exposes a deleted message (or its attachments).
+    .filter((m) => !m.deletedAt);
   return { ...ticket, messages };
 }
 
@@ -356,8 +358,32 @@ export function getAdminTicket(
   const repo = deps.repo ?? getTicketRepository();
   const ticket = repo.getTicket(ticketId);
   if (!ticket) return null;
-  const messages = enrichMessagesWithAttachments(repo.listMessages(ticket.id, { includeInternalNotes: true }));
+  const messages = enrichMessagesWithAttachments(repo.listMessages(ticket.id, { includeInternalNotes: true }))
+    // Admin sees a placeholder (audit trail) but never the original body/attachments.
+    .map((m) => (m.deletedAt ? { ...m, text: "", attachments: [] } : m));
   return { ...ticket, messages };
+}
+
+/**
+ * Admin-only soft delete of a message. Never hard-deletes: the row keeps its
+ * id/deleted_at/deleted_by audit trail, and the ticket stays intact.
+ */
+export function deleteMessageByAdmin(
+  messageId: number,
+  operator: { id: number | null; name: string | null },
+  deps: SupportServiceDeps = {}
+): TicketWithMessages {
+  const repo = deps.repo ?? getTicketRepository();
+  const message = repo.getMessage(Math.trunc(Number(messageId)));
+  if (!message) throw new SupportError("message_not_found", 404);
+  const ticket = repo.getTicket(message.ticketId);
+  if (!ticket) throw new SupportError("ticket_not_found", 404);
+
+  repo.softDeleteMessage(message.id, operator.id, operator.name);
+
+  const updated = getAdminTicket(ticket.id, deps);
+  if (!updated) throw new SupportError("ticket_not_found", 404);
+  return updated;
 }
 
 export function addStaffMessage(
