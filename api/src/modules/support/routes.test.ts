@@ -712,3 +712,70 @@ test("message delete is admin-only and unknown messages are rejected", async () 
   });
   assert.equal(missing.statusCode, 404);
 });
+
+/* ─── User-centric history ──────────────────────────────────────────────── */
+
+test("user history aggregates all tickets, compensations, notes and timeline", async () => {
+  const { getTicketRepository } = await import("./repository.js");
+  const repo = getTicketRepository();
+
+  // Same user, different services (Germany / Moscow / Germany again).
+  const a = repo.createTicket({ userId: 777, source: "app", categoryKey: "connection", subject: "Germany down", status: "closed", serviceId: 11, serviceSnapshot: { user_service_id: 911, service_id: 11, name: "Germany", status: "ACTIVE" } });
+  const b = repo.createTicket({ userId: 777, source: "app", categoryKey: "connection", subject: "Moscow slow", status: "closed", serviceId: 22, serviceSnapshot: { user_service_id: 922, service_id: 22, name: "Moscow", status: "ACTIVE" } });
+  const c = repo.createTicket({ userId: 777, source: "app", categoryKey: "connection", subject: "Germany again", status: "open", serviceId: 11, serviceSnapshot: { user_service_id: 911, service_id: 11, name: "Germany", status: "ACTIVE" } });
+  repo.addMessage({ ticketId: c.id, authorType: "user", text: "Germany снова не работает" });
+
+  await app.inject({ method: "POST", url: "/api/admin/support/users/777/compensations", headers: userHeaders("sid-admin"), payload: { ticketId: a.id, serviceId: 11, serviceTitle: "Germany", kind: "days", amountDays: 14, description: "+14 дней" } });
+  await app.inject({ method: "POST", url: "/api/admin/support/users/777/compensations", headers: userHeaders("sid-admin"), payload: { ticketId: b.id, serviceId: 22, serviceTitle: "Moscow", kind: "days", amountDays: 7, description: "+7 дней" } });
+  await app.inject({ method: "POST", url: "/api/admin/support/users/777/notes", headers: userHeaders("sid-admin"), payload: { text: "Germany уже компенсирована 18.09.2026." } });
+
+  const res = await app.inject({ method: "GET", url: "/api/admin/support/users/777/history", headers: userHeaders("sid-admin") });
+  assert.equal(res.statusCode, 200);
+  const history = res.json().history;
+
+  assert.equal(history.summary.ticketsTotal, 3, "all past tickets are visible");
+  assert.equal(history.summary.ticketsOpen, 1);
+  assert.equal(history.summary.compensationsTotal, 2);
+  assert.equal(history.summary.notesTotal, 1);
+  assert.ok(history.tickets.some((t: any) => t.id === a.id), "ticket A visible from ticket C");
+  assert.ok(history.tickets.some((t: any) => t.id === b.id), "ticket B (other service) visible");
+  assert.ok(history.tickets.every((t: any) => t.userId === 777), "history is scoped by stable user id");
+  assert.equal(history.compensations.length, 2);
+  assert.ok(history.notes.some((n: any) => n.text.includes("Germany")));
+  assert.ok(history.timeline.some((e: any) => e.kind === "ticket"));
+  assert.ok(history.timeline.some((e: any) => e.kind === "compensation"));
+  assert.ok(history.timeline.some((e: any) => e.kind === "note"));
+});
+
+test("user history is admin-only and never leaks via the public ticket API", async () => {
+  const history = await app.inject({ method: "GET", url: "/api/admin/support/users/777/history", headers: userHeaders("sid-user-201") });
+  assert.equal(history.statusCode, 403);
+
+  const note = await app.inject({ method: "POST", url: "/api/admin/support/users/777/notes", headers: userHeaders("sid-user-201"), payload: { text: "nope" } });
+  assert.equal(note.statusCode, 403);
+
+  const comp = await app.inject({ method: "POST", url: "/api/admin/support/users/777/compensations", headers: userHeaders("sid-user-201"), payload: { description: "nope" } });
+  assert.equal(comp.statusCode, 403);
+
+  // A normal user's own ticket payload carries no internal history fields.
+  const created = await createUserTicket("sid-user-201");
+  const own = await app.inject({ method: "GET", url: `/api/support/tickets/${created.json().ticket.id}`, headers: userHeaders("sid-user-201") });
+  const body = own.json().ticket;
+  assert.equal(body.compensations, undefined);
+  assert.equal(body.notes, undefined);
+  assert.equal(body.history, undefined);
+});
+
+test("user history isolates different users by shm user id", async () => {
+  const { getTicketRepository } = await import("./repository.js");
+  const repo = getTicketRepository();
+  const other = repo.createTicket({ userId: 888, source: "app", categoryKey: "connection", subject: "Other user", status: "open" });
+
+  const res = await app.inject({ method: "GET", url: "/api/admin/support/users/888/history", headers: userHeaders("sid-admin") });
+  const history = res.json().history;
+  assert.equal(history.summary.ticketsTotal, 1);
+  assert.equal(history.tickets[0].id, other.id);
+
+  const foreign = await app.inject({ method: "GET", url: "/api/admin/support/users/777/history", headers: userHeaders("sid-admin") });
+  assert.ok(foreign.json().history.tickets.every((t: any) => t.id !== other.id), "other user's ticket is not in the history");
+});

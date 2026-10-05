@@ -8621,6 +8621,44 @@ button.reviews-star:not(:disabled) {
   background: rgba(8,12,22,0.92); color: #bde8ff; font-size: 12px; font-weight: 900; cursor: pointer;
 }
 .supportNewBelow:hover { border-color: rgba(77,215,255,0.5); }
+
+/* User-centric support history */
+.supportUserSummary {
+  display: flex; flex-direction: column; gap: 8px; margin-top: 12px; padding: 12px 14px;
+  border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; background: rgba(255,255,255,0.02);
+}
+.supportUserSummary__stats, .supportHistory__stats {
+  display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 12px; font-weight: 800; color: rgba(255,255,255,0.72);
+}
+.supportUserSummary__warn {
+  padding: 8px 12px; border-radius: 10px; font-size: 12px; font-weight: 800;
+  border: 1px solid rgba(255,190,90,0.35); background: rgba(255,190,90,0.08); color: #ffd79a;
+}
+.supportUserSummary__warn--strong {
+  border-color: rgba(255,120,120,0.4); background: rgba(255,120,120,0.1); color: #ffb3b3;
+}
+.supportUserSummary .btn { align-self: flex-start; }
+.supportHistory { display: flex; flex-direction: column; gap: 14px; }
+.supportHistory__summary {
+  display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02);
+}
+.supportHistory__user { font-size: 14px; font-weight: 900; color: #e8f4ff; }
+.supportHistory__section { display: flex; flex-direction: column; gap: 8px; }
+.supportHistory__title { font-size: 12px; font-weight: 900; letter-spacing: 0.04em; text-transform: uppercase; color: rgba(255,255,255,0.55); }
+.supportHistory__ticket, .supportHistory__comp, .supportHistory__note, .supportHistory__event {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.07); background: rgba(255,255,255,0.015);
+}
+.supportHistory__ticketMain { display: flex; flex-direction: column; gap: 3px; flex: 1 1 200px; min-width: 0; }
+.supportHistory__ticketTitle { font-size: 13px; font-weight: 900; color: #e8f4ff; }
+.supportHistory__meta { font-size: 11.5px; color: rgba(255,255,255,0.58); }
+.supportHistory__compMark { font-size: 13px; font-weight: 900; color: #9ef0c0; }
+.supportHistory__noteText { font-size: 13px; color: rgba(255,255,255,0.86); flex: 1 1 200px; min-width: 0; }
+.supportHistory__timeline { display: flex; flex-direction: column; gap: 6px; }
+.supportHistory__form {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin-top: 4px;
+}
 .supportMsg__copy {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 3px 9px; min-height: 26px;

@@ -18,6 +18,18 @@ import {
   notifyTicketUserMessage,
 } from "./notifications.js";
 import {
+  createCompensation,
+  createUserNote,
+  deleteUserNote,
+  listCompensations,
+  listUserHistoryTickets,
+  listUserNotes,
+  updateUserNote,
+  type SupportCompensation,
+  type SupportUserNote,
+  type UserHistoryTicket,
+} from "./historyRepo.js";
+import {
   isPartnershipType,
   isTicketPriority,
   isTicketStatus,
@@ -364,8 +376,7 @@ export function getAdminTicket(
   return { ...ticket, messages };
 }
 
-/**
- * Admin-only soft delete of a message. Never hard-deletes: the row keeps its
+/** Admin-only soft delete of a message. Never hard-deletes: the row keeps its
  * id/deleted_at/deleted_by audit trail, and the ticket stays intact.
  */
 export function deleteMessageByAdmin(
@@ -384,6 +395,148 @@ export function deleteMessageByAdmin(
   const updated = getAdminTicket(ticket.id, deps);
   if (!updated) throw new SupportError("ticket_not_found", 404);
   return updated;
+}
+
+/* ─── User-centric history (admin-only) ─────────────────────────────────── */
+
+const OPEN_TICKET_STATUSES = new Set<TicketStatus>(["open", "in_progress", "waiting_user", "waiting_staff"]);
+
+export type UserHistoryTimelineEvent =
+  | { kind: "ticket"; at: string; ticketId: number; publicNo: string; title: string | null; status: string; serviceTitle: string | null }
+  | { kind: "compensation"; at: string; compensationId: number; ticketId: number | null; serviceTitle: string | null; amountDays: number | null; amountMinor: number | null; currency: string | null; description: string }
+  | { kind: "note"; at: string; noteId: number; text: string; isPinned: boolean };
+
+export type UserHistory = {
+  user: { id: number; login: string | null; displayName: string | null; balance: number | null };
+  summary: {
+    ticketsTotal: number;
+    ticketsOpen: number;
+    compensationsTotal: number;
+    notesTotal: number;
+    lastTicketAt: string | null;
+  };
+  tickets: UserHistoryTicket[];
+  compensations: SupportCompensation[];
+  notes: SupportUserNote[];
+  timeline: UserHistoryTimelineEvent[];
+};
+
+/**
+ * One aggregate payload for the whole user, keyed by the stable support user
+ * id (ticket.user_id): tickets across every service, compensations, internal
+ * notes and a merged timeline. Never reachable from the public API.
+ */
+export function getUserHistory(userId: unknown): UserHistory {
+  const uid = requireUserId(userId);
+  const tickets = listUserHistoryTickets(uid);
+  const compensations = listCompensations(uid);
+  const notes = listUserNotes(uid);
+  const latest = tickets[0];
+
+  const timeline: UserHistoryTimelineEvent[] = [
+    ...tickets.map((t) => ({
+      kind: "ticket" as const,
+      at: t.createdAt,
+      ticketId: t.id,
+      publicNo: t.publicNo,
+      title: t.subject,
+      status: t.status,
+      serviceTitle: t.serviceTitle,
+    })),
+    ...compensations.map((c) => ({
+      kind: "compensation" as const,
+      at: c.createdAt,
+      compensationId: c.id,
+      ticketId: c.ticketId,
+      serviceTitle: c.serviceTitleSnapshot,
+      amountDays: c.amountDays,
+      amountMinor: c.amountMinor,
+      currency: c.currency,
+      description: c.description,
+    })),
+    ...notes.map((n) => ({
+      kind: "note" as const,
+      at: n.createdAt,
+      noteId: n.id,
+      text: n.text,
+      isPinned: n.isPinned,
+    })),
+  ].sort((a, b) => String(b.at).localeCompare(String(a.at)));
+
+  return {
+    user: {
+      id: uid,
+      login: latest?.userLoginSnapshot ?? null,
+      displayName: latest?.displayNameSnapshot ?? null,
+      balance: latest?.balanceSnapshot ?? null,
+    },
+    summary: {
+      ticketsTotal: tickets.length,
+      ticketsOpen: tickets.filter((t) => OPEN_TICKET_STATUSES.has(t.status as TicketStatus)).length,
+      compensationsTotal: compensations.length,
+      notesTotal: notes.length,
+      lastTicketAt: latest?.lastMessageAt ?? null,
+    },
+    tickets,
+    compensations,
+    notes,
+    timeline,
+  };
+}
+
+export function addCompensation(
+  input: {
+    userId: unknown;
+    ticketId?: unknown;
+    serviceId?: unknown;
+    serviceTitleSnapshot?: unknown;
+    kind?: unknown;
+    amountDays?: unknown;
+    amountMinor?: unknown;
+    currency?: unknown;
+    description: unknown;
+    reason?: unknown;
+    externalReference?: unknown;
+    createdBy?: number | null;
+  },
+): SupportCompensation {
+  const uid = requireUserId(input.userId as number);
+  const description = normalizeText(input.description, 1000);
+  if (!description) throw new SupportError("compensation_description_required", 400);
+  const kind = String(input.kind ?? "days").trim() || "days";
+  const toInt = (v: unknown) => (v == null || v === "" ? null : Math.trunc(Number(v)));
+  return createCompensation({
+    userId: uid,
+    ticketId: toInt(input.ticketId),
+    serviceId: toInt(input.serviceId),
+    serviceTitleSnapshot: input.serviceTitleSnapshot == null ? null : String(input.serviceTitleSnapshot),
+    kind,
+    amountDays: toInt(input.amountDays),
+    amountMinor: toInt(input.amountMinor),
+    currency: input.currency == null ? null : String(input.currency),
+    description,
+    reason: input.reason == null ? null : String(input.reason),
+    externalReference: input.externalReference == null ? null : String(input.externalReference),
+    createdBy: input.createdBy ?? null,
+  });
+}
+
+export function addUserNote(input: { userId: unknown; text: unknown; createdBy?: number | null; isPinned?: unknown }): SupportUserNote {
+  const uid = requireUserId(input.userId as number);
+  return createUserNote({
+    userId: uid,
+    text: String(input.text ?? ""),
+    createdBy: input.createdBy ?? null,
+    isPinned: input.isPinned === true || input.isPinned === 1 || input.isPinned === "1",
+  });
+}
+
+export function editUserNote(noteId: unknown, patch: { text?: unknown; isPinned?: unknown }): SupportUserNote | null {
+  return updateUserNote(noteId, patch);
+}
+
+export function removeUserNote(noteId: unknown): boolean {
+  return deleteUserNote(noteId);
 }
 
 export function addStaffMessage(

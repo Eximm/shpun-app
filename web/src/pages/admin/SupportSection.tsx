@@ -98,6 +98,64 @@ type AdminTicket = {
   messages?: TicketMessage[];
 };
 
+type HistoryTicket = {
+  id: number;
+  userId: number;
+  publicNo: string;
+  kind: string;
+  status: TicketStatus;
+  priority: TicketPriority;
+  categoryKey: string;
+  subject: string | null;
+  serviceId: number | null;
+  userServiceId: number | null;
+  serviceCategory: string | null;
+  serviceTitle: string | null;
+  createdAt: string;
+  updatedAt: string;
+  lastMessageAt: string;
+  closedAt: string | null;
+  messageCount: number;
+};
+
+type HistoryCompensation = {
+  id: number;
+  ticketId: number | null;
+  serviceId: number | null;
+  serviceTitleSnapshot: string | null;
+  kind: string;
+  amountDays: number | null;
+  amountMinor: number | null;
+  currency: string | null;
+  description: string;
+  reason: string | null;
+  createdBy: number | null;
+  createdAt: string;
+};
+
+type HistoryNote = {
+  id: number;
+  text: string;
+  createdBy: number | null;
+  createdAt: string;
+  updatedAt: string | null;
+  isPinned: boolean;
+};
+
+type HistoryTimelineEvent =
+  | { kind: "ticket"; at: string; ticketId: number; publicNo: string; title: string | null; status: string; serviceTitle: string | null }
+  | { kind: "compensation"; at: string; compensationId: number; ticketId: number | null; serviceTitle: string | null; amountDays: number | null; amountMinor: number | null; currency: string | null; description: string }
+  | { kind: "note"; at: string; noteId: number; text: string; isPinned: boolean };
+
+type UserHistory = {
+  user: { id: number; login: string | null; displayName: string | null; balance: number | null };
+  summary: { ticketsTotal: number; ticketsOpen: number; compensationsTotal: number; notesTotal: number; lastTicketAt: string | null };
+  tickets: HistoryTicket[];
+  compensations: HistoryCompensation[];
+  notes: HistoryNote[];
+  timeline: HistoryTimelineEvent[];
+};
+
 type SupportCategory = {
   key: string;
   title: string;
@@ -534,6 +592,14 @@ export function SupportSection({
   const [patching, setPatching] = useState(false);
   const [assigneeDraft, setAssigneeDraft] = useState("");
   const [hasNewBelow, setHasNewBelow] = useState(false);
+  const [userHistory, setUserHistory] = useState<UserHistory | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+  const [noteDraft, setNoteDraft] = useState("");
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [compDraft, setCompDraft] = useState({ days: "7", description: "" });
+  const [compSaving, setCompSaving] = useState(false);
 
   // Synchronous locks prevent double-submit before React re-renders.
   const sendLock = useRef(false);
@@ -742,6 +808,71 @@ export function SupportSection({
     if (id) void loadOpenedSilently(id);
   }
 
+  async function loadUserHistory(userId: number, options: { silent?: boolean } = {}) {
+    if (!options.silent) setHistoryLoading(true);
+    setHistoryError("");
+    try {
+      const response = await apiFetch<{ ok: true; history: UserHistory }>(
+        `/admin/support/users/${userId}/history`,
+        { method: "GET" },
+      );
+      setUserHistory(response.history);
+    } catch (error) {
+      setHistoryError(errorMessage(error, t("support.history.err")));
+    } finally {
+      if (!options.silent) setHistoryLoading(false);
+    }
+  }
+
+  function openHistory() {
+    setHistoryOpen(true);
+    if (opened) void loadUserHistory(opened.userId, { silent: true });
+  }
+
+  async function addHistoryNote() {
+    if (!opened) return;
+    const text = noteDraft.trim();
+    if (!text) return;
+    setNoteSaving(true);
+    try {
+      await apiFetch(`/admin/support/users/${opened.userId}/notes`, { method: "POST", body: { text } });
+      setNoteDraft("");
+      setNotice(t("support.history.note.saved"));
+      await loadUserHistory(opened.userId, { silent: true });
+    } catch (error) {
+      setHistoryError(errorMessage(error, t("support.history.err")));
+    } finally {
+      setNoteSaving(false);
+    }
+  }
+
+  async function addHistoryCompensation() {
+    if (!opened) return;
+    const description = compDraft.description.trim();
+    if (!description) return;
+    setCompSaving(true);
+    try {
+      await apiFetch(`/admin/support/users/${opened.userId}/compensations`, {
+        method: "POST",
+        body: {
+          ticketId: opened.id,
+          serviceId: opened.serviceId,
+          serviceTitle: opened.serviceSnapshot?.name ?? null,
+          kind: "days",
+          amountDays: compDraft.days === "" ? null : Number(compDraft.days),
+          description,
+        },
+      });
+      setCompDraft({ days: "7", description: "" });
+      setNotice(t("support.history.comp.saved"));
+      await loadUserHistory(opened.userId, { silent: true });
+    } catch (error) {
+      setHistoryError(errorMessage(error, t("support.history.err")));
+    } finally {
+      setCompSaving(false);
+    }
+  }
+
   async function openTicket(id: number) {
     setOpenedLoading(true);
     setOpenedError("");
@@ -754,6 +885,7 @@ export function SupportSection({
       );
       applyTicketUpdate(response.ticket);
       setComposerText("");
+      void loadUserHistory(response.ticket.userId);
       // Clear the local unread marker and refresh the badge. The backend
       // already marked the ticket read when it served the detail request.
       setItems((prev) => prev.map((t) => (t.id === id ? { ...t, unread: false } : t)));
@@ -771,6 +903,8 @@ export function SupportSection({
     setOpenedError("");
     setNotice("");
     setComposerText("");
+    setUserHistory(null);
+    setHistoryOpen(false);
   }
 
   async function sendComposer() {
@@ -894,6 +1028,10 @@ export function SupportSection({
   ].filter(Boolean).length;
 
   const messages = opened?.messages ?? [];
+  const sameServiceCompensations = useMemo(() => {
+    if (!userHistory || !opened?.serviceId) return [];
+    return userHistory.compensations.filter((c) => c.serviceId === opened.serviceId);
+  }, [userHistory, opened?.serviceId]);
 
   return (
     <div className="card">
@@ -1134,6 +1272,23 @@ export function SupportSection({
 
           <Diagnostics ticket={opened} />
 
+          {userHistory && userHistory.user.id === opened.userId ? (
+            <div className="supportUserSummary">
+              <div className="supportUserSummary__stats">
+                <span>{t("support.history.stat.tickets", { n: userHistory.summary.ticketsTotal })}</span>
+                <span>{t("support.history.stat.open", { n: userHistory.summary.ticketsOpen })}</span>
+                <span>{t("support.history.stat.compensations", { n: userHistory.summary.compensationsTotal })}</span>
+                <span>{t("support.history.stat.notes", { n: userHistory.summary.notesTotal })}</span>
+              </div>
+              {sameServiceCompensations.length > 0 ? (
+                <div className="supportUserSummary__warn supportUserSummary__warn--strong">{t("support.history.warn.same_service")}</div>
+              ) : userHistory.summary.compensationsTotal > 0 ? (
+                <div className="supportUserSummary__warn">{t("support.history.warn.previous")}</div>
+              ) : null}
+              <button className="btn btn--soft" type="button" onClick={openHistory}>{t("support.history.open")}</button>
+            </div>
+          ) : null}
+
           {/* Conversation */}
           <div className="supportDetail__thread">
             {messages.length === 0 ? (
@@ -1210,6 +1365,132 @@ export function SupportSection({
             </div>
             <div className="composerAttachHint">{t("support.attach.hint")}</div>
             <div className="composerHint">{t("support.retention")}</div>
+          </div>
+        </ModalShell>
+      )}
+
+      {historyOpen && opened && (
+        <ModalShell
+          title={t("support.history.title")}
+          kicker={`#${opened.userId}`}
+          onClose={() => setHistoryOpen(false)}
+        >
+          <div className="supportHistory">
+            {historyError ? <div className="pre">{historyError}</div> : null}
+            {historyLoading && !userHistory ? <p className="p">{t("common.loading")}</p> : null}
+            {userHistory ? (
+              <>
+                <div className="supportHistory__summary">
+                  <div className="supportHistory__user">
+                    {userHistory.user.displayName || userHistory.user.login || t("support.admin.user_ref", { id: userHistory.user.id })} · #{userHistory.user.id}
+                  </div>
+                  <div className="supportHistory__stats">
+                    <span>{t("support.history.stat.tickets", { n: userHistory.summary.ticketsTotal })}</span>
+                    <span>{t("support.history.stat.open", { n: userHistory.summary.ticketsOpen })}</span>
+                    <span>{t("support.history.stat.compensations", { n: userHistory.summary.compensationsTotal })}</span>
+                    <span>{t("support.history.stat.notes", { n: userHistory.summary.notesTotal })}</span>
+                  </div>
+                </div>
+
+                {sameServiceCompensations.length > 0 ? (
+                  <div className="supportUserSummary__warn supportUserSummary__warn--strong">{t("support.history.warn.same_service")}</div>
+                ) : userHistory.summary.compensationsTotal > 0 ? (
+                  <div className="supportUserSummary__warn">{t("support.history.warn.previous")}</div>
+                ) : null}
+
+                <section className="supportHistory__section">
+                  <div className="supportHistory__title">{t("support.history.section.tickets")}</div>
+                  {userHistory.tickets.map((ht) => (
+                    <div className="supportHistory__ticket" key={ht.id}>
+                      <div className="supportHistory__ticketMain">
+                        <div className="supportHistory__ticketTitle">
+                          #{ht.publicNo} · {ht.serviceTitle || ht.subject || t("support.service_word")}
+                        </div>
+                        <div className="supportHistory__meta">
+                          <span>{formatDateTime(ht.createdAt, formatDate)}</span>
+                          <span>· {statusLabel(ht.status as TicketStatus)}</span>
+                          {ht.serviceTitle ? <span>· {ht.serviceTitle}</span> : null}
+                          <span>· {t("support.history.updated", { date: formatDateTime(ht.updatedAt, formatDate) })}</span>
+                        </div>
+                      </div>
+                      {ht.id !== opened.id ? (
+                        <button className="btn btn--soft" type="button" onClick={() => { setHistoryOpen(false); void openTicket(ht.id); }}>
+                          {t("support.history.action.open_ticket")}
+                        </button>
+                      ) : (
+                        <span className="chip chip--soft">{t("support.history.current")}</span>
+                      )}
+                    </div>
+                  ))}
+                </section>
+
+                <section className="supportHistory__section">
+                  <div className="supportHistory__title">{t("support.history.section.compensations")}</div>
+                  {userHistory.compensations.length === 0 ? <p className="p">{t("support.history.empty")}</p> : null}
+                  {userHistory.compensations.map((c) => (
+                    <div className="supportHistory__comp" key={c.id}>
+                      <span className="supportHistory__compMark">+{c.amountDays ?? c.amountMinor ?? "?"}</span>
+                      <span className="supportHistory__meta">
+                        {formatDateTime(c.createdAt, formatDate)} · {c.serviceTitleSnapshot || "—"}
+                        {c.ticketId ? ` · #${userHistory.tickets.find((t) => t.id === c.ticketId)?.publicNo ?? c.ticketId}` : ""}
+                        {c.description ? ` · ${c.description}` : ""}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="supportHistory__form">
+                    <label className="field">
+                      <span className="field__label">{t("support.history.comp.days")}</span>
+                      <input className="input" inputMode="numeric" value={compDraft.days} onChange={(e) => setCompDraft({ ...compDraft, days: e.target.value.replace(/\D/g, "") })} />
+                    </label>
+                    <label className="field">
+                      <span className="field__label">{t("support.history.comp.description")}</span>
+                      <input className="input" value={compDraft.description} onChange={(e) => setCompDraft({ ...compDraft, description: e.target.value })} /></label>
+                    <button className="btn btn--primary" type="button" disabled={compSaving || !compDraft.description.trim()} onClick={() => void addHistoryCompensation()}>
+                      {t("support.history.comp.add")}
+                    </button>
+                  </div>
+                </section>
+
+                <section className="supportHistory__section">
+                  <div className="supportHistory__title">{t("support.history.section.notes")}</div>
+                  {userHistory.notes.length === 0 ? <p className="p">{t("support.history.empty")}</p> : null}
+                  {userHistory.notes.map((n) => (
+                    <div className="supportHistory__note" key={n.id}>
+                      {n.isPinned ? <span className="chip chip--ok">{t("support.history.note.pinned")}</span> : null}
+                      <span className="supportHistory__noteText">{n.text}</span>
+                      <span className="supportHistory__meta">{formatDateTime(n.createdAt, formatDate)}{n.createdBy ? ` · #${n.createdBy}` : ""}</span>
+                    </div>
+                  ))}
+                  <div className="supportHistory__form">
+                    <label className="field">
+                      <span className="field__label">{t("support.history.note.add")}</span>
+                      <input className="input" value={noteDraft} placeholder={t("support.history.note.ph")} onChange={(e) => setNoteDraft(e.target.value)} />
+                    </label>
+                    <button className="btn btn--primary" type="button" disabled={noteSaving || !noteDraft.trim()} onClick={() => void addHistoryNote()}>
+                      {t("support.history.note.save")}
+                    </button>
+                  </div>
+                </section>
+
+                <section className="supportHistory__section">
+                  <div className="supportHistory__title">{t("support.history.section.timeline")}</div>
+                  <div className="supportHistory__timeline">
+                    {userHistory.timeline.slice(0, 30).map((ev, i) => (
+                      <div className="supportHistory__event" key={i}>
+                        <span className="supportHistory__meta">{formatDateTime(ev.at, formatDate)}</span>
+                        <span className="supportHistory__noteText">
+                          {ev.kind === "ticket"
+                            ? `#${ev.publicNo} · ${ev.serviceTitle || ev.title || t("support.service_word")} · ${statusLabel(ev.status as TicketStatus)}`
+                            : ev.kind === "compensation"
+                              ? `${t("support.history.event.compensation")} · +${ev.amountDays ?? ev.amountMinor ?? "?"} · ${ev.serviceTitle ?? "—"}`
+                              : `${t("support.history.event.note")} · ${ev.text}`}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              </>
+            ) : null}
           </div>
         </ModalShell>
       )}

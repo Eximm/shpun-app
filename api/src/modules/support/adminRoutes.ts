@@ -20,9 +20,14 @@ import {
 } from "./notifyRepo.js";
 import { isTicketKind, isTicketPriority, isTicketStatus, type TicketPriority, type TicketStatus } from "./types.js";
 import {
+  addCompensation,
   addStaffMessage,
+  addUserNote,
   deleteMessageByAdmin,
+  editUserNote,
   getAdminTicket,
+  getUserHistory,
+  removeUserNote,
   listAdminTickets,
   listCategories,
   updateTicketByAdmin,
@@ -198,6 +203,89 @@ export async function supportAdminRoutes(app: FastifyInstance) {
         { id: admin?.userId ?? null, name: admin?.displayName ?? admin?.login ?? null },
       );
       return reply.send({ ok: true, ticket });
+    } catch (error) {
+      return sendSupportError(reply, error);
+    }
+  });
+
+  /* ── User-centric history (admin-only) ─────────────────────────────────── */
+
+  app.get("/admin/support/users/:userId/history", async (req, reply) => {
+    try {
+      const session = await requireAdmin(req, reply);
+      if (!session) return;
+      return reply.send({ ok: true, history: getUserHistory(Number((req.params as any)?.userId)) });
+    } catch (error) {
+      return sendSupportError(reply, error);
+    }
+  });
+
+  app.post("/admin/support/users/:userId/compensations", async (req, reply) => {
+    try {
+      const session = await requireAdmin(req, reply);
+      if (!session) return;
+      const admin = sessionUser(session);
+      const body = readBody(req);
+      const item = addCompensation({
+        userId: Number((req.params as any)?.userId),
+        ticketId: pick(body, "ticketId", "ticket_id"),
+        serviceId: pick(body, "serviceId", "service_id"),
+        serviceTitleSnapshot: pick(body, "serviceTitle", "service_title", "serviceTitleSnapshot"),
+        kind: pick(body, "kind"),
+        amountDays: pick(body, "amountDays", "amount_days"),
+        amountMinor: pick(body, "amountMinor", "amount_minor"),
+        currency: pick(body, "currency"),
+        description: pick(body, "description"),
+        reason: pick(body, "reason"),
+        externalReference: pick(body, "externalReference", "external_reference"),
+        createdBy: admin?.userId ?? null,
+      });
+      return reply.code(201).send({ ok: true, item });
+    } catch (error) {
+      return sendSupportError(reply, error);
+    }
+  });
+
+  app.post("/admin/support/users/:userId/notes", async (req, reply) => {
+    try {
+      const session = await requireAdmin(req, reply);
+      if (!session) return;
+      const admin = sessionUser(session);
+      const body = readBody(req);
+      const item = addUserNote({
+        userId: Number((req.params as any)?.userId),
+        text: pick(body, "text"),
+        isPinned: pick(body, "isPinned", "is_pinned"),
+        createdBy: admin?.userId ?? null,
+      });
+      return reply.code(201).send({ ok: true, item });
+    } catch (error) {
+      return sendSupportError(reply, error);
+    }
+  });
+
+  app.patch("/admin/support/users/:userId/notes/:noteId", async (req, reply) => {
+    try {
+      const session = await requireAdmin(req, reply);
+      if (!session) return;
+      const body = readBody(req);
+      const item = editUserNote(Number((req.params as any)?.noteId), {
+        text: pick(body, "text"),
+        isPinned: pick(body, "isPinned", "is_pinned"),
+      });
+      if (!item) return reply.code(404).send({ ok: false, error: "note_not_found" });
+      return reply.send({ ok: true, item });
+    } catch (error) {
+      return sendSupportError(reply, error);
+    }
+  });
+
+  app.delete("/admin/support/users/:userId/notes/:noteId", async (req, reply) => {
+    try {
+      const session = await requireAdmin(req, reply);
+      if (!session) return;
+      const deleted = removeUserNote(Number((req.params as any)?.noteId));
+      return deleted ? reply.send({ ok: true }) : reply.code(404).send({ ok: false, error: "note_not_found" });
     } catch (error) {
       return sendSupportError(reply, error);
     }
