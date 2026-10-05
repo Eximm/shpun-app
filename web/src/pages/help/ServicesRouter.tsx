@@ -20,8 +20,8 @@ type Block = {
   tone?: BlockTone;
 };
 
-const ROUTER_INSTALLER_URL = "https://spb.shpyn.online/files/router/shpun-router-installer.exe";
-const ROUTER_INSTALLER_WIN7_URL = "https://spb.shpyn.online/files/router/shpun-router-installer-win7.exe";
+const ROUTER_INSTALLER_URL = "https://router.shpun.net/files/router/shpun-router-installer.exe";
+const ROUTER_INSTALLER_WIN7_URL = "https://router.shpun.net/files/router/shpun-router-installer-win7.exe";
 
 export function ServicesRouter() {
   const { t } = useI18n();
