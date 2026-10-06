@@ -175,7 +175,7 @@ assert("compact row has dense padding", css.includes(".mon-row__main { display: 
 assert("compact metric label/value are split", css.includes(".mon-row__metricLabel") && css.includes(".mon-row__metricValue"));
 assert("inline traffic + age tokens exist", css.includes(".mon-row__trafficInline") && css.includes(".mon-row__fresh"));
 assert("health indicator has tone variants", css.includes(".mon-row__health.is-ok") && css.includes(".mon-row__health.is-warn") && css.includes(".mon-row__health.is-bad"));
-assert("mobile rows stay two lines", css.includes(".mon-row__stats { order: 5; flex-basis: 100%;") && css.includes(".mon-row__overflow { order: 4; margin-left: auto;"));
+assert("mobile rows stay two lines", css.includes(".mon-row__stats { order: 5; flex: 0 0 100%;") && css.includes(".mon-row__overflow { order: 4;"));
 assert("old mini-dashboard grid is gone", !css.includes('"title  title  title  title  chev   more"') && !css.includes(".mon-metric__barFill"));
 
 // Incident/history mobile isolation + richer history.

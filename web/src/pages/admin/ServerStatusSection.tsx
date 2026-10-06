@@ -858,7 +858,7 @@ export function ServerStatusSection() {
                         <span className="mon-row__title">
                           <span className={`serverStatus-dot serverStatus-dot--${Number(item.active) ? "online" : "offline"}`} />
                           {item.visibility === "admin_only" ? <span className="mon-row__vis" title={t("admin.monitoring.badge.internal")}>🔒</span> : null}
-                          <span className="mon-row__name">{item.country_code ? `${countryFlag(item.country_code)} ` : ""}{item.title || item.host}</span>
+                          <span className="mon-row__name" title={item.title || item.host}>{item.country_code ? `${countryFlag(item.country_code)} ` : ""}{item.title || item.host}</span>
                         </span>
                         {topIssue && (
                           <span className={`mon-row__issueInline mon-row__issue--${topIssue.severity}`}>
@@ -885,6 +885,7 @@ export function ServerStatusSection() {
                         </span>
                         <span className={`mon-row__fresh${current?.state === "stale" || current?.state === "offline" ? " is-stale" : ""}`}>{fmtRelative(current?.checkedAt ?? null, t)}</span>
                       </div>
+                      <span className="mon-row__spacer" aria-hidden="true" />
                       <div className="mon-row__overflow" onClick={(e) => e.stopPropagation()}>
                         <button
                           className="mon-row__overflowBtn"

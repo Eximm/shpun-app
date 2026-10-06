@@ -145,7 +145,7 @@ ok("layout controls exist in CSS", css.includes(".mon-controls") && css.includes
 
 /* ── Density refactor: compact rows ───────────────────────────────────────── */
 
-ok("D1 row is a single flex line (no stacked zone grid)", /\.mon-row__main\s*\{[^}]*display:\s*flex/.test(css) && !/\.mon-row__main\s*\{[^}]*display:\s*grid/.test(css));
+ok("D1 base row is flex; wide row is a non-wrapping grid", /\n\.mon-row__main\s*\{[^}]*display:\s*flex/.test(css) && /@media \(min-width: 1000px\)[\s\S]{0,400}\.mon-row__main\s*\{[^}]*display:\s*grid/.test(css));
 ok("D2 base row padding is compact (<= 10px)", /\.mon-row__main\s*\{[^}]*padding:\s*8px 10px/.test(css));
 ok("D3 identity is a single row with ellipsis name", /\.mon-row__name\s*\{[^}]*text-overflow:\s*ellipsis/.test(css) && /\.mon-row__identity\s*\{[^}]*display:\s*flex/.test(css) && !/\.mon-row__identity\s*\{[^}]*flex-direction:\s*column/.test(css));
 ok("D4 compact metric primitives exist", section.includes("function CompactMetric") && css.includes(".mon-row__metricValue") && section.includes("CompactMetric label={t(\"admin.monitoring.metric.cpu_short\""));
@@ -159,9 +159,21 @@ ok("D11 no inline chevron expand control", !section.includes("mon-row__chevron")
 ok("D12 row click still selects the server", section.includes("onClick={() => void toggleExpand(item.id)}") && section.includes("onKeyDown={(e) => { if (e.key === \"Enter\")"));
 ok("D13 detail panel still renders for the selected server", section.includes("mon-detail") && section.includes("id={`mon-detail-${item.id}`}"));
 ok("D14 reorder + drag still wired", section.includes("function reorderNode(item") && section.includes("handleDrop(") && section.includes("mon-row__drag"));
-ok("D15 mobile keeps rows to two lines", css.includes("@media (max-width: 720px)") && /\.mon-row__stats\s*\{[^}]*flex-basis:\s*100%/.test(css));
+ok("D15 mobile keeps rows to two lines", css.includes("@media (max-width: 720px)") && /\.mon-row__stats\s*\{[^}]*flex:\s*0 0 100%/.test(css));
 ok("D16 no horizontal overflow (identity+stats min-width 0)", /\.mon-row__identity\s*\{[^}]*min-width:\s*0/.test(css) && /\.mon-row__stats\s*\{[^}]*min-width:\s*0/.test(css));
 ok("D17 row grows by content (no fixed height)", !/\.mon-row\s*\{[^}]*height:/.test(css));
+
+/* ── Wide desktop adaptation ────────────────────────────────────────────── */
+
+ok("W1 admin container widened to 1100-1300px", /\.app--admin\s*\{[^}]*--container:\s*1240px/.test(css));
+ok("W2 wide row is a 10-track grid with a trailing spacer", /grid-template-columns:\s*auto minmax\(0, 340px\) auto auto auto auto auto auto 1fr auto/.test(css));
+ok("W3 metrics/actions are nowrap in the grid", /@media \(min-width: 1000px\)[\s\S]{0,700}\.mon-row__metric,[\s\S]{0,120}white-space:\s*nowrap/.test(css));
+ok("W4 grid gap stays dense (<= 14px)", /\.mon-row__main\s*\{[^}]*gap:\s*4px 14px/.test(css));
+ok("W5 name column is bounded + ellipsis", /\.mon-row__identity\s*\{[^}]*overflow:\s*hidden/.test(css) && /\.mon-row__name\s*\{[^}]*text-overflow:\s*ellipsis/.test(css));
+ok("W6 spacer is hidden on mobile, shown on wide", /\.mon-row__spacer\s*\{\s*display:\s*none/.test(css) && /@media \(min-width: 1000px\)[\s\S]{0,800}\.mon-row__spacer\s*\{\s*display:\s*block/.test(css));
+ok("W7 narrow admin shell cannot overflow (minmax(0,1fr))", /\.admin-shell\s*\{\s*grid-template-columns:\s*minmax\(0,\s*1fr\)/.test(css));
+ok("W8 wide toolbar becomes one line", /@media \(min-width: 1200px\)[\s\S]{0,200}\.mon-controls\s*\{[^}]*flex-wrap:\s*nowrap/.test(css));
+ok("W9 markup carries the wide spacer", section.includes("mon-row__spacer"));
 
 console.log(`\n${failures === 0 ? "OK" : "FAILED"}: ${failures} failure(s)`);
 process.exit(failures === 0 ? 0 : 1);

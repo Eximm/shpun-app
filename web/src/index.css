@@ -129,7 +129,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .app--services { --route-a: rgba(43,227,143,0.11);  --route-b: rgba(77,215,255,0.13); }
 .app--payments { --route-a: rgba(245,158,11,0.10);  --route-b: rgba(124,92,255,0.13); }
 .app--profile  { --route-a: rgba(124,92,255,0.16); --route-b: rgba(77,215,255,0.11); }
-.app--admin    { --route-a: rgba(255,77,109,0.10);  --route-b: rgba(124,92,255,0.13); }
+.app--admin    { --route-a: rgba(255,77,109,0.10);  --route-b: rgba(124,92,255,0.13); --container: 1240px; }
 .app--login    { --route-a: rgba(124,92,255,0.15); --route-b: rgba(77,215,255,0.10); --container: 1140px; }
 
 .app-ambient {
@@ -7644,7 +7644,7 @@ button.reviews-star:not(:disabled) {
 }
 
 @media (max-width: 860px) {
-  .admin-shell { grid-template-columns: 1fr; gap: 10px; }
+  .admin-shell { grid-template-columns: minmax(0, 1fr); gap: 10px; }
   .admin-nav { position: static; max-height: none; overflow: visible; gap: 8px; }
   .admin-nav__top { flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; }
   .admin-nav__brand { flex-direction: row; align-items: baseline; gap: 8px; padding: 0 2px; }
@@ -9068,6 +9068,7 @@ button.reviews-star:not(:disabled) {
 .mon-row__fresh.is-stale { color: var(--danger); }
 .mon-row__issueInline { font-size: 11px; font-weight: 800; white-space: nowrap; color: var(--warn); }
 .mon-row__issueInline.mon-row__issue--critical { color: var(--danger); }
+.mon-row__spacer { display: none; }
 .mon-metric {
   display: inline-flex; align-items: baseline; gap: 5px;
   padding: 3px 8px; min-width: 0;
@@ -9137,6 +9138,33 @@ button.reviews-star:not(:disabled) {
 .mon-orderRow__label { flex: 1 1 auto; min-width: 0; font-weight: 700; overflow-wrap: anywhere; }
 .mon-orderRow__actions { display: flex; gap: 6px; flex: 0 0 auto; }
 .mon-orderRow__actions .btn { min-width: 40px; padding: 0 10px; }
+
+/* Wide desktop: single non-wrapping grid row per server.
+   <=640 mobile keeps the 2-line layout; 641-999 keeps controlled wrap. */
+@media (min-width: 1000px) {
+  .mon-row__main {
+    display: grid;
+    grid-template-columns: auto minmax(0, 340px) auto auto auto auto auto auto 1fr auto;
+    align-items: center;
+    gap: 4px 14px;
+    padding: 7px 10px;
+  }
+  .mon-row__identity { max-width: none; min-width: 0; overflow: hidden; }
+  .mon-row__stats { display: contents; }
+  .mon-row__spacer { display: block; }
+  .mon-row__health,
+  .mon-row__metric,
+  .mon-row__trafficInline,
+  .mon-row__fresh,
+  .mon-row__overflow { white-space: nowrap; }
+  .mon-row__name { min-width: 0; }
+}
+
+/* Wide desktop toolbar: one line, search takes the free space. */
+@media (min-width: 1200px) {
+  .mon-controls { flex-wrap: nowrap; }
+  .mon-controls__search { flex: 1 1 auto; }
+}
 
 .mon-detail {
   border-top: 1px solid var(--border);
@@ -9404,21 +9432,20 @@ button.reviews-star:not(:disabled) {
   .mon-chipFilter { min-height: 30px; padding: 4px 10px; font-size: 11px; }
   .mon-incidents__empty { margin-top: 6px; }
 
-  /* Compact server rows: two dense lines on mobile. */
+  /* Compact server rows: density only (layout handled in the 720 block). */
   .mon-group__title { margin: 6px 0 0; font-size: 14px; }
   .mon-row { margin-top: 6px; }
-  .mon-row__main { padding: 8px 10px; gap: 4px 10px; }
-  .mon-row__identity { gap: 6px; }
-  .mon-row__stats { order: 5; flex-basis: 100%; gap: 4px 12px; }
-  .mon-row__overflow { order: 4; margin-left: auto; }
   .mon-row__metricValue { font-size: 12px; }
   .mon-row__fresh { font-size: 10.5px; }
 }
 
 /* ── Monitoring mobile: rows stay dense (two lines max) ────────────────── */
 @media (max-width: 720px) {
-  .mon-row__main { gap: 4px 10px; padding: 8px 10px; }
-  .mon-row__identity { flex: 1 1 auto; max-width: none; }
-  .mon-row__stats { order: 5; flex-basis: 100%; gap: 4px 12px; }
-  .mon-row__overflow { order: 4; margin-left: auto; }
+  .mon-row__main { display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 8px 10px; align-items: center; }
+  .mon-row__drag { order: 1; }
+  .mon-row__identity { order: 2; flex: 1 1 0; min-width: 0; max-width: none; }
+  .mon-row__health { order: 3; flex: 0 0 auto; }
+  .mon-row__overflow { order: 4; flex: 0 0 auto; }
+  .mon-row__spacer { display: none; }
+  .mon-row__stats { order: 5; flex: 0 0 100%; display: flex; flex-wrap: wrap; gap: 4px 12px; }
 }
