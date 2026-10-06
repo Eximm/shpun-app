@@ -9083,6 +9083,46 @@ button.reviews-star:not(:disabled) {
 .mon-toolbar .mon-btn--quiet { background: transparent; border-color: transparent; color: var(--muted); }
 .mon-toolbar .mon-btn--quiet:hover { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.12); color: var(--text); }
 
+/* Operator sort controls */
+.mon-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+.mon-controls .field { margin: 0; }
+.mon-controls__sort { min-width: 170px; }
+.mon-controls__search { flex: 1 1 240px; min-width: 200px; }
+
+/* Type groups: label + counter + collapse */
+.mon-group__label { min-width: 0; overflow-wrap: anywhere; }
+.mon-group__count {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 22px; height: 20px; padding: 0 7px; border-radius: 999px;
+  font-size: 12px; font-weight: 800; background: rgba(255,255,255,0.06); color: var(--muted);
+}
+.mon-group__problems { font-size: 11px; }
+.mon-group__toggle {
+  margin-left: auto; min-height: 28px; height: 28px; padding: 0 10px;
+  font-size: 14px; line-height: 1;
+}
+
+/* Manual reorder (drag handle + same-type drop) */
+.mon-row__drag {
+  flex: 0 0 auto; align-self: stretch; display: inline-flex; align-items: center;
+  padding: 0 6px; margin-left: -6px; cursor: grab; color: var(--muted);
+  font-size: 14px; user-select: none; touch-action: none;
+}
+.mon-row__drag:active { cursor: grabbing; }
+.mon-row.is-dragging { opacity: 0.55; }
+.mon-row.is-dragOver { border-color: rgba(77,215,255,0.55); box-shadow: 0 0 0 1px rgba(77,215,255,0.35); }
+
+/* Type order configurator */
+.mon-orderList { display: flex; flex-direction: column; gap: 8px; }
+.mon-orderRow {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface);
+}
+.mon-orderRow__handle { color: var(--muted); font-size: 14px; }
+.mon-orderRow__label { flex: 1 1 auto; min-width: 0; font-weight: 700; overflow-wrap: anywhere; }
+.mon-orderRow__actions { display: flex; gap: 6px; flex: 0 0 auto; }
+.mon-orderRow__actions .btn { min-width: 40px; padding: 0 10px; }
+
 .mon-detail {
   border-top: 1px solid var(--border);
   padding: 14px;

@@ -3,6 +3,33 @@ import { apiFetch } from "../../shared/api/client";
 import { useI18n } from "../../shared/i18n";
 import { AdminSectionHeader, AdminSectionIcon, ADMIN_SECTION_ICON, ModalShell } from "./shared";
 import { ActionMenu } from "./ActionMenu";
+import {
+  canReorderAcrossKinds,
+  COLLAPSED_TYPES_KEY,
+  DEFAULT_TYPE_ORDER,
+  dropWithinType,
+  isSortMode,
+  moveInList,
+  NODE_ORDER_KEY,
+  NODE_SORT_KEY,
+  normalizeTypeOrder,
+  orderGroups,
+  orderNodesWithinType,
+  pruneNodeOrder,
+  readLayoutJson,
+  reorderWithinType,
+  SELECTED_NODE_KEY,
+  sanitizeNodeOrder,
+  sanitizeSelectedNode,
+  sanitizeStringArray,
+  sanitizeTypeOrder,
+  TYPE_ORDER_KEY,
+  writeLayoutJson,
+  type HealthTier,
+  type OrderableNode,
+  type ReorderAction,
+  type SortMode,
+} from "./monitoringLayout";
 import { MonitoringGraph, MONITORING_METRICS, type GraphIncident, type GraphPoint } from "./MonitoringGraph";
 import {
   MonitoringIncidents,
@@ -148,6 +175,18 @@ function kindKey(kind: ServerKind) {
   return kind === "infra" ? "admin.servers.kind.infra" : kind === "gateway" ? "admin.servers.kind.gateway" : "admin.servers.kind.vpn";
 }
 
+/** Human-readable group label for a real backend `kind` (unknown -> "Other"). */
+function groupKey(kind: string) {
+  if (kind === "gateway") return "admin.monitoring.group.gateway";
+  if (kind === "infra") return "admin.monitoring.group.infra";
+  if (kind === "vpn") return "admin.monitoring.group.vpn";
+  return "admin.monitoring.group.other";
+};
+
+function isKnownKind(kind: string) {
+  return kind === "gateway" || kind === "infra" || kind === "vpn";
+}
+
 function fmtRelative(iso: string | null, t: TFn) {
   if (!iso) return "—";
   const diff = Math.max(0, Date.now() - new Date(iso).getTime());
@@ -216,7 +255,7 @@ export function ServerStatusSection() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [expandedId, setExpandedId] = useState<number | null>(() => sanitizeSelectedNode(readLayoutJson(SELECTED_NODE_KEY, null)));
   const [detail, setDetail] = useState<{ current: CurrentCheck | null; activeIncidents: Incident[]; recentIncidents: Incident[] } | null>(null);
   const [historyRange, setHistoryRange] = useState<"1h" | "24h" | "7d">("1h");
   const [history, setHistory] = useState<HistoryPoint[]>([]);
@@ -233,6 +272,22 @@ export function ServerStatusSection() {
   const [incidentRange, setIncidentRange] = useState<IncidentRange>("24h");
   const [detailMeta, setDetailMeta] = useState<{ effectiveThresholds: Record<string, number>; uplinkMbps: number | null; uplinkCapacityBps: number | null; uplinkCapacitySource: string } | null>(null);
   const [historyIncidents, setHistoryIncidents] = useState<GraphIncident[]>([]);
+
+  /* ── Operator layout (type order, manual order, sort mode, collapse) ───── */
+  const [sortMode, setSortMode] = useState<SortMode>(() => {
+    const saved = readLayoutJson(NODE_SORT_KEY, "manual");
+    return isSortMode(saved) ? saved : "manual";
+  });
+  const [typeOrder, setTypeOrder] = useState<string[]>(() => sanitizeTypeOrder(readLayoutJson(TYPE_ORDER_KEY, DEFAULT_TYPE_ORDER)));
+  const [nodeOrder, setNodeOrder] = useState<Record<string, string[]>>(() => sanitizeNodeOrder(readLayoutJson(NODE_ORDER_KEY, {})));
+  const [collapsedTypes, setCollapsedTypes] = useState<string[]>(() => sanitizeStringArray(readLayoutJson(COLLAPSED_TYPES_KEY, [])));
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [search, setSearch] = useState("");
+  const [problemsOnly, setProblemsOnly] = useState(false);
+  const [orderOpen, setOrderOpen] = useState(false);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragKind, setDragKind] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
 
   const countryOptionsList = useMemo(
     () => COUNTRY_CODES.map((code) => ({ code })).sort((a, b) => a.code.localeCompare(b.code, locale)),
@@ -274,7 +329,16 @@ export function ServerStatusSection() {
       apiFetch<{ ok: true; thresholds: Thresholds }>("/admin/monitoring/settings", { method: "GET" }),
     ]);
 
-    if (serversR.status === "fulfilled") setItems(serversR.value.items ?? []);
+    if (serversR.status === "fulfilled") {
+      const list = serversR.value.items ?? [];
+      setItems(list);
+      // Keep persisted layout valid: drop removed servers/kinds, append new
+      // ones at the end. Never lets stale localStorage break the overview.
+      const presentKinds = Array.from(new Set(list.map((i) => i.kind)));
+      const presentIds = new Set(list.map((i) => String(i.id)));
+      setTypeOrder((prev) => normalizeTypeOrder(prev, presentKinds));
+      setNodeOrder((prev) => pruneNodeOrder(prev, presentIds));
+    }
     if (sumR.status === "fulfilled") {
       setSummary({ totals: sumR.value.totals, incidents: sumR.value.incidents });
       setCollector((sumR.value as any).collector ?? null);
@@ -317,6 +381,13 @@ export function ServerStatusSection() {
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, []);
+
+  // Persist the operator layout separately so each concern has its own key.
+  useEffect(() => { writeLayoutJson(NODE_SORT_KEY, sortMode); }, [sortMode]);
+  useEffect(() => { writeLayoutJson(TYPE_ORDER_KEY, typeOrder); }, [typeOrder]);
+  useEffect(() => { writeLayoutJson(NODE_ORDER_KEY, nodeOrder); }, [nodeOrder]);
+  useEffect(() => { writeLayoutJson(COLLAPSED_TYPES_KEY, collapsedTypes); }, [collapsedTypes]);
+  useEffect(() => { if (expandedId != null) writeLayoutJson(SELECTED_NODE_KEY, expandedId); }, [expandedId]);
 
   /* ── Server editor ─────────────────────────────────────────────────────── */
 
@@ -548,11 +619,63 @@ export function ServerStatusSection() {
     });
   }
 
-  const groups: { kind: ServerKind; items: MonitoredServer[] }[] = [
-    { kind: "vpn", items: items.filter((i) => i.kind === "vpn") },
-    { kind: "gateway", items: items.filter((i) => i.kind === "gateway") },
-    { kind: "infra", items: items.filter((i) => i.kind === "infra") },
-  ];
+  type GroupNode = OrderableNode & { item: MonitoredServer };
+
+  function serverHealth(item: MonitoredServer): HealthTier {
+    if (Number(item.active) !== 1) return "warning";
+    if (item.current?.state === "offline") return "critical";
+    const issues = globalActive.filter((i) => i.serverId === item.id);
+    if (issues.some((i) => i.severity === "critical")) return "critical";
+    if (item.current?.state === "stale" || item.current?.state === "no_data" || issues.some((i) => i.severity === "warning")) return "warning";
+    return "healthy";
+  }
+
+  const presentKinds = useMemo(() => Array.from(new Set(items.map((i) => i.kind))), [items]);
+  const orderedKinds = useMemo(() => normalizeTypeOrder(typeOrder, presentKinds), [typeOrder, presentKinds]);
+
+  const filteredItems = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return items.filter((item) => {
+      if (typeFilter !== "all" && item.kind !== typeFilter) return false;
+      if (problemsOnly && serverHealth(item) === "healthy") return false;
+      if (q) {
+        const hay = `${item.title} ${item.host} ${item.country_code ?? ""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [items, typeFilter, problemsOnly, search, globalActive]);
+
+  const groups = useMemo<{ kind: string; nodes: GroupNode[] }[]>(() => {
+    const built = orderedKinds
+      .map((kind) => ({
+        kind,
+        nodes: filteredItems
+          .filter((i) => i.kind === kind)
+          .map<GroupNode>((i) => ({ id: i.id, title: i.title || i.host, health: serverHealth(i), item: i })),
+      }))
+      .map((g) => ({ kind: g.kind, nodes: orderNodesWithinType(g.nodes, sortMode, nodeOrder[g.kind] ?? [], locale) }));
+    return orderGroups(built, sortMode, orderedKinds) as { kind: string; nodes: GroupNode[] }[];
+  }, [orderedKinds, filteredItems, sortMode, nodeOrder, locale, globalActive]);
+
+  function groupProblemCount(group: { nodes: GroupNode[] }): number {
+    return group.nodes.filter((n) => n.health !== "healthy").length;
+  }
+
+  function toggleTypeCollapsed(kind: string) {
+    setCollapsedTypes((prev) => (prev.includes(kind) ? prev.filter((k) => k !== kind) : [...prev, kind]));
+  }
+
+  function reorderNode(item: MonitoredServer, action: ReorderAction) {
+    const visibleIds = items.filter((i) => i.kind === item.kind).map((i) => String(i.id));
+    setNodeOrder((prev) => reorderWithinType(prev, item.kind, visibleIds, String(item.id), action));
+  }
+
+  function handleDrop(sourceKind: string, targetKind: string, targetId: string) {
+    if (!dragId || !canReorderAcrossKinds(sourceKind, targetKind) || dragId === targetId) return;
+    const visibleIds = items.filter((i) => i.kind === targetKind).map((i) => String(i.id));
+    setNodeOrder((prev) => dropWithinType(prev, sourceKind, targetKind, visibleIds, dragId, targetId));
+  }
 
   const staleCount = summary?.totals.stale ?? 0;
   const offlineCount = summary?.totals.offline ?? 0;
@@ -664,14 +787,50 @@ export function ServerStatusSection() {
             refreshing={refreshing}
           />
 
-          {groups.map((group) => (
-            <section key={group.kind} className="mon-group admin-gap-top-md">
+          {/* Operator controls: sort model, search, type filter, order config */}
+          <div className="mon-controls admin-gap-top-md">
+            <label className="field mon-controls__sort">
+              <span className="field__label">{t("admin.monitoring.sort.label")}</span>
+              <select className="input" value={sortMode} onChange={(e) => setSortMode(e.target.value as SortMode)}>
+                <option value="manual">{t("admin.monitoring.sort.manual")}</option>
+                <option value="type">{t("admin.monitoring.sort.type")}</option>
+                <option value="problems">{t("admin.monitoring.sort.problems")}</option>
+              </select>
+            </label>
+            <label className="field mon-controls__search">
+              <span className="field__label">{t("admin.monitoring.search.label")}</span>
+              <input className="input" value={search} placeholder={t("admin.monitoring.search.placeholder")} onChange={(e) => setSearch(e.target.value)} />
+            </label>
+            <label className="field">
+              <span className="field__label">{t("admin.monitoring.filter.type")}</span>
+              <select className="input" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+                <option value="all">{t("admin.monitoring.filter.all")}</option>
+                {orderedKinds.map((kind) => <option key={kind} value={kind}>{isKnownKind(kind) ? t(groupKey(kind)) : `${t("admin.monitoring.group.other")} (${kind})`}</option>)}
+              </select>
+            </label>
+            <button className={`btn ${problemsOnly ? "btn--primary" : "btn--soft"}`} type="button" aria-pressed={problemsOnly} onClick={() => setProblemsOnly((v) => !v)}>
+              {t("admin.monitoring.filter.problems")}
+            </button>
+            <button className="btn btn--soft" type="button" onClick={() => setOrderOpen(true)}>{t("admin.monitoring.order.button")}</button>
+          </div>
+
+          {groups.map((group) => {
+            const collapsed = collapsedTypes.includes(group.kind);
+            const problems = groupProblemCount(group);
+            return (
+            <section key={group.kind} className={`mon-group admin-gap-top-md${collapsed ? " is-collapsed" : ""}`}>
               <h3 className="h2 mon-group__title">
-                <AdminSectionIcon name={group.kind === "vpn" ? "server" : group.kind === "gateway" ? "gateway" : "layers"} size={16} />
-                {t(kindKey(group.kind))}
+                <AdminSectionIcon name={isKnownKind(group.kind) ? (group.kind === "vpn" ? "server" : group.kind === "gateway" ? "gateway" : "layers") : "layers"} size={16} />
+                <span className="mon-group__label">{isKnownKind(group.kind) ? t(groupKey(group.kind)) : `${t("admin.monitoring.group.other")} (${group.kind})`}</span>
+                <span className="mon-group__count">{group.nodes.length}</span>
+                {problems > 0 && <span className="chip chip--warn mon-group__problems">{t("admin.monitoring.group.problems", { count: problems })}</span>}
+                <button className="btn mon-btn--quiet mon-group__toggle" type="button" aria-expanded={!collapsed} onClick={() => toggleTypeCollapsed(group.kind)}>
+                  {collapsed ? "⌄" : "⌃"}
+                </button>
               </h3>
-              {group.items.length === 0 && <div className="pre">{t("admin.servers.empty")}</div>}
-              {group.items.map((item) => {
+              {!collapsed && group.nodes.length === 0 && <div className="pre">{t("admin.servers.empty")}</div>}
+              {!collapsed && group.nodes.map((node) => {
+                const item = node.item;
                 const expanded = expandedId === item.id;
                 const current = expanded ? detail?.current ?? item.current ?? null : item.current ?? null;
                 const rowState = current?.state === "offline"
@@ -684,8 +843,25 @@ export function ServerStatusSection() {
                 const activeIssues = globalActive.filter((i) => i.serverId === item.id);
                 const topIssue = activeIssues.slice().sort((a, b) => severityRank(a.severity) - severityRank(b.severity))[0] ?? null;
                 return (
-                  <div key={item.id} id={`mon-server-${item.id}`} className={`mon-row${expanded ? " is-expanded" : ""}${rowState ? ` ${rowState}` : ""}`}>
+                  <div
+                    key={item.id}
+                    id={`mon-server-${item.id}`}
+                    className={`mon-row${expanded ? " is-expanded" : ""}${rowState ? ` ${rowState}` : ""}${dragId === String(item.id) ? " is-dragging" : ""}${dragOverId === String(item.id) ? " is-dragOver" : ""}`}
+                    onDragOver={(e) => { if (dragId && dragKind === item.kind && dragId !== String(item.id)) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDragOverId(String(item.id)); } }}
+                    onDragLeave={() => { if (dragOverId === String(item.id)) setDragOverId(null); }}
+                    onDrop={(e) => { e.preventDefault(); if (dragKind) handleDrop(dragKind, item.kind, String(item.id)); setDragId(null); setDragKind(null); setDragOverId(null); }}
+                  >
                     <div className="mon-row__main" role="button" tabIndex={0} onClick={() => void toggleExpand(item.id)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void toggleExpand(item.id); } }} aria-expanded={expanded} aria-controls={`mon-detail-${item.id}`}>
+                      <span
+                        className="mon-row__drag"
+                        role="button"
+                        tabIndex={-1}
+                        title={t("admin.monitoring.drag.hint")}
+                        draggable
+                        onDragStart={(e) => { setDragId(String(item.id)); setDragKind(item.kind); e.dataTransfer.effectAllowed = "move"; }}
+                        onDragEnd={() => { setDragId(null); setDragKind(null); setDragOverId(null); }}
+                        onClick={(e) => e.stopPropagation()}
+                      >⠿</span>
                       <div className="mon-row__identity">
                         <div className="mon-row__title">
                           <span className={`serverStatus-dot serverStatus-dot--${Number(item.active) ? "online" : "offline"}`} />
@@ -896,7 +1072,8 @@ export function ServerStatusSection() {
                 );
               })}
             </section>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -1035,6 +1212,30 @@ export function ServerStatusSection() {
         </ModalShell>
       )}
 
+      {orderOpen && (
+        <ModalShell
+          title={t("admin.monitoring.order.title")}
+          kicker={t("admin.monitoring.order.hint")}
+          onClose={() => setOrderOpen(false)}
+        >
+          <div className="mon-orderList">
+            {orderedKinds.map((kind, idx) => (
+              <div className="mon-orderRow" key={kind}>
+                <span className="mon-orderRow__handle" aria-hidden="true">⠿</span>
+                <span className="mon-orderRow__label">{isKnownKind(kind) ? t(groupKey(kind)) : `${t("admin.monitoring.group.other")} (${kind})`}</span>
+                <div className="mon-orderRow__actions">
+                  <button className="btn btn--soft" type="button" aria-label={t("admin.monitoring.reorder.up")} disabled={idx === 0} onClick={() => setTypeOrder(moveInList(orderedKinds, idx, idx - 1))}>↑</button>
+                  <button className="btn btn--soft" type="button" aria-label={t("admin.monitoring.reorder.down")} disabled={idx === orderedKinds.length - 1} onClick={() => setTypeOrder(moveInList(orderedKinds, idx, idx + 1))}>↓</button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="actions actions--1 admin-gap-top-sm">
+            <button className="btn btn--primary" type="button" onClick={() => setOrderOpen(false)}>{t("common.save")}</button>
+          </div>
+        </ModalShell>
+      )}
+
       <ActionMenu
         anchorEl={actionAnchor}
         open={actionServerId != null}
@@ -1051,6 +1252,10 @@ export function ServerStatusSection() {
           return it
             ? [
                 { label: t("common.edit"), onClick: () => edit(it) },
+                { label: t("admin.monitoring.reorder.up"), onClick: () => reorderNode(it, "up") },
+                { label: t("admin.monitoring.reorder.down"), onClick: () => reorderNode(it, "down") },
+                { label: t("admin.monitoring.reorder.start"), onClick: () => reorderNode(it, "start") },
+                { label: t("admin.monitoring.reorder.end"), onClick: () => reorderNode(it, "end") },
                 { label: t("common.delete"), danger: true, onClick: () => void remove(it.id) },
               ]
             : [];
