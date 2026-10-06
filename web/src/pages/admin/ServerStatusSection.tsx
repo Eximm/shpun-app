@@ -43,11 +43,9 @@ import {
   formatBitrate,
   formatDuration,
   formatIncidentValue,
-  formatLoad,
   formatPct,
   incidentMetricKey,
   incidentRuleKey,
-  stateTone,
 } from "./monitoringFormat";
 
 type TFn = ReturnType<typeof useI18n>["t"];
@@ -171,10 +169,6 @@ function countryFlag(code: string) {
   return String.fromCodePoint(...code.split("").map((char) => 127397 + char.charCodeAt(0)));
 }
 
-function kindKey(kind: ServerKind) {
-  return kind === "infra" ? "admin.servers.kind.infra" : kind === "gateway" ? "admin.servers.kind.gateway" : "admin.servers.kind.vpn";
-}
-
 /** Human-readable group label for a real backend `kind` (unknown -> "Other"). */
 function groupKey(kind: string) {
   if (kind === "gateway") return "admin.monitoring.group.gateway";
@@ -213,21 +207,30 @@ function metricTone(v: number | null | undefined): string {
   return "";
 }
 
-function barWidth(v: number | null | undefined): number {
-  if (v == null || !Number.isFinite(v)) return 0;
-  return Math.min(100, Math.max(0, v));
-}
-
-function MetricPill({ label, value, pct, tone = "" }: { label: string; value: string; pct?: number | null; tone?: string }) {
+/* Compact operational row primitives (density layer, no logic). */
+function CompactMetric({ label, value, pct }: { label: string; value: string; pct: number | null | undefined }) {
+  const tone = metricTone(pct);
   return (
-    <span className={`mon-metric${tone}`}>
-      <span className="mon-metric__label">{label}</span>
-      <span className="mon-metric__value">{value}</span>
-      {pct !== undefined && (
-        <span className="mon-metric__bar"><span className="mon-metric__barFill" style={{ width: `${barWidth(pct)}%` }} /></span>
-      )}
+    <span className={`mon-row__metric${tone}`}>
+      <span className="mon-row__metricLabel">{label}</span>
+      <span className="mon-row__metricValue">{value}{tone ? " ⚠" : ""}</span>
     </span>
   );
+}
+
+function trafficShort(mbps: number | null | undefined): string {
+  if (mbps == null || !Number.isFinite(mbps)) return "—";
+  return formatBitrate(mbps).replace(/\s?(Gbps|Mbps|Kbps|bps)$/i, "");
+}
+
+function healthShort(health: HealthTier, state: CurrentCheck["state"] | undefined, t: TFn): string {
+  if (health === "healthy") return t("admin.monitoring.health.ok");
+  if (state === "offline") return t("admin.monitoring.state.offline");
+  return t("admin.monitoring.state.stale");
+}
+
+function healthTone(health: HealthTier): string {
+  return health === "critical" ? "is-bad" : health === "warning" ? "is-warn" : "is-ok";
 }
 
 function collectorHealth(c: CollectorState | null): { tone: string; labelKey: string } | null {
@@ -583,17 +586,6 @@ export function ServerStatusSection() {
     });
   }
 
-  function currentStateLabel(state: CurrentCheck["state"] | undefined) {
-    if (state === "fresh") return t("admin.monitoring.state.fresh");
-    if (state === "stale") return t("admin.monitoring.state.stale");
-    if (state === "offline") return t("admin.monitoring.state.offline");
-    return t("admin.monitoring.state.no_data");
-  }
-
-  function currentStateChip(state: CurrentCheck["state"] | undefined) {
-    return `chip--${stateTone(state)}`;
-  }
-
   function severityRank(sev: string) {
     return sev === "critical" ? 0 : sev === "warning" ? 1 : 2;
   }
@@ -863,57 +855,36 @@ export function ServerStatusSection() {
                         onClick={(e) => e.stopPropagation()}
                       >⠿</span>
                       <div className="mon-row__identity">
-                        <div className="mon-row__title">
+                        <span className="mon-row__title">
                           <span className={`serverStatus-dot serverStatus-dot--${Number(item.active) ? "online" : "offline"}`} />
-                          {item.country_code ? `${countryFlag(item.country_code)} ` : ""}{item.title || item.host}
-                        </div>
-                        <div className="mon-row__badges">
-                          <span className={`chip ${currentStateChip(current?.state)}`}>{currentStateLabel(current?.state)}</span>
-                          <span className="chip chip--soft">{t(kindKey(item.kind))}</span>
-                          <span className={`chip ${item.visibility === "admin_only" ? "chip--warn" : "chip--ok"}`}>
-                            {item.visibility === "admin_only" ? `🔒 ${t("admin.monitoring.badge.internal")}` : t("admin.monitoring.badge.public")}
+                          {item.visibility === "admin_only" ? <span className="mon-row__vis" title={t("admin.monitoring.badge.internal")}>🔒</span> : null}
+                          <span className="mon-row__name">{item.country_code ? `${countryFlag(item.country_code)} ` : ""}{item.title || item.host}</span>
+                        </span>
+                        {topIssue && (
+                          <span className={`mon-row__issueInline mon-row__issue--${topIssue.severity}`}>
+                            {`${topIssue.severity === "critical" ? "🔴" : "⚠"} ${t(incidentRuleKey(topIssue.ruleType))}`}
+                            {topIssue.value != null && topIssue.threshold != null ? ` ${formatIncidentValue(topIssue.value, incidentUnit(topIssue.ruleType))}` : ""}
+                            {activeIssues.length > 1 ? ` +${activeIssues.length - 1}` : ""}
                           </span>
-                          {Number(item.affects_public_health) === 1 && item.visibility === "admin_only" && (
-                            <span className="chip chip--soft">{t("admin.monitoring.badge.affects_health")}</span>
-                          )}
-                        </div>
+                        )}
                       </div>
-                      <div className="mon-row__metrics">
-                        <MetricPill label={t("admin.monitoring.metric.cpu_short")} value={formatPct(current?.cpuLoadPct)} pct={current?.cpuLoadPct} tone={metricTone(current?.cpuLoadPct)} />
-                        <MetricPill label={t("admin.monitoring.metric.ram_short")} value={formatPct(current?.memoryLoadPct)} pct={current?.memoryLoadPct} tone={metricTone(current?.memoryLoadPct)} />
-                        <MetricPill label={t("admin.monitoring.metric.disk_short")} value={formatPct(current?.diskLoadPct)} pct={current?.diskLoadPct} tone={metricTone(current?.diskLoadPct)} />
-                        <MetricPill label={t("admin.monitoring.metric.load")} value={formatLoad(current?.load1)} />
-                      </div>
-                      <div className="mon-row__traffic">
-                        <span className="mon-traffic">
-                          <span className="mon-traffic__head"><span className="mon-traffic__arrow">↓</span><span className="mon-traffic__label">{t("admin.monitoring.metric.rx")}</span></span>
-                          <span className="mon-traffic__value">{formatBitrate(current?.rxMbps)}</span>
+                      <span className={`mon-row__health ${healthTone(node.health)}`}>
+                        <span className="mon-row__healthDot" />
+                        {healthShort(node.health, current?.state, t)}
+                      </span>
+                      <div className="mon-row__stats">
+                        <CompactMetric label={t("admin.monitoring.metric.cpu_short")} value={formatPct(current?.cpuLoadPct)} pct={current?.cpuLoadPct} />
+                        <CompactMetric label={t("admin.monitoring.metric.ram_short")} value={formatPct(current?.memoryLoadPct)} pct={current?.memoryLoadPct} />
+                        <CompactMetric label={t("admin.monitoring.metric.disk_short")} value={formatPct(current?.diskLoadPct)} pct={current?.diskLoadPct} />
+                        <span
+                          className="mon-row__trafficInline"
+                          title={`${t("admin.monitoring.metric.rx")} ${formatBitrate(current?.rxMbps)} · ${t("admin.monitoring.metric.tx")} ${formatBitrate(current?.txMbps)}`}
+                        >
+                          <span>↓{trafficShort(current?.rxMbps)}</span>
+                          <span>↑{trafficShort(current?.txMbps)}</span>
                         </span>
-                        <span className="mon-traffic">
-                          <span className="mon-traffic__head"><span className="mon-traffic__arrow">↑</span><span className="mon-traffic__label">{t("admin.monitoring.metric.tx")}</span></span>
-                          <span className="mon-traffic__value">{formatBitrate(current?.txMbps)}</span>
-                        </span>
-                        <MetricPill label={t("admin.monitoring.metric.uplink")} value={formatPct(current?.uplinkLoadPct)} pct={current?.uplinkLoadPct} tone={metricTone(current?.uplinkLoadPct)} />
-                        <span className={`mon-fresh${current?.state === "stale" || current?.state === "offline" ? " is-stale" : ""}`}>{t("admin.monitoring.metric.freshness", { value: fmtRelative(current?.checkedAt ?? null, t) })}</span>
+                        <span className={`mon-row__fresh${current?.state === "stale" || current?.state === "offline" ? " is-stale" : ""}`}>{fmtRelative(current?.checkedAt ?? null, t)}</span>
                       </div>
-                      {topIssue && (
-                        <div className={`mon-row__issue mon-row__issue--${topIssue.severity}`}>
-                          {`${topIssue.severity === "critical" ? "🔴" : "⚠"} ${t(incidentRuleKey(topIssue.ruleType))}`}
-                          {topIssue.value != null && topIssue.threshold != null
-                            ? `: ${formatIncidentValue(topIssue.value, incidentUnit(topIssue.ruleType))} · ${t("admin.monitoring.incident.threshold_short")} ${formatIncidentValue(topIssue.threshold, incidentUnit(topIssue.ruleType))}`
-                            : ""}
-                          {` · ${formatDuration(topIssue.durationSec)}`}
-                          {activeIssues.length > 1 ? ` · +${activeIssues.length - 1}` : ""}
-                        </div>
-                      )}
-                      <button
-                        className="mon-row__chevron"
-                        type="button"
-                        aria-label={expanded ? t("admin.monitoring.row.collapse") : t("admin.monitoring.row.expand")}
-                        aria-expanded={expanded}
-                        aria-controls={`mon-detail-${item.id}`}
-                        onClick={(e) => { e.stopPropagation(); void toggleExpand(item.id); }}
-                      >{expanded ? "⌃" : "⌄"}</button>
                       <div className="mon-row__overflow" onClick={(e) => e.stopPropagation()}>
                         <button
                           className="mon-row__overflowBtn"

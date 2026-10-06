@@ -102,7 +102,7 @@ assert(
   !src.includes("const current = expanded ? detail?.current ?? null : null"),
 );
 assert("compact uses shared formatBitrate", src.includes("formatBitrate(current?.rxMbps)"));
-assert("compact uses shared formatLoad", src.includes('formatLoad(current?.load1)'));
+assert("compact row dropped the Load pill", !src.includes('formatLoad(current?.load1)') && src.includes("trafficShort("));
 assert("compact does not hardcode Mbps decimals", !src.includes("rxMbps.toFixed(1)"));
 assert("mobile actions use an overflow menu", src.includes("mon-row__overflow") && src.includes('aria-haspopup="menu"'));
 assert("expanded diagnostics still present", src.includes("admin.monitoring.section.history") && src.includes("mon-detail"));
@@ -113,14 +113,14 @@ assert("loader uses Promise.allSettled (partial failure keeps data)", src.includ
 assert("loader never clears the list", !src.includes("setItems([])"));
 assert("mutations revalidate silently", src.includes("loadAll({ silent: true })"));
 assert("explicit force-check endpoint is separate", src.includes("/admin/monitoring/collect-now"));
-assert("compact row uses the explicit persisted state", src.includes("currentStateChip(current?.state)"));
+assert("compact row has a persisted health label", src.includes("admin.monitoring.health.ok") && src.includes("healthShort("));
 assert("polling only refetches persisted state", src.includes("setInterval(() => void loadAll({ silent: true })"));
 assert("collector observability surfaced", src.includes("admin.monitoring.collector.title"));
 assert("top panel uses grouped dashboard panels", src.includes("mon-dashboard") && src.includes("mon-panel__label"));
 assert("action toolbar is one grouped control row", src.includes("mon-toolbar") && src.includes("mon-btn--quiet"));
 assert("server summary is one grouped block", src.includes("mon-panel__big") && src.includes("mon-panel__sub"));
 assert("collector status is a compact operational row", src.includes("mon-collectorRow") && src.includes("mon-statusDot"));
-assert("collapsed card uses compact metrics, not gauges", !src.includes("Gauge") && src.includes("mon-metric") && src.includes("mon-row__traffic"));
+assert("collapsed card uses compact metrics, not gauges", !src.includes("Gauge") && src.includes("mon-row__metric") && src.includes("mon-row__stats"));
 
 const shared = readNormalized("src/pages/admin/shared.tsx");
 const actionMenu = readNormalized("src/pages/admin/ActionMenu.tsx");
@@ -130,7 +130,7 @@ assert("modal restores focus without scrolling", shared.includes("preventScroll:
 assert("modal lock effect is stable across renders", shared.includes("onCloseRef.current"));
 
 // Mobile interaction model: explicit chevron + separate actions menu.
-assert("explicit chevron control exists", src.includes("mon-row__chevron") && src.includes("aria-controls={`mon-detail-${item.id}`}"));
+assert("no inline chevron expand control", !src.includes("mon-row__chevron"));
 assert("card header exposes aria-expanded", src.includes("aria-expanded={expanded}"));
 assert("overflow button opens the action menu without expanding", src.includes("setActionAnchor(e.currentTarget)"));
 assert("actions stop propagation", src.includes("mon-row__overflow") && src.includes("onClick={(e) => e.stopPropagation()}"));
@@ -140,7 +140,7 @@ assert("action menu is a viewport-aware portal", actionMenu.includes("createPort
 // Global incidents + graph integration.
 assert("global incidents section wired in", src.includes("<MonitoringIncidents") && src.includes("openIncident"));
 assert("summary incident cards are clickable", src.includes("focusIncidents") && src.includes("mon-stat"));
-assert("compact row shows the top active issue", src.includes("mon-row__issue") && src.includes("globalActive.filter"));
+assert("compact row shows the top active issue inline", src.includes("mon-row__issueInline") && src.includes("globalActive.filter"));
 assert("incident click targets the server card", src.includes("mon-server-${inc.serverId}"));
 assert("graph focuses the incident metric", src.includes("incidentMetricKey(inc.ruleType)"));
 assert("uplink diagnostics show the capacity source", src.includes("admin.monitoring.capacity.source") && src.includes("admin.monitoring.metric.capacity"));
@@ -170,20 +170,13 @@ assert("toolbar buttons share one height", css.includes(".mon-toolbar .btn { min
 // Mobile-only composition (desktop pills retained).
 assert("mobile top summary is one bounded block", css.includes(".mon-dashboard {\n    gap: 0;") && css.includes("border-top: 1px solid var(--border);"));
 assert("mobile toolbar collapses refresh to an icon", css.includes(".mon-toolbar .mon-btn--quiet .mon-btn__text { display: none; }") && css.includes('.mon-toolbar .mon-btn--quiet::before { content: "↻"'));
-assert("mobile metrics drop bordered pills", css.includes(".mon-row__metrics .mon-metric,\n  .mon-row__traffic .mon-metric {"));
-assert("mobile badges become separator text", css.includes(".mon-row__badges .chip + .chip::before") && css.includes('content: "·"'));
-assert("desktop metric pills are retained", css.includes("border: 1px solid var(--border); border-radius: 8px;"));
-assert("mobile collapsed card keeps 3-4 logical rows", css.includes(".mon-row__main { padding: 9px 10px; gap: 5px; }") && src.includes("mon-row__metrics") && src.includes("mon-row__traffic"));
-
-// Mobile mini-dashboard composition.
-assert("mobile card is a 4-zone grid", css.includes('"title  title  title  title  chev   more"') && css.includes('"rx     rx     tx     tx     uplink uplink"'));
-assert("mobile actions live in the header zone", css.includes(".mon-row__chevron { grid-area: chev") && css.includes(".mon-row__overflow { grid-area: more"));
-assert("mobile freshness sits in the meta row", css.includes(".mon-fresh { grid-area: fresh"));
-assert("mobile system metrics use a 4-column grid", css.includes("grid-template-columns: repeat(4, minmax(0, 1fr))"));
-assert("mobile network uses rx/tx/uplink areas", css.includes(".mon-row__traffic > .mon-traffic:nth-child(1) { grid-area: rx; }") && css.includes(".mon-row__traffic > .mon-metric { grid-area: uplink; }"));
-assert("mobile percentage metrics have a thin accent bar", css.includes(".mon-metric__barFill") && css.includes(".mon-metric.is-warn .mon-metric__barFill"));
-assert("desktop hides the mobile bar and traffic labels", css.includes(".mon-metric__bar { display: none; }") && css.includes(".mon-traffic__label { display: none; }"));
-assert("no plain-text wall: label/value spans kept", src.includes("mon-metric__label") && src.includes("mon-metric__value") && src.includes("mon-traffic__value"));
+assert("compact row is not a fixed-height card", !/\.mon-row\s*\{[^}]*height:/.test(css));
+assert("compact row has dense padding", css.includes(".mon-row__main { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; padding: 8px 10px;"));
+assert("compact metric label/value are split", css.includes(".mon-row__metricLabel") && css.includes(".mon-row__metricValue"));
+assert("inline traffic + age tokens exist", css.includes(".mon-row__trafficInline") && css.includes(".mon-row__fresh"));
+assert("health indicator has tone variants", css.includes(".mon-row__health.is-ok") && css.includes(".mon-row__health.is-warn") && css.includes(".mon-row__health.is-bad"));
+assert("mobile rows stay two lines", css.includes(".mon-row__stats { order: 5; flex-basis: 100%;") && css.includes(".mon-row__overflow { order: 4; margin-left: auto;"));
+assert("old mini-dashboard grid is gone", !css.includes('"title  title  title  title  chev   more"') && !css.includes(".mon-metric__barFill"));
 
 // Incident/history mobile isolation + richer history.
 assert("incident meta no longer refuses to wrap", !css.includes(".mon-incident__meta { color: var(--muted); font-size: 11px; white-space: nowrap; }"));

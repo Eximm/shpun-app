@@ -143,5 +143,25 @@ ok("module has no cpu/ram/disk/traffic sort symbols", !/(cpu|ram|disk|traffic|lo
 ok("component sort select has exactly 3 options", (section.match(/<option value=\"(manual|type|problems)\"/g) || []).length === 3);
 ok("layout controls exist in CSS", css.includes(".mon-controls") && css.includes(".mon-orderRow") && css.includes(".mon-row__drag") && css.includes(".mon-row.is-dragOver"));
 
+/* ── Density refactor: compact rows ───────────────────────────────────────── */
+
+ok("D1 row is a single flex line (no stacked zone grid)", /\.mon-row__main\s*\{[^}]*display:\s*flex/.test(css) && !/\.mon-row__main\s*\{[^}]*display:\s*grid/.test(css));
+ok("D2 base row padding is compact (<= 10px)", /\.mon-row__main\s*\{[^}]*padding:\s*8px 10px/.test(css));
+ok("D3 identity is a single row with ellipsis name", /\.mon-row__name\s*\{[^}]*text-overflow:\s*ellipsis/.test(css) && /\.mon-row__identity\s*\{[^}]*display:\s*flex/.test(css) && !/\.mon-row__identity\s*\{[^}]*flex-direction:\s*column/.test(css));
+ok("D4 compact metric primitives exist", section.includes("function CompactMetric") && css.includes(".mon-row__metricValue") && section.includes("CompactMetric label={t(\"admin.monitoring.metric.cpu_short\""));
+ok("D5 CPU/RAM/Disk are inline in one stats group", section.includes("mon-row__stats") && section.includes("metric.cpu_short") && section.includes("metric.ram_short") && section.includes("metric.disk_short"));
+ok("D6 traffic is inline ↓/↑ without unit", section.includes("mon-row__trafficInline") && section.includes("trafficShort("));
+ok("D7 last seen is inline", section.includes("mon-row__fresh") && section.includes("fmtRelative(current?.checkedAt"));
+ok("D8 no repeated type badge inside rows", !section.includes("chip--soft\">{t(kindKey(item.kind))") && !section.includes("mon-row__badges"));
+ok("D9 no separate 'Актуально' status chip", !section.includes("currentStateLabel(") && !section.includes("currentStateChip(") && section.includes("admin.monitoring.health.ok"));
+ok("D10 no Load/Uplink pills in the row", !/mon-row__metrics[\s\S]{0,400}metric\.load/.test(section) && !/mon-row__stats[\s\S]{0,400}metric\.uplink/.test(section));
+ok("D11 no inline chevron expand control", !section.includes("mon-row__chevron"));
+ok("D12 row click still selects the server", section.includes("onClick={() => void toggleExpand(item.id)}") && section.includes("onKeyDown={(e) => { if (e.key === \"Enter\")"));
+ok("D13 detail panel still renders for the selected server", section.includes("mon-detail") && section.includes("id={`mon-detail-${item.id}`}"));
+ok("D14 reorder + drag still wired", section.includes("function reorderNode(item") && section.includes("handleDrop(") && section.includes("mon-row__drag"));
+ok("D15 mobile keeps rows to two lines", css.includes("@media (max-width: 720px)") && /\.mon-row__stats\s*\{[^}]*flex-basis:\s*100%/.test(css));
+ok("D16 no horizontal overflow (identity+stats min-width 0)", /\.mon-row__identity\s*\{[^}]*min-width:\s*0/.test(css) && /\.mon-row__stats\s*\{[^}]*min-width:\s*0/.test(css));
+ok("D17 row grows by content (no fixed height)", !/\.mon-row\s*\{[^}]*height:/.test(css));
+
 console.log(`\n${failures === 0 ? "OK" : "FAILED"}: ${failures} failure(s)`);
 process.exit(failures === 0 ? 0 : 1);
