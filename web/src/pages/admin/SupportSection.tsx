@@ -1181,7 +1181,7 @@ export function SupportSection({
             {items.map((ticket) => (
               <div
                 key={ticket.id}
-                className="list__item is-clickable admin-tightItem"
+                className="list__item is-clickable admin-tightItem admin-ticketCard"
                 role="button"
                 tabIndex={0}
                 onClick={() => void openTicket(ticket.id)}
@@ -1189,27 +1189,29 @@ export function SupportSection({
                   if (e.key === "Enter" || e.key === " ") void openTicket(ticket.id);
                 }}
               >
-                <div className="list__main">
-                  <div className="list__title">
+                <div className="admin-ticketCard__head">
+                  <div className="admin-ticketCard__title">
                     <UnreadMarker count={ticket.unread ? 1 : 0} />
-                    #{ticket.publicNo} · {userLabel(ticket, t)}
+                    <span className="admin-ticketCard__id">#{ticket.publicNo}</span>
+                    <span className="admin-ticketCard__sep">{" · "}</span>
+                    <span className="admin-ticketCard__user">{userLabel(ticket, t)}</span>
                   </div>
-                  <div className="list__sub" style={{ marginTop: 6 }}>
-                    {categoryTitles.get(ticket.categoryKey) ?? ticket.categoryKey}
-                    {" · "}
-                    {sourceLabel(ticket.source)}
-                    {ticket.userServiceId ? ` · ${t("support.admin.service_ref", { id: ticket.userServiceId })}` : ""}
-                    {" · "}
-                    {formatClock(ticket.lastMessageAt, formatDate) || "—"}
-                    {" · "}
-                    {ticket.assignedTo != null ? t("support.admin.operator_ref", { id: ticket.assignedTo }) : t("support.admin.unassigned")}
+                  <div className="admin-ticketCard__badges">
+                    <span className={`chip chip--${STATUS_TONES[ticket.status]}`}>{statusLabel(ticket.status)}</span>
+                    {(ticket.priority === "high" || ticket.priority === "urgent") && (
+                      <span className={`chip chip--${PRIORITY_TONES[ticket.priority]}`}>{priorityLabel(ticket.priority)}</span>
+                    )}
                   </div>
                 </div>
-                <div className="list__side" style={{ flexDirection: "column", gap: 4, alignItems: "flex-end" }}>
-                  <span className={`chip chip--${STATUS_TONES[ticket.status]}`}>{statusLabel(ticket.status)}</span>
-                  {(ticket.priority === "high" || ticket.priority === "urgent") && (
-                    <span className={`chip chip--${PRIORITY_TONES[ticket.priority]}`}>{priorityLabel(ticket.priority)}</span>
-                  )}
+                <div className="admin-ticketCard__meta">
+                  {categoryTitles.get(ticket.categoryKey) ?? ticket.categoryKey}
+                  {" · "}
+                  {sourceLabel(ticket.source)}
+                  {ticket.userServiceId ? ` · ${t("support.admin.service_ref", { id: ticket.userServiceId })}` : ""}
+                  {" · "}
+                  {formatClock(ticket.lastMessageAt, formatDate) || "—"}
+                  {" · "}
+                  {ticket.assignedTo != null ? t("support.admin.operator_ref", { id: ticket.assignedTo }) : t("support.admin.unassigned")}
                 </div>
               </div>
             ))}

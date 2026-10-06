@@ -7691,6 +7691,56 @@ button.reviews-star:not(:disabled) {
 .admin-inlineMeta         { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 12px; color: rgba(255,255,255,0.62); line-height: 1.35; }
 .admin-inlineMeta strong  { font-weight: 900; color: rgba(255,255,255,0.88); }
 .admin-tightItem          { padding: 10px 12px; }
+
+/* Admin Support: responsive ticket cards (long names/emails must not collide with badges) */
+.admin-ticketCard { overflow: hidden; }
+.admin-ticketCard__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px 12px;
+}
+.admin-ticketCard__title {
+  min-width: 0;
+  font-weight: 900;
+  line-height: 1.35;
+  letter-spacing: 0.1px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.admin-ticketCard__id, .admin-ticketCard__sep { white-space: nowrap; }
+.admin-ticketCard__user { overflow-wrap: anywhere; word-break: break-word; }
+.admin-ticketCard__badges {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+  min-width: 0;
+}
+.admin-ticketCard__badges .chip {
+  width: fit-content;
+  max-width: 100%;
+  white-space: nowrap;
+}
+.admin-ticketCard__meta {
+  margin-top: 8px;
+  font-size: 13px;
+  color: rgba(255,255,255,0.68);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+@media (max-width: 640px) {
+  .admin-ticketCard__head { grid-template-columns: 1fr; gap: 6px; }
+  .admin-ticketCard__title { white-space: normal; overflow: visible; text-overflow: clip; padding-right: 0; }
+  .admin-ticketCard__badges {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+}
 .admin-broadcastDate      { display: flex; flex-direction: column; gap: 6px; margin: 0 0 8px; }
 .admin-fieldHint          { display: block; margin-top: 6px; font-size: 12px; line-height: 1.38; color: rgba(255,255,255,0.54); }
 .admin-reviewSetting      { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 12px; align-items: center; }

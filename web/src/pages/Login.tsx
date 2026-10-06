@@ -108,7 +108,6 @@ function getForgotCooldown(): number {
   const left = Math.ceil((sentAt + FORGOT_COOLDOWN_MS - Date.now()) / 1000);
   return left > 0 ? left : 0;
 }
-function wasForgotSent(): boolean { return getForgotSentAt() > 0; }
 
 /* ─── Auth helpers ───────────────────────────────────────────────────────── */
 
@@ -377,7 +376,7 @@ export function Login() {
 
   // ── Forgot password ───────────────────────────────────────────────────────
   const [forgotLogin,    setForgotLogin]    = useState("");
-  const [forgotSent,     setForgotSent]     = useState(() => wasForgotSent());
+  const [forgotSent,     setForgotSent]     = useState(false);
   const [forgotLoading,  setForgotLoading]  = useState(false);
   const [forgotCooldown, setForgotCooldown] = useState(() => getForgotCooldown());
   const forgotTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -560,10 +559,14 @@ export function Login() {
       const p = readPendingPartnerId();
       setPartnerIdInput((p > 0 ? p : partnerId) > 0 ? String(p > 0 ? p : partnerId) : "");
     }
-    // При открытии forgot — подставляем email из поля логина если forgotLogin пустой
-    if (next === "forgot" && !forgotLogin.trim()) {
-      const emailFromLogin = login.trim().toLowerCase();
-      if (emailFromLogin && emailFromLogin.includes("@")) setForgotLogin(emailFromLogin);
+    // Экран «письмо отправлено» относится только к текущему успешному запросу.
+    // Старый cooldown не должен подменять результат новой попытки восстановления.
+    if (next === "forgot") {
+      setForgotSent(false);
+      if (!forgotLogin.trim()) {
+        const emailFromLogin = login.trim().toLowerCase();
+        if (emailFromLogin && emailFromLogin.includes("@")) setForgotLogin(emailFromLogin);
+      }
     }
     if (next !== "forgot") setForgotLoading(false);
   }
@@ -690,8 +693,6 @@ export function Login() {
     setForgotLoading(true);
     try {
       await apiFetch("/auth/password-reset", { method: "POST", body: { login: email } });
-    } catch { /* не раскрываем существование аккаунта */ }
-    finally {
       setForgotSentAt();
       setForgotCooldown(FORGOT_COOLDOWN_MS / 1000);
       if (forgotTimerRef.current) clearInterval(forgotTimerRef.current);
@@ -700,8 +701,11 @@ export function Login() {
         setForgotCooldown(l);
         if (l <= 0 && forgotTimerRef.current) { clearInterval(forgotTimerRef.current); forgotTimerRef.current = null; }
       }, 1000);
-      setForgotLoading(false);
       setForgotSent(true);
+    } catch {
+      toast.error(t("login.forgot.failed"));
+    } finally {
+      setForgotLoading(false);
     }
   }
 
