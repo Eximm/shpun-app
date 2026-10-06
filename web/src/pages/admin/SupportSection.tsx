@@ -566,7 +566,7 @@ export function SupportSection({
   initialKind = "support",
   initialTicketId,
 }: { initialKind?: "support" | "partnership"; initialTicketId?: number } = {}) {
-  const { t, formatDate } = useI18n();
+  const { t, formatDate, tp } = useI18n();
   const statusLabel = (status: TicketStatus) => ticketStatusLabel(status, "admin", t);
   const priorityLabel = (priority: TicketPriority) => t(PRIORITY_KEYS[priority] ?? priority);
   const sourceLabel = (source: TicketSource) => t(SOURCE_KEYS[source] ?? source);
@@ -600,6 +600,9 @@ export function SupportSection({
   const [noteSaving, setNoteSaving] = useState(false);
   const [compDraft, setCompDraft] = useState({ days: "7", description: "" });
   const [compSaving, setCompSaving] = useState(false);
+  const [compFormOpen, setCompFormOpen] = useState(false);
+  const [noteFormOpen, setNoteFormOpen] = useState(false);
+  const compSectionRef = useRef<HTMLElement | null>(null);
 
   // Synchronous locks prevent double-submit before React re-renders.
   const sendLock = useRef(false);
@@ -826,6 +829,8 @@ export function SupportSection({
 
   function openHistory() {
     setHistoryOpen(true);
+    setCompFormOpen(false);
+    setNoteFormOpen(false);
     if (opened) void loadUserHistory(opened.userId, { silent: true });
   }
 
@@ -837,6 +842,7 @@ export function SupportSection({
     try {
       await apiFetch(`/admin/support/users/${opened.userId}/notes`, { method: "POST", body: { text } });
       setNoteDraft("");
+      setNoteFormOpen(false);
       setNotice(t("support.history.note.saved"));
       await loadUserHistory(opened.userId, { silent: true });
     } catch (error) {
@@ -864,6 +870,7 @@ export function SupportSection({
         },
       });
       setCompDraft({ days: "7", description: "" });
+      setCompFormOpen(false);
       setNotice(t("support.history.comp.saved"));
       await loadUserHistory(opened.userId, { silent: true });
     } catch (error) {
@@ -905,6 +912,8 @@ export function SupportSection({
     setComposerText("");
     setUserHistory(null);
     setHistoryOpen(false);
+    setCompFormOpen(false);
+    setNoteFormOpen(false);
   }
 
   async function sendComposer() {
@@ -1032,6 +1041,24 @@ export function SupportSection({
     if (!userHistory || !opened?.serviceId) return [];
     return userHistory.compensations.filter((c) => c.serviceId === opened.serviceId);
   }, [userHistory, opened?.serviceId]);
+
+  const historyServiceTitle = (ticket: { serviceTitle?: string | null; subject?: string | null; serviceSnapshot?: { name?: string | null } | null }) =>
+    ticket.serviceTitle || ticket.subject || ticket.serviceSnapshot?.name || t("support.service_word");
+  const formatCompAmount = (c: HistoryCompensation) =>
+    c.amountDays != null
+      ? `+${tp("support.history.days", c.amountDays)}`
+      : c.amountMinor != null
+        ? `+${c.amountMinor} ${c.currency ?? ""}`.trim()
+        : "—";
+  const compPublicNo = (c: HistoryCompensation) => {
+    if (!c.ticketId) return "";
+    return userHistory?.tickets.find((x) => x.id === c.ticketId)?.publicNo ?? String(c.ticketId);
+  };
+  const compForTicket = (ht: HistoryTicket) =>
+    userHistory?.compensations.find((c) => c.ticketId === ht.id) ??
+    (ht.serviceId ? userHistory?.compensations.find((c) => c.serviceId === ht.serviceId) : undefined);
+  const pinnedNote = userHistory?.notes.find((n) => n.isPinned) ?? null;
+  const latestSameCompensation = sameServiceCompensations[0] ?? null;
 
   return (
     <div className="card">
@@ -1278,12 +1305,25 @@ export function SupportSection({
                 <span>{t("support.history.stat.tickets", { n: userHistory.summary.ticketsTotal })}</span>
                 <span>{t("support.history.stat.open", { n: userHistory.summary.ticketsOpen })}</span>
                 <span>{t("support.history.stat.compensations", { n: userHistory.summary.compensationsTotal })}</span>
-                <span>{t("support.history.stat.notes", { n: userHistory.summary.notesTotal })}</span>
               </div>
-              {sameServiceCompensations.length > 0 ? (
-                <div className="supportUserSummary__warn supportUserSummary__warn--strong">{t("support.history.warn.same_service")}</div>
+              {latestSameCompensation ? (
+                <div className="supportUserSummary__warn supportUserSummary__warn--strong">
+                  <div>{t("support.history.warn.same_title")}</div>
+                  <div className="supportUserSummary__warnBody">
+                    {formatDateTime(latestSameCompensation.createdAt, formatDate)} · {formatCompAmount(latestSameCompensation)} · {latestSameCompensation.serviceTitleSnapshot || historyServiceTitle(opened)}
+                    {compPublicNo(latestSameCompensation) ? ` · #${compPublicNo(latestSameCompensation)}` : ""}
+                  </div>
+                  {latestSameCompensation.ticketId ? (
+                    <button className="btn btn--soft" type="button" onClick={() => void openTicket(latestSameCompensation.ticketId as number)}>
+                      {t("support.history.action.open_ticket")}
+                    </button>
+                  ) : null}
+                </div>
               ) : userHistory.summary.compensationsTotal > 0 ? (
-                <div className="supportUserSummary__warn">{t("support.history.warn.previous")}</div>
+                <div className="supportUserSummary__warn">
+                  <div>{t("support.history.warn.previous_other")}</div>
+                  <button className="btn btn--soft" type="button" onClick={openHistory}>{t("support.history.warn.view")}</button>
+                </div>
               ) : null}
               <button className="btn btn--soft" type="button" onClick={openHistory}>{t("support.history.open")}</button>
             </div>
@@ -1374,12 +1414,14 @@ export function SupportSection({
           title={t("support.history.title")}
           kicker={`#${opened.userId}`}
           onClose={() => setHistoryOpen(false)}
+          cardClassName="admin-modal__card--wide"
         >
           <div className="supportHistory">
             {historyError ? <div className="pre">{historyError}</div> : null}
             {historyLoading && !userHistory ? <p className="p">{t("common.loading")}</p> : null}
             {userHistory ? (
               <>
+                {/* Summary — compact: who + 3 numbers */}
                 <div className="supportHistory__summary">
                   <div className="supportHistory__user">
                     {userHistory.user.displayName || userHistory.user.login || t("support.admin.user_ref", { id: userHistory.user.id })} · #{userHistory.user.id}
@@ -1388,106 +1430,153 @@ export function SupportSection({
                     <span>{t("support.history.stat.tickets", { n: userHistory.summary.ticketsTotal })}</span>
                     <span>{t("support.history.stat.open", { n: userHistory.summary.ticketsOpen })}</span>
                     <span>{t("support.history.stat.compensations", { n: userHistory.summary.compensationsTotal })}</span>
-                    <span>{t("support.history.stat.notes", { n: userHistory.summary.notesTotal })}</span>
                   </div>
                 </div>
 
-                {sameServiceCompensations.length > 0 ? (
-                  <div className="supportUserSummary__warn supportUserSummary__warn--strong">{t("support.history.warn.same_service")}</div>
-                ) : userHistory.summary.compensationsTotal > 0 ? (
-                  <div className="supportUserSummary__warn">{t("support.history.warn.previous")}</div>
+                {/* Same-service warning — loud, above the fold */}
+                {latestSameCompensation ? (
+                  <div className="supportHistory__warning supportHistory__warning--strong">
+                    <div className="supportHistory__warningTitle">{t("support.history.warn.same_title")}</div>
+                    <div className="supportHistory__warningBody">
+                      {formatDateTime(latestSameCompensation.createdAt, formatDate)} · {formatCompAmount(latestSameCompensation)} · {latestSameCompensation.serviceTitleSnapshot || historyServiceTitle(opened)}
+                      {compPublicNo(latestSameCompensation) ? ` · #${compPublicNo(latestSameCompensation)}` : ""}
+                    </div>
+                    {latestSameCompensation.ticketId ? (
+                      <button className="btn btn--soft" type="button" onClick={() => { setHistoryOpen(false); void openTicket(latestSameCompensation.ticketId as number); }}>
+                        {t("support.history.action.open_ticket")}
+                      </button>
+                    ) : null}
+                  </div>
                 ) : null}
 
+                {/* Generic previous-compensations hint (other services only) */}
+                {userHistory.summary.compensationsTotal > 0 && sameServiceCompensations.length === 0 ? (
+                  <div className="supportHistory__warning">
+                    <div className="supportHistory__warningBody">{t("support.history.warn.previous_other")}</div>
+                    <button className="btn btn--soft" type="button" onClick={() => compSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+                      {t("support.history.warn.view")}
+                    </button>
+                  </div>
+                ) : null}
+
+                {/* Pinned operator note — always on top */}
+                {pinnedNote ? (
+                  <div className="supportHistory__pinnedNote">
+                    <div className="supportHistory__noteText">{pinnedNote.text}</div>
+                    <div className="supportHistory__meta">
+                      <span className="chip chip--ok">{t("support.history.note.pinned")}</span>
+                      <span>{formatDateTime(pinnedNote.createdAt, formatDate)}{pinnedNote.createdBy ? ` · #${pinnedNote.createdBy}` : ""}</span>
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* Tickets — the main block */}
                 <section className="supportHistory__section">
                   <div className="supportHistory__title">{t("support.history.section.tickets")}</div>
-                  {userHistory.tickets.map((ht) => (
-                    <div className="supportHistory__ticket" key={ht.id}>
-                      <div className="supportHistory__ticketMain">
-                        <div className="supportHistory__ticketTitle">
-                          #{ht.publicNo} · {ht.serviceTitle || ht.subject || t("support.service_word")}
+                  {userHistory.tickets.map((ht) => {
+                    const comp = compForTicket(ht);
+                    return (
+                      <div className="supportHistory__ticket" key={ht.id}>
+                        <div className="supportHistory__ticketMain">
+                          <div className="supportHistory__ticketTitle">#{ht.publicNo} · {historyServiceTitle(ht)}</div>
+                          <div className="supportHistory__meta">
+                            <span>{formatDateTime(ht.createdAt, formatDate)}</span>
+                            <span>· {statusLabel(ht.status as TicketStatus)}</span>
+                          </div>
+                          {comp ? (
+                            <div className="supportHistory__ticketComp">
+                              {t("support.history.comp.in_ticket")} · {formatCompAmount(comp)}
+                            </div>
+                          ) : null}
                         </div>
-                        <div className="supportHistory__meta">
-                          <span>{formatDateTime(ht.createdAt, formatDate)}</span>
-                          <span>· {statusLabel(ht.status as TicketStatus)}</span>
-                          {ht.serviceTitle ? <span>· {ht.serviceTitle}</span> : null}
-                          <span>· {t("support.history.updated", { date: formatDateTime(ht.updatedAt, formatDate) })}</span>
-                        </div>
+                        {ht.id !== opened.id ? (
+                          <button className="btn btn--soft" type="button" onClick={() => { setHistoryOpen(false); void openTicket(ht.id); }}>
+                            {t("support.history.action.open_ticket")}
+                          </button>
+                        ) : (
+                          <span className="chip chip--soft">{t("support.history.current")}</span>
+                        )}
                       </div>
-                      {ht.id !== opened.id ? (
-                        <button className="btn btn--soft" type="button" onClick={() => { setHistoryOpen(false); void openTicket(ht.id); }}>
-                          {t("support.history.action.open_ticket")}
-                        </button>
-                      ) : (
-                        <span className="chip chip--soft">{t("support.history.current")}</span>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </section>
 
-                <section className="supportHistory__section">
+                {/* Compensations */}
+                <section className="supportHistory__section" ref={compSectionRef}>
                   <div className="supportHistory__title">{t("support.history.section.compensations")}</div>
-                  {userHistory.compensations.length === 0 ? <p className="p">{t("support.history.empty")}</p> : null}
-                  {userHistory.compensations.map((c) => (
-                    <div className="supportHistory__comp" key={c.id}>
-                      <span className="supportHistory__compMark">+{c.amountDays ?? c.amountMinor ?? "?"}</span>
-                      <span className="supportHistory__meta">
-                        {formatDateTime(c.createdAt, formatDate)} · {c.serviceTitleSnapshot || "—"}
-                        {c.ticketId ? ` · #${userHistory.tickets.find((t) => t.id === c.ticketId)?.publicNo ?? c.ticketId}` : ""}
-                        {c.description ? ` · ${c.description}` : ""}
-                      </span>
+                  {userHistory.compensations.length === 0 ? (
+                    <p className="supportHistory__empty">{t("support.history.comp.none")}</p>
+                  ) : (
+                    userHistory.compensations.map((c) => (
+                      <div className="supportHistory__comp" key={c.id}>
+                        <div className="supportHistory__compMain">
+                          <div className="supportHistory__compMark">{formatCompAmount(c)}</div>
+                          <div className="supportHistory__meta">
+                            {formatDateTime(c.createdAt, formatDate)} · {c.serviceTitleSnapshot || "—"}
+                            {compPublicNo(c) ? ` · #${compPublicNo(c)}` : ""}
+                          </div>
+                          {c.description ? <div className="supportHistory__meta">{c.description}</div> : null}
+                        </div>
+                        {c.ticketId ? (
+                          <button className="btn btn--soft" type="button" onClick={() => { setHistoryOpen(false); void openTicket(c.ticketId as number); }}>
+                            {t("support.history.action.open_ticket")}
+                          </button>
+                        ) : null}
+                      </div>
+                    ))
+                  )}
+                  {compFormOpen ? (
+                    <div className="supportHistory__form">
+                      <label className="field">
+                        <span className="field__label">{t("support.history.comp.days")}</span>
+                        <input className="input" inputMode="numeric" value={compDraft.days} onChange={(e) => setCompDraft({ ...compDraft, days: e.target.value.replace(/\D/g, "") })} />
+                      </label>
+                      <label className="field supportHistory__fieldGrow">
+                        <span className="field__label">{t("support.history.comp.description")}</span>
+                        <input className="input" value={compDraft.description} onChange={(e) => setCompDraft({ ...compDraft, description: e.target.value })} />
+                      </label>
+                      <button className="btn btn--primary" type="button" disabled={compSaving || !compDraft.description.trim()} onClick={() => void addHistoryCompensation()}>
+                        {t("support.history.comp.save")}
+                      </button>
+                      <button className="btn btn--soft" type="button" onClick={() => setCompFormOpen(false)}>{t("common.cancel")}</button>
                     </div>
-                  ))}
-                  <div className="supportHistory__form">
-                    <label className="field">
-                      <span className="field__label">{t("support.history.comp.days")}</span>
-                      <input className="input" inputMode="numeric" value={compDraft.days} onChange={(e) => setCompDraft({ ...compDraft, days: e.target.value.replace(/\D/g, "") })} />
-                    </label>
-                    <label className="field">
-                      <span className="field__label">{t("support.history.comp.description")}</span>
-                      <input className="input" value={compDraft.description} onChange={(e) => setCompDraft({ ...compDraft, description: e.target.value })} /></label>
-                    <button className="btn btn--primary" type="button" disabled={compSaving || !compDraft.description.trim()} onClick={() => void addHistoryCompensation()}>
-                      {t("support.history.comp.add")}
+                  ) : (
+                    <button className="btn btn--soft supportHistory__addBtn" type="button" onClick={() => setCompFormOpen(true)}>
+                      {userHistory.compensations.length === 0 ? t("support.history.comp.create") : t("support.history.comp.add_more")}
                     </button>
-                  </div>
+                  )}
                 </section>
 
+                {/* Internal notes */}
                 <section className="supportHistory__section">
                   <div className="supportHistory__title">{t("support.history.section.notes")}</div>
-                  {userHistory.notes.length === 0 ? <p className="p">{t("support.history.empty")}</p> : null}
-                  {userHistory.notes.map((n) => (
-                    <div className="supportHistory__note" key={n.id}>
-                      {n.isPinned ? <span className="chip chip--ok">{t("support.history.note.pinned")}</span> : null}
-                      <span className="supportHistory__noteText">{n.text}</span>
-                      <span className="supportHistory__meta">{formatDateTime(n.createdAt, formatDate)}{n.createdBy ? ` · #${n.createdBy}` : ""}</span>
-                    </div>
-                  ))}
-                  <div className="supportHistory__form">
-                    <label className="field">
-                      <span className="field__label">{t("support.history.note.add")}</span>
-                      <input className="input" value={noteDraft} placeholder={t("support.history.note.ph")} onChange={(e) => setNoteDraft(e.target.value)} />
-                    </label>
-                    <button className="btn btn--primary" type="button" disabled={noteSaving || !noteDraft.trim()} onClick={() => void addHistoryNote()}>
-                      {t("support.history.note.save")}
-                    </button>
-                  </div>
-                </section>
-
-                <section className="supportHistory__section">
-                  <div className="supportHistory__title">{t("support.history.section.timeline")}</div>
-                  <div className="supportHistory__timeline">
-                    {userHistory.timeline.slice(0, 30).map((ev, i) => (
-                      <div className="supportHistory__event" key={i}>
-                        <span className="supportHistory__meta">{formatDateTime(ev.at, formatDate)}</span>
-                        <span className="supportHistory__noteText">
-                          {ev.kind === "ticket"
-                            ? `#${ev.publicNo} · ${ev.serviceTitle || ev.title || t("support.service_word")} · ${statusLabel(ev.status as TicketStatus)}`
-                            : ev.kind === "compensation"
-                              ? `${t("support.history.event.compensation")} · +${ev.amountDays ?? ev.amountMinor ?? "?"} · ${ev.serviceTitle ?? "—"}`
-                              : `${t("support.history.event.note")} · ${ev.text}`}
-                        </span>
+                  {userHistory.notes.length === 0 ? (
+                    <p className="supportHistory__empty">{t("support.history.note.none")}</p>
+                  ) : (
+                    userHistory.notes.map((n) => (
+                      <div className={`supportHistory__note${n.isPinned ? " supportHistory__note--pinned" : ""}`} key={n.id}>
+                        <div className="supportHistory__noteText">{n.text}</div>
+                        <div className="supportHistory__meta">
+                          {n.isPinned ? <span className="chip chip--ok">{t("support.history.note.pinned")}</span> : null}
+                          <span>{formatDateTime(n.createdAt, formatDate)}{n.createdBy ? ` · #${n.createdBy}` : ""}</span>
+                        </div>
                       </div>
-                    ))}
-                  </div>
+                    ))
+                  )}
+                  {noteFormOpen ? (
+                    <div className="supportHistory__form">
+                      <label className="field supportHistory__fieldGrow">
+                        <span className="field__label">{t("support.history.note.add")}</span>
+                        <textarea className="input" rows={2} value={noteDraft} placeholder={t("support.history.note.ph")} onChange={(e) => setNoteDraft(e.target.value)} />
+                      </label>
+                      <button className="btn btn--primary" type="button" disabled={noteSaving || !noteDraft.trim()} onClick={() => void addHistoryNote()}>
+                        {t("support.history.note.save")}
+                      </button>
+                      <button className="btn btn--soft" type="button" onClick={() => setNoteFormOpen(false)}>{t("common.cancel")}</button>
+                    </div>
+                  ) : (
+                    <button className="btn btn--soft supportHistory__addBtn" type="button" onClick={() => setNoteFormOpen(true)}>{t("support.history.note.create")}</button>
+                  )}
                 </section>
               </>
             ) : null}

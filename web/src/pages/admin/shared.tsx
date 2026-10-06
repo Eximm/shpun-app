@@ -110,12 +110,14 @@ export function ModalShell({
   onClose,
   children,
   contentRef,
+  cardClassName,
 }: {
   title: string;
   kicker?: string;
   onClose: () => void;
   children: ReactNode;
   contentRef?: Ref<HTMLDivElement>;
+  cardClassName?: string;
 }) {
   const { t } = useI18n();
   // Keep the latest onClose without re-running the lock effect on every render
@@ -165,7 +167,7 @@ export function ModalShell({
 
   return (
     <div className="modal admin-modal" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className="modal__card card admin-modal__card" onClick={(ev) => ev.stopPropagation()}>
+      <div className={`modal__card card admin-modal__card${cardClassName ? ` ${cardClassName}` : ""}`} onClick={(ev) => ev.stopPropagation()}>
         <div className="card__body admin-modal__body">
           <div className="modal__head admin-modal__head">
             <div className="admin-modal__headMain">
