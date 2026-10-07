@@ -22,7 +22,8 @@ type ApiForecast = {
   nextInDays: number | null; nextDate: string | null; nextAmount: number | null; currency: string;
 };
 type ApiServicesResponse = { ok: true; summary: ApiSummary; forecast?: ApiForecast };
-type ForecastResp  = { ok: true; raw: any };
+type PaymentForecast = { amount: number | null; date: string | null; currency: string };
+type ForecastResp  = { ok: true; forecast?: PaymentForecast; raw?: any };
 type NotifLevel    = "info" | "success" | "error";
 type NotifEvent    = { event_id: string; ts: number; type?: string; level?: NotifLevel; title?: string; message?: string; meta?: any };
 type FeedResp      = { ok: true; items: NotifEvent[]; nextBefore: any };
@@ -67,13 +68,20 @@ function categoryOf(e: NotifEvent): Category {
   if (text.includes("услуг") || text.includes("продл") || text.includes("блок")) return "services";
   return "all";
 }
-function parsePaymentsForecast(raw: any): { whenText?: string; amount?: number } | null {
-  if (!raw || typeof raw !== "object") return null;
-  const data0 = Array.isArray(raw.data) && raw.data.length ? raw.data[0] : null;
-  const amount = typeof data0?.total === "number" && Number.isFinite(data0.total) ? data0.total : null;
-  const whenText = typeof raw.date === "string" && raw.date ? fmtShortDate(raw.date) : undefined;
+function parsePaymentsForecast(input: any): { whenText?: string; amount?: number; currency?: string } | null {
+  if (!input || typeof input !== "object") return null;
+  const data0 = Array.isArray(input.data) && input.data.length ? input.data[0] : null;
+  const amountRaw = input.amount ?? data0?.total;
+  const amountNumber = typeof amountRaw === "string" && amountRaw.trim() ? Number(amountRaw.replace(",", ".")) : amountRaw;
+  const amount = typeof amountNumber === "number" && Number.isFinite(amountNumber) ? amountNumber : null;
+  const date = input.date;
+  const whenText = typeof date === "string" && date ? fmtShortDate(date) : undefined;
   if (!whenText && amount == null) return null;
-  return { whenText, amount: amount ?? undefined };
+  return {
+    whenText,
+    amount: amount ?? undefined,
+    currency: typeof input.currency === "string" && input.currency ? input.currency : undefined,
+  };
 }
 function tr(template: string, params: Record<string, string | number>) {
   return Object.entries(params).reduce((acc, [k, v]) => acc.replace(new RegExp(`\\{${k}\\}`, "g"), String(v)), template);
@@ -176,7 +184,7 @@ export function Home() {
   const [svcSummary,  setSvcSummary]  = useState<ApiSummary | null>(null);
   const [svcForecast, setSvcForecast] = useState<ApiForecast | null>(null);
   const [payLoading,  setPayLoading]  = useState(false);
-  const [payForecast, setPayForecast] = useState<{ whenText?: string; amount?: number } | null>(null);
+  const [payForecast, setPayForecast] = useState<{ whenText?: string; amount?: number; currency?: string } | null>(null);
   const [newsLoading, setNewsLoading] = useState(false);
   const [newsItems,   setNewsItems]   = useState<NotifEvent[]>([]);
 
@@ -220,7 +228,10 @@ export function Home() {
   }
   async function loadPaymentsForecast() {
     setPayLoading(true);
-    try { const fc = await apiFetch("/payments/forecast", { method: "GET" }) as ForecastResp; setPayForecast(parsePaymentsForecast(fc?.raw ?? null)); }
+    try {
+      const fc = await apiFetch("/payments/forecast", { method: "GET" }) as ForecastResp;
+      setPayForecast(parsePaymentsForecast(fc?.forecast ?? fc?.raw ?? null));
+    }
     catch { setPayForecast(null); }
     finally { setPayLoading(false); }
   }
@@ -278,7 +289,7 @@ export function Home() {
   const currencyFallback = s?.currency || balance?.currency || "RUB";
 
   const forecastAmountText = typeof payForecast?.amount === "number"
-    ? fmtMoneyForecast(payForecast.amount, currencyFallback) : null;
+    ? fmtMoneyForecast(payForecast.amount, payForecast.currency || currencyFallback) : null;
   const forecastWhenText   = payForecast?.whenText || null;
 
   const servicesForecastText = svcForecast && (svcForecast.nextInDays != null || svcForecast.nextDate || svcForecast.nextAmount != null)

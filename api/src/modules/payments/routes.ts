@@ -6,6 +6,7 @@ import crypto from "node:crypto";
 
 import { getSessionFromRequest } from "../../shared/session/sessionStore.js";
 import { shmFetch, shmGetMe, shmGetPays, shmGetWithdraws } from "../../shared/shm/shmClient.js";
+import { normalizePaymentForecast } from "./forecast.js";
 
 type ReceiptRecord = {
   id: string;
@@ -251,7 +252,11 @@ export async function paymentsRoutes(app: FastifyInstance) {
       });
     }
 
-    return reply.send({ ok: true, raw: debug ? r.json : undefined });
+    return reply.send({
+      ok: true,
+      forecast: normalizePaymentForecast(r.json),
+      raw: debug ? r.json : undefined,
+    });
   });
 
   // ✅ GET /api/payments/pays?page=1 (как в SHM, постранично, компактно)

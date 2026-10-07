@@ -20,7 +20,8 @@ type PaySystem = {
 };
 
 type PaysystemsResp = { ok: true; items: PaySystem[]; raw?: any };
-type ForecastResp   = { ok: true; raw: any };
+type PaymentForecast = { amount: number | null; date: string | null; currency: string };
+type ForecastResp   = { ok: true; forecast?: PaymentForecast; raw?: any };
 
 type RequisitesResp = {
   ok: boolean;
@@ -76,7 +77,9 @@ function copyText(text: string) {
 function parseForecast(raw: any): { amount: number | null; date: string | null } {
   if (!raw || typeof raw !== "object") return { amount: null, date: null };
   const data0 = Array.isArray(raw.data) && raw.data.length ? raw.data[0] : null;
-  const amount = typeof data0?.total === "number" && Number.isFinite(data0.total) ? data0.total : null;
+  const amountRaw = raw.amount ?? data0?.total;
+  const amountNumber = typeof amountRaw === "string" && amountRaw.trim() ? Number(amountRaw.replace(",", ".")) : amountRaw;
+  const amount = typeof amountNumber === "number" && Number.isFinite(amountNumber) ? amountNumber : null;
   const date   = typeof raw.date === "string" && raw.date ? raw.date : null;
   return { amount, date };
 }
@@ -425,9 +428,10 @@ export function Payments() {
       setPaySystems(rawItems);
       try {
         const fc = (await apiFetch("/payments/forecast", { method: "GET" })) as ForecastResp;
-        setForecast(fc?.raw ?? null);
+        const nextForecast = fc?.forecast ?? fc?.raw ?? null;
+        setForecast(nextForecast);
         if (!amount) {
-          const { amount: fa } = parseForecast(fc?.raw ?? null);
+          const { amount: fa } = parseForecast(nextForecast);
           if (fa && fa > 0) { setAmount(String(Math.round(fa))); }
           else { const fallback = rawItems.find((x) => Number(x?.amount || 0) > 0)?.amount; if (fallback) setAmount(String(Math.round(Number(fallback)))); }
         }
