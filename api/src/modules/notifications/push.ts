@@ -20,6 +20,7 @@ import {
   hideBroadcastByOriginId,
   updateBroadcastByOriginId,
   putNotifEvent,
+  recordPushDelivery,
 } from "../../shared/linkdb/notificationsRepo.js";
 import { shmShpunAppAdminStatus } from "../../shared/shm/shmClient.js";
 
@@ -113,7 +114,7 @@ async function sendBroadcastPush(event: BillingPushEvent) {
 
   let totalCandidates = 0;
   let skippedInvalid = 0;
-  let skippedActive = 0;
+  let activeCandidates = 0;
   let attempted = 0;
   let sentUsers = 0;
   let failedUsers = 0;
@@ -128,10 +129,7 @@ async function sendBroadcastPush(event: BillingPushEvent) {
       continue;
     }
 
-    if (isUserActive(targetUid)) {
-      skippedActive += 1;
-      continue;
-    }
+    if (isUserActive(targetUid)) activeCandidates += 1;
 
     attempted += 1;
 
@@ -158,7 +156,7 @@ async function sendBroadcastPush(event: BillingPushEvent) {
   return {
     totalCandidates,
     skippedInvalid,
-    skippedActive,
+    activeCandidates,
     attempted,
     sentUsers,
     failedUsers,
@@ -231,7 +229,7 @@ export async function pushRoutes(app: FastifyInstance) {
 
     try {
       if (!wantsPush) {
-        console.info("BILLING_PUSH_RESULT", {
+        const result = {
           event_id: eventId,
           uid,
           ok: true,
@@ -240,109 +238,67 @@ export async function pushRoutes(app: FastifyInstance) {
           sent: 0,
           failed: 0,
           removed: 0,
+        };
+        console.info("BILLING_PUSH_RESULT", result);
+        recordPushDelivery({
+          eventId: String(eventId || ""), userId: uid, eventType: String(formatted?.type || ""),
+          mode: result.mode, reason: result.reason, ok: true,
         });
       } else if (uid > 0) {
-        if (active) {
-          console.info("BILLING_PUSH_RESULT", {
-            event_id: eventId,
-            uid,
-            ok: true,
-            mode: "skip",
-            reason: "user_active",
-            sent: 0,
-            failed: 0,
-            removed: 0,
-          });
-        } else {
-          const payloadEvent = {
-            ...formatted,
-            event_id: eventId,
-            ts: eventTs,
-          };
-
-          const wp = await sendWebPushToUser(uid, payloadEvent);
-
-          console.info("BILLING_PUSH_RESULT", {
-            event_id: eventId,
-            uid,
-            ok: Boolean(wp?.ok),
-            mode: "single",
-            reason: null,
-            sent: Number(wp?.sent ?? 0),
-            failed: Number(wp?.failed ?? 0),
-            removed: Number(wp?.removed ?? 0),
-            error: (wp as any)?.error ?? null,
-          });
-        }
-      } else if (broadcast) {
-        const rows = stmtListUsersWithPushSubs.all() as Array<{ user_id: number }>;
-
-        let totalCandidates = 0;
-        let skippedInvalid = 0;
-        let skippedActive = 0;
-        let attempted = 0;
-        let sentUsers = 0;
-        let failedUsers = 0;
-        let removedSubs = 0;
-
         const payloadEvent = {
           ...formatted,
           event_id: eventId,
-          ts: eventTs,
+          ts: eventTs ?? undefined,
         };
 
-        for (const row of rows) {
-          const targetUid = Number(row.user_id);
-          totalCandidates += 1;
-
-          if (!Number.isFinite(targetUid) || targetUid <= 0) {
-            skippedInvalid += 1;
-            continue;
-          }
-
-          if (isUserActive(targetUid)) {
-            skippedActive += 1;
-            continue;
-          }
-
-          attempted += 1;
-
-          try {
-            const wp = await sendWebPushToUser(targetUid, payloadEvent);
-
-            if (wp?.ok) {
-              if (Number(wp?.sent ?? 0) > 0) sentUsers += 1;
-              if (Number(wp?.failed ?? 0) > 0 && Number(wp?.sent ?? 0) <= 0) failedUsers += 1;
-              removedSubs += Number(wp?.removed ?? 0) || 0;
-            } else {
-              failedUsers += 1;
-            }
-          } catch (e: any) {
-            failedUsers += 1;
-            console.warn("BILLING_PUSH_BROADCAST_USER_FAIL", {
-              event_id: eventId,
-              targetUid,
-              msg: String(e?.message || e || ""),
-            });
-          }
-        }
-
-        console.info("BILLING_PUSH_RESULT", {
+        // Always hand the event to every subscription. Each service worker
+        // already suppresses the system notification when its own app window
+        // is visible. A user-level activity flag cannot safely represent all
+        // browsers and devices belonging to the account.
+        const wp = await sendWebPushToUser(uid, payloadEvent);
+        const result = {
+          event_id: eventId,
+          uid,
+          ok: Boolean(wp?.ok),
+          mode: "single",
+          reason: null,
+          active,
+          sent: Number(wp?.sent ?? 0),
+          failed: Number(wp?.failed ?? 0),
+          removed: Number(wp?.removed ?? 0),
+          error: (wp as any)?.error ?? null,
+        };
+        console.info("BILLING_PUSH_RESULT", result);
+        recordPushDelivery({
+          eventId: String(eventId || ""), userId: uid, eventType: String(formatted?.type || ""),
+          mode: result.mode, reason: result.reason, ok: result.ok,
+          sent: result.sent, failed: result.failed, removed: result.removed,
+          details: { active, error: result.error },
+        });
+      } else if (broadcast) {
+        const payloadEvent = {
+          ...formatted,
+          event_id: eventId,
+          ts: eventTs ?? undefined,
+        };
+        const delivery = await sendBroadcastPush(payloadEvent);
+        const result = {
           event_id: eventId,
           uid: null,
           ok: true,
           mode: "broadcast",
           reason: null,
-          totalCandidates,
-          skippedInvalid,
-          skippedActive,
-          attempted,
-          sentUsers,
-          failedUsers,
-          removedSubs,
+          ...delivery,
+        };
+        console.info("BILLING_PUSH_RESULT", result);
+        recordPushDelivery({
+          eventId: String(eventId || ""), eventType: String(formatted?.type || ""),
+          mode: result.mode, reason: result.reason, ok: true,
+          sent: delivery.sentUsers, failed: delivery.failedUsers, removed: delivery.removedSubs,
+          details: delivery,
         });
       } else {
-        console.info("BILLING_PUSH_RESULT", {
+        const result = {
           event_id: eventId,
           uid,
           ok: true,
@@ -351,6 +307,11 @@ export async function pushRoutes(app: FastifyInstance) {
           sent: 0,
           failed: 0,
           removed: 0,
+        };
+        console.info("BILLING_PUSH_RESULT", result);
+        recordPushDelivery({
+          eventId: String(eventId || ""), userId: uid, eventType: String(formatted?.type || ""),
+          mode: result.mode, reason: result.reason, ok: true,
         });
       }
     } catch (e: any) {
@@ -358,6 +319,11 @@ export async function pushRoutes(app: FastifyInstance) {
         event_id: eventId,
         uid,
         msg: String(e?.message || e || ""),
+      });
+      recordPushDelivery({
+        eventId: String(eventId || ""), userId: uid, eventType: String(formatted?.type || ""),
+        mode: "handler_error", reason: "exception", ok: false, failed: 1,
+        details: { message: String(e?.message || e || "") },
       });
     }
 
@@ -433,6 +399,11 @@ export async function pushRoutes(app: FastifyInstance) {
         event_id,
         ts,
         ...pushResult,
+      });
+      recordPushDelivery({
+        eventId: event_id, eventType: "broadcast.news", mode: "admin_broadcast", ok: true,
+        sent: pushResult.sentUsers, failed: pushResult.failedUsers, removed: pushResult.removedSubs,
+        details: pushResult,
       });
     }
 
@@ -552,18 +523,24 @@ export async function pushRoutes(app: FastifyInstance) {
       return reply.code(400).send({ ok: false, error: "bad_subscription" });
     }
 
-    putSubscription(uid, {
+    const saved = putSubscription(uid, {
       endpoint,
       keys: { p256dh, auth },
       ts: Math.floor(Date.now() / 1000),
     });
 
+    if (!saved.ok) {
+      console.warn("PUSH_SUBSCRIBE_STORE_FAIL", { uid, error: saved.error });
+      return reply.code(500).send({ ok: false, error: "subscription_store_failed" });
+    }
+
     console.info("PUSH_SUBSCRIBE_OK", {
       uid,
       endpoint: endpointTail(endpoint),
+      reassigned: saved.reassigned,
     });
 
-    return reply.send({ ok: true });
+    return reply.send({ ok: true, reassigned: saved.reassigned });
   });
 
   app.post("/notifications/push/unsubscribe", async (req, reply) => {

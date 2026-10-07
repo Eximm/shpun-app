@@ -96,14 +96,14 @@ export function formatIncoming(e: BillingPushEvent): BillingPushEvent {
     else if (type === "service.blocked") toast = true;
     else if (type === "service.renewed") toast = true;
     else if (type === "service.activated") toast = true;
-    else if (type === "service.forecast") toast = false;
+    else if (type === "service.forecast") toast = true;
     else if (type === "broadcast.news") toast = false;
     else toast = false;
   }
 
   let push = parseBoolLike((e as any).push);
   if (push === undefined) {
-    push = Boolean(toast);
+    push = type === "service.forecast" ? true : Boolean(toast);
   }
 
   const metaRaw = (e as any).meta || {};

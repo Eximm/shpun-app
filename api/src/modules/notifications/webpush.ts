@@ -43,8 +43,12 @@ function shortBody(ev: any) {
 }
 
 // Определяем ссылку и urgency по типу события
-function resolveEventMeta(ev: any): { link: string; urgency: webpush.Urgency; ttl: number } {
+export function resolveEventMeta(ev: any): { link: string; urgency: webpush.Urgency; ttl: number } {
   const type = String(ev?.type || "").trim();
+
+  if (type === "service.forecast") {
+    return { link: "/payments", urgency: "high", ttl: 43200 }; // 12 часов
+  }
 
   // Платёжные и балансовые события — высокий приоритет, короткий TTL
   // urgency "high" = доставить немедленно, игнорируя Doze-mode на Android

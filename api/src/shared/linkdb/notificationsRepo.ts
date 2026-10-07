@@ -450,6 +450,45 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
 
 CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user
   ON push_subscriptions(user_id);
+
+CREATE TABLE IF NOT EXISTS push_delivery_log (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  event_id    TEXT,
+  user_id     INTEGER,
+  event_type  TEXT,
+  mode        TEXT NOT NULL,
+  reason      TEXT,
+  ok          INTEGER NOT NULL DEFAULT 0,
+  sent        INTEGER NOT NULL DEFAULT 0,
+  failed      INTEGER NOT NULL DEFAULT 0,
+  removed     INTEGER NOT NULL DEFAULT 0,
+  details_json TEXT,
+  created_at  INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_push_delivery_log_created
+  ON push_delivery_log(created_at);
+
+CREATE INDEX IF NOT EXISTS idx_push_delivery_log_user_created
+  ON push_delivery_log(user_id, created_at);
+`);
+
+// A Web Push endpoint identifies one browser profile. Older versions kept the
+// same endpoint attached to every account used in that browser. Keep only the
+// most recently synchronized owner before accepting new subscriptions.
+linkDb.exec(`
+DELETE FROM push_subscriptions
+WHERE rowid NOT IN (
+  SELECT winner.rowid
+  FROM push_subscriptions AS winner
+  WHERE winner.rowid = (
+    SELECT candidate.rowid
+    FROM push_subscriptions AS candidate
+    WHERE candidate.endpoint = winner.endpoint
+    ORDER BY candidate.updated_at DESC, candidate.rowid DESC
+    LIMIT 1
+  )
+);
 `);
 
 const stmtPushSubUpsert = linkDb.prepare(`
@@ -459,6 +498,11 @@ const stmtPushSubUpsert = linkDb.prepare(`
     p256dh = excluded.p256dh,
     auth = excluded.auth,
     updated_at = excluded.updated_at
+`);
+
+const stmtPushSubRemoveFromOtherUsers = linkDb.prepare(`
+  DELETE FROM push_subscriptions
+  WHERE endpoint = @endpoint AND user_id <> @user_id
 `);
 
 const stmtPushSubList = linkDb.prepare(`
@@ -477,6 +521,30 @@ const stmtPushSubRemoveAll = linkDb.prepare(`
   DELETE FROM push_subscriptions
   WHERE user_id = @user_id
 `);
+
+const stmtPushDeliveryInsert = linkDb.prepare(`
+  INSERT INTO push_delivery_log
+    (event_id, user_id, event_type, mode, reason, ok, sent, failed, removed, details_json, created_at)
+  VALUES
+    (@event_id, @user_id, @event_type, @mode, @reason, @ok, @sent, @failed, @removed, @details_json, @created_at)
+`);
+
+const stmtPushDeliveryPrune = linkDb.prepare(`
+  DELETE FROM push_delivery_log
+  WHERE created_at < @cutoff
+`);
+
+const upsertPushSubscriptionTx = linkDb.transaction((params: {
+  user_id: number;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  now: number;
+}) => {
+  const moved = Number(stmtPushSubRemoveFromOtherUsers.run(params).changes || 0);
+  stmtPushSubUpsert.run(params);
+  return moved;
+});
 
 export type PushSubscriptionRow = {
   endpoint: string;
@@ -502,10 +570,49 @@ export function upsertPushSubscription(params: {
   const now = Math.floor(Date.now() / 1000);
 
   try {
-    stmtPushSubUpsert.run({ user_id: uid, endpoint, p256dh, auth, now });
-    return { ok: true as const };
+    const reassigned = upsertPushSubscriptionTx({ user_id: uid, endpoint, p256dh, auth, now });
+    return { ok: true as const, reassigned };
   } catch {
     return { ok: false as const, error: "db_upsert_failed" };
+  }
+}
+
+export function recordPushDelivery(params: {
+  eventId?: string | null;
+  userId?: number | null;
+  eventType?: string | null;
+  mode: string;
+  reason?: string | null;
+  ok: boolean;
+  sent?: number;
+  failed?: number;
+  removed?: number;
+  details?: unknown;
+}) {
+  const now = Math.floor(Date.now() / 1000);
+  const uid = Number(params.userId);
+
+  try {
+    stmtPushDeliveryInsert.run({
+      event_id: params.eventId ? String(params.eventId) : null,
+      user_id: Number.isFinite(uid) && uid > 0 ? Math.floor(uid) : null,
+      event_type: params.eventType ? String(params.eventType) : null,
+      mode: String(params.mode || "unknown"),
+      reason: params.reason ? String(params.reason) : null,
+      ok: params.ok ? 1 : 0,
+      sent: Math.max(0, Math.floor(Number(params.sent) || 0)),
+      failed: Math.max(0, Math.floor(Number(params.failed) || 0)),
+      removed: Math.max(0, Math.floor(Number(params.removed) || 0)),
+      details_json: params.details == null ? null : JSON.stringify(params.details),
+      created_at: now,
+    });
+
+    // Delivery diagnostics are useful across container rebuilds, but should
+    // not grow forever. Ninety days is enough for support investigations.
+    stmtPushDeliveryPrune.run({ cutoff: now - 90 * 24 * 60 * 60 });
+    return { ok: true as const };
+  } catch {
+    return { ok: false as const, error: "db_insert_failed" };
   }
 }
 
