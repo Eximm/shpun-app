@@ -81,6 +81,22 @@ their present routes until every gate below is recorded as passed.
   credential rotation or password-login disablement separately, before
   calling the production auth path safe. Do not include password derivations,
   credentials or customer identifiers in test reports.
+- On the 2026-10-11 isolated clone, 15 accounts were confirmed to have the
+  old default technical password. All 15 lacked an `accounts(type=telegram)`
+  row after the upstream migration, although the ShpunApp settings recorded
+  the matching Telegram ID. Changing those passwords or disabling fallback
+  before linking them would lock these customers out. There were 61 missing
+  Telegram account rows among 1,381 `@numeric` users, with no conflicting
+  rows. The narrowly scoped SQL in `shm-core/link_verified_app_telegram_accounts.sql`
+  linked 23 accounts whose existing ShpunApp ID matched their legacy login;
+  the remaining 38 require separate provenance review. One of those has an
+  active service, so they cannot be dismissed as unused test accounts.
+- After the 23 stage-only links, an independently signed Telegram Mini App
+  payload authenticated a previously affected account and returned its
+  original billing `user_id`; a forged signature was rejected. This proves
+  one stage path, not every customer, browser Widget/OIDC, production 2.x,
+  or a production credential rotation. Re-run the count and identity tests
+  on a fresh snapshot before any cutover. Never output IDs or tokens.
 - No end-to-end OIDC authorization, live test-bot callback, app session
   continuity, or customer-flow rehearsal on the 3.x clone has been completed.
 - The stage containers are stopped. No production service was changed by this

@@ -59,6 +59,13 @@ separately distributed administrator image.
   `session_id` expected by SHM 3.x rather than an ignored `uid` field.
   This is local branch preparation only; it has not been deployed or exercised
   against the 3.x clone. The full auth rehearsal is in `AUTH_CUTOVER.md`.
+- A stage-only audit found 61 legacy `@numeric` users without a Telegram
+  account row after migration. An evidence-based local SQL patch linked 23
+  whose ShpunApp settings independently held the same Telegram ID, including
+  all 15 confirmed default-password accounts in that snapshot. Signed stage
+  Mini App login then resolved to the original user and a forged signature
+  failed. The 38 remaining unlinked users include one with an active service
+  and need review before customer cutover; production is unchanged.
 - Production images still use mutable `latest` tags. At eventual cutover, pin
   exact digests for core, API, client, admin and dependencies, and archive
   matching image tarballs before the first database migration.
