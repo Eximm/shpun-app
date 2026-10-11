@@ -57,8 +57,10 @@ separately distributed administrator image.
   matching image tarballs before the first database migration.
 - The registry does not currently publish `3.5.0` tags for `danuk/shm-admin`
   or `danuk/shm-client-2`; their `latest` images must be pinned by digest and
-  exercised against the 3.5.0 clone before cutover. Do not equate an HTTP
-  health check with a working billing UI.
+  exercised against the 3.5.0 clone before cutover. Isolated copies of the
+  currently running UI images returned HTTP 200 when proxying `/shm/v1/test`
+  to the 3.5.0 API. This only proves the proxy, not browser login/order/admin
+  behavior. Do not equate an HTTP health check with a working billing UI.
 
 ## Release acceptance gates
 
