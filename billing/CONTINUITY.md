@@ -61,8 +61,14 @@ separately distributed administrator image.
   legacy path independently verifies Telegram signatures before using it.
   The signed Widget binding request also now supplies the authenticated
   `session_id` expected by SHM 3.x rather than an ignored `uid` field.
-  This is local branch preparation only; it has not been deployed or exercised
-  against the 3.x clone. The full auth rehearsal is in `AUTH_CUTOVER.md`.
+  This is local branch preparation only and has not been deployed. A local API
+  with a separate empty `DATA_DIR` reached only the 3.x clone through a
+  temporary SSH tunnel. Synthetic registration and password re-login returned
+  the same user; signed Telegram Mini App login returned the original user,
+  `/me` and `/services` succeeded, and a forged signature was rejected.
+  Through the same local API, a synthetic secondary email was added, a code
+  sent, an invalid code rejected, a valid code accepted, and the verified
+  account read back. The full auth rehearsal is in `AUTH_CUTOVER.md`.
 - A stage-only audit found 61 legacy `@numeric` users without a Telegram
   account row after migration. An evidence-based SQL patch linked 23 with a
   matching ShpunApp Telegram ID, including all 15 confirmed default-password
@@ -81,6 +87,10 @@ separately distributed administrator image.
   currently running UI images returned HTTP 200 when proxying `/shm/v1/test`
   to the 3.5.0 API. This only proves the proxy, not browser login/order/admin
   behavior. Do not equate an HTTP health check with a working billing UI.
+- After these tests, the local API and SSH tunnel were closed and the four
+  stage containers stopped. The production ShpunApp health endpoint and the
+  billing API at `bill.shpyn.online` both returned HTTP 200; no production
+  deployment was made.
 
 ## Release acceptance gates
 

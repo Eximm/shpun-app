@@ -108,8 +108,16 @@ their present routes until every gate below is recorded as passed.
   login still worked. Its original stage hash was restored after this test.
   This is a rehearsal, not permission to rotate production credentials before
   a fresh backup, full-account audit, native-login canaries and rollback plan.
-- No end-to-end OIDC authorization, live test-bot callback, app session
-  continuity, or customer-flow rehearsal on the 3.x clone has been completed.
-- The stage bot template alone was changed in its isolated DB; production bot
-  and billing were not touched. No production service was changed by this
-  preparation.
+- A temporary local ShpunApp API with its own empty `DATA_DIR`, strict
+  Telegram mode and an SSH-only connection to the clone passed synthetic
+  registration/password re-login, signed Mini App login to the original
+  billing user, forged-signature rejection, `/me`, `/services`, and secondary
+  email add/send/invalid-code/verify/readback. It was stopped afterward.
+  This does not prove preservation of existing production ShpunApp `sid`
+  cookies or a browser session through the actual switch.
+- No end-to-end OIDC authorization, live test-bot callback, existing app
+  session continuity, or complete customer-flow rehearsal on the 3.x clone
+  has been completed.
+- The migrated bot template and synthetic test accounts exist only in the
+  isolated clone. The four stage containers were stopped after testing;
+  production bot, billing and ShpunApp were not changed.
