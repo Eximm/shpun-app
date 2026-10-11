@@ -328,14 +328,15 @@ export async function shmSetUserEmail(sessionId: string, email: string) {
   })
 }
 
-export async function shmDeleteUserEmail(sessionId: string) {
+export async function shmDeleteUserEmail(sessionId: string, email: string) {
   return await shmFetch<any>(sessionId, 'v1/user/email', {
     method: 'DELETE',
+    query: { email },
   })
 }
 
 export async function shmRequestUserEmailVerify(sessionId: string, payload?: Record<string, any>) {
-  return await shmFetch<any>(sessionId, 'v1/user/email/verify', {
+  return await shmFetch<any>(sessionId, 'v1/user/email', {
     method: 'POST',
     body: payload ?? {},
   })

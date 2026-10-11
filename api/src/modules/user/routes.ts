@@ -159,14 +159,24 @@ async function readCurrentEmail(sessionId: string): Promise<{
   email: string | null;
   emailVerified: boolean | null;
 }> {
+  const emails = await readUserEmails(sessionId);
+  return emails[0] ?? { email: null, emailVerified: null };
+}
+
+async function readUserEmails(sessionId: string): Promise<Array<{
+  email: string;
+  emailVerified: boolean | null;
+}>> {
   const r = await shmFetch<any>(sessionId, "v1/user/email", {
-    method: "GET", query: { limit: 1, offset: 0 },
+    method: "GET", query: { limit: 100, offset: 0 },
   });
   if (!r.ok) throw new Error("shm_email_get_failed");
-  return {
-    email: extractEmailFromPayload(r.json),
-    emailVerified: extractEmailVerifiedFromPayload(r.json),
-  };
+  const rows = Array.isArray(r.json?.data) ? r.json.data : [r.json?.data ?? r.json];
+  return rows.flatMap((row: any) => {
+    const email = extractEmailFromPayload(row);
+    if (!email) return [];
+    return [{ email, emailVerified: extractEmailVerifiedFromPayload(row) }];
+  });
 }
 
 async function markOnboardingStep(sessionId: string, step: string) {
@@ -332,15 +342,16 @@ export async function userRoutes(app: FastifyInstance) {
     }
 
     try {
-      const current = await readCurrentEmail(s.shmSessionId);
-      return reply.send({ ok: true, ...current });
+      const emails = await readUserEmails(s.shmSessionId);
+      const current = emails[0] ?? { email: null, emailVerified: null };
+      return reply.send({ ok: true, ...current, emails });
     } catch {
       return reply.code(502).send({ ok: false, error: "shm_email_get_failed" });
     }
   });
 
   // PUT /user/email
-  // Меняем пользовательский email только в настройках пользователя SHM.
+  // Добавляем email как ещё одну привязку в SHM, не заменяя прежний адрес.
   // login2 не трогаем: он не должен использоваться как email-поле.
   // Успех возвращаем только если email реально сохранился.
   app.put("/user/email", async (req, reply) => {
@@ -381,9 +392,9 @@ export async function userRoutes(app: FastifyInstance) {
     }
 
     try {
-      const current = await readCurrentEmail(s.shmSessionId);
+      const savedEmail = (await readUserEmails(s.shmSessionId)).find((entry) => entry.email === email);
 
-      if (current.email !== email) {
+      if (!savedEmail) {
         return reply.code(409).send({ ok: false, error: "email_not_saved" });
       }
 
@@ -391,8 +402,8 @@ export async function userRoutes(app: FastifyInstance) {
 
       return reply.send({
         ok: true,
-        email: current.email,
-        emailVerified: current.emailVerified ?? false,
+        email: savedEmail.email,
+        emailVerified: savedEmail.emailVerified ?? false,
       });
     } catch {
       return reply.code(502).send({ ok: false, error: "email_save_check_failed" });
@@ -406,17 +417,32 @@ export async function userRoutes(app: FastifyInstance) {
       return reply.code(401).send({ ok: false, error: "not_authenticated" });
     }
 
-    const r = await shmDeleteUserEmail(s.shmSessionId);
+    const requestedEmail = normalizeEmail((req.body as any)?.email);
+    const emails = await readUserEmails(s.shmSessionId).catch(() => null);
+    if (!emails) return reply.code(502).send({ ok: false, error: "shm_email_get_failed" });
+    if (!requestedEmail && emails.length > 1) {
+      return reply.code(400).send({ ok: false, error: "email_required" });
+    }
+    const email = requestedEmail || emails[0]?.email;
+    if (!email) return reply.code(400).send({ ok: false, error: "no_email_set" });
+    if (!emails.some((entry) => entry.email === email)) {
+      return reply.code(404).send({ ok: false, error: "email_not_found" });
+    }
+    const r = await shmDeleteUserEmail(s.shmSessionId, email);
     if (!r.ok) {
       return reply.code(r.status || 502).send({
         ok: false, error: "shm_email_delete_failed", shm: { status: r.status }, text: r.text,
       });
     }
 
+    const remaining = await readUserEmails(s.shmSessionId).catch(() => null);
+    if (!remaining || remaining.some((entry) => entry.email === email)) {
+      return reply.code(409).send({ ok: false, error: "email_not_deleted" });
+    }
     return reply.send({ ok: true });
   });
 
-  // POST /user/email/verify — оставляем как был (legacy, не используется фронтом напрямую)
+  // Existing app route; SHM 3.x verifies through POST /v1/user/email.
   app.post("/user/email/verify", async (req, reply) => {
     const s = getSessionFromRequest(req);
     if (!s?.shmSessionId) {
@@ -436,7 +462,10 @@ export async function userRoutes(app: FastifyInstance) {
       });
     }
 
-    const r = await shmRequestUserEmailVerify(s.shmSessionId, payload);
+    const r = await shmRequestUserEmailVerify(s.shmSessionId, {
+      email: current.email,
+      ...(payload?.code ? { code: String(payload.code).trim() } : {}),
+    });
     if (!r.ok) {
       return reply.code(r.status || 502).send({
         ok: false, error: "shm_email_verify_failed", shm: { status: r.status }, text: r.text,
@@ -447,16 +476,21 @@ export async function userRoutes(app: FastifyInstance) {
   });
 
   // POST /user/email/send-code — отправить письмо с кодом верификации
-  // Вызывает POST /shm/v1/user/email/verify — биллинг шлёт письмо с кодом.
+  // SHM 3.x sends the code via POST /shm/v1/user/email.
   app.post("/user/email/send-code", async (req, reply) => {
     const s = getSessionFromRequest(req);
     if (!s?.shmSessionId) {
       return reply.code(401).send({ ok: false, error: "not_authenticated" });
     }
 
-    const current = await readCurrentEmail(s.shmSessionId).catch(() => ({ email: null, emailVerified: null }));
+    const requestedEmail = normalizeEmail((req.body as any)?.email);
+    const emails = await readUserEmails(s.shmSessionId).catch(() => null);
+    if (!emails) return reply.code(502).send({ ok: false, error: "shm_email_get_failed" });
+    const current = requestedEmail
+      ? emails.find((entry) => entry.email === requestedEmail)
+      : emails[0];
 
-    if (!current.email) {
+    if (!current?.email) {
       return reply.code(400).send({ ok: false, error: "no_email_set" });
     }
     const emailCheck = validateRegistrationEmailBasic(current.email);
@@ -470,10 +504,7 @@ export async function userRoutes(app: FastifyInstance) {
       return reply.code(400).send({ ok: false, error: "email_already_verified" });
     }
 
-    const r = await shmFetch<any>(s.shmSessionId, "v1/user/email/verify", {
-      method: "POST",
-      body: { email: current.email },
-    });
+    const r = await shmRequestUserEmailVerify(s.shmSessionId, { email: current.email });
 
     if (!r.ok) {
       return reply.code(r.status || 502).send({
@@ -485,7 +516,7 @@ export async function userRoutes(app: FastifyInstance) {
   });
 
   // POST /user/email/confirm — подтвердить email кодом из письма
-  // Принимает { code }. Вызывает POST /shm/v1/user/email/verify.
+  // Принимает { code, email? }. Вызывает POST /shm/v1/user/email.
   app.post("/user/email/confirm", async (req, reply) => {
     const s = getSessionFromRequest(req);
     if (!s?.shmSessionId) {
@@ -497,11 +528,13 @@ export async function userRoutes(app: FastifyInstance) {
       return reply.code(400).send({ ok: false, error: "code_required" });
     }
 
-    const storedEmail = await readCurrentEmail(s.shmSessionId).catch(() => ({
-      email: null,
-      emailVerified: null,
-    }));
-    const emailCheck = validateRegistrationEmailBasic(storedEmail.email);
+    const requestedEmail = normalizeEmail((req.body as any)?.email);
+    const emails = await readUserEmails(s.shmSessionId).catch(() => null);
+    if (!emails) return reply.code(502).send({ ok: false, error: "shm_email_get_failed" });
+    const storedEmail = requestedEmail
+      ? emails.find((entry) => entry.email === requestedEmail)
+      : emails[0];
+    const emailCheck = validateRegistrationEmailBasic(storedEmail?.email);
     if (!emailCheck.ok) {
       return reply.code(400).send({
         ok: false,
@@ -509,10 +542,7 @@ export async function userRoutes(app: FastifyInstance) {
       });
     }
 
-    const r = await shmFetch<any>(s.shmSessionId, "v1/user/email/verify", {
-      method: "POST",
-      body: { code },
-    });
+    const r = await shmRequestUserEmailVerify(s.shmSessionId, { email: storedEmail?.email, code });
 
     if (!r.ok) {
       return reply.code(r.status === 400 ? 400 : 502).send({
@@ -531,7 +561,8 @@ export async function userRoutes(app: FastifyInstance) {
     // account. Never report success until the persisted billing state says so.
     let current: Awaited<ReturnType<typeof readCurrentEmail>> | null = null;
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      current = await readCurrentEmail(s.shmSessionId).catch(() => null);
+      current = (await readUserEmails(s.shmSessionId).catch(() => []))
+        .find((entry) => entry.email === storedEmail?.email) ?? null;
       if (current?.emailVerified === true) break;
       if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 120));
     }

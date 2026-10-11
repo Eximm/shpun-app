@@ -20,4 +20,5 @@ export type PasswordSetResponse = ApiResult<{
 export type UserEmailResponse = ApiResult<{
   email?: string | null;
   emailVerified?: boolean | null;
+  emails?: Array<{ email: string; emailVerified: boolean | null }>;
 }>;

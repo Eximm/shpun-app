@@ -419,7 +419,7 @@ export function EmailVerifyModal({ open, email, onClose, onVerified, onChangeEma
     if (cooldown > 0 || sending) return;
     setSending(true); setCodeError(null);
     try {
-      await apiFetch("/user/email/send-code", { method: "POST", body: {} });
+      await apiFetch("/user/email/send-code", { method: "POST", body: { email } });
       markPendingEmailVerification(); setCooldown(EMAIL_CODE_COOLDOWN_MS / 1000);
       if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = setInterval(() => {
@@ -436,7 +436,7 @@ export function EmailVerifyModal({ open, email, onClose, onVerified, onChangeEma
     if (!trimmed) { setCodeError(t("profile.email.verify.error.empty_code")); return; }
     setConfirming(true); setCodeError(null);
     try {
-      await apiFetch("/user/email/confirm", { method: "POST", body: { code: trimmed } });
+      await apiFetch("/user/email/confirm", { method: "POST", body: { email, code: trimmed } });
       clearPendingEmailVerification(); setState("success"); onVerified();
     } catch (e: any) {
       const errCode = e?.code ?? e?.data?.error ?? "";
@@ -720,25 +720,32 @@ export function Profile() {
   // Email
   const [email,         setEmail]         = useState("");
   const [emailVerified, setEmailVerified] = useState<boolean | null>(null);
+  const [emails,        setEmails]        = useState<Array<{ email: string; emailVerified: boolean | null }>>([]);
   const [emailLoading,  setEmailLoading]  = useState(false);
   const [emailBusy,     setEmailBusy]     = useState(false);
   const [emailModal,    setEmailModal]    = useState(false);
   const [emailDraft,    setEmailDraft]    = useState("");
   const [emailError,    setEmailError]    = useState<string | null>(null);
   const [emailSaved,    setEmailSaved]    = useState(false);
+  const [emailJustAdded, setEmailJustAdded] = useState("");
   const [verifyModal,   setVerifyModal]   = useState(false);
+  const [verifyEmail,   setVerifyEmail]   = useState("");
 
   async function loadEmail() {
     setEmailLoading(true);
     try {
       const resp = await apiFetch<UserEmailResponse>("/user/email", { method: "GET" }) as any;
-      if (resp?.ok) { setEmail(String(resp.email ?? "").trim()); setEmailVerified(typeof resp.emailVerified === "boolean" ? resp.emailVerified : null); }
+      if (resp?.ok) {
+        setEmail(String(resp.email ?? "").trim());
+        setEmailVerified(typeof resp.emailVerified === "boolean" ? resp.emailVerified : null);
+        setEmails(Array.isArray(resp.emails) ? resp.emails : []);
+      }
     } catch { /* ignore */ }
     finally { setEmailLoading(false); }
   }
 
   useEffect(() => { void loadEmail(); }, []);
-  useEffect(() => { if (!emailModal) { setEmailDraft(email || ""); setEmailError(null); setEmailSaved(false); } }, [emailModal, email]);
+  useEffect(() => { if (!emailModal) { setEmailDraft(""); setEmailError(null); setEmailSaved(false); setEmailJustAdded(""); } }, [emailModal]);
 
   function getEmailError(err: unknown): string {
     const shaped = err as any;
@@ -763,7 +770,13 @@ export function Profile() {
     setEmailBusy(true);
     try {
       const resp = await apiFetch<UserEmailResponse>("/user/email", { method: "PUT", body: { email: clean } }) as any;
-      if (resp?.ok) { setEmail(String(resp.email ?? clean)); setEmailVerified(typeof resp.emailVerified === "boolean" ? resp.emailVerified : false); setEmailSaved(true); return; }
+      if (resp?.ok) {
+        setEmailJustAdded(clean);
+        setVerifyEmail(clean);
+        setEmailSaved(true);
+        await loadEmail();
+        return;
+      }
       setEmailError(t("profile.email.error.save"));
     } catch (e: unknown) { setEmailError(getEmailError(e)); }
     finally { setEmailBusy(false); }
@@ -1172,21 +1185,32 @@ export function Profile() {
           right={<SmallBadge text={t("profile.auth.login2.badge")} />}
         />
 
-        <PRow
-          label={t("profile.email.title")}
-          value={emailLoading ? t("profile.email.loading") : email || t("profile.email.empty")}
-          muted={!email}
-          hint={codePending ? t("profile.email.code_pending") : undefined}
-          right={
-            <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center" }}>
-              {email && <SmallBadge text={emailVerified === true ? t("profile.email.badge.verified") : t("profile.email.badge.unverified")} tone={emailVerified === true ? "ok" : "warn"} />}
-              <SmallBtn onClick={() => setEmailModal(true)}>{email ? t("profile.email.change") : t("profile.email.add")}</SmallBtn>
-              {email && emailVerified !== true && (
-                <SmallBtn primary onClick={() => setVerifyModal(true)}>{codePending ? t("profile.email.enter_code") : t("profile.email.verify")}</SmallBtn>
-              )}
-            </div>
-          }
-        />
+        {emails.length ? emails.map((entry, index) => (
+          <PRow
+            key={entry.email}
+            label={index === 0 ? t("profile.email.title") : t("profile.email.additional")}
+            value={entry.email}
+            hint={codePending && verifyEmail === entry.email ? t("profile.email.code_pending") : undefined}
+            right={
+              <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center" }}>
+                <SmallBadge text={entry.emailVerified === true ? t("profile.email.badge.verified") : t("profile.email.badge.unverified")} tone={entry.emailVerified === true ? "ok" : "warn"} />
+                {index === 0 && <SmallBtn onClick={() => setEmailModal(true)}>{t("profile.email.change")}</SmallBtn>}
+                {entry.emailVerified !== true && (
+                  <SmallBtn primary onClick={() => { setVerifyEmail(entry.email); setVerifyModal(true); }}>
+                    {codePending && verifyEmail === entry.email ? t("profile.email.enter_code") : t("profile.email.verify")}
+                  </SmallBtn>
+                )}
+              </div>
+            }
+          />
+        )) : (
+          <PRow
+            label={t("profile.email.title")}
+            value={emailLoading ? t("profile.email.loading") : t("profile.email.empty")}
+            muted
+            right={<SmallBtn onClick={() => setEmailModal(true)}>{t("profile.email.add")}</SmallBtn>}
+          />
+        )}
 
         <PRow
           label="Telegram"
@@ -1256,7 +1280,7 @@ export function Profile() {
         </div>
       </Modal>
 
-      <EmailVerifyModal open={verifyModal} email={email} onClose={() => setVerifyModal(false)} onVerified={() => setEmailVerified(true)} t={t} />
+      <EmailVerifyModal open={verifyModal} email={verifyEmail || email} onClose={() => setVerifyModal(false)} onVerified={() => { void loadEmail(); }} t={t} />
 
       <Modal open={pwaGuideOpen} title={t(`profile.pwa.guide.${pwaGuide}.title`)} onClose={() => setPwaGuideOpen(false)} closeLabel={t("profile.modal.close")}>
         <p className="p">{t(`profile.pwa.guide.${pwaGuide}.text`)}</p>
@@ -1291,7 +1315,7 @@ export function Profile() {
       >
         {emailSaved ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <p className="p" style={{ margin: 0 }}>Email <strong>{email}</strong> — {t("profile.email.toast.saved")}.</p>
+            <p className="p" style={{ margin: 0 }}>Email <strong>{emailJustAdded}</strong> — {t("profile.email.toast.saved")}.</p>
             <div className="pre" style={{ background: "rgba(124,92,255,.06)", borderColor: "rgba(124,92,255,.2)" }}>
               <div className="profile-note-title"><ProfileIcon name="mail" /> {t("profile.email.modal.verify_title")}</div>
               <div style={{ opacity: 0.75, fontSize: 13, lineHeight: 1.5 }}>{t("profile.email.modal.verify_text")}</div>
