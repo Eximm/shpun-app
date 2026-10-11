@@ -37,3 +37,14 @@ agreed in that quote using an idempotent payment reference. Never infer RUB
 credit from a later rate or treat a displayed EUR/USD amount as the SHM ledger
 balance. Existing payment modules need separate currency-support tests before
 any non-RUB charge is offered.
+
+## Telegram bot email template
+
+`migrate_telegram_bot_email_for_3x.py` transforms our exact SHM 2.x
+`telegram_bot` template from stdin to stdout. It has no database access and
+refuses missing/ambiguous anchors or leftover references to `login2` and the
+old email settings. It uses positional Template Toolkit method arguments for
+SHM 3.x `user.set_email` and `user.verify_email`. Do not point it at a changed
+template or apply its output directly to production without a fresh backup,
+diff review, parser check and full bot conversation test. The clone-only dry
+run and installation are documented in `../CONTINUITY.md`.

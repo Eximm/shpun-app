@@ -46,12 +46,16 @@ separately distributed administrator image.
   marker on the verified account. The exact current production template was
   transformed only on the clone; a synthetic user passed owner and invalid-
   session checks. This patch is not deployed to production.
-- The current `telegram_bot` template still reads legacy `settings.email`,
-  `settings.email_verified`, `email_verify_code`, and `login2`, and its code
-  confirmation writes these old fields instead of the SHM 3.x `accounts`
-  record. Its registration command uses SHM's native registration, but the
-  email confirmation/login experience is not yet compatible. This is a
-  blocking cutover gate; migrate and test the bot template first.
+- The 2.x `telegram_bot` email flow used legacy `settings.email`,
+  `settings.email_verified`, `email_verify_code`, and `login2` instead of the
+  SHM 3.x `accounts` record. `shm-core/migrate_telegram_bot_email_for_3x.py`
+  now transforms the exact local template to native `set_email` and
+  `verify_email` calls. On the isolated clone, the transformed template
+  parsed successfully and was installed with a source-hash guard and
+  readback. Separate synthetic template calls proved new email, repeated
+  add, code send, invalid-code rejection, verified-account ownership, and
+  rejection of another user's attempt to claim the address. The actual bot
+  conversation has **not** been exercised; this remains a cutover gate.
 - The ShpunApp API now has a stage-safe strict Telegram mode: the deterministic
   password fallback is disabled unless explicitly enabled, and the optional
   legacy path independently verifies Telegram signatures before using it.
@@ -85,7 +89,7 @@ separately distributed administrator image.
    checks. If a newer stable release appears before cutover, re-run all gates.
 2. Recreate a clean clone from a fresh production snapshot. Apply all new
    migrations, compare user/account/service/payment counts, and test the
-   `shpun_app` billing template, migrated bot email flow, bot registration and
+   `shpun_app` billing template, migrated bot conversation, bot registration and
    referrals, key issue and renewal, duplicate email, secondary logins and
    password reset.
 3. Test each saved payment module's initiation and callback without real

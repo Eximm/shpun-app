@@ -7,17 +7,20 @@ their present routes until every gate below is recorded as passed.
 ## Isolation first
 
 - The existing `shm-stage-3x-*` containers are a separate Docker network and
-  separate database/data volumes, with no published ports. They are currently
-  stopped, but they share the **production host**. This is logical isolation,
+  separate database/data volumes, with no published ports. Their running state
+  changes during tests; they share the **production host**. This is logical isolation,
   not failure isolation. Do not start them without checking host headroom and
   confirming that stage jobs cannot send real messages, charge providers, or
   accept production webhooks.
 - Give the test ShpunApp API its own `DATA_DIR` and `SHM_BASE` pointing only to
   the stage API. Give the browser a separate origin and cookie scope. Do not
   connect a test app to the production session store or billing database.
-- Use a dedicated Telegram test bot and stage Telegram profile. Keep its token,
-  OIDC client ID/secret and BotFather Allowed URLs out of Git. Never forward
-  the production bot webhook to stage.
+- Prefer a dedicated Telegram test bot and stage Telegram profile for the final
+  bot conversation test. No separate test bot is currently configured. Keep
+  its token, OIDC client ID/secret and BotFather Allowed URLs out of Git. Never
+  forward the production bot webhook to stage. If no test bot is available,
+  keep this gate open until a controlled canary can prove it without exposing
+  normal customers to the migrated flow.
 
 ## Telegram identity gates
 
@@ -56,8 +59,9 @@ their present routes until every gate below is recorded as passed.
 
 ## Other cutover gates
 
-- Migrate the `telegram_bot` email verification/account-linking template;
-  the current `login2` and `settings.email` writes are not 3.x-compatible.
+- Run a real bot registration and email-verification conversation against the
+  migrated template. Its static parse and synthetic native email method tests
+  passed on the clone, but no end-to-end bot conversation has passed yet.
 - Rehearse password reset and existing ShpunApp `sid` continuity. Do not assume
   that a valid app cookie still works after its stored SHM session changes.
 - Test ordering, key issue/renewal, payment initiation/callback, YooMoney
@@ -106,5 +110,6 @@ their present routes until every gate below is recorded as passed.
   a fresh backup, full-account audit, native-login canaries and rollback plan.
 - No end-to-end OIDC authorization, live test-bot callback, app session
   continuity, or customer-flow rehearsal on the 3.x clone has been completed.
-- The stage containers are stopped. No production service was changed by this
+- The stage bot template alone was changed in its isolated DB; production bot
+  and billing were not touched. No production service was changed by this
   preparation.
