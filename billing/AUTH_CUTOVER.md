@@ -73,6 +73,14 @@ their present routes until every gate below is recorded as passed.
 
 - Local API tests cover strict mode, forged Telegram payload rejection and the
   3.x binding request shape.
+- A read-only check of the running ShpunApp container found none of the
+  configured secrets used for legacy deterministic Telegram passwords. This
+  may leave old `@TelegramID` accounts with predictable passwords even through
+  SHM's ordinary password endpoint. Disabling the app fallback alone does not
+  invalidate existing SHM passwords. Audit the affected accounts and plan a
+  credential rotation or password-login disablement separately, before
+  calling the production auth path safe. Do not include password derivations,
+  credentials or customer identifiers in test reports.
 - No end-to-end OIDC authorization, live test-bot callback, app session
   continuity, or customer-flow rehearsal on the 3.x clone has been completed.
 - The stage containers are stopped. No production service was changed by this
