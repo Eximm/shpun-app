@@ -57,3 +57,7 @@ telegram-marzban-happ-miniapp.html
 
 # Local SHM billing templates (contain deployment-specific logic/secrets)
 local-billing/
+
+# Local Python test cache
+__pycache__/
+*.pyc
