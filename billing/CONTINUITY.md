@@ -60,12 +60,14 @@ separately distributed administrator image.
   This is local branch preparation only; it has not been deployed or exercised
   against the 3.x clone. The full auth rehearsal is in `AUTH_CUTOVER.md`.
 - A stage-only audit found 61 legacy `@numeric` users without a Telegram
-  account row after migration. An evidence-based local SQL patch linked 23
-  whose ShpunApp settings independently held the same Telegram ID, including
-  all 15 confirmed default-password accounts in that snapshot. Signed stage
-  Mini App login then resolved to the original user and a forged signature
-  failed. The 38 remaining unlinked users include one with an active service
-  and need review before customer cutover; production is unchanged.
+  account row after migration. An evidence-based SQL patch linked 23 with a
+  matching ShpunApp Telegram ID, including all 15 confirmed default-password
+  accounts in that snapshot, and 38 with a matching legacy private chat ID.
+  All 1,381 are now linked on the clone without conflicts. Signed Mini App
+  login resolved to the original user for both groups, including one with an
+  active service; forged signatures failed. A one-account stage-only password
+  rotation rejected the old predictable password without breaking signed
+  Telegram login, and the original hash was restored. Production is unchanged.
 - Production images still use mutable `latest` tags. At eventual cutover, pin
   exact digests for core, API, client, admin and dependencies, and archive
   matching image tarballs before the first database migration.

@@ -87,16 +87,23 @@ their present routes until every gate below is recorded as passed.
   the matching Telegram ID. Changing those passwords or disabling fallback
   before linking them would lock these customers out. There were 61 missing
   Telegram account rows among 1,381 `@numeric` users, with no conflicting
-  rows. The narrowly scoped SQL in `shm-core/link_verified_app_telegram_accounts.sql`
-  linked 23 accounts whose existing ShpunApp ID matched their legacy login;
-  the remaining 38 require separate provenance review. One of those has an
-  active service, so they cannot be dismissed as unused test accounts.
-- After the 23 stage-only links, an independently signed Telegram Mini App
-  payload authenticated a previously affected account and returned its
-  original billing `user_id`; a forged signature was rejected. This proves
-  one stage path, not every customer, browser Widget/OIDC, production 2.x,
-  or a production credential rotation. Re-run the count and identity tests
-  on a fresh snapshot before any cutover. Never output IDs or tokens.
+  rows. The narrowly scoped SQL in `shm-core/link_verified_telegram_accounts.sql`
+  linked 23 accounts whose ShpunApp ID matched their legacy login and the
+  remaining 38 whose legacy private `telegram.chat_id` matched it. After the
+  stage-only repair, all 1,381 have a Telegram account row for the original
+  user, with zero conflicts or missing rows. The latter group included an
+  account with an active service.
+- Independently signed Telegram Mini App payloads authenticated one account
+  from each group and resolved to the original billing `user_id`, including
+  the account with an active service. Forged signatures were rejected. This
+  proves those stage paths, not every customer, browser Widget/OIDC,
+  production 2.x, or a production credential rotation. Re-run the count and
+  identity tests on a fresh snapshot before cutover. Never output IDs or tokens.
+- On one cloned affected account, replacing the default technical password
+  with a random PBKDF2 hash made the old password fail while signed Telegram
+  login still worked. Its original stage hash was restored after this test.
+  This is a rehearsal, not permission to rotate production credentials before
+  a fresh backup, full-account audit, native-login canaries and rollback plan.
 - No end-to-end OIDC authorization, live test-bot callback, app session
   continuity, or customer-flow rehearsal on the 3.x clone has been completed.
 - The stage containers are stopped. No production service was changed by this
