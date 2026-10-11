@@ -2,19 +2,20 @@
 
 ## Current decision
 
-Keep production on SHM 2.19.10. The maintainer said that a release with
-working analytics and promo codes is planned; a chat promise is not a tested
-release. Rebase the isolated migration branch on the actual published tag and
-repeat the gates below before any production cutover. The `billing/analytics`
-report is a cold contingency, not a deployed replacement of the SHM feature.
+Target the currently published stable SHM 3.5.0 without waiting for the
+maintainer's promised analytics/promo release. Production remains on 2.19.10
+until the user-facing compatibility and rollback gates below pass. The
+`billing/analytics` report is a cold contingency, not a deployed replacement
+of the SHM feature. Analytics and Cloud-gated promo redemption in 3.5.0 must
+be treated as unavailable until independently verified, not silently bypassed.
 
 ## SHM Cloud dependencies found in the 3.5.0 core source
 
 | Surface | Dependency | Current disposition |
 | --- | --- | --- |
 | Currency conversion | `Core::Cloud::Currency` calls `/service/currencies/list` and writes to Cloud on admin save. | Independent local adapter is built and tested on the isolated 3.5.0 clone; it is not deployed. Rebase it on the actual target release. |
-| Analytics | `Core::Analytics::api_report` checks `Cloud::Subscription`. | Wait for maintainer's release, then test with Cloud unavailable. Do not remove the entitlement check from the paid endpoint. A separate aggregate report is available as a fallback. |
-| Promo redemption | `Core::Promo::apply` checks `Cloud::Subscription`. | Same release gate; test creation, redemption, reuse, expiry and billing/referral effects in the clone. |
+| Analytics | `Core::Analytics::api_report` checks `Cloud::Subscription`. | Not an upgrade gate if the user accepts the missing dashboard temporarily. Do not remove the entitlement check from the paid endpoint. A separate aggregate report is available as a fallback. |
+| Promo redemption | `Core::Promo::apply` checks `Cloud::Subscription`. | Not an upgrade gate if the user accepts Cloud-gated promo redemption temporarily; do not advertise new promo campaigns until redemption is tested. |
 | Payment-module updates | `Core::Cloud::Jobs` can download files from Cloud at startup or after configuration change. | Four currently used ARM64 binaries are saved in the verified backup and were copied byte-for-byte to the clone. No update is pending in production. Future provider/API changes remain a vendor risk. |
 | Cloud account/admin proxy | Cloud login, account, paysystem catalog, and generic proxy endpoints remain in core. | They are not the local customer's normal login, but Cloud-related admin screens may fail while Cloud is down. Admin UI source availability needs separate audit. |
 | Template S3 helper | `Core::S3` defaults to Yandex Object Storage if a template uses it. | None of the 57 local templates matched direct S3 or SHM Cloud calls in a text scan. The scan cannot prove absence of indirect/template-generated calls. |
@@ -38,20 +39,37 @@ separately distributed administrator image.
   additional email binding, code verification, and an independent FX test.
   This says nothing yet about bot referrals, production payment callbacks,
   renewals, or operational continuity under a real Cloud outage.
+- The `shpun_app` template on the clone returned `bad_session` because it tried
+  to resolve a session through an obsolete template variable. A narrowly scoped
+  migration script in `billing/shm-core` now uses the authenticated request's
+  user, removes the obsolete `login2` write, and bases the email onboarding
+  marker on the verified account. The exact current production template was
+  transformed only on the clone; a synthetic user passed owner and invalid-
+  session checks. This patch is not deployed to production.
+- The current `telegram_bot` template still reads legacy `settings.email`,
+  `settings.email_verified`, `email_verify_code`, and `login2`, and its code
+  confirmation writes these old fields instead of the SHM 3.x `accounts`
+  record. Its registration command uses SHM's native registration, but the
+  email confirmation/login experience is not yet compatible. This is a
+  blocking cutover gate; migrate and test the bot template first.
 - Production images still use mutable `latest` tags. At eventual cutover, pin
   exact digests for core, API, client, admin and dependencies, and archive
   matching image tarballs before the first database migration.
+- The registry does not currently publish `3.5.0` tags for `danuk/shm-admin`
+  or `danuk/shm-client-2`; their `latest` images must be pinned by digest and
+  exercised against the 3.5.0 clone before cutover. Do not equate an HTTP
+  health check with a working billing UI.
 
 ## Release acceptance gates
 
-1. Obtain the maintainer's actual stable tag, changelog, source commit and
-   image digests. Confirm analytics and promo implementation in source, not
-   only the interface. Test them in a Cloud-disconnected clone using the
-   intended license/entitlement path; no bypass of paid checks.
+1. Pin the published stable 3.5.0 source and image digests for all components.
+   Record the temporary analytics/promo limitations clearly; no bypass of paid
+   checks. If a newer stable release appears before cutover, re-run all gates.
 2. Recreate a clean clone from a fresh production snapshot. Apply all new
    migrations, compare user/account/service/payment counts, and test the
-   `shpun_app` billing template, bot registration/referrals, key issue and
-   renewal, duplicate email, secondary logins and password reset.
+   `shpun_app` billing template, migrated bot email flow, bot registration and
+   referrals, key issue and renewal, duplicate email, secondary logins and
+   password reset.
 3. Test each saved payment module's initiation and callback without real
    charges where possible. Test YooMoney through the intended tunnel while
    confirming client Xray traffic stays on the hoster's egress. Validate

@@ -492,11 +492,16 @@ export async function shmShpunAppTemplate<T = any>(
     ...(extraParams ?? {}),
   }
 
-  return await shmFetch<T>(null, 'v1/template/shpun_app', {
+  const result = await shmFetch<T>(null, 'v1/template/shpun_app', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: toFormUrlEncoded(flat),
   })
+  const payload = result.json as any
+  if (result.ok && payload && typeof payload === 'object' && (payload.ok === 0 || payload.ok === false)) {
+    return { ...result, ok: false, status: 422 }
+  }
+  return result
 }
 
 // =====================

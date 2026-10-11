@@ -254,7 +254,9 @@ async function callShmTemplate(
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: toFormUrlEncoded({ session_id: sessionId, action, ...(extraParams ?? {}) }),
   });
-  if (!r.ok) throw new Error(`shm_template_failed:${r.status}`);
+  if (!r.ok || (r.json && typeof r.json === "object" && r.json.ok === 0)) {
+    throw new Error(`shm_template_failed:${r.status}:${String(r.json?.error ?? "unknown")}`);
+  }
   return r.json ?? {};
 }
 

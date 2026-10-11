@@ -194,11 +194,15 @@ async function callShpunAppAction(
   action: string,
   params?: Record<string, any>
 ) {
-  return await shmFetch<any>(null, "v1/template/shpun_app", {
+  const result = await shmFetch<any>(null, "v1/template/shpun_app", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: toFormUrlEncoded({ session_id: sessionId, action, ...(params ?? {}) }),
   });
+  if (result.ok && result.json && typeof result.json === "object" && result.json.ok === 0) {
+    return { ...result, ok: false, status: 422 };
+  }
+  return result;
 }
 
 // ─── routes ──────────────────────────────────────────────────────────────────
@@ -695,22 +699,21 @@ export async function userRoutes(app: FastifyInstance) {
       }
     }
 
-    // SHM официально ищет Telegram-пользователя через login="@id" или login2="@id".
-    // Пользовательский /v1/user молча игнорирует login2, поэтому фиксируем его
-    // через наш billing-шаблон: он выполняется внутри SHM и вызывает u.set(login2).
-    const login2Res = await callShpunAppAction(s.shmSessionId, "auth.telegram", {
+    // SHM 3.x уже создает запись Telegram через подписанный web-auth запрос выше.
+    // Шаблон сохраняет только метаданные ShpunApp и не должен менять login2.
+    const metadataRes = await callShpunAppAction(s.shmSessionId, "auth.telegram", {
       telegram_id: telegramId,
       telegram_login: String(body?.username ?? "").trim(),
     });
-    const login2Msg = extractShmMessage(login2Res.json);
-    const login2ApiError = String((login2Res.json as any)?.error ?? "").trim();
-    if (!login2Res.ok || login2ApiError) {
-      return reply.code(login2Res.status === 409 ? 409 : login2Res.status || 502).send({
+    const metadataMsg = extractShmMessage(metadataRes.json);
+    const metadataApiError = String((metadataRes.json as any)?.error ?? "").trim();
+    if (!metadataRes.ok || metadataApiError) {
+      return reply.code(metadataRes.status === 409 ? 409 : metadataRes.status || 502).send({
         ok: false,
-        error: login2ApiError || login2Msg || "telegram_login_bind_failed",
-        message: login2Msg || null,
-        details: "telegram_login_is_already_used_or_rejected",
-        shm: { status: login2Res.status },
+        error: metadataApiError || metadataMsg || "telegram_metadata_update_failed",
+        message: metadataMsg || null,
+        details: "telegram_metadata_update_failed",
+        shm: { status: metadataRes.status },
       });
     }
 
