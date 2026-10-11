@@ -272,7 +272,6 @@ export async function shmTelegramWebAuth(widgetPayload: Record<string, any>, cli
 
 export async function shmTelegramWebAuthBind(
   sessionId: string,
-  uid: number,
   widgetPayload: Record<string, any>,
   clientIp?: string
 ) {
@@ -281,7 +280,8 @@ export async function shmTelegramWebAuthBind(
     headers: ipHeaders(clientIp),
     body: withTelegramProfile({
       ...(widgetPayload ?? {}),
-      uid,
+      // SHM 3.x binds to the owner of this session; its v1 schema drops uid.
+      session_id: sessionId,
       bind_to_profile: 1,
       bind_only_if_new: 1,
     }),

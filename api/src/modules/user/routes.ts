@@ -662,7 +662,6 @@ export async function userRoutes(app: FastifyInstance) {
 
     const r = await shmTelegramWebAuthBind(
       s.shmSessionId,
-      uid,
       pickTelegramWidgetPayload(body),
       getClientIp(req)
     );

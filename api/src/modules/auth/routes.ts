@@ -2,6 +2,7 @@
 
 import type { FastifyInstance } from "fastify";
 import { createHash } from "node:crypto";
+import { verifyTelegramInitData, verifyTelegramWidgetPayload } from "../../shared/telegram/verifyInitData.js";
 import { setPassword } from "./password.js";
 import { handleAuth } from "./authService.js";
 import {
@@ -616,6 +617,15 @@ function needsLegacyTelegramBind(source: string): boolean {
   return source.includes("_password_");
 }
 
+function telegramPasswordFallbackEnabled(): boolean {
+  return String(process.env.SHM_TELEGRAM_PASSWORD_FALLBACK ?? "").trim() === "1";
+}
+
+function telegramFallbackBotToken(): string {
+  // Explicitly name the login bot: TG_BOT_TOKEN may belong to a different bot.
+  return String(process.env.SHM_TELEGRAM_BOT_TOKEN ?? "").trim();
+}
+
 async function resolveTelegramMiniAppSession(
   req: any,
   body: any,
@@ -655,6 +665,19 @@ async function resolveTelegramMiniAppSession(
       error: "telegram_auth_limited",
       detail: rr.json ?? rr.text,
     };
+  }
+
+  if (!telegramPasswordFallbackEnabled()) {
+    return {
+      ok: false,
+      status: mapShmAuthErrorStatus(rr.status),
+      error: "shm_telegram_auth_failed",
+      detail: rr.json ?? rr.text,
+    };
+  }
+  const verified = verifyTelegramInitData(initData, telegramFallbackBotToken());
+  if (!verified.ok) {
+    return { ok: false, status: 401, error: "telegram_signature_invalid" };
   }
 
   const creds = buildMiniAppTelegramCredentials(initData);
@@ -764,6 +787,36 @@ async function resolveTelegramWidgetSession(
       error: "telegram_auth_limited",
       detail: rr.json ?? rr.text,
     };
+  }
+
+  if (!telegramPasswordFallbackEnabled()) {
+    if (allowRegistration) {
+      const initialPartnerId = resolvePartnerIdForInitialRegistration(payload?.partner_id, payload?.referral_alias);
+      rr = await shmTelegramWebAuthRegister(pickTelegramWidgetPayload(payload), {
+        clientIp,
+        partnerId: initialPartnerId,
+      });
+      if (rr.ok && hasShmSession(rr)) {
+        return {
+          ok: true,
+          shmSessionId: String(rr.json?.session_id ?? "").trim(),
+          registered: true,
+          source: "widget",
+        };
+      }
+      if (rr.status === 429) {
+        return { ok: false, status: 429, error: "telegram_auth_limited", detail: rr.json ?? rr.text };
+      }
+    }
+    return {
+      ok: false,
+      status: mapShmAuthErrorStatus(rr.status),
+      error: "shm_telegram_widget_auth_failed",
+      detail: rr.json ?? rr.text,
+    };
+  }
+  if (!verifyTelegramWidgetPayload(pickTelegramWidgetPayload(payload), telegramFallbackBotToken())) {
+    return { ok: false, status: 401, error: "telegram_signature_invalid" };
   }
 
   const creds = buildWidgetTelegramCredentials(payload);

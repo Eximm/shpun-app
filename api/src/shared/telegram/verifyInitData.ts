@@ -85,3 +85,28 @@ export function verifyTelegramInitData(
 
   return { ok: true, data, user }
 }
+
+/** Verify the signed fields returned by the classic Telegram Login Widget. */
+export function verifyTelegramWidgetPayload(
+  payload: Record<string, unknown>,
+  botToken: string,
+  maxAgeSeconds = 24 * 60 * 60
+): boolean {
+  if (!botToken || !payload || typeof payload !== 'object') return false
+  const id = String(payload.id ?? '').trim()
+  const hash = String(payload.hash ?? '').trim()
+  const authDate = Number(payload.auth_date)
+  if (!/^\d+$/.test(id) || !/^[a-fA-F0-9]{64}$/.test(hash) || !Number.isSafeInteger(authDate)) return false
+  const age = Math.floor(Date.now() / 1000) - authDate
+  if (age < -60 || age > maxAgeSeconds) return false
+
+  const signedKeys = ['auth_date', 'first_name', 'id', 'last_name', 'photo_url', 'username']
+  const dataCheckString = signedKeys
+    .filter((key) => payload[key] != null)
+    .sort()
+    .map((key) => `${key}=${String(payload[key])}`)
+    .join('\n')
+  const secretKey = crypto.createHash('sha256').update(botToken).digest()
+  const expected = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest()
+  return crypto.timingSafeEqual(expected, Buffer.from(hash, 'hex'))
+}

@@ -52,6 +52,13 @@ separately distributed administrator image.
   record. Its registration command uses SHM's native registration, but the
   email confirmation/login experience is not yet compatible. This is a
   blocking cutover gate; migrate and test the bot template first.
+- The ShpunApp API now has a stage-safe strict Telegram mode: the deterministic
+  password fallback is disabled unless explicitly enabled, and the optional
+  legacy path independently verifies Telegram signatures before using it.
+  The signed Widget binding request also now supplies the authenticated
+  `session_id` expected by SHM 3.x rather than an ignored `uid` field.
+  This is local branch preparation only; it has not been deployed or exercised
+  against the 3.x clone. The full auth rehearsal is in `AUTH_CUTOVER.md`.
 - Production images still use mutable `latest` tags. At eventual cutover, pin
   exact digests for core, API, client, admin and dependencies, and archive
   matching image tarballs before the first database migration.
