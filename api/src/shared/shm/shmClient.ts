@@ -266,6 +266,21 @@ export async function shmTelegramWebAppAuth(initData: string, clientIp?: string)
   })
 }
 
+export async function shmTelegramWebAppAuthRegister(
+  initData: string,
+  opts?: { clientIp?: string; partnerId?: number }
+) {
+  return await shmFetch<{ session_id?: string; registered?: number }>(null, 'v1/telegram/webapp/auth', {
+    method: 'GET',
+    headers: ipHeaders(opts?.clientIp),
+    query: withTelegramProfile({
+      initData: String(initData ?? '').trim(),
+      register_if_not_exists: 1,
+      ...(opts?.partnerId ? { partner_id: opts.partnerId } : {}),
+    }),
+  })
+}
+
 export async function shmTelegramWebAuth(widgetPayload: Record<string, any>, clientIp?: string) {
   return await shmFetch<{ session_id?: string }>(null, 'v1/telegram/web/auth', {
     method: 'POST',

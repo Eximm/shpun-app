@@ -9,12 +9,26 @@ import test from "node:test";
 const botToken = "test-login-bot-token";
 const calls: string[] = [];
 const nativeBodies: Record<string, unknown>[] = [];
+const miniAppQueries: URLSearchParams[] = [];
+const registeredMiniAppIds = new Set<number>();
+registeredMiniAppIds.add(123459);
+let nativeMiniAppRegistrationEnabled = false;
 const shm = http.createServer(async (req, res) => {
   let body = "";
   for await (const chunk of req) body += String(chunk);
   const url = new URL(req.url ?? "/", "http://billing.test");
   calls.push(`${req.method} ${url.pathname}`);
   res.setHeader("content-type", "application/json");
+  if (url.pathname.endsWith("/v1/telegram/webapp/auth")) {
+    miniAppQueries.push(new URLSearchParams(url.searchParams));
+    const telegramUser = JSON.parse(new URLSearchParams(url.searchParams.get("initData") ?? "").get("user") ?? "{}");
+    const telegramId = Number(telegramUser.id ?? 0);
+    if (telegramId === 123459 || (nativeMiniAppRegistrationEnabled && telegramId > 0)) {
+      const registered = registeredMiniAppIds.has(telegramId) ? 0 : 1;
+      registeredMiniAppIds.add(telegramId);
+      return res.end(JSON.stringify({ status: 200, data: [{ session_id: "native-session", registered }] }));
+    }
+  }
   if (url.pathname.endsWith("/v1/telegram/web/auth")) {
     nativeBodies.push(JSON.parse(body || "{}"));
   }
@@ -49,7 +63,16 @@ process.env.SHM_TELEGRAM_BOT_TOKEN = botToken;
 process.env.TELEGRAM_AUTH_SALT = "test-only-secret";
 const { buildServer } = await import("../../app/server.js");
 const { shmTelegramWebAuthBind } = await import("../../shared/shm/shmClient.js");
+const { saveReferralAlias } = await import("../../shared/linkdb/referralAliasesRepo.js");
 const app = await buildServer();
+saveReferralAlias({
+  alias: "mini_partner",
+  linkType: "partner",
+  partnerId: 777,
+  firstPaymentBonusPercent: 0,
+  partnerRewardPercent: 0,
+  enabled: true,
+});
 
 function signedMiniApp(id: number): string {
   const authDate = String(Math.floor(Date.now() / 1000));
@@ -82,6 +105,42 @@ test("strict SHM 3.x mode does not try a technical password", async () => {
     payload: { initData: signedMiniApp(123456) },
   });
   assert.equal(result.statusCode, 401);
+  assert.equal(passwordCalls().length, 0);
+});
+
+test("strict Mini App registers through native SHM once, then logs into the same account", async () => {
+  process.env.SHM_TELEGRAM_PASSWORD_FALLBACK = "0";
+  nativeMiniAppRegistrationEnabled = true;
+  calls.length = 0;
+  miniAppQueries.length = 0;
+  try {
+    const initData = signedMiniApp(123460);
+    const first = await app.inject({
+      method: "POST",
+      url: "/api/auth/telegram",
+      payload: { initData, partner_id: 999, referral_alias: "mini_partner" },
+    });
+    assert.equal(first.statusCode, 200);
+    assert.equal(first.json().user_id, 123);
+    assert.equal(miniAppQueries[0]?.get("register_if_not_exists"), "1");
+    assert.equal(miniAppQueries[0]?.get("partner_id"), "777");
+    assert.equal(passwordCalls().length, 0);
+
+    const again = await app.inject({ method: "POST", url: "/api/auth/telegram", payload: { initData: signedMiniApp(123460) } });
+    assert.equal(again.statusCode, 200);
+    assert.equal(again.json().user_id, first.json().user_id);
+    assert.equal(passwordCalls().length, 0);
+  } finally {
+    nativeMiniAppRegistrationEnabled = false;
+  }
+});
+
+test("existing Mini App Telegram account remains an ordinary login", async () => {
+  process.env.SHM_TELEGRAM_PASSWORD_FALLBACK = "0";
+  calls.length = 0;
+  const result = await app.inject({ method: "POST", url: "/api/auth/telegram", payload: { initData: signedMiniApp(123459) } });
+  assert.equal(result.statusCode, 200);
+  assert.equal(result.json().user_id, 123);
   assert.equal(passwordCalls().length, 0);
 });
 

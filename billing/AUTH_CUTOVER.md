@@ -43,10 +43,13 @@ for external providers is in `CUTOVER_RUNBOOK.md`.
 3. For a new customer, test Telegram Mini App registration, web login, email
    confirmation, bot registration, partner/campaign attribution, and repeated
    login. Record the account rows before and after each action.
-   In SHM 3.5, `/telegram/webapp/auth` is login-only; a new Mini App user must
-   first be created by the migrated bot's `/start` path, or a separate safe
-   registration flow must be implemented. Do not silently re-enable the
-   technical-password registration path.
+   Upstream SHM 3.5 `/telegram/webapp/auth` is login-only. Our pinned core
+   image adds `register_if_not_exists=1` to that endpoint: SHM verifies the
+   Mini App signature first, then creates a native Telegram account with no
+   password and returns `registered=1`. It does not mark the bot chat as
+   started; `/start` later records the chat ID. Do not re-enable the legacy
+   technical-password registration path. Rebuild and canary the custom core
+   image before expecting direct Mini App registration to work in production.
 4. Test invalid, expired, replayed and wrong-bot Telegram signatures; invalid
    payloads must never fall through to password login or registration.
 5. Add Telegram OIDC Code Flow for browser login only after confirming the

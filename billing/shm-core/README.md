@@ -1,4 +1,13 @@
-# Local FX adapter for SHM 3.5.0
+# Local SHM 3.5.0 core customizations
+
+The same pinned core image also applies
+`patch_telegram_webapp_registration.pl` to SHM's Telegram WebApp route. A
+valid signed Mini App `initData` can then create a native Telegram account on
+first launch (`register_if_not_exists=1`); an existing identity logs into its
+original account. Invalid signatures fail before lookup or creation. Unlike
+bot `/start`, a Mini App launch does not prove a private chat exists, so chat
+membership is recorded only when `/start` later arrives. This change requires
+an image rebuild and a new-user canary before production rollout.
 
 This is a deliberately narrow replacement for `Core::Cloud::Currency`. It keeps
 the SHM conversion interface but reads rates from the local SHM database, with

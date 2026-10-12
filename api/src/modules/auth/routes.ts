@@ -14,6 +14,7 @@ import {
 import {
   shmFetch,
   shmTelegramWebAppAuth,
+  shmTelegramWebAppAuthRegister,
   shmTelegramWebAuth,
   shmTelegramWebAuthRegister,
   toFormUrlEncoded,
@@ -420,6 +421,13 @@ function hasShmSession(rr: any): boolean {
   return !!shmSessionIdFromResponse(rr);
 }
 
+function shmRegisteredFromResponse(rr: any): boolean {
+  const data = rr?.json?.data;
+  const row = Array.isArray(data) ? data[0] : data;
+  return row?.registered === 1 || row?.registered === "1" ||
+    rr?.json?.registered === 1 || rr?.json?.registered === "1";
+}
+
 function logTelegramWidgetAuthShape(req: any, rr: any, stage: string): void {
   const json = rr?.json;
   const data = json?.data;
@@ -671,12 +679,16 @@ async function resolveTelegramMiniAppSession(
 > {
   const clientIp = getClientIp(req);
 
-  let rr = await singleFlightTelegramWebAppAuth(initData, clientIp);
+  const initialPartnerId = resolvePartnerIdForInitialRegistration(body?.partner_id, body?.referral_alias);
+  let rr = await shmTelegramWebAppAuthRegister(initData, {
+    clientIp,
+    partnerId: initialPartnerId,
+  });
   if (rr.ok && hasShmSession(rr)) {
     return {
       ok: true,
       shmSessionId: shmSessionIdFromResponse(rr),
-      registered: false,
+      registered: shmRegisteredFromResponse(rr),
       source: "telegram",
     };
   }
@@ -949,9 +961,13 @@ const tgMiniAppResolveCache = new Map<
   { expiresAt: number; promise: Promise<TelegramResolveResult> }
 >();
 
-function telegramResolveCacheKey(initData: string): string {
+function telegramResolveCacheKey(initData: string, body: any): string {
   return createHash("sha256")
     .update(String(initData ?? "").trim())
+    .update("\0")
+    .update(String(body?.referral_alias ?? "").trim().toLowerCase())
+    .update("\0")
+    .update(String(resolvePartnerIdForInitialRegistration(body?.partner_id, body?.referral_alias)))
     .digest("hex");
 }
 
@@ -961,7 +977,7 @@ async function cachedResolveTelegramMiniAppSession(
   initData: string
 ): Promise<TelegramResolveResult> {
   const now = Date.now();
-  const key = telegramResolveCacheKey(initData);
+  const key = telegramResolveCacheKey(initData, body);
 
   for (const [k, v] of tgMiniAppResolveCache) {
     if (v.expiresAt <= now) tgMiniAppResolveCache.delete(k);
