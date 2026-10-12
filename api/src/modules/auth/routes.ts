@@ -1588,11 +1588,13 @@ export async function authRoutes(app: FastifyInstance) {
     return reply.clearCookie("sid", { path: "/" }).send({ ok: true });
   });
 
-  // ── Сброс пароля: проверка токена и получение login2 ────────────────────
-  // Публичный. GET /auth/password-reset/verify?token=...
-  // Возвращает login2 пользователя чтобы показать его на странице сброса.
-  app.get("/auth/password-reset/verify", async (req, reply) => {
-    const token = String((req.query as any)?.token ?? "").trim();
+  // ── Сброс пароля: SHM 3 requires the account login as well as the token. ──
+  // SHM 2 accepts the additional login parameter, so the browser may carry
+  // both fields during migration without selecting a billing version here.
+  const verifyPasswordReset = async (req: any, reply: any) => {
+    const params = req.method === "POST" ? readJsonBody(req) : (req.query ?? {});
+    const token = String(params?.token ?? "").trim();
+    const linkLogin = String(params?.login ?? "").trim().toLowerCase();
 
     if (!token) {
       return reply.code(400).send({ ok: false, error: "token_required" });
@@ -1600,7 +1602,7 @@ export async function authRoutes(app: FastifyInstance) {
 
     const r = await shmFetch<any>(null, `v1/user/passwd/reset/verify`, {
       method: "GET",
-      query: { token },
+      query: { token, ...(linkLogin ? { login: linkLogin } : {}) },
     });
 
     if (!r.ok) {
@@ -1610,9 +1612,12 @@ export async function authRoutes(app: FastifyInstance) {
       });
     }
 
-    // Биллинг возвращает данные пользователя — вытаскиваем login2
     const j: any = r.json ?? {};
     const u = Array.isArray(j?.data) ? j.data[0] : j?.data ?? j ?? {};
+    const outcome = String(u?.msg ?? j?.msg ?? "").trim();
+    if (outcome !== "Successful") {
+      return reply.code(400).send({ ok: false, error: "invalid_or_expired_token" });
+    }
     const login2 = String(u?.login2 ?? u?.data?.login2 ?? "").trim();
     const login  = String(u?.login  ?? u?.data?.login  ?? "").trim();
 
@@ -1621,7 +1626,10 @@ export async function authRoutes(app: FastifyInstance) {
       login2: login2 || null,
       login:  login  || null,
     });
-  });
+  };
+  app.get("/auth/password-reset/verify", verifyPasswordReset);
+  // New browser flow keeps reset tokens out of the API's request URL/logs.
+  app.post("/auth/password-reset/verify", verifyPasswordReset);
 
   // ── Сброс пароля: запрос письма ──────────────────────────────────────────
   // Публичный. Принимает { login }.
@@ -1647,10 +1655,11 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   // ── Сброс пароля: установка нового пароля по токену ──────────────────────
-  // Публичный. Принимает { token, password }.
+  // Публичный. Принимает { token, login, password }.
   app.post("/auth/password-reset/confirm", async (req, reply) => {
     const body     = readJsonBody(req);
     const token    = String(body?.token    ?? "").trim();
+    const linkLogin = String(body?.login   ?? "").trim().toLowerCase();
     const password = String(body?.password ?? "").trim();
 
     if (!token) {
@@ -1662,7 +1671,7 @@ export async function authRoutes(app: FastifyInstance) {
 
     const r = await shmFetch<any>(null, "v1/user/passwd/reset/verify", {
       method: "POST",
-      body: { token, password },
+      body: { token, ...(linkLogin ? { login: linkLogin } : {}), password },
     });
 
     if (!r.ok) {
@@ -1675,6 +1684,10 @@ export async function authRoutes(app: FastifyInstance) {
     // Биллинг возвращает данные пользователя — вытаскиваем login2 и login
     const j: any = r.json ?? {};
     const u = Array.isArray(j?.data) ? j.data[0] : j?.data ?? {};
+    const outcome = String(u?.msg ?? j?.msg ?? "").trim();
+    if (outcome !== "Password reset successful") {
+      return reply.code(400).send({ ok: false, error: "invalid_or_expired_token" });
+    }
     const login2 = String(u?.login2 ?? "").trim();
     const login  = String(u?.login  ?? "").trim();
 

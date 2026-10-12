@@ -45,8 +45,11 @@ switch, even if reads stay available.
    logging into the same user, bot email/referral registration, ShpunApp
    catalog and order readback, and canonical custom-template actions. The
    synthetic stage covered all except a real browser Widget/OIDC round trip,
-   real bot transport, complete password-reset token flow and a pre-upgrade
-   ShpunApp `sid`. Decide explicitly whether a forced re-login is acceptable.
+   real bot transport and a pre-upgrade ShpunApp `sid`. The repaired SHM 3
+   password-reset contract passed a full token/new-password/replay cycle.
+   A browser/bot transport canary may run immediately after the switch with
+   registrations held; decide explicitly whether a forced re-login is
+   acceptable.
    Do not silently re-enable the technical-password fallback.
 4. Preserve and compare the four payment-module binaries and configuration;
    verify their API/module loading and the YooMoney tunnel route before
@@ -68,9 +71,10 @@ switch, even if reads stay available.
 2. Recreate the tested 3.x stack from **that** snapshot, run guarded migrations
    and count/parity checks. Deploy reviewed ShpunApp Git revision and the bot
    config together; keep external traffic on 2.x until all internal checks pass.
-3. Switch routes/webhook/callbacks only after internal health **and** real
-   canaries for login, registration, order, key, renewal and payment pass.
-   Compare balances/services/payment totals and monitor errors continuously.
+3. After internal health, switch the read/auth routes and run limited real
+   browser/bot canaries while registrations, orders and payments remain held.
+   Open those writes only after login, registration, key, renewal and payment
+   canaries pass. Compare balances/services/payment totals and monitor errors.
 4. Keep the whole 2.x stack and snapshot ready during a defined rollback
    window. Rollback restores matching 2.x DB, data volume, config and pinned
    images together; never run 2.x against a migrated 3.x database. Reconcile
@@ -85,8 +89,11 @@ order passed. A cloned existing Telegram customer with an active service
 logged into the isolated ShpunApp, retained the same billing identity and
 service visibility, opened an existing active key through the app without
 printing its subscription URL, and reused the same local `sid` on repeat
-login; a forged signature failed. A synthetic second verified email logged into its original
-ShpunApp/SHM user. The password-reset request route returned 200, but a full
-token/confirmation cycle remains untested. The encrypted off-host backup was
+login; a forged signature failed. A synthetic second verified email logged
+into its original ShpunApp/SHM user. SHM 3 requires `login` with the reset
+token; the app and UI now pass both, reject HTTP-200 logical errors and hide
+tokens from request logs. A full synthetic reset changed the same user's
+password, rejected the old password and used-token replay. The encrypted
+off-host backup was
 decrypted and the app DB, data and config restored in a separate no-network
 test. These do not replace the remaining gates above.

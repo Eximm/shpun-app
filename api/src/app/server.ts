@@ -19,12 +19,34 @@ function parseAllowedOrigins(): string[] {
 
 const COOKIE_MAX_AGE_SEC = Number(process.env.COOKIE_MAX_AGE_SEC || 30 * 24 * 60 * 60)
 
+export function sanitizeRequestUrlForLog(raw: string): string {
+  try {
+    const parsed = new URL(raw, 'http://internal.invalid')
+    for (const name of parsed.searchParams.keys()) {
+      if (/^(token|code|password|session_id)$/i.test(name)) {
+        parsed.searchParams.set(name, '<redacted>')
+      }
+    }
+    return parsed.pathname + parsed.search
+  } catch {
+    return String(raw).split('?', 1)[0]
+  }
+}
+
 export async function buildServer() {
   const isProd = process.env.NODE_ENV === 'production'
   const allowed = parseAllowedOrigins()
 
   const app = Fastify({
     logger: {
+      serializers: {
+        req: (req: any) => ({
+          method: req.method,
+          url: sanitizeRequestUrlForLog(String(req.url ?? '')),
+          hostname: req.headers?.host,
+          remoteAddress: req.socket?.remoteAddress,
+        }),
+      },
       // Человекопонятный timestamp вместо unix ms
       timestamp: () => `,"time":"${new Date().toISOString()}"`,
       // В dev — красивый вывод через pino-pretty если доступен,

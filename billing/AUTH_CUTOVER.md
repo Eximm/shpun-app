@@ -72,8 +72,10 @@ for external providers is in `CUTOVER_RUNBOOK.md`.
   through the app without disclosing the key, and reused the same
   local `sid` on repeat login. This is **not** a pre-upgrade cookie test.
   A synthetic second confirmed email also logged into the same billing user.
-  Reset initiation returned 200 on the clone, but token confirmation remains
-  untested.
+  SHM 3's reset API requires the account login as well as the token; ShpunApp
+  and its reset-link UI now pass both. A full stage cycle generated a token,
+  rejected a wrong token, changed the password, rejected the old password
+  and token replay, then logged into the same user with the new password.
 - Test ordering and read-only balance/service parity on the clone. Check the
   YooMoney tunnel before reopening payments. External provider key
   issue/renewal and payment callbacks may instead be monitored canaries after
@@ -127,7 +129,7 @@ for external providers is in `CUTOVER_RUNBOOK.md`.
   email add/send/invalid-code/verify/readback. It was stopped afterward.
   This does not prove preservation of existing production ShpunApp `sid`
   cookies or a browser session through the actual switch.
-- No end-to-end OIDC authorization, live test-bot callback, existing app
+- No end-to-end OIDC authorization, live test-bot callback, pre-upgrade app
   session continuity, provider key issue/renewal, or payment callback on the
   3.x clone has been completed.
 - SHM 3 fingerprints bot-created sessions to the webhook IP and User-Agent.

@@ -383,6 +383,7 @@ export function Login() {
 
   // ── Reset password (по токену из письма) ──────────────────────────────────
   const [resetToken,       setResetToken]       = useState("");
+  const [resetLogin,       setResetLogin]       = useState("");
   const [resetPwd1,        setResetPwd1]        = useState("");
   const [resetPwd2,        setResetPwd2]        = useState("");
   const [resetShowPwd1,    setResetShowPwd1]    = useState(false);
@@ -637,20 +638,24 @@ export function Login() {
   }
 
   // ── Reset password logic ──────────────────────────────────────────────────
-  function openResetModal(token: string) {
+  function openResetModal(token: string, login: string) {
     // Сбрасываем всё предыдущее
     setResetToken(token);
+    setResetLogin(login);
     setResetPwd1(""); setResetPwd2(""); setResetShowPwd1(false); setResetShowPwd2(false);
     setResetError(null); setResetDone(false); setResetVerifyError(null);
     setAuthModal("reset");
-    void verifyResetToken(token);
+    void verifyResetToken(token, login);
   }
 
-  async function verifyResetToken(token: string) {
+  async function verifyResetToken(token: string, login: string) {
     setResetVerifying(true);
     setResetVerifyError(null);
     try {
-      await apiFetch(`/auth/password-reset/verify?token=${encodeURIComponent(token)}`);
+      await apiFetch("/auth/password-reset/verify", {
+        method: "POST",
+        body: { token, login },
+      });
     } catch (e: any) {
       const code = String(e?.code ?? e?.data?.error ?? "");
       setResetVerifyError(
@@ -670,7 +675,7 @@ export function Login() {
     try {
       await apiFetch("/auth/password-reset/confirm", {
         method: "POST",
-        body: { token: resetToken, password: resetPwd1.trim() },
+        body: { token: resetToken, login: resetLogin, password: resetPwd1.trim() },
       });
       setResetDone(true);
     } catch (e: any) {
@@ -938,18 +943,21 @@ export function Login() {
     return () => { cancelled = true; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ?token= — открываем модалку смены пароля
+  // SHM 3 recovery links contain ?login=...&token=...; SHM 2 links may
+  // contain only a token. Strip both from browser history after capture.
   useEffect(() => {
     if (tokenHandledRef.current) return;
     const sp    = new URLSearchParams(String(loc?.search ?? ""));
     const token = sp.get("token")?.trim();
     if (!token) return;
+    const login = sp.get("login")?.trim().toLowerCase() ?? "";
     tokenHandledRef.current = true;
     // Убираем токен из URL
     sp.delete("token");
+    sp.delete("login");
     const nextSearch = sp.toString();
     window.history.replaceState(null, "", window.location.pathname + (nextSearch ? `?${nextSearch}` : ""));
-    openResetModal(token);
+    openResetModal(token, login);
   }, [loc?.search]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ?a=auth_ok — после редиректа из виджета

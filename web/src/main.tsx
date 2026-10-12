@@ -211,13 +211,13 @@ function AppPathRedirect() {
 }
 
 // Корневой маршрут.
-// Биллинг шлёт ссылки вида https://app.shpun.net?token=XXX —
-// редиректим на /login?token=XXX, там Login.tsx сам откроет модалку смены пароля.
+// SHM 3 includes both login and token in recovery links. Preserve the whole
+// query string so Login can verify the token against that exact account.
 function RootRoute() {
   const loc   = useLocation();
   const token = new URLSearchParams(loc.search).get("token");
   if (token) {
-    return <Navigate to={`/login?token=${encodeURIComponent(token)}`} replace />;
+    return <Navigate to={{ pathname: "/login", search: loc.search }} replace />;
   }
   return <AuthGateRoot />;
 }

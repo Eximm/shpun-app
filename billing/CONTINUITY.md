@@ -129,9 +129,12 @@ separately distributed administrator image.
   connection (without printing the key). Repeat login kept the same local
   `sid`; a forged signature was rejected. A synthetic second verified email
   logged into the same user. Catalog, paysystems and an unpaid order again
-  worked. Password-reset initiation returned HTTP 200, but token verification
-  and final password change remain untested. The local test app/tunnel and
-  stage containers were stopped again; production remained unchanged.
+  worked. A further stage pass found and fixed SHM 3's reset contract:
+  verification now supplies login with token, and HTTP-200 logical errors
+  are rejected. The complete reset changed a synthetic user's password,
+  preserved their identity, rejected the old password and used-token replay.
+  The local test app/tunnel and stage containers were stopped after the
+  complete test pass; production remained unchanged.
 
 ## Release acceptance gates
 

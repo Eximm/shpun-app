@@ -89,6 +89,10 @@ type ShmFetchOpts = {
 function sanitizeUrlForLog(u: URL): string {
   const safe = new URL(u.toString())
   for (const [k, v] of safe.searchParams.entries()) {
+    if (/^(token|code|password|session_id)$/i.test(k)) {
+      safe.searchParams.set(k, '<redacted>')
+      continue
+    }
     const vv = String(v ?? '')
     safe.searchParams.set(k, vv.length > 32 ? vv.slice(0, 32) + '…' : vv)
   }

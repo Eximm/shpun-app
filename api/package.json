@@ -7,6 +7,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "test:email": "tsx --test src/shared/utils/email.test.ts src/modules/emailValidation/routes.test.ts",
+    "test:auth-reset": "tsx --test src/modules/auth/passwordResetCompatibility.test.ts",
     "test:referral": "tsx --test src/shared/linkdb/referralAliasesRepo.test.ts src/modules/auth/referralRegistration.test.ts src/modules/auth/telegramFallback.test.ts",
     "test:referral-analytics": "tsx --test src/modules/referrals/analytics.test.ts",
     "test:admin": "tsx --test src/modules/admin/overview.test.ts src/modules/admin/overview.monitoring.test.ts",
@@ -16,7 +17,7 @@
     "test:help": "tsx --test src/modules/help/help.test.ts",
     "test:server-status": "tsx --test src/modules/serverStatus/health.test.ts src/modules/serverStatus/routes.test.ts",
     "test:monitoring": "tsx --test src/modules/serverStatus/crypto.test.ts src/modules/serverStatus/nodeExporter.test.ts src/modules/serverStatus/nodeExporterUrl.test.ts src/modules/serverStatus/fetchDeadline.test.ts src/modules/serverStatus/history.test.ts src/modules/serverStatus/incidents.test.ts src/modules/serverStatus/monitoring.test.ts src/modules/serverStatus/migration.test.ts src/modules/serverStatus/restartableTimer.test.ts src/modules/serverStatus/thresholds.test.ts src/modules/serverStatus/monitoringNotifications.test.ts src/modules/serverStatus/collectorInterval.test.ts src/modules/serverStatus/compactStatus.test.ts src/modules/serverStatus/collectorLifecycle.test.ts src/modules/serverStatus/uplink.test.ts src/modules/serverStatus/incidentApi.test.ts",
-    "test": "npm run test:email && npm run test:referral && npm run test:referral-analytics && npm run test:admin && npm run test:reviews && npm run test:notifications && npm run test:support && npm run test:help && npm run test:server-status && npm run test:monitoring",
+    "test": "npm run test:email && npm run test:auth-reset && npm run test:referral && npm run test:referral-analytics && npm run test:admin && npm run test:reviews && npm run test:notifications && npm run test:support && npm run test:help && npm run test:server-status && npm run test:monitoring",
     "start": "node dist/index.js",
     "deps:check": "npm ls fastify @fastify/formbody @fastify/multipart"
   },

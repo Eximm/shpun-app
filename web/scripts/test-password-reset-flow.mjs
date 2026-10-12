@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const login = fs.readFileSync(path.join(root, "src/pages/Login.tsx"), "utf8");
+const main = fs.readFileSync(path.join(root, "src/main.tsx"), "utf8");
 const dict = fs.readFileSync(path.join(root, "src/shared/i18n/dict.ts"), "utf8");
 
 let failures = 0;
@@ -38,6 +39,10 @@ assert(
   "password recovery failure is translated",
   (dict.match(/"login\.forgot\.failed"/g) ?? []).length === 2,
 );
+assert("root redirect preserves SHM 3 login and token", main.includes('pathname: "/login", search: loc.search'));
+assert("reset link captures login before removing it from history", login.includes('const login = sp.get("login")') && login.includes('sp.delete("login")'));
+assert("reset verification uses a body, not a token-bearing URL", login.includes('body: { token, login }') && !login.includes('verify?token='));
+assert("reset confirmation includes login", login.includes('login: resetLogin, password: resetPwd1.trim()'));
 
 if (failures) {
   console.error(`\nFAILED: ${failures} password-reset check(s)`);
