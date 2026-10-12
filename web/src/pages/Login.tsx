@@ -358,6 +358,7 @@ export function Login() {
 
   const [mode,    setMode]    = useState<Mode>("detecting");
   const [loading, setLoading] = useState(false);
+  const [telegramFinishing, setTelegramFinishing] = useState(false);
 
   // ── Modal & auth fields ───────────────────────────────────────────────────
   const [authModal,     setAuthModal]     = useState<AuthModal>("none");
@@ -715,13 +716,13 @@ export function Login() {
   }
 
   // ── Telegram ──────────────────────────────────────────────────────────────
-  async function goAfterAuth(r?: AuthResponse, provider?: string) {
+  async function goAfterAuth(r?: AuthResponse, provider?: string): Promise<boolean> {
     if (!r || !(r as any).ok) {
       clearAuthPending();
       const raw = String((r as any)?.error ?? "") || "login_failed";
       if (provider === "telegram") toastTelegramError(raw);
       else toastError(raw);
-      return;
+      return false;
     }
     markAuthEverSucceeded();
     resetOnboardingPromptSession();
@@ -732,16 +733,17 @@ export function Login() {
     const nextRaw = String((r as any).next ?? "home").trim();
     if (nextRaw === "set_password") {
       nav("/set-password", { replace: true, state: { login: String((r as any).login ?? "").trim() } });
-      return;
+      return true;
     }
     if (provider === "telegram") await sleep(200);
     const me = await ensureAuthorizedAfterAuth();
     if (!me) {
       clearAuthPending();
       toast.error(t("login.toast.error_title"), { description: t("login.auth.finish_failed") });
-      return;
+      return false;
     }
     nav(String(loc?.state?.from ?? "").trim() || "/", { replace: true });
+    return true;
   }
 
   async function telegramLoginMiniApp() {
@@ -855,7 +857,8 @@ export function Login() {
 
   async function telegramLoginWidget(widgetUser: Record<string, any>) {
     if (authInProgressRef.current) return;
-    authInProgressRef.current = true; setLoading(true);
+    authInProgressRef.current = true; setLoading(true); setTelegramFinishing(true);
+    let navigated = false;
     try {
       const referralPayload = await buildReferralAuthPayload();
       const r = await apiFetch<AuthResponse>("/auth/telegram_widget", {
@@ -866,9 +869,9 @@ export function Login() {
           mode: authModal === "register" ? "register" : "login",
         },
       });
-      await goAfterAuth(r, "telegram");
+      navigated = await goAfterAuth(r, "telegram");
     } catch (e: unknown) { clearAuthPending(); toastTelegramError(errorToAuthRaw(e, t("error.telegram_login_failed")));
-    } finally { setLoading(false); authInProgressRef.current = false; }
+    } finally { if (!navigated) setTelegramFinishing(false); setLoading(false); authInProgressRef.current = false; }
   }
 
   async function mountTelegramWidget(force = false) {
@@ -1504,6 +1507,19 @@ export function Login() {
   ) : null;
 
   // ── Loader ────────────────────────────────────────────────────────────────
+
+  if (telegramFinishing) {
+    return (
+      <div className="app-loader" role="status" aria-live="polite" aria-busy="true">
+        <div className="app-loader__card">
+          <div className="app-loader__shine" />
+          <div className="app-loader__brandRow"><div className="app-loader__mark" /><div className="app-loader__title">Shpun App</div></div>
+          <div className="app-loader__text">{t("login.telegram.finishing_title")}</div>
+          <div className="app-loader__hint">{t("login.telegram.finishing_hint")}</div>
+        </div>
+      </div>
+    );
+  }
 
   if (mode === "detecting") {
     return (
