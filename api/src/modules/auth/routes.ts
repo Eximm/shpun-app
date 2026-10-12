@@ -408,7 +408,12 @@ function getClientIp(req: any): string {
 }
 
 function shmSessionIdFromResponse(rr: any): string {
-  return String(rr?.json?.data?.session_id ?? rr?.json?.session_id ?? "").trim();
+  const data = rr?.json?.data;
+  return String(
+    (Array.isArray(data) ? data[0]?.session_id : data?.session_id) ??
+      rr?.json?.session_id ??
+      ""
+  ).trim();
 }
 
 function hasShmSession(rr: any): boolean {
