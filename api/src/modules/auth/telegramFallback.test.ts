@@ -19,6 +19,10 @@ const shm = http.createServer(async (req, res) => {
     nativeBodies.push(JSON.parse(body || "{}"));
   }
   if (url.pathname.endsWith("/v1/telegram/web/auth") &&
+      JSON.parse(body || "{}").id === "123458") {
+    return res.end(JSON.stringify({ status: 200, data: { session_id: "native-session" } }));
+  }
+  if (url.pathname.endsWith("/v1/telegram/web/auth") &&
       JSON.parse(body || "{}").register_if_not_exists === 1) {
     return res.end(JSON.stringify({ session_id: "native-session" }));
   }
@@ -90,6 +94,19 @@ test("strict SHM 3.x mode also blocks Widget password fallback", async () => {
     payload: { ...signedWidget(123456), mode: "login" },
   });
   assert.equal(result.statusCode, 401);
+  assert.equal(passwordCalls().length, 0);
+});
+
+test("strict Widget login accepts SHM 3.x data-wrapped session", async () => {
+  process.env.SHM_TELEGRAM_PASSWORD_FALLBACK = "0";
+  calls.length = 0;
+  const result = await app.inject({
+    method: "POST",
+    url: "/api/auth/telegram_widget",
+    payload: { ...signedWidget(123458), mode: "login" },
+  });
+  assert.equal(result.statusCode, 200);
+  assert.equal(result.json().user_id, 123);
   assert.equal(passwordCalls().length, 0);
 });
 

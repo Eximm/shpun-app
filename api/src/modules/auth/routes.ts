@@ -407,8 +407,12 @@ function getClientIp(req: any): string {
   );
 }
 
+function shmSessionIdFromResponse(rr: any): string {
+  return String(rr?.json?.data?.session_id ?? rr?.json?.session_id ?? "").trim();
+}
+
 function hasShmSession(rr: any): boolean {
-  return !!String(rr?.json?.session_id ?? "").trim();
+  return !!shmSessionIdFromResponse(rr);
 }
 
 function formatDateDDMMYYYY(date = new Date()): string {
@@ -653,7 +657,7 @@ async function resolveTelegramMiniAppSession(
   if (rr.ok && hasShmSession(rr)) {
     return {
       ok: true,
-      shmSessionId: String(rr.json?.session_id ?? "").trim(),
+      shmSessionId: shmSessionIdFromResponse(rr),
       registered: false,
       source: "telegram",
     };
@@ -693,7 +697,7 @@ async function resolveTelegramMiniAppSession(
     if (rr.ok && hasShmSession(rr)) {
       return {
         ok: true,
-        shmSessionId: String(rr.json?.session_id ?? "").trim(),
+        shmSessionId: shmSessionIdFromResponse(rr),
         registered: false,
         source: "telegram",
       };
@@ -728,7 +732,7 @@ async function resolveTelegramMiniAppSession(
   if (rr.ok && hasShmSession(rr)) {
     return {
       ok: true,
-      shmSessionId: String(rr.json?.session_id ?? "").trim(),
+      shmSessionId: shmSessionIdFromResponse(rr),
       registered: true,
       source: "telegram",
     };
@@ -775,7 +779,7 @@ async function resolveTelegramWidgetSession(
   if (rr.ok && hasShmSession(rr)) {
     return {
       ok: true,
-      shmSessionId: String(rr.json?.session_id ?? "").trim(),
+      shmSessionId: shmSessionIdFromResponse(rr),
       registered: false,
       source: "widget",
     };
@@ -799,7 +803,7 @@ async function resolveTelegramWidgetSession(
       if (rr.ok && hasShmSession(rr)) {
         return {
           ok: true,
-          shmSessionId: String(rr.json?.session_id ?? "").trim(),
+          shmSessionId: shmSessionIdFromResponse(rr),
           registered: true,
           source: "widget",
         };
@@ -832,7 +836,7 @@ async function resolveTelegramWidgetSession(
     if (rr.ok && hasShmSession(rr)) {
       return {
         ok: true,
-        shmSessionId: String(rr.json?.session_id ?? "").trim(),
+        shmSessionId: shmSessionIdFromResponse(rr),
         registered: false,
         source: "widget",
       };
@@ -863,7 +867,7 @@ async function resolveTelegramWidgetSession(
   if (rr.ok && hasShmSession(rr)) {
     return {
       ok: true,
-      shmSessionId: String(rr.json?.session_id ?? "").trim(),
+      shmSessionId: shmSessionIdFromResponse(rr),
       registered: true,
       source: "widget",
     };
@@ -898,7 +902,7 @@ async function resolveTelegramWidgetSession(
   if (rr.ok && hasShmSession(rr)) {
     return {
       ok: true,
-      shmSessionId: String(rr.json?.session_id ?? "").trim(),
+      shmSessionId: shmSessionIdFromResponse(rr),
       registered: true,
       source: "widget",
     };
@@ -1354,7 +1358,7 @@ export async function authRoutes(app: FastifyInstance) {
             getClientIp(req)
           );
           if (rr.ok && hasShmSession(rr)) {
-            const newSid = String(rr.json?.session_id ?? "").trim();
+            const newSid = shmSessionIdFromResponse(rr);
             if (newSid) {
               try {
                 const ident = await shmGetUserIdentity(newSid);
@@ -1403,7 +1407,7 @@ export async function authRoutes(app: FastifyInstance) {
             getClientIp(req)
           );
           if (rr.ok && hasShmSession(rr)) {
-            const newSid = String(rr.json?.session_id ?? "").trim();
+            const newSid = shmSessionIdFromResponse(rr);
             if (newSid) {
               try {
                 const ident = await shmGetUserIdentity(newSid);
@@ -1496,7 +1500,7 @@ export async function authRoutes(app: FastifyInstance) {
           getClientIp(req)
         );
         if (rr.ok && hasShmSession(rr)) {
-          shmSessionId = String(rr.json?.session_id ?? "").trim();
+          shmSessionId = shmSessionIdFromResponse(rr);
         } else {
           const creds = buildMiniAppTelegramCredentials(String(s.telegramInitData).trim());
           if (creds) {
@@ -1519,7 +1523,7 @@ export async function authRoutes(app: FastifyInstance) {
           getClientIp(req)
         );
         if (rr.ok && hasShmSession(rr)) {
-          shmSessionId = String(rr.json?.session_id ?? "").trim();
+          shmSessionId = shmSessionIdFromResponse(rr);
         } else {
           const creds = buildWidgetTelegramCredentials(s.telegramWidgetPayload);
           if (creds) {
