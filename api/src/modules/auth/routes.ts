@@ -415,6 +415,19 @@ function hasShmSession(rr: any): boolean {
   return !!shmSessionIdFromResponse(rr);
 }
 
+function logTelegramWidgetAuthShape(req: any, rr: any, stage: string): void {
+  const json = rr?.json;
+  const data = json?.data;
+  req.log.warn({
+    stage,
+    shmStatus: rr?.status,
+    responseKeys: json && typeof json === "object" ? Object.keys(json).slice(0, 12) : [],
+    dataType: Array.isArray(data) ? "array" : typeof data,
+    dataKeys: data && typeof data === "object" ? Object.keys(data).slice(0, 12) : [],
+    hasSession: hasShmSession(rr),
+  }, "telegram_widget_shm_shape");
+}
+
 function formatDateDDMMYYYY(date = new Date()): string {
   const day = String(date.getDate()).padStart(2, "0");
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -784,6 +797,7 @@ async function resolveTelegramWidgetSession(
       source: "widget",
     };
   }
+  logTelegramWidgetAuthShape(req, rr, "login");
   if (rr.status === 429) {
     return {
       ok: false,
@@ -808,6 +822,7 @@ async function resolveTelegramWidgetSession(
           source: "widget",
         };
       }
+      logTelegramWidgetAuthShape(req, rr, "register");
       if (rr.status === 429) {
         return { ok: false, status: 429, error: "telegram_auth_limited", detail: rr.json ?? rr.text };
       }
@@ -1111,7 +1126,8 @@ export async function authRoutes(app: FastifyInstance) {
       const ident = await shmGetUserIdentity(shmSessionId);
       shmUserId = ident.userId;
       login = ident.login;
-    } catch {
+    } catch (error: any) {
+      req.log.warn({ reason: String(error?.message ?? "unknown").slice(0, 100) }, "telegram_widget_user_lookup_failed");
       return reply.code(502).send({ ok: false, error: "shm_user_lookup_failed" });
     }
 
