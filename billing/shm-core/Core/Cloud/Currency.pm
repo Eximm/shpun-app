@@ -34,8 +34,10 @@ sub _valid_state {
     my $now = time();
     for my $field (qw(fetched_at_epoch effective_at_epoch)) {
         return 0 unless defined $state->{$field} && "$state->{$field}" =~ /\A\d{10}\z/;
-        return 0 if $state->{$field} > $now + 300;
     }
+    return 0 if $state->{fetched_at_epoch} > $now + 300;
+    # CBR publishes the next business day's official rate in advance.
+    return 0 if $state->{effective_at_epoch} > $now + 86_400;
     return 0 if $now - $state->{fetched_at_epoch} > MAX_FETCH_AGE;
     return 0 if $now - $state->{effective_at_epoch} > MAX_EFFECTIVE_AGE;
 

@@ -25,6 +25,13 @@ my $stale = {
 };
 die "Stale fetch was accepted\n" if Core::Cloud::Currency::_valid_state($stale);
 
+my $tomorrow = {
+    currencies => $rates,
+    fetched_at_epoch => time(),
+    effective_at_epoch => time() + 8 * 3600,
+};
+die "Next-day official rate was rejected\n" unless Core::Cloud::Currency::_valid_state($tomorrow);
+
 my $bad = {
     currencies => { USD => { value => 'NaN' }, EUR => { value => 90 } },
     fetched_at_epoch => time(),
