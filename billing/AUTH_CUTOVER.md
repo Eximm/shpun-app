@@ -50,6 +50,9 @@ for external providers is in `CUTOVER_RUNBOOK.md`.
    started; `/start` later records the chat ID. Do not re-enable the legacy
    technical-password registration path. Rebuild and canary the custom core
    image before expecting direct Mini App registration to work in production.
+   Telegram does not provide proof of ownership of an unrelated email account:
+   an existing email-only customer must sign into that account and explicitly
+   bind Telegram there. Never merge accounts merely because names match.
 4. Test invalid, expired, replayed and wrong-bot Telegram signatures; invalid
    payloads must never fall through to password login or registration.
 5. Add Telegram OIDC Code Flow for browser login only after confirming the
