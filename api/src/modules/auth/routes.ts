@@ -825,6 +825,11 @@ async function resolveTelegramWidgetSession(
   }
 
   if (!telegramPasswordFallbackEnabled()) {
+    // SHM can return HTTP 200 with an empty data array for a valid Widget login
+    // whose Telegram account does not exist. Login must never create it.
+    if (!allowRegistration && rr.ok && !hasShmSession(rr)) {
+      return { ok: false, status: 404, error: "telegram_account_not_found" };
+    }
     if (allowRegistration) {
       const initialPartnerId = resolvePartnerIdForInitialRegistration(payload?.partner_id, payload?.referral_alias);
       rr = await shmTelegramWebAuthRegister(pickTelegramWidgetPayload(payload), {

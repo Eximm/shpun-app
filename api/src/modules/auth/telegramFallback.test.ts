@@ -37,6 +37,10 @@ const shm = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ status: 200, data: [{ session_id: "native-session" }] }));
   }
   if (url.pathname.endsWith("/v1/telegram/web/auth") &&
+      JSON.parse(body || "{}").id === "123455") {
+    return res.end(JSON.stringify({ status: 200, data: [] }));
+  }
+  if (url.pathname.endsWith("/v1/telegram/web/auth") &&
       JSON.parse(body || "{}").register_if_not_exists === 1) {
     return res.end(JSON.stringify({ session_id: "native-session" }));
   }
@@ -153,6 +157,22 @@ test("strict SHM 3.x mode also blocks Widget password fallback", async () => {
     payload: { ...signedWidget(123456), mode: "login" },
   });
   assert.equal(result.statusCode, 401);
+  assert.equal(passwordCalls().length, 0);
+});
+
+test("Widget login never registers an unknown Telegram account", async () => {
+  process.env.SHM_TELEGRAM_PASSWORD_FALLBACK = "0";
+  calls.length = 0;
+  nativeBodies.length = 0;
+  const result = await app.inject({
+    method: "POST",
+    url: "/api/auth/telegram_widget",
+    payload: { ...signedWidget(123455), mode: "login" },
+  });
+  assert.equal(result.statusCode, 404);
+  assert.equal(result.json().error, "telegram_account_not_found");
+  assert.equal(nativeBodies.length, 1);
+  assert.equal(nativeBodies[0]?.register_if_not_exists, undefined);
   assert.equal(passwordCalls().length, 0);
 });
 
