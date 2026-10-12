@@ -23,6 +23,13 @@ current version until the user explicitly approves the final cutover.
 
 ## Remaining gates before scheduling
 
+The compatibility-first route does **not** require proving every external
+payment provider and Remnawave operation in a disconnected sandbox. It does
+require preserving writes and proving our own integration. A "hot" copy made
+while 2.x keeps accepting payments/orders will diverge from 3.x; there is no
+dual-write or catch-up mechanism. Use a brief write freeze at the actual
+switch, even if reads stay available.
+
 1. Fresh production snapshot; encrypted off-host copy; restore in an isolated
    environment. The 2026-10-11 backup passed a full app DB/data/config restore
    test on 2026-10-12. Do **not** import its `mysql` system section into an
@@ -33,20 +40,25 @@ current version until the user explicitly approves the final cutover.
    services, balances and payment totals before and after migrations. Reapply
    the local FX adapter and both guarded bot-template transforms. Keep the
    clone's Telegram transport pointed to a private mock until tests end.
-3. Test real browser auth (legacy Widget/OIDC decision), an existing app `sid`,
-   password reset, native Telegram login/account binding, bot email and alias
-   registrations. Existing technical Telegram passwords require their own
-   audited rotation after native login is proven; do not silently re-enable
-   ShpunApp's password fallback.
-4. Complete provider-specific key issue/renewal and every saved payment
-   module's initiation/callback in a controlled sandbox. The current clone
-   has no default route and has proven only catalog read plus a `NOT PAID`
-   synthetic order. It has **not** proven provider provisioning or YooMoney.
-   Check the YooMoney billing tunnel and, independently, that SPB client Xray
-   traffic retains the hoster's egress. Verify Telegram Stars/XTR separately.
-5. Verify billing UI/admin browser flows, analytics/promo limitations and local
-   FX quotes. Pin all core/API/UI/dependency image digests and archive exact
-   images. Do not let a mutable `latest` tag change during the window.
+3. Compatibility must-pass: web password login/registration, Telegram login
+   for an existing user, native account binding, a secondary confirmed email
+   logging into the same user, bot email/referral registration, ShpunApp
+   catalog and order readback, and canonical custom-template actions. The
+   synthetic stage covered all except a real browser Widget/OIDC round trip,
+   real bot transport, complete password-reset token flow and a pre-upgrade
+   ShpunApp `sid`. Decide explicitly whether a forced re-login is acceptable.
+   Do not silently re-enable the technical-password fallback.
+4. Preserve and compare the four payment-module binaries and configuration;
+   verify their API/module loading and the YooMoney tunnel route before
+   opening writes. A controlled real initiation/callback and provider key
+   issue/renewal can be immediate monitored canaries **after** switch if the
+   user accepts that bounded risk. Keep new orders/payments paused until the
+   first canaries pass. Check SPB client Xray egress separately. Define an XTR
+   policy before using Telegram Stars with multi-currency.
+5. Verify admin/client UI reachability and local FX quotes. Pin all
+   core/API/UI/dependency image digests and archive exact images. Do not let a
+   mutable `latest` tag change during the window. Analytics/promo limitation
+   remains an explicit product decision, not an app-compatibility failure.
 
 ## Final cutover outline (stop before this without explicit approval)
 
@@ -69,6 +81,12 @@ current version until the user explicitly approves the final cutover.
 On the isolated 3.5.0 clone, native Telegram identity, synthetic bot email
 verification, partner/campaign attribution, a 15% first-pay bonus state,
 deduplicated app analytics, read-only catalog/paysystems and a `NOT PAID`
-order passed. The encrypted off-host backup was decrypted and the app DB,
-data and config restored in a separate no-network test. These do not replace
-the remaining gates above.
+order passed. A cloned existing Telegram customer with an active service
+logged into the isolated ShpunApp, retained the same billing identity and
+service visibility, opened an existing active key through the app without
+printing its subscription URL, and reused the same local `sid` on repeat
+login; a forged signature failed. A synthetic second verified email logged into its original
+ShpunApp/SHM user. The password-reset request route returned 200, but a full
+token/confirmation cycle remains untested. The encrypted off-host backup was
+decrypted and the app DB, data and config restored in a separate no-network
+test. These do not replace the remaining gates above.

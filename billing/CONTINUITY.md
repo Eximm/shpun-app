@@ -123,6 +123,15 @@ separately distributed administrator image.
   plaintext restore-test directory was deleted. The encrypted off-host backup
   remains. Production billing and app health endpoints returned HTTP 200;
   this is availability, not end-user-flow proof.
+- A later compatibility pass resumed only the private stage and local test
+  ShpunApp. A cloned existing Telegram customer with an active service logged
+  into the app as the original billing user, saw the service and opened its
+  connection (without printing the key). Repeat login kept the same local
+  `sid`; a forged signature was rejected. A synthetic second verified email
+  logged into the same user. Catalog, paysystems and an unpaid order again
+  worked. Password-reset initiation returned HTTP 200, but token verification
+  and final password change remain untested. The local test app/tunnel and
+  stage containers were stopped again; production remained unchanged.
 
 ## Release acceptance gates
 
@@ -130,14 +139,16 @@ separately distributed administrator image.
    Record the temporary analytics/promo limitations clearly; no bypass of paid
    checks. If a newer stable release appears before cutover, re-run all gates.
 2. Recreate a clean clone from a fresh production snapshot. Apply all new
-   migrations, compare user/account/service/payment counts, and test the
-   `shpun_app` billing template, migrated bot conversation, bot registration and
-   referrals, key issue and renewal, duplicate email, secondary logins and
-   password reset.
-3. Test each saved payment module's initiation and callback without real
-   charges where possible. Test YooMoney through the intended tunnel while
-   confirming client Xray traffic stays on the hoster's egress. Validate
-   Telegram Stars/XTR accounting independently.
+   migrations, compare user/account/service/payment counts, and repeat the
+   ShpunApp, bot, email, referral and existing-key compatibility checks.
+   Resolve the browser-login and password-reset gaps or explicitly accept a
+   monitored canary and possible re-login.
+3. Preserve the saved payment modules, verify their loading and YooMoney
+   route before reopening writes, and confirm client Xray traffic stays on
+   the hoster's egress. Provider key issue/renewal and payment callbacks may
+   be immediate monitored canaries after switching under the bounded
+   compatibility-first route in `CUTOVER_RUNBOOK.md`. Validate Telegram
+   Stars/XTR accounting before offering it with multi-currency.
 4. Rebase and retest the local currency adapter. Keep RUB as the SHM ledger;
    show foreign currencies only via expiring quotes with a stored rate and
    payment-provider currency. Fail closed on stale/unknown rates.

@@ -2,7 +2,9 @@
 
 This is a staging checklist, not permission to deploy. Production SHM 2.x,
 ShpunApp, bot webhooks, payment callbacks and customer traffic must remain on
-their present routes until every gate below is recorded as passed.
+their present routes until the compatibility and recovery gates are accepted
+and the final switch is explicitly authorized. The bounded canary alternative
+for external providers is in `CUTOVER_RUNBOOK.md`.
 
 ## Isolation first
 
@@ -65,8 +67,17 @@ their present routes until every gate below is recorded as passed.
   conversation has not passed yet.
 - Rehearse password reset and existing ShpunApp `sid` continuity. Do not assume
   that a valid app cookie still works after its stored SHM session changes.
-- Test ordering, key issue/renewal, payment initiation/callback, YooMoney
-  tunnel routing, and read-only balance/service parity on the clone.
+  An existing cloned Telegram customer did log into the isolated ShpunApp,
+  retained the original billing user and active service, opened its connection
+  through the app without disclosing the key, and reused the same
+  local `sid` on repeat login. This is **not** a pre-upgrade cookie test.
+  A synthetic second confirmed email also logged into the same billing user.
+  Reset initiation returned 200 on the clone, but token confirmation remains
+  untested.
+- Test ordering and read-only balance/service parity on the clone. Check the
+  YooMoney tunnel before reopening payments. External provider key
+  issue/renewal and payment callbacks may instead be monitored canaries after
+  switching, if that bounded risk is explicitly accepted.
 - Freeze or queue writes for the final snapshot/migration interval. A clone
   made earlier is not current enough for cutover: new payments and orders must
   not be lost. Define a whole-stack restore point and a short rollback window.
