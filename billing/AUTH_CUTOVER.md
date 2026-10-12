@@ -60,8 +60,9 @@ their present routes until every gate below is recorded as passed.
 ## Other cutover gates
 
 - Run a real bot registration and email-verification conversation against the
-  migrated template. Its static parse and synthetic native email method tests
-  passed on the clone, but no end-to-end bot conversation has passed yet.
+  migrated template. An end-to-end **synthetic webhook** conversation passed
+  against the clone with all outgoing Telegram calls intercepted; a real bot
+  conversation has not passed yet.
 - Rehearse password reset and existing ShpunApp `sid` continuity. Do not assume
   that a valid app cookie still works after its stored SHM session changes.
 - Test ordering, key issue/renewal, payment initiation/callback, YooMoney
@@ -116,8 +117,17 @@ their present routes until every gate below is recorded as passed.
   This does not prove preservation of existing production ShpunApp `sid`
   cookies or a browser session through the actual switch.
 - No end-to-end OIDC authorization, live test-bot callback, existing app
-  session continuity, or complete customer-flow rehearsal on the 3.x clone
-  has been completed.
+  session continuity, provider key issue/renewal, or payment callback on the
+  3.x clone has been completed.
+- SHM 3 fingerprints bot-created sessions to the webhook IP and User-Agent.
+  Passing `user.gen_session.id` from the bot to the app for a protected
+  `shpun_app` template call returned 401; doing it synchronously during a
+  webhook also timed out. The migrated bot now performs billing attribution
+  and first-payment-bonus initialization in its own trusted context, then
+  reports a signed internal receipt to ShpunApp for analytics. The stage
+  tested a 15% partner bonus and a separate campaign, each counted once.
+  The production bot must receive the same existing referral secret through
+  `config.bot.referralClaimSecret` at cutover; never commit the value.
 - The migrated bot template and synthetic test accounts exist only in the
-  isolated clone. The four stage containers were stopped after testing;
-  production bot, billing and ShpunApp were not changed.
+  isolated clone. Its mock transport was removed and stage containers stopped
+  after testing. Production bot, billing and ShpunApp were not changed.

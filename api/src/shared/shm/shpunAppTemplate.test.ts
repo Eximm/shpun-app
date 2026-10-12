@@ -8,6 +8,11 @@ const server = http.createServer((request, response) => {
   request.on('end', () => {
     const params = new URLSearchParams(body)
     response.setHeader('content-type', 'application/json')
+    if (request.headers.cookie !== 'session_id=test-session' || params.get('session_id') !== 'test-session') {
+      response.statusCode = 401
+      response.end(JSON.stringify({ error: 'missing_session_cookie' }))
+      return
+    }
     response.end(JSON.stringify(params.has('ok') ? { ok: 1 } : { ok: 0, error: 'bad_session' }))
   })
 })

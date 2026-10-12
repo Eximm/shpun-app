@@ -365,6 +365,38 @@ function telegramGet(path: string, host = "shpun-app-api") {
   return app.inject({ method: "GET", url: `/api${path}`, headers: { host } });
 }
 
+function telegramBotClaim(body: Record<string, unknown>, secret = "test-referral-secret") {
+  return app.inject({
+    method: "POST",
+    url: "/api/internal/referrals/telegram-bot-claim",
+    headers: { host: "shpun-app-api", "x-bot-referral-secret": secret },
+    payload: body,
+  });
+}
+
+test("bot-completed partner attribution is counted once without replaying its SHM session", async () => {
+  const before = findReferralAlias("blogger_one")?.registrations_count ?? 0;
+  const claim = { alias: "blogger_one", user_id: 95001, partner_id: 777, comment_written: true, referral_initialized: true };
+  assert.equal((await app.inject({
+    method: "POST",
+    url: "/api/internal/referrals/telegram-bot-claim",
+    headers: { host: "public.example", "x-bot-referral-secret": "test-referral-secret" },
+    payload: claim,
+  })).statusCode, 404);
+  assert.equal((await telegramBotClaim(claim, "")).statusCode, 403);
+  assert.equal((await telegramBotClaim(claim, "wrong")).statusCode, 403);
+  assert.equal((await telegramBotClaim({ ...claim, partner_id: 999 })).statusCode, 409);
+  assert.equal((await telegramBotClaim({ ...claim, referral_initialized: false })).statusCode, 409);
+  const first = await telegramBotClaim(claim);
+  assert.equal(first.statusCode, 200);
+  assert.equal(JSON.parse(first.body).registered, 1);
+  const replay = await telegramBotClaim(claim);
+  assert.equal(replay.statusCode, 200);
+  assert.equal(JSON.parse(replay.body).registered, 0);
+  assert.equal((await telegramBotClaim({ ...claim, comment_written: "1", referral_initialized: "1" })).statusCode, 200);
+  assert.equal(findReferralAlias("blogger_one")?.registrations_count, before + 1);
+});
+
 function shmTemplateCalls(action: string): ShmCall[] {
   return shmStub.calls.filter(
     (c) => c.path.endsWith("/v1/template/shpun_app") && c.body.includes(`action=${action}`)
@@ -380,6 +412,7 @@ test("internal telegram-resolve returns partner data and counts a visit", async 
   assert.equal(json.linkType, "partner");
   assert.equal(json.alias, "blogger_one");
   assert.equal(json.partnerId, 777);
+  assert.equal(json.firstPayPercent, 20);
   assert.equal(json.campaign_code, "");
   assert.equal(json.comment, "blogger_one");
   assert.equal(findReferralAlias("blogger_one")?.visits_count, before + 1);

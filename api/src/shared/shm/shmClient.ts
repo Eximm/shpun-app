@@ -492,7 +492,9 @@ export async function shmShpunAppTemplate<T = any>(
     ...(extraParams ?? {}),
   }
 
-  const result = await shmFetch<T>(null, 'v1/template/shpun_app', {
+  // SHM 3.x authenticates protected templates with the session cookie.
+  // Keep session_id in the form body for the template's existing contract.
+  const result = await shmFetch<T>(shmSessionId, 'v1/template/shpun_app', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: toFormUrlEncoded(flat),

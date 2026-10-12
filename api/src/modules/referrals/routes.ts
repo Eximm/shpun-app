@@ -1,6 +1,7 @@
 // api/src/modules/referrals/routes.ts
 
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { timingSafeEqual } from "node:crypto";
 import { getSessionFromRequest } from "../../shared/session/sessionStore.js";
 import {
   shmShpunAppReferralsList,
@@ -60,7 +61,42 @@ function refDbg(event: string, data?: Record<string, any>) {
   );
 }
 
+function botReferralSecretMatches(req: FastifyRequest): boolean {
+  const expected = String(process.env.SHM_REFERRAL_SECRET ?? "");
+  const supplied = String(req.headers["x-bot-referral-secret"] ?? "");
+  if (!expected || !supplied) return false;
+  const a = Buffer.from(expected);
+  const b = Buffer.from(supplied);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 export async function referralsRoutes(app: FastifyInstance) {
+  // SHM 3 binds bot-created sessions to the webhook's IP/User-Agent. The bot
+  // therefore completes billing attribution itself and reports only the
+  // resulting registration to ShpunApp; no cross-host session replay.
+  app.post("/internal/referrals/telegram-bot-claim", async (req, reply) => {
+    if (!isInternalRequest(req)) return reply.code(404).send({ ok: false, error: "not_found" });
+    if (!botReferralSecretMatches(req)) return reply.code(403).send({ ok: false, error: "forbidden" });
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const alias = String(body.alias ?? "").trim().toLowerCase();
+    const userId = toInt(body.user_id, 0);
+    const partnerId = toInt(body.partner_id, 0);
+    const commentWritten = body.comment_written === true || toInt(body.comment_written, 0) === 1;
+    const referralInitialized = body.referral_initialized === true || toInt(body.referral_initialized, 0) === 1;
+    if (!isValidReferralAlias(alias) || userId <= 0) {
+      return reply.code(400).send({ ok: false, error: "invalid_claim" });
+    }
+    const item = findReferralAlias(alias);
+    if (!item) return reply.code(404).send({ ok: false, error: "alias_not_found" });
+    if (!commentWritten || (item.link_type === "partner"
+      ? partnerId !== item.partner_id || !referralInitialized
+      : partnerId !== 0)) {
+      return reply.code(409).send({ ok: false, error: "billing_attribution_not_confirmed" });
+    }
+    const registered = recordReferralAliasRegistrationForUser(item.alias, userId);
+    return reply.send({ ok: true, alias: item.alias, registered: registered ? 1 : 0 });
+  });
+
   app.get("/internal/referrals/telegram-resolve", async (req, reply) => {
     if (!isInternalRequest(req)) {
       refDbg("TELEGRAM_REFERRAL_FAIL", {
@@ -101,6 +137,7 @@ export async function referralsRoutes(app: FastifyInstance) {
       alias: item.alias,
       linkType: item.link_type,
       partnerId: item.link_type === "partner" ? item.partner_id : 0,
+      firstPayPercent: item.link_type === "partner" ? item.first_payment_bonus_percent : 0,
       // Canonical SHM comment, computed by ShpunApp so no consumer has to know
       // the partner/campaign rule.
       comment: referralComment(item),

@@ -33,8 +33,15 @@ separately distributed administrator image.
 - The live 2.19.10 snapshot includes DB, configuration, local templates, four
   payment modules, and exact running Docker images. Checksums passed. A copy
   encrypted to the workstation's SSH public key was transferred to an ignored
-  local folder and its SHA-256 matched the server copy. A full decrypt/restore
-  of that encrypted off-host copy has **not** yet been rehearsed.
+  local folder and its SHA-256 matched the server copy. On 2026-10-12 the
+  **local encrypted copy** was decrypted into a separate server test directory;
+  every embedded SHA-256 matched. Its application database, data volume and
+  compose configuration were restored without touching production. The
+  isolated DB contained 1,498 users, 2,644 user services, 57 templates and
+  1,380 payment-history rows. Importing the dump's `mysql` system schema into
+  a fresh MySQL 9.7 instance broke that disposable instance. The successful
+  restore retained the dump's global `SET` preamble, skipped the `mysql`
+  section and imported only `shm`. Do not replay `--all-databases` blindly.
 - The isolated SHM 3.5.0 clone completed migrations and passed customer login,
   additional email binding, code verification, and an independent FX test.
   This says nothing yet about bot referrals, production payment callbacks,
@@ -54,13 +61,29 @@ separately distributed administrator image.
   parsed successfully and was installed with a source-hash guard and
   readback. Separate synthetic template calls proved new email, repeated
   add, code send, invalid-code rejection, verified-account ownership, and
-  rejection of another user's attempt to claim the address. The actual bot
-  conversation has **not** been exercised; this remains a cutover gate.
+  rejection of another user's attempt to claim the address. A full synthetic
+  webhook conversation with a private Telegram API mock later passed new-user
+  registration, email prompt/send/resend, wrong-code rejection, verification,
+  duplicate-email rejection and native Telegram login. A real bot conversation
+  remains a cutover gate.
+- The 2.x bot passed `user.gen_session.id` to ShpunApp for referral completion.
+  SHM 3 pins that session to the webhook's fingerprint, so an app callback
+  cannot authenticate with it. The stage rehearsal reproduced HTTP 401 and
+  a timeout while the webhook waited on the app. A separate 3.x bot-template
+  transform now writes canonical partner/comment/first-pay state directly to
+  the billing user and sends a secret-authenticated completion receipt to the
+  internal ShpunApp API for deduplicated analytics. On stage, a partner alias
+  with a 15% first-payment bonus and a campaign alias both registered and
+  counted through the **real isolated ShpunApp**. The secret is read from the
+  billing template settings and injected into stage `config.bot`; no value is
+  committed to Git. Rehearse this on the final fresh snapshot.
 - The ShpunApp API now has a stage-safe strict Telegram mode: the deterministic
   password fallback is disabled unless explicitly enabled, and the optional
   legacy path independently verifies Telegram signatures before using it.
   The signed Widget binding request also now supplies the authenticated
   `session_id` expected by SHM 3.x rather than an ignored `uid` field.
+  Protected `shpun_app` template calls also now send the SHM session cookie
+  alongside the existing form field.
   This is local branch preparation only and has not been deployed. A local API
   with a separate empty `DATA_DIR` reached only the 3.x clone through a
   temporary SSH tunnel. Synthetic registration and password re-login returned
@@ -87,10 +110,19 @@ separately distributed administrator image.
   currently running UI images returned HTTP 200 when proxying `/shm/v1/test`
   to the 3.5.0 API. This only proves the proxy, not browser login/order/admin
   behavior. Do not equate an HTTP health check with a working billing UI.
-- After these tests, the local API and SSH tunnel were closed and the four
-  stage containers stopped. The production ShpunApp health endpoint and the
-  billing API at `bill.shpyn.online` both returned HTTP 200; no production
-  deployment was made.
+- A later isolated ShpunApp API read back `/me`, services, seven orderable
+  tariffs and four saved payment systems from SHM 3. A synthetic paid-tariff
+  order was created as `NOT PAID` and read back; no provider or real payment
+  was contacted. Key issue, renewal, payment callbacks, YooMoney routing and
+  live-client compatibility are **not** proven by this test.
+- On 2026-10-12, GitHub's most recent tag was `3.5.4-beta` (despite its
+  release metadata not marking it prerelease). The latest non-beta tag was
+  still `3.5.0`; recheck before the final snapshot.
+- After the rehearsal, the stage Telegram mock/config and disposable restore
+  containers were removed, all four stage containers were stopped, and the
+  plaintext restore-test directory was deleted. The encrypted off-host backup
+  remains. Production billing and app health endpoints returned HTTP 200;
+  this is availability, not end-user-flow proof.
 
 ## Release acceptance gates
 
@@ -109,8 +141,8 @@ separately distributed administrator image.
 4. Rebase and retest the local currency adapter. Keep RUB as the SHM ledger;
    show foreign currencies only via expiring quotes with a stored rate and
    payment-provider currency. Fail closed on stale/unknown rates.
-5. Rehearse a complete restore from the encrypted off-host backup. Define a
-   maintenance window and rollback point. A migrated 3.x DB cannot be
+5. Repeat the proven off-host restore against the final fresh snapshot. Define
+   a maintenance window and rollback point. A migrated 3.x DB cannot be
    assumed to downgrade to 2.x in place: rollback restores the *whole*
    pre-upgrade DB, data volume, configuration and pinned images together.
 6. Canary with monitored real user flows, then switch traffic. Keep a
