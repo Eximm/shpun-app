@@ -3,25 +3,24 @@ import { useNavigate } from "react-router-dom";
 import { useI18n } from "../../shared/i18n";
 import { useMe } from "./useMe";
 
-const SNOOZE_MS = 30 * 24 * 60 * 60 * 1000;
-
 /** A quiet, inline reminder; never interrupts ordering or connection. */
 export function PasswordReminder() {
   const { me } = useMe();
   const { t } = useI18n();
   const navigate = useNavigate();
-  const [dismissedFor, setDismissedFor] = useState<number | null>(null);
+  const [dismissedFor, setDismissedFor] = useState<string | null>(null);
   const profile = me?.profile;
   const uid = profile?.id;
-  const key = `password.reminder.snoozed:${uid}`;
+  const authSessionId = me?.authSessionId;
+  const dismissalId = `${uid}:${authSessionId}`;
+  const key = `password.reminder.dismissed:${uid}`;
   let snoozed = false;
   try {
-    const until = Number(localStorage.getItem(key));
-    snoozed = Number.isFinite(until) && until > Date.now() && until <= Date.now() + SNOOZE_MS;
+    snoozed = localStorage.getItem(key) === authSessionId;
   } catch { /* Storage may be unavailable in a Mini App. */ }
 
-  if (!uid || profile?.passwordStepDone !== false || profile.emailVerified !== true ||
-      !profile.email || dismissedFor === uid || snoozed) return null;
+  if (!uid || !authSessionId || profile?.passwordStepDone !== false || profile.emailVerified !== true ||
+      !profile.email || dismissedFor === dismissalId || snoozed) return null;
 
   return (
     <aside className="card" aria-label={t("password.reminder.title")} style={{ marginTop: 16 }}>
@@ -33,8 +32,8 @@ export function PasswordReminder() {
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button type="button" className="btn btn--soft" onClick={() => navigate("/profile#password")}>{t("password.reminder.action")}</button>
           <button type="button" className="btn" onClick={() => {
-            setDismissedFor(uid);
-            try { localStorage.setItem(key, String(Date.now() + SNOOZE_MS)); } catch { /* ignore */ }
+            setDismissedFor(dismissalId);
+            try { localStorage.setItem(key, authSessionId); } catch { /* ignore */ }
           }}>{t("password.reminder.later")}</button>
         </div>
       </div>

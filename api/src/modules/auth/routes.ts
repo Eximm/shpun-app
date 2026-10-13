@@ -1324,6 +1324,9 @@ export async function authRoutes(app: FastifyInstance) {
     putSession(localSid, { shmSessionId, shmUserId, login, createdAt: Date.now() });
 
     await updateAuthMeta(shmSessionId, req, "password");
+    // A successful explicit password login also repairs flags for passwords
+    // installed through recovery or older versions of the application.
+    await markPasswordStep(shmSessionId, "password_login", req);
 
     if (mode === "register") {
       regDbg(req, "REGISTRATION_SUCCESS", { userId: shmUserId, login });
@@ -1729,6 +1732,22 @@ export async function authRoutes(app: FastifyInstance) {
     }
     const login2 = String(u?.login2 ?? "").trim();
     const login  = String(u?.login  ?? "").trim();
+
+    // Recovery is public, so obtain a session for the recovered account rather
+    // than using a browser cookie that may belong to a different user.
+    const recoveredLogin = linkLogin || login2 || login;
+    if (recoveredLogin) {
+      try {
+        const recovered = await handleAuth("password", {
+          mode: "login", login: recoveredLogin, password, client_ip: getClientIp(req),
+        });
+        if (recovered.ok && recovered.shmSessionId) {
+          await markPasswordStep(recovered.shmSessionId, "password_reset", req);
+        }
+      } catch {
+        // The next successful password login retries marking the flag.
+      }
+    }
 
     return reply.send({
       ok: true,
