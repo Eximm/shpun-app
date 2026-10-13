@@ -2,7 +2,7 @@
 use strict;
 use warnings;
 
-# Apply only to the pinned SHM 3.5.0 image. Fail on changed upstream anchors.
+# Apply only to a pinned, verified SHM image. Fail on changed upstream anchors.
 sub replace_once {
     my ($source, $old, $new) = @_;
     my $at = index($source, $old);
