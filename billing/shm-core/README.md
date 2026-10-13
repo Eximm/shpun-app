@@ -1,5 +1,13 @@
 # Local SHM 3.6.0 core customizations
 
+Production rollout on 2026-10-13 uses the pinned images in
+`docker-compose.override.3.6.yml`. The previous override and a fresh checked
+MySQL dump are stored on core at `/opt/shm/backups/pre-3.6.0-20261013-1/`.
+An image-only rollback uses the saved override and recreates `api`, `core` and
+`spool`; restart `admin` and `client` afterward because their Nginx upstream
+addresses are resolved at startup. Do not restore the pre-upgrade database
+automatically after customer writes: that would discard valid transactions.
+
 The same pinned core image also applies
 `patch_telegram_webapp_registration.pl` to SHM's Telegram WebApp route. A
 valid signed Mini App `initData` can then create a native Telegram account on

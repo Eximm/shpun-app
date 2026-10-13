@@ -1,5 +1,9 @@
 # SHM 3.x authentication cutover rehearsal
 
+> Historical staging checklist. Production runs SHM 3.6.0 with the local Mini
+> App registration patch as of 2026-10-13; the 2.x production statements below
+> are no longer current.
+
 This is a staging checklist, not permission to deploy. Production SHM 2.x,
 ShpunApp, bot webhooks, payment callbacks and customer traffic must remain on
 their present routes until the compatibility and recovery gates are accepted

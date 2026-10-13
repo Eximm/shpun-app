@@ -1,5 +1,12 @@
 # SHM continuity decision, 2026-10-11
 
+> Historical planning snapshot. As of 2026-10-13, production runs SHM 3.6.0
+> (`danuk/shm-api:3.6.0` plus `shpun/shm-core:3.6.0-localfx-tgregister-9dd3a2e`).
+> The local currency adapter and Mini App registration patch are deployed.
+> SHM 3.6.0 removed the Cloud subscription checks from analytics and promo
+> redemption. The 3.5.0/2.x statements below describe the earlier decision,
+> not current production state.
+
 ## Current decision
 
 Target the currently published stable SHM 3.5.0 without waiting for the

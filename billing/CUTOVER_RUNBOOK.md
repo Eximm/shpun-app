@@ -1,5 +1,9 @@
 # SHM 2.19.10 -> 3.x: preparation and stop line
 
+> Historical cutover rehearsal. The approved migration completed before this
+> document was updated; production runs SHM 3.6.0 as of 2026-10-13. Do not use
+> the 2.x baseline or stop line below as a statement of current state.
+
 This is a rehearsal/runbook, **not an authorization to switch production**.
 Production SHM, ShpunApp, bot webhook, payment callbacks and DNS remain on the
 current version until the user explicitly approves the final cutover.
