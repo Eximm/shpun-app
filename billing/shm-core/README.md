@@ -3,6 +3,11 @@
 Production rollout on 2026-10-13 uses the pinned images in
 `docker-compose.override.3.6.yml`. The previous override and a fresh checked
 MySQL dump are stored on core at `/opt/shm/backups/pre-3.6.0-20261013-1/`.
+Later the same day, only the admin UI was updated to 3.6.2. Its prior
+override is at `/opt/shm/backups/pre-admin-3.6.2-20261013/`; the client UI
+remains on its existing pinned image because ShpunApp is the customer cabinet.
+For an admin-only rollback, restore that prior override and recreate `admin`
+alone; the old admin image remains stored locally.
 An image-only rollback uses the saved override and recreates `api`, `core` and
 `spool`; restart `admin` and `client` afterward because their Nginx upstream
 addresses are resolved at startup. Do not restore the pre-upgrade database
