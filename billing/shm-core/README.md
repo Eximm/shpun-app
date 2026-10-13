@@ -1,4 +1,4 @@
-# Local SHM 3.5.0 core customizations
+# Local SHM 3.6.0 core customizations
 
 The same pinned core image also applies
 `patch_telegram_webapp_registration.pl` to SHM's Telegram WebApp route. A

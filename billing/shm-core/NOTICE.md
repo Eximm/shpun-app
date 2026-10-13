@@ -1,5 +1,5 @@
 The local `Core::Cloud::Currency` adapter is a modified version of the
-currency class in danuk/shm 3.5.0, licensed under Apache License 2.0.
+currency class in danuk/shm 3.6.0, licensed under Apache License 2.0.
 
 Original project: https://github.com/danuk/shm
 
