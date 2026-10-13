@@ -149,7 +149,8 @@ async function resolveOwnedRemnawaveUser(shmSessionId: string, usi: number) {
   };
 }
 
-const MARZBAN_MIRROR_BASE = "https://mirepo.space/";
+const MARZBAN_DIRECT_BASE = "https://sub.netget.online/";
+const MARZBAN_MIRROR_BASE = "https://cdn.netget.online/";
 
 function safeDecodeUriPart(value: string) {
   try {
@@ -169,7 +170,7 @@ function cleanSubscriptionToken(value: unknown) {
     .trim();
 }
 
-function mirrorUrlFromSubscription(subscriptionUrl: string) {
+function mirrorUrlFromSubscription(subscriptionUrl: string, base = MARZBAN_MIRROR_BASE) {
   const raw = String(subscriptionUrl || "").trim();
   if (!raw) return null;
 
@@ -187,6 +188,9 @@ function mirrorUrlFromSubscription(subscriptionUrl: string) {
         ?? url.searchParams.get("id")
         ?? "";
     }
+    if (!token && segments.length === 1 && ["mirepo.space", "netget.online", "sub.netget.online", "cdn.netget.online"].includes(url.hostname)) {
+      token = segments[0];
+    }
     if (!token && /sub|subscribe|subscription/i.test(url.pathname)) {
       token = segments[segments.length - 1] ?? "";
     }
@@ -198,7 +202,7 @@ function mirrorUrlFromSubscription(subscriptionUrl: string) {
   const cleanToken = cleanSubscriptionToken(token);
   if (!cleanToken) return null;
 
-  const mirror = new URL(MARZBAN_MIRROR_BASE);
+  const mirror = new URL(base);
   mirror.pathname = `/${encodeURIComponent(cleanToken)}`;
   return mirror.toString();
 }
@@ -695,7 +699,8 @@ export async function servicesRoutes(app: FastifyInstance) {
         });
       }
 
-      const subscriptionUrl = String(j?.subscription_url ?? "").trim();
+      const originalSubscriptionUrl = String(j?.subscription_url ?? "").trim();
+      const subscriptionUrl = mirrorUrlFromSubscription(originalSubscriptionUrl, MARZBAN_DIRECT_BASE) ?? originalSubscriptionUrl;
       if (!subscriptionUrl) {
         return reply.code(502).send({
           ok: false,
