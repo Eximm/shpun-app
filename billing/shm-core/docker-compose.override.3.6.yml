@@ -1,0 +1,16 @@
+services:
+  api:
+    image: danuk/shm-api:3.6.0@sha256:904a1801c3df78adb71facc04236ea475769b10742fc34f692f6962b5c367b3d
+    pull_policy: never
+  core:
+    image: shpun/shm-core:3.6.0-localfx-tgregister-9dd3a2e
+    pull_policy: never
+  spool:
+    image: shpun/shm-core:3.6.0-localfx-tgregister-9dd3a2e
+    pull_policy: never
+  admin:
+    image: shpun/pinned-shm-admin:3.5.0-cutover
+    pull_policy: never
+  client:
+    image: shpun/pinned-shm-client:3.5.0-cutover
+    pull_policy: never
