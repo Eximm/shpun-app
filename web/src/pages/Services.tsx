@@ -9,6 +9,7 @@ import { toastApiError } from "../shared/ui/toast/toastApiError";
 import { normalizeError } from "../shared/api/errorText";
 import { getMood } from "../shared/payments-mood";
 import { useI18n } from "../shared/i18n";
+import { PasswordReminder } from "../app/auth/PasswordReminder";
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 
@@ -987,6 +988,8 @@ export function Services() {
       )}
 
       {/* ── Stop modal ── */}
+      {hasActiveServices && !paySuccessOpen && new URLSearchParams(location.search).get("assistant") !== "1" && <PasswordReminder />}
+
       <Modal
         title={stopTarget ? t("services.modal.stop.title_named").replace("{title}", stopTarget.title) : t("services.modal.stop.title")}
         open={!!stopTarget} loading={stopBusy} error={stopErrText} confirmClassName="btn btn--danger"

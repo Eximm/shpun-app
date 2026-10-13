@@ -14,6 +14,7 @@ export type AuthResponse = ApiResult<{
 // Ответ установки/смены пароля (/auth/password/set)
 export type PasswordSetResponse = ApiResult<{
   password_set: 1;
+  reauth_method?: "session_updated" | "use_email_password" | "use_telegram";
 }>;
 
 // Email пользователя (/user/email)

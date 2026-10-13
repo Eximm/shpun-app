@@ -34,6 +34,7 @@ process.env.SHM_BASE = `http://127.0.0.1:${port}/shm/`;
 process.env.NODE_ENV = "development";
 const { buildServer, sanitizeRequestUrlForLog } = await import("../../app/server.js");
 const app = await buildServer();
+const { putSession } = await import("../../shared/session/sessionStore.js");
 
 test("request logging redacts reset tokens without hiding the route", () => {
   const safe = sanitizeRequestUrlForLog("/api/auth/password-reset/verify?login=second%40gmail.com&token=private-value");
@@ -65,6 +66,22 @@ test("HTTP 200 with a rejected SHM reset token is not treated as success", async
     login: "second@gmail.com", token: "bad-token", password: "new-password-123",
   } });
   assert.equal(confirm.statusCode, 400);
+});
+
+test("rejected password installation never marks the onboarding step as done", async () => {
+  putSession("password-install-test", {
+    shmSessionId: "test-shm-session", shmUserId: 42, login: "@test", createdAt: Date.now(),
+  });
+  const before = calls.length;
+  const short = await app.inject({ method: "POST", url: "/api/auth/password/set",
+    headers: { cookie: "sid=password-install-test" }, payload: { password: "short" } });
+  assert.equal(short.statusCode, 400);
+  assert.equal(calls.length, before, "validation must not write password flags");
+  const rejected = await app.inject({ method: "POST", url: "/api/auth/password/set",
+    headers: { cookie: "sid=password-install-test" }, payload: { password: "valid-length-password" } });
+  assert.equal(JSON.parse(rejected.body).ok, false);
+  assert.deepEqual(calls.slice(before).map((call) => call.path), ["/shm/v1/user/passwd"],
+    "SHM rejection must not call password.mark_set or onboarding.mark");
 });
 
 test.after(async () => {

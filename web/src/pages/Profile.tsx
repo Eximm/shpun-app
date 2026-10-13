@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useMe } from "../app/auth/useMe";
 import { resetAuthenticatedClientState } from "../app/auth/authState";
 import { apiFetch } from "../shared/api/client";
@@ -784,6 +784,15 @@ export function Profile() {
 
   // Password
   const [pwdModal, setPwdModal] = useState(false);
+  const location = useLocation();
+  const needsPassword = profile?.passwordStepDone === false;
+  const passwordTitle = t(needsPassword ? "password.reminder.action" : "profile.change_password");
+  useEffect(() => {
+    if (location.hash === "#password") {
+      setPwdModal(true);
+      nav(location.pathname + location.search, { replace: true });
+    }
+  }, [location.hash, location.pathname, location.search, nav]);
   const [pwd1,     setPwd1]     = useState("");
   const [pwd2,     setPwd2]     = useState("");
   const [showPwd1, setShowPwd1] = useState(false);
@@ -803,6 +812,11 @@ export function Profile() {
       const res = await apiFetch<PasswordSetResponse>("/auth/password/set", { method: "POST", body: { password: pwd1.trim() } }) as any;
       if (!res?.ok) throw new Error(String(res?.error || "password_set_failed"));
       showToast(t("profile.password.toast.changed"));
+      if (res.reauth_method === "session_updated") {
+        setPwdModal(false);
+        await refetch();
+        return;
+      }
       try {
         resetPwaInstallPromptForNextSession();
         resetOnboardingPromptSession();
@@ -1035,7 +1049,7 @@ export function Profile() {
               <ProfileMenuItem icon={<ProfileIcon name="user" />} title={t("profile.personal.title")} subtitle={`${personalNameView !== "—" ? personalNameView : t("profile.email.empty")} · ID ${profile?.id ?? "—"}`} badge={<SmallBtn>{t("profile.personal.edit")}</SmallBtn>} onClick={() => setEditPersonal(true)} />
               <ProfileMenuItem icon={<ProfileIcon name="mail" />} title={t("profile.email.title")} subtitle={emailLoading ? t("profile.email.loading") : email || t("profile.email.empty")} badge={email ? <SmallBadge text={emailVerified === true ? t("profile.email.badge.verified") : t("profile.email.badge.unverified")} tone={emailVerified === true ? "ok" : "warn"} /> : undefined} onClick={() => setEmailModal(true)} />
               <ProfileMenuItem icon={<ProfileIcon name="telegram" />} title="Telegram" subtitle={telegramLogin || t("profile.telegram.unlinked")} badge={telegramLogin ? <SmallBadge text={t("profile.telegram.badge.linked")} tone="ok" /> : <SmallBadge text={t("profile.telegram.badge.unlinked")} />} onClick={() => setTgModal(true)} />
-              <ProfileMenuItem icon={<ProfileIcon name="lock" />} title={t("profile.change_password")} subtitle={t("profile.password.subtitle")} onClick={() => setPwdModal(true)} />
+              <ProfileMenuItem icon={<ProfileIcon name="lock" />} title={passwordTitle} subtitle={t(needsPassword ? "password.reminder.status" : "profile.password.subtitle")} onClick={() => setPwdModal(true)} />
             </div>
           </div>
 
@@ -1131,7 +1145,7 @@ export function Profile() {
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
             <button className="btn" onClick={() => setPwdModal(true)} type="button" style={{ fontSize: 12, minHeight: 34 }}>
-              <ProfileIcon name="lock" /> {t("profile.change_password")}
+              <ProfileIcon name="lock" /> {passwordTitle}
             </button>
             <button className="btn btn--danger" onClick={() => void logout()} disabled={loggingOut} type="button" style={{ fontSize: 12, minHeight: 34 }}>
               <ProfileIcon name="logout" /> {loggingOut ? "…" : t("profile.logout")}
@@ -1347,8 +1361,8 @@ export function Profile() {
         )}
       </Modal>
 
-      <Modal open={pwdModal} title={t("profile.password.modal.title")} onClose={() => setPwdModal(false)} closeLabel={t("profile.modal.close")}>
-        <p className="p">{t("profile.password.modal.text")}</p>
+      <Modal open={pwdModal} title={needsPassword ? passwordTitle : t("profile.password.modal.title")} onClose={() => setPwdModal(false)} closeLabel={t("profile.modal.close")}>
+        <p className="p">{t(needsPassword ? "password.reminder.text" : "profile.password.modal.text")}</p>
         <label className="field" style={{ marginTop: 12 }}>
           <span className="field__label">{t("profile.password.field.p1")}</span>
           <div className="pwdfield">

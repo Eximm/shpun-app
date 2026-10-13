@@ -1343,12 +1343,6 @@ export async function authRoutes(app: FastifyInstance) {
     const currentLogin = String(session?.login ?? "").trim();
     const oldSessionId = String(session?.shmSessionId ?? "").trim();
 
-    const markedWithOld = await markPasswordStep(oldSessionId, "old_session", req);
-    dbg(req, "password_set:pre_mark", {
-      markedWithOld,
-      oldSessionId: maskValue(oldSessionId),
-    });
-
     const r = await setPassword(req, password);
     if (!r.ok) {
       return reply.code(r.status || 400).send(r);
@@ -1494,9 +1488,8 @@ export async function authRoutes(app: FastifyInstance) {
       } catch {}
     }
 
-    if (newSessionId && newSessionId !== oldSessionId) {
-      await markPasswordStep(newSessionId, "new_session", req);
-    }
+    // Never mark a password as installed before SHM has accepted it.
+    await markPasswordStep(newSessionId || oldSessionId, "saved_password", req);
 
     return reply.send({
       ok: true,

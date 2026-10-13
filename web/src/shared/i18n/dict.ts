@@ -2,6 +2,11 @@
 export type Dict = Record<string, string>;
 
 export const RU: Dict = {
+  "password.reminder.title": "На аккаунте ещё не установлен пароль",
+  "password.reminder.text": "Давайте установим пароль, чтобы вы могли входить по почте на любом устройстве. Привычный способ входа тоже останется доступен.",
+  "password.reminder.action": "Установить пароль",
+  "password.reminder.later": "Позже",
+  "password.reminder.status": "Пароль ещё не установлен",
   // app
   "system_health.ok": "Всё работает",
   "system_health.degraded": "Есть неполадки",
@@ -2697,6 +2702,11 @@ export const RU: Dict = {
 };
 
 export const EN: Dict = {
+  "password.reminder.title": "Your account does not have a password yet",
+  "password.reminder.text": "Set a password so you can sign in with your email on any device. Your usual sign-in method will still be available.",
+  "password.reminder.action": "Set a password",
+  "password.reminder.later": "Later",
+  "password.reminder.status": "Password not set yet",
   // app
   "system_health.ok": "All systems operational",
   "system_health.degraded": "Some issues",
