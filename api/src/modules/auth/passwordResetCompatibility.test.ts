@@ -66,7 +66,7 @@ test("SHM 3 reset checks and confirmation include the login from the link", asyn
   assert.equal(JSON.parse(confirm.body).ok, true);
   assert.deepEqual(calls.filter((call) => ["password.mark_set", "onboarding.mark"].includes(call.action))
     .map((call) => [call.action, call.session]),
-    [["password.mark_set", "recovered-session"], ["onboarding.mark", "recovered-session"]]);
+    [["onboarding.mark", "recovered-session"]]);
   assert.deepEqual(calls.filter((call) => call.path.endsWith("/verify")).map((call) => call.login),
     ["second@gmail.com", "second@gmail.com"]);
 });

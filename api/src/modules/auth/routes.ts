@@ -373,7 +373,6 @@ async function markPasswordStep(
 ): Promise<boolean> {
   if (!sessionId) return false;
   try {
-    await callShmTemplate(sessionId, "password.mark_set");
     await callShmTemplate(sessionId, "onboarding.mark", { step: "password" });
     dbg(req, `password_set:mark_done:${label}`, {
       sessionId: maskValue(sessionId),
