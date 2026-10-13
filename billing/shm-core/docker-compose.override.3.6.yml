@@ -9,7 +9,7 @@ services:
     image: shpun/shm-core:3.6.0-localfx-tgregister-9dd3a2e
     pull_policy: never
   admin:
-    image: shpun/pinned-shm-admin:3.5.0-cutover
+    image: danuk/shm-admin:3.6.2@sha256:79f311933cd93214ff9cf6f7a16b2ee40cacb097f2e47ac8f6543b7758380de9
     pull_policy: never
   client:
     image: shpun/pinned-shm-client:3.5.0-cutover
