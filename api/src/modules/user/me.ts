@@ -12,7 +12,7 @@ export type MeView = {
   created?: string;
   lastLogin?: string;
 
-  // Both current and legacy billing flags are authoritative.
+  // ShpynApp.onboarding.step_password — единая отметка установки пароля.
   passwordStepDone: boolean;
 
   // ShpynApp.onboarding.step_email (0/1 из шаблона)
@@ -36,18 +36,6 @@ function toStr(v: any, fallback = ""): string {
 // Шаблон нормализует все флаги в числа 0/1
 function toBool(v: any): boolean {
   return v === 1 || v === "1";
-}
-
-export function passwordStepDoneFromStatus(data: any): boolean {
-  const current = data?.onboarding?.step_password;
-  const legacy = data?.auth?.password_set;
-  const isSet = (value: unknown) => value === 1 || value === "1" || value === true;
-  const isUnset = (value: unknown) => value === 0 || value === "0" || value === false;
-  if (isSet(current) || isSet(legacy)) return true;
-  // Missing or malformed status is not evidence that a password is absent.
-  if (current != null && !isUnset(current)) return true;
-  if (legacy != null && !isUnset(legacy)) return true;
-  return !(isUnset(current) || isUnset(legacy));
 }
 
 export async function fetchMe(shmSessionId: string): Promise<MeResult> {
@@ -82,8 +70,8 @@ export async function fetchMe(shmSessionId: string): Promise<MeResult> {
   const appData = statusResp.ok ? ((statusResp.json as any)?.data ?? {}) : null;
   const onboardingData = appData?.onboarding ?? {};
 
-  // Preserve historic password marks, even before template migration.
-  const passwordStepDone = passwordStepDoneFromStatus(appData);
+  // Напоминать только при явном 0; неизвестный статус не беспокоит клиента.
+  const passwordStepDone = onboardingData.step_password !== 0 && onboardingData.step_password !== "0";
   const emailStepDone    = appData ? toBool(onboardingData?.step_email)    : true;
 
   const me: MeView = {

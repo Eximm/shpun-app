@@ -354,13 +354,7 @@ async function getPasswordSetFlag(shmSessionId: string): Promise<0 | 1> {
     });
     const data = (r.json as any)?.data ?? {};
     const stepPassword = data?.onboarding?.step_password;
-    const legacyPwSet = data?.auth?.password_set;
-    const isSet =
-      stepPassword === 1 ||
-      stepPassword === "1" ||
-      legacyPwSet === 1 ||
-      legacyPwSet === "1";
-    return isSet ? 1 : 0;
+    return stepPassword === 0 || stepPassword === "0" ? 0 : 1;
   } catch {
     return 1;
   }
