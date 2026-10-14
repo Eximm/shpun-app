@@ -212,7 +212,7 @@ function validateRegisterEmailClient(value: string): RegisterEmailClientCode | n
 
 function pwdScore(p: string): number {
   let s = 0;
-  if (p.length >= 8)           s++;
+  if (p.length >= 10)          s++;
   if (/[A-Z]/.test(p))        s++;
   if (/[a-z]/.test(p))        s++;
   if (/\d/.test(p))            s++;
@@ -397,7 +397,7 @@ export function Login() {
 
   const resetStrength  = pwdScore(resetPwd1);
   const resetPwdMatch  = resetPwd2.length === 0 || resetPwd1 === resetPwd2;
-  const canSubmitReset = resetPwd1.length >= 8 && resetPwd2.length > 0
+  const canSubmitReset = resetPwd1.trim().length >= 10 && resetPwd2.length > 0
                          && resetPwd1 === resetPwd2 && !resetLoading
                          && !resetVerifying && !resetVerifyError;
 
@@ -443,7 +443,7 @@ export function Login() {
   const referralFieldError =
     partnerError ??
     (authModal === "register" && registerError?.field === "referral" ? registerError.message : "");
-  const canPasswordRegister = login.trim().length > 0 && password.length > 0
+  const canPasswordRegister = login.trim().length > 0 && password.trim().length >= 10
     && password2.length > 0 && password === password2 && !registerEmailCode;
 
   useEffect(() => {
@@ -809,6 +809,10 @@ export function Login() {
     }
     if (!password) {
       setRegisterError({ field: "password", message: t("login.err.password_required") });
+      return;
+    }
+    if (password.trim().length < 10) {
+      setRegisterError({ field: "password", message: t("login.err.password_too_short") });
       return;
     }
     if (password2.length === 0 || !passwordsMatch) {
@@ -1375,7 +1379,7 @@ export function Login() {
                   {authModal === "register" ? t("login.password.register_password") : t("login.password.password")}
                 </label>
                 <div className="pwdfield">
-                  <input className="input" placeholder={t("login.password.password_ph")}
+                  <input className="input" placeholder={t(authModal === "register" ? "onboarding.password.placeholder" : "login.password.password_ph")}
                     ref={passwordInputRef}
                     value={password} onChange={(e) => {
                       setPassword(e.target.value);

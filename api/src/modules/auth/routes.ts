@@ -1334,12 +1334,13 @@ export async function authRoutes(app: FastifyInstance) {
   app.post("/auth/password/set", async (req, reply) => {
     const body = readJsonBody(req);
     const password = String(body?.password ?? "");
+    const oldPassword = String(body?.old_password ?? "");
     const sid = String((req.cookies as any)?.sid ?? "").trim();
     const session = getSessionFromRequest(req) as any;
     const currentLogin = String(session?.login ?? "").trim();
     const oldSessionId = String(session?.shmSessionId ?? "").trim();
 
-    const r = await setPassword(req, password);
+    const r = await setPassword(req, password, oldPassword);
     if (!r.ok) {
       return reply.code(r.status || 400).send(r);
     }
@@ -1700,7 +1701,7 @@ export async function authRoutes(app: FastifyInstance) {
     if (!token) {
       return reply.code(400).send({ ok: false, error: "token_required" });
     }
-    if (!password || password.length < 8) {
+    if (!password || password.length < 10) {
       return reply.code(400).send({ ok: false, error: "password_too_short" });
     }
 

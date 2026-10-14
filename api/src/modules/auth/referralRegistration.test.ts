@@ -131,6 +131,17 @@ async function register(payload: Record<string, unknown>) {
 
 /* ── Tests ───────────────────────────────────────────────────────────────── */
 
+test("registration requires 10 characters without blocking old-password login", async () => {
+  const before = shmStub.calls.length;
+  const short = await register({ login: "shortpass@gmail.com", password: "123456789", mode: "register" });
+  assert.equal(short.statusCode, 400);
+  assert.equal(JSON.parse(short.body).error, "password_too_short");
+  assert.equal(shmStub.calls.length, before, "short registration must not reach SHM");
+
+  const login = await register({ login: "existing@gmail.com", password: "12345678", mode: "login" });
+  assert.equal(login.statusCode, 200, "existing 8-character passwords remain valid for login");
+});
+
 test("registration without referral still works", async () => {
   const res = await register({ login: "plain@gmail.com", password: "supersecret1", mode: "register" });
   assert.equal(res.statusCode, 200);

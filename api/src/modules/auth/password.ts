@@ -10,11 +10,12 @@ type SetPasswordResult =
 
 export async function setPassword(
   req: FastifyRequest,
-  password: string
+  password: string,
+  oldPassword?: string
 ): Promise<SetPasswordResult> {
   const pwd = String(password || "").trim();
 
-  if (!pwd || pwd.length < 8) {
+  if (!pwd || pwd.length < 10) {
     return { ok: false, status: 400, error: "password_too_short" };
   }
 
@@ -23,11 +24,11 @@ export async function setPassword(
     return { ok: false, status: 401, error: "not_authenticated" };
   }
 
-  // POST /v1/user/passwd { password }
+  // SHM requires the current password when replacing an existing password.
   // Используем shmFetch — единственный транспорт к SHM (таймаут, логирование, нормализация).
   const r = await shmFetch<any>(s.shmSessionId, "v1/user/passwd", {
     method: "POST",
-    body: { password: pwd },
+    body: { password: pwd, ...(oldPassword ? { old_password: oldPassword } : {}) },
   });
 
   if (!r.ok) {

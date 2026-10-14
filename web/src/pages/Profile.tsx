@@ -73,7 +73,7 @@ function isValidEmail(email: string) {
 
 function pwdScore(p: string) {
   let s = 0;
-  if (p.length >= 8)           s++;
+  if (p.length >= 10)          s++;
   if (/[A-Z]/.test(p))        s++;
   if (/[a-z]/.test(p))        s++;
   if (/\d/.test(p))            s++;
@@ -795,21 +795,22 @@ export function Profile() {
   }, [location.hash, location.pathname, location.search, nav]);
   const [pwd1,     setPwd1]     = useState("");
   const [pwd2,     setPwd2]     = useState("");
+  const [oldPwd,   setOldPwd]   = useState("");
   const [showPwd1, setShowPwd1] = useState(false);
   const [showPwd2, setShowPwd2] = useState(false);
   const [pwdBusy,  setPwdBusy]  = useState(false);
   const [pwdError, setPwdError] = useState<string | null>(null);
 
-  useEffect(() => { if (!pwdModal) { setPwd1(""); setPwd2(""); setShowPwd1(false); setShowPwd2(false); setPwdError(null); setPwdBusy(false); } }, [pwdModal]);
+  useEffect(() => { if (!pwdModal) { setPwd1(""); setPwd2(""); setOldPwd(""); setShowPwd1(false); setShowPwd2(false); setPwdError(null); setPwdBusy(false); } }, [pwdModal]);
 
   const pwdStrength     = useMemo(() => pwdScore(pwd1), [pwd1]);
-  const canSavePassword = pwd1.trim().length >= 8 && pwd2.length > 0 && pwd1 === pwd2 && !pwdBusy;
+  const canSavePassword = pwd1.trim().length >= 10 && pwd2.length > 0 && pwd1 === pwd2 && (needsPassword || oldPwd.length > 0) && !pwdBusy;
 
   async function savePassword() {
     if (!canSavePassword) return;
     setPwdBusy(true); setPwdError(null);
     try {
-      const res = await apiFetch<PasswordSetResponse>("/auth/password/set", { method: "POST", body: { password: pwd1.trim() } }) as any;
+      const res = await apiFetch<PasswordSetResponse>("/auth/password/set", { method: "POST", body: { password: pwd1.trim(), ...(!needsPassword ? { old_password: oldPwd } : {}) } }) as any;
       if (!res?.ok) throw new Error(String(res?.error || "password_set_failed"));
       showToast(t("profile.password.toast.changed"));
       if (res.reauth_method === "session_updated") {
@@ -827,8 +828,14 @@ export function Profile() {
       nav("/login?reason=pwd_changed", { replace: true, state: { from: "/profile" } });
     } catch (e: unknown) {
       const n = normalizeError(e);
-      setPwdError(n.description || t("profile.password.error.save"));
-      toastApiError(e, { title: t("profile.password.error.save") });
+      const raw = JSON.stringify((e as any)?.data ?? {});
+      const oldPasswordError = raw.includes("INVALID_OLD_PASSWORD")
+        ? t("profile.password.error.old_invalid")
+        : raw.includes("OLD_PASSWORD_REQUIRED")
+          ? t("profile.password.error.old_required")
+          : null;
+      setPwdError(oldPasswordError || n.description || t("profile.password.error.save"));
+      if (!oldPasswordError) toastApiError(e, { title: t("profile.password.error.save") });
     } finally { setPwdBusy(false); }
   }
 
@@ -1363,6 +1370,10 @@ export function Profile() {
 
       <Modal open={pwdModal} title={needsPassword ? passwordTitle : t("profile.password.modal.title")} onClose={() => setPwdModal(false)} closeLabel={t("profile.modal.close")}>
         <p className="p">{t(needsPassword ? "password.reminder.text" : "profile.password.modal.text")}</p>
+        {!needsPassword && <label className="field" style={{ marginTop: 12 }}>
+          <span className="field__label">{t("profile.password.field.old")}</span>
+          <input className="input" value={oldPwd} onChange={(e) => setOldPwd(e.target.value)} type="password" autoComplete="current-password" disabled={pwdBusy} />
+        </label>}
         <label className="field" style={{ marginTop: 12 }}>
           <span className="field__label">{t("profile.password.field.p1")}</span>
           <div className="pwdfield">

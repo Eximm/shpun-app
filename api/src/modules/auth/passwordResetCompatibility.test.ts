@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-const calls: Array<{ method: string; path: string; login: string; token: string; action: string; session: string }> = [];
+const calls: Array<{ method: string; path: string; login: string; token: string; action: string; session: string; oldPassword: string }> = [];
 const shm = http.createServer(async (req, res) => {
   let raw = "";
   for await (const chunk of req) raw += String(chunk);
@@ -15,8 +15,16 @@ const shm = http.createServer(async (req, res) => {
   const login = String(url.searchParams.get("login") ?? body.login ?? "");
   const token = String(url.searchParams.get("token") ?? body.token ?? "");
   calls.push({ method: String(req.method), path: url.pathname, login, token,
-    action: String(body.action ?? ""), session: String(body.session_id ?? "") });
+    action: String(body.action ?? ""), session: String(body.session_id ?? ""),
+    oldPassword: String(body.old_password ?? "") });
   res.setHeader("content-type", "application/json");
+  if (url.pathname.endsWith("/v1/user/passwd") && req.method === "POST") {
+    if (body.old_password === "current-password") {
+      return res.end(JSON.stringify({ ok: true }));
+    }
+    res.statusCode = 400;
+    return res.end(JSON.stringify({ error: "INVALID_OLD_PASSWORD" }));
+  }
   if (url.pathname.endsWith("/v1/user/auth")) {
     return res.end(JSON.stringify({ session_id: "recovered-session" }));
   }
@@ -84,6 +92,16 @@ test("HTTP 200 with a rejected SHM reset token is not treated as success", async
   assert.ok(calls.slice(before).every((call) => !call.action), "invalid recovery cannot mark a password as set");
 });
 
+test("password recovery rejects 9 characters before sending a reset request", async () => {
+  const before = calls.length;
+  const confirm = await app.inject({ method: "POST", url: "/api/auth/password-reset/confirm", payload: {
+    login: "second@gmail.com", token: "valid-reset-token", password: "123456789",
+  } });
+  assert.equal(confirm.statusCode, 400);
+  assert.equal(JSON.parse(confirm.body).error, "password_too_short");
+  assert.equal(calls.length, before);
+});
+
 test("rejected password installation never marks the onboarding step as done", async () => {
   putSession("password-install-test", {
     shmSessionId: "test-shm-session", shmUserId: 42, login: "@test", createdAt: Date.now(),
@@ -98,6 +116,17 @@ test("rejected password installation never marks the onboarding step as done", a
   assert.equal(JSON.parse(rejected.body).ok, false);
   assert.deepEqual(calls.slice(before).map((call) => call.path), ["/shm/v1/user/passwd"],
     "SHM rejection must not call password.mark_set or onboarding.mark");
+});
+
+test("normal password change forwards the current password to SHM", async () => {
+  const before = calls.length;
+  const response = await app.inject({ method: "POST", url: "/api/auth/password/set",
+    headers: { cookie: "sid=password-install-test" },
+    payload: { password: "new-password-123", old_password: "current-password" } });
+  assert.equal(response.statusCode, 200);
+  assert.equal(JSON.parse(response.body).ok, true);
+  const changed = calls.slice(before).find((call) => call.path.endsWith("/v1/user/passwd"));
+  assert.equal(changed?.oldPassword, "current-password");
 });
 
 test.after(async () => {

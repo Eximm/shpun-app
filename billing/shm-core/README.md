@@ -1,8 +1,9 @@
-# Local SHM 3.6.0 core customizations
+# Local SHM 3.6.2 core customizations
 
-Production rollout on 2026-10-13 uses the pinned images in
-`docker-compose.override.3.6.yml`. The previous override and a fresh checked
-MySQL dump are stored on core at `/opt/shm/backups/pre-3.6.0-20261013-1/`.
+The pinned images in `docker-compose.override.3.6.yml` include SHM 3.6.2
+core/API and our local currency and Telegram-registration changes. The previous
+3.6.0 override, a checked MySQL dump and data archive are stored on core at
+`/opt/shm/backups/pre-3.6.2-20261014-1/`.
 Later the same day, only the admin UI was updated to 3.6.2. Its prior
 override is at `/opt/shm/backups/pre-admin-3.6.2-20261013/`; the client UI
 remains on its existing pinned image because ShpunApp is the customer cabinet.
