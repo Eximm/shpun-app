@@ -23,6 +23,14 @@ bot `/start`, a Mini App launch does not prove a private chat exists, so chat
 membership is recorded only when `/start` later arrives. This change requires
 an image rebuild and a new-user canary before production rollout.
 
+SHM 3.6.2 also needs `patch_password_reset_reload.pl`: after token-based
+recovery updates all login/email password hashes, its original code reused a
+stale account object while clearing the token and silently restored the old
+hash. The patch fetches a fresh account object before that settings merge.
+An isolated 3.6.2 clone passed registration length, normal password change,
+reset-token verification, new-password login, old-password rejection and
+token-replay rejection before this image was selected for production.
+
 This is a deliberately narrow replacement for `Core::Cloud::Currency`. It keeps
 the SHM conversion interface but reads rates from the local SHM database, with
 no request to `cloud.myshm.ru`. The source is the official Bank of Russia daily

@@ -3,10 +3,10 @@ services:
     image: danuk/shm-api:3.6.2@sha256:6171808a2b4462f6c5d20b928870462496bd081ecbd090e8e30dcc0bf6e1b22e
     pull_policy: never
   core:
-    image: shpun/shm-core:3.6.2-localfx-tgregister-d65f86f
+    image: shpun/shm-core:3.6.2-localfx-tgregister-resetfix-d65f86f
     pull_policy: never
   spool:
-    image: shpun/shm-core:3.6.2-localfx-tgregister-d65f86f
+    image: shpun/shm-core:3.6.2-localfx-tgregister-resetfix-d65f86f
     pull_policy: never
   admin:
     image: danuk/shm-admin:3.6.2@sha256:79f311933cd93214ff9cf6f7a16b2ee40cacb097f2e47ac8f6543b7758380de9

@@ -11,3 +11,6 @@ The build also patches `app/public_html/shm/v1.cgi` and
 `app/lib/Core/Transport/Telegram.pm` from the pinned danuk/shm 3.6.2
 image to add signed Telegram Mini App registration. These upstream files are
 licensed under the same Apache License 2.0 terms.
+
+The same build applies a narrow fix to `app/lib/Core/User/Passwd.pm` to avoid
+restoring a stale account password hash after token-based recovery.

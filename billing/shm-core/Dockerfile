@@ -2,3 +2,5 @@ FROM danuk/shm-core:3.6.2@sha256:bbb987755a0562b07bc6134121f2423564bfdb20ec02d0d
 COPY Core/Cloud/Currency.pm /app/lib/Core/Cloud/Currency.pm
 COPY patch_telegram_webapp_registration.pl /tmp/patch_telegram_webapp_registration.pl
 RUN perl /tmp/patch_telegram_webapp_registration.pl /app/public_html/shm/v1.cgi /app/lib/Core/Transport/Telegram.pm
+COPY patch_password_reset_reload.pl /tmp/patch_password_reset_reload.pl
+RUN perl /tmp/patch_password_reset_reload.pl /app/lib/Core/User/Passwd.pm
