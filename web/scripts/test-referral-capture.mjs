@@ -130,6 +130,18 @@ check("payload valid", mod.buildReferralPayload(777, "druni4"), { partner_id: 77
 check("payload no referral", mod.buildReferralPayload(0, ""), {});
 check("payload drops invalid alias", mod.buildReferralPayload(0, "  "), {});
 check("payload numeric string partner", mod.buildReferralPayload("777", "x1"), { partner_id: 777, referral_alias: "x1" });
+check("alias link keeps code visible instead of resolved id", mod.referralCodeInputValue(1689, "pivo"), "pivo");
+check("numeric link still shows partner id", mod.referralCodeInputValue(1689, ""), "1689");
+check(
+  "confirming resolved partner id preserves its alias",
+  mod.isSameResolvedPartnerAlias(1689, "pivo", { alias: "pivo", linkType: "partner", partnerId: 1689 }),
+  true
+);
+check(
+  "different partner id overrides old alias",
+  mod.isSameResolvedPartnerAlias(1690, "pivo", { alias: "pivo", linkType: "partner", partnerId: 1689 }),
+  false
+);
 
 /* 12. clear helpers */
 mod.clearPendingPartnerId();

@@ -95,6 +95,18 @@ function regDbg(req: any, event: string, data?: Record<string, any>) {
   );
 }
 
+function warnReferralClaim(kind: "partner" | "campaign", alias: string, userId: number | undefined, error: unknown) {
+  const status = Number(String((error as any)?.message ?? "").match(/^shm_template_failed:(\d+):/)?.[1] ?? 0);
+  console.warn(JSON.stringify({
+    level: "warn",
+    event: "REFERRAL_CLAIM_FAILED",
+    kind,
+    alias: safeAlias(alias),
+    userId: Number(userId ?? 0) || 0,
+    shmStatus: status,
+  }));
+}
+
 function readJsonBody(req: any): any {
   const b = (req as any)?.body;
   if (!b) return {};
@@ -251,13 +263,16 @@ async function callShmTemplate(
   action: string,
   extraParams?: Record<string, any>
 ): Promise<any> {
-  const r = await shmFetch<any>(null, "v1/template/shpun_app", {
+  // SHM 3.x authenticates protected templates with the session cookie.
+  // A form-body session_id alone is not sufficient.
+  const r = await shmFetch<any>(sessionId, "v1/template/shpun_app", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: toFormUrlEncoded({ session_id: sessionId, action, ...(extraParams ?? {}) }),
   });
-  if (!r.ok || (r.json && typeof r.json === "object" && r.json.ok === 0)) {
-    throw new Error(`shm_template_failed:${r.status}:${String(r.json?.error ?? "unknown")}`);
+  const payload = r.json?.data && typeof r.json.data === "object" ? r.json.data : r.json;
+  if (!r.ok || payload?.ok === 0 || payload?.ok === false) {
+    throw new Error(`shm_template_failed:${r.status}:${String(payload?.error ?? r.json?.error ?? "unknown")}`);
   }
   return r.json ?? {};
 }
@@ -291,8 +306,9 @@ async function tryAttachReferral(
       if (Number((claimData as any)?.comment_written ?? 0) === 1) {
         recordReferralAliasRegistrationForUser(campaign.alias, (claimData as any)?.user_id);
       }
-    } catch {
+    } catch (error) {
       // Registration itself must remain successful if campaign attribution fails.
+      warnReferralClaim("campaign", referralAlias, options?.shmUserId, error);
     }
     return;
   }
@@ -326,8 +342,10 @@ async function tryAttachReferral(
     ) {
       recordReferralAliasRegistrationForUser(campaign.alias, options?.shmUserId);
     }
-  } catch {
-    // ignore
+  } catch (error) {
+    // The user was already created; keep registration successful but leave a
+    // sanitized operational signal so attribution failures are not invisible.
+    warnReferralClaim("partner", referralAlias, options?.shmUserId, error);
   }
 }
 

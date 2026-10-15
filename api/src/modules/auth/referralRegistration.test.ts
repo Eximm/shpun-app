@@ -59,6 +59,10 @@ function startShmStub() {
       }
       if (url.pathname.endsWith("/v1/template/shpun_app") && req.method === "POST") {
         const params = new URLSearchParams(body);
+        if (!sessionId || sessionId !== params.get("session_id") || !sessions.has(sessionId)) {
+          res.statusCode = 401;
+          return res.end(JSON.stringify({ ok: 0, error: "not_authenticated" }));
+        }
         if (params.get("action") === "referrals.claim") {
           const s = sessions.get(String(params.get("session_id") ?? ""));
           return res.end(JSON.stringify({
@@ -510,6 +514,7 @@ test("internal telegram-claim confirms a partner alias and forwards the secret",
   assert.ok(body.includes("partner_id=777"), "claim must carry the partner id");
   assert.ok(body.includes("referral_alias=blogger_one"), "claim must carry the alias");
   assert.ok(body.includes("referral_secret=test-referral-secret"), "claim must forward SHM_REFERRAL_SECRET");
+  assert.equal(claims[claims.length - 1].sessionId, "shm-sess-1", "protected claim requires the SHM session cookie");
 });
 
 test("internal telegram-claim writes a campaign comment", async () => {

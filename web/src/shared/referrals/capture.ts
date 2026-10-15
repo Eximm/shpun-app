@@ -31,6 +31,27 @@ export function normalizePartnerId(v: unknown): number {
   return Number.isFinite(n) && n > 0 ? Math.trunc(n) : 0;
 }
 
+/** Keep an alias-based invitation visible as its alias, not only its partner ID. */
+export function referralCodeInputValue(partnerId: unknown, alias: unknown): string {
+  const normalizedAlias = String(alias ?? "").trim().toLowerCase();
+  if (isValidReferralAlias(normalizedAlias)) return normalizedAlias;
+  const id = normalizePartnerId(partnerId);
+  return id > 0 ? String(id) : "";
+}
+
+/** Confirming the displayed partner ID must not silently discard its alias. */
+export function isSameResolvedPartnerAlias(
+  inputPartnerId: unknown,
+  currentAlias: unknown,
+  resolved: { alias: string; linkType: "partner" | "campaign"; partnerId: number } | null
+): boolean {
+  const alias = String(currentAlias ?? "").trim().toLowerCase();
+  return isValidReferralAlias(alias)
+    && resolved?.alias === alias
+    && resolved.linkType === "partner"
+    && normalizePartnerId(inputPartnerId) === normalizePartnerId(resolved.partnerId);
+}
+
 export function isValidReferralAlias(v: unknown): boolean {
   return ALIAS_RE.test(String(v ?? "").trim().toLowerCase());
 }

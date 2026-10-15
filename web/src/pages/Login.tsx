@@ -29,11 +29,13 @@ import {
   captureReferralFromLocation,
   clearPendingPartnerId,
   clearPendingReferralAlias,
+  isSameResolvedPartnerAlias,
   isValidReferralAlias,
   normalizePartnerId,
   parseReferralFromHref,
   readPendingPartnerId,
   readPendingReferralAlias,
+  referralCodeInputValue,
   replaceReferralInUrl,
   savePendingPartnerId,
   savePendingReferralAlias,
@@ -405,7 +407,7 @@ export function Login() {
   const [partnerId,      setPartnerId]      = useState<number>(() => readPendingPartnerId());
   const [referralAlias, setReferralAlias] = useState<string>(() => readPendingReferralAlias());
   const [partnerIdInput, setPartnerIdInput] = useState<string>(() => {
-    const p = readPendingPartnerId(); return p > 0 ? String(p) : "";
+    return referralCodeInputValue(readPendingPartnerId(), readPendingReferralAlias());
   });
   const [tgWidgetState, setTgWidgetState] = useState<TgWidgetState>("idle");
   const [partnerOpen,   setPartnerOpen]   = useState(false);
@@ -523,8 +525,6 @@ export function Login() {
         if (resolved.ok) {
           id = resolved.linkType === "partner" ? resolved.partnerId : 0;
           if (resolved.linkType === "campaign") clearPendingPartnerId();
-        } else {
-          alias = "";
         }
       }
     }
@@ -532,7 +532,7 @@ export function Login() {
     if (id > 0) {
       savePendingPartnerId(id);
       setPartnerId(id);
-      setPartnerIdInput(String(id));
+      setPartnerIdInput(referralCodeInputValue(id, alias));
     }
     if (alias) {
       savePendingReferralAlias(alias);
@@ -559,7 +559,7 @@ export function Login() {
     if (next !== "register") setClientName("");
     if (next === "register") {
       const p = readPendingPartnerId();
-      setPartnerIdInput((p > 0 ? p : partnerId) > 0 ? String(p > 0 ? p : partnerId) : "");
+      setPartnerIdInput(referralCodeInputValue(p || partnerId, readPendingReferralAlias() || referralAlias));
     }
     // Экран «письмо отправлено» относится только к текущему успешному запросу.
     // Старый cooldown не должен подменять результат новой попытки восстановления.
@@ -591,6 +591,11 @@ export function Login() {
     setPartnerError(null);
     const nextPartnerId = normalizePartnerId(raw);
     if (nextPartnerId > 0) {
+      if (isSameResolvedPartnerAlias(nextPartnerId, referralAlias || readPendingReferralAlias(), resolvedReferralRef.current)) {
+        setPartnerIdInput(referralCodeInputValue(nextPartnerId, referralAlias || readPendingReferralAlias()));
+        setPartnerOpen(false);
+        return;
+      }
       setPartnerId(nextPartnerId);
       savePendingPartnerId(nextPartnerId);
       setReferralAlias("");
@@ -618,7 +623,7 @@ export function Login() {
       savePendingPartnerId(resolved.partnerId);
       setReferralAlias(alias);
       savePendingReferralAlias(alias);
-      setPartnerIdInput(String(resolved.partnerId));
+      setPartnerIdInput(alias);
     } else {
       // Campaign alias: no partner id, but the alias drives backend attribution.
       setPartnerId(0);
@@ -633,7 +638,7 @@ export function Login() {
   }
 
   function cancelPartnerCode() {
-    setPartnerIdInput(partnerId > 0 ? String(partnerId) : referralAlias);
+    setPartnerIdInput(referralCodeInputValue(partnerId, referralAlias));
     setPartnerError(null);
     setPartnerOpen(false);
   }
@@ -1030,13 +1035,13 @@ export function Login() {
           }
           savePendingReferralAlias(alias);
           setReferralAlias(alias);
+          setPartnerIdInput(alias);
         } else {
-          // Unknown/disabled alias: keep the normal registration possible and
-          // tell the user instead of silently dropping the invitation.
+          // Keep the alias for authoritative resolution by the API at submit.
+          // A temporary resolve failure must not turn an alias invitation into
+          // a partner-id-only registration with no comment or first-pay bonus.
           aliasKnownInvalid = true;
-          clearPendingReferralAlias();
-          setReferralAlias("");
-          setPartnerIdInput("");
+          setPartnerIdInput(alias);
         }
       }
 
@@ -1045,7 +1050,7 @@ export function Login() {
       if (finalId > 0) {
         savePendingPartnerId(finalId);
         setPartnerId(finalId);
-        setPartnerIdInput(String(finalId));
+        setPartnerIdInput(referralCodeInputValue(finalId, alias));
       }
       if (mode === "web" && aliasKnownInvalid) {
         toast.error(t("login.partner.notice_title"), { description: t("login.partner.not_found") });
