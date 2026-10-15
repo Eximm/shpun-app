@@ -2927,9 +2927,10 @@ button, a { -webkit-tap-highlight-color: transparent; }
   max-width: 100%;
   box-sizing: content-box;
   padding: 8px 0 0;
-  overflow: hidden;
+  /* Keep Telegram's iframe measurements independent of the page's UI zoom. */
+  zoom: calc(1 / var(--ui-scale));
 }
-.login__widgetBox--modal iframe { display: block; }
+.login__widgetBox--modal iframe { display: block; max-width: none; }
 .login__switchWrap     { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.09); }
 .login__switchBtn      { width: 100%; background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.10); font-weight: 900; }
 .login__btnFull        { width: 100%; flex: 1 0 100%; }

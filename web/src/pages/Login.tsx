@@ -904,6 +904,7 @@ export function Login() {
         script.src = "https://telegram.org/js/telegram-widget.js?22";
         script.setAttribute("data-telegram-login", botUsername);
         script.setAttribute("data-size", "large");
+        script.setAttribute("data-max_width", String(Math.floor(container.clientWidth)));
         script.setAttribute("data-userpic", "true");
         script.setAttribute("data-request-access", "write");
         script.setAttribute("data-onauth", "__shpunTelegramWidgetAuth(user)");
