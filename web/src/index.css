@@ -2266,6 +2266,9 @@ button, a { -webkit-tap-highlight-color: transparent; }
   border: 1px solid rgba(53,169,232,0.24);
   background: rgba(53,169,232,0.12);
 }
+.loginRegisterChoice__body {
+  min-width: 0;
+}
 .loginRegisterChoice__title {
   color: rgba(255,255,255,0.94);
   font-size: 13px;
@@ -2918,6 +2921,15 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .login__preMt12        { margin-top: 12px; }
 .login__preMb10        { margin-bottom: 10px; }
 .login__widgetBox      { display: grid; justify-items: center; padding: 12px 0; }
+.login__widgetBox.login__widgetBox--modal {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: content-box;
+  padding: 8px 0 0;
+  overflow: hidden;
+}
+.login__widgetBox--modal iframe { display: block; }
 .login__switchWrap     { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.09); }
 .login__switchBtn      { width: 100%; background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.10); font-weight: 900; }
 .login__btnFull        { width: 100%; flex: 1 0 100%; }

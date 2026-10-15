@@ -1065,6 +1065,43 @@ export function Login() {
     return () => { if (forgotTimerRef.current) clearInterval(forgotTimerRef.current); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Telegram sizes its cross-origin iframe to the user's name. Fit the whole
+  // frame instead of clipping it or changing its viewport and hiding controls.
+  useEffect(() => {
+    const container = document.getElementById("tg-widget-container");
+    if (!container) return;
+    let frame: HTMLIFrameElement | null = null;
+    const fit = () => {
+      if (!frame) return;
+      const width = frame.offsetWidth;
+      const height = frame.offsetHeight;
+      if (!width || !height || !container.clientWidth) return;
+      const scale = Math.min(1, container.clientWidth / width);
+      frame.style.transformOrigin = "top left";
+      frame.style.transform = scale < 1 ? `scale(${scale})` : "";
+      container.style.height = `${Math.ceil(height * scale)}px`;
+    };
+    const resize = new ResizeObserver(fit);
+    resize.observe(container);
+    const findFrame = () => {
+      const next = container.querySelector("iframe");
+      if (next !== frame) {
+        if (frame) resize.unobserve(frame);
+        frame = next;
+        if (frame) resize.observe(frame);
+        else container.style.height = "";
+      }
+      fit();
+    };
+    const mutations = new MutationObserver(findFrame);
+    mutations.observe(container, { childList: true });
+    findFrame();
+    return () => {
+      resize.disconnect();
+      mutations.disconnect();
+    };
+  }, [authModal, mode]);
+
   // Cleanup widget on unmount
   useEffect(() => {
     return () => {
