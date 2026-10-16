@@ -27,10 +27,18 @@ test("new ticket receives named reply; retry is idempotent and queue remains vis
   const t = await create();
   assert.equal(t.messages.length, 2);
   assert.equal(t.messages[1]!.authorName, "Помощник Shpun");
+  assert.match(t.messages[1]!.text, /Привет! Я Шпунь/);
   assert.equal(t.assistant?.mode, "active");
   assert.equal(t.status, "waiting_staff");
   assert.equal(runSupportAssistant(repo, t.id), null);
   assert.equal(bots(t.id).length, 1);
+});
+test("short confirmation continues the active step without repeating the greeting", async () => {
+  const t = await create();
+  const message = next(t.id, "Перезагрузил");
+  assert.match(message!.text, /Получилось/);
+  assert.doesNotMatch(message!.text, /Привет/);
+  assert.equal(readAssistantState(t.id)?.mode, "active");
 });
 test("device clarification uses only the active question and never exceeds two steps", async () => {
   const t = await create("Happ не работает");

@@ -98,6 +98,31 @@ export function Support() {
   const [services, setServices] = useState<ServiceItem[]>([]);
 
   const [opened, setOpened] = useState<UserTicket | null>(null);
+  const [pendingAssistantIds, setPendingAssistantIds] = useState<number[]>([]);
+  const assistantTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const shownAssistantIdsRef = useRef(new Set<number>());
+  const isAssistantMessage = (m: TicketMessage) => m.authorType === "system" && m.authorName === "Помощник Shpun";
+  function finishAssistantAnimation() {
+    if (assistantTimerRef.current) clearTimeout(assistantTimerRef.current);
+    assistantTimerRef.current = null;
+    setPendingAssistantIds([]);
+  }
+  function showReply(ticket: UserTicket) {
+    finishAssistantAnimation();
+    const alreadyVisible = new Set(opened?.id === ticket.id ? (opened.messages ?? []).map(m => m.id) : []);
+    const fresh = (ticket.messages ?? []).filter(m => isAssistantMessage(m) && !alreadyVisible.has(m.id) && !shownAssistantIdsRef.current.has(m.id));
+    for (const m of ticket.messages ?? []) if (isAssistantMessage(m)) shownAssistantIdsRef.current.add(m.id);
+    setOpened(ticket);
+    if (fresh.length) {
+      setPendingAssistantIds(fresh.map(m => m.id));
+      assistantTimerRef.current = setTimeout(() => {
+        assistantTimerRef.current = null;
+        setPendingAssistantIds([]);
+      }, 1600);
+    }
+  }
+  useEffect(() => () => { if (assistantTimerRef.current) clearTimeout(assistantTimerRef.current); }, []);
+  useEffect(() => { if (view !== "detail") finishAssistantAnimation(); }, [view]);
   const [replyText, setReplyText] = useState("");
   const [attachError, setAttachError] = useState<AttachmentAddError | null>(null);
   const attach = useAttachmentComposer({ onError: setAttachError });
@@ -140,13 +165,15 @@ export function Support() {
   function Bubble({ message }: { message: TicketMessage }) {
     const isUser = message.authorType === "user";
     const isSystem = message.authorType === "system";
-    const cls = isSystem ? "supportMsg supportMsg--system" : isUser ? "supportMsg supportMsg--user" : "supportMsg supportMsg--staff";
+    const isAssistant = isAssistantMessage(message);
+    const cls = isAssistant ? "supportMsg supportMsg--assistant" : isSystem ? "supportMsg supportMsg--system" : isUser ? "supportMsg supportMsg--user" : "supportMsg supportMsg--staff";
     const author = isUser ? t("support.author.you") : isSystem && message.authorName === "Помощник Shpun"
       ? t("support.assistant.name") : isSystem ? t("support.author.system") : t("support.author.staff");
     return (
       <div className={cls}>
         <div className="supportMsg__meta">
           <strong>{author}</strong>
+          {isAssistant ? <span className="supportAssistantBadge">{t("support.assistant.badge")}</span> : null}
           {!isUser && !isSystem && message.authorName ? <span>· {message.authorName}</span> : null}
           <span className="supportMsg__time">{fmt(message.createdAt)}</span>
         </div>
@@ -181,7 +208,11 @@ export function Support() {
   useEffect(() => {
     const el = threadRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [opened?.id, opened?.messages?.length]);
+  }, [opened?.id, opened?.messages?.length, pendingAssistantIds.length]);
+
+  useEffect(() => {
+    if (view === "detail" && opened) threadRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [view, opened?.id]);
 
   async function loadList() {
     setLoading(true);
@@ -219,11 +250,13 @@ export function Support() {
   }
 
   async function openTicket(id: number) {
+    finishAssistantAnimation();
     ticketRevisionRef.current++;
     setError("");
     try {
       const r = await apiFetch<{ ok: true; ticket: UserTicket }>(`/support/tickets/${id}`, { method: "GET" });
       setOpened(r.ticket);
+      for (const m of r.ticket.messages ?? []) if (isAssistantMessage(m)) shownAssistantIdsRef.current.add(m.id);
       setReplyText("");
       setConfirmClose(false);
       setView("detail");
@@ -252,11 +285,10 @@ export function Support() {
       setDescribe("");
       setSelCategory("");
       setSelService(null);
-      setOpened(created.ticket);
+      showReply(created.ticket);
       setReplyText("");
       setConfirmClose(false);
       setView("detail");
-      toast.success(t("support.created"), { description: t("support.created_desc") });
       await loadList();
     } catch (e) {
       setError(errorMessage(e, t("support.create_failed")));
@@ -282,7 +314,7 @@ export function Support() {
         `/support/tickets/${opened.id}/messages`,
         { method: "POST", body }
       );
-      setOpened(r.ticket);
+      showReply(r.ticket);
       cooldownUntilRef.current = Date.now() + 5000;
       setCooldownSeconds(5);
       attach.clearPending();
@@ -343,6 +375,7 @@ export function Support() {
   async function requestStaff() {
     if (!opened || requestingStaff) return;
     const ticketId = opened.id;
+    finishAssistantAnimation();
     ticketRevisionRef.current++;
     setRequestingStaff(true);
     setError("");
@@ -532,11 +565,17 @@ export function Support() {
             {opened ? <span className={`chip chip--${STATUS_TONES[opened.status]}`}>{statusLabel(opened.status)}</span> : null}
           </div>
 
-          <div className="supportDetail__thread" ref={threadRef}>
+          <div className="supportDetail__thread" ref={threadRef} role="log" aria-live="polite" aria-relevant="additions">
             {(opened?.messages ?? []).length === 0 ? (
               <div className="supportDetail__empty">{t("support.no_messages")}</div>
             ) : (
-              (opened?.messages ?? []).map((m) => <Bubble key={m.id} message={m} />)
+              (opened?.messages ?? []).filter(m => !pendingAssistantIds.includes(m.id)).map((m) => <Bubble key={m.id} message={m} />)
+            )}
+            {pendingAssistantIds.length > 0 && (
+              <div className="supportMsg supportMsg--assistant supportAssistantTyping" role="status">
+                <strong>{t("support.assistant.typing")}</strong>
+                <span className="supportAssistantDots" aria-hidden="true"><i /><i /><i /></span>
+              </div>
             )}
           </div>
 

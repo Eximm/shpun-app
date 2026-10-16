@@ -6,7 +6,7 @@ import { enrichMessagesWithAttachments } from "./attachmentService.js";
 
 export const ASSISTANT_NAME = "Помощник Shpun";
 export const assistantEnabled = () => process.env.SUPPORT_ASSISTANT_ENABLED === "true";
-const handoffText = "Обращение передано сотрудникам поддержки. Переписка сохранена — повторять всё заново не нужно. Можно дописать детали здесь.";
+const handoffText = "Обращение передано сотрудникам поддержки. Они увидят нашу переписку, поэтому повторять всё заново не нужно. Ответ придёт здесь.";
 const defaultState = (): AssistantState => ({ mode: "active", reason: null, lastUserMessageId: 0, sentScenarios: [], replies: 0 });
 
 export function assistantPublicState(ticketId: number) {
@@ -54,7 +54,10 @@ export function runSupportAssistant(repo: TicketRepository, ticketId: number, fo
       "subscription_incident", "ru_servers", "local_device", "connection_vs_import"];
     const asksStaff = /оператор|специалист|сотрудник|живой человек|человеку|человека|не бот|без бота|хватит|не помог|уже пробовал|не заработал/.test(normalized);
     const confirmsResolved = /^(спасибо[!,. ]*)?(все работает|заработало|проблема решена|можно закрывать)[!,. ]*$/.test(normalized.trim());
-    if (forceHandoff || asksStaff) reason = forceHandoff ? "requested" : "requested_or_failed";
+    if (forceHandoff || asksStaff) {
+      reason = forceHandoff ? "requested" : "requested_or_failed";
+      if (/не помог|уже пробовал|не заработал/.test(normalized)) text = "Понял, повторять те же действия не будем.";
+    }
     else if (latest?.attachments?.length) reason = "attachment_needs_staff";
     else if (confirmsResolved && state.replies > 0) {
       if (state.mode === "resolved") return null;
@@ -68,6 +71,10 @@ export function runSupportAssistant(repo: TicketRepository, ticketId: number, fo
     } else if (!chosen && state.replies === 0 && /не работает|не подключается|нет интернета/.test(normalized)) {
       scenario = "clarify_device";
       text = "Подскажите, на каком устройстве и в каком приложении не работает подключение. Например: компьютер с Windows и Happ.";
+    } else if (!chosen && state.replies === 1 && state.sentScenarios.at(-1) === "windows_happ_tun" &&
+      /^(да|готово|сделал|сделала|перезагрузил|перезагрузила|попробовал|попробовала)[.! ]*$/.test(normalized.trim())) {
+      scenario = "check_after_restart";
+      text = "Спасибо. Теперь подключитесь в Happ и попробуйте открыть любую страницу. Получилось?";
     } else if (!chosen || result.needsOperator) reason = "needs_staff";
     else {
       scenario = chosen.id;
@@ -85,6 +92,12 @@ export function runSupportAssistant(repo: TicketRepository, ticketId: number, fo
     if (scenario && !state.sentScenarios.includes(scenario)) state.sentScenarios.push(scenario);
     state.lastUserMessageId = latest?.authorType === "user" ? latest.id : state.lastUserMessageId;
     state.replies++;
+    if (state.replies === 1) {
+      const greeting = state.mode === "active"
+        ? "Привет! Я Шпунь, помощник поддержки. Давайте попробуем разобраться вместе."
+        : "Привет! Я Шпунь, помощник поддержки.";
+      text = `${greeting}\n\n${text}`;
+    }
     if (ticket.source === "telegram") {
       text = `${ASSISTANT_NAME}\n\n${text}`;
       if (state.replies === 1 && state.mode === "active") text += "\n\nЧтобы позвать сотрудника поддержки, напишите «оператор».";

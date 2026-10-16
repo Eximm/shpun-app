@@ -2,7 +2,9 @@
 export type Dict = Record<string, string>;
 
 export const RU: Dict = {
-  "support.assistant.name": "Помощник Shpun",
+  "support.assistant.name": "Шпунь",
+  "support.assistant.badge": "Автоматический помощник",
+  "support.assistant.typing": "Шпунь печатает…",
   "support.assistant.suggestions": "Подсказки помощника",
   "support.assistant.checks_hint": "Проверки ниже ещё не выполнены. Сверьте данные и историю перед ответом. Готовый текст можно вставить в пустое поле ответа.",
   "support.assistant.suggestions_failed": "Подсказки не загрузились. Можно ответить как обычно.",
@@ -2722,7 +2724,9 @@ export const RU: Dict = {
 };
 
 export const EN: Dict = {
-  "support.assistant.name": "Shpun helper",
+  "support.assistant.name": "Shpun",
+  "support.assistant.badge": "Automated helper",
+  "support.assistant.typing": "Shpun is typing…",
   "support.assistant.suggestions": "Helper suggestions",
   "support.assistant.checks_hint": "These checks have not been performed. Review the account and conversation before replying. You can insert a suggested reply into an empty composer.",
   "support.assistant.suggestions_failed": "Suggestions could not load. You can reply as usual.",
