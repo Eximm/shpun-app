@@ -55,8 +55,9 @@ docker-data/
 web/referral-nudge-preview.svg
 telegram-marzban-happ-miniapp.html
 
-# Local SHM billing templates (contain deployment-specific logic/secrets)
-local-billing/
+# Billing work belongs in a separate local folder beside this repository.
+/billing/
+/local-billing/
 
 # Local Python test cache
 __pycache__/

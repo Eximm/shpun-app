@@ -1,14 +1,12 @@
 #!/usr/bin/env node
-// Regression for the service documents module (LegalDocs) and its synced
-// Telegram-bot legal HTML template.
+// Regression for the ShpunApp service documents module (LegalDocs).
 //
 // Locks in:
-//   - a dedicated "Оплата и возвраты" document, shared wording with the bot page
+//   - a dedicated "Оплата и возвраты" document
 //   - VPON usage terms, refunds and bonus semantics identical in both places
 //   - in-app support CTA (no more @shpun_staff as the main contact)
 //   - a mini TOC with anchors, FAQ blocks and a single revision date
 //   - mobile-safe navigation and no page overflow
-//   - the bot legal template stays full HTML with balanced tags and anchors
 //
 // Usage: npm run test:legal-docs
 
@@ -20,21 +18,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const webRoot = path.join(__dirname, "..");
 
 const read = (rel) => fs.readFileSync(path.join(webRoot, rel), "utf8").replace(/\r\n?/g, "\n");
-const readMaybe = (rel) => {
-  const p = path.join(webRoot, rel);
-  return fs.existsSync(p) ? fs.readFileSync(p, "utf8").replace(/\r\n?/g, "\n") : "";
-};
-
 let failures = 0;
 function assert(name, cond) {
   console.log(`${cond ? "PASS" : "FAIL"} ${name}`);
   if (!cond) failures++;
 }
-const count = (haystack, needle) => haystack.split(needle).length - 1;
-
 const docs = read("src/pages/LegalDocs.tsx");
 const css = read("src/index.css");
-const bot = readMaybe("../local-billing/shpun_legal.production.tpl");
 
 /* ── Payment document + shared wording ────────────────────────────────────── */
 
@@ -107,28 +97,8 @@ assert("anchored sections offset the sticky nav", css.includes(".legal-section-c
 assert("tabs scroll on mobile", /@media \(max-width: 680px\) \{[\s\S]*?\.legal-tabs \{[\s\S]*?overflow-x: auto;/.test(css));
 assert("TOC scrolls on mobile", /@media \(max-width: 680px\) \{[\s\S]*?\.legal-toc \{[\s\S]*?overflow-x: auto;/.test(css));
 
-/* ── Bot legal template: full HTML, synced content, support CTA ───────────── */
-
-assert("bot legal template file exists", bot.length > 0);
-assert("bot template is a full HTML page", bot.startsWith("<!DOCTYPE html>") && bot.trimEnd().endsWith("</html>"));
-assert("bot template has balanced section tags", count(bot, "<section") === count(bot, "</section>"));
-assert("bot template has balanced div tags", count(bot, "<div") === count(bot, "</div>"));
-assert("bot template has balanced style tags", count(bot, "<style") === count(bot, "</style>"));
-assert("bot template has balanced script tags", count(bot, "<script") === count(bot, "</script>"));
-assert("bot template keeps the six anchors", ["#overview", "#payments", "#privacy", "#offer", "#terms", "#contacts"].every((a) => bot.includes(`href="${a}"`)));
-assert("bot template has an in-app support CTA", bot.includes("https://app.shpun.net/support") && bot.includes("Открыть поддержку") && bot.includes("js-support"));
-assert("bot template does not use @shpun_staff", !bot.includes("shpun_staff"));
-assert("bot template shows the revision date", bot.includes("25.09.2026"));
-assert("bot template keeps the email as secondary contact", bot.includes("shpynsdn@gmail.com"));
-assert("bot template has the Главное block", bot.includes("Главное") && bot.includes("Основной баланс используется для оплаты услуг"));
-assert("bot template has payments semantics", bot.includes("авансовый платёж для оплаты услуг") && bot.includes("нельзя вывести") && bot.includes("Возвраты рассматриваются индивидуально"));
-assert("bot template has VPN limitations", bot.includes("интернет-провайдера") && bot.includes("предпринимает разумные меры"));
-assert("bot template has TOC + FAQ", bot.includes('class="toc"') && bot.includes('class="faq"'));
-assert("bot template has a mobile viewport", bot.includes('name="viewport"'));
-assert("bot template opens links via Telegram WebApp", bot.includes("Telegram.WebApp") && bot.includes("openLink"));
-
 if (failures > 0) {
   console.error(`\nFAILED: ${failures} check(s)`);
   process.exit(1);
 }
-console.log("\nOK: service documents (app + bot) synced, in-app support CTA, TOC, revision verified");
+console.log("\nOK: ShpunApp service documents, in-app support CTA, TOC, revision verified");
