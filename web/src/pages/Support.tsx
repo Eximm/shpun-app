@@ -6,7 +6,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { apiFetch } from "../shared/api/client";
+import { apiFetch, ApiError } from "../shared/api/client";
 import { PageBackButton } from "../shared/ui/PageBackButton";
 import { toast } from "../shared/ui/toast";
 import { useI18n } from "../shared/i18n";
@@ -101,6 +101,16 @@ export function Support() {
   const [attachError, setAttachError] = useState<AttachmentAddError | null>(null);
   const attach = useAttachmentComposer({ onError: setAttachError });
   const [sending, setSending] = useState(false);
+  const sendLockRef = useRef(false);
+  const createLockRef = useRef(false);
+  const cooldownUntilRef = useRef(0);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setCooldownSeconds(Math.max(0, Math.ceil((cooldownUntilRef.current - Date.now()) / 1000)));
+    }, 250);
+    return () => window.clearInterval(timer);
+  }, []);
   const [closing, setClosing] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -219,11 +229,13 @@ export function Support() {
   }
 
   async function submitCreate() {
+    if (createLockRef.current) return;
     const text = describe.trim();
     if (text.length < 2 || !selCategory) {
       setError(t("support.select_hint"));
       return;
     }
+    createLockRef.current = true;
     setCreating(true);
     setError("");
     try {
@@ -240,14 +252,16 @@ export function Support() {
     } catch (e) {
       setError(errorMessage(e, t("support.create_failed")));
     } finally {
+      createLockRef.current = false;
       setCreating(false);
     }
   }
 
   async function sendReply() {
-    if (!opened || sending) return;
+    if (!opened || sendLockRef.current || Date.now() < cooldownUntilRef.current) return;
     const text = replyText.trim();
     if (text.length < 2 && attach.pending.length === 0) return;
+    sendLockRef.current = true;
     setSending(true);
     setError("");
     try {
@@ -259,12 +273,21 @@ export function Support() {
         { method: "POST", body }
       );
       setOpened(r.ticket);
+      cooldownUntilRef.current = Date.now() + 5000;
+      setCooldownSeconds(5);
       attach.clearPending();
       setAttachError(null);
       setReplyText("");
     } catch (e) {
-      setError(errorMessage(e, t("support.send_failed")));
+      if (e instanceof ApiError && (e.code === "support_message_cooldown" || e.code === "support_duplicate_message")) {
+        const seconds = e.code === "support_duplicate_message" ? 5
+          : Math.min(60, Math.max(1, Number(e.data?.retryAfter) || 5));
+        cooldownUntilRef.current = Date.now() + seconds * 1000;
+        setCooldownSeconds(Math.ceil(seconds));
+        setError(t(e.code === "support_duplicate_message" ? "support.duplicate_message" : "support.cooldown_hint"));
+      } else setError(errorMessage(e, t("support.send_failed")));
     } finally {
+      sendLockRef.current = false;
       setSending(false);
     }
   }
@@ -518,8 +541,8 @@ export function Support() {
               </div>
               <div className="composerAttachHint">{t("support.attach.hint")}</div>
               <div className="actions actions--2 admin-gap-top-sm">
-                <button className="btn btn--primary" type="button" disabled={sending || (replyText.trim().length < 2 && attach.pending.length === 0)} onClick={() => void sendReply()}>
-                  {sending ? t("common.sending") : `💬 ${t("support.reply")}`}
+                <button className="btn btn--primary" type="button" disabled={sending || cooldownSeconds > 0 || (replyText.trim().length < 2 && attach.pending.length === 0)} onClick={() => void sendReply()}>
+                  {sending ? t("common.sending") : cooldownSeconds > 0 ? t("support.cooldown_button", { seconds: cooldownSeconds }) : `💬 ${t("support.reply")}`}
                 </button>
                 {canClose ? (
                   <button className="btn btn--soft" type="button" disabled={closing} onClick={() => setConfirmClose(true)}>

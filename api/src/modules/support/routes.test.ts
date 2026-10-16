@@ -81,6 +81,24 @@ function userHeaders(sid: string) {
   return { "x-app-sid": sid, "content-type": "application/json" };
 }
 
+test("parallel retries create one reply and return actionable 429 without losing history", async () => {
+  const created = await createUserTicket("sid-user-201");
+  const id = created.json().ticket.id;
+  const send = (text: string) => app.inject({ method: "POST", url: `/api/support/tickets/${id}/messages`,
+    headers: userHeaders("sid-user-201"), payload: { text } });
+  const results = await Promise.all([send("Дополнительные детали"), send("Дополнительные детали"), send("Дополнительные детали")]);
+  assert.deepEqual(results.map((r) => r.statusCode).sort(), [201, 429, 429]);
+  const rejected = results.find((r) => r.statusCode === 429)!;
+  assert.equal(rejected.json().error, "support_duplicate_message");
+  assert.ok(Number(rejected.headers["retry-after"]) > 0);
+  assert.ok(rejected.json().retryAfter > 0);
+  const cooldown = await send("Ещё одна деталь");
+  assert.equal(cooldown.statusCode, 429);
+  assert.equal(cooldown.json().error, "support_message_cooldown");
+  const detail = await app.inject({ method: "GET", url: `/api/support/tickets/${id}`, headers: userHeaders("sid-user-201") });
+  assert.equal(detail.json().ticket.messages.length, 2);
+});
+
 async function createUserTicket(sid: string, body: Record<string, unknown> = {}) {
   return app.inject({
     method: "POST",

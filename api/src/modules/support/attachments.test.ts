@@ -111,11 +111,15 @@ test("supports text-only, attachment-only and text+attachment messages", async (
   const textOnly = service.addUserMessageWithAttachments(ticket.id, 902, "только текст", []);
   assert.equal(textOnly.messages[textOnly.messages.length - 1].attachments?.length, 0);
 
+  linkDb.prepare("UPDATE support_ticket_messages SET created_at = datetime('now', '-6 seconds') WHERE ticket_id = ?").run(ticket.id);
   const attOnly = service.addUserMessageWithAttachments(ticket.id, 902, "", [upload("only.pdf", PDF)]);
   const attOnlyMsg = attOnly.messages[attOnly.messages.length - 1];
   assert.equal(attOnlyMsg.text, "");
   assert.equal(attOnlyMsg.attachments?.length, 1);
 
+  assert.throws(() => service.addUserMessageWithAttachments(ticket.id, 902, "смотрите", [upload("both.jpg", JPEG)]),
+    (error: any) => error.code === "support_message_cooldown");
+  linkDb.prepare("UPDATE support_ticket_messages SET created_at = datetime('now', '-6 seconds') WHERE ticket_id = ?").run(ticket.id);
   const both = service.addUserMessageWithAttachments(ticket.id, 902, "смотрите", [upload("both.jpg", JPEG), upload("both.pdf", PDF)]);
   const bothMsg = both.messages[both.messages.length - 1];
   assert.equal(bothMsg.attachments?.length, 2);

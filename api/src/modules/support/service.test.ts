@@ -9,6 +9,35 @@ process.env.DATA_DIR = mkdtempSync(path.join(tmpdir(), "shpun-support-service-")
 const service = await import("./service.js");
 const { getTicketRepository } = await import("./repository.js");
 const { SupportError } = service;
+const { linkDb } = await import("../../shared/linkdb/db.js");
+
+test("user message protection rejects retries, allows new details after cooldown and repeats after staff reply", async () => {
+  const ticket = await service.createTicket({ userId: 8001, source: "app", categoryKey: "other", text: "Первый вопрос" });
+  const reply = service.addUserMessage(ticket.id, 8001, "Повторный текст\r\nДетали");
+  assert.throws(() => service.addUserMessage(ticket.id, 8001, "  Повторный текст\nДетали  "), (e) => {
+    assertSupportError(e, "support_duplicate_message");
+    assert.equal((e as InstanceType<typeof SupportError>).status, 429);
+    assert.ok((e as InstanceType<typeof SupportError>).retryAfter! > 0);
+    return true;
+  });
+  assert.throws(() => service.addUserMessage(ticket.id, 8001, "Другие детали"), (e) => assertSupportError(e, "support_message_cooldown"));
+  assert.equal(service.getUserTicket(ticket.id, 8001)?.messages.length, 2);
+  linkDb.prepare("UPDATE support_ticket_messages SET created_at = datetime('now', '-6 seconds') WHERE id = ?").run(reply.messages.at(-1)!.id);
+  assert.equal(service.addUserMessage(ticket.id, 8001, "Другие детали").messages.length, 3);
+  // A duplicate remains blocked after the short cooldown expires.
+  assert.throws(() => service.addUserMessage(ticket.id, 8001, "Повторный текст\nДетали"), (e) => assertSupportError(e, "support_duplicate_message"));
+  service.addStaffMessage({ ticketId: ticket.id, operatorId: 900, text: "Повторите, пожалуйста" });
+  assert.equal(service.addUserMessage(ticket.id, 8001, "Повторный текст\nДетали").messages.length, 5);
+});
+
+test("duplicate window expires and another ticket is independent", async () => {
+  const ticket = await service.createTicket({ userId: 8002, source: "app", categoryKey: "other", text: "Первый вопрос" });
+  service.addUserMessage(ticket.id, 8002, "Детали вопроса");
+  linkDb.prepare("UPDATE support_ticket_messages SET created_at = datetime('now', '-61 seconds') WHERE ticket_id = ?").run(ticket.id);
+  assert.equal(service.addUserMessage(ticket.id, 8002, "Детали вопроса").messages.length, 3);
+  const other = await service.createTicket({ userId: 8002, source: "telegram", categoryKey: "other", text: "Другое обращение" });
+  assert.equal(service.addUserMessage(other.id, 8002, "Детали вопроса").messages.length, 2);
+});
 
 const fakeShm = {
   async resolveIdentity(sessionId: string) {

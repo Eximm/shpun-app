@@ -50,6 +50,7 @@ import {
 export class SupportError extends Error {
   code: string;
   status: number;
+  retryAfter?: number;
 
   constructor(code: string, status = 400, message?: string) {
     super(message ?? code);
@@ -325,6 +326,34 @@ export function addUserMessageWithAttachments(
   //  - resolved -> user can reply, the ticket reopens into waiting_staff.
   if (ticket.status === "closed") {
     throw new SupportError("ticket_closed", 409, "Обращение закрыто. Создайте новое.");
+  }
+
+  // Synchronous read/check/write: a retry cannot interleave before persistence.
+  // Read persisted history so protection also survives restarts and other tabs.
+  const history = enrichMessagesWithAttachments(repo.listMessages(ticket.id))
+    .filter((m) => !m.deletedAt && !m.isInternalNote)
+    .sort((a, b) => a.id - b.id);
+  let staffIndex = history.length - 1;
+  while (staffIndex >= 0 && history[staffIndex].authorType !== "staff") staffIndex--;
+  const pending = history.slice(staffIndex + 1).filter((m) => m.authorType === "user");
+  const age = (createdAt: string) => Date.now() - Date.parse(
+    createdAt.includes("T") ? createdAt : `${createdAt.replace(" ", "T")}Z`
+  );
+  const rejectFlood = (code: string, seconds: number, message: string): never => {
+    const error = new SupportError(code, 429, message);
+    error.retryAfter = Math.max(1, Math.ceil(seconds));
+    throw error;
+  };
+  if (!hasFiles) {
+    const duplicate = [...pending].reverse().find((m) => m.text === normalized && !m.attachments?.length && age(m.createdAt) < 60_000);
+    if (duplicate) rejectFlood("support_duplicate_message", (60_000 - age(duplicate.createdAt)) / 1000,
+      "Это сообщение уже отправлено. Дождитесь ответа или дополните вопрос.");
+  }
+  const last = pending.at(-1);
+  // Allow an immediate clarification after creating a ticket.
+  if (last && last.id !== history[0]?.id && age(last.createdAt) < 5000) {
+    rejectFlood("support_message_cooldown", (5000 - age(last.createdAt)) / 1000,
+      "Подождите несколько секунд перед следующим сообщением.");
   }
 
   const message = repo.addMessage({

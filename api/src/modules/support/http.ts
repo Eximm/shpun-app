@@ -33,11 +33,13 @@ export function pick(body: Record<string, any>, ...keys: string[]): unknown {
 export function sendSupportError(reply: FastifyReply, error: unknown): FastifyReply {
   // Duck-typed so both SupportError and AttachmentError map cleanly without
   // importing the service layer here (avoids a circular dependency).
-  const e = error as { status?: unknown; code?: unknown; message?: unknown };
+  const e = error as { status?: unknown; code?: unknown; message?: unknown; retryAfter?: number };
   if (e && typeof e === "object" && typeof e.status === "number" && typeof e.code === "string") {
     const code = e.code;
     const message = typeof e.message === "string" && e.message !== code ? e.message : undefined;
-    return reply.code(e.status).send({ ok: false, error: code, message });
+    const retryAfter = e.retryAfter;
+    if (retryAfter) reply.header("Retry-After", String(retryAfter));
+    return reply.code(e.status).send({ ok: false, error: code, message, retryAfter });
   }
   throw error;
 }

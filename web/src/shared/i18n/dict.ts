@@ -2,6 +2,9 @@
 export type Dict = Record<string, string>;
 
 export const RU: Dict = {
+  "support.cooldown_button": "Отправить через {seconds} с",
+  "support.cooldown_hint": "Подождите несколько секунд перед следующим сообщением.",
+  "support.duplicate_message": "Это сообщение уже отправлено. Дождитесь ответа или дополните вопрос.",
   "password.reminder.title": "На аккаунте ещё не установлен пароль",
   "password.reminder.text": "Давайте установим пароль, чтобы вы могли входить по почте на любом устройстве. Привычный способ входа тоже останется доступен.",
   "password.reminder.action": "Установить пароль",
@@ -2705,6 +2708,9 @@ export const RU: Dict = {
 };
 
 export const EN: Dict = {
+  "support.cooldown_button": "Send in {seconds}s",
+  "support.cooldown_hint": "Please wait a few seconds before sending another message.",
+  "support.duplicate_message": "This message has already been sent. Wait for a reply or add more details.",
   "password.reminder.title": "Your account does not have a password yet",
   "password.reminder.text": "Set a password so you can sign in with your email on any device. Your usual sign-in method will still be available.",
   "password.reminder.action": "Set a password",
