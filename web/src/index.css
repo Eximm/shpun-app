@@ -9466,3 +9466,12 @@ button.reviews-star:not(:disabled) {
   .mon-row__spacer { display: none; }
   .mon-row__stats { order: 5; flex: 0 0 100%; display: flex; flex-wrap: wrap; gap: 4px 12px; }
 }
+.supportAssistantBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 12px 0;
+}
+.supportAssistantBar .p { flex: 1 1 240px; margin: 0; }

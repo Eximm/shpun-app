@@ -5,7 +5,8 @@ const normalize = (text: string) => text.toLocaleLowerCase("ru").replaceAll("ё"
 
 /** Suggestions for staff only. No billing, network, message or ticket mutations. */
 export function suggestSupportReply(ticket: TicketWithMessages) {
-  const messages = ticket.messages.filter(m => !m.deletedAt && !m.isInternalNote);
+  const messages = ticket.messages.filter(m => !m.deletedAt && !m.isInternalNote &&
+    !(m.authorType === "system" && m.authorName === "Помощник Shpun"));
   const latest = messages.at(-1);
   const base = { knowledgeVersion: knowledge.version, mode: "staff_suggestion", autoSend: false,
     policy: knowledge.policy, serviceSnapshot: ticket.serviceSnapshot,

@@ -7,6 +7,7 @@
 
 import { getTicketRepository, type TicketRepository } from "./repository.js";
 import { getSupportShmPort } from "./snapshot.js";
+import { assistantPublicState, runSupportAssistant, stopSupportAssistant } from "./assistantRuntime.js";
 import {
   enrichMessagesWithAttachments,
   saveMessageAttachments,
@@ -64,6 +65,27 @@ export type SupportServiceDeps = {
   repo?: TicketRepository;
   shm?: SupportShmPort;
 };
+
+// A saved customer message must remain successful if the optional assistant fails.
+function processAssistant(ticketId: number, repo: TicketRepository) {
+  try {
+    runSupportAssistant(repo, ticketId);
+  } catch {
+    console.error("SUPPORT_ASSISTANT_FAILED", { ticketId });
+  }
+}
+
+export function requestSupportStaff(ticketId: number, userId: number): TicketWithMessages {
+  const repo = getTicketRepository();
+  const ticket = repo.getTicket(ticketId);
+  if (!ticket || ticket.userId !== requireUserId(userId)) throw new SupportError("ticket_not_found", 404);
+  if (ticket.kind !== "support") throw new SupportError("invalid_ticket_kind", 400);
+  if (ticket.status === "closed") throw new SupportError("ticket_closed", 409);
+  const message = runSupportAssistant(repo, ticketId, true);
+  const result = getUserTicket(ticketId, userId)!;
+  if (message) void notifyTicketUserMessage(result, message);
+  return result;
+}
 
 function normalizeText(value: unknown, max = 4000): string {
   return String(value ?? "")
@@ -242,6 +264,7 @@ export async function createTicket(
     isInternalNote: false,
   });
 
+  processAssistant(ticket.id, repo);
   const created = mustGetUserTicket(ticket.id, identity.userId, deps);
   void notifyTicketCreated(created);
   return created;
@@ -276,7 +299,7 @@ export function getUserTicket(
   const messages = enrichMessagesWithAttachments(repo.listMessages(ticket.id, { includeInternalNotes: false }))
     // User-facing API never exposes a deleted message (or its attachments).
     .filter((m) => !m.deletedAt);
-  return { ...ticket, messages };
+  return { ...ticket, messages, assistant: ticket.kind === "support" ? assistantPublicState(ticket.id) : undefined };
 }
 
 function mustGetUserTicket(
@@ -377,6 +400,7 @@ export function addUserMessageWithAttachments(
 
   repo.updateTicket(ticket.id, { status: "waiting_staff" });
 
+  processAssistant(ticket.id, repo);
   const result = mustGetUserTicket(ticket.id, uid, deps);
   void notifyTicketUserMessage(result, { ...message, attachments });
   return result;
@@ -402,7 +426,7 @@ export function getAdminTicket(
   const messages = enrichMessagesWithAttachments(repo.listMessages(ticket.id, { includeInternalNotes: true }))
     // Admin sees a placeholder (audit trail) but never the original body/attachments.
     .map((m) => (m.deletedAt ? { ...m, text: "", attachments: [] } : m));
-  return { ...ticket, messages };
+  return { ...ticket, messages, assistant: ticket.kind === "support" ? assistantPublicState(ticket.id) : undefined };
 }
 
 /** Admin-only soft delete of a message. Never hard-deletes: the row keeps its
@@ -633,6 +657,7 @@ export function addStaffMessage(
   }
 
   repo.updateTicket(ticket.id, { status: "waiting_user" });
+  if (ticket.kind === "support") stopSupportAssistant(ticket.id);
 
   const result = getAdminTicket(ticket.id, deps) as TicketWithMessages;
   void notifyTicketStaffReply(result, { ...message, attachments });
@@ -670,6 +695,8 @@ export function updateTicketByAdmin(
   }
 
   repo.updateTicket(ticket.id, next);
+  if (ticket.kind === "support" && (next.assignedTo || next.status === "in_progress" ||
+    next.status === "closed" || next.status === "resolved")) stopSupportAssistant(ticket.id);
   return getAdminTicket(ticket.id, deps) as TicketWithMessages;
 }
 
@@ -714,6 +741,7 @@ export function closeUserTicket(
   }
 
   repo.updateTicket(ticket.id, { status: "closed" });
+  if (ticket.kind === "support") stopSupportAssistant(ticket.id);
   repo.addMessage({
     ticketId: ticket.id,
     authorType: "system",

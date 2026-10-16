@@ -22,6 +22,7 @@ import {
   getUserTicket,
   listCategories,
   listUserTickets,
+  requestSupportStaff,
 } from "./service.js";
 import { pick, readBody, readMultipart, sendSupportError, sessionUser } from "./http.js";
 import { listOwnerUnreadTicketIds, markSupportTicketRead } from "./notifyRepo.js";
@@ -41,6 +42,16 @@ function parseStatusFilter(value: unknown): TicketStatus[] | undefined {
 }
 
 export async function supportRoutes(app: FastifyInstance) {
+  app.post("/support/tickets/:id/staff", async (req, reply) => {
+    try {
+      const user = sessionUser(getSessionFromRequest(req));
+      if (!user) return reply.code(401).send({ ok: false, error: "unauthorized" });
+      const id = Number((req.params as any)?.id);
+      if (!Number.isSafeInteger(id) || id <= 0) return reply.code(400).send({ ok: false, error: "invalid_ticket_id" });
+      return reply.send({ ok: true, ticket: requestSupportStaff(id, user.userId) });
+    } catch (error) { return sendSupportError(reply, error); }
+  });
+
   // Public (authenticated) category list for the UI.
   app.get("/support/categories", async (req, reply) => {
     const session = getSessionFromRequest(req) as any;

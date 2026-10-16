@@ -128,6 +128,22 @@ test("assistant endpoint is admin-only, suggests without sending or changing tic
   assert.equal((await app.inject({ method: "GET", url: "/api/admin/support/tickets/999999/assistant", headers: userHeaders("sid-admin") })).statusCode, 404);
 });
 
+test("staff request is owner-scoped, immediate and idempotent even if automation is off", async () => {
+  const created = await createUserTicket("sid-user-201");
+  const id = created.json().ticket.id;
+  const url = `/api/support/tickets/${id}/staff`;
+  assert.equal((await app.inject({ method: "POST", url })).statusCode, 401);
+  assert.equal((await app.inject({ method: "POST", url, headers: userHeaders("sid-user-202") })).statusCode, 404);
+  const result = await app.inject({ method: "POST", url, headers: userHeaders("sid-user-201") });
+  assert.equal(result.statusCode, 200);
+  assert.equal(result.json().ticket.assistant.mode, "staff");
+  assert.equal(result.json().ticket.status, "waiting_staff");
+  const retried = await app.inject({ method: "POST", url, headers: userHeaders("sid-user-201") });
+  assert.deepEqual(retried.json().ticket.messages, result.json().ticket.messages);
+  await app.inject({ method: "POST", url: `/api/support/tickets/${id}/close`, headers: userHeaders("sid-user-201") });
+  assert.equal((await app.inject({ method: "POST", url, headers: userHeaders("sid-user-201") })).statusCode, 409);
+});
+
 test("user API creates and lists own tickets", async () => {
   const created = await createUserTicket("sid-user-201");
   assert.equal(created.statusCode, 201);

@@ -168,7 +168,8 @@ export type SupportAttachment = {
   deleteReason: string | null;
 };
 
-export type TicketWithMessages = Ticket & { messages: TicketMessage[] };
+export type TicketWithMessages = Ticket & { messages: TicketMessage[];
+  assistant?: { enabled: boolean; mode: "active" | "staff" | "resolved" } };
 
 export type CreateTicketInput = {
   userId: number;

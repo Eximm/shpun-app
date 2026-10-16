@@ -2,6 +2,20 @@
 export type Dict = Record<string, string>;
 
 export const RU: Dict = {
+  "support.assistant.name": "Помощник Shpun",
+  "support.assistant.suggestions": "Подсказки помощника",
+  "support.assistant.checks_hint": "Проверки ниже ещё не выполнены. Сверьте данные и историю перед ответом. Готовый текст можно вставить в пустое поле ответа.",
+  "support.assistant.suggestions_failed": "Подсказки не загрузились. Можно ответить как обычно.",
+  "support.assistant.no_suggestions": "Подходящих подсказок пока нет.",
+  "support.assistant.next_steps": "Следующие шаги",
+  "support.assistant.escalation": "Когда нужна помощь специалиста",
+  "support.assistant.use_reply": "Вставить ответ",
+  "support.assistant.intro": "Помогу разобраться. Сотрудника поддержки можно позвать в любой момент.",
+  "support.assistant.call_staff": "Позвать сотрудника",
+  "support.assistant.requesting": "Передаём обращение…",
+  "support.assistant.staff_hint": "Сотрудники поддержки видят эту переписку. Здесь можно добавить детали.",
+  "support.assistant.resolved": "Если всё работает, можно закрыть обращение. Если нужна помощь — позовите сотрудника.",
+  "support.assistant.staff_failed": "Не удалось передать запрос. Попробуйте ещё раз или напишите «оператор» в сообщении.",
   "support.cooldown_button": "Отправить через {seconds} с",
   "support.cooldown_hint": "Подождите несколько секунд перед следующим сообщением.",
   "support.duplicate_message": "Это сообщение уже отправлено. Дождитесь ответа или дополните вопрос.",
@@ -2708,6 +2722,20 @@ export const RU: Dict = {
 };
 
 export const EN: Dict = {
+  "support.assistant.name": "Shpun helper",
+  "support.assistant.suggestions": "Helper suggestions",
+  "support.assistant.checks_hint": "These checks have not been performed. Review the account and conversation before replying. You can insert a suggested reply into an empty composer.",
+  "support.assistant.suggestions_failed": "Suggestions could not load. You can reply as usual.",
+  "support.assistant.no_suggestions": "No matching suggestions yet.",
+  "support.assistant.next_steps": "Next steps",
+  "support.assistant.escalation": "When a specialist is needed",
+  "support.assistant.use_reply": "Insert reply",
+  "support.assistant.intro": "I can help you get started. You can ask for a support team member at any time.",
+  "support.assistant.call_staff": "Ask for a person",
+  "support.assistant.requesting": "Passing your request on…",
+  "support.assistant.staff_hint": "The support team can see this conversation. You can add more details here.",
+  "support.assistant.resolved": "If everything works, you can close this request. If you need help, ask for a team member.",
+  "support.assistant.staff_failed": "Could not pass your request on. Please try again or ask for an operator in a message.",
   "support.cooldown_button": "Send in {seconds}s",
   "support.cooldown_hint": "Please wait a few seconds before sending another message.",
   "support.duplicate_message": "This message has already been sent. Wait for a reply or add more details.",
