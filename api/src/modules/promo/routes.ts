@@ -8,7 +8,8 @@ import {
   shmShpunAppPromoProfile,
 } from '../../shared/shm/shmClient.js'
 import { hasReviewByUserId } from '../reviews/repo.js'
-import { buildBonusOpportunities } from './opportunities.js'
+import { getPromotionDisplaySettingsMap } from './displaySettingsRepo.js'
+import { applyPromotionDisplaySettings, buildBonusOpportunities } from './opportunities.js'
 
 function ensureAuthed(req: any, reply: any): string | null {
   const session = getSessionFromRequest(req as any)
@@ -62,10 +63,13 @@ export async function promoRoutes(app: FastifyInstance) {
 
     return reply.send({
       ok: true,
-      items: buildBonusOpportunities({
-        billing,
-        canCreateReview: !hasReviewByUserId(Math.trunc(userId)),
-      }),
+      items: applyPromotionDisplaySettings(
+        buildBonusOpportunities({
+          billing,
+          canCreateReview: !hasReviewByUserId(Math.trunc(userId)),
+        }),
+        getPromotionDisplaySettingsMap(),
+      ),
     })
   })
 

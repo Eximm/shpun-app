@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildBonusOpportunities } from "./opportunities.js";
+import { applyPromotionDisplaySettings, buildBonusOpportunities } from "./opportunities.js";
 
 test("return promo is offered only when billing marks the account eligible", () => {
   const items = buildBonusOpportunities({
@@ -26,12 +26,29 @@ test("an activated return promo becomes a pending top-up bonus", () => {
 
   assert.deepEqual(items, [{
     id: "topup:return:RETURN15:15:7",
+    campaignId: "return15",
     kind: "topup_bonus",
     source: "return",
     percent: 15,
     code: "RETURN15",
     tariffDays: 7,
   }]);
+});
+
+test("display settings hide campaigns and control the modal order", () => {
+  const items = buildBonusOpportunities({
+    billing: {
+      return_offer: { eligible: 1, code: "RETURN15", percent: 15, inactive_days: 30, tariff_days: 7 },
+      review_reward_amount: 50,
+    },
+    canCreateReview: true,
+  });
+  const settings = new Map<any, any>([
+    ["return15", { campaignId: "return15", enabled: true, priority: 30, updatedAt: null }],
+    ["review_reward", { campaignId: "review_reward", enabled: false, priority: 10, updatedAt: null }],
+  ]);
+
+  assert.deepEqual(applyPromotionDisplaySettings(items, settings).map((item) => item.campaignId), ["return15"]);
 });
 
 test("partner FirstPay stays independent and keeps its configured percent", () => {

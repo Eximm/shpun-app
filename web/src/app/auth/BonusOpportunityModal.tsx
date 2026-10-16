@@ -3,9 +3,9 @@ import { createPortal } from "react-dom";
 import { useI18n } from "../../shared/i18n";
 
 export type BonusOpportunity =
-  | { id: string; kind: "return_promo"; code: string; percent: number; inactiveDays: number; tariffDays: number }
-  | { id: string; kind: "topup_bonus"; source: "return" | "first_pay"; percent: number; code?: string; tariffDays?: number }
-  | { id: string; kind: "review_bonus"; amount: number };
+  | { id: string; campaignId: "return15"; kind: "return_promo"; code: string; percent: number; inactiveDays: number; tariffDays: number }
+  | { id: string; campaignId: "return15" | "first_pay"; kind: "topup_bonus"; source: "return" | "first_pay"; percent: number; code?: string; tariffDays?: number }
+  | { id: string; campaignId: "review_reward"; kind: "review_bonus"; amount: number };
 
 export function BonusOpportunityModal({
   open,

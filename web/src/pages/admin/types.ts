@@ -167,6 +167,7 @@ export type ClearEventsResp = {
 export const ADMIN_TABS = [
   "overview",
   "reviews",
+  "promotions",
   "broadcasts",
   "orderRules",
   "trialProtection",

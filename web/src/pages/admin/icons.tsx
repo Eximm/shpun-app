@@ -48,6 +48,14 @@ export function AdminSectionIcon({ name, size = 18 }: { name: AdminNavIconName; 
           <path d="M12 3.6l2.6 5.2 5.7.8-4.1 4 1 5.7-5.2-2.7-5.2 2.7 1-5.7-4.1-4 5.7-.8L12 3.6Z" />
         </svg>
       );
+    case "gift":
+      return (
+        <svg {...common}>
+          <rect x="3.5" y="9" width="17" height="11" rx="2" />
+          <path d="M12 9v11M3 13h18" />
+          <path d="M12 9H8.2a2.7 2.7 0 1 1 2.1-4.4L12 7l1.7-2.4a2.7 2.7 0 1 1 2.1 4.4H12Z" />
+        </svg>
+      );
     case "megaphone":
       return (
         <svg {...common}>

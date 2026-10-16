@@ -11,6 +11,7 @@ import { activityRoutes } from '../../modules/activity/routes.js'
 import { referralsRoutes } from '../../modules/referrals/routes.js'
 import { pushRoutes } from '../../modules/notifications/push.js'
 import { promoRoutes } from '../../modules/promo/routes.js'
+import { promoAdminRoutes } from '../../modules/promo/adminRoutes.js'
 import { reviewsRoutes } from '../../modules/reviews/routes.js'
 import { serverStatusRoutes } from '../../modules/serverStatus/routes.js'
 import { emailValidationRoutes } from '../../modules/emailValidation/routes.js'
@@ -30,6 +31,7 @@ export async function registerRoutes(app: FastifyInstance) {
       await referralsRoutes(api)
       await adminRoutes(api)
       await promoRoutes(api)
+      await promoAdminRoutes(api)
       await reviewsRoutes(api)
       await serverStatusRoutes(api)
       await emailValidationRoutes(api)

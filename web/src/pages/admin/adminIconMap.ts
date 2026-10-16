@@ -33,12 +33,14 @@ export type AdminNavIconName =
   | "network"
   | "cpu"
   | "disk"
-  | "help";
+  | "help"
+  | "gift";
 
 /** Canonical section -> icon mapping (single entity, single icon). */
 export const ADMIN_SECTION_ICON: Record<AdminTab, AdminNavIconName> = {
   overview: "dashboard",
   reviews: "star",
+  promotions: "gift",
   broadcasts: "megaphone",
   orderRules: "cart",
   trialProtection: "shield",

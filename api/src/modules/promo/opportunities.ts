@@ -1,6 +1,9 @@
+import type { PromotionCampaignId, PromotionDisplaySetting } from "./displaySettingsRepo.js";
+
 export type BonusOpportunity =
   | {
       id: string;
+      campaignId: "first_pay" | "return15";
       kind: "topup_bonus";
       source: "return" | "first_pay";
       percent: number;
@@ -9,6 +12,7 @@ export type BonusOpportunity =
     }
   | {
       id: string;
+      campaignId: "return15";
       kind: "return_promo";
       code: string;
       percent: number;
@@ -17,6 +21,7 @@ export type BonusOpportunity =
     }
   | {
       id: string;
+      campaignId: "review_reward";
       kind: "review_bonus";
       amount: number;
     };
@@ -54,6 +59,7 @@ export function buildBonusOpportunities(input: {
   if (truthy(returnOffer.pending) && returnPercent > 0) {
     items.push({
       id: `topup:return:${returnCode}:${returnPercent}:${tariffDays}`,
+      campaignId: "return15",
       kind: "topup_bonus",
       source: "return",
       percent: returnPercent,
@@ -65,6 +71,7 @@ export function buildBonusOpportunities(input: {
     const campaign = String(firstPay.campaign || "default").trim() || "default";
     items.push({
       id: `topup:first-pay:${campaign}:${percent}`,
+      campaignId: "first_pay",
       kind: "topup_bonus",
       source: "first_pay",
       percent,
@@ -72,6 +79,7 @@ export function buildBonusOpportunities(input: {
   } else if (truthy(returnOffer.eligible) && returnCode && returnPercent > 0) {
     items.push({
       id: `return:${returnCode}:${returnPercent}:${tariffDays}`,
+      campaignId: "return15",
       kind: "return_promo",
       code: returnCode,
       percent: returnPercent,
@@ -84,10 +92,24 @@ export function buildBonusOpportunities(input: {
   if (input.canCreateReview && reviewAmount >= 1 && reviewAmount <= 500) {
     items.push({
       id: `review:${reviewAmount}`,
+      campaignId: "review_reward",
       kind: "review_bonus",
       amount: reviewAmount,
     });
   }
 
   return items;
+}
+
+export function applyPromotionDisplaySettings(
+  items: BonusOpportunity[],
+  settings: ReadonlyMap<PromotionCampaignId, PromotionDisplaySetting>,
+): BonusOpportunity[] {
+  return items
+    .map((item, index) => ({ item, index, setting: settings.get(item.campaignId) }))
+    .filter(({ setting }) => setting?.enabled !== false)
+    .sort((left, right) =>
+      (left.setting?.priority ?? 50) - (right.setting?.priority ?? 50) || left.index - right.index
+    )
+    .map(({ item }) => item);
 }
