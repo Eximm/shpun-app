@@ -7860,8 +7860,8 @@ button.reviews-star:not(:disabled) {
 .admin-dateGroup { display: flex; flex-direction: column; gap: 8px; }
 .admin-dateTitle { position: sticky; top: 0; z-index: 1; display: inline-flex; align-items: center; width: fit-content; max-width: 100%; padding: 6px 10px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.09); background: rgba(11,15,23,0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); font-size: 11px; font-weight: 900; letter-spacing: 0.10em; text-transform: uppercase; color: rgba(255,255,255,0.65); }
 .admin-modal { align-items: center; justify-content: center; padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, calc(env(safe-area-inset-bottom) + 8px)) max(12px, env(safe-area-inset-left)); }
-.admin-modal__card    { width: min(680px,100%); max-height: min(86dvh,860px); overflow: hidden; }
-.admin-modal__body    { display: flex; flex-direction: column; min-height: 0; max-height: inherit; padding: 14px; }
+.admin-modal__card    { display: flex; flex-direction: column; width: min(680px,100%); max-height: min(86dvh,860px); overflow: hidden; }
+.admin-modal__card > .admin-modal__body { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; max-height: none; overflow: hidden; padding: 14px; }
 .admin-modal__head    { flex: 0 0 auto; align-items: flex-start; gap: 10px; }
 .admin-modal__headMain { min-width: 0; }
 .admin-modal__title   { margin-top: 4px; font-size: 17px; line-height: 1.2; word-break: break-word; }
@@ -8613,6 +8613,7 @@ button.reviews-star:not(:disabled) {
   padding: 10px 0 2px;
   background: linear-gradient(to bottom, rgba(12,12,20,0) 0%, rgba(12,12,20,0.94) 24%, rgba(12,12,20,0.98) 100%);
 }
+.admin-modal__content .supportDetail__composer { position: static; }
 .supportDetail__input { min-height: 84px; resize: vertical; white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 8px; }
 
 /* Staff composer textarea: large by default, auto-grows to a cap, then scrolls. */
