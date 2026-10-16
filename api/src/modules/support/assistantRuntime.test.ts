@@ -40,6 +40,15 @@ test("short confirmation continues the active step without repeating the greetin
   assert.doesNotMatch(message!.text, /Привет/);
   assert.equal(readAssistantState(t.id)?.mode, "active");
 });
+test("unusual question gets a friendly introduction and a clear human handoff", async () => {
+  const t = await create("Скорость около 3 мегабит");
+  const text = t.messages.at(-1)!.text;
+  assert.match(text, /Привет! Я Шпунь/);
+  assert.match(text, /Хм…/);
+  assert.match(text, /Передаю ему нашу переписку/);
+  assert.doesNotMatch(text, /Обращение передано/);
+  assert.equal(t.assistant?.mode, "staff");
+});
 test("device clarification uses only the active question and never exceeds two steps", async () => {
   const t = await create("Happ не работает");
   assert.match(t.messages.at(-1)!.text, /на каком устройстве/);
