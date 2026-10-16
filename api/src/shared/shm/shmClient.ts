@@ -839,3 +839,8 @@ export async function shmShpunAppPromoProfile(
 ): Promise<ShmResult<ShmPromoProfileResp>> {
   return await shmShpunAppTemplate<ShmPromoProfileResp>(shmSessionId, 'promo.profile')
 }
+
+/** Read-only billing-owned eligibility and pending-bonus state. */
+export async function shmShpunAppPromoOpportunities(shmSessionId: string) {
+  return await shmShpunAppTemplate<any>(shmSessionId, 'promo.opportunities.status')
+}

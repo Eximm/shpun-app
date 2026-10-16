@@ -4,8 +4,11 @@ import type { FastifyInstance } from 'fastify'
 import { getSessionFromRequest } from '../../shared/session/sessionStore.js'
 import {
   shmShpunAppPromoApply,
+  shmShpunAppPromoOpportunities,
   shmShpunAppPromoProfile,
 } from '../../shared/shm/shmClient.js'
+import { hasReviewByUserId } from '../reviews/repo.js'
+import { buildBonusOpportunities } from './opportunities.js'
 
 function ensureAuthed(req: any, reply: any): string | null {
   const session = getSessionFromRequest(req as any)
@@ -31,6 +34,40 @@ function toFinite(v: any): number | null {
 }
 
 export async function promoRoutes(app: FastifyInstance) {
+
+  /**
+   * GET /promo/opportunities
+   *
+   * Billing remains the source of truth for financial eligibility. The app
+   * only adds its local one-review-per-account state and shapes a generic list
+   * that the UI can extend with future campaigns.
+   */
+  app.get('/promo/opportunities', async (req, reply) => {
+    const session = getSessionFromRequest(req as any) as any
+    const shmSessionId = String(session?.shmSessionId ?? '').trim()
+    const userId = Number(session?.shmUserId ?? session?.userId ?? 0)
+    if (!shmSessionId || !Number.isFinite(userId) || userId <= 0) {
+      return reply.code(401).send({ ok: false, error: 'not_authenticated' })
+    }
+
+    const statusRes = await shmShpunAppPromoOpportunities(shmSessionId)
+    const billing = (statusRes.json ?? {}) as any
+    if (!statusRes.ok || !isOk(billing?.ok)) {
+      return reply.code(502).send({
+        ok: false,
+        error: 'opportunities_failed',
+        message: 'Не удалось проверить доступные бонусы.',
+      })
+    }
+
+    return reply.send({
+      ok: true,
+      items: buildBonusOpportunities({
+        billing,
+        canCreateReview: !hasReviewByUserId(Math.trunc(userId)),
+      }),
+    })
+  })
 
   /**
    * POST /promo/apply

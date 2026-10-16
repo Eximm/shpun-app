@@ -28,8 +28,8 @@ function assert(name, condition) {
 assert("assistant route exists", appShell.includes('<Route path="/assistant"'));
 assert("assistant hides bottom navigation and global prompts", appShell.includes("const hideNav") && appShell.includes("assistantFlow") && appShell.includes("<PwaInstallPrompt enabled={!hideNav}"));
 assert("profile onboarding is suppressed inside assistant", authGate.includes("needsFirstLoginOnboarding && !assistantFlow"));
-assert("bonus prompt is suppressed inside assistant", authGate.includes("showFirstPayBonus && !assistantFlow"));
-assert("push prompt is suppressed inside assistant", authGate.includes("!showFirstPayBonus && !assistantFlow && pushPromptOpen"));
+assert("bonus prompt is suppressed inside assistant", authGate.includes("showBonusOpportunity && !assistantFlow"));
+assert("push prompt is suppressed inside assistant", authGate.includes("!showBonusOpportunity && !assistantFlow && pushPromptOpen"));
 
 /* Email save and verification continuity. */
 assert("assistant reuses the billing-backed email modal", assistant.includes("<EmailVerifyModal"));

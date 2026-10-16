@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 
-export type OnboardingSurface = "profile" | "first_pay_bonus" | "pwa_install" | "push";
+export type OnboardingSurface = "profile" | "bonus_offer" | "pwa_install" | "push";
 
 const PRIORITY: Record<OnboardingSurface, number> = {
   profile: 40,
-  first_pay_bonus: 30,
+  bonus_offer: 30,
   pwa_install: 20,
   push: 10,
 };

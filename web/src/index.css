@@ -8324,6 +8324,46 @@ button.reviews-star:not(:disabled) {
 .firstPayBonusModal__text { position: relative; margin: 13px auto 0; max-width: 340px; color: rgba(255,255,255,0.68); font-size: 14px; line-height: 1.55; }
 .firstPayBonusModal__example { position: relative; margin-top: 16px; padding: 11px 13px; border: 1px solid rgba(77,215,255,0.12); border-radius: 13px; background: rgba(77,215,255,0.055); color: rgba(218,248,255,0.78); font-size: 12px; line-height: 1.4; }
 .firstPayBonusModal__button { position: relative; width: 100%; margin-top: 18px; }
+.bonusOpportunityModal__card { padding-top: 30px; }
+.bonusOpportunityModal__close {
+  position: absolute;
+  z-index: 2;
+  top: 12px;
+  right: 14px;
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.72);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.bonusOpportunityModal__close:disabled { opacity: .45; cursor: default; }
+.bonusOpportunityModal__code { font-size: clamp(38px, 11vw, 52px); letter-spacing: .01em; }
+.bonusOpportunityModal__error {
+  position: relative;
+  margin-top: 13px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255,100,126,.28);
+  border-radius: 12px;
+  background: rgba(255,72,105,.09);
+  color: rgba(255,218,226,.9);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.bonusOpportunityModal__later {
+  position: relative;
+  margin-top: 11px;
+  border: 0;
+  background: transparent;
+  color: rgba(255,255,255,.48);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.bonusOpportunityModal__later:disabled { opacity: .45; cursor: default; }
 @keyframes firstPayFirework {
   0% { opacity: 0; transform: translate(-50%,-50%) rotate(var(--angle)) translateY(0) scale(.25); }
   18% { opacity: 1; }
