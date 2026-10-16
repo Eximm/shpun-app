@@ -10,7 +10,8 @@ function ticket(text: string): TicketWithMessages {
   } as TicketWithMessages;
 }
 test("knowledge has unique scenarios, resolvable checks and complete dialogue steps", () => {
-  assert.equal(new Set(knowledge.scenarios.map(s => s.id)).size, 20);
+  assert.equal(new Set(knowledge.scenarios.map(s => s.id)).size, knowledge.scenarios.length);
+  assert.ok(knowledge.scenarios.length >= 25);
   for (const s of knowledge.scenarios) {
     assert.ok(s.reply && s.next_steps.length && s.escalate_if.length && s.triggers.length);
     for (const key of s.internal_checks) assert.ok(key in knowledge.checks);

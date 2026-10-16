@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import voice from "./voice.json" with { type: "json" };
+const containsVoice = (group: keyof typeof voice.groups, text: string) => assert.ok(voice.groups[group].some(v => text.includes(v)), group);
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -27,7 +29,7 @@ test("new ticket receives named reply; retry is idempotent and queue remains vis
   const t = await create();
   assert.equal(t.messages.length, 2);
   assert.equal(t.messages[1]!.authorName, "Помощник Shpun");
-  assert.match(t.messages[1]!.text, /Привет! Я Шпунь/);
+  containsVoice("greeting", t.messages[1]!.text);
   assert.equal(t.assistant?.mode, "active");
   assert.equal(t.status, "waiting_staff");
   assert.equal(runSupportAssistant(repo, t.id), null);
@@ -36,22 +38,31 @@ test("new ticket receives named reply; retry is idempotent and queue remains vis
 test("short confirmation continues the active step without repeating the greeting", async () => {
   const t = await create();
   const message = next(t.id, "Перезагрузил");
-  assert.match(message!.text, /Получилось/);
-  assert.doesNotMatch(message!.text, /Привет/);
+  containsVoice("followup", message!.text);
+  assert.ok(!voice.groups.greeting.some(v => message!.text.includes(v)));
   assert.equal(readAssistantState(t.id)?.mode, "active");
 });
 test("unusual question gets a friendly introduction and a clear human handoff", async () => {
-  const t = await create("Скорость около 3 мегабит");
+  const t = await create("Как сменить владельца договора?");
   const text = t.messages.at(-1)!.text;
-  assert.match(text, /Привет! Я Шпунь/);
-  assert.match(text, /Хм…/);
-  assert.match(text, /Передаю ему нашу переписку/);
+  containsVoice("greeting", text);
+  containsVoice("unknown", text);
+  assert.match(text, /переписк|истори/);
   assert.doesNotMatch(text, /Обращение передано/);
   assert.equal(t.assistant?.mode, "staff");
 });
+test("low speed asks a relevant question and remembers the network reply", async () => {
+  const t = await create("Скорость около 3 мегабит");
+  assert.equal(t.assistant?.mode, "active");
+  containsVoice("scenario_slow_speed", t.messages.at(-1)!.text);
+  containsVoice("scenario_compare_speed", next(t.id, "Везде, через Wi-Fi")!.text);
+  assert.equal(readAssistantState(t.id)?.mode, "active");
+  next(t.id, "Без подключения быстрее");
+  assert.equal(readAssistantState(t.id)?.mode, "staff");
+});
 test("device clarification uses only the active question and never exceeds two steps", async () => {
   const t = await create("Happ не работает");
-  assert.match(t.messages.at(-1)!.text, /на каком устройстве/);
+  containsVoice("clarification", t.messages.at(-1)!.text);
   assert.match(next(t.id, "Компьютер Windows")!.text, /перезагрузите/);
   assert.equal(readAssistantState(t.id)?.replies, 2);
   next(t.id, "подписка не импортируется");
@@ -74,7 +85,7 @@ test("failed transaction leaves no phantom handoff and can be safely retried", a
 test("same scenario never repeats; staff request is persistent and idempotent", async () => {
   const t = await create();
   const answer = next(t.id, "Windows Happ нет интернета");
-  assert.match(answer!.text, /передано сотрудникам/);
+  containsVoice("handoff", answer!.text);
   assert.equal(readAssistantState(t.id)?.mode, "staff");
   assert.equal(next(t.id, "подписка не импортируется"), null);
   assert.equal(service.requestSupportStaff(t.id, t.userId).messages.length, 5);
@@ -109,11 +120,11 @@ test("attachments go to staff; no attempt to pretend to read an image", async ()
     buffer: Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(64, 1)]),
   }]);
   assert.equal(result.assistant?.mode, "staff");
-  assert.match(result.messages.at(-1)!.text, /передано сотрудникам/);
+  containsVoice("handoff", result.messages.at(-1)!.text);
 });
 test("resolution never closes a ticket and asks for feedback once; recurrence goes to staff", async () => {
   const t = await create();
-  assert.match(next(t.id, "Спасибо, всё работает!")!.text, /по желанию|Если захотите/);
+  containsVoice("review", next(t.id, "Спасибо, всё работает!")!.text);
   assert.notEqual(repo.getTicket(t.id)!.status, "closed");
   assert.equal(next(t.id, "всё работает"), null);
   assert.equal(readAssistantState(t.id)?.mode, "resolved");

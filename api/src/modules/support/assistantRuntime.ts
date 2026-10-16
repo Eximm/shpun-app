@@ -3,10 +3,10 @@ import type { TicketRepository } from "./repository.js";
 import type { TicketMessage } from "./types.js";
 import { assistantTransaction, readAssistantState, writeAssistantState, type AssistantState } from "./assistantState.js";
 import { enrichMessagesWithAttachments } from "./attachmentService.js";
+import { chooseSupportVoice, chooseScenarioVoice } from "./voice.js";
 
 export const ASSISTANT_NAME = "Помощник Shpun";
 export const assistantEnabled = () => process.env.SUPPORT_ASSISTANT_ENABLED === "true";
-const handoffText = "Обращение передано сотрудникам поддержки. Они увидят нашу переписку, поэтому повторять всё заново не нужно. Ответ придёт здесь.";
 const defaultState = (): AssistantState => ({ mode: "active", reason: null, lastUserMessageId: 0, sentScenarios: [], replies: 0 });
 
 export function assistantPublicState(ticketId: number) {
@@ -39,6 +39,7 @@ export function runSupportAssistant(repo: TicketRepository, ticketId: number, fo
     if (!forceHandoff && (!latest || latest.authorType !== "user" || latest.id <= state.lastUserMessageId)) return null;
     const input = latest?.authorType === "user" ? latest.text : "";
     const normalized = input.toLowerCase().replaceAll("ё", "е");
+    const say = (group: Parameters<typeof chooseSupportVoice>[0]) => chooseSupportVoice(group, ticketId, latest?.id ?? 0, state.replies);
     let reason = "";
     let text = "";
     let scenario = "";
@@ -52,52 +53,54 @@ export function runSupportAssistant(repo: TicketRepository, ticketId: number, fo
     const incident = (process.env.SUPPORT_ASSISTANT_INCIDENT_TEXT ?? "").trim().slice(0, 1500);
     const incidentScenarios = ["windows_happ_tun", "other_device_works", "subscription_import", "flex_variants",
       "subscription_incident", "ru_servers", "local_device", "connection_vs_import"];
-    const asksStaff = /оператор|специалист|сотрудник|живой человек|человеку|человека|не бот|без бота|хватит|не помог|уже пробовал|не заработал/.test(normalized);
+    const asksStaff = /оператор|специалист|сотрудник|живой человек|человеку|человека|не бот|без бота|хватит|не помог|уже пробовал|не заработал|бесполез|достало|сколько можно|не понимаешь/.test(normalized);
     const confirmsResolved = /^(спасибо[!,. ]*)?(все работает|заработало|проблема решена|можно закрывать)[!,. ]*$/.test(normalized.trim());
     if (forceHandoff || asksStaff) {
       reason = forceHandoff ? "requested" : "requested_or_failed";
-      if (/не помог|уже пробовал|не заработал/.test(normalized)) text = "Понял, повторять те же действия не будем.";
+      if (/не помог|уже пробовал|не заработал/.test(normalized)) text = say("failed");
     }
-    else if (latest?.attachments?.length) reason = "attachment_needs_staff";
+    else if (latest?.attachments?.length) { reason = "attachment_needs_staff"; text = say("attachment"); }
     else if (confirmsResolved && state.replies > 0) {
       if (state.mode === "resolved") return null;
       state.mode = "resolved";
       scenario = "resolved";
-      text = "Рад, что всё заработало! Если вопрос решён, можно закрыть обращение. Если захотите, оставьте отзыв в разделе «Отзывы» в ShpunApp.";
-    } else if (state.mode === "resolved") reason = "issue_returned";
+      text = `${say("resolved")} ${say("review")}`;
+    } else if (state.mode === "resolved") { reason = "issue_returned"; text = say("returned"); }
     else if (chosen && incident && incidentScenarios.includes(chosen.id)) {
       text = incident;
       reason = "confirmed_incident";
     } else if (!chosen && state.replies === 0 && /не работает|не подключается|нет интернета/.test(normalized)) {
       scenario = "clarify_device";
-      text = "Подскажите, на каком устройстве и в каком приложении не работает подключение. Например: компьютер с Windows и Happ.";
+      text = say("clarification");
     } else if (!chosen && state.replies === 1 && state.sentScenarios.at(-1) === "windows_happ_tun" &&
       /^(да|готово|сделал|сделала|перезагрузил|перезагрузила|попробовал|попробовала)[.! ]*$/.test(normalized.trim())) {
       scenario = "check_after_restart";
-      text = "Спасибо. Теперь подключитесь в Happ и попробуйте открыть любую страницу. Получилось?";
+      text = say("followup");
+    } else if (state.replies === 1 && state.sentScenarios.at(-1) === "slow_speed" && /wi.?fi|вай.?фай|мобильн|все|везде|ютуб/.test(normalized)) {
+      scenario = "compare_speed";
+      text = say("scenario_compare_speed");
     } else if (!chosen || result.needsOperator) reason = "needs_staff";
     else {
       scenario = chosen.id;
-      if (["amnezia", "ru_servers", "device_limit", "iphone_app_store", "review", "resolved", "windows_clean_install"].includes(scenario)) {
+      if (["amnezia", "ru_servers", "device_limit", "iphone_app_store", "review", "resolved", "windows_clean_install", "payment_context"].includes(scenario)) {
         reason = "requires_verified_context";
-      } else if (state.replies >= 2 || state.sentScenarios.includes(scenario)) reason = "steps_exhausted";
-      else text = chosen.reply;
+        text = say("needChecks");
+      } else if (state.replies >= 2 || state.sentScenarios.includes(scenario)) { reason = "steps_exhausted"; text = say("exhausted"); }
+      else text = chooseScenarioVoice(chosen.id, chosen.reply, ticketId, latest?.id ?? 0, state.replies);
     }
     if (reason) {
       state.mode = "staff";
       state.reason = reason;
       text = reason === "needs_staff" && !chosen
-        ? "Хм… Этот вопрос лучше разобрать с сотрудником поддержки. Передаю ему нашу переписку — повторять всё заново не придётся. Ответ придёт сюда."
-        : text ? `${text}\n\n${handoffText}` : handoffText;
+        ? say("unknown")
+        : text ? `${text}\n\n${say("handoff")}` : say("handoff");
     }
     if (!text) return null;
     if (scenario && !state.sentScenarios.includes(scenario)) state.sentScenarios.push(scenario);
     state.lastUserMessageId = latest?.authorType === "user" ? latest.id : state.lastUserMessageId;
     state.replies++;
     if (state.replies === 1) {
-      const greeting = state.mode === "active"
-        ? "Привет! Я Шпунь, помощник поддержки. Давайте попробуем разобраться вместе."
-        : "Привет! Я Шпунь, помощник поддержки.";
+      const greeting = state.mode === "active" ? `${say("greeting")} ${say("opening")}` : say("greeting");
       text = `${greeting}\n\n${text}`;
     }
     if (ticket.source === "telegram") {
