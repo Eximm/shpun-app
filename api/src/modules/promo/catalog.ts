@@ -68,4 +68,3 @@ export function buildPromotionCatalog(
     }),
   ].sort((left, right) => left.priority - right.priority || left.campaignId.localeCompare(right.campaignId));
 }
-

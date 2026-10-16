@@ -77,4 +77,3 @@ export function setPromotionDisplaySetting(
 
   return getPromotionDisplaySettingsMap().get(campaignId)!;
 }
-

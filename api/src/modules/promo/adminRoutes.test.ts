@@ -102,4 +102,3 @@ test.after(async () => {
   await app.close();
   await new Promise<void>((resolve, reject) => shm.close((error) => error ? reject(error) : resolve()));
 });
-

@@ -172,4 +172,3 @@ export function PromotionsSection() {
     </div></div>
   );
 }
-
