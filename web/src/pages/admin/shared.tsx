@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
+import { createPortal } from "react-dom";
 import { useI18n } from "../../shared/i18n";
 import type { AdminTab } from "./types";
 
@@ -166,7 +167,7 @@ export function ModalShell({
   }, []);
 
   return (
-    <div className="modal admin-modal" role="dialog" aria-modal="true" onClick={onClose}>
+    createPortal(<div className="modal admin-modal" role="dialog" aria-modal="true" onClick={onClose}>
       <div className={`modal__card card admin-modal__card${cardClassName ? ` ${cardClassName}` : ""}`} onClick={(ev) => ev.stopPropagation()}>
         <div className="card__body admin-modal__body">
           <div className="modal__head admin-modal__head">
@@ -190,7 +191,7 @@ export function ModalShell({
           </div>
         </div>
       </div>
-    </div>
+    </div>, document.body)
   );
 }
 /* ─── Unread + section icons ─────────────────────────────────────────────── */
