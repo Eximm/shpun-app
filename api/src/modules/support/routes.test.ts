@@ -112,6 +112,22 @@ async function createUserTicket(sid: string, body: Record<string, unknown> = {})
   });
 }
 
+test("assistant endpoint is admin-only, suggests without sending or changing ticket", async () => {
+  const created = await createUserTicket("sid-user-201", { text: "Windows Happ нет интернета" });
+  const id = created.json().ticket.id;
+  const url = `/api/admin/support/tickets/${id}/assistant`;
+  assert.equal((await app.inject({ method: "GET", url })).statusCode, 401);
+  assert.equal((await app.inject({ method: "GET", url, headers: userHeaders("sid-user-201") })).statusCode, 403);
+  const before = await app.inject({ method: "GET", url: `/api/admin/support/tickets/${id}`, headers: userHeaders("sid-admin") });
+  const result = await app.inject({ method: "GET", url, headers: userHeaders("sid-admin") });
+  assert.equal(result.statusCode, 200);
+  assert.equal(result.json().assistant.suggestions[0].id, "windows_happ_tun");
+  const after = await app.inject({ method: "GET", url: `/api/admin/support/tickets/${id}`, headers: userHeaders("sid-admin") });
+  assert.deepEqual(after.json().ticket, before.json().ticket);
+  assert.equal((await app.inject({ method: "GET", url: "/api/admin/support/tickets/0/assistant", headers: userHeaders("sid-admin") })).statusCode, 400);
+  assert.equal((await app.inject({ method: "GET", url: "/api/admin/support/tickets/999999/assistant", headers: userHeaders("sid-admin") })).statusCode, 404);
+});
+
 test("user API creates and lists own tickets", async () => {
   const created = await createUserTicket("sid-user-201");
   assert.equal(created.statusCode, 201);
