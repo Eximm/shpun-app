@@ -581,7 +581,7 @@ export function Support() {
 
           {opened?.kind === "support" && opened.status !== "closed" && (
             <div className="supportAssistantBar">
-              <p className="p" aria-live="polite">{t(opened.assistant?.mode === "active" ? "support.assistant.intro" :
+              <p className="p" aria-live="polite">{t(pendingAssistantIds.length > 0 || opened.assistant?.mode === "active" ? "support.assistant.intro" :
                 opened.assistant?.mode === "resolved" ? "support.assistant.resolved" : "support.assistant.staff_hint")}</p>
               <button className="btn btn--soft" type="button" disabled={requestingStaff}
                 onClick={() => void requestStaff()}>{t(requestingStaff ? "support.assistant.requesting" : "support.assistant.call_staff")}</button>

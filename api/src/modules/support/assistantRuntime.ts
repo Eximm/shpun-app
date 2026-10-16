@@ -86,7 +86,9 @@ export function runSupportAssistant(repo: TicketRepository, ticketId: number, fo
     if (reason) {
       state.mode = "staff";
       state.reason = reason;
-      text = text ? `${text}\n\n${handoffText}` : handoffText;
+      text = reason === "needs_staff" && !chosen
+        ? "Хм… Этот вопрос лучше разобрать с сотрудником поддержки. Передаю ему нашу переписку — повторять всё заново не придётся. Ответ придёт сюда."
+        : text ? `${text}\n\n${handoffText}` : handoffText;
     }
     if (!text) return null;
     if (scenario && !state.sentScenarios.includes(scenario)) state.sentScenarios.push(scenario);
