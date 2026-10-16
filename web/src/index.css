@@ -2269,6 +2269,10 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .loginRegisterChoice__body {
   min-width: 0;
 }
+.loginRegisterChoice__widget {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
 .loginRegisterChoice__title {
   color: rgba(255,255,255,0.94);
   font-size: 13px;
@@ -2927,8 +2931,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
   max-width: 100%;
   box-sizing: content-box;
   padding: 8px 0 0;
-  /* Keep Telegram's iframe measurements independent of the page's UI zoom. */
-  zoom: calc(1 / var(--ui-scale));
+  overflow: hidden;
 }
 .login__widgetBox--modal iframe { display: block; max-width: none; }
 .login__switchWrap     { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.09); }

@@ -910,7 +910,7 @@ export function Login() {
         script.setAttribute("data-telegram-login", botUsername);
         script.setAttribute("data-size", "large");
         script.setAttribute("data-max_width", String(Math.floor(container.clientWidth)));
-        script.setAttribute("data-userpic", "true");
+        script.setAttribute("data-userpic", "false");
         script.setAttribute("data-request-access", "write");
         script.setAttribute("data-onauth", "__shpunTelegramWidgetAuth(user)");
         const tid = window.setTimeout(() => {
@@ -1083,8 +1083,9 @@ export function Login() {
       const height = frame.offsetHeight;
       if (!width || !height || !container.clientWidth) return;
       const scale = Math.min(1, container.clientWidth / width);
-      frame.style.transformOrigin = "top left";
-      frame.style.transform = scale < 1 ? `scale(${scale})` : "";
+      // CSS transforms on an iframe under body zoom shift its painted origin
+      // in mobile Chromium. Zoom participates in layout and preserves its edge.
+      frame.style.zoom = String(scale);
       container.style.height = `${Math.ceil(height * scale)}px`;
     };
     const resize = new ResizeObserver(fit);
@@ -1320,6 +1321,8 @@ export function Login() {
         <div className="loginRegisterChoice__text">
           {authModal === "login" ? t("login.telegram.login_choice_text") : t("login.telegram.register_choice_text")}
         </div>
+      </div>
+      <div className="loginRegisterChoice__widget">
         {botUsername ? (
           <>
             <div id="tg-widget-container" className="login__widgetBox login__widgetBox--modal" />
