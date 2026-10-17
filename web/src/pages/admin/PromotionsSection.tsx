@@ -7,6 +7,8 @@ type PromotionCatalogItem = {
   campaignId: "return15" | "first_pay" | "review_reward";
   kind: "return" | "first_pay" | "review";
   billingConnected: boolean;
+  billingActive: boolean;
+  billingReason?: string;
   enabled: boolean;
   priority: number;
   code?: string;
@@ -73,7 +75,9 @@ export function PromotionsSection() {
   }
 
   function title(item: PromotionCatalogItem) {
-    if (item.kind === "return") return t("admin.promotions.return.title", { code: item.code || "RETURN15" });
+    if (item.kind === "return") return item.code
+      ? t("admin.promotions.return.title", { code: item.code })
+      : t("admin.promotions.return.missing");
     if (item.kind === "first_pay") return t("admin.promotions.first_pay.title");
     return t("admin.promotions.review.title");
   }
@@ -128,8 +132,12 @@ export function PromotionsSection() {
                     <div className="list__title">{title(item)}</div>
                     <div className="list__sub">{description(item)}</div>
                   </div>
-                  <span className={`chip ${item.billingConnected ? "chip--ok" : "chip--warn"}`}>
-                    {item.billingConnected ? t("admin.promotions.connected") : t("admin.promotions.not_connected")}
+                  <span className={`chip ${item.billingActive ? "chip--ok" : "chip--warn"}`}>
+                    {!item.billingConnected
+                      ? t("admin.promotions.not_connected")
+                      : item.billingActive
+                        ? t("admin.promotions.active")
+                        : t("admin.promotions.inactive")}
                   </span>
                 </div>
 

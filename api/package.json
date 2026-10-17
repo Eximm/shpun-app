@@ -11,7 +11,7 @@
     "test:referral": "tsx --test src/shared/linkdb/referralAliasesRepo.test.ts src/modules/auth/referralRegistration.test.ts src/modules/auth/telegramFallback.test.ts",
     "test:referral-analytics": "tsx --test src/modules/referrals/analytics.test.ts",
     "test:admin": "tsx --test src/modules/admin/overview.test.ts src/modules/admin/overview.monitoring.test.ts",
-    "test:reviews": "tsx --test src/modules/reviews/repo.test.ts src/modules/reviews/notifications.test.ts",
+    "test:reviews": "tsx --test src/modules/reviews/repo.test.ts src/modules/reviews/routes.test.ts src/modules/reviews/notifications.test.ts",
     "test:promo": "tsx --test src/modules/promo/opportunities.test.ts src/modules/promo/catalog.test.ts src/modules/promo/adminRoutes.test.ts",
     "test:notifications": "tsx --test src/modules/notifications/format.test.ts src/modules/notifications/subscriptions.test.ts src/modules/notifications/webpush.test.ts",
     "test:support": "tsx --test src/modules/support/repository.test.ts src/modules/support/service.test.ts src/modules/support/routes.test.ts src/modules/support/notifications.test.ts src/modules/support/telegram.test.ts src/modules/support/partnership.test.ts src/modules/support/attachments.test.ts src/modules/support/migration.test.ts src/modules/support/staffReplyNotifications.test.ts",

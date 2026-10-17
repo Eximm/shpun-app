@@ -559,6 +559,7 @@ export async function shmShpunAppAdminSettingsSet(
     trialRequireVerifiedEmail?: boolean
     requireVerifiedEmail?: boolean
     reviewRewardAmount?: number
+    reviewRewardEnabled?: boolean
   }
 ) {
   return await shmShpunAppTemplate<any>(shmSessionId, 'admin.settings.set', payload)
@@ -627,11 +628,12 @@ export type ShmReviewRewardResp = {
 
 export async function shmShpunAppAdminReviewReward(
   shmSessionId: string,
-  payload: { reviewId: number; userId: number }
+  payload: { reviewId: number; userId: number; amount?: number }
 ) {
   return await shmShpunAppTemplate<ShmReviewRewardResp>(shmSessionId, 'admin.review.reward', {
     review_id: payload.reviewId,
     target_user_id: payload.userId,
+    ...(payload.amount == null ? {} : { amount: payload.amount }),
   })
 }
 

@@ -942,6 +942,7 @@ export async function adminRoutes(app: FastifyInstance) {
     }
 
     const amount = Math.round(Number((req.body as any)?.reviewRewardAmount) * 100) / 100;
+    const enabled = (req.body as any)?.reviewRewardEnabled;
     if (!Number.isFinite(amount) || amount < 1 || amount > 500) {
       return reply.code(400).send({
         ok: false,
@@ -950,7 +951,14 @@ export async function adminRoutes(app: FastifyInstance) {
       });
     }
 
-    const r = await shmShpunAppAdminSettingsSet(s.shmSessionId, { reviewRewardAmount: amount });
+    if (enabled !== undefined && typeof enabled !== "boolean") {
+      return reply.code(400).send({ ok: false, error: "bad_review_reward_enabled" });
+    }
+
+    const r = await shmShpunAppAdminSettingsSet(s.shmSessionId, {
+      reviewRewardAmount: amount,
+      ...(enabled === undefined ? {} : { reviewRewardEnabled: enabled }),
+    });
     const logicalOk = r.json?.ok === 1 || r.json?.ok === true;
     if (!r.ok || !logicalOk) {
       return reply.code(502).send({

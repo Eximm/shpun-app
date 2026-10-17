@@ -5,8 +5,8 @@ import { applyPromotionDisplaySettings, buildBonusOpportunities } from "./opport
 test("return promo is offered only when billing marks the account eligible", () => {
   const items = buildBonusOpportunities({
     billing: {
-      return_offer: { eligible: 1, code: "RETURN15", percent: 15, inactive_days: 30, tariff_days: 7 },
-      review_reward_amount: 50,
+      return_offer: { active: 1, eligible: 1, code: "RETURN15", percent: 15, inactive_days: 30, tariff_days: 7 },
+      review_reward: { active: 1, amount: 50 },
     },
     canCreateReview: true,
   });
@@ -38,8 +38,8 @@ test("an activated return promo becomes a pending top-up bonus", () => {
 test("display settings hide campaigns and control the modal order", () => {
   const items = buildBonusOpportunities({
     billing: {
-      return_offer: { eligible: 1, code: "RETURN15", percent: 15, inactive_days: 30, tariff_days: 7 },
-      review_reward_amount: 50,
+      return_offer: { active: 1, eligible: 1, code: "RETURN15", percent: 15, inactive_days: 30, tariff_days: 7 },
+      review_reward: { active: 1, amount: 50 },
     },
     canCreateReview: true,
   });
@@ -56,7 +56,7 @@ test("partner FirstPay stays independent and keeps its configured percent", () =
     billing: {
       return_offer: { eligible: 0, pending: 0 },
       first_pay: { pending: 1, percent: 23, campaign: "partner-42" },
-      review_reward_amount: 50,
+      review_reward: { active: 1, amount: 50 },
     },
     canCreateReview: true,
   });
@@ -68,7 +68,17 @@ test("partner FirstPay stays independent and keeps its configured percent", () =
 
 test("review offer is hidden after the account has submitted a review", () => {
   assert.deepEqual(buildBonusOpportunities({
-    billing: { review_reward_amount: 50 },
+    billing: { review_reward: { active: 1, amount: 50 } },
     canCreateReview: false,
+  }), []);
+});
+
+test("inactive billing campaigns are never offered", () => {
+  assert.deepEqual(buildBonusOpportunities({
+    billing: {
+      return_offer: { active: 0, eligible: 1, code: "RETURN15", percent: 15 },
+      review_reward: { active: 0, amount: 50 },
+    },
+    canCreateReview: true,
   }), []);
 });

@@ -53,10 +53,10 @@ export function buildBonusOpportunities(input: {
     : {};
 
   const returnPercent = positive(returnOffer.percent, 15);
-  const returnCode = String(returnOffer.code || "RETURN15").trim().toUpperCase();
+  const returnCode = String(returnOffer.code || "").trim().toUpperCase();
   const tariffDays = positive(returnOffer.tariff_days, 7);
 
-  if (truthy(returnOffer.pending) && returnPercent > 0) {
+  if (truthy(returnOffer.pending) && returnCode && returnPercent > 0) {
     items.push({
       id: `topup:return:${returnCode}:${returnPercent}:${tariffDays}`,
       campaignId: "return15",
@@ -76,7 +76,7 @@ export function buildBonusOpportunities(input: {
       source: "first_pay",
       percent,
     });
-  } else if (truthy(returnOffer.eligible) && returnCode && returnPercent > 0) {
+  } else if (truthy(returnOffer.active) && truthy(returnOffer.eligible) && returnCode && returnPercent > 0) {
     items.push({
       id: `return:${returnCode}:${returnPercent}:${tariffDays}`,
       campaignId: "return15",
@@ -88,8 +88,12 @@ export function buildBonusOpportunities(input: {
     });
   }
 
-  const reviewAmount = positive(billing.review_reward_amount);
-  if (input.canCreateReview && reviewAmount >= 1 && reviewAmount <= 500) {
+  const reviewReward = billing.review_reward && typeof billing.review_reward === "object"
+    ? billing.review_reward
+    : null;
+  const reviewActive = reviewReward ? truthy(reviewReward.active) : false;
+  const reviewAmount = positive(reviewReward?.amount ?? billing.review_reward_amount);
+  if (input.canCreateReview && reviewActive && reviewAmount >= 1 && reviewAmount <= 500) {
     items.push({
       id: `review:${reviewAmount}`,
       campaignId: "review_reward",

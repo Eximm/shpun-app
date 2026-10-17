@@ -4,6 +4,8 @@ export type PromotionCatalogItem = {
   campaignId: PromotionCampaignId;
   kind: "return" | "first_pay" | "review";
   billingConnected: boolean;
+  billingActive: boolean;
+  billingReason?: string;
   enabled: boolean;
   priority: number;
   code?: string;
@@ -33,7 +35,11 @@ export function buildPromotionCatalog(
   const firstPay = payload.first_pay && typeof payload.first_pay === "object"
     ? payload.first_pay
     : null;
-  const reviewConnected = Object.prototype.hasOwnProperty.call(payload, "review_reward_amount");
+  const reviewReward = payload.review_reward && typeof payload.review_reward === "object"
+    ? payload.review_reward
+    : null;
+  const reviewConnected = reviewReward !== null
+    || Object.prototype.hasOwnProperty.call(payload, "review_reward_amount");
 
   const withSetting = (
     campaignId: PromotionCampaignId,
@@ -52,7 +58,9 @@ export function buildPromotionCatalog(
     withSetting("return15", {
       kind: "return",
       billingConnected: returnOffer !== null,
-      code: String(returnOffer?.code || "RETURN15").trim().toUpperCase(),
+      billingActive: returnOffer !== null && truthy(returnOffer.active),
+      billingReason: String(returnOffer?.status_reason || returnOffer?.reason || ""),
+      code: String(returnOffer?.code || "").trim().toUpperCase(),
       percent: positive(returnOffer?.percent, 15),
       inactiveDays: positive(returnOffer?.inactive_days, 30),
       tariffDays: positive(returnOffer?.tariff_days, 7),
@@ -60,11 +68,20 @@ export function buildPromotionCatalog(
     withSetting("first_pay", {
       kind: "first_pay",
       billingConnected: firstPay !== null,
+      billingActive: firstPay !== null,
     }),
     withSetting("review_reward", {
       kind: "review",
       billingConnected: reviewConnected,
-      amount: positive(payload.review_reward_amount),
+      billingActive: reviewReward !== null
+        ? truthy(reviewReward.active)
+        : false,
+      billingReason: reviewReward && !truthy(reviewReward.active) ? "disabled" : "",
+      amount: positive(reviewReward?.amount ?? payload.review_reward_amount),
     }),
   ].sort((left, right) => left.priority - right.priority || left.campaignId.localeCompare(right.campaignId));
+}
+
+function truthy(value: unknown): boolean {
+  return value === true || value === 1 || value === "1" || value === "true";
 }

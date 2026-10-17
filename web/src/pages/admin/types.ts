@@ -24,6 +24,7 @@ export type AdminSettingsResp = {
   settings?: {
     orderBlockMode?: OrderBlockMode;
     reviewRewardAmount?: number;
+    reviewRewardEnabled?: boolean | number;
   };
 };
 

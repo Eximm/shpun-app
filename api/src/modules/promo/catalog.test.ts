@@ -9,9 +9,9 @@ test("catalog projects billing-owned offer values and local display settings", (
     ["review_reward", { campaignId: "review_reward", enabled: true, priority: 10, updatedAt: null }],
   ]);
   const items = buildPromotionCatalog({
-    return_offer: { code: "RETURN15", percent: 15, inactive_days: 30, tariff_days: 7 },
+    return_offer: { code: "RETURN15", active: 1, percent: 15, inactive_days: 30, tariff_days: 7 },
     first_pay: { pending: 0, percent: 0 },
-    review_reward_amount: 50,
+    review_reward: { active: 1, amount: 50 },
   }, settings);
 
   assert.deepEqual(items.map((item) => item.campaignId), ["review_reward", "first_pay", "return15"]);

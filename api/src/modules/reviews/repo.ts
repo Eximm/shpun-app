@@ -10,6 +10,8 @@ export type ReviewRow = {
   text: string;
   status: string;
   reward_status?: string;
+  reward_offer_status?: string | null;
+  reward_offer_amount?: number | null;
   reward_amount?: number | null;
   reward_error?: string | null;
   rewarded_at?: string | null;
@@ -41,6 +43,8 @@ CREATE TABLE IF NOT EXISTS reviews (
   text TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'published',
   reward_status TEXT NOT NULL DEFAULT 'none',
+  reward_offer_status TEXT,
+  reward_offer_amount REAL,
   reward_amount REAL,
   reward_error TEXT,
   rewarded_at TEXT,
@@ -85,6 +89,14 @@ try {
 } catch {}
 
 try {
+  linkDb.exec(`ALTER TABLE reviews ADD COLUMN reward_offer_status TEXT;`);
+} catch {}
+
+try {
+  linkDb.exec(`ALTER TABLE reviews ADD COLUMN reward_offer_amount REAL;`);
+} catch {}
+
+try {
   linkDb.exec(`ALTER TABLE reviews ADD COLUMN reward_amount REAL;`);
 } catch {}
 
@@ -121,7 +133,8 @@ CREATE TABLE IF NOT EXISTS review_reward_accounts (
 
 const REVIEW_COLUMNS = `
   id, user_id, user_login, display_name, author_visibility, rating, text, status,
-  reward_status, reward_amount, reward_error, rewarded_at, created_at, updated_at
+  reward_status, reward_offer_status, reward_offer_amount, reward_amount, reward_error, rewarded_at,
+  created_at, updated_at
 `;
 
 function toInt(v: unknown, fallback: number) {
@@ -258,14 +271,29 @@ export function createReview(input: {
   rating: number;
   text: string;
   status?: string;
+  rewardOfferStatus?: "offered" | "none";
+  rewardOfferAmount?: number | null;
 }) {
   const rating = Math.min(Math.max(toInt(input.rating, 5), 1), 5);
   const status = normalizeStatus(input.status, "pending");
   const authorVisibility = normalizeAuthorVisibility(input.authorVisibility);
   const info = linkDb.prepare(`
-    INSERT INTO reviews (user_id, user_login, display_name, author_visibility, rating, text, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(input.userId, input.userLogin, input.displayName, authorVisibility, rating, input.text, status);
+    INSERT INTO reviews (
+      user_id, user_login, display_name, author_visibility, rating, text, status,
+      reward_offer_status, reward_offer_amount
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    input.userId,
+    input.userLogin,
+    input.displayName,
+    authorVisibility,
+    rating,
+    input.text,
+    status,
+    input.rewardOfferStatus ?? null,
+    input.rewardOfferAmount ?? null,
+  );
   return getReviewById(Number(info.lastInsertRowid));
 }
 
@@ -375,6 +403,15 @@ export function beginReviewReward(id: number) {
   return tx();
 }
 
+/** Freeze the legacy promise before the first billing request, including retries. */
+export function snapshotLegacyReviewReward(id: number, amount: number) {
+  if (!Number.isFinite(amount) || amount < 1 || amount > 500) return false;
+  return linkDb.prepare(`
+    UPDATE reviews SET reward_offer_status = 'offered', reward_offer_amount = ?
+    WHERE id = ? AND reward_offer_status IS NULL AND status = 'pending'
+  `).run(amount, id).changes > 0;
+}
+
 export function failReviewReward(id: number, error: string) {
   const tx = linkDb.transaction(() => {
     const review = getReviewById(id);
@@ -415,6 +452,14 @@ export function completeReviewReward(id: number, amount: number) {
     return result.changes > 0;
   });
   return tx();
+}
+
+export function publishReviewWithoutReward(id: number) {
+  return linkDb.prepare(`
+    UPDATE reviews
+    SET status = 'published', reward_status = 'none', reward_error = NULL, updated_at = datetime('now')
+    WHERE id = ? AND status = 'pending' AND reward_status IN ('none', 'failed')
+  `).run(id).changes > 0;
 }
 
 export function setCommentStatus(id: number, status: unknown) {

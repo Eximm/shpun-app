@@ -118,3 +118,31 @@ test("removing a rewarded review does not unlock another rewarded submission", (
     text: "Повторная награда после удаления недоступна.",
   }), /review_already_exists/);
 });
+
+test("review stores the promised reward and can publish without one when the campaign is off", () => {
+  const offered = repo.createReview({
+    userId: 47,
+    userLogin: "user47",
+    displayName: "User 47",
+    rating: 5,
+    text: "Бонус был доступен в момент отправки отзыва.",
+    rewardOfferStatus: "offered",
+    rewardOfferAmount: 50,
+  });
+  assert.equal(offered?.reward_offer_status, "offered");
+  assert.equal(offered?.reward_offer_amount, 50);
+
+  const noOffer = repo.createReview({
+    userId: 48,
+    userLogin: "user48",
+    displayName: "User 48",
+    rating: 4,
+    text: "Отзыв отправлен после завершения бонусной акции.",
+    rewardOfferStatus: "none",
+  });
+  assert.ok(noOffer);
+  assert.equal(repo.publishReviewWithoutReward(noOffer.id), true);
+  const published = repo.getReviewById(noOffer.id);
+  assert.equal(published?.status, "published");
+  assert.equal(published?.reward_status, "none");
+});

@@ -15,6 +15,8 @@ type AdminReview = {
   text: string;
   status: "pending" | "published" | "hidden";
   rewardStatus?: RewardStatus;
+  rewardOfferStatus?: "offered" | "none" | null;
+  rewardOfferAmount?: number | null;
   rewardAmount?: number | null;
   rewardError?: string | null;
   rewardedAt?: string | null;
@@ -39,6 +41,8 @@ export function ReviewsSection() {
   const [items, setItems] = useState<AdminReview[]>([]);
   const [amount, setAmount] = useState("100");
   const [savedAmount, setSavedAmount] = useState(100);
+  const [enabled, setEnabled] = useState(true);
+  const [savedEnabled, setSavedEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -52,7 +56,7 @@ export function ReviewsSection() {
   );
   const numericAmount = Math.round(Number(amount) * 100) / 100;
   const amountValid = Number.isFinite(numericAmount) && numericAmount >= 1 && numericAmount <= 500;
-  const amountChanged = amountValid && numericAmount !== savedAmount;
+  const settingsChanged = amountValid && (numericAmount !== savedAmount || enabled !== savedEnabled);
 
   async function load() {
     setLoading(true);
@@ -70,6 +74,10 @@ export function ReviewsSection() {
       setItems(reviews.items);
       setAmount(String(safeAmount));
       setSavedAmount(safeAmount);
+      const nextEnabled = settings?.settings?.reviewRewardEnabled !== false
+        && settings?.settings?.reviewRewardEnabled !== 0;
+      setEnabled(nextEnabled);
+      setSavedEnabled(nextEnabled);
     } catch (e: unknown) {
       setError(errorMessage(e, t("admin.reviews.err.load")));
     } finally {
@@ -85,13 +93,16 @@ export function ReviewsSection() {
     setError("");
     setMessage("");
     try {
-      const response = await apiFetch<{ ok: 1 | true; reviewRewardAmount?: number }>(
+      const response = await apiFetch<{ ok: 1 | true; reviewRewardAmount?: number; reviewRewardEnabled?: boolean | number }>(
         "/admin/settings/review-reward",
-        { method: "PUT", body: { reviewRewardAmount: numericAmount } },
+        { method: "PUT", body: { reviewRewardAmount: numericAmount, reviewRewardEnabled: enabled } },
       );
       const next = Number(response.reviewRewardAmount ?? numericAmount);
       setSavedAmount(next);
       setAmount(String(next));
+      const nextEnabled = response.reviewRewardEnabled === 1 || response.reviewRewardEnabled === true;
+      setEnabled(nextEnabled);
+      setSavedEnabled(nextEnabled);
       setMessage(t("admin.reviews.reward.saved", { amount: formatCurrency(next) }));
     } catch (e: unknown) {
       setError(errorMessage(e, t("admin.reviews.err.save")));
@@ -101,7 +112,7 @@ export function ReviewsSection() {
   }
 
   async function approve(review: AdminReview) {
-    if (amountChanged && review.rewardStatus !== "processing") {
+    if (settingsChanged && !review.rewardOfferStatus && review.rewardStatus !== "processing") {
       setError(t("admin.reviews.err.save_amount"));
       return;
     }
@@ -160,6 +171,16 @@ export function ReviewsSection() {
             <div className="list__sub">{t("admin.reviews.reward.subtitle")}</div>
           </div>
           <div className="admin-reviewSetting__controls">
+            <label className="admin-pushToggle">
+              <input
+                type="checkbox"
+                checked={enabled}
+                disabled={saving}
+                onChange={(event) => setEnabled(event.target.checked)}
+              />
+              <span className={`admin-pushToggle__track${enabled ? " is-on" : ""}`} aria-hidden="true" />
+              <span><strong>{enabled ? t("admin.reviews.reward.enabled") : t("admin.reviews.reward.disabled")}</strong></span>
+            </label>
             <input
               className="input admin-reviewAmountInput"
               inputMode="decimal"
@@ -167,7 +188,7 @@ export function ReviewsSection() {
               aria-label={t("admin.reviews.reward.aria")}
               onChange={(event) => setAmount(event.target.value.replace(/[^\d.,]/g, "").replace(",", "."))}
             />
-            <button className="btn btn--accent" type="button" onClick={() => void saveAmount()} disabled={saving || !amountChanged}>
+            <button className="btn btn--accent" type="button" onClick={() => void saveAmount()} disabled={saving || !settingsChanged}>
               {saving ? t("admin.reviews.reward.saving") : t("admin.reviews.reward.save")}
             </button>
           </div>
@@ -200,14 +221,18 @@ export function ReviewsSection() {
                 <button
                   className="btn btn--accent"
                   type="button"
-                  disabled={busyId !== null || (review.rewardStatus !== "processing" && (amountChanged || !amountValid))}
+                  disabled={busyId !== null || (review.rewardStatus !== "processing" && !review.rewardOfferStatus && (settingsChanged || !amountValid))}
                   onClick={() => void approve(review)}
                 >
                   {busyId === review.id
                     ? t("admin.reviews.action.checking")
                     : review.rewardStatus === "processing"
                       ? t("admin.reviews.action.check_reward")
-                      : t("admin.reviews.action.approve", { amount: formatCurrency(savedAmount) })}
+                      : review.rewardOfferStatus === "none"
+                        ? t("reviews.mod.publish_no_bonus")
+                        : t("admin.reviews.action.approve", {
+                            amount: formatCurrency(review.rewardOfferAmount ?? savedAmount),
+                          })}
                 </button>
                 <button className="btn btn--soft" type="button" disabled={busyId !== null || review.rewardStatus === "processing"} onClick={() => void hide(review.id)}>
                   {t("admin.reviews.action.reject")}

@@ -22,8 +22,9 @@ const shm = http.createServer((req, res) => {
       if (action === "promo.opportunities.status") {
         return res.end(JSON.stringify({
           ok: 1,
-          return_offer: { code: "RETURN15", eligible: 1, percent: 15, inactive_days: 30, tariff_days: 7 },
+          return_offer: { code: "RETURN15", active: 1, eligible: 1, percent: 15, inactive_days: 30, tariff_days: 7 },
           first_pay: { pending: 0, percent: 0 },
+          review_reward: { active: 1, amount: 50 },
           review_reward_amount: 50,
         }));
       }
@@ -59,7 +60,7 @@ test("promo catalog is admin-only and scans billing values", async () => {
   assert.equal(regular.statusCode, 403);
 
   const admin = await app.inject({ method: "GET", url: "/api/admin/promo-catalog", headers: { "x-app-sid": "sid-admin" } });
-  assert.equal(admin.statusCode, 200);
+  assert.equal(admin.statusCode, 200, admin.body);
   const payload = JSON.parse(admin.body);
   assert.equal(payload.source, "billing");
   assert.equal(payload.items.find((item: any) => item.campaignId === "return15").percent, 15);
@@ -73,7 +74,7 @@ test("admin can change display only, with strict campaign and priority validatio
     headers: { "x-app-sid": "sid-admin" },
     payload: { enabled: false, priority: 30 },
   });
-  assert.equal(saved.statusCode, 200);
+  assert.equal(saved.statusCode, 200, saved.body);
   assert.deepEqual(JSON.parse(saved.body).setting, {
     campaignId: "return15",
     enabled: false,

@@ -1,6 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { getSessionFromRequest } from "../../shared/session/sessionStore.js";
-import { shmShpunAppAdminReviewReward, shmShpunAppAdminStatus } from "../../shared/shm/shmClient.js";
+import {
+  shmShpunAppAdminReviewReward,
+  shmShpunAppAdminStatus,
+  shmShpunAppPromoOpportunities,
+} from "../../shared/shm/shmClient.js";
 import { notifyReviewReward } from "./notifications.js";
 import {
   beginReviewReward,
@@ -14,8 +18,10 @@ import {
   hideComment,
   hideReview,
   listReviews,
+  publishReviewWithoutReward,
   setCommentStatus,
   setReviewStatus,
+  snapshotLegacyReviewReward,
 } from "./repo.js";
 
 type AuthorVisibility = "public" | "masked" | "hidden";
@@ -116,6 +122,8 @@ function publicReview(row: any, currentUserId: number, isAdmin: boolean) {
     item.rewardAmount = row.reward_amount == null ? null : Number(row.reward_amount);
     item.rewardError = row.reward_error || null;
     item.rewardedAt = row.rewarded_at || null;
+    item.rewardOfferStatus = row.reward_offer_status || null;
+    item.rewardOfferAmount = row.reward_offer_amount == null ? null : Number(row.reward_offer_amount);
   } else if (mine && row.reward_status === "rewarded") {
     item.rewardStatus = "rewarded";
     item.rewardAmount = row.reward_amount == null ? null : Number(row.reward_amount);
@@ -162,6 +170,35 @@ export async function reviewsRoutes(app: FastifyInstance) {
     }
 
     const rating = Math.min(Math.max(int(body.rating, 5), 1), 5);
+    let rewardOfferStatus: "offered" | "none" = "none";
+    let rewardOfferAmount: number | null = null;
+    try {
+      const billing = await shmShpunAppPromoOpportunities(String(s.shmSessionId || ""));
+      const payload = billing.json?.data && typeof billing.json.data === "object"
+        ? billing.json.data
+        : billing.json;
+      const offer = payload?.review_reward && typeof payload.review_reward === "object"
+        ? payload.review_reward
+        : null;
+      if (!billing.ok || !(payload?.ok === 1 || payload?.ok === true) || !offer) {
+        throw new Error("review_reward_status_unavailable");
+      }
+      const active = offer?.active === true || offer?.active === 1 || offer?.active === "1";
+      const offerAmount = Math.round(Number(offer?.amount) * 100) / 100;
+      if (active && (!Number.isFinite(offerAmount) || offerAmount < 1 || offerAmount > 500)) {
+        throw new Error("review_reward_amount_invalid");
+      }
+      if (active) {
+        rewardOfferStatus = "offered";
+        rewardOfferAmount = offerAmount;
+      }
+    } catch {
+      return reply.code(503).send({
+        ok: false,
+        error: "review_reward_status_unavailable",
+        message: "Не удалось проверить условия бонуса. Повторите отправку через несколько секунд.",
+      });
+    }
     let created;
     try {
       created = createReview({
@@ -171,6 +208,8 @@ export async function reviewsRoutes(app: FastifyInstance) {
         authorVisibility: normalizeAuthorVisibility(body.authorVisibility),
         rating,
         text: reviewText,
+        rewardOfferStatus,
+        rewardOfferAmount,
       });
     } catch (error: any) {
       if (String(error?.message || "").includes("review_already_exists")) {
@@ -282,6 +321,19 @@ export async function reviewsRoutes(app: FastifyInstance) {
       });
     }
 
+    if (review.reward_offer_status === "none") {
+      if (!publishReviewWithoutReward(id)) {
+        return reply.code(409).send({ ok: false, error: "review_publish_not_available" });
+      }
+      review = getReviewById(id);
+      return reply.send({
+        ok: true,
+        bonusAdded: 0,
+        item: publicReview({ ...review, comments: [] }, user.id, true),
+        message: "Отзыв опубликован без бонуса: при отправке акция не была активна.",
+      });
+    }
+
     if (!beginReviewReward(id)) {
       review = getReviewById(id);
       if (review?.reward_status !== "processing") {
@@ -295,9 +347,26 @@ export async function reviewsRoutes(app: FastifyInstance) {
 
     const sid = String(s?.shmSessionId ?? "").trim();
     try {
+      // Legacy pending reviews predate snapshots. Honour their existing promise
+      // even when the campaign has since ended, using the configured reward amount.
+      let promisedAmount = review.reward_offer_amount == null ? undefined : Number(review.reward_offer_amount);
+      if (!review.reward_offer_status) {
+        const status = await shmShpunAppPromoOpportunities(sid);
+        const statusPayload = status.json?.data && typeof status.json.data === "object"
+          ? status.json.data
+          : status.json;
+        const configuredAmount = Number(statusPayload?.review_reward?.amount);
+        if (!status.ok || !Number.isFinite(configuredAmount) || configuredAmount < 1 || configuredAmount > 500) {
+          return reply.code(502).send({ ok: false, error: "review_reward_status_unavailable" });
+        }
+        snapshotLegacyReviewReward(id, configuredAmount);
+        review = getReviewById(id)!;
+        promisedAmount = Number(review.reward_offer_amount);
+      }
       const billing = await shmShpunAppAdminReviewReward(sid, {
         reviewId: id,
         userId: reviewUserId,
+        amount: promisedAmount,
       });
       const payload = billing.json?.data && typeof billing.json.data === "object"
         ? billing.json.data
@@ -309,7 +378,8 @@ export async function reviewsRoutes(app: FastifyInstance) {
       const validAmount = Number.isFinite(amount) && amount >= 1 && amount <= 500;
       const alreadyRewarded = payload?.already_rewarded === 1 || payload?.already_rewarded === true;
       const exactBonusAdded = Math.abs(Number(payload?.bonus_added) - amount) < 0.001;
-      const rewarded = alreadyRewarded || exactBonusAdded;
+      const promisedAmountMatches = promisedAmount == null || Math.abs(amount - promisedAmount) < 0.001;
+      const rewarded = alreadyRewarded || (exactBonusAdded && promisedAmountMatches);
 
       if (!billing.ok || !logicalOk || !sameReview || !sameUser || !validAmount || !rewarded) {
         const code = text(payload?.error || `billing_${billing.status}`, 120) || "billing_error";
