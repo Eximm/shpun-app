@@ -55,7 +55,7 @@ export function BonusOpportunityModal({
           ? t("bonus.offer.topup.return_title")
           : t("bonus.offer.topup.firstpay_title");
   const text = activated
-    ? t("bonus.offer.return.success_text", { percent: isReturn ? offer.percent : 0 })
+    ? t("bonus.offer.return.success_text", { percent: isReturn ? offer.percent : 0, days: isReturn ? offer.tariffDays : 0 })
     : offer.kind === "review_bonus"
       ? t("bonus.offer.review.text", { amount: formatMoney(offer.amount) })
       : isReturn
