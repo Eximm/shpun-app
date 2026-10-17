@@ -8,6 +8,7 @@ export type PromotionCatalogItem = {
   billingReason?: string;
   enabled: boolean;
   priority: number;
+  description: string;
   code?: string;
   percent?: number;
   inactiveDays?: number;
@@ -43,13 +44,14 @@ export function buildPromotionCatalog(
 
   const withSetting = (
     campaignId: PromotionCampaignId,
-    item: Omit<PromotionCatalogItem, "campaignId" | "enabled" | "priority">,
+    item: Omit<PromotionCatalogItem, "campaignId" | "enabled" | "priority" | "description">,
   ): PromotionCatalogItem => {
     const setting = settings.get(campaignId);
     return {
       campaignId,
       enabled: setting?.enabled ?? true,
       priority: setting?.priority ?? 50,
+      description: setting?.description ?? "",
       ...item,
     };
   };

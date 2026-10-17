@@ -11,6 +11,7 @@ type PromotionCatalogItem = {
   billingReason?: string;
   enabled: boolean;
   priority: number;
+  description: string;
   code?: string;
   percent?: number;
   inactiveDays?: number;
@@ -38,6 +39,7 @@ export function PromotionsSection() {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [descriptionDrafts, setDescriptionDrafts] = useState<Record<string, string>>({});
 
   async function load() {
     setLoading(true);
@@ -45,6 +47,7 @@ export function PromotionsSection() {
     try {
       const response = await apiFetch<CatalogResponse>("/admin/promo-catalog", { method: "GET" });
       setItems(response.items);
+      setDescriptionDrafts(Object.fromEntries(response.items.map((item) => [item.campaignId, item.description || ""])));
       setScannedAt(response.scannedAt);
     } catch (cause) {
       setError(errorMessage(cause, t("admin.promotions.error.load")));
@@ -55,7 +58,7 @@ export function PromotionsSection() {
 
   useEffect(() => { void load(); }, []);
 
-  async function save(item: PromotionCatalogItem, patch: Partial<Pick<PromotionCatalogItem, "enabled" | "priority">>) {
+  async function save(item: PromotionCatalogItem, patch: Partial<Pick<PromotionCatalogItem, "enabled" | "priority" | "description">>) {
     const next = { ...item, ...patch };
     setBusyId(item.campaignId);
     setError("");
@@ -63,7 +66,7 @@ export function PromotionsSection() {
     try {
       await apiFetch(`/admin/promo-catalog/${item.campaignId}`, {
         method: "PATCH",
-        body: { enabled: next.enabled, priority: next.priority },
+        body: { enabled: next.enabled, priority: next.priority, description: next.description },
       });
       setItems((current) => [...current].sort((left, right) => left.priority - right.priority));
     } catch (cause) {
@@ -124,7 +127,8 @@ export function PromotionsSection() {
       ) : (
         <div className="list admin-gap-top-md">
           {items.map((item) => {
-            const busy = busyId === item.campaignId;
+            const busy = busyId !== null;
+            const descriptionDraft = descriptionDrafts[item.campaignId] ?? item.description ?? "";
             return (
               <article className={`list__item admin-promoCard${item.enabled ? "" : " is-disabled"}`} key={item.campaignId}>
                 <div className="admin-promoCard__head">
@@ -170,6 +174,33 @@ export function PromotionsSection() {
                     </select>
                   </label>
                 </div>
+                <details className="admin-promoCard__editor">
+                  <summary>{t("admin.promotions.description.label")}</summary>
+                  <label htmlFor={`promotion-description-${item.campaignId}`} className="admin-fieldHint">
+                    {t("admin.promotions.description.hint")}
+                  </label>
+                  <textarea
+                    id={`promotion-description-${item.campaignId}`}
+                    className="input"
+                    rows={3}
+                    maxLength={280}
+                    value={descriptionDraft}
+                    disabled={busy}
+                    placeholder={t("admin.promotions.description.placeholder")}
+                    onChange={(event) => setDescriptionDrafts((current) => ({ ...current, [item.campaignId]: event.target.value }))}
+                  />
+                  <div className="admin-promoCard__editorActions">
+                    <span className="admin-fieldHint">{descriptionDraft.length}/280</span>
+                    <button
+                      className="btn btn--soft"
+                      type="button"
+                      disabled={busy || descriptionDraft.trim() === (item.description || "")}
+                      onClick={() => void save(item, { description: descriptionDraft.trim() })}
+                    >
+                      {t("admin.promotions.description.save")}
+                    </button>
+                  </div>
+                </details>
               </article>
             );
           })}

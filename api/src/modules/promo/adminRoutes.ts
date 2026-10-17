@@ -66,10 +66,21 @@ export async function promoAdminRoutes(app: FastifyInstance) {
     if (!Number.isInteger(priority) || priority < 0 || priority > 100) {
       return reply.code(400).send({ ok: false, error: "bad_priority" });
     }
+    if (body.description !== undefined && (typeof body.description !== "string" || body.description.length > 280)) {
+      return reply.code(400).send({
+        ok: false,
+        error: "bad_description",
+        message: "Описание должно быть текстом длиной до 280 символов.",
+      });
+    }
 
     return reply.send({
       ok: true,
-      setting: setPromotionDisplaySetting(campaignId, { enabled: body.enabled, priority }),
+      setting: setPromotionDisplaySetting(campaignId, {
+        enabled: body.enabled,
+        priority,
+        description: body.description as string | undefined,
+      }),
     });
   });
 }

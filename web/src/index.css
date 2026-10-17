@@ -7789,6 +7789,12 @@ button.reviews-star:not(:disabled) {
 .admin-promoCard__toggle small { margin-top: 2px; color: rgba(255,255,255,0.48); font-size: 11px; line-height: 1.3; }
 .admin-promoCard__priority { display: flex; flex-direction: column; gap: 6px; font-size: 11px; font-weight: 800; color: rgba(255,255,255,0.55); }
 .admin-promoCard__priority .input { min-height: 42px; }
+.admin-promoCard__editor { margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 10px; }
+.admin-promoCard__editor summary { cursor: pointer; font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.72); }
+.admin-promoCard__editor label { display: block; margin-top: 10px; margin-bottom: 6px; }
+.admin-promoCard__editor textarea { display: block; width: 100%; min-height: 80px; resize: vertical; }
+.admin-promoCard__editorActions { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 8px; }
+.bonusOpportunityModal__description { white-space: pre-wrap; overflow-wrap: anywhere; }
 @media (max-width: 560px) {
   .admin-promoCard__head, .admin-promoCard__controls { grid-template-columns: 1fr; }
   .admin-promoCard__head .chip { width: fit-content; }

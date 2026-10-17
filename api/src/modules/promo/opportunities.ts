@@ -1,6 +1,6 @@
 import type { PromotionCampaignId, PromotionDisplaySetting } from "./displaySettingsRepo.js";
 
-export type BonusOpportunity =
+export type BonusOpportunity = { description?: string } & (
   | {
       id: string;
       campaignId: "first_pay" | "return15";
@@ -24,7 +24,7 @@ export type BonusOpportunity =
       campaignId: "review_reward";
       kind: "review_bonus";
       amount: number;
-    };
+    });
 
 function finite(v: unknown, fallback = 0): number {
   const n = Number(v);
@@ -115,5 +115,5 @@ export function applyPromotionDisplaySettings(
     .sort((left, right) =>
       (left.setting?.priority ?? 50) - (right.setting?.priority ?? 50) || left.index - right.index
     )
-    .map(({ item }) => item);
+    .map(({ item, setting }) => setting?.description ? { ...item, description: setting.description } : item);
 }

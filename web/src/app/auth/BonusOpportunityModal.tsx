@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "../../shared/i18n";
 
-export type BonusOpportunity =
+export type BonusOpportunity = { description?: string } & (
   | { id: string; campaignId: "return15"; kind: "return_promo"; code: string; percent: number; inactiveDays: number; tariffDays: number }
   | { id: string; campaignId: "return15" | "first_pay"; kind: "topup_bonus"; source: "return" | "first_pay"; percent: number; code?: string; tariffDays?: number }
-  | { id: string; campaignId: "review_reward"; kind: "review_bonus"; amount: number };
+  | { id: string; campaignId: "review_reward"; kind: "review_bonus"; amount: number });
 
 export function BonusOpportunityModal({
   open,
@@ -119,6 +119,9 @@ export function BonusOpportunityModal({
         <div className="firstPayBonusModal__eyebrow">{t("bonus.offer.eyebrow")}</div>
         {!activated && <div className={`firstPayBonusModal__percent${isReturn ? " bonusOpportunityModal__code" : ""}`}>{value}</div>}
         <h2 className="firstPayBonusModal__title">{title}</h2>
+        {!activated && offer.description && (
+          <p className="firstPayBonusModal__text bonusOpportunityModal__description">{offer.description}</p>
+        )}
         <p className="firstPayBonusModal__text">{text}</p>
         {isReturn && !activated && (
           <div className="firstPayBonusModal__example">
