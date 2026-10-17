@@ -18,7 +18,8 @@ test("review reward notification is personal and deduplicated by review", () => 
   assert.equal(event.target, "user");
   assert.equal(event.user_id, 42);
   assert.equal(event.toast, true);
-  assert.match(String(event.message), /300 ₽/);
+  assert.match(String(event.message), /бонусы: 300/);
+  assert.doesNotMatch(String(event.message), /₽|RUB/);
 
   assert.deepEqual(putNotifEvent(event), { ok: true, dedup: false });
   assert.deepEqual(putNotifEvent({ ...event, ts: event.ts + 1 }), { ok: true, dedup: true });

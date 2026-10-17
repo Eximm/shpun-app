@@ -412,7 +412,7 @@ export async function reviewsRoutes(app: FastifyInstance) {
         bonusAdded: Number(payload?.bonus_added || 0),
         bonusAfter: Number(payload?.bonus_after || 0),
         item: publicReview({ ...review, comments: [] }, user.id, true),
-        message: `Отзыв опубликован. Пользователю начислено ${amount.toLocaleString("ru-RU")} ₽ бонусами.`,
+        message: `Отзыв опубликован. Начислены бонусы: ${amount.toLocaleString("ru-RU")}.`,
       });
     } catch (error: any) {
       return reply.code(502).send({

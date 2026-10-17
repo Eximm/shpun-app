@@ -947,7 +947,7 @@ export async function adminRoutes(app: FastifyInstance) {
       return reply.code(400).send({
         ok: false,
         error: "bad_review_reward_amount",
-        message: "Укажите сумму от 1 до 500 ₽.",
+        message: "Укажите количество бонусов от 1 до 500.",
       });
     }
 

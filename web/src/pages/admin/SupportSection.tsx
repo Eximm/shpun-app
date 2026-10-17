@@ -436,7 +436,7 @@ function MessageBubble({ message, onDelete }: { message: TicketMessage; onDelete
 /* ─── Diagnostics ────────────────────────────────────────────────────────── */
 
 function Diagnostics({ ticket }: { ticket: AdminTicket }) {
-  const { t, formatCurrency } = useI18n();
+  const { t, formatCurrency, formatNumber } = useI18n();
   const contextUser = (ticket.contextSnapshot?.user ?? null) as ContextUser | null;
   const service = ticket.serviceSnapshot;
   const partnership = partnershipOf(ticket);
@@ -449,7 +449,7 @@ function Diagnostics({ ticket }: { ticket: AdminTicket }) {
     { label: "login", value: login || "—" },
     { label: "имя", value: displayName || "—" },
     { label: "баланс", value: formatCost(balance, formatCurrency) },
-    { label: "бонусы", value: contextUser?.bonus != null ? formatCost(contextUser.bonus, formatCurrency) : "—" },
+    { label: "бонусы", value: contextUser?.bonus != null ? formatNumber(contextUser.bonus) : "—" },
     { label: "telegram chat", value: ticket.telegramChatId ? String(ticket.telegramChatId) : "—" },
   ];
 

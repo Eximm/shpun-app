@@ -6,6 +6,7 @@ import { useI18n } from '../shared/i18n'
 
 type TFn = ReturnType<typeof useI18n>['t']
 type CurrencyFn = ReturnType<typeof useI18n>['formatCurrency']
+type NumberFn = ReturnType<typeof useI18n>['formatNumber']
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -100,7 +101,7 @@ function isMeaningfulChip(s: string): boolean {
   return true
 }
 
-function renderFromItem(item: ShmItem, extra: SuccessData, t: TFn, formatCurrency: CurrencyFn): RenderResult {
+function renderFromItem(item: ShmItem, extra: SuccessData, t: TFn, formatCurrency: CurrencyFn, formatNumber: NumberFn): RenderResult {
   const type         = String(item?.type || 'other')
   const periodDays   = toNum(item?.period_days)
   const periodMonths = toNum(item?.period_months)
@@ -135,18 +136,18 @@ function renderFromItem(item: ShmItem, extra: SuccessData, t: TFn, formatCurrenc
   }
 
   if (type === 'bonus') {
-    if (Number.isFinite(extra.bonusAdded!) && extra.bonusAdded! > 0) chips.push(t('promo.bonus.added', { amount: formatCurrency(Number(extra.bonusAdded)) }))
-    if (Number.isFinite(extra.bonusAfter!)) chips.push(t('promo.bonus.balance', { amount: formatCurrency(Number(extra.bonusAfter)) }))
+    if (Number.isFinite(extra.bonusAdded!) && extra.bonusAdded! > 0) chips.push(t('promo.bonus.added', { amount: formatNumber(Number(extra.bonusAdded)) }))
+    if (Number.isFinite(extra.bonusAfter!)) chips.push(t('promo.bonus.balance', { amount: formatNumber(Number(extra.bonusAfter)) }))
     return { kind: 'good', title, text: baseText, chips, needPay: null }
   }
 
   return { kind: 'good', title, text: baseText, chips, needPay: null }
 }
 
-function renderFromNumbers(extra: SuccessData, t: TFn, formatCurrency: CurrencyFn): RenderResult {
+function renderFromNumbers(extra: SuccessData, t: TFn, formatCurrency: CurrencyFn, formatNumber: NumberFn): RenderResult {
   const chips: string[] = []
-  if (extra.bonusAdded != null && extra.bonusAdded > 0) chips.push(t('promo.bonus.added', { amount: formatCurrency(Number(extra.bonusAdded)) }))
-  if (extra.bonusAfter != null) chips.push(t('promo.bonus.total', { amount: formatCurrency(Number(extra.bonusAfter)) }))
+  if (extra.bonusAdded != null && extra.bonusAdded > 0) chips.push(t('promo.bonus.added', { amount: formatNumber(Number(extra.bonusAdded)) }))
+  if (extra.bonusAfter != null) chips.push(t('promo.bonus.total', { amount: formatNumber(Number(extra.bonusAfter)) }))
   if (extra.balanceAfter != null) chips.push(t('promo.balance', { amount: formatCurrency(extra.balanceAfter) }))
   return {
     kind:    'good',
@@ -235,7 +236,7 @@ export type PromoModalProps = {
 }
 
 export function PromoModal({ open, onClose, onSuccess }: PromoModalProps) {
-  const { t, formatCurrency } = useI18n()
+  const { t, formatCurrency, formatNumber } = useI18n()
   const [code,    setCode]    = useState('')
   const [phase,   setPhase]   = useState<Phase>({ tag: 'idle' })
   const [mounted, setMounted] = useState(false)
@@ -287,7 +288,7 @@ export function PromoModal({ open, onClose, onSuccess }: PromoModalProps) {
         balanceAfter: resp.balanceAfter ?? null,
       }
 
-      const result = resp.item ? renderFromItem(resp.item, extra, t, formatCurrency) : renderFromNumbers(extra, t, formatCurrency)
+      const result = resp.item ? renderFromItem(resp.item, extra, t, formatCurrency, formatNumber) : renderFromNumbers(extra, t, formatCurrency, formatNumber)
       setPhase({ tag: 'success', result })
       onSuccess?.(extra)
 

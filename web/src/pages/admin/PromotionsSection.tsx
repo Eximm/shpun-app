@@ -33,7 +33,7 @@ function errorMessage(error: unknown, fallback: string) {
 }
 
 export function PromotionsSection() {
-  const { t, formatCurrency, formatDate } = useI18n();
+  const { t, formatNumber, formatDate } = useI18n();
   const [items, setItems] = useState<PromotionCatalogItem[]>([]);
   const [scannedAt, setScannedAt] = useState("");
   const [loading, setLoading] = useState(true);
@@ -94,7 +94,7 @@ export function PromotionsSection() {
       });
     }
     if (item.kind === "first_pay") return t("admin.promotions.first_pay.description");
-    return t("admin.promotions.review.description", { amount: formatCurrency(item.amount ?? 0) });
+    return t("admin.promotions.review.description", { amount: formatNumber(item.amount ?? 0) });
   }
 
   const scannedLabel = scannedAt

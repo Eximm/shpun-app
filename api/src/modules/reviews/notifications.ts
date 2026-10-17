@@ -15,7 +15,7 @@ export function reviewRewardEvent(params: {
   amount: number;
 }): NotifEvent {
   const amount = normalizedAmount(params.amount);
-  const message = `За опубликованный отзыв начислено ${amountText(amount)} ₽ на бонусный счёт.`;
+  const message = `За опубликованный отзыв начислены бонусы: ${amountText(amount)}.`;
 
   return {
     event_id: `u:${params.userId}:review-reward:${params.reviewId}`,
@@ -33,7 +33,7 @@ export function reviewRewardEvent(params: {
       action: { kind: "nav", to: "/reviews" },
       short: {
         title: "Бонусы за отзыв начислены",
-        message: `+${amountText(amount)} ₽ на бонусный счёт`,
+        message: `Бонусы: +${amountText(amount)}`,
       },
     },
   };

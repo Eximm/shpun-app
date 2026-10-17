@@ -28,7 +28,7 @@ function errorMessage(error: unknown, fallback: string) {
 }
 
 export function ReviewsSection() {
-  const { t, formatCurrency, formatDate } = useI18n();
+  const { t, formatNumber, formatDate } = useI18n();
 
   const fmtDate = (value?: string | null) => {
     if (!value) return "";
@@ -103,7 +103,7 @@ export function ReviewsSection() {
       const nextEnabled = response.reviewRewardEnabled === 1 || response.reviewRewardEnabled === true;
       setEnabled(nextEnabled);
       setSavedEnabled(nextEnabled);
-      setMessage(t("admin.reviews.reward.saved", { amount: formatCurrency(next) }));
+      setMessage(t("admin.reviews.reward.saved", { amount: formatNumber(next) }));
     } catch (e: unknown) {
       setError(errorMessage(e, t("admin.reviews.err.save")));
     } finally {
@@ -231,7 +231,7 @@ export function ReviewsSection() {
                       : review.rewardOfferStatus === "none"
                         ? t("reviews.mod.publish_no_bonus")
                         : t("admin.reviews.action.approve", {
-                            amount: formatCurrency(review.rewardOfferAmount ?? savedAmount),
+                            amount: formatNumber(review.rewardOfferAmount ?? savedAmount),
                           })}
                 </button>
                 <button className="btn btn--soft" type="button" disabled={busyId !== null || review.rewardStatus === "processing"} onClick={() => void hide(review.id)}>
@@ -251,7 +251,7 @@ export function ReviewsSection() {
               <div className="list__item admin-tightItem" key={review.id}>
                 <div className="list__main">
                   <div className="list__title">{review.author} {t("admin.reviews.rewarded.review_ref", { id: review.id })}</div>
-                  <div className="list__sub">{t("admin.reviews.rewarded.credited", { amount: formatCurrency(Number(review.rewardAmount || 0)), date: fmtDate(review.rewardedAt) })}</div>
+                  <div className="list__sub">{t("admin.reviews.rewarded.credited", { amount: formatNumber(Number(review.rewardAmount || 0)), date: fmtDate(review.rewardedAt) })}</div>
                 </div>
                 <div className="list__side"><span className="chip chip--ok">{t("admin.reviews.rewarded.published")}</span></div>
               </div>

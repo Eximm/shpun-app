@@ -22,7 +22,7 @@ export function BonusOpportunityModal({
   onOpenReviews: () => void;
   onClose: () => void;
 }) {
-  const { t, formatCurrency } = useI18n();
+  const { t, formatNumber } = useI18n();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [activated, setActivated] = useState(false);
@@ -38,7 +38,7 @@ export function BonusOpportunityModal({
   const isReturn = offer.kind === "return_promo";
   const isTopup = offer.kind === "topup_bonus";
   const value = offer.kind === "review_bonus"
-    ? formatCurrency(offer.amount)
+    ? formatNumber(offer.amount)
     : isReturn
       ? offer.code
       : `+${offer.percent}%`;
@@ -55,7 +55,7 @@ export function BonusOpportunityModal({
   const text = activated
     ? t("bonus.offer.return.success_text", { percent: isReturn ? offer.percent : 0 })
     : offer.kind === "review_bonus"
-      ? t("bonus.offer.review.text", { amount: formatCurrency(offer.amount) })
+      ? t("bonus.offer.review.text", { amount: formatNumber(offer.amount) })
       : isReturn
         ? t("bonus.offer.return.text", { percent: offer.percent, days: offer.tariffDays })
         : offer.source === "return"

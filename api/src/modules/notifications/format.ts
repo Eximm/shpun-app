@@ -17,6 +17,14 @@ function rub(v: any) {
   return `${Math.trunc(n)}\u00A0₽`;
 }
 
+function bonusText(value: unknown) {
+  if (value == null || value === "") return "";
+  const numeric = Number(value);
+  return Number.isFinite(numeric)
+    ? numeric.toLocaleString("ru-RU", { maximumFractionDigits: 2 })
+    : "";
+}
+
 function pick(obj: any, path: string): any {
   try {
     return path.split(".").reduce((a, k) => (a == null ? undefined : a[k]), obj);
@@ -165,7 +173,7 @@ export function formatIncoming(e: BillingPushEvent): BillingPushEvent {
 
     const t = rub(total);
     const b = rub(balance);
-    const bn = rub(bonus);
+    const bn = bonusText(bonus);
 
     title = "⏳ Скоро нужна оплата";
 
@@ -191,7 +199,7 @@ export function formatIncoming(e: BillingPushEvent): BillingPushEvent {
       }
 
       if (b) parts.push(`баланс ${b}`);
-      if (bn) parts.push(`бонус ${bn}`);
+      if (bn) parts.push(`бонусы ${bn}`);
 
       message = parts.length ? parts.join(" · ") : "Проверьте ближайшую оплату услуг";
     }
@@ -200,7 +208,7 @@ export function formatIncoming(e: BillingPushEvent): BillingPushEvent {
     if (Number.isFinite(cnt) && cnt > 0) shortParts.push(`Услуг: ${cnt}`);
     if (t) shortParts.push(`нужно ${t}`);
     if (b) shortParts.push(`баланс ${b}`);
-    if (bn) shortParts.push(`бонус ${bn}`);
+    if (bn) shortParts.push(`бонусы ${bn}`);
 
     const shortMessage = shortParts.length ? shortParts.join(" · ") : "Проверьте оплату";
 
