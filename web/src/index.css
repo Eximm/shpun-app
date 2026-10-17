@@ -9530,3 +9530,32 @@ button.reviews-star:not(:disabled) {
   .mon-row__spacer { display: none; }
   .mon-row__stats { order: 5; flex: 0 0 100%; display: flex; flex-wrap: wrap; gap: 4px 12px; }
 }
+.supportAssistantBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 12px 0;
+}
+.supportAssistantBar .p { flex: 1 1 240px; margin: 0; }
+
+/* Assistant messages are conversation bubbles, not muted system notices. */
+.supportMsg--assistant {
+  align-self: flex-start;
+  background: rgba(124,92,255,0.16);
+  border: 1px solid rgba(124,92,255,0.45);
+  box-shadow: 0 3px 18px rgba(124,92,255,0.08);
+
+}
+.supportAssistantBadge { font-size: 11px; opacity: .78; }
+.supportAssistantTyping { display: flex; align-items: center; gap: 12px; }
+.supportAssistantDots { display: inline-flex; gap: 4px; }
+.supportAssistantDots i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; animation: supportAssistantDot 1s ease-in-out infinite; }
+.supportAssistantDots i:nth-child(2) { animation-delay: .15s; }
+.supportAssistantDots i:nth-child(3) { animation-delay: .3s; }
+@keyframes supportAssistantDot { 0%, 60%, 100% { opacity: .35; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .supportMsg--assistant, .supportAssistantDots i { animation: none; }
+}

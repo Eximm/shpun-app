@@ -34,6 +34,7 @@ import {
 } from "./service.js";
 import { pick, readBody, readMultipart, sendSupportError, sessionUser } from "./http.js";
 import type { UploadFile } from "./attachmentService.js";
+import { suggestSupportReply } from "./assistant.js";
 
 function parseStatusFilter(value: unknown): TicketStatus[] | undefined {
   const raw = String(value ?? "").trim();
@@ -82,6 +83,22 @@ async function requireAdmin(req: any, reply: any) {
 }
 
 export async function supportAdminRoutes(app: FastifyInstance) {
+  app.get("/admin/support/tickets/:id/assistant", async (req, reply) => {
+    try {
+      const session = await requireAdmin(req, reply);
+      if (!session) return;
+      const id = Number((req.params as any)?.id);
+      if (!Number.isSafeInteger(id) || id <= 0) {
+        return reply.code(400).send({ ok: false, error: "invalid_ticket_id" });
+      }
+      const ticket = getAdminTicket(id);
+      if (!ticket) return reply.code(404).send({ ok: false, error: "ticket_not_found" });
+      return reply.send({ ok: true, assistant: suggestSupportReply(ticket) });
+    } catch (error) {
+      return sendSupportError(reply, error);
+    }
+  });
+
   app.get("/admin/support/unread", async (req, reply) => {
     const session = await requireAdmin(req, reply);
     if (!session) return;

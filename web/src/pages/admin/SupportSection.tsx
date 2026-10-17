@@ -17,6 +17,7 @@ import {
 } from "../../shared/support/attachments";
 import { AttachmentList, PendingFiles } from "../../shared/support/AttachmentViews";
 import { useAttachmentComposer, type AttachmentAddError } from "../../shared/support/useAttachmentComposer";
+import { AssistantSuggestions } from "../../shared/support/AssistantSuggestions";
 import { AdminFilterBar, AdminSectionHeader, ModalShell, PartnershipTabIcon, SupportTabIcon, UnreadMarker, ADMIN_SECTION_ICON } from "./shared";
 import { ActionMenu } from "./ActionMenu";
 import { ticketStatusLabel, TICKET_STATUSES } from "../../shared/support/ticketLabels";
@@ -371,6 +372,7 @@ function MessageBubble({ message, onDelete }: { message: TicketMessage; onDelete
 
   const isUser = message.authorType === "user";
   const isSystem = message.authorType === "system";
+  const isAssistant = isSystem && message.authorName === "Помощник Shpun";
 
   const menu = onDelete ? (
     <ActionMenu
@@ -419,7 +421,7 @@ function MessageBubble({ message, onDelete }: { message: TicketMessage; onDelete
   return (
     <div className={`supportMsg ${modifier}`}>
       <div className="supportMsg__meta">
-        <strong>{t(AUTHOR_KEYS[message.authorType])}</strong>
+        <strong>{t(isAssistant ? "support.assistant.name" : AUTHOR_KEYS[message.authorType])}</strong>
         {!isUser && !isSystem && message.authorName ? <span>· {message.authorName}</span> : null}
         <span className="supportMsg__time">{formatClock(message.createdAt, formatDate)}</span>
       </div>
@@ -1300,6 +1302,10 @@ export function SupportSection({
           </div>
 
           <Diagnostics ticket={opened} />
+          {opened.kind !== "partnership" && <AssistantSuggestions ticketId={opened.id}
+            lastMessageId={opened.messages?.at(-1)?.id ?? 0}
+            canUse={!composerText.trim() && !sending}
+            onUse={text => { setComposerMode("reply"); setComposerText(text); composerInputRef.current?.focus(); }} />}
 
           {userHistory && userHistory.user.id === opened.userId ? (
             <div className="supportUserSummary">

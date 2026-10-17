@@ -19,6 +19,8 @@ services:
       DATA_DIR: "/data"
       LINKDB_PATH: "/data/linkdb.sqlite"
       RECEIPTS_DIR: "/data/receipts"
+      SUPPORT_ASSISTANT_ENABLED: "${SUPPORT_ASSISTANT_ENABLED:-true}"
+      SUPPORT_ASSISTANT_INCIDENT_TEXT: "${SUPPORT_ASSISTANT_INCIDENT_TEXT:-}"
     networks:
       - shpun-app
       - shm_default
