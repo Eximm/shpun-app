@@ -1,5 +1,6 @@
 // FILE: api/src/modules/notifications/format.ts
 import type { BillingPushEvent } from "./inbox.js";
+import { moneyText } from "../../shared/utils/money.js";
 
 type Level = "info" | "success" | "error";
 
@@ -9,20 +10,6 @@ type Level = "info" | "success" | "error";
 function compact(s: string, max = 220) {
   const t = String(s || "").replace(/\s+/g, " ").trim();
   return t.length > max ? t.slice(0, max - 1) + "…" : t;
-}
-
-function rub(v: any) {
-  const n = Number(v);
-  if (!Number.isFinite(n)) return "";
-  return `${Math.trunc(n)}\u00A0₽`;
-}
-
-function bonusText(value: unknown) {
-  if (value == null || value === "") return "";
-  const numeric = Number(value);
-  return Number.isFinite(numeric)
-    ? numeric.toLocaleString("ru-RU", { maximumFractionDigits: 2 })
-    : "";
 }
 
 function pick(obj: any, path: string): any {
@@ -127,7 +114,7 @@ export function formatIncoming(e: BillingPushEvent): BillingPushEvent {
 
   if (type === "balance.credited") {
     const amount = pick(meta, "amount") ?? pick(meta, "money") ?? pick(meta, "sum");
-    const a = rub(amount);
+    const a = moneyText(amount, String(pick(meta, "currency") || "RUB"));
 
     title = "💰 Баланс пополнен";
     message = a ? `Зачислено ${a} на баланс аккаунта.` : "Баланс успешно пополнен.";
@@ -171,9 +158,10 @@ export function formatIncoming(e: BillingPushEvent): BillingPushEvent {
     const bonus = pick(meta, "bonus") ?? pick(meta, "get_bonus");
     const fullMessage = String(pick(meta, "full_message") ?? "").trim();
 
-    const t = rub(total);
-    const b = rub(balance);
-    const bn = bonusText(bonus);
+    const currency = String(pick(meta, "currency") || "RUB");
+    const t = moneyText(total, currency);
+    const b = moneyText(balance, currency);
+    const bn = bonus == null || bonus === "" ? "" : moneyText(bonus, currency);
 
     title = "⏳ Скоро нужна оплата";
 

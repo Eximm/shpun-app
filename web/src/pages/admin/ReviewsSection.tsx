@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../../shared/api/client";
 import { useI18n } from "../../shared/i18n";
+import { useAccountMoney } from "../../shared/money/useAccountMoney";
 import { refreshAdminOverview } from "../../app/notifications/adminOverview";
 import { AdminSectionHeader, ADMIN_SECTION_ICON } from "./shared";
 import type { AdminSettingsResp } from "./types";
@@ -28,7 +29,8 @@ function errorMessage(error: unknown, fallback: string) {
 }
 
 export function ReviewsSection() {
-  const { t, formatNumber, formatDate } = useI18n();
+  const { t, formatDate } = useI18n();
+  const formatMoney = useAccountMoney();
 
   const fmtDate = (value?: string | null) => {
     if (!value) return "";
@@ -103,7 +105,7 @@ export function ReviewsSection() {
       const nextEnabled = response.reviewRewardEnabled === 1 || response.reviewRewardEnabled === true;
       setEnabled(nextEnabled);
       setSavedEnabled(nextEnabled);
-      setMessage(t("admin.reviews.reward.saved", { amount: formatNumber(next) }));
+      setMessage(t("admin.reviews.reward.saved", { amount: formatMoney(next) }));
     } catch (e: unknown) {
       setError(errorMessage(e, t("admin.reviews.err.save")));
     } finally {
@@ -168,7 +170,7 @@ export function ReviewsSection() {
         <div className="list__item admin-tightItem admin-reviewSetting">
           <div className="list__main">
             <div className="list__title">{t("admin.reviews.reward.title")}</div>
-            <div className="list__sub">{t("admin.reviews.reward.subtitle")}</div>
+            <div className="list__sub">{t("admin.reviews.reward.subtitle", { min: formatMoney(1), max: formatMoney(500) })}</div>
           </div>
           <div className="admin-reviewSetting__controls">
             <label className="admin-pushToggle">
@@ -195,7 +197,7 @@ export function ReviewsSection() {
         </div>
       </div>
 
-      {!amountValid && <div className="pre admin-gap-top-md">{t("admin.reviews.reward.invalid")}</div>}
+      {!amountValid && <div className="pre admin-gap-top-md">{t("admin.reviews.reward.invalid", { min: formatMoney(1), max: formatMoney(500) })}</div>}
 
       {message && <div className="pre admin-gap-top-md">{message}</div>}
       {error && <div className="pre admin-gap-top-md">{error}</div>}
@@ -231,7 +233,7 @@ export function ReviewsSection() {
                       : review.rewardOfferStatus === "none"
                         ? t("reviews.mod.publish_no_bonus")
                         : t("admin.reviews.action.approve", {
-                            amount: formatNumber(review.rewardOfferAmount ?? savedAmount),
+                            amount: formatMoney(review.rewardOfferAmount ?? savedAmount),
                           })}
                 </button>
                 <button className="btn btn--soft" type="button" disabled={busyId !== null || review.rewardStatus === "processing"} onClick={() => void hide(review.id)}>
@@ -251,7 +253,7 @@ export function ReviewsSection() {
               <div className="list__item admin-tightItem" key={review.id}>
                 <div className="list__main">
                   <div className="list__title">{review.author} {t("admin.reviews.rewarded.review_ref", { id: review.id })}</div>
-                  <div className="list__sub">{t("admin.reviews.rewarded.credited", { amount: formatNumber(Number(review.rewardAmount || 0)), date: fmtDate(review.rewardedAt) })}</div>
+                  <div className="list__sub">{t("admin.reviews.rewarded.credited", { amount: formatMoney(Number(review.rewardAmount || 0)), date: fmtDate(review.rewardedAt) })}</div>
                 </div>
                 <div className="list__side"><span className="chip chip--ok">{t("admin.reviews.rewarded.published")}</span></div>
               </div>

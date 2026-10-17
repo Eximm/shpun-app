@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMe } from "../app/auth/useMe";
 import { useI18n } from "../shared/i18n";
+import { useAccountMoney } from "../shared/money/useAccountMoney";
 import { getRuntimeLocale } from "../shared/i18n/runtime";
 import { apiFetch } from "../shared/api/client";
 import { toast } from "../shared/ui/toast";
@@ -177,6 +178,7 @@ export function Home() {
   const { t }  = useI18n();
   const nav    = useNavigate();
   const { me, loading, error, refetch } = useMe();
+  const formatMoney = useAccountMoney();
 
   const [promoOpen,   setPromoOpen]   = useState(false);
   const [svcLoading,  setSvcLoading]  = useState(false);
@@ -412,7 +414,7 @@ export function Home() {
         <StatCell
           to="/payments" icon="🎁"
           label={t("home.tiles.bonus")}
-          value={bonusValue}
+          value={formatMoney(bonusValue)}
           sub={t("home.tiles.bonus.sub")}
           accent={bonusValue > 0 ? "ok" : undefined}
         />

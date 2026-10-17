@@ -18,8 +18,8 @@ test("review reward notification is personal and deduplicated by review", () => 
   assert.equal(event.target, "user");
   assert.equal(event.user_id, 42);
   assert.equal(event.toast, true);
-  assert.match(String(event.message), /бонусы: 300/);
-  assert.doesNotMatch(String(event.message), /₽|RUB/);
+  assert.match(String(event.message), /300\s*₽/);
+  assert.equal((event.meta as { currency: string }).currency, "RUB");
 
   assert.deepEqual(putNotifEvent(event), { ok: true, dedup: false });
   assert.deepEqual(putNotifEvent({ ...event, ts: event.ts + 1 }), { ok: true, dedup: true });
@@ -28,4 +28,12 @@ test("review reward notification is personal and deduplicated by review", () => 
   const other = listNotifAfter({ userId: 43, limit: 10 });
   assert.equal(own.items.length, 1);
   assert.equal(other.items.length, 0);
+});
+
+test("review notification formats the supplied monetary currency, without converting the amount", () => {
+  const event = reviewRewardEvent({ reviewId: 18, userId: 42, amount: 0.5, currency: "USD" });
+  assert.match(String(event.message), /0,5\s*\$/);
+  assert.doesNotMatch(String(event.message), /₽/);
+  assert.equal((event.meta as { currency: string }).currency, "USD");
+  assert.equal((event.meta as { amount: number }).amount, 0.5);
 });

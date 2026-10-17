@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../../shared/api/client";
 import { useI18n } from "../../shared/i18n";
+import { useAccountMoney } from "../../shared/money/useAccountMoney";
 import { AdminSectionHeader, ADMIN_SECTION_ICON } from "./shared";
 
 type PromotionCatalogItem = {
@@ -33,7 +34,8 @@ function errorMessage(error: unknown, fallback: string) {
 }
 
 export function PromotionsSection() {
-  const { t, formatNumber, formatDate } = useI18n();
+  const { t, formatDate } = useI18n();
+  const formatMoney = useAccountMoney();
   const [items, setItems] = useState<PromotionCatalogItem[]>([]);
   const [scannedAt, setScannedAt] = useState("");
   const [loading, setLoading] = useState(true);
@@ -94,7 +96,7 @@ export function PromotionsSection() {
       });
     }
     if (item.kind === "first_pay") return t("admin.promotions.first_pay.description");
-    return t("admin.promotions.review.description", { amount: formatNumber(item.amount ?? 0) });
+    return t("admin.promotions.review.description", { amount: formatMoney(item.amount ?? 0) });
   }
 
   const scannedLabel = scannedAt

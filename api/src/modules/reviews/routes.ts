@@ -6,6 +6,7 @@ import {
   shmShpunAppPromoOpportunities,
 } from "../../shared/shm/shmClient.js";
 import { notifyReviewReward } from "./notifications.js";
+import { moneyText } from "../../shared/utils/money.js";
 import {
   beginReviewReward,
   completeReviewReward,
@@ -372,6 +373,7 @@ export async function reviewsRoutes(app: FastifyInstance) {
         ? billing.json.data
         : billing.json;
       const amount = Math.round(Number(payload?.amount) * 100) / 100;
+      const rewardCurrency = String(payload?.currency || "RUB");
       const logicalOk = payload?.ok === 1 || payload?.ok === true;
       const sameReview = Number(payload?.review_id) === id;
       const sameUser = Number(payload?.target_user_id) === reviewUserId;
@@ -405,6 +407,7 @@ export async function reviewsRoutes(app: FastifyInstance) {
         reviewId: id,
         userId: reviewUserId,
         amount,
+        currency: rewardCurrency,
       });
       return reply.send({
         ok: true,
@@ -412,7 +415,7 @@ export async function reviewsRoutes(app: FastifyInstance) {
         bonusAdded: Number(payload?.bonus_added || 0),
         bonusAfter: Number(payload?.bonus_after || 0),
         item: publicReview({ ...review, comments: [] }, user.id, true),
-        message: `Отзыв опубликован. Начислены бонусы: ${amount.toLocaleString("ru-RU")}.`,
+        message: `Отзыв опубликован. Начислено ${moneyText(amount, rewardCurrency)} бонусами.`,
       });
     } catch (error: any) {
       return reply.code(502).send({

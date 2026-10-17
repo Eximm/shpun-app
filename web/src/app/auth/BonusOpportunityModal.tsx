@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "../../shared/i18n";
+import { useAccountMoney } from "../../shared/money/useAccountMoney";
 
 export type BonusOpportunity = { description?: string } & (
   | { id: string; campaignId: "return15"; kind: "return_promo"; code: string; percent: number; inactiveDays: number; tariffDays: number }
@@ -22,7 +23,8 @@ export function BonusOpportunityModal({
   onOpenReviews: () => void;
   onClose: () => void;
 }) {
-  const { t, formatNumber } = useI18n();
+  const { t } = useI18n();
+  const formatMoney = useAccountMoney();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [activated, setActivated] = useState(false);
@@ -38,7 +40,7 @@ export function BonusOpportunityModal({
   const isReturn = offer.kind === "return_promo";
   const isTopup = offer.kind === "topup_bonus";
   const value = offer.kind === "review_bonus"
-    ? formatNumber(offer.amount)
+    ? formatMoney(offer.amount)
     : isReturn
       ? offer.code
       : `+${offer.percent}%`;
@@ -55,7 +57,7 @@ export function BonusOpportunityModal({
   const text = activated
     ? t("bonus.offer.return.success_text", { percent: isReturn ? offer.percent : 0 })
     : offer.kind === "review_bonus"
-      ? t("bonus.offer.review.text", { amount: formatNumber(offer.amount) })
+      ? t("bonus.offer.review.text", { amount: formatMoney(offer.amount) })
       : isReturn
         ? t("bonus.offer.return.text", { percent: offer.percent, days: offer.tariffDays })
         : offer.source === "return"

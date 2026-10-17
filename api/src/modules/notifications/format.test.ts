@@ -28,7 +28,7 @@ test("payment forecast respects an explicit notification opt-out", () => {
   assert.equal(event.push, false);
 });
 
-test("forecast keeps money in currency and bonuses as unitless quantities", () => {
+test("forecast formats bonuses and the main balance in the event currency", () => {
   const event = formatIncoming({
     event_id: "forecast-bonus-units",
     type: "service.forecast",
@@ -37,6 +37,15 @@ test("forecast keeps money in currency and bonuses as unitless quantities", () =
   });
   assert.match(String(event.message), /бонусы 22,5/);
   assert.match(String(event.message), /200\s*₽/);
-  assert.doesNotMatch(String(event.message), /22,5\s*₽/);
-  assert.doesNotMatch(String((event.meta as any)?.short?.message), /22,5\s*₽/);
+  assert.match(String(event.message), /22,5\s*₽/);
+  assert.match(String((event.meta as any)?.short?.message), /22,5\s*₽/);
+});
+
+test("forecast supports USD values supplied by billing without a hardcoded ruble sign", () => {
+  const event = formatIncoming({
+    event_id: "forecast-dollar", type: "service.forecast", user_id: 2,
+    meta: { total: 2, balance: 1.5, bonus: 0.25, items_count: 1, currency: "USD" },
+  });
+  assert.match(String(event.message), /0,25\s*\$/);
+  assert.doesNotMatch(String(event.message), /₽/);
 });

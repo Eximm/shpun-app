@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../shared/api/client";
 import { useI18n } from "../shared/i18n";
+import { useAccountMoney } from "../shared/money/useAccountMoney";
 import { PageBackButton } from "../shared/ui/PageBackButton";
 
 type ReviewStatus = "pending" | "published" | "hidden";
@@ -109,7 +110,8 @@ function AuthorVisibilityPicker({
 }
 
 export function Reviews() {
-  const { t, formatDate, formatNumber } = useI18n();
+  const { t, formatDate } = useI18n();
+  const formatMoney = useAccountMoney();
   const [items, setItems] = useState<Review[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [canCreateReview, setCanCreateReview] = useState(true);
@@ -373,7 +375,7 @@ export function Reviews() {
                 </div>
                 <p className="reviews-text">{r.text}</p>
                 {r.mine && r.rewardStatus === "rewarded" && Number(r.rewardAmount) > 0 && (
-                  <div className="reviews-notice">{t("reviews.reward", { amount: formatNumber(Number(r.rewardAmount)) })}</div>
+                  <div className="reviews-notice">{t("reviews.reward", { amount: formatMoney(Number(r.rewardAmount)) })}</div>
                 )}
                 <div className="reviews-moderation">
                   {r.canApprove && r.status !== "published" && (
