@@ -8,6 +8,7 @@ import test from "node:test";
 
 const botToken = "test-login-bot-token";
 const calls: string[] = [];
+const templateActions: string[] = [];
 const nativeBodies: Record<string, unknown>[] = [];
 const miniAppQueries: URLSearchParams[] = [];
 const registeredMiniAppIds = new Set<number>();
@@ -18,6 +19,9 @@ const shm = http.createServer(async (req, res) => {
   for await (const chunk of req) body += String(chunk);
   const url = new URL(req.url ?? "/", "http://billing.test");
   calls.push(`${req.method} ${url.pathname}`);
+  if (url.pathname.endsWith("/v1/template/shpun_app")) {
+    templateActions.push(new URLSearchParams(body).get("action") ?? "");
+  }
   res.setHeader("content-type", "application/json");
   if (url.pathname.endsWith("/v1/telegram/webapp/auth")) {
     miniAppQueries.push(new URLSearchParams(url.searchParams));
@@ -78,9 +82,9 @@ saveReferralAlias({
   enabled: true,
 });
 
-function signedMiniApp(id: number): string {
+function signedMiniApp(id: number, firstName = "Test"): string {
   const authDate = String(Math.floor(Date.now() / 1000));
-  const user = JSON.stringify({ id, first_name: "Test" });
+  const user = JSON.stringify({ id, first_name: firstName });
   const dataCheckString = `auth_date=${authDate}\nuser=${user}`;
   const secret = createHmac("sha256", "WebAppData").update(botToken).digest();
   const hash = createHmac("sha256", secret).update(dataCheckString).digest("hex");
@@ -116,6 +120,7 @@ test("strict Mini App registers through native SHM once, then logs into the same
   process.env.SHM_TELEGRAM_PASSWORD_FALLBACK = "0";
   nativeMiniAppRegistrationEnabled = true;
   calls.length = 0;
+  templateActions.length = 0;
   miniAppQueries.length = 0;
   try {
     const initData = signedMiniApp(123460);
@@ -129,11 +134,16 @@ test("strict Mini App registers through native SHM once, then logs into the same
     assert.equal(miniAppQueries[0]?.get("register_if_not_exists"), "1");
     assert.equal(miniAppQueries[0]?.get("partner_id"), "777");
     assert.equal(passwordCalls().length, 0);
+    assert.ok(templateActions.includes("referrals.claim"), "new Mini App users must receive the partner claim");
 
-    const again = await app.inject({ method: "POST", url: "/api/auth/telegram", payload: { initData: signedMiniApp(123460) } });
+    templateActions.length = 0;
+    const again = await app.inject({ method: "POST", url: "/api/auth/telegram", payload: {
+      initData: signedMiniApp(123460, "Second launch"), referral_alias: "mini_partner",
+    } });
     assert.equal(again.statusCode, 200);
     assert.equal(again.json().user_id, first.json().user_id);
     assert.equal(passwordCalls().length, 0);
+    assert.ok(!templateActions.includes("referrals.claim"), "re-login must not replay the partner claim");
   } finally {
     nativeMiniAppRegistrationEnabled = false;
   }
@@ -142,10 +152,14 @@ test("strict Mini App registers through native SHM once, then logs into the same
 test("existing Mini App Telegram account remains an ordinary login", async () => {
   process.env.SHM_TELEGRAM_PASSWORD_FALLBACK = "0";
   calls.length = 0;
-  const result = await app.inject({ method: "POST", url: "/api/auth/telegram", payload: { initData: signedMiniApp(123459) } });
+  templateActions.length = 0;
+  const result = await app.inject({ method: "POST", url: "/api/auth/telegram", payload: {
+    initData: signedMiniApp(123459), referral_alias: "mini_partner",
+  } });
   assert.equal(result.statusCode, 200);
   assert.equal(result.json().user_id, 123);
   assert.equal(passwordCalls().length, 0);
+  assert.ok(!templateActions.includes("referrals.claim"), "a returning user must not gain a new partner");
 });
 
 test("strict SHM 3.x mode also blocks Widget password fallback", async () => {
@@ -179,28 +193,46 @@ test("Widget login never registers an unknown Telegram account", async () => {
 test("strict Widget login accepts SHM 3.x array-wrapped session", async () => {
   process.env.SHM_TELEGRAM_PASSWORD_FALLBACK = "0";
   calls.length = 0;
+  templateActions.length = 0;
   const result = await app.inject({
     method: "POST",
     url: "/api/auth/telegram_widget",
-    payload: { ...signedWidget(123458), mode: "login" },
+    payload: { ...signedWidget(123458), mode: "login", referral_alias: "mini_partner" },
   });
   assert.equal(result.statusCode, 200);
   assert.equal(result.json().user_id, 123);
   assert.equal(passwordCalls().length, 0);
+  assert.ok(!templateActions.includes("referrals.claim"), "a returning user must not gain a new partner");
+});
+
+test("Widget register button does not re-attribute an existing Telegram account", async () => {
+  process.env.SHM_TELEGRAM_PASSWORD_FALLBACK = "0";
+  templateActions.length = 0;
+  const result = await app.inject({
+    method: "POST",
+    url: "/api/auth/telegram_widget",
+    payload: { ...signedWidget(123458), mode: "register", referral_alias: "mini_partner" },
+  });
+  assert.equal(result.statusCode, 200);
+  assert.ok(!templateActions.includes("referrals.claim"));
 });
 
 test("strict Widget registration uses native SHM registration only", async () => {
   process.env.SHM_TELEGRAM_PASSWORD_FALLBACK = "0";
   calls.length = 0;
+  templateActions.length = 0;
+  nativeBodies.length = 0;
   const result = await app.inject({
     method: "POST",
     url: "/api/auth/telegram_widget",
-    payload: { ...signedWidget(123456), mode: "register" },
+    payload: { ...signedWidget(123456), mode: "register", referral_alias: "mini_partner" },
   });
   assert.equal(result.statusCode, 200);
   assert.equal(result.json().user_id, 123);
   assert.equal(passwordCalls().length, 0);
   assert.ok(calls.includes("POST /shm/v1/telegram/web/auth"));
+  assert.equal(nativeBodies.at(-1)?.partner_id, 777);
+  assert.ok(templateActions.includes("referrals.claim"), "new users must receive the partner claim");
 });
 
 test("forged Mini App data cannot trigger the legacy password path", async () => {

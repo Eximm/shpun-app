@@ -332,6 +332,10 @@ async function tryAttachReferral(
     const claimData = (claimResult as any)?.data && typeof (claimResult as any).data === "object"
       ? (claimResult as any).data
       : claimResult;
+    if (Number((claimData as any)?.partner_confirmed ?? 0) !== 1) {
+      warnReferralClaim("partner", referralAlias, options?.shmUserId, new Error("partner_not_confirmed"));
+      return;
+    }
     // Idempotent per (alias, SHM user): a repeated claim or re-login must not
     // increment the local counter twice. Requires partner_confirmed, which the
     // billing template sets only when the effective partner matches.
@@ -1097,12 +1101,12 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(502).send({ ok: false, error: "shm_user_lookup_failed" });
     }
 
-    try {
+    if (resolved.registered) {
       await tryAttachReferral(shmSessionId, body?.partner_id, body?.referral_alias, {
-        allowCampaign: Boolean(resolved.registered),
+        allowCampaign: true,
         shmUserId,
       });
-    } catch {}
+    }
 
     const localSid = reuseOrCreateSid(req);
     putSession(localSid, {
@@ -1168,12 +1172,12 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(502).send({ ok: false, error: "shm_user_lookup_failed" });
     }
 
-    try {
+    if (resolved.registered) {
       await tryAttachReferral(shmSessionId, body?.partner_id, body?.referral_alias, {
-        allowCampaign: Boolean(resolved.registered),
+        allowCampaign: true,
         shmUserId,
       });
-    } catch {}
+    }
 
     const localSid = reuseOrCreateSid(req);
     putSession(localSid, {
@@ -1229,12 +1233,12 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.redirect("/login?e=user_lookup_failed");
     }
 
-    try {
+    if (resolved.registered) {
       await tryAttachReferral(shmSessionId, payload?.partner_id, payload?.referral_alias, {
-        allowCampaign: Boolean(resolved.registered),
+        allowCampaign: true,
         shmUserId,
       });
-    } catch {}
+    }
 
     const localSid = reuseOrCreateSid(req);
     putSession(localSid, {
