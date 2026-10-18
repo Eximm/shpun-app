@@ -44,8 +44,12 @@ function startShmStub() {
       res.setHeader("content-type", "application/json");
 
       if (url.pathname.endsWith("/v1/user") && req.method === "PUT") {
-        // Registration: {login,password[,partner_id]}
+        // Registration: {login,password,full_name[,partner_id]}
         return res.end(JSON.stringify({ ok: 1 }));
+      }
+      if (url.pathname.endsWith("/v1/user") && req.method === "POST") {
+        res.statusCode = 405;
+        return res.end(JSON.stringify({ error: "method_not_allowed" }));
       }
       if (url.pathname.endsWith("/v1/user/auth") && req.method === "POST") {
         const parsed = JSON.parse(body || "{}");
@@ -153,6 +157,30 @@ test("registration without referral still works", async () => {
   const body = shmRegisterBodies("plain@gmail.com")[0] ?? "";
   assert.ok(body.includes("plain@gmail.com"));
   assert.ok(!body.includes("partner_id"), "no partner_id must be sent for a direct registration");
+});
+
+test("registration sends the entered name with the partner ID at creation", async () => {
+  const login = "named@gmail.com";
+  const res = await register({
+    login,
+    password: "supersecret1",
+    client: "Микита Тсыкаловский",
+    mode: "register",
+    referral_alias: "blogger_one",
+  });
+  assert.equal(res.statusCode, 200);
+  const body = JSON.parse(shmRegisterBodies(login)[0] ?? "{}");
+  assert.equal(body.full_name, "Микита Тсыкаловский");
+  assert.equal(body.partner_id, 777);
+  assert.equal(shmStub.calls.filter((c) => c.method === "POST" && c.path.endsWith("/v1/user")).length, 0);
+});
+
+test("registration uses the email as name when the optional field is empty", async () => {
+  const login = "nameless@gmail.com";
+  const res = await register({ login, password: "supersecret1", client: "", mode: "register" });
+  assert.equal(res.statusCode, 200);
+  const body = JSON.parse(shmRegisterBodies(login)[0] ?? "{}");
+  assert.equal(body.full_name, login);
 });
 
 test("valid partner alias is attributed through the backend claim path", async () => {

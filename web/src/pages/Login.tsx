@@ -1416,7 +1416,7 @@ export function Login() {
                   <label className="field__label">{t("login.password.client")}</label>
                   <input className="input" placeholder={t("login.password.client_ph")}
                     value={clientName} onChange={(e) => setClientName(e.target.value)}
-                    autoComplete="name" disabled={loading} />
+                    autoComplete="name" maxLength={64} disabled={loading} />
                 </div>
               )}
 

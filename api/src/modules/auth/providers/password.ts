@@ -105,11 +105,12 @@ async function withTimeout<T>(
 async function shmRegister(
   login: string,
   password: string,
+  fullName: string,
   partnerId: number,
   clientIp: string,
   signal: AbortSignal
 ): Promise<{ ok: true } | { ok: false; status: number; detail: unknown }> {
-  const body: Record<string, any> = { login, password };
+  const body: Record<string, any> = { login, password, full_name: fullName };
   if (partnerId > 0) body.partner_id = partnerId;
 
   const r = await shmFetch<any>(null, "v1/user", {
@@ -186,19 +187,6 @@ async function shmLogin(
   };
 }
 
-async function shmSetClientName(
-  sessionId: string,
-  client: string,
-  signal: AbortSignal
-) {
-  if (!client) return;
-  await shmFetch(sessionId, "v1/user", {
-    method: "POST",
-    body: { full_name: client },
-    signal,
-  });
-}
-
 async function shmSetEmail(
   sessionId: string,
   email: string,
@@ -251,7 +239,6 @@ export async function passwordAuth(body: any): Promise<AuthResult> {
   let login = normalizeLogin(body?.login);
   let password = normalizePassword(body?.password);
 
-  const client = normalizeClient(body?.client, login);
   const mode = normalizeMode(body?.mode);
   const partnerId = normalizePartnerId(body?.partner_id);
   const clientIp = normalizeClientIp(body?.client_ip);
@@ -297,12 +284,17 @@ export async function passwordAuth(body: any): Promise<AuthResult> {
     password = generateTelegramPassword(tgId);
   }
 
+  // SHM accepts full_name during registration (max 64 chars). An omitted name
+  // keeps the existing fallback to the normalized login/e-mail address.
+  const client = normalizeClient(body?.client, login).slice(0, 64);
+
   try {
     return await withTimeout(15000, async (signal) => {
       if (mode === "register") {
         const reg = await shmRegister(
           login,
           password,
+          client,
           partnerId,
           clientIp,
           signal
@@ -327,7 +319,6 @@ export async function passwordAuth(body: any): Promise<AuthResult> {
         const sessionId = auth.shmSessionId;
 
         await Promise.allSettled([
-          client ? shmSetClientName(sessionId, client, signal) : Promise.resolve(),
           shmSetEmail(sessionId, login, signal),
         ]);
 
@@ -344,6 +335,7 @@ export async function passwordAuth(body: any): Promise<AuthResult> {
         const reg = await shmRegister(
           login,
           password,
+          client,
           partnerId,
           clientIp,
           signal
@@ -364,12 +356,6 @@ export async function passwordAuth(body: any): Promise<AuthResult> {
 
         const auth = await shmLogin(login, password, clientIp, signal);
         if (!auth.ok || !auth.shmSessionId) return auth;
-
-        const sessionId = auth.shmSessionId;
-
-        await Promise.allSettled([
-          client ? shmSetClientName(sessionId, client, signal) : Promise.resolve(),
-        ]);
 
         return auth;
       }
