@@ -22,6 +22,7 @@ import routerIconUrl from "../assets/brand-icons/router.svg";
 import shieldIconUrl from "../assets/brand-icons/shield.svg";
 import signalIconUrl from "../assets/brand-icons/signal-bars.svg";
 import telegramIconUrl from "../assets/brand-icons/telegram.svg";
+import emailIconUrl from "../assets/brand-icons/email.svg";
 import youtubeIconUrl from "../assets/brand-icons/youtube.svg";
 import allowedEmailDomains from "../shared/data/allowed-email-domains.json";
 import {
@@ -1327,13 +1328,14 @@ export function Login() {
           <>
             <div id="tg-widget-container" className="login__widgetBox login__widgetBox--modal" />
             {(tgWidgetState === "idle" || tgWidgetState === "failed") && (
-              <button type="button" className="btn loginRegisterChoice__btn"
+              <button type="button" className="btn loginRegisterChoice__btn loginAuthMethodButton"
                 onClick={() => void mountTelegramWidget(true)} disabled={loading}>
-                {tgWidgetState === "failed"
+                <LoginIcon src={telegramIconUrl} className="loginAuthMethodButton__icon" />
+                <span>{tgWidgetState === "failed"
                   ? t("login.widget.retry.alt")
                   : authModal === "login"
                     ? t("login.telegram.login_choice_cta")
-                    : t("login.telegram.register_choice_cta")}
+                    : t("login.telegram.register_choice_cta")}</span>
               </button>
             )}
           </>
@@ -1530,11 +1532,12 @@ export function Login() {
               )}
 
               <div className="auth__actions">
-                <button type="submit" className="btn btn--primary login__btnFull"
+                <button type="submit" className="btn btn--primary login__btnFull loginAuthMethodButton"
                   disabled={loading || (authModal === "register" && !canPasswordRegister)}>
-                  {loading
+                  <LoginIcon src={emailIconUrl} className="loginAuthMethodButton__icon loginAuthMethodButton__icon--email" />
+                  <span>{loading
                     ? (authModal === "login" ? t("login.password.submit_loading") : t("login.password.register_loading"))
-                    : (authModal === "login" ? t("login.password.submit") : t("login.password.register_submit"))}
+                    : (authModal === "login" ? t("login.password.submit") : t("login.password.register_submit"))}</span>
                 </button>
               </div>
               <div className="login__switchWrap">

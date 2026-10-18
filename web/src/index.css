@@ -2269,6 +2269,10 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .loginRegisterChoice__body {
   min-width: 0;
 }
+.loginAuthMethodButton { gap: 10px; }
+.loginAuthMethodButton__icon { width: 22px; height: 22px; flex: 0 0 22px; object-fit: contain; }
+.loginAuthMethodButton__icon--email { filter: brightness(0); }
+.loginAuthMethodButton > span { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 .loginRegisterChoice__widget {
   grid-column: 1 / -1;
   min-width: 0;
