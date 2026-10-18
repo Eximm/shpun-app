@@ -383,13 +383,8 @@ export function Home() {
         <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: balanceCardStyle.labelColor, marginBottom: 6 }}>
           {t("home.tiles.balance")}
         </div>
-        <div style={{ fontSize: 32, fontWeight: 900, color: "#fff", lineHeight: 1, marginBottom: 5 }}>
+        <div style={{ fontSize: 32, fontWeight: 900, color: "#fff", lineHeight: 1, marginBottom: 14 }}>
           {balance ? <AnimatedMoney amount={balance.amount} currency={balance.currency} /> : "…"}
-        </div>
-        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.38)", marginBottom: 14, lineHeight: 1.4 }}>
-          {forecastAmountText
-            ? `${t("home.tiles.forecast")}: ${forecastAmountText}${forecastWhenText ? ` · ${forecastWhenText}` : ""}`
-            : t("home.tiles.balance.sub")}
         </div>
         <button type="button" className="btn btn--primary" onClick={() => nav("/payments")} style={{ width: "100%", fontSize: 13, minHeight: 38, fontWeight: 800 }}>
           ⚡ {t("home.tiles.balance.sub")}
