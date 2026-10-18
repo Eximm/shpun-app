@@ -6,6 +6,7 @@ import { apiFetch } from "../shared/api/client";
 import { clearPendingEmailVerification, markPendingEmailVerification } from "../shared/emailVerificationState";
 import { useI18n } from "../shared/i18n";
 import { toastApiError } from "../shared/ui/toast/toastApiError";
+import { CONNECTION_ASSISTANT_SNOOZE_KEY as SNOOZE_KEY } from "../shared/connectionAssistant";
 
 type ServiceStatus = "active" | "blocked" | "pending" | "not_paid" | "removed" | "error" | "init";
 
@@ -29,7 +30,6 @@ type ServicesResponse = {
 type DeviceKind = "phone" | "computer" | "router";
 type Screen = "offer" | "device";
 
-const SNOOZE_KEY = "connection-assistant.snoozed-until.v1";
 const SCREEN_KEY = "connection-assistant.screen.v1";
 const EMAIL_KEY = "connection-assistant.email.v1";
 

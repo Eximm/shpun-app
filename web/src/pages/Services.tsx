@@ -10,6 +10,7 @@ import { normalizeError } from "../shared/api/errorText";
 import { getMood } from "../shared/payments-mood";
 import { useI18n } from "../shared/i18n";
 import { PasswordReminder } from "../app/auth/PasswordReminder";
+import { shouldOfferConnectionAssistant } from "../shared/connectionAssistant";
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 
@@ -921,11 +922,23 @@ export function Services() {
               <p className="services-empty__text">{t("services.empty.text")}</p>
 
               <div className="services-empty__actions">
-                <button className="btn btn--primary services-empty__cta" onClick={() => go("/assistant")} type="button">
+                <button className="btn btn--primary services-empty__cta" onClick={() => go("/services/order")} type="button">
                   {t("services.empty.cta")}
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {shouldOfferConnectionAssistant(items) && new URLSearchParams(location.search).get("assistant") !== "1" && (
+        <div className="card" style={{ marginTop: 12, marginBottom: 12 }}>
+          <div className="card__body">
+            <h2 className="h1">{t("services.assistant.title")}</h2>
+            <p className="p">{t("services.assistant.text")}</p>
+            <button className="btn" type="button" style={{ marginTop: 12 }} onClick={() => go("/assistant")}>
+              {t("services.assistant.open")}
+            </button>
           </div>
         </div>
       )}

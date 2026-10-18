@@ -2,6 +2,9 @@
 export type Dict = Record<string, string>;
 
 export const RU: Dict = {
+  "services.assistant.title": "Нужна помощь с подключением?",
+  "services.assistant.text": "Помощник проведёт по шагам: выбор услуги, оплата и настройка. Вы можете запустить его, когда понадобится.",
+  "services.assistant.open": "Открыть помощник подключения",
   "support.assistant.name": "Шпунь",
   "support.assistant.badge": "Автоматический помощник",
   "support.assistant.typing": "Шпунь печатает…",
@@ -754,8 +757,8 @@ export const RU: Dict = {
     "services.empty.feat2": "Оплатите или активируйте тест",
     "services.empty.feat3": "Откройте помощник подключения",
     "services.empty.title": "Услуги пока не подключены",
-    "services.empty.text": "Помощник поможет выбрать, оплатить и настроить услугу на вашем устройстве.",
-    "services.empty.cta": "Помочь подключить",
+    "services.empty.text": "Выберите подходящую услугу и тариф. Заказать и подключить услугу можно самостоятельно.",
+    "services.empty.cta": "Выбрать услугу",
   "services.connect.title": "Настройка устройства",
   "services.connect.button": "Открыть настройку",
   "services.connect.quick": "Настроить устройство",
@@ -2770,6 +2773,9 @@ export const RU: Dict = {
 };
 
 export const EN: Dict = {
+  "services.assistant.title": "Need help getting connected?",
+  "services.assistant.text": "The assistant guides you through choosing a service, payment and setup. Open it whenever you need help.",
+  "services.assistant.open": "Open connection assistant",
   "support.assistant.name": "Shpun",
   "support.assistant.badge": "Automated helper",
   "support.assistant.typing": "Shpun is typing…",
@@ -3522,8 +3528,8 @@ export const EN: Dict = {
     "services.empty.feat2": "Pay or activate a trial",
     "services.empty.feat3": "Open the connection helper",
     "services.empty.title": "No services connected yet",
-    "services.empty.text": "The assistant will help you choose, pay, and set up a service on your device.",
-    "services.empty.cta": "Help me connect",
+    "services.empty.text": "Choose a service and plan. You can order and connect it yourself.",
+    "services.empty.cta": "Choose a service",
   "services.connect.title": "Device setup",
   "services.connect.button": "Open setup",
   "services.connect.quick": "Set up a device",

@@ -13,6 +13,7 @@ import "./index.css";
 
 import { Login }            from "./pages/Login";
 import { Home }             from "./pages/Home";
+import { isConnectionAssistantSnoozed } from "./shared/connectionAssistant";
 import { Feed }             from "./pages/Feed";
 import { Services }         from "./pages/Services";
 import { ServicesOrder }    from "./pages/ServicesOrder";
@@ -159,7 +160,8 @@ function AuthedLayout() {
 function LandingRoute() {
   const { t } = useI18n();
   const loc   = useLocation();
-  const cachedDestination = sessionStorage.getItem("landing_destination");
+  const snoozed = isConnectionAssistantSnoozed();
+  const cachedDestination = snoozed ? "home" : sessionStorage.getItem("landing_destination");
   // "services" used to be cached for clients who postponed the assistant.
   // It made the Home tab render the Services page, so intentionally ignore
   // that legacy value and calculate a real landing destination again.
@@ -176,10 +178,7 @@ function LandingRoute() {
         const resp   = await apiFetch<ServicesSummaryResp>("/services", { method: "GET" });
         const active = Number(resp?.summary?.active ?? 0);
         if (cancelled) return;
-        const unfinished = Number(resp?.summary?.pending ?? 0) + Number(resp?.summary?.notPaid ?? 0) + Number(resp?.summary?.blocked ?? 0);
-        let snoozed = false;
-        try { snoozed = Number(localStorage.getItem("connection-assistant.snoozed-until.v1") || "0") > Date.now(); } catch { /* ignore */ }
-        const destination = active > 0 || (snoozed && unfinished === 0) ? "home" : "assistant";
+        const destination = active > 0 || isConnectionAssistantSnoozed() ? "home" : "assistant";
         sessionStorage.setItem("landing_destination", destination);
         setState(destination);
       } catch { if (!cancelled) setState("home"); }
