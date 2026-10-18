@@ -936,7 +936,7 @@ export function Services() {
           <div className="card__body">
             <h2 className="h1">{t("services.assistant.title")}</h2>
             <p className="p">{t("services.assistant.text")}</p>
-            <button className="btn" type="button" style={{ marginTop: 12 }} onClick={() => go("/assistant")}>
+            <button className="btn" type="button" style={{ marginTop: 12, width: "100%", whiteSpace: "normal", overflowWrap: "anywhere" }} onClick={() => go("/assistant")}>
               {t("services.assistant.open")}
             </button>
           </div>
