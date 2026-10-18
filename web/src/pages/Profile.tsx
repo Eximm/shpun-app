@@ -561,8 +561,13 @@ export function Profile() {
       const payload = { full_name: fullName.trim(), phone: phone.trim() };
       await apiFetch("/user/profile", { method: "POST", body: payload });
       setSavedFullName(payload.full_name); setSavedPhone(payload.phone);
+      await refetch();
       setEditPersonal(false); showToast("✅ " + t("profile.toast.saved"));
-    } catch (e: any) { setPersonalError(e?.message || t("profile.personal.error")); }
+    } catch (e: any) {
+      setPersonalError(e?.code === "phone_change_requires_separate_flow"
+        ? t("profile.personal.phone_note")
+        : e?.message || t("profile.personal.error"));
+    }
     finally { setSavingPersonal(false); }
   }
 
@@ -1171,11 +1176,12 @@ export function Profile() {
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <div className="field">
               <label className="field__label">{t("profile.personal.name")}</label>
-              <input className="input" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder={t("profile.personal.name_ph")} />
+              <input className="input" value={fullName} maxLength={64} onChange={(e) => setFullName(e.target.value)} placeholder={t("profile.personal.name_ph")} />
             </div>
             <div className="field">
               <label className="field__label">{t("profile.personal.phone")}</label>
-              <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+7…" />
+              <input className="input" value={phone} readOnly aria-describedby="profile-phone-note" />
+              <small id="profile-phone-note">{t("profile.personal.phone_note")}</small>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
               <SmallBtn onClick={cancelPersonal} disabled={savingPersonal}>{t("profile.personal.cancel")}</SmallBtn>
@@ -1288,11 +1294,12 @@ export function Profile() {
           {personalError && <div className="pre">{personalError}</div>}
           <div className="field">
             <label className="field__label">{t("profile.personal.name")}</label>
-            <input className="input" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder={t("profile.personal.name_ph")} />
+            <input className="input" value={fullName} maxLength={64} onChange={(e) => setFullName(e.target.value)} placeholder={t("profile.personal.name_ph")} />
           </div>
           <div className="field">
             <label className="field__label">{t("profile.personal.phone")}</label>
-            <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+7…" />
+            <input className="input" value={phone} readOnly aria-describedby="profile-phone-note-modal" />
+            <small id="profile-phone-note-modal">{t("profile.personal.phone_note")}</small>
           </div>
           <div className="actions actions--2">
             <button className="btn" onClick={cancelPersonal} disabled={savingPersonal} type="button">{t("profile.personal.cancel")}</button>

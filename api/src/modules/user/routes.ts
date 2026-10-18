@@ -6,11 +6,13 @@ import { fetchMe } from "./me.js";
 import {
   shmDeleteUserEmail,
   shmFetch,
+  shmGetMe,
   shmRequestUserEmailVerify,
   shmSetUserEmail,
   shmShpunAppAdminStatus,
   shmShpunAppReferralBonusDismiss,
   shmShpunAppReferralBonusStatus,
+  shmShpunAppTemplate,
   shmTelegramWebAuthBind,
   toFormUrlEncoded,
 } from "../../shared/shm/shmClient.js";
@@ -315,27 +317,29 @@ export async function userRoutes(app: FastifyInstance) {
     }
 
     const full_name = String((req.body as any)?.full_name ?? "").trim();
-    const phone     = String((req.body as any)?.phone     ?? "").trim();
-
-    if (!full_name && !phone) {
-      return reply.code(400).send({ ok: false, error: "empty_update" });
+    const phone = String((req.body as any)?.phone ?? "").trim();
+    if (full_name.length > 64) {
+      return reply.code(400).send({ ok: false, error: "full_name_too_long" });
     }
 
-    const r = await shmFetch<any>(s.shmSessionId, "v1/user", {
-      method: "POST",
-      body: {
-        ...(full_name ? { full_name } : {}),
-        ...(phone     ? { phone     } : {}),
-      },
-    });
-
-    if (!r.ok) {
-      return reply.code(r.status || 502).send({
-        ok: false, error: "shm_update_failed", shm: { status: r.status }, text: r.text,
-      });
+    // In SHM 3.x a phone is an account/login, not a simple user field. Do not
+    // silently add a second login or remove the existing one from this form.
+    const me = await shmGetMe(s.shmSessionId);
+    const current = Array.isArray((me.json as any)?.data) ? (me.json as any).data[0] : null;
+    if (!me.ok || !current) {
+      return reply.code(502).send({ ok: false, error: "profile_read_failed" });
+    }
+    if (phone !== String(current.phone ?? "").trim()) {
+      return reply.code(409).send({ ok: false, error: "phone_change_requires_separate_flow" });
     }
 
-    return reply.send({ ok: true });
+    const r = await shmShpunAppTemplate<any>(s.shmSessionId, "profile.name.update", { full_name });
+    const data = Array.isArray((r.json as any)?.data) ? (r.json as any).data[0] : (r.json as any)?.data ?? r.json;
+    if (!r.ok || Number(data?.ok) !== 1 || Number(data?.saved) !== 1) {
+      return reply.code(502).send({ ok: false, error: "profile_name_update_failed" });
+    }
+
+    return reply.send({ ok: true, full_name, phone });
   });
 
   // GET /user/email

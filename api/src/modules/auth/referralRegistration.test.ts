@@ -59,7 +59,11 @@ function startShmStub() {
       }
       if (url.pathname.endsWith("/v1/user") && req.method === "GET") {
         const s = sessionId ? sessions.get(sessionId) : undefined;
-        return res.end(JSON.stringify({ data: [{ user_id: s?.userId ?? 1, login: s?.login ?? "" }] }));
+        return res.end(JSON.stringify({ data: [{
+          user_id: s?.userId ?? 1,
+          login: s?.login ?? "",
+          phone: s?.login === "profile-update@gmail.com" ? "4796832075" : "",
+        }] }));
       }
       if (url.pathname.endsWith("/v1/template/shpun_app") && req.method === "POST") {
         const params = new URLSearchParams(body);
@@ -68,6 +72,9 @@ function startShmStub() {
           return res.end(JSON.stringify({ ok: 0, error: "not_authenticated" }));
         }
         if (params.get("action") === "profile.name.initialize") {
+          return res.end(JSON.stringify({ ok: 1, data: { ok: 1, saved: 1 } }));
+        }
+        if (params.get("action") === "profile.name.update") {
           return res.end(JSON.stringify({ ok: 1, data: { ok: 1, saved: 1 } }));
         }
         if (params.get("action") === "referrals.claim") {
@@ -187,6 +194,37 @@ test("registration uses the email as name when the optional field is empty", asy
   assert.equal(res.statusCode, 200);
   const nameCall = shmStub.calls.find((c) => c.body.includes("action=profile.name.initialize") && c.body.includes(`full_name=${encodeURIComponent(login)}`));
   assert.ok(nameCall);
+});
+
+test("profile name update uses the protected template and leaves the phone login untouched", async () => {
+  const registered = await register({ login: "profile-update@gmail.com", password: "supersecret1", mode: "register" });
+  assert.equal(registered.statusCode, 200);
+  const cookie = String(registered.headers["set-cookie"] ?? "").split(";")[0];
+  assert.ok(cookie.startsWith("sid="));
+
+  const before = shmStub.calls.length;
+  const updated = await app.inject({
+    method: "POST",
+    url: "/api/user/profile",
+    headers: { cookie },
+    payload: { full_name: "Updated Name", phone: "4796832075" },
+  });
+  assert.equal(updated.statusCode, 200);
+  assert.equal(JSON.parse(updated.body).full_name, "Updated Name");
+  const calls = shmStub.calls.slice(before);
+  assert.ok(calls.some((c) => c.body.includes("action=profile.name.update") && c.sessionId));
+  assert.equal(calls.filter((c) => c.method === "POST" && c.path.endsWith("/v1/user")).length, 0);
+
+  const beforeChangedPhone = shmStub.calls.length;
+  const refused = await app.inject({
+    method: "POST",
+    url: "/api/user/profile",
+    headers: { cookie },
+    payload: { full_name: "Another Name", phone: "4796832076" },
+  });
+  assert.equal(refused.statusCode, 409);
+  assert.equal(JSON.parse(refused.body).error, "phone_change_requires_separate_flow");
+  assert.equal(shmStub.calls.slice(beforeChangedPhone).filter((c) => c.body.includes("action=profile.name.update")).length, 0);
 });
 
 test("valid partner alias is attributed through the backend claim path", async () => {
