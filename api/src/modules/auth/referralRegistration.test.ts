@@ -44,7 +44,7 @@ function startShmStub() {
       res.setHeader("content-type", "application/json");
 
       if (url.pathname.endsWith("/v1/user") && req.method === "PUT") {
-        // Registration: {login,password,full_name[,partner_id]}
+        // Stock SHM registration: {login,password[,partner_id]}
         return res.end(JSON.stringify({ ok: 1 }));
       }
       if (url.pathname.endsWith("/v1/user") && req.method === "POST") {
@@ -66,6 +66,9 @@ function startShmStub() {
         if (!sessionId || sessionId !== params.get("session_id") || !sessions.has(sessionId)) {
           res.statusCode = 401;
           return res.end(JSON.stringify({ ok: 0, error: "not_authenticated" }));
+        }
+        if (params.get("action") === "profile.name.initialize") {
+          return res.end(JSON.stringify({ ok: 1, data: { ok: 1, saved: 1 } }));
         }
         if (params.get("action") === "referrals.claim") {
           const s = sessions.get(String(params.get("session_id") ?? ""));
@@ -159,7 +162,7 @@ test("registration without referral still works", async () => {
   assert.ok(!body.includes("partner_id"), "no partner_id must be sent for a direct registration");
 });
 
-test("registration sends the entered name with the partner ID at creation", async () => {
+test("registration initializes the entered name through the protected template", async () => {
   const login = "named@gmail.com";
   const res = await register({
     login,
@@ -170,8 +173,11 @@ test("registration sends the entered name with the partner ID at creation", asyn
   });
   assert.equal(res.statusCode, 200);
   const body = JSON.parse(shmRegisterBodies(login)[0] ?? "{}");
-  assert.equal(body.full_name, "Микита Тсыкаловский");
   assert.equal(body.partner_id, 777);
+  assert.equal(body.full_name, undefined, "the stock SHM registration route drops full_name");
+  const nameCall = shmStub.calls.find((c) => c.body.includes("action=profile.name.initialize") && c.body.includes("%D0%9C%D0%B8%D0%BA%D0%B8%D1%82%D0%B0"));
+  assert.ok(nameCall);
+  assert.ok(nameCall.sessionId?.startsWith("shm-sess-"), "the template must receive the authenticated cookie");
   assert.equal(shmStub.calls.filter((c) => c.method === "POST" && c.path.endsWith("/v1/user")).length, 0);
 });
 
@@ -179,8 +185,8 @@ test("registration uses the email as name when the optional field is empty", asy
   const login = "nameless@gmail.com";
   const res = await register({ login, password: "supersecret1", client: "", mode: "register" });
   assert.equal(res.statusCode, 200);
-  const body = JSON.parse(shmRegisterBodies(login)[0] ?? "{}");
-  assert.equal(body.full_name, login);
+  const nameCall = shmStub.calls.find((c) => c.body.includes("action=profile.name.initialize") && c.body.includes(`full_name=${encodeURIComponent(login)}`));
+  assert.ok(nameCall);
 });
 
 test("valid partner alias is attributed through the backend claim path", async () => {

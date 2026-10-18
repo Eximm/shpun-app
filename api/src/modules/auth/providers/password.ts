@@ -105,12 +105,11 @@ async function withTimeout<T>(
 async function shmRegister(
   login: string,
   password: string,
-  fullName: string,
   partnerId: number,
   clientIp: string,
   signal: AbortSignal
 ): Promise<{ ok: true } | { ok: false; status: number; detail: unknown }> {
-  const body: Record<string, any> = { login, password, full_name: fullName };
+  const body: Record<string, any> = { login, password };
   if (partnerId > 0) body.partner_id = partnerId;
 
   const r = await shmFetch<any>(null, "v1/user", {
@@ -185,6 +184,25 @@ async function shmLogin(
     shmUserId: shmUserId || undefined,
     login,
   };
+}
+
+async function shmInitializeClientName(
+  sessionId: string,
+  client: string,
+  signal: AbortSignal
+): Promise<boolean> {
+  const r = await shmFetch<any>(sessionId, "v1/template/shpun_app", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: toFormUrlEncoded({
+      session_id: sessionId,
+      action: "profile.name.initialize",
+      full_name: client,
+    }),
+    signal,
+  });
+  const data = Array.isArray(r.json?.data) ? r.json.data[0] : r.json?.data ?? r.json;
+  return r.ok && Number(data?.ok) === 1 && Number(data?.saved) === 1;
 }
 
 async function shmSetEmail(
@@ -294,7 +312,6 @@ export async function passwordAuth(body: any): Promise<AuthResult> {
         const reg = await shmRegister(
           login,
           password,
-          client,
           partnerId,
           clientIp,
           signal
@@ -318,9 +335,13 @@ export async function passwordAuth(body: any): Promise<AuthResult> {
 
         const sessionId = auth.shmSessionId;
 
-        await Promise.allSettled([
+        const [nameResult] = await Promise.allSettled([
+          shmInitializeClientName(sessionId, client, signal),
           shmSetEmail(sessionId, login, signal),
         ]);
+        if (nameResult.status !== "fulfilled" || !nameResult.value) {
+          console.warn("shm_registration_name_initialization_failed");
+        }
 
         await markShpunAppFlags(
           sessionId,
@@ -335,7 +356,6 @@ export async function passwordAuth(body: any): Promise<AuthResult> {
         const reg = await shmRegister(
           login,
           password,
-          client,
           partnerId,
           clientIp,
           signal
@@ -356,6 +376,10 @@ export async function passwordAuth(body: any): Promise<AuthResult> {
 
         const auth = await shmLogin(login, password, clientIp, signal);
         if (!auth.ok || !auth.shmSessionId) return auth;
+
+        if (!await shmInitializeClientName(auth.shmSessionId, client, signal)) {
+          console.warn("shm_telegram_registration_name_initialization_failed");
+        }
 
         return auth;
       }
