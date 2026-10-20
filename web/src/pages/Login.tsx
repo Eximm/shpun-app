@@ -400,7 +400,7 @@ export function Login() {
 
   const resetStrength  = pwdScore(resetPwd1);
   const resetPwdMatch  = resetPwd2.length === 0 || resetPwd1 === resetPwd2;
-  const canSubmitReset = resetPwd1.trim().length >= 10 && resetPwd2.length > 0
+  const canSubmitReset = resetPwd1.trim().length >= 6 && resetPwd2.length > 0
                          && resetPwd1 === resetPwd2 && !resetLoading
                          && !resetVerifying && !resetVerifyError;
 
@@ -446,7 +446,7 @@ export function Login() {
   const referralFieldError =
     partnerError ??
     (authModal === "register" && registerError?.field === "referral" ? registerError.message : "");
-  const canPasswordRegister = login.trim().length > 0 && password.trim().length >= 10
+  const canPasswordRegister = login.trim().length > 0 && password.trim().length >= 6
     && password2.length > 0 && password === password2 && !registerEmailCode;
 
   useEffect(() => {
@@ -817,7 +817,7 @@ export function Login() {
       setRegisterError({ field: "password", message: t("login.err.password_required") });
       return;
     }
-    if (password.trim().length < 10) {
+    if (password.trim().length < 6) {
       setRegisterError({ field: "password", message: t("login.err.password_too_short") });
       return;
     }

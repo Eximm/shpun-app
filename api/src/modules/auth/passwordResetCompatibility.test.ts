@@ -68,7 +68,7 @@ test("SHM 3 reset checks and confirmation include the login from the link", asyn
   assert.equal(verify.statusCode, 200);
   assert.equal(JSON.parse(verify.body).ok, true);
   const confirm = await app.inject({ method: "POST", url: "/api/auth/password-reset/confirm", payload: {
-    login: "second@gmail.com", token: "valid-reset-token", password: "new-password-123",
+    login: "second@gmail.com", token: "valid-reset-token", password: "a1B2c3",
   } });
   assert.equal(confirm.statusCode, 200);
   assert.equal(JSON.parse(confirm.body).ok, true);
@@ -92,10 +92,10 @@ test("HTTP 200 with a rejected SHM reset token is not treated as success", async
   assert.ok(calls.slice(before).every((call) => !call.action), "invalid recovery cannot mark a password as set");
 });
 
-test("password recovery rejects 9 characters before sending a reset request", async () => {
+test("password recovery rejects five characters before sending a reset request", async () => {
   const before = calls.length;
   const confirm = await app.inject({ method: "POST", url: "/api/auth/password-reset/confirm", payload: {
-    login: "second@gmail.com", token: "valid-reset-token", password: "123456789",
+    login: "second@gmail.com", token: "valid-reset-token", password: "12345",
   } });
   assert.equal(confirm.statusCode, 400);
   assert.equal(JSON.parse(confirm.body).error, "password_too_short");
@@ -112,7 +112,7 @@ test("rejected password installation never marks the onboarding step as done", a
   assert.equal(short.statusCode, 400);
   assert.equal(calls.length, before, "validation must not write password flags");
   const rejected = await app.inject({ method: "POST", url: "/api/auth/password/set",
-    headers: { cookie: "sid=password-install-test" }, payload: { password: "valid-length-password" } });
+    headers: { cookie: "sid=password-install-test" }, payload: { password: "a1B2c3" } });
   assert.equal(JSON.parse(rejected.body).ok, false);
   assert.deepEqual(calls.slice(before).map((call) => call.path), ["/shm/v1/user/passwd"],
     "SHM rejection must not call password.mark_set or onboarding.mark");
@@ -122,7 +122,7 @@ test("normal password change forwards the current password to SHM", async () => 
   const before = calls.length;
   const response = await app.inject({ method: "POST", url: "/api/auth/password/set",
     headers: { cookie: "sid=password-install-test" },
-    payload: { password: "new-password-123", old_password: "current-password" } });
+    payload: { password: "a1B2c3", old_password: "current-password" } });
   assert.equal(response.statusCode, 200);
   assert.equal(JSON.parse(response.body).ok, true);
   const changed = calls.slice(before).find((call) => call.path.endsWith("/v1/user/passwd"));

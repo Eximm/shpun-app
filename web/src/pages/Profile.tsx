@@ -809,7 +809,7 @@ export function Profile() {
   useEffect(() => { if (!pwdModal) { setPwd1(""); setPwd2(""); setOldPwd(""); setShowPwd1(false); setShowPwd2(false); setPwdError(null); setPwdBusy(false); } }, [pwdModal]);
 
   const pwdStrength     = useMemo(() => pwdScore(pwd1), [pwd1]);
-  const canSavePassword = pwd1.trim().length >= 10 && pwd2.length > 0 && pwd1 === pwd2 && (needsPassword || oldPwd.length > 0) && !pwdBusy;
+  const canSavePassword = pwd1.trim().length >= 6 && pwd2.length > 0 && pwd1 === pwd2 && (needsPassword || oldPwd.length > 0) && !pwdBusy;
 
   async function savePassword() {
     if (!canSavePassword) return;

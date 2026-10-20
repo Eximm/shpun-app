@@ -129,7 +129,7 @@ export function FirstLoginOnboardingModal({ open, me, onSkip }: Props) {
 
   const pwdStrength     = useMemo(() => pwdScore(pwd1), [pwd1]);
   const canSaveEmail    = isValidEmail(String(emailDraft || "").trim()) && !emailBusy;
-  const canSavePassword = pwd1.trim().length >= 10 && pwd2.length > 0 && pwd1 === pwd2 && !pwdBusy;
+  const canSavePassword = pwd1.trim().length >= 6 && pwd2.length > 0 && pwd1 === pwd2 && !pwdBusy;
 
   const currentStepNumber = step === "email" ? 1 : needEmail ? 2 : 1;
   const badge = totalSteps > 1

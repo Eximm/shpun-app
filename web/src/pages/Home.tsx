@@ -24,7 +24,7 @@ type ApiForecast = {
 };
 type ApiServicesResponse = { ok: true; summary: ApiSummary; forecast?: ApiForecast };
 type PaymentForecast = { amount: number | null; date: string | null; currency: string };
-type ForecastResp  = { ok: true; forecast?: PaymentForecast; raw?: any };
+type ForecastResp  = { ok: true; forecast?: PaymentForecast };
 type NotifLevel    = "info" | "success" | "error";
 type NotifEvent    = { event_id: string; ts: number; type?: string; level?: NotifLevel; title?: string; message?: string; meta?: any };
 type FeedResp      = { ok: true; items: NotifEvent[]; nextBefore: any };
@@ -71,8 +71,7 @@ function categoryOf(e: NotifEvent): Category {
 }
 function parsePaymentsForecast(input: any): { whenText?: string; amount?: number; currency?: string } | null {
   if (!input || typeof input !== "object") return null;
-  const data0 = Array.isArray(input.data) && input.data.length ? input.data[0] : null;
-  const amountRaw = input.amount ?? data0?.total;
+  const amountRaw = input.amount;
   const amountNumber = typeof amountRaw === "string" && amountRaw.trim() ? Number(amountRaw.replace(",", ".")) : amountRaw;
   const amount = typeof amountNumber === "number" && Number.isFinite(amountNumber) ? amountNumber : null;
   const date = input.date;
@@ -232,7 +231,7 @@ export function Home() {
     setPayLoading(true);
     try {
       const fc = await apiFetch("/payments/forecast", { method: "GET" }) as ForecastResp;
-      setPayForecast(parsePaymentsForecast(fc?.forecast ?? fc?.raw ?? null));
+      setPayForecast(parsePaymentsForecast(fc?.forecast ?? null));
     }
     catch { setPayForecast(null); }
     finally { setPayLoading(false); }
@@ -247,8 +246,12 @@ export function Home() {
   }
 
   useEffect(() => {
-    if (me?.ok) { void loadServicesSummary(); void loadPaymentsForecast(); void loadHomeNews(); }
-  }, [me?.ok]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (me?.ok) { void loadServicesSummary(); void loadHomeNews(); }
+  }, [me?.ok]);
+
+  useEffect(() => {
+    if (me?.ok) void loadPaymentsForecast();
+  }, [me?.ok, balance?.amount, bonusValue]);
 
   if (loading) {
     return (
@@ -315,7 +318,7 @@ export function Home() {
   const initials = displayName.trim().split(/\s+/).map((w: string) => w[0]).slice(0, 2).join("").toUpperCase() || "?";
 
   const nextPaySub = forecastWhenText
-    ? forecastWhenText
+    ? `${forecastWhenText}${payForecast?.amount === 0 ? ` · ${t("home.tiles.forecast.covered")}` : ""}`
     : servicesForecastText || undefined;
 
   const balanceAmount =

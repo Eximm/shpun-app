@@ -270,7 +270,7 @@ export async function passwordAuth(body: any): Promise<AuthResult> {
   }
 
   if (mode === "register") {
-    if (password.length < 10) {
+    if (password.length < 6) {
       return { ok: false, status: 400, error: "password_too_short" };
     }
     if (isTelegramStyleLogin(login)) {

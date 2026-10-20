@@ -15,7 +15,7 @@ export async function setPassword(
 ): Promise<SetPasswordResult> {
   const pwd = String(password || "").trim();
 
-  if (!pwd || pwd.length < 10) {
+  if (!pwd || pwd.length < 6) {
     return { ok: false, status: 400, error: "password_too_short" };
   }
 

@@ -16,20 +16,22 @@ function nonEmptyString(value: unknown): string | null {
   return result || null;
 }
 
-/**
- * SHM returns the nearest charge date at the response root and its total in
- * the first data row. Keep that upstream shape inside the API and expose the
- * small, stable contract the application actually needs.
- */
+/** SHM's root `date` is the response timestamp, not a charge date. */
 export function normalizePaymentForecast(raw: unknown): PaymentForecast {
   const source = raw && typeof raw === "object" ? raw as Record<string, any> : {};
   const first = Array.isArray(source.data) && source.data.length > 0 && source.data[0] && typeof source.data[0] === "object"
     ? source.data[0] as Record<string, any>
     : {};
+  const items = Array.isArray(first.items) ? first.items : [];
+  const dates = items
+    .map((item: any) => nonEmptyString(item?.expire))
+    .filter((date: string | null): date is string => date !== null && Number.isFinite(Date.parse(date)))
+    .sort((a: string, b: string) => Date.parse(a) - Date.parse(b));
+  const date = dates[0] ?? null;
 
   return {
-    amount: finiteNumber(first.total ?? source.total ?? source.amount),
-    date: nonEmptyString(source.date ?? first.date),
+    amount: date ? finiteNumber(first.total) : null,
+    date,
     currency: nonEmptyString(first.currency ?? source.currency) || "RUB",
   };
 }

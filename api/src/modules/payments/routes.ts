@@ -238,7 +238,7 @@ export async function paymentsRoutes(app: FastifyInstance) {
 
     const r = await shmFetch<any>(s.shmSessionId, "v1/user/pay/forecast", {
       method: "GET",
-      query: { limit: 25, offset: 0 },
+      query: { days: 90 },
     });
 
     if (!r.ok) {

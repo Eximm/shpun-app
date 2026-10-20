@@ -184,18 +184,36 @@ export function refetchMe(): Promise<MeResponse | null> {
   return doFetchMe();
 }
 
+function refreshVisibleAccount(): void {
+  if (document.visibilityState === "hidden" || !state.me || state.authRequired) return;
+  if (Date.now() - state.lastFetchedAt < 5_000) return;
+  void doFetchMe().catch(() => {});
+}
+
 export function useMe() {
   const [snap, setSnap] = useState<State>(state);
 
   useEffect(() => {
     const onChange = (s: State) => setSnap(s);
     listeners.add(onChange);
+    if (listeners.size === 1) {
+      window.addEventListener("focus", refreshVisibleAccount);
+      document.addEventListener("visibilitychange", refreshVisibleAccount);
+    }
 
     if (state.loading && state.lastFetchedAt === 0 && !hasFreshAuthPending()) {
       doFetchMe().catch(() => {});
+    } else if (state.me) {
+      refreshVisibleAccount();
     }
 
-    return () => { listeners.delete(onChange); };
+    return () => {
+      listeners.delete(onChange);
+      if (listeners.size === 0) {
+        window.removeEventListener("focus", refreshVisibleAccount);
+        document.removeEventListener("visibilitychange", refreshVisibleAccount);
+      }
+    };
   }, []);
 
   return {

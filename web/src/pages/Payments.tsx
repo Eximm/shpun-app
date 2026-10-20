@@ -2,6 +2,7 @@
 
 import { createPortal } from "react-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { refetchMe } from "../app/auth/useMe";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { apiFetch } from "../shared/api/client";
 import { useI18n } from "../shared/i18n";
@@ -21,7 +22,7 @@ type PaySystem = {
 
 type PaysystemsResp = { ok: true; items: PaySystem[]; raw?: any };
 type PaymentForecast = { amount: number | null; date: string | null; currency: string };
-type ForecastResp   = { ok: true; forecast?: PaymentForecast; raw?: any };
+type ForecastResp   = { ok: true; forecast?: PaymentForecast };
 
 type RequisitesResp = {
   ok: boolean;
@@ -76,8 +77,7 @@ function copyText(text: string) {
 
 function parseForecast(raw: any): { amount: number | null; date: string | null } {
   if (!raw || typeof raw !== "object") return { amount: null, date: null };
-  const data0 = Array.isArray(raw.data) && raw.data.length ? raw.data[0] : null;
-  const amountRaw = raw.amount ?? data0?.total;
+  const amountRaw = raw.amount;
   const amountNumber = typeof amountRaw === "string" && amountRaw.trim() ? Number(amountRaw.replace(",", ".")) : amountRaw;
   const amount = typeof amountNumber === "number" && Number.isFinite(amountNumber) ? amountNumber : null;
   const date   = typeof raw.date === "string" && raw.date ? raw.date : null;
@@ -428,7 +428,7 @@ export function Payments() {
       setPaySystems(rawItems);
       try {
         const fc = (await apiFetch("/payments/forecast", { method: "GET" })) as ForecastResp;
-        const nextForecast = fc?.forecast ?? fc?.raw ?? null;
+        const nextForecast = fc?.forecast ?? null;
         setForecast(nextForecast);
         if (!amount) {
           const { amount: fa } = parseForecast(nextForecast);
@@ -526,7 +526,7 @@ export function Payments() {
                   <button className="btn btn--primary" disabled={checkingPay} type="button" onClick={async () => {
                     setCheckingPay(true); setShowOverlay(false);
                     toast.info(t("payments.toast.checking_status"), { description: getMood("payment_checking") ?? t("payments.toast.checking_status.pay_desc") });
-                    await load(); setCheckingPay(false);
+                    await Promise.all([load(), refetchMe()]); setCheckingPay(false);
                   }}>
                     {checkingPay ? "…" : t("payments.overlay.refresh")}
                   </button>
@@ -572,10 +572,12 @@ export function Payments() {
           <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,0.35)", marginBottom: 8 }}>
             {t("payments.amount.title")}
           </div>
-          {forecastAmount && (
+          {forecastDate && forecastAmount !== null && (
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.42)", marginBottom: 8 }}>
-              {t("payments.forecast.hint")}: <strong style={{ color: "rgba(255,255,255,0.72)" }}>{fmtMoney(forecastAmount)}</strong>
-              {forecastDate ? ` · ${fmtForecastDate(forecastDate)}` : ""}
+              {t("payments.forecast.hint")}: <strong style={{ color: "rgba(255,255,255,0.72)" }}>
+                {forecastAmount === 0 ? t("payments.forecast.covered") : fmtMoney(forecastAmount)}
+              </strong>
+              {` · ${fmtForecastDate(forecastDate)}`}
             </div>
           )}
           <input

@@ -1723,7 +1723,7 @@ export async function authRoutes(app: FastifyInstance) {
     if (!token) {
       return reply.code(400).send({ ok: false, error: "token_required" });
     }
-    if (!password || password.length < 10) {
+    if (!password || password.length < 6) {
       return reply.code(400).send({ ok: false, error: "password_too_short" });
     }
 
