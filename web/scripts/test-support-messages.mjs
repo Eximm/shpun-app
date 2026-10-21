@@ -28,6 +28,8 @@ const dict = read("src/shared/i18n/dict.ts");
 /* ── Message soft delete ──────────────────────────────────────────────────── */
 
 assert("message menu exists (ActionMenu + delete action)", section.includes("<ActionMenu") && section.includes('t("support.admin.action.delete_message")'));
+const zIndexOf = selector => Number(css.match(new RegExp(`\\.${selector}\\s*\\{[^}]*?z-index:\\s*(\\d+)`))?.[1]);
+assert("portaled message menu stays above the dialog backdrop", zIndexOf("mon-actionMenu") > zIndexOf("modal"));
 assert("delete is confirmed", section.includes('window.confirm(t("support.admin.confirm_delete_message"))'));
 assert("delete calls the admin message endpoint", section.includes("/admin/support/messages/${message.id}") && section.includes('method: "DELETE"'));
 assert("deleted message renders an audit placeholder", section.includes("message.deletedAt") && section.includes("supportMsg--deleted") && section.includes('t("support.admin.message_deleted")'));

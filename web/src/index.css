@@ -9344,7 +9344,8 @@ button.reviews-star:not(:disabled) {
 
 .mon-actionMenu {
   position: fixed;
-  z-index: 1000;
+  /* Portaled to body, including when opened inside a .modal (z-index 10000). */
+  z-index: 10010;
   display: flex;
   flex-direction: column;
   gap: 2px;

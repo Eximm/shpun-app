@@ -391,8 +391,9 @@ function MessageBubble({ message, onDelete }: { message: TicketMessage; onDelete
           type="button"
           className="supportMsg__menuBtn"
           aria-haspopup="menu"
+          aria-expanded={Boolean(menuAnchor)}
           aria-label={t("support.admin.message_actions")}
-          onClick={(e) => setMenuAnchor(e.currentTarget)}
+          onClick={(e) => { const trigger = e.currentTarget; setMenuAnchor(current => current ? null : trigger); }}
         >
           {"\u22EE"}
         </button>
