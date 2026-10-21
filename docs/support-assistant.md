@@ -102,12 +102,12 @@ SupportShmPort получает личность и принадлежащую �
 
 ## Сборка на сервере
 
-Ветка `feat/support-knowledge`. Из существующего checkout ShpunApp:
+Рабочая ветка `main`. Из существующего checkout ShpunApp:
 
 ```sh
 git fetch origin
-git switch feat/support-knowledge
-git pull --ff-only origin feat/support-knowledge
+git switch main
+git pull --ff-only origin main
 docker compose --env-file /opt/shpun-app/.env build shpun-app-api shpun-app-web
 docker compose --env-file /opt/shpun-app/.env up -d shpun-app-api shpun-app-web
 ```

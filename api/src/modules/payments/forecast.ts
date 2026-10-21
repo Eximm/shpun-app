@@ -23,14 +23,21 @@ export function normalizePaymentForecast(raw: unknown): PaymentForecast {
     ? source.data[0] as Record<string, any>
     : {};
   const items = Array.isArray(first.items) ? first.items : [];
-  const dates = items
-    .map((item: any) => nonEmptyString(item?.expire))
-    .filter((date: string | null): date is string => date !== null && Number.isFinite(Date.parse(date)))
-    .sort((a: string, b: string) => Date.parse(a) - Date.parse(b));
-  const date = dates[0] ?? null;
+  const datedItems = items
+    .map((item: any) => ({ date: nonEmptyString(item?.expire), amount: finiteNumber(item?.next?.total) }))
+    .filter((item: { date: string | null; amount: number | null }): item is { date: string; amount: number | null } =>
+      item.date !== null && Number.isFinite(Date.parse(item.date)))
+    .sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
+  const date = datedItems[0]?.date ?? null;
+  const nextDay = date?.slice(0, 10);
+  const nextItems = datedItems.filter((item) => item.date.slice(0, 10) === nextDay);
+  const nextCharge = nextItems.length > 0 && nextItems.every((item) => item.amount !== null)
+    ? nextItems.reduce((sum, item) => sum + (item.amount ?? 0), 0)
+    : null;
+  const balance = finiteNumber(first.balance);
 
   return {
-    amount: date ? finiteNumber(first.total) : null,
+    amount: nextCharge === null || balance === null ? null : Math.max(0, nextCharge - balance),
     date,
     currency: nonEmptyString(first.currency ?? source.currency) || "RUB",
   };
