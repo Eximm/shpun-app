@@ -468,6 +468,9 @@ function ServiceRow({ s, expanded, connectOpen, onToggle, onToggleConnect, onRef
       )}
 
       {/* Действия */}
+      {mobileKey && !connectOpen && (
+        <p className="muted" style={{ margin: "6px 12px 10px", fontSize: 12 }}>{t("services.flex_plus.inside_hint")}</p>
+      )}
       {expanded && (
         <div className="svc-row__details" style={{ padding: "0 12px 10px", display: "flex", flexDirection: "column", gap: 6 }}>
           {s.descr ? <p className="p" style={{ marginTop: 0, marginBottom: 2, fontSize: 12 }}>{s.descr}</p> : null}
