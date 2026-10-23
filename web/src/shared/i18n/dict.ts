@@ -2,6 +2,12 @@
 export type Dict = Record<string, string>;
 
 export const RU: Dict = {
+  "services.flex_plus.import_primary_title": "Сначала добавьте основной Flex",
+  "services.flex_plus.import_primary_text": "Добавьте основной ключ в приложение, затем вернитесь сюда за Flex Plus. Так у вас будут оба ключа: основной на каждый день и дополнительный для ограничений в мобильной сети.",
+  "services.flex_plus.import_primary_hint": "Flex Plus станет доступен после нажатия импорта основного ключа.",
+  "services.flex_plus.import_primary_action": "Перейти к основному Flex",
+  "services.flex_plus.next_title": "Теперь добавьте Flex Plus",
+  "services.flex_plus.next_text": "Добавьте второй ключ в Happ, чтобы он был под рукой при ограничениях в мобильной сети. Для обычного подключения выбирайте основной Flex.",
   "services.assistant.title": "Нужна помощь с подключением?",
   "services.assistant.text": "Помощник проведёт по шагам: выбор услуги, оплата и настройка. Вы можете запустить его, когда понадобится.",
   "services.assistant.open": "Открыть помощник подключения",
@@ -708,7 +714,7 @@ export const RU: Dict = {
   "assistant.finish.done": "Всё работает",
   "assistant.finish.help": "Не получилось",
   "assistant.finish.mobile_key.title": "Есть ещё ключ для мобильной сети",
-  "assistant.finish.mobile_key.text": "Добавьте его в Happ для мобильного интернета.",
+  "assistant.finish.mobile_key.text": "Добавьте Flex Plus в Happ. Используйте основной Flex каждый день, а дополнительный — если основной не подключается в мобильной сети.",
   "assistant.finish.mobile_key.button": "Добавить мобильный ключ",
   "assistant.connect.exit_hint": "Можно продолжить позже.",
   "assistant.connect.exit": "На главную",
@@ -2775,6 +2781,12 @@ export const RU: Dict = {
 };
 
 export const EN: Dict = {
+  "services.flex_plus.import_primary_title": "Add the main Flex key first",
+  "services.flex_plus.import_primary_text": "Add the main key to your app, then come back for Flex Plus. You will have both keys: the main one for everyday use and the extra one for mobile network restrictions.",
+  "services.flex_plus.import_primary_hint": "Flex Plus becomes available after you start importing the main key.",
+  "services.flex_plus.import_primary_action": "Go to the main Flex key",
+  "services.flex_plus.next_title": "Now add Flex Plus",
+  "services.flex_plus.next_text": "Add the second key to Happ so it is ready when mobile networks are restricted. Use the main Flex key for everyday connections.",
   "services.assistant.title": "Need help getting connected?",
   "services.assistant.text": "The assistant guides you through choosing a service, payment and setup. Open it whenever you need help.",
   "services.assistant.open": "Open connection assistant",
@@ -3481,7 +3493,7 @@ export const EN: Dict = {
   "assistant.finish.done": "It works",
   "assistant.finish.help": "Something went wrong",
   "assistant.finish.mobile_key.title": "You also have a mobile network key",
-  "assistant.finish.mobile_key.text": "Add it to Happ for mobile internet.",
+  "assistant.finish.mobile_key.text": "Add Flex Plus to Happ. Use the main Flex key every day, and switch to the extra key if the main one cannot connect on a mobile network.",
   "assistant.finish.mobile_key.button": "Add mobile key",
   "assistant.connect.exit_hint": "You can continue later.",
   "assistant.connect.exit": "Home",

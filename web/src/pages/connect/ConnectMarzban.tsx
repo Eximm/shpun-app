@@ -8,6 +8,8 @@ import { apiFetch } from "../../shared/api/client";
 import { getMood } from "../../shared/payments-mood";
 import { toast } from "../../shared/ui/toast";
 import { useI18n } from "../../shared/i18n";
+import { useMe } from "../../app/auth/useMe";
+import { markFlexPrimaryImport } from "../../shared/flexPrimaryImport";
 
 type Props = {
   usi: number;
@@ -271,6 +273,12 @@ function deviceUpdatedDate(value: string) {
 
 export default function ConnectMarzban({ usi, service, onAssistantStepChange }: Props) {
   const { t } = useI18n();
+  const { me } = useMe();
+  function markPrimaryImport() {
+    if (service.category === "remnawave" && !service.parent) {
+      markFlexPrimaryImport(me?.profile.id ?? 0, usi);
+    }
+  }
 
   const assistantMode = useMemo(() => new URLSearchParams(window.location.search).get("assistant") === "1", []);
   const assistantStepKey = `connection-assistant.connect-step.v1:${usi}`;
@@ -452,6 +460,7 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
   async function openImport(useReserve = false, client: ClientKind = "happ") {
     const target = useReserve ? (reserveSubscriptionUrl ?? "") : primarySubscriptionUrl;
     if (!ready || !target) return;
+    markPrimaryImport();
     if (assistantMode) setAssistantStep("done");
     const targetClient: ClientKind = happOnly ? "happ" : client;
 
@@ -501,6 +510,8 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
       setQrDataUrl(dataUrl);
       setQrReserve(useReserve);
       setQrOpen(true);
+      markPrimaryImport();
+      if (assistantMode) setAssistantStep("done");
       toast.info(title, { description: text });
     } catch {
       toast.error(title, { description: t("connect.sub_prepare_error_desc") });
@@ -511,6 +522,10 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
     const target = useReserve ? (reserveSubscriptionUrl ?? "") : primarySubscriptionUrl;
     if (!target) return;
     const ok = await copyToClipboard(target);
+    if (ok) {
+      markPrimaryImport();
+      if (assistantMode) setAssistantStep("done");
+    }
     if (useReserve) { setCopiedReserve(ok); if (ok) setTimeout(() => setCopiedReserve(false), 1500); }
     else { setCopiedPrimary(ok); if (ok) setTimeout(() => setCopiedPrimary(false), 1500); }
     ok
