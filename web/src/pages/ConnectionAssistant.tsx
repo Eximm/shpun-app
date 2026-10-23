@@ -6,7 +6,7 @@ import { apiFetch } from "../shared/api/client";
 import { clearPendingEmailVerification, markPendingEmailVerification } from "../shared/emailVerificationState";
 import { useI18n } from "../shared/i18n";
 import { toastApiError } from "../shared/ui/toast/toastApiError";
-import { CONNECTION_ASSISTANT_SNOOZE_KEY as SNOOZE_KEY } from "../shared/connectionAssistant";
+import { CONNECTION_ASSISTANT_SNOOZE_KEY as SNOOZE_KEY, selectConnectionService } from "../shared/connectionAssistant";
 
 type ServiceStatus = "active" | "blocked" | "pending" | "not_paid" | "removed" | "error" | "init";
 
@@ -15,6 +15,7 @@ type ServiceItem = {
   serviceId: number;
   title: string;
   category: string;
+  parent?: number | null;
   status: ServiceStatus;
   statusRaw: string;
   price: number;
@@ -36,19 +37,6 @@ const EMAIL_KEY = "connection-assistant.email.v1";
 function readAssistantEmail(): string {
   try { return String(sessionStorage.getItem(EMAIL_KEY) || "").trim(); }
   catch { return ""; }
-}
-
-function statusWeight(status: ServiceStatus): number {
-  const weights: Record<ServiceStatus, number> = {
-    active: 0,
-    pending: 1,
-    init: 2,
-    not_paid: 3,
-    blocked: 4,
-    error: 5,
-    removed: 6,
-  };
-  return weights[status] ?? 99;
 }
 
 function detectDevice(): DeviceKind {
@@ -276,15 +264,7 @@ export function ConnectionAssistant() {
     return () => { cancelled = true; };
   }, [refetchMe]);
 
-  const current = useMemo(() => {
-    const targeted = Number.isFinite(targetUsi) && targetUsi > 0
-      ? items.find((item) => item.userServiceId === targetUsi && item.status !== "removed")
-      : null;
-    if (targeted) return targeted;
-    return items
-      .filter((item) => item.status !== "removed")
-      .sort((a, b) => statusWeight(a.status) - statusWeight(b.status))[0] ?? null;
-  }, [items, targetUsi]);
+  const current = useMemo(() => selectConnectionService(items, targetUsi), [items, targetUsi]);
 
   useEffect(() => {
     if (!current || !isWaiting(current.status)) return;

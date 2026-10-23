@@ -1,6 +1,6 @@
 // FILE: web/src/pages/connect/ConnectMarzban.tsx
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import QRCode from "qrcode";
@@ -16,9 +16,13 @@ type Props = {
   service: { title: string; status: string; statusRaw: string; category?: string; parent?: number | null };
   onDone?: () => void;
   onAssistantStepChange?: (step: "install" | "import" | "done") => void;
+  compact?: boolean;
+  platformOverride?: Platform;
+  onPlatformChange?: (platform: Platform) => void;
+  afterImport?: ReactNode;
 };
 
-type Platform = "android" | "ios" | "windows" | "mac" | "linux";
+export type Platform = "android" | "ios" | "windows" | "mac" | "linux";
 type Chip = "auto" | Platform;
 type RuntimeMode = "telegram-miniapp" | "browser" | "standalone-app";
 type ClientKind = "happ" | "v2ray" | "hiddify";
@@ -271,7 +275,7 @@ function deviceUpdatedDate(value: string) {
   });
 }
 
-export default function ConnectMarzban({ usi, service, onAssistantStepChange }: Props) {
+export default function ConnectMarzban({ usi, service, onAssistantStepChange, compact = false, platformOverride, onPlatformChange, afterImport }: Props) {
   const { t } = useI18n();
   const { me } = useMe();
   function markPrimaryImport() {
@@ -280,7 +284,7 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
     }
   }
 
-  const assistantMode = useMemo(() => new URLSearchParams(window.location.search).get("assistant") === "1", []);
+  const assistantMode = useMemo(() => !compact && new URLSearchParams(window.location.search).get("assistant") === "1", [compact]);
   const assistantStepKey = `connection-assistant.connect-step.v1:${usi}`;
   const variant = serviceVariant(service?.category);
   const happOnly = isHappOnlyService(service, variant);
@@ -292,7 +296,8 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
   const runtime = useMemo(() => detectRuntime(), []);
 
   const [chip, setChip] = useState<Chip>("auto");
-  const platform: Platform = chip === "auto" ? autoPlatform : chip;
+  const platform: Platform = platformOverride ?? (chip === "auto" ? autoPlatform : chip);
+  useEffect(() => { onPlatformChange?.(platform); }, [platform, onPlatformChange]);
 
   const [platformPickerOpen, setPlatformPickerOpen] = useState(false);
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
@@ -346,7 +351,7 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
 
   // Contextual Help comes from a configurable placement (never a hardcoded slug).
   useEffect(() => {
-    if (!(platform === "ios" && effectiveClient === "happ")) {
+    if (compact || !(platform === "ios" && effectiveClient === "happ")) {
       setIosHappHelp(null);
       return;
     }
@@ -358,7 +363,7 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
       .then((res) => { if (!cancelled) setIosHappHelp(res.article ?? null); })
       .catch(() => { if (!cancelled) setIosHappHelp(null); });
     return () => { cancelled = true; };
-  }, [platform, effectiveClient]);
+  }, [compact, platform, effectiveClient]);
 
   function setAssistantStep(step: AssistantFocusStep) {
     setAssistantStepState(step);
@@ -381,7 +386,7 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
         variant === "flex_plus" ? t("connectFlexPlus.ready_desc")
         : variant === "flex" ? t("connectFlex.ready_desc")
         : getMood("subscription_ready") ?? t("connect.sub_ready_desc");
-      toast.success(t("connect.ready"), { description: readyDesc });
+      if (!compact) toast.success(t("connect.ready"), { description: readyDesc });
     } catch (e: any) {
       setSubscriptionUrl("");
       setSubscriptionUrlMirror(null);
@@ -402,12 +407,12 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
   const ready = !loading && !error && !!subscriptionUrl;
 
   useEffect(() => {
-    if (assistantMode || !ready) return;
+    if (compact || assistantMode || !ready) return;
     const frame = window.requestAnimationFrame(() => {
       setupCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [assistantMode, ready]);
+  }, [compact, assistantMode, ready]);
 
   const scrollAssistantStepIntoView = useCallback((behavior: ScrollBehavior = "smooth") => {
     if (!assistantMode || !ready || assistantStep === "done") return;
@@ -496,7 +501,7 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
   async function openQr(useReserve = false) {
     const target = useReserve ? (reserveSubscriptionUrl ?? "") : primarySubscriptionUrl;
     if (!target) return;
-    const title = t(useReserve ? "connectMarzban.manual.reserve_qr_title" : "connect.qr_title");
+    const title = t(useReserve ? "connectMarzban.manual.reserve_qr_title" : compact ? "services.flex_plus.qr" : "connect.qr_title");
     const text = useReserve
       ? t("connectMarzban.manual.reserve_qr_text")
       : happOnly ? t("connectMarzban.manual.happ_only_qr_text") : t("connectMarzban.manual.qr_text");
@@ -622,7 +627,7 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
       <div className="cm__extraSub">{t("connectMarzban.qr.helper")}</div>
       <div className="cm__qrGrid">
         <button className="btn cm__qrAction" type="button" onClick={() => void copySub(false)}>
-          {copiedPrimary ? `\u2705 ${t("connect.copied")}` : `\u{1F4CB} ${t("connectMarzban.manual.primary_link")}`}
+          {copiedPrimary ? `\u2705 ${t("connect.copied")}` : `\u{1F4CB} ${t(compact ? "services.flex_plus.link" : "connectMarzban.manual.primary_link")}`}
         </button>
         {reserveSubscriptionUrl && (
           <button className="btn cm__qrAction cm__qrAction--secondary" type="button" onClick={() => void copySub(true)}>
@@ -630,7 +635,7 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
           </button>
         )}
         <button className="btn cm__qrAction" type="button" onClick={() => void openQr(false)}>
-          {"\u{1F4F1}"} {t("connectMarzban.manual.primary_qr")}
+          {"\u{1F4F1}"} {t(compact ? "services.flex_plus.qr" : "connectMarzban.manual.primary_qr")}
         </button>
         {reserveSubscriptionUrl && (
           <button className="btn cm__qrAction cm__qrAction--secondary" type="button" onClick={() => void openQr(true)}>
@@ -643,14 +648,14 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
 
   return (
     <div className={`cm${assistantMode && ready ? ` cm--assistant-focus cm--assistant-${assistantStep}` : ""}`}>
-      <div className="pre" style={{
+      {(!compact || !ready) && <div className="pre" style={{
         borderColor: ready ? "rgba(43,227,143,0.28)" : error ? "rgba(255,77,109,0.28)" : "rgba(77,215,255,0.20)",
         background: ready ? "rgba(43,227,143,0.06)" : error ? "rgba(255,77,109,0.06)" : "rgba(77,215,255,0.05)",
         display: "flex", alignItems: "center", gap: 8,
       }}>
         <span>{loading ? "\u23F3" : error ? "\u26A0\uFE0F" : "\u2705"}</span>
         <span>{loading ? t("connect.loading") : error ? t("connect.error") : t("connect.ready")}</span>
-      </div>
+      </div>}
 
       {!loading && error && (
         <div className="actions actions--1" style={{ marginTop: 8 }}>
@@ -688,6 +693,16 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
         </div>
       )}
 
+      {compact ? (
+        <div className="actions actions--1">
+          <button className="btn btn--primary" type="button" disabled={!ready} onClick={() => void openImport(false, "happ")}>
+            {t("services.flex_plus.add")}
+          </button>
+          <button className="btn" type="button" disabled={!ready} onClick={() => setClientPickerOpen(true)}>
+            {t("services.flex_plus.more_methods")}
+          </button>
+        </div>
+      ) : <>
       <div className="cm__selectorGrid">
         <div className="cm__selectorItem">
           <span className="p cawg__label">{t("connectAmneziaWG.device.label")}</span>
@@ -808,6 +823,8 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
         </div>
       </div>
 
+      {afterImport}
+
       {ready && (
         <div className={`card cm__devicesCard${assistantMode && assistantStep !== "done" ? " cm__assistantSecondary" : ""}`}>
           <div className="card__body cm__devicesCardBody">
@@ -824,6 +841,8 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
           </div>
         </div>
       )}
+
+      </>}
 
       {platformPickerOpen && createPortal(
         <div className="modal" role="dialog" aria-modal="true" onMouseDown={() => setPlatformPickerOpen(false)}>
@@ -865,6 +884,7 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
                 <button className="btn modal__close" type="button" onClick={() => setClientPickerOpen(false)} aria-label={t("common.close")}>{"\u00D7"}</button>
               </div>
               <div className="modal__content">
+                {!compact && <>
                 <div className="cm__extraTitle">{t("connectMarzban.client.recommended_title")}</div>
                 <div className="kv">{renderClientOption("happ")}</div>
                 {!happOnly && (
@@ -873,6 +893,7 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
                     <div className="kv">{availableClients.filter((kind) => kind !== "happ").map(renderClientOption)}</div>
                   </>
                 )}
+                </>}
                 <div className="cm__extraTitle">{t("connectMarzban.client.qr_title")}</div>
                 {manualQrBlock}
               </div>
@@ -966,7 +987,7 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange }: 
           <div className="card modal__card" onMouseDown={(e) => e.stopPropagation()}>
             <div className="card__body">
               <div className="modal__head">
-                <div className="modal__title">{"\u{1F4F1}"} {t(qrReserve ? "connectMarzban.manual.reserve_qr_title" : "connect.qr_title")}</div>
+                <div className="modal__title">{"\u{1F4F1}"} {t(qrReserve ? "connectMarzban.manual.reserve_qr_title" : compact ? "services.flex_plus.qr" : "connect.qr_title")}</div>
                 <button className="btn modal__close" type="button" onClick={() => setQrOpen(false)} aria-label={t("common.close")}>{"\u00D7"}</button>
               </div>
               <div className="modal__content">

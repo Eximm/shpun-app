@@ -11,8 +11,9 @@ import { getMood } from "../shared/payments-mood";
 import { useI18n } from "../shared/i18n";
 import { PasswordReminder } from "../app/auth/PasswordReminder";
 import { useMe } from "../app/auth/useMe";
-import { hasFlexPrimaryImport, useFlexPrimaryImport } from "../shared/flexPrimaryImport";
+import { flexPrimaryService, visibleFlexServices, useFlexPrimaryImport } from "../shared/flexPrimaryImport";
 import { shouldOfferConnectionAssistant } from "../shared/connectionAssistant";
+import type { Platform } from "./connect/ConnectMarzban";
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 
@@ -35,12 +36,7 @@ type ApiServiceItem = {
   parent?: number | null; // user_service_id родительской услуги (может отсутствовать)
 };
 
-type ApiSummary = {
-  total: number; active: number; blocked: number; pending: number;
-  notPaid: number; expiringSoon: number; monthlyCost: number; currency: string;
-};
-
-type ApiServicesResponse = { ok: true; items: ApiServiceItem[]; summary: ApiSummary };
+type ApiServicesResponse = { ok: true; items: ApiServiceItem[] };
 type ServiceKind = "amneziawg" | "marzban" | "flex" | "marzban_router" | "unknown";
 
 /* ─── Utils ─────────────────────────────────────────────────────────────── */
@@ -269,15 +265,16 @@ function Modal({ title, open, children, confirmText, cancelText, loading, error,
 
 /* ─── ConnectInline ──────────────────────────────────────────────────────── */
 
-function ConnectInline({ kind, service, mobileKeyUsi, onDone, t }: {
+function ConnectInline({ kind, service, mobileKey, onDone, t }: {
   kind: ServiceKind;
   service: ApiServiceItem;
-  mobileKeyUsi?: number | null;
+  mobileKey?: ApiServiceItem | null;
   onDone?: () => void;
   t: T;
 }) {
   const { me } = useMe();
   const primaryImportStarted = useFlexPrimaryImport(me?.profile.id ?? 0, service.userServiceId);
+  const [platform, setPlatform] = useState<Platform>();
   const assistantMode = new URLSearchParams(window.location.search).get("assistant") === "1";
   const [assistantFinished, setAssistantFinished] = useState(() => {
     if (!assistantMode) return false;
@@ -331,6 +328,23 @@ function ConnectInline({ kind, service, mobileKeyUsi, onDone, t }: {
     };
   }, [assistantFinished, assistantMode]);
 
+  const mobileKeyBlock = mobileKey && primaryImportStarted ? (
+    <div className="pre cm__additionalKey" ref={assistantFinishRef} style={{ marginTop: 16, borderColor: "rgba(96,165,250,.35)", background: "rgba(96,165,250,.06)" }}>
+      <strong>{t("services.flex_plus.next_title")}</strong>
+      <p className="p">{t("services.flex_plus.next_text")}</p>
+      {mobileKey.status === "active" ? (
+        <Suspense fallback={<p className="p">{t("services.loading_short")}</p>}>
+          <ConnectMarzban key={mobileKey.userServiceId} usi={mobileKey.userServiceId} service={mobileKey} compact platformOverride={platform} />
+        </Suspense>
+      ) : (
+        <>
+          <p className="p">{t(mobileKey.status === "pending" || mobileKey.status === "init" ? "services.flex_plus.preparing" : "services.flex_plus.unavailable")}</p>
+          <button className="btn" type="button" onClick={onDone}>{t("services.refresh_status")}</button>
+        </>
+      )}
+    </div>
+  ) : null;
+
   return (
     <div className="svc__connect assistant-connect-target" ref={connectRootRef}>
       {assistantMode && (
@@ -353,29 +367,17 @@ function ConnectInline({ kind, service, mobileKeyUsi, onDone, t }: {
               service={service}
               onDone={onDone}
               onAssistantStepChange={(step) => setAssistantFinished(step === "done")}
+              onPlatformChange={setPlatform}
+              afterImport={mobileKeyBlock}
             />
           ) : null}
           {kind === "marzban_router" ? <ConnectRouter    usi={service.userServiceId} service={service} onDone={onDone} /> : null}
           {kind === "unknown" ? <div className="pre">{t("services.connect.unavailable")}</div> : null}
         </Suspense>
         {assistantMode && kind !== "unknown" && (!["flex", "marzban"].includes(kind) || assistantFinished) && (
-          <div className="assistant-finish" ref={assistantFinishRef}>
+          <div className="assistant-finish" ref={mobileKey && primaryImportStarted ? undefined : assistantFinishRef}>
             <div className="assistant-finish__title">{t("assistant.finish.title")}</div>
             <p>{t("assistant.finish.text")}</p>
-            {mobileKeyUsi && primaryImportStarted ? (
-              <div className="assistant-mobile-key">
-                <span aria-hidden="true">📱</span>
-                <div>
-                  <strong>{t("assistant.finish.mobile_key.title")}</strong>
-                  <small>{t("assistant.finish.mobile_key.text")}</small>
-                </div>
-                <button className="btn btn--primary" type="button" onClick={() => {
-                  window.location.assign(`/services?usi=${encodeURIComponent(String(mobileKeyUsi))}&connect=1&assistant=1`);
-                }}>
-                  {t("assistant.finish.mobile_key.button")}
-                </button>
-              </div>
-            ) : null}
             <div className="actions actions--2">
               <button className="btn btn--primary" type="button" onClick={() => {
                 try {
@@ -400,9 +402,9 @@ function ConnectInline({ kind, service, mobileKeyUsi, onDone, t }: {
 
 /* ─── ServiceRow — одна услуга ───────────────────────────────────────────── */
 
-function ServiceRow({ s, expanded, connectOpen, onToggle, onToggleConnect, onRefresh, onAskDelete, onAskStop, t, isChild = false, mobileKeyUsi = null }: {
+function ServiceRow({ s, expanded, connectOpen, onToggle, onToggleConnect, onRefresh, onAskDelete, onAskStop, t, isChild = false, mobileKey = null }: {
   s: ApiServiceItem; expanded: boolean; connectOpen: boolean; isChild?: boolean;
-  mobileKeyUsi?: number | null;
+  mobileKey?: ApiServiceItem | null;
   onToggle: () => void; onToggleConnect: () => void; onRefresh: () => void;
   onAskDelete: (s: ApiServiceItem) => void; onAskStop: (s: ApiServiceItem) => void; t: T;
 }) {
@@ -511,7 +513,7 @@ function ServiceRow({ s, expanded, connectOpen, onToggle, onToggleConnect, onRef
             </div>
           )}
 
-          {connectOpen && canConnect && <ConnectInline kind={kind} service={s} mobileKeyUsi={mobileKeyUsi} onDone={onRefresh} t={t} />}
+          {connectOpen && canConnect && <ConnectInline kind={kind} service={s} mobileKey={mobileKey} onDone={onRefresh} t={t} />}
 
           {!isChild && canStopStatus(s.status) && (
             <button className="btn" onClick={() => onAskStop(s)} type="button" style={{ width: "100%", fontSize: 11, color: "rgba(255,255,255,.40)", borderColor: "rgba(255,255,255,.08)" }}>
@@ -537,14 +539,9 @@ function ServiceCard({ main, children, expandedId, connectOpenId, onToggle, onTo
   onToggle: (id: number) => void; onToggleConnect: (id: number) => void; onRefresh: () => void;
   onAskDelete: (s: ApiServiceItem) => void; onAskStop: (s: ApiServiceItem) => void; t: T;
 }) {
-  const { me } = useMe();
-  const primaryImportStarted = useFlexPrimaryImport(me?.profile.id ?? 0, main.userServiceId);
-  const assistantMode = new URLSearchParams(window.location.search).get("assistant") === "1";
-  const [primaryHintOpen, setPrimaryHintOpen] = useState(false);
-  const needsPrimaryImport = main.category === "remnawave" && main.status === "active" && !primaryImportStarted;
   const tint = statusTint(main.status);
-  const hasWL = children.length > 0;
-  const mobileKeyUsi = children.find((child) => child.status === "active" && isFlexPlus(child.category))?.userServiceId ?? null;
+  const mobileKey = main.category === "remnawave" ? children.find((child) => isFlexPlus(child.category) && child.status !== "removed") ?? null : null;
+  const visibleChildren = children.filter((child) => flexPrimaryService(child, [main, ...children]) === child);
 
   const pulseAnim =
     main.status === "blocked" || main.status === "error"
@@ -572,22 +569,12 @@ function ServiceCard({ main, children, expandedId, connectOpenId, onToggle, onTo
         onRefresh={onRefresh}
         onAskDelete={onAskDelete}
         onAskStop={onAskStop}
-        mobileKeyUsi={mobileKeyUsi}
+        mobileKey={mobileKey}
         t={t}
       />
 
-      {!assistantMode && primaryImportStarted && connectOpenId === main.userServiceId && mobileKeyUsi && (
-        <div className="pre" style={{ margin: 12 }}>
-          <strong>{t("services.flex_plus.next_title")}</strong>
-          <p className="p">{t("services.flex_plus.next_text")}</p>
-          <button className="btn btn--primary" type="button" onClick={() => onToggleConnect(mobileKeyUsi)}>
-            {t("assistant.finish.mobile_key.button")}
-          </button>
-        </div>
-      )}
-
       {/* WL дочерние ключи */}
-      {hasWL && children.filter((child) => !(assistantMode && needsPrimaryImport && isFlexPlus(child.category))).map((child) => (
+      {visibleChildren.map((child) => (
         <React.Fragment key={child.userServiceId}>
           {/* Разделитель с меткой */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 12px", margin: "2px 0" }}>
@@ -600,47 +587,22 @@ function ServiceCard({ main, children, expandedId, connectOpenId, onToggle, onTo
           </div>
 
           {/* Дочерняя карточка */}
-          <div style={{ background: "rgba(96,165,250,.04)", opacity: needsPrimaryImport && isFlexPlus(child.category) ? 0.55 : 1 }}>
+          <div style={{ background: "rgba(96,165,250,.04)" }}>
             <ServiceRow
               s={child}
               isChild
               expanded={expandedId === child.userServiceId}
-              connectOpen={connectOpenId === child.userServiceId && !(needsPrimaryImport && isFlexPlus(child.category))}
+              connectOpen={connectOpenId === child.userServiceId}
               onToggle={() => onToggle(child.userServiceId)}
-              onToggleConnect={() => {
-                if (needsPrimaryImport && isFlexPlus(child.category)) setPrimaryHintOpen(true);
-                else onToggleConnect(child.userServiceId);
-              }}
+              onToggleConnect={() => onToggleConnect(child.userServiceId)}
               onRefresh={onRefresh}
               onAskDelete={onAskDelete}
               onAskStop={onAskStop}
               t={t}
             />
           </div>
-          {needsPrimaryImport && isFlexPlus(child.category) && (
-            <p className="muted" style={{ margin: "8px 12px", fontSize: 12 }}>{t("services.flex_plus.import_primary_hint")}</p>
-          )}
         </React.Fragment>
       ))}
-      {createPortal(<Modal
-        open={primaryHintOpen}
-        title={t("services.flex_plus.import_primary_title")}
-        confirmText={t("services.flex_plus.import_primary_action")}
-        cancelText={t("common.close")}
-        closeLabel={t("common.close")}
-        footerHint=""
-        onClose={() => setPrimaryHintOpen(false)}
-        onConfirm={() => {
-          setPrimaryHintOpen(false);
-          if (connectOpenId !== main.userServiceId) onToggleConnect(main.userServiceId);
-          window.setTimeout(() => {
-            document.querySelector(`[data-usi="${main.userServiceId}"] .svc__connect`)
-              ?.scrollIntoView({ behavior: "smooth", block: "start" });
-          }, 120);
-        }}
-      >
-        <p className="p">{t("services.flex_plus.import_primary_text")}</p>
-      </Modal>, document.body)}
     </div>
   );
 }
@@ -674,7 +636,7 @@ export function Services() {
   const [showInitialLoading, setShowInitialLoading] = useState(false);
   const [error,    setError]    = useState<unknown>(null);
   const [items,    setItems]    = useState<ApiServiceItem[]>([]);
-  const [summary,  setSummary]  = useState<ApiSummary | null>(null);
+  const visibleItems = useMemo(() => visibleFlexServices(items), [items]);
 
   const [expandedId,    setExpandedId]    = useState<number | null>(null);
   const [connectOpenId, setConnectOpenId] = useState<number | null>(null);
@@ -729,7 +691,6 @@ export function Services() {
     try {
       const r = await apiFetch("/services", { method: "GET" }) as ApiServicesResponse;
       setItems(r.items || []);
-      setSummary(r.summary || null);
       if (toastOnSuccess) toast.info(t("services.toast.updated"), { description: getMood("service_status_updated") ?? t("services.toast.updated_desc") });
     } catch (e) {
       setError(e);
@@ -791,16 +752,9 @@ export function Services() {
     if (!item) return;
 
     focusedUsiRef.current = target;
-    // A direct assistant link to Plus starts with the primary key too.
-    if (sp.get("assistant") === "1" && isFlexPlus(item.category) && item.parent) {
-      const parentId = item.parent;
-      const primary = items.find((candidate) => candidate.userServiceId === parentId);
-      if (primary?.category === "remnawave" && primary.status === "active" &&
-          !hasFlexPrimaryImport(me.profile.id, primary.userServiceId)) {
-        item = primary;
-        target = primary.userServiceId;
-      }
-    }
+    // Links to a bundled key always open its main service.
+    item = flexPrimaryService(item, items);
+    target = item.userServiceId;
     setOpenGroups((cur) => ({ ...cur, [detectKind(item.category)]: true }));
     setExpandedId(target);
     if (sp.get("connect") === "1" && item.status === "active") setConnectOpenId(target);
@@ -844,8 +798,9 @@ export function Services() {
     };
 
     // Разделяем на основные (parent=null/undefined) и дочерние WL (parent — число)
-    const mainItems = items.filter(x => !x.parent);
-    const wlItems   = items.filter(x => !!x.parent);
+    const serviceIds = new Set(items.map((item) => item.userServiceId));
+    const mainItems = items.filter(x => !x.parent || !serviceIds.has(x.parent));
+    const wlItems   = items.filter(x => x.parent && serviceIds.has(x.parent));
 
     // Индекс WL по parent userServiceId
     const wlByParent = new Map<number, ApiServiceItem[]>();
@@ -919,12 +874,9 @@ export function Services() {
     );
   }
 
-  const s              = summary;
-  const hasServices    = items.length > 0;
-  const fallbackActive = items.filter((x) => x.status === "active").length;
-  const fallbackAttn   = items.filter((x) => x.status === "blocked" || x.status === "not_paid").length;
-  const attnCount      = (s?.blocked ?? 0) + (s?.notPaid ?? 0) || fallbackAttn;
-  const activeCount    = s?.active ?? fallbackActive;
+  const hasServices    = visibleItems.length > 0;
+  const attnCount      = visibleItems.filter((x) => x.status === "blocked" || x.status === "not_paid").length;
+  const activeCount    = visibleItems.filter((x) => x.status === "active").length;
   const hasActiveServices = activeCount > 0;
   const stopErrText    = stopError   ? normalizeError(stopError).description   : null;
   const deleteErrText  = deleteError ? normalizeError(deleteError).description : null;
@@ -986,7 +938,7 @@ export function Services() {
         </div>
       )}
 
-      {shouldOfferConnectionAssistant(items) && new URLSearchParams(location.search).get("assistant") !== "1" && (
+      {shouldOfferConnectionAssistant(visibleItems) && new URLSearchParams(location.search).get("assistant") !== "1" && (
         <div className="card" style={{ marginTop: 12, marginBottom: 12 }}>
           <div className="card__body">
             <h2 className="h1">{t("services.assistant.title")}</h2>
@@ -1004,7 +956,7 @@ export function Services() {
         if (!arr?.length) return null;
         const open = !!openGroups[kind];
         const icon = kindIcon(kind);
-        const total = arr.reduce((acc, g) => acc + 1 + g.children.length, 0);
+        const total = arr.reduce((acc, g) => acc + visibleFlexServices([g.main, ...g.children]).length, 0);
 
         return (
           <div className="section services-group" key={kind}>

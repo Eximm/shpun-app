@@ -13,6 +13,7 @@ const assistant = read("src/pages/ConnectionAssistant.tsx");
 const order = read("src/pages/ServicesOrder.tsx");
 const services = read("src/pages/Services.tsx");
 const connector = read("src/pages/connect/ConnectMarzban.tsx");
+const css = read("src/index.css");
 const authGate = read("src/app/auth/AuthGate.tsx");
 const appShell = read("src/main.tsx");
 const emailState = read("src/shared/emailVerificationState.ts");
@@ -56,7 +57,8 @@ assert("assistant has explicit install and import actions", connector.includes('
 assert("connector offers an exit to Home", services.includes('t("assistant.connect.exit")') && services.includes('window.location.assign("/home")'));
 assert("waiting screens offer an exit to Home", assistant.includes("onClick={exitToHome}"));
 assert("finish screen can leave the assistant", services.includes('t("assistant.finish.done")') && services.includes('window.location.assign("/home")'));
-assert("optional mobile key reminder remains", services.includes('t("assistant.finish.mobile_key.button")'));
+assert("additional mobile key is inside the primary connector", services.includes("mobileKey && primaryImportStarted") && services.includes("service={mobileKey} compact"));
+assert("assistant focus does not dim or block the second key", services.includes('className="pre cm__additionalKey"') && css.includes(":not(.cm__setupCard):not(.cm__additionalKey)"));
 
 /* Required localized copy exists in both dictionaries. */
 for (const key of [

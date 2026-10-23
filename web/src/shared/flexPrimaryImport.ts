@@ -3,6 +3,17 @@ import { useSyncExternalStore } from "react";
 const changed = "shpun:flex-primary-import";
 const started = new Set<string>();
 
+type FlexServiceRef = { userServiceId: number; category: string; parent?: number | null };
+
+export function flexPrimaryService<T extends FlexServiceRef>(service: T, items: readonly T[]): T {
+  if (service.category !== "remnawave-wl" || !service.parent) return service;
+  return items.find((item) => item.userServiceId === service.parent && item.category === "remnawave") ?? service;
+}
+
+export function visibleFlexServices<T extends FlexServiceRef>(items: readonly T[]): T[] {
+  return items.filter((item) => flexPrimaryService(item, items) === item);
+}
+
 function key(userId: number, serviceId: number) {
   return `flex.primary-import.v1:${userId}:${serviceId}`;
 }
