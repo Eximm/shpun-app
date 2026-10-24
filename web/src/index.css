@@ -3979,6 +3979,18 @@ button, a { -webkit-tap-highlight-color: transparent; }
   min-width: 210px;
   box-shadow: 0 8px 22px rgba(77,215,255,0.16);
 }
+.cm__deviceKeyActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.cm__deviceKeyActions .btn {
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 12px;
+  font-size: 12px;
+  white-space: normal;
+}
 .cm__devicesModal {
   width: min(620px, 100%);
 }

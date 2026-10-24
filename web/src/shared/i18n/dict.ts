@@ -2,6 +2,9 @@ export type Lang = "ru" | "en";
 export type Dict = Record<string, string>;
 
 export const RU: Dict = {
+  "connectMarzban.devices.bundle_title": "Устройства",
+  "connectMarzban.devices.choose_key": "Выберите ключ, чтобы посмотреть или удалить устройства.",
+  "connectMarzban.devices.primary_key": "Основной Flex",
   "services.flex_plus.after_primary_hint": "Добавьте основной ключ и вернитесь сюда за Flex Plus — дополнительным ключом для мобильных сетей, подключения при работе глушилок и других сложных ограничениях.",
   "services.flex_plus.inside_hint": "Flex Plus теперь внутри настройки основного Flex.",
   "services.flex_plus.link": "Ссылка второго ключа",
@@ -2782,6 +2785,9 @@ export const RU: Dict = {
 };
 
 export const EN: Dict = {
+  "connectMarzban.devices.bundle_title": "Devices",
+  "connectMarzban.devices.choose_key": "Choose a key to view or remove its devices.",
+  "connectMarzban.devices.primary_key": "Main Flex",
   "services.flex_plus.after_primary_hint": "Add the main key, then come back here for Flex Plus — an extra key for mobile networks, signal jamming and other difficult network restrictions.",
   "services.flex_plus.inside_hint": "Flex Plus is now inside the main Flex setup.",
   "services.flex_plus.link": "Second key link",

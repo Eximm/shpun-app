@@ -20,6 +20,7 @@ type Props = {
   platformOverride?: Platform;
   onPlatformChange?: (platform: Platform) => void;
   afterImport?: ReactNode;
+  additionalDevicesUsi?: number;
 };
 
 export type Platform = "android" | "ios" | "windows" | "mac" | "linux";
@@ -275,7 +276,7 @@ function deviceUpdatedDate(value: string) {
   });
 }
 
-export default function ConnectMarzban({ usi, service, onAssistantStepChange, compact = false, platformOverride, onPlatformChange, afterImport }: Props) {
+export default function ConnectMarzban({ usi, service, onAssistantStepChange, compact = false, platformOverride, onPlatformChange, afterImport, additionalDevicesUsi }: Props) {
   const { t } = useI18n();
   const { me } = useMe();
   function markPrimaryImport() {
@@ -320,6 +321,8 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange, co
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [deepLinkFallback, setDeepLinkFallback] = useState<DeepLinkFallback | null>(null);
   const [devicesOpen, setDevicesOpen] = useState(false);
+  const [devicesUsi, setDevicesUsi] = useState(usi);
+  const devicesRequestRef = useRef(0);
   const [devicesLoading, setDevicesLoading] = useState(false);
   const [devicesError, setDevicesError] = useState("");
   const [devices, setDevices] = useState<SubscriptionDevice[]>([]);
@@ -560,34 +563,40 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange, co
     openClientStore(client);
   }
 
-  async function loadDevices() {
+  async function loadDevices(targetUsi = devicesUsi) {
+    const requestId = ++devicesRequestRef.current;
     setDevicesLoading(true);
     setDevicesError("");
     try {
       const response = await apiFetch<{
         devices?: SubscriptionDevice[];
         limit?: number | null;
-      }>(`/services/${encodeURIComponent(String(usi))}/devices`);
+      }>(`/services/${encodeURIComponent(String(targetUsi))}/devices`);
+      if (requestId !== devicesRequestRef.current) return;
       setDevices(Array.isArray(response?.devices) ? response.devices : []);
       setDeviceLimit(typeof response?.limit === "number" ? response.limit : null);
     } catch (error: any) {
+      if (requestId !== devicesRequestRef.current) return;
       setDevicesError(String(error?.message || t("connectMarzban.devices.load_error")));
     } finally {
-      setDevicesLoading(false);
+      if (requestId === devicesRequestRef.current) setDevicesLoading(false);
     }
   }
 
-  function openDevices() {
+  function openDevices(targetUsi = usi) {
+    setDevicesUsi(targetUsi);
     setDevicesOpen(true);
     setDeletingDevice(null);
-    void loadDevices();
+    setDevices([]);
+    setDeviceLimit(null);
+    void loadDevices(targetUsi);
   }
 
   async function deleteDevice() {
     if (!deletingDevice || deletePending) return;
     setDeletePending(true);
     try {
-      await apiFetch(`/services/${encodeURIComponent(String(usi))}/devices`, {
+      await apiFetch(`/services/${encodeURIComponent(String(devicesUsi))}/devices`, {
         method: "DELETE",
         body: { hwid: deletingDevice.id },
       });
@@ -831,13 +840,18 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange, co
             <div className="cm__devicesIntro">
               <span className="cm__devicesIntroIcon" aria-hidden="true">{"\u{1F4F1}"}</span>
               <div>
-                <div className="cm__extraTitle">{t("connectMarzban.devices.title")}</div>
-                <div className="cm__extraSub">{t("connectMarzban.devices.desc")}</div>
+                <div className="cm__extraTitle">{t(additionalDevicesUsi ? "connectMarzban.devices.bundle_title" : "connectMarzban.devices.title")}</div>
+                <div className="cm__extraSub">{t(additionalDevicesUsi ? "connectMarzban.devices.choose_key" : "connectMarzban.devices.desc")}</div>
               </div>
             </div>
-            <button className="btn btn--primary cm__devicesManage" type="button" onClick={openDevices}>
+            {additionalDevicesUsi ? (
+              <div className="cm__deviceKeyActions">
+                <button className="btn btn--soft" type="button" onClick={() => openDevices(usi)}>{t("connectMarzban.devices.primary_key")}</button>
+                <button className="btn btn--soft" type="button" onClick={() => openDevices(additionalDevicesUsi)}>{t("services.flex_plus.next_title")}</button>
+              </div>
+            ) : <button className="btn btn--primary cm__devicesManage" type="button" onClick={() => openDevices()}>
               {t("connectMarzban.devices.manage")}
-            </button>
+            </button>}
           </div>
         </div>
       )}
@@ -909,7 +923,7 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange, co
             <div className="card__body">
               <div className="modal__head">
                 <div>
-                  <div className="modal__title">{t("connectMarzban.devices.modal_title")}</div>
+                  <div className="modal__title">{t("connectMarzban.devices.modal_title")}{additionalDevicesUsi ? ` · ${t(devicesUsi === usi ? "connectMarzban.devices.primary_key" : "services.flex_plus.next_title")}` : ""}</div>
                   <div className="cm__extraSub">
                     {deviceLimit
                       ? t("connectMarzban.devices.counter").replace("{count}", String(devices.length)).replace("{limit}", String(deviceLimit))

@@ -373,6 +373,7 @@ function ConnectInline({ kind, service, mobileKey, onDone, t }: {
               onAssistantStepChange={(step) => setAssistantFinished(step === "done")}
               onPlatformChange={setPlatform}
               afterImport={mobileKeyBlock}
+              additionalDevicesUsi={mobileKey?.userServiceId}
             />
           ) : null}
           {kind === "marzban_router" ? <ConnectRouter    usi={service.userServiceId} service={service} onDone={onDone} /> : null}
