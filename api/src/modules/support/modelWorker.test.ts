@@ -140,3 +140,9 @@ test("external-document URLs cannot target local hosts, credentials or arbitrary
  for(const url of ['http://docs.happ.info/','https://127.0.0.1/','https://docs.happ.info.evil.example/','https://user:secret@docs.happ.info/','https://docs.happ.info:8443/','https://docs.happ.info/?token=secret','https://example.org/'])assert.equal(allowedSupportURL(url),false,url);
  assert.equal(allowedSupportURL('https://docs.happ.info/docs'),true);
 });
+test("a quote tied to the wrong message cannot become learned knowledge",async()=>{
+ const {item,answer}=await source();
+ provider.setSupportModelTransport(async()=>envelope({title:'Неверно связанный эпизод',problem:'Другой вопрос из того же диалога',answer,keywords:['happ','dns'],risk:'low',solution_message_id:0,confirmation_message_id:item.confirmationMessageId,evidence_quote:answer,reason:'Проверка неверной привязки'}));
+ worker.queueModelLearning();await worker.processSupportModelJob();
+ assert.equal(learning.getLearnedCase(item.id)?.status,'draft');
+});
