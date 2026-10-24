@@ -35,6 +35,7 @@ import {
 import { pick, readBody, readMultipart, sendSupportError, sessionUser } from "./http.js";
 import type { UploadFile } from "./attachmentService.js";
 import { suggestSupportReply } from "./assistant.js";
+import { findLearnedCases, listLearnedCases, learningStats, scanSupportLearning, reviewLearnedCase, LearningError } from "./learning.js";
 
 function parseStatusFilter(value: unknown): TicketStatus[] | undefined {
   const raw = String(value ?? "").trim();
@@ -83,6 +84,26 @@ async function requireAdmin(req: any, reply: any) {
 }
 
 export async function supportAdminRoutes(app: FastifyInstance) {
+  app.get("/admin/support/learning",async(req,reply)=>{
+    if(!await requireAdmin(req,reply)) return;
+    return reply.send({ok:true,items:listLearnedCases(),stats:learningStats()});
+  });
+  app.post("/admin/support/learning/analyze",async(req,reply)=>{
+    if(!await requireAdmin(req,reply)) return;
+    return reply.send({ok:true,...scanSupportLearning(200)});
+  });
+  app.patch("/admin/support/learning/:id",async(req,reply)=>{
+    const session=await requireAdmin(req,reply); if(!session) return;
+    try {
+      const id=Number((req.params as any).id);
+      if(!Number.isSafeInteger(id)||id<=0) return reply.code(400).send({ok:false,error:"invalid_case_id"});
+      const item=reviewLearnedCase(id,readBody(req) as any,sessionUser(session)!.userId);
+      return reply.send({ok:true,item});
+    } catch(error) {
+      if(error instanceof LearningError) return reply.code(error.status).send({ok:false,error:error.code});
+      return sendSupportError(reply,error);
+    }
+  });
   app.get("/admin/support/tickets/:id/assistant", async (req, reply) => {
     try {
       const session = await requireAdmin(req, reply);
@@ -93,7 +114,8 @@ export async function supportAdminRoutes(app: FastifyInstance) {
       }
       const ticket = getAdminTicket(id);
       if (!ticket) return reply.code(404).send({ ok: false, error: "ticket_not_found" });
-      return reply.send({ ok: true, assistant: suggestSupportReply(ticket) });
+      const last=ticket.messages.filter(m=>m.authorType==="user"&&!m.deletedAt&&!m.isInternalNote).at(-1);
+      return reply.send({ ok: true, assistant: suggestSupportReply(ticket), learned:findLearnedCases(last?.text??"",ticket.serviceCategory).map(r=>({id:r.item.id,title:r.item.title,answer:r.item.answer,conditions:r.item.conditions,sourceTicketId:r.item.sourceTicketId,score:r.score})) });
     } catch (error) {
       return sendSupportError(reply, error);
     }

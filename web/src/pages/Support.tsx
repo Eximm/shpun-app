@@ -28,6 +28,7 @@ type TicketStatus =
   | "closed";
 
 type TicketMessage = {
+  sources?:{title:string;url:string}[];
   id: number;
   authorType: "user" | "staff" | "system";
   authorName: string | null;
@@ -50,7 +51,7 @@ type UserTicket = {
   closedAt: string | null;
   unread?: boolean;
   messages?: TicketMessage[];
-  assistant?: { enabled: boolean; mode: "active" | "staff" | "resolved" };
+  assistant?: { enabled: boolean; mode: "active" | "staff" | "resolved"; pending?:boolean };
 };
 
 type SupportCategory = { key: string; title: string; description: string | null };
@@ -178,6 +179,7 @@ export function Support() {
           <span className="supportMsg__time">{fmt(message.createdAt)}</span>
         </div>
         {message.text ? <div className="supportMsg__text">{message.text}</div> : null}
+        {!!message.sources?.length&&<div className="supportMsg__sources">{message.sources.map(source=><a key={source.url} href={source.url} target="_blank" rel="noopener noreferrer">{source.title}</a>)}</div>}
         <AttachmentList attachments={message.attachments} />
       </div>
     );
@@ -208,7 +210,7 @@ export function Support() {
   useEffect(() => {
     const el = threadRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [opened?.id, opened?.messages?.length, pendingAssistantIds.length]);
+  }, [opened?.id, opened?.messages?.length, pendingAssistantIds.length, opened?.assistant?.pending]);
 
   useEffect(() => {
     if (view === "detail" && opened) threadRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -399,12 +401,13 @@ export function Support() {
       try {
         const r = await apiFetch<{ ok: true; ticket: UserTicket }>(`/support/tickets/${id}`, { method: "GET" });
         if (!disposed && !sendLockRef.current && ticketRevisionRef.current === revision)
-          setOpened(current => current?.id === id ? r.ticket : current);
+          if((r.ticket.messages??[]).some(m=>isAssistantMessage(m)&&!shownAssistantIdsRef.current.has(m.id)))showReply(r.ticket);
+          else setOpened(current => current?.id === id ? r.ticket : current);
       } catch { /* Sending and staff request remain available during transient refresh failures. */ }
       finally { refreshing = false; }
-    }, 10000);
+    }, opened.assistant?.pending ? 1200 : 10000);
     return () => { disposed = true; window.clearInterval(timer); };
-  }, [view, opened?.id, opened?.status]);
+  }, [view, opened?.id, opened?.status, opened?.assistant?.pending]);
 
   const canClose = opened ? CLOSEABLE.includes(opened.status) : false;
 
@@ -571,7 +574,7 @@ export function Support() {
             ) : (
               (opened?.messages ?? []).filter(m => !pendingAssistantIds.includes(m.id)).map((m) => <Bubble key={m.id} message={m} />)
             )}
-            {pendingAssistantIds.length > 0 && (
+            {(pendingAssistantIds.length > 0 || opened?.assistant?.pending) && (
               <div className="supportMsg supportMsg--assistant supportAssistantTyping" role="status">
                 <strong>{t("support.assistant.typing")}</strong>
                 <span className="supportAssistantDots" aria-hidden="true"><i /><i /><i /></span>

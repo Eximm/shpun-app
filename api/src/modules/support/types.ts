@@ -136,6 +136,7 @@ export type Ticket = {
 };
 
 export type TicketMessage = {
+  sources?:{title:string;url:string}[];
   id: number;
   ticketId: number;
   authorType: AuthorType;
@@ -169,7 +170,7 @@ export type SupportAttachment = {
 };
 
 export type TicketWithMessages = Ticket & { messages: TicketMessage[];
-  assistant?: { enabled: boolean; mode: "active" | "staff" | "resolved" } };
+  assistant?: { enabled: boolean; mode: "active" | "staff" | "resolved"; pending?:boolean } };
 
 export type CreateTicketInput = {
   userId: number;

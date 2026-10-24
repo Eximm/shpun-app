@@ -18,6 +18,7 @@ import {
 import { AttachmentList, PendingFiles } from "../../shared/support/AttachmentViews";
 import { useAttachmentComposer, type AttachmentAddError } from "../../shared/support/useAttachmentComposer";
 import { AssistantSuggestions } from "../../shared/support/AssistantSuggestions";
+import { SupportLearningPanel } from "../../shared/support/SupportLearningPanel";
 import { AdminFilterBar, AdminSectionHeader, ModalShell, PartnershipTabIcon, SupportTabIcon, UnreadMarker, ADMIN_SECTION_ICON } from "./shared";
 import { ActionMenu } from "./ActionMenu";
 import { ticketStatusLabel, TICKET_STATUSES } from "../../shared/support/ticketLabels";
@@ -55,6 +56,7 @@ type ContextUser = {
 };
 
 type TicketMessage = {
+  sources?:{title:string;url:string}[];
   id: number;
   ticketId: number;
   authorType: AuthorType;
@@ -427,6 +429,7 @@ function MessageBubble({ message, onDelete }: { message: TicketMessage; onDelete
         <span className="supportMsg__time">{formatClock(message.createdAt, formatDate)}</span>
       </div>
       {message.text ? <div className="supportMsg__text">{message.text}</div> : null}
+      {!!message.sources?.length&&<div className="supportMsg__sources">{message.sources.map(source=><a key={source.url} href={source.url} target="_blank" rel="noopener noreferrer">{source.title}</a>)}</div>}
       <AttachmentList attachments={message.attachments} />
       {actions}
       {menu}
@@ -1080,6 +1083,7 @@ export function SupportSection({
           }
         />
 
+        {kind === "support" && <SupportLearningPanel onOpenSource={id=>void openTicket(id)} />}
         <div className="supportKindTabs">
           <button
             type="button"
