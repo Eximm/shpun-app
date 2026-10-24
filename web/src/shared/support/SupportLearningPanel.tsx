@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiFetch } from "../api/client";
 import { useI18n } from "../i18n";
 
@@ -10,6 +10,8 @@ export function SupportLearningPanel({onOpenSource}:{onOpenSource:(id:number)=>v
  const {t}=useI18n();
  const [items,setItems]=useState<Case[]>([]),[stats,setStats]=useState<Stats|null>(null),[error,setError]=useState("");
  const [busy,setBusy]=useState(false),[editing,setEditing]=useState<Case|null>(null),[keywords,setKeywords]=useState("");
+ const editorRef=useRef<HTMLDivElement|null>(null);
+ useEffect(()=>{if(editing)editorRef.current?.scrollIntoView({block:"nearest",behavior:"smooth"});},[editing?.id]);
  async function load() {
   const r=await apiFetch<{items:Case[];stats:Stats}>("/admin/support/learning",{method:"GET"});setItems(r.items);setStats(r.stats);
  }
@@ -39,7 +41,7 @@ export function SupportLearningPanel({onOpenSource}:{onOpenSource:(id:number)=>v
     <div className="actions"><button type="button" className="btn btn--soft" onClick={()=>onOpenSource(item.sourceTicketId)}>{t("support.learning.source")}</button>
     <button type="button" className="btn btn--soft" onClick={()=>{setEditing({...item});setKeywords(item.keywords.join(", "));}}>{t("support.learning.edit")}</button></div>
    </div></div>)}
-   {editing&&<div className="card admin-gap-top-sm"><div className="card__body">
+   {editing&&<div className="card admin-gap-top-sm" ref={editorRef}><div className="card__body">
     <label className="field"><span>{t("support.learning.case_title")}</span><input className="input" value={editing.title} maxLength={160} onChange={e=>setEditing({...editing,title:e.target.value})}/></label>
     <label className="field"><span>{t("support.learning.problem")}</span><textarea className="input" value={editing.problem} onChange={e=>setEditing({...editing,problem:e.target.value})}/></label>
     <label className="field"><span>{t("support.learning.answer")}</span><textarea className="input" value={editing.answer} maxLength={2000} onChange={e=>setEditing({...editing,answer:e.target.value})}/></label>
