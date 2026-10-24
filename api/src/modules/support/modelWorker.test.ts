@@ -105,3 +105,37 @@ test("repeated unsuccessful uses suspend automatically learned advice",async()=>
  assert.equal(learning.getLearnedCase(item.id)?.autoReply,false);
  worker.queueModelLearning();assert.equal(await worker.processSupportModelJob(),false);
 });
+test("one failed step does not force a handoff in model mode",async()=>{
+ provider.setSupportModelTransport(async body=>envelope(String((body.messages as any[])[0].content).includes('независимый')?
+  {safe:true,reason:'Уточнение после неудачного шага'}:{action:'reply',reply:'Уточните, в другой сети ситуация такая же?',used_case_ids:[],question_only:true,reason:'Проверим другую гипотезу'}));
+ process.env.SUPPORT_ASSISTANT_ENABLED='true';
+ const t=await service.createTicket({userId:++uid,source:'app',categoryKey:'connection',text:'Не помогло, интернет всё ещё работает нестабильно'});
+ assert.equal(t.assistant?.mode,'active');assert.equal(t.assistant?.pending,true);assert.equal(t.messages.length,1);
+ await worker.processSupportModelJob();
+ assert.equal(service.getUserTicket(t.id,t.userId)!.assistant?.mode,'active');
+});
+test("internet evidence is loaded from official URLs and cited in the reply",async()=>{
+ const web=await import('./trustedWeb.js');
+ process.env.SUPPORT_LLM_WEB_ENABLED='true';
+ web.setSupportDocumentFetcher(async()=>({title:'Happ documentation',excerpt:'Откройте список подключений в приложении и выберите нужный сервер вручную. Это описание безопасного действия в пользовательском интерфейсе приложения.'}));
+ provider.setSupportModelTransport(async body=>{
+  if(body.tools)return envelope({urls:['http://127.0.0.1/admin','https://docs.happ.info/example']});
+  const system=String((body.messages as any[])[0].content),data=JSON.parse((body.messages as any[])[1].content);
+  if(system.includes('независимый'))return envelope({safe:true,reason:'Ответ соответствует загруженной документации'});
+  if(data.research_already_attempted)return envelope({action:'reply',reply:'Откройте список подключений и выберите нужный сервер вручную.',used_case_ids:[],used_web_ids:[data.web_sources[0].id],question_only:false,reason:'Официальный источник'});
+  return envelope({action:'research',reply:'',search_query:'Happ manual server selection official documentation',used_case_ids:[],question_only:false,reason:'Нужна инструкция'});
+ });
+ process.env.SUPPORT_ASSISTANT_ENABLED='true';
+ try {
+  const t=await service.createTicket({userId:++uid,source:'app',categoryKey:'connection',text:'Как в Happ выбрать один сервер, а не автоматический выбор?'});
+  await worker.processSupportModelJob();
+  const result=service.getUserTicket(t.id,t.userId)!;
+  assert.equal(result.assistant?.mode,'active');assert.equal(result.messages.at(-1)!.sources?.[0]?.url,'https://docs.happ.info/example');
+  assert.ok(!result.messages.at(-1)!.sources?.some(s=>s.url.includes('127.0.0.1')));
+ }finally{delete process.env.SUPPORT_LLM_WEB_ENABLED;web.setSupportDocumentFetcher(null);}
+});
+test("external-document URLs cannot target local hosts, credentials or arbitrary sites",async()=>{
+ const {allowedSupportURL}=await import('./trustedWeb.js');
+ for(const url of ['http://docs.happ.info/','https://127.0.0.1/','https://docs.happ.info.evil.example/','https://user:secret@docs.happ.info/','https://docs.happ.info:8443/','https://docs.happ.info/?token=secret','https://example.org/'])assert.equal(allowedSupportURL(url),false,url);
+ assert.equal(allowedSupportURL('https://docs.happ.info/docs'),true);
+});

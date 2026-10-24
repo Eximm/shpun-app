@@ -9549,3 +9549,4 @@ button.reviews-star:not(:disabled) {
 @media (prefers-reduced-motion: reduce) {
   .supportMsg--assistant, .supportAssistantDots i { animation: none; }
 }
+.supportMsg__sources { display: grid; gap: 5px; margin-top: 8px; font-size: 12px; overflow-wrap: anywhere; }

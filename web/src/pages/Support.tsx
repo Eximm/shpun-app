@@ -28,6 +28,7 @@ type TicketStatus =
   | "closed";
 
 type TicketMessage = {
+  sources?:{title:string;url:string}[];
   id: number;
   authorType: "user" | "staff" | "system";
   authorName: string | null;
@@ -178,6 +179,7 @@ export function Support() {
           <span className="supportMsg__time">{fmt(message.createdAt)}</span>
         </div>
         {message.text ? <div className="supportMsg__text">{message.text}</div> : null}
+        {!!message.sources?.length&&<div className="supportMsg__sources">{message.sources.map(source=><a key={source.url} href={source.url} target="_blank" rel="noopener noreferrer">{source.title}</a>)}</div>}
         <AttachmentList attachments={message.attachments} />
       </div>
     );

@@ -136,6 +136,7 @@ export type Ticket = {
 };
 
 export type TicketMessage = {
+  sources?:{title:string;url:string}[];
   id: number;
   ticketId: number;
   authorType: AuthorType;

@@ -58,7 +58,8 @@ export function runSupportAssistant(repo: TicketRepository, ticketId: number, fo
       "subscription_incident", "ru_servers", "local_device", "connection_vs_import"];
     const asksStaff = /оператор|специалист|сотрудник|живой человек|человеку|человека|не бот|без бота|хватит|не помог|уже пробовал|не заработал|бесполез|достало|сколько можно|не понимаешь/.test(normalized);
     const confirmsResolved = /^(спасибо[!,. ]*)?(все работает|заработало|проблема решена|можно закрывать)[!,. ]*$/.test(normalized.trim());
-    if(!forceHandoff&&!bypassModel&&modelReady()&&!asksStaff&&!confirmsResolved&&!latest?.attachments?.length&&!incident) {
+    const explicitlyWantsStaff=/оператор|специалист|сотрудник|живой человек|человеку|человека|не бот|без бота|хватит|достало|сколько можно/.test(normalized);
+    if(!forceHandoff&&!bypassModel&&modelReady()&&!explicitlyWantsStaff&&!confirmsResolved&&!latest?.attachments?.length&&!incident) {
       enqueueModelJob("reply",ticketId,String(latest!.id));
       writeAssistantState(ticketId,state);
       return null;

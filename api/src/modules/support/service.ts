@@ -8,6 +8,7 @@
 import { getTicketRepository, type TicketRepository } from "./repository.js";
 import { getSupportShmPort } from "./snapshot.js";
 import { assistantPublicState, runSupportAssistant, stopSupportAssistant } from "./assistantRuntime.js";
+import { webMessageSources } from "./trustedWeb.js";
 import {
   enrichMessagesWithAttachments,
   saveMessageAttachments,
@@ -299,7 +300,7 @@ export function getUserTicket(
   const messages = enrichMessagesWithAttachments(repo.listMessages(ticket.id, { includeInternalNotes: false }))
     // User-facing API never exposes a deleted message (or its attachments).
     .filter((m) => !m.deletedAt);
-  return { ...ticket, messages, assistant: ticket.kind === "support" ? assistantPublicState(ticket.id) : undefined };
+  return { ...ticket, messages:messages.map(m=>{const sources=webMessageSources(m.id);return sources.length?{...m,sources}:m;}), assistant: ticket.kind === "support" ? assistantPublicState(ticket.id) : undefined };
 }
 
 function mustGetUserTicket(
@@ -426,7 +427,7 @@ export function getAdminTicket(
   const messages = enrichMessagesWithAttachments(repo.listMessages(ticket.id, { includeInternalNotes: true }))
     // Admin sees a placeholder (audit trail) but never the original body/attachments.
     .map((m) => (m.deletedAt ? { ...m, text: "", attachments: [] } : m));
-  return { ...ticket, messages, assistant: ticket.kind === "support" ? assistantPublicState(ticket.id) : undefined };
+  return { ...ticket, messages:messages.map(m=>{if(m.deletedAt)return m;const sources=webMessageSources(m.id);return sources.length?{...m,sources}:m;}), assistant: ticket.kind === "support" ? assistantPublicState(ticket.id) : undefined };
 }
 
 /** Admin-only soft delete of a message. Never hard-deletes: the row keeps its

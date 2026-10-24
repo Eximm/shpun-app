@@ -56,6 +56,7 @@ type ContextUser = {
 };
 
 type TicketMessage = {
+  sources?:{title:string;url:string}[];
   id: number;
   ticketId: number;
   authorType: AuthorType;
@@ -428,6 +429,7 @@ function MessageBubble({ message, onDelete }: { message: TicketMessage; onDelete
         <span className="supportMsg__time">{formatClock(message.createdAt, formatDate)}</span>
       </div>
       {message.text ? <div className="supportMsg__text">{message.text}</div> : null}
+      {!!message.sources?.length&&<div className="supportMsg__sources">{message.sources.map(source=><a key={source.url} href={source.url} target="_blank" rel="noopener noreferrer">{source.title}</a>)}</div>}
       <AttachmentList attachments={message.attachments} />
       {actions}
       {menu}
