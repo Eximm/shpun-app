@@ -115,8 +115,9 @@ export async function processSupportModelJob() {
  if(!modelReady())return false;
  const job=takeModelJob();if(!job)return false;
  try{if(job.purpose==='learn')await learn(job);else await reply(job);finishModelJob(job.id,'done');}
- catch {
-  finishModelJob(job.id,'failed','provider_or_validation_failure');
+ catch(error) {
+  const code=error instanceof Error&&/^support_model_[a-z0-9_]+$/.test(error.message)?error.message:'provider_or_validation_failure';
+  finishModelJob(job.id,'failed',code);
   if(job.purpose==='reply') {
    const repo=getTicketRepository();
    const last=repo.listMessages(job.entity_id).filter(m=>!m.deletedAt&&!m.isInternalNote).at(-1);

@@ -15,7 +15,7 @@ const defaultState = (): AssistantState => ({ mode: "active", reason: null, last
 export function assistantPublicState(ticketId: number) {
   const state = readAssistantState(ticketId);
   const enabled = assistantEnabled();
-  return { enabled, mode: enabled ? state?.mode ?? "staff" : "staff" as const, pending:enabled&&modelReady()&&modelReplyPending(ticketId) };
+  return { enabled, mode: enabled ? state?.mode ?? "staff" : "staff" as const, pending:enabled&&state?.mode==="active"&&modelReady()&&modelReplyPending(ticketId) };
 }
 
 /** Synchronous transaction prevents double responses across retries/processes. */

@@ -79,6 +79,7 @@ test("a staff reply during generation wins over the model",async()=>{
  const t=await service.createTicket({userId:++uid,source:"app",categoryKey:"connection",text:"Пожалуйста, помогите разобраться в ситуации"});tid=t.id;
  await worker.processSupportModelJob();
  assert.equal(service.getUserTicket(t.id,t.userId)!.messages.filter(m=>m.authorType==='system').length,0);
+ assert.equal(service.getUserTicket(t.id,t.userId)!.assistant?.pending,false);
 });
 test("provider failure falls back without losing the user message",async()=>{
  provider.setSupportModelTransport(async()=>{throw new Error('simulated_timeout');});
