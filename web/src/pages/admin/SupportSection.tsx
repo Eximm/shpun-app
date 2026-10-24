@@ -18,6 +18,7 @@ import {
 import { AttachmentList, PendingFiles } from "../../shared/support/AttachmentViews";
 import { useAttachmentComposer, type AttachmentAddError } from "../../shared/support/useAttachmentComposer";
 import { AssistantSuggestions } from "../../shared/support/AssistantSuggestions";
+import { SupportLearningPanel } from "../../shared/support/SupportLearningPanel";
 import { AdminFilterBar, AdminSectionHeader, ModalShell, PartnershipTabIcon, SupportTabIcon, UnreadMarker, ADMIN_SECTION_ICON } from "./shared";
 import { ActionMenu } from "./ActionMenu";
 import { ticketStatusLabel, TICKET_STATUSES } from "../../shared/support/ticketLabels";
@@ -1080,6 +1081,7 @@ export function SupportSection({
           }
         />
 
+        {kind === "support" && <SupportLearningPanel onOpenSource={id=>void openTicket(id)} />}
         <div className="supportKindTabs">
           <button
             type="button"

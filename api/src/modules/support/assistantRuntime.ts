@@ -4,6 +4,7 @@ import type { TicketMessage } from "./types.js";
 import { assistantTransaction, readAssistantState, writeAssistantState, type AssistantState } from "./assistantState.js";
 import { enrichMessagesWithAttachments } from "./attachmentService.js";
 import { chooseSupportVoice, chooseScenarioVoice } from "./voice.js";
+import { chooseLearnedCase, recordLearnedUse, recordLearningOutcome } from "./learning.js";
 
 export const ASSISTANT_NAME = "Помощник Shpun";
 export const assistantEnabled = () => process.env.SUPPORT_ASSISTANT_ENABLED === "true";
@@ -55,6 +56,9 @@ export function runSupportAssistant(repo: TicketRepository, ticketId: number, fo
       "subscription_incident", "ru_servers", "local_device", "connection_vs_import"];
     const asksStaff = /оператор|специалист|сотрудник|живой человек|человеку|человека|не бот|без бота|хватит|не помог|уже пробовал|не заработал|бесполез|достало|сколько можно|не понимаешь/.test(normalized);
     const confirmsResolved = /^(спасибо[!,. ]*)?(все работает|заработало|проблема решена|можно закрывать)[!,. ]*$/.test(normalized.trim());
+    const guarded = ["amnezia","ru_servers","device_limit","iphone_app_store","payment_context","windows_clean_install"];
+    const learned = process.env.SUPPORT_LEARNED_REPLIES_ENABLED!=="false" && !incident && !guarded.includes(chosen?.id??"")
+      ? chooseLearnedCase(matchingMessages.filter(m=>m.authorType==="user").slice(-3).map(m=>m.text).join("\n"),ticket.serviceCategory) : null;
     if (forceHandoff || asksStaff) {
       reason = forceHandoff ? "requested" : "requested_or_failed";
       if (/не помог|уже пробовал|не заработал/.test(normalized)) text = say("failed");
@@ -65,10 +69,15 @@ export function runSupportAssistant(repo: TicketRepository, ticketId: number, fo
       state.mode = "resolved";
       scenario = "resolved";
       text = `${say("resolved")} ${say("review")}`;
+      recordLearningOutcome(ticketId,"confirmed");
     } else if (state.mode === "resolved") { reason = "issue_returned"; text = say("returned"); }
     else if (chosen && incident && incidentScenarios.includes(chosen.id)) {
       text = incident;
       reason = "confirmed_incident";
+    } else if (learned) {
+      scenario=`learned:${learned.id}:${learned.version}`;
+      if(state.replies>=2 || state.sentScenarios.includes(scenario)) { reason="steps_exhausted"; text=say("exhausted"); }
+      else text=learned.answer;
     } else if (!chosen && state.replies === 0 && /не работает|не подключается|нет интернета/.test(normalized)) {
       scenario = "clarify_device";
       text = say("clarification");
@@ -89,6 +98,7 @@ export function runSupportAssistant(repo: TicketRepository, ticketId: number, fo
       else text = chooseScenarioVoice(chosen.id, chosen.reply, ticketId, latest?.id ?? 0, state.replies);
     }
     if (reason) {
+      recordLearningOutcome(ticketId,"handoff");
       state.mode = "staff";
       state.reason = reason;
       text = reason === "needs_staff" && !chosen
@@ -108,6 +118,9 @@ export function runSupportAssistant(repo: TicketRepository, ticketId: number, fo
       if (state.replies === 1 && state.mode === "active") text += "\n\nЧтобы позвать сотрудника поддержки, напишите «оператор».";
     }
     const message = repo.addMessage({ ticketId, authorType: "system", authorName: ASSISTANT_NAME, text, isInternalNote: false });
+    if(learned && !reason && scenario.startsWith("learned:")) recordLearnedUse(learned,ticketId,latest!.id,message.id);
+    if(reason) repo.addInternalNote({ticketId,authorType:"system",authorName:ASSISTANT_NAME,isInternalNote:true,
+      text:`Передача сотруднику: ${reason}.\nШаги помощника: ${state.sentScenarios.join(", ")||"не предлагались"}.\nПоследние сообщения клиента:\n${messages.filter(m=>m.authorType==="user").slice(-3).map(m=>m.text.slice(0,700)).join("\n")}`});
     writeAssistantState(ticketId, state);
     // A bot reply never hides the ticket from staff or changes it to waiting_user.
     repo.updateTicket(ticketId, { status: "waiting_staff" });

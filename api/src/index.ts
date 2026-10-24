@@ -1,5 +1,6 @@
 import { buildServer } from './app/server.js'
 import { startSupportAttachmentCleanup } from './modules/support/cleanupJob.js'
+import { startSupportLearning } from './modules/support/learningJob.js'
 
 function assertEnv() {
   // В проде всё приходит через docker-compose / окружение.
@@ -38,6 +39,7 @@ async function main() {
 
     // Best-effort daily retention cleanup for support attachments.
     startSupportAttachmentCleanup()
+    startSupportLearning()
   } catch (err) {
     app.log.error(err)
     process.exit(1)

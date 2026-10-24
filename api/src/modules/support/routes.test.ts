@@ -144,6 +144,19 @@ test("staff request is owner-scoped, immediate and idempotent even if automation
   assert.equal((await app.inject({ method: "POST", url, headers: userHeaders("sid-user-201") })).statusCode, 409);
 });
 
+test("learning knowledge and analysis require admin; review is validated",async()=>{
+  for(const method of ["GET","POST"] as const) {
+    const url=method==="GET"?"/api/admin/support/learning":"/api/admin/support/learning/analyze";
+    assert.equal((await app.inject({method,url})).statusCode,401);
+    assert.equal((await app.inject({method,url,headers:userHeaders("sid-user-201")})).statusCode,403);
+    const response=await app.inject({method,url,headers:userHeaders("sid-admin")});
+    assert.equal(response.statusCode,200);
+  }
+  const url="/api/admin/support/learning/999999";
+  assert.equal((await app.inject({method:"PATCH",url,headers:userHeaders("sid-user-201"),payload:{}})).statusCode,403);
+  assert.equal((await app.inject({method:"PATCH",url,headers:userHeaders("sid-admin"),payload:{}})).statusCode,404);
+});
+
 test("user API creates and lists own tickets", async () => {
   const created = await createUserTicket("sid-user-201");
   assert.equal(created.statusCode, 201);

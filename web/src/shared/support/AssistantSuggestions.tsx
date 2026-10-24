@@ -11,13 +11,15 @@ export function AssistantSuggestions({ ticketId, lastMessageId, canUse, onUse }:
 }) {
   const { t } = useI18n();
   const [items, setItems] = useState<Suggestion[]>([]);
+  const [learned,setLearned]=useState<{id:number;title:string;answer:string;conditions:string;sourceTicketId:number}[]>([]);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     let disposed = false;
     setItems([]);
+    setLearned([]);
     setFailed(false);
-    void apiFetch<{ assistant: { suggestions: Suggestion[] } }>(`/admin/support/tickets/${ticketId}/assistant`, { method: "GET" })
-      .then(r => { if (!disposed) setItems(r.assistant.suggestions); })
+    void apiFetch<{ assistant: { suggestions: Suggestion[] }; learned?:typeof learned }>(`/admin/support/tickets/${ticketId}/assistant`, { method: "GET" })
+      .then(r => { if (!disposed) {setItems(r.assistant.suggestions);setLearned(r.learned??[]);} })
       .catch(() => { if (!disposed) setFailed(true); });
     return () => { disposed = true; };
   }, [ticketId, lastMessageId]);
@@ -25,6 +27,11 @@ export function AssistantSuggestions({ ticketId, lastMessageId, canUse, onUse }:
     <details className="admin-gap-top-sm">
       <summary>{t("support.assistant.suggestions")}</summary>
       <p className="p">{t("support.assistant.checks_hint")}</p>
+      {learned.map(item=><div className="card admin-gap-top-sm" key={item.id}><div className="card__body">
+        <strong>{t("support.learning.from_cases")}: {item.title}</strong><p className="p">{item.answer}</p>
+        {item.conditions&&<p className="p">{item.conditions}</p>}
+        <button type="button" className="btn btn--soft" disabled={!canUse} onClick={()=>onUse(item.answer)}>{t("support.assistant.use_reply")}</button>
+      </div></div>)}
       {failed ? <p className="p">{t("support.assistant.suggestions_failed")}</p> : null}
       {!failed && items.length === 0 ? <p className="p">{t("support.assistant.no_suggestions")}</p> : null}
       {items.map(item => <div className="card admin-gap-top-sm" key={item.id}><div className="card__body">
