@@ -39,7 +39,7 @@ const map = (r: any): LearnedCase => ({ id:r.id, sourceTicketId:r.source_ticket_
  reviewedBy:r.reviewed_by, reviewedAt:r.reviewed_at, sourceHash:r.source_hash, updatedAt:r.updated_at });
 
 const publicMessages = (id: number) => getTicketRepository().listMessages(id).filter(m => !m.deletedAt && !m.isInternalNote && m.authorType !== "system");
-const digest = (messages: TicketMessage[], status:string) => createHash("sha256").update(JSON.stringify([status,messages.map(m => [m.id,m.authorType,m.text])])).digest("hex");
+const digest = (messages: TicketMessage[], status:string) => createHash("sha256").update(JSON.stringify(["learning-v2",status,messages.map(m => [m.id,m.authorType,m.text])])).digest("hex");
 const normalize = (text: string) => text.toLowerCase().replaceAll("ё","е");
 const stop = new Set("здравствуйте привет спасибо пожалуйста работает работать работа подключение подключить проблема вопрос помощь помогите после перед через когда здесь этот такая такое как что для или при все уже еще нет мне меня вас вам это будет было была если тогда только очень пока да нет хорошо понятно решить решение могу можно нужно надо сделать сделал делает делали давайте попробуйте напишите подскажите пользователь поддержка shpun шпунь".split(" "));
 function terms(text: string) {
@@ -61,7 +61,7 @@ export function redactSupportText(text: string, names: string[] = []) {
 
 function confirmed(text: string) {
  const n=normalize(text);
- return !/не (?:заработ|помог|решен|получ)|все (?:еще|равно)|снова не|но не/.test(n) &&
+ return !/не (?:заработ|помог|решен|получ|работает|открывается|подключается)|все (?:еще|равно)|снова не|но не/.test(n) &&
  /(?:все|теперь) работает|заработал[оаи]?|проблема решена|вопрос решен|помогло|получилось/.test(n);
 }
 

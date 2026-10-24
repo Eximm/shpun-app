@@ -129,6 +129,7 @@ export function runSupportAssistant(repo: TicketRepository, ticketId: number, fo
 }
 
 export function stopSupportAssistant(ticketId: number) {
+  recordLearningOutcome(ticketId,"handoff");
   const state = readAssistantState(ticketId) ?? defaultState();
   writeAssistantState(ticketId, { ...state, mode: "staff", reason: "staff_takeover" });
 }

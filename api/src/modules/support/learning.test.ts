@@ -32,7 +32,7 @@ test("extracts real operator answer with evidence but never auto-publishes",asyn
  assert.equal(learning.listLearnedCases().filter(c=>c.sourceTicketId===ticket.id).length,1);
 });
 test("generic thanks and negative confirmations do not prove resolution",async()=>{
- for(const text of ["Спасибо за ответ","Не получилось, всё равно не работает"]) {
+ for(const text of ["Спасибо за ответ","Не получилось, всё равно не работает","Помогло на минуту, сейчас не работает"]) {
   const {item}=await solved("negative",text);assert.equal(item.confirmationMessageId,null);
  }
 });
