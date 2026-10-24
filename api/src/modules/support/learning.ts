@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import { linkDb } from "../../shared/linkdb/db.js";
 import { getTicketRepository } from "./repository.js";
 import type { TicketMessage } from "./types.js";
+import { supportModelStats } from "./modelProvider.js";
+import "./modelQueue.js";
 
 linkDb.exec(`
 CREATE TABLE IF NOT EXISTS support_learning_reviews (
@@ -31,12 +33,14 @@ export type LearnedCase = {
  serviceCategory: string | null; status: string; autoReply: boolean; verified: boolean;
  version: number; usedCount: number; reviewedBy: number | null; reviewedAt: string | null;
  sourceHash: string; updatedAt: string;
+ reviewMethod?:"model"|"staff"|"pending";
 };
 const map = (r: any): LearnedCase => ({ id:r.id, sourceTicketId:r.source_ticket_id, sourceMessageId:r.source_message_id,
  confirmationMessageId:r.confirmation_message_id, title:r.title, problem:r.problem, answer:r.answer,
  keywords:JSON.parse(r.keywords), conditions:r.conditions, serviceCategory:r.service_category,
  status:r.status, autoReply:!!r.auto_reply, verified:!!r.verified, version:r.version, usedCount:r.used_count,
- reviewedBy:r.reviewed_by, reviewedAt:r.reviewed_at, sourceHash:r.source_hash, updatedAt:r.updated_at });
+ reviewedBy:r.reviewed_by, reviewedAt:r.reviewed_at, sourceHash:r.source_hash, updatedAt:r.updated_at,
+ reviewMethod:r.status!=="approved"?"pending":r.reviewed_by===null?"model":"staff" });
 
 const publicMessages = (id: number) => getTicketRepository().listMessages(id).filter(m => !m.deletedAt && !m.isInternalNote && m.authorType !== "system");
 const digest = (messages: TicketMessage[], status:string) => createHash("sha256").update(JSON.stringify(["learning-v2",status,messages.map(m => [m.id,m.authorType,m.text])])).digest("hex");
@@ -51,6 +55,8 @@ export function redactSupportText(text: string, names: string[] = []) {
  let value = text.replace(/(?:https?:\/\/|vless:\/\/|vmess:\/\/|ss:\/\/|trojan:\/\/|hysteria2?:\/\/|happ:\/\/|t.me\/)[^\s<>]+/gi,"[ссылка скрыта]")
   .replace(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/gi,"[почта скрыта]")
   .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g,"[адрес скрыт]")
+  .replace(/\b(?:[a-f0-9]{0,4}:){2,}[a-f0-9:]{1,39}\b/gi,"[адрес скрыт]")
+  .replace(/(?:password|пароль|token|session_id|api[_ -]?key|код подтверждения)\s*[:=]\s*["']?[^\s,;"']+/gi,"[секрет скрыт]")
   .replace(/\b[0-9a-f]{8}-[0-9a-f-]{27,}\b/gi,"[ключ скрыт]")
   .replace(/[a-z0-9_+/=-]{24,}/gi,"[ключ скрыт]")
   .replace(/@[a-z0-9_]{3,}/gi,"[имя скрыто]")
@@ -118,7 +124,7 @@ export function learningStats() {
  const outcomes=linkDb.prepare("SELECT outcome,COUNT(*) count FROM support_learning_reviews GROUP BY outcome").all();
  const cases=linkDb.prepare("SELECT status,COUNT(*) count FROM support_learned_cases GROUP BY status").all();
  const uses=linkDb.prepare("SELECT outcome,COUNT(*) count FROM support_learning_uses GROUP BY outcome").all();
- return {outcomes,cases,uses};
+ return {outcomes,cases,uses,model:supportModelStats()};
 }
 export function listLearnedCases() { return (linkDb.prepare("SELECT * FROM support_learned_cases ORDER BY status='draft' DESC,updated_at DESC,id DESC LIMIT 200").all() as any[]).map(map); }
 export function getLearnedCase(id:number) { const r=linkDb.prepare("SELECT * FROM support_learned_cases WHERE id=?").get(id); return r?map(r):null; }
@@ -141,9 +147,31 @@ export function reviewLearnedCase(id:number, input: {version:number;title:string
  if(!r.changes) throw new LearningError("case_changed",409);
  return getLearnedCase(id)!;
 }
-function sourceCurrent(item:LearnedCase) {
+export function sourceCurrent(item:LearnedCase) {
  const t=getTicketRepository().getTicket(item.sourceTicketId);
  return !!t && ["closed","resolved"].includes(t.status) && digest(publicMessages(item.sourceTicketId),t.status)===item.sourceHash;
+}
+export function modelKnowledge(category:string|null) {
+ return listLearnedCases().filter(c=>c.status==="approved"&&c.verified&&c.autoReply&&(!c.serviceCategory||c.serviceCategory===category)&&sourceCurrent(c)).slice(0,35);
+}
+export function caseConversation(item:LearnedCase) {
+ const t=getTicketRepository().getTicket(item.sourceTicketId);
+ const names=[t?.displayNameSnapshot??"",t?.userLoginSnapshot??""];
+ return publicMessages(item.sourceTicketId).slice(-25).map(m=>({id:m.id,role:m.authorType,text:redactSupportText(m.text,names).slice(0,1400)}));
+}
+export function publishModelCase(item:LearnedCase,data:{title:string;problem:string;answer:string;keywords:string[]},explanation:string) {
+ return linkDb.transaction(()=>{
+ if(!sourceCurrent(item)||!item.confirmationMessageId||item.status!=="draft")return false;
+ const keywords=Array.isArray(data.keywords)?[...new Set(data.keywords.flatMap(terms))].slice(0,12):[];
+ const title=String(data.title??"").trim().slice(0,160),problem=String(data.problem??"").trim().slice(0,2000),answer=String(data.answer??"").trim().slice(0,1200);
+ if(!title||problem.length<8||answer.length<15||keywords.length<2)return false;
+ if([title,problem,answer].some(s=>redactSupportText(s)!==s)||/[\[\]]|парол|оплат|перен[ео]с|списани|зачисл|возврат|удал|сброс|антивирус|брандмауэр|реестр/i.test(answer))return false;
+ const result=linkDb.prepare(`UPDATE support_learned_cases SET title=?,problem=?,answer=?,keywords=?,conditions='',status='approved',auto_reply=1,verified=1,
+  reviewed_by=NULL,reviewed_at=datetime('now'),version=version+1,updated_at=datetime('now') WHERE id=? AND version=? AND status='draft'`).run(title,problem,answer,JSON.stringify(keywords),item.id,item.version).changes;
+ if(result)linkDb.prepare(`INSERT INTO support_model_reviews(case_id,source_hash,result,explanation) VALUES(?,?,'approved',?)
+  ON CONFLICT(case_id) DO UPDATE SET source_hash=excluded.source_hash,result='approved',explanation=excluded.explanation,created_at=datetime('now')`).run(item.id,item.sourceHash,redactSupportText(explanation).slice(0,1000));
+ return !!result;
+ }).immediate();
 }
 
 export function findLearnedCases(query:string, serviceCategory:string|null, autoOnly=false) {
@@ -168,4 +196,15 @@ export function recordLearnedUse(item:LearnedCase,ticketId:number,userMessageId:
 }
 export function recordLearningOutcome(ticketId:number,outcome:"confirmed"|"handoff") {
  linkDb.prepare("UPDATE support_learning_uses SET outcome=? WHERE ticket_id=? AND outcome='pending'").run(outcome,ticketId);
+ // Model-published advice that repeatedly fails returns to staff review. It
+ // cannot immediately republish itself from the same unchanged evidence.
+ if(outcome==="handoff") {
+  const failing=linkDb.prepare(`SELECT c.id FROM support_learned_cases c JOIN support_learning_uses u ON u.case_id=c.id
+   WHERE c.status='approved' AND c.reviewed_by IS NULL AND c.id IN (SELECT case_id FROM support_learning_uses WHERE ticket_id=?)
+   GROUP BY c.id HAVING SUM(u.outcome='handoff')>=2 AND SUM(u.outcome='confirmed')=0`).all(ticketId) as {id:number}[];
+  for(const item of failing) {
+   linkDb.prepare("UPDATE support_learned_cases SET status='draft',auto_reply=0,verified=0,version=version+1,updated_at=datetime('now') WHERE id=?").run(item.id);
+   linkDb.prepare("UPDATE support_model_reviews SET result='staff',explanation='Repeated unsuccessful applications; staff review required' WHERE case_id=?").run(item.id);
+  }
+ }
 }

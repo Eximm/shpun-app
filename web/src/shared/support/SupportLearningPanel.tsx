@@ -3,8 +3,8 @@ import { apiFetch } from "../api/client";
 import { useI18n } from "../i18n";
 
 type Case = {id:number;sourceTicketId:number;confirmationMessageId:number|null;title:string;problem:string;answer:string;
- keywords:string[];conditions:string;status:string;autoReply:boolean;verified:boolean;version:number;usedCount:number};
-type Stats = {outcomes:{outcome:string;count:number}[];cases:{status:string;count:number}[];uses:{outcome:string;count:number}[]};
+ keywords:string[];conditions:string;status:string;autoReply:boolean;verified:boolean;version:number;usedCount:number;reviewMethod?:string};
+type Stats = {outcomes:{outcome:string;count:number}[];cases:{status:string;count:number}[];uses:{outcome:string;count:number}[];model?:{configured:boolean;enabled:boolean;model:string;today:{requests:number;tokens:number}}};
 
 export function SupportLearningPanel({onOpenSource}:{onOpenSource:(id:number)=>void}) {
  const {t}=useI18n();
@@ -33,10 +33,12 @@ export function SupportLearningPanel({onOpenSource}:{onOpenSource:(id:number)=>v
    <p className="p">{t("support.learning.intro")}</p>
    <button type="button" className="btn btn--soft" disabled={busy} onClick={()=>void run(true)}>{t("support.learning.analyze")}</button>
    {stats&&<p className="p">{t("support.learning.stats",{analyzed:stats.outcomes.reduce((n,r)=>n+r.count,0),draft:stats.cases.find(s=>s.status==="draft")?.count??0,approved:stats.cases.find(s=>s.status==="approved")?.count??0,used:stats.uses.reduce((n,r)=>n+r.count,0),confirmed:stats.uses.find(s=>s.outcome==="confirmed")?.count??0})}</p>}
+   {stats?.model&&<p className="p">{t(stats.model.configured?"support.learning.model_ready":"support.learning.model_off",{model:stats.model.model,requests:stats.model.today.requests,tokens:stats.model.today.tokens})}</p>}
    {error&&<p role="alert">{error}</p>}
    {!busy&&items.length===0&&<p className="p">{t("support.learning.empty")}</p>}
    {items.map(item=><div className="card admin-gap-top-sm" key={item.id}><div className="card__body">
     <strong>{item.title}</strong><p className="p">{t(`support.learning.status.${item.status}`)} · {item.confirmationMessageId?t("support.learning.confirmed"):t("support.learning.unconfirmed")}</p>
+    {item.reviewMethod==="model"&&<p className="p">{t("support.learning.model_reviewed")}</p>}
     <p className="p">{item.answer}</p>
     <div className="actions"><button type="button" className="btn btn--soft" onClick={()=>onOpenSource(item.sourceTicketId)}>{t("support.learning.source")}</button>
     <button type="button" className="btn btn--soft" onClick={()=>{setEditing({...item});setKeywords(item.keywords.join(", "));}}>{t("support.learning.edit")}</button></div>

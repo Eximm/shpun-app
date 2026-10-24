@@ -2,6 +2,9 @@ export type Lang = "ru" | "en";
 export type Dict = Record<string, string>;
 
 export const RU: Dict = {
+  "support.learning.model_ready": "Модель: {model} · Запросов сегодня: {requests} · Токенов: {tokens}",
+  "support.learning.model_off": "Модель не подключена: действует прежний помощник. Обучение из диалогов продолжается в режиме предложений.",
+  "support.learning.model_reviewed": "Обобщено и проверено моделью по подтверждённому диалогу",
   "support.learning.title": "Знания из обращений",
   "support.learning.intro": "Шпунь анализирует переписки и предлагает решения из ответов сотрудников. Перед использованием проверьте исходный диалог, уберите личные данные и подтвердите, что ответ подходит другим клиентам.",
   "support.learning.analyze": "Проанализировать диалоги",
@@ -2808,6 +2811,9 @@ export const RU: Dict = {
 };
 
 export const EN: Dict = {
+  "support.learning.model_ready": "Model: {model} · Requests today: {requests} · Tokens: {tokens}",
+  "support.learning.model_off": "Model is not connected. The existing helper remains active and conversation analysis creates proposals.",
+  "support.learning.model_reviewed": "Generalized and verified by a model using a confirmed conversation",
   "support.learning.title": "Knowledge from conversations",
   "support.learning.intro": "Shpun analyzes conversations and proposes staff solutions. Review the source, remove private details and verify applicability before using a case for other customers.",
   "support.learning.analyze": "Analyze conversations",

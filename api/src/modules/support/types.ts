@@ -169,7 +169,7 @@ export type SupportAttachment = {
 };
 
 export type TicketWithMessages = Ticket & { messages: TicketMessage[];
-  assistant?: { enabled: boolean; mode: "active" | "staff" | "resolved" } };
+  assistant?: { enabled: boolean; mode: "active" | "staff" | "resolved"; pending?:boolean } };
 
 export type CreateTicketInput = {
   userId: number;

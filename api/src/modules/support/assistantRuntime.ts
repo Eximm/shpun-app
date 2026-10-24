@@ -5,6 +5,8 @@ import { assistantTransaction, readAssistantState, writeAssistantState, type Ass
 import { enrichMessagesWithAttachments } from "./attachmentService.js";
 import { chooseSupportVoice, chooseScenarioVoice } from "./voice.js";
 import { chooseLearnedCase, recordLearnedUse, recordLearningOutcome } from "./learning.js";
+import { modelReady } from "./modelProvider.js";
+import { enqueueModelJob, modelReplyPending } from "./modelQueue.js";
 
 export const ASSISTANT_NAME = "Помощник Shpun";
 export const assistantEnabled = () => process.env.SUPPORT_ASSISTANT_ENABLED === "true";
@@ -13,11 +15,11 @@ const defaultState = (): AssistantState => ({ mode: "active", reason: null, last
 export function assistantPublicState(ticketId: number) {
   const state = readAssistantState(ticketId);
   const enabled = assistantEnabled();
-  return { enabled, mode: enabled ? state?.mode ?? "staff" : "staff" as const };
+  return { enabled, mode: enabled ? state?.mode ?? "staff" : "staff" as const, pending:enabled&&modelReady()&&modelReplyPending(ticketId) };
 }
 
 /** Synchronous transaction prevents double responses across retries/processes. */
-export function runSupportAssistant(repo: TicketRepository, ticketId: number, forceHandoff = false): TicketMessage | null {
+export function runSupportAssistant(repo: TicketRepository, ticketId: number, forceHandoff = false, bypassModel = false): TicketMessage | null {
   if (!assistantEnabled() && !forceHandoff) return null;
   return assistantTransaction(() => {
     const ticket = repo.getTicket(ticketId);
@@ -56,6 +58,11 @@ export function runSupportAssistant(repo: TicketRepository, ticketId: number, fo
       "subscription_incident", "ru_servers", "local_device", "connection_vs_import"];
     const asksStaff = /оператор|специалист|сотрудник|живой человек|человеку|человека|не бот|без бота|хватит|не помог|уже пробовал|не заработал|бесполез|достало|сколько можно|не понимаешь/.test(normalized);
     const confirmsResolved = /^(спасибо[!,. ]*)?(все работает|заработало|проблема решена|можно закрывать)[!,. ]*$/.test(normalized.trim());
+    if(!forceHandoff&&!bypassModel&&modelReady()&&!asksStaff&&!confirmsResolved&&!latest?.attachments?.length&&!incident) {
+      enqueueModelJob("reply",ticketId,String(latest!.id));
+      writeAssistantState(ticketId,state);
+      return null;
+    }
     const guarded = ["amnezia","ru_servers","device_limit","iphone_app_store","payment_context","windows_clean_install"];
     const learned = process.env.SUPPORT_LEARNED_REPLIES_ENABLED!=="false" && !incident && !guarded.includes(chosen?.id??"")
       ? chooseLearnedCase(matchingMessages.filter(m=>m.authorType==="user").slice(-3).map(m=>m.text).join("\n"),ticket.serviceCategory) : null;
