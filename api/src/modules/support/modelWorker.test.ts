@@ -32,7 +32,8 @@ test("model generalizes and verifies a confirmed case without a manual publicati
  const {item,answer}=await source();
  provider.setSupportModelTransport(async body=>{
   const system=String((body.messages as any[])[0].content);
-  return envelope(system.includes("аналитик")?{title:"Happ: разрешение адресов",problem:"Не определяются адреса сайтов в Happ",answer,keywords:["happ","dns"],risk:"low",evidence_quote:answer,reason:"Общий обратимый шаг"}:{safe:true,reason:"Шаг подтверждён источником"});
+  const data=JSON.parse((body.messages as any[])[1].content);
+  return envelope(system.includes("аналитик")?{title:"Happ: разрешение адресов",problem:"Не определяются адреса сайтов в Happ",answer,keywords:["happ","dns"],risk:"low",solution_message_id:data.conversation.find((m:any)=>m.role==='staff').id,confirmation_message_id:data.conversation.at(-1).id,evidence_quote:answer,reason:"Общий обратимый шаг"}:{safe:true,reason:"Шаг подтверждён источником"});
  });
  worker.queueModelLearning();await worker.processSupportModelJob();
  const learned=learning.getLearnedCase(item.id)!;
