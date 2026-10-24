@@ -343,6 +343,10 @@ function ConnectInline({ kind, service, mobileKey, onDone, t }: {
         </>
       )}
     </div>
+  ) : mobileKey ? (
+    <div className="pre cm__additionalKey" style={{ marginTop: 12, fontSize: 12, color: "rgba(255,255,255,.65)", borderColor: "rgba(96,165,250,.2)", background: "rgba(96,165,250,.04)" }}>
+      {t("services.flex_plus.after_primary_hint")}
+    </div>
   ) : null;
 
   return (
