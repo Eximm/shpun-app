@@ -2,6 +2,8 @@ export type Lang = "ru" | "en";
 export type Dict = Record<string, string>;
 
 export const RU: Dict = {
+  "services.flex_plus.label": "Дополнительный ключ",
+  "services.flex_plus.everyday_hint": "На каждый день — основной Flex.",
   "connectMarzban.devices.bundle_title": "Устройства",
   "connectMarzban.devices.choose_key": "Выберите ключ, чтобы посмотреть или удалить устройства.",
   "connectMarzban.devices.primary_key": "Основной Flex",
@@ -44,7 +46,7 @@ export const RU: Dict = {
   "services.flex_plus.preparing": "Второй ключ ещё создаётся. Проверьте статус через несколько секунд.",
   "services.flex_plus.unavailable": "Дополнительный ключ пока недоступен. Обновите статус или обратитесь в поддержку.",
   "services.flex_plus.next_title": "Flex Plus",
-  "services.flex_plus.next_text": "Используйте этот ключ в мобильных сетях, при работе глушилок и других сложных ограничениях. Для обычного подключения выбирайте основной Flex.",
+  "services.flex_plus.next_text": "Используйте в мобильных сетях, при работе глушилок и других сложных ограничениях связи.",
   "services.assistant.title": "Нужна помощь с подключением?",
   "services.assistant.text": "Помощник проведёт по шагам: выбор услуги, оплата и настройка. Вы можете запустить его, когда понадобится.",
   "services.assistant.open": "Открыть помощник подключения",
@@ -2815,6 +2817,8 @@ export const RU: Dict = {
 };
 
 export const EN: Dict = {
+  "services.flex_plus.label": "Additional key",
+  "services.flex_plus.everyday_hint": "For everyday use, choose the main Flex key.",
   "connectMarzban.devices.bundle_title": "Devices",
   "connectMarzban.devices.choose_key": "Choose a key to view or remove its devices.",
   "connectMarzban.devices.primary_key": "Main Flex",
@@ -2857,7 +2861,7 @@ export const EN: Dict = {
   "services.flex_plus.preparing": "The second key is still being prepared. Check its status again in a few seconds.",
   "services.flex_plus.unavailable": "The extra key is currently unavailable. Refresh its status or contact support.",
   "services.flex_plus.next_title": "Flex Plus",
-  "services.flex_plus.next_text": "Use this key on mobile networks, during signal jamming and under other difficult network restrictions. Use the main Flex key for everyday connections.",
+  "services.flex_plus.next_text": "Use on mobile networks, during signal jamming and under other difficult network restrictions.",
   "services.assistant.title": "Need help getting connected?",
   "services.assistant.text": "The assistant guides you through choosing a service, payment and setup. Open it whenever you need help.",
   "services.assistant.open": "Open connection assistant",

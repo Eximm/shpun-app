@@ -58,7 +58,7 @@ assert("connector offers an exit to Home", services.includes('t("assistant.conne
 assert("waiting screens offer an exit to Home", assistant.includes("onClick={exitToHome}"));
 assert("finish screen can leave the assistant", services.includes('t("assistant.finish.done")') && services.includes('window.location.assign("/home")'));
 assert("additional mobile key is inside the primary connector", services.includes("mobileKey && primaryImportStarted") && services.includes("service={mobileKey} compact"));
-assert("assistant focus does not dim or block the second key", services.includes('className="pre cm__additionalKey"') && css.includes(":not(.cm__setupCard):not(.cm__additionalKey)"));
+assert("assistant focus does not dim or block the second key", services.includes('className="cm__additionalKey cm__plusCard"') && css.includes(":not(.cm__setupCard):not(.cm__additionalKey)"));
 
 /* Required localized copy exists in both dictionaries. */
 for (const key of [

@@ -329,9 +329,16 @@ function ConnectInline({ kind, service, mobileKey, onDone, t }: {
   }, [assistantFinished, assistantMode]);
 
   const mobileKeyBlock = mobileKey && primaryImportStarted ? (
-    <div className="pre cm__additionalKey" ref={assistantFinishRef} style={{ marginTop: 16, borderColor: "rgba(96,165,250,.35)", background: "rgba(96,165,250,.06)" }}>
-      <strong>{t("services.flex_plus.next_title")}</strong>
-      <p className="p">{t("services.flex_plus.next_text")}</p>
+    <section className="cm__additionalKey cm__plusCard" ref={assistantFinishRef} aria-labelledby={`flex-plus-title-${mobileKey.userServiceId}`}>
+      <div className="cm__plusHead">
+        <span className="cm__plusIcon" aria-hidden="true">📶</span>
+        <div>
+          <div className="cm__plusEyebrow">{t("services.flex_plus.label")}</div>
+          <h3 className="cm__plusTitle" id={`flex-plus-title-${mobileKey.userServiceId}`}>{t("services.flex_plus.next_title")}</h3>
+        </div>
+      </div>
+      <div className="cm__plusPurpose"><p>{t("services.flex_plus.next_text")}</p></div>
+      <p className="cm__plusNote">{t("services.flex_plus.everyday_hint")}</p>
       {mobileKey.status === "active" ? (
         <Suspense fallback={<p className="p">{t("services.loading_short")}</p>}>
           <ConnectMarzban key={mobileKey.userServiceId} usi={mobileKey.userServiceId} service={mobileKey} compact platformOverride={platform} />
@@ -342,7 +349,7 @@ function ConnectInline({ kind, service, mobileKey, onDone, t }: {
           <button className="btn" type="button" onClick={onDone}>{t("services.refresh_status")}</button>
         </>
       )}
-    </div>
+    </section>
   ) : mobileKey ? (
     <div className="pre cm__additionalKey" style={{ marginTop: 12, fontSize: 12, color: "rgba(255,255,255,.65)", borderColor: "rgba(96,165,250,.2)", background: "rgba(96,165,250,.04)" }}>
       {t("services.flex_plus.after_primary_hint")}
