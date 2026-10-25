@@ -481,7 +481,13 @@ function ServiceRow({ s, expanded, connectOpen, onToggle, onToggleConnect, onRef
 
       {/* Действия */}
       {mobileKey && !connectOpen && (
-        <p className="muted" style={{ margin: "6px 12px 10px", fontSize: 12 }}>{t("services.flex_plus.inside_hint")}</p>
+        <div className="svc-row__plusHint">
+          <span className="svc-row__plusHintIcon" aria-hidden="true">📶</span>
+          <div>
+            <strong>{t("services.flex_plus.next_title")}</strong>
+            <p>{t("services.flex_plus.inside_hint")}</p>
+          </div>
+        </div>
       )}
       {expanded && (
         <div className="svc-row__details" style={{ padding: "0 12px 10px", display: "flex", flexDirection: "column", gap: 6 }}>
