@@ -536,17 +536,15 @@ export function ReferralAliasesSection() {
                 <span>{t("admin.referral.detail.created")}</span>
                 <strong>{created}</strong>
               </span>
+              <span className="refCard__detail">
+                <span>{t("admin.referral.field.first_bonus")}</span>
+                <strong>+{item.first_payment_bonus_percent}%</strong>
+              </span>
               {isPartner ? (
-                <>
-                  <span className="refCard__detail">
-                    <span>{t("admin.referral.field.first_bonus")}</span>
-                    <strong>+{item.first_payment_bonus_percent}%</strong>
-                  </span>
-                  <span className="refCard__detail">
-                    <span>{t("admin.referral.field.reward")}</span>
-                    <strong>{item.partner_reward_percent}%</strong>
-                  </span>
-                </>
+                <span className="refCard__detail">
+                  <span>{t("admin.referral.field.reward")}</span>
+                  <strong>{item.partner_reward_percent}%</strong>
+                </span>
               ) : (
                 <span className="refCard__detail">
                   <span>{t("admin.referral.metric.ad_cost")}</span>
@@ -683,35 +681,33 @@ export function ReferralAliasesSection() {
             <section className="refAnalytics__section">
               <h4 className="refAnalytics__title">{t("admin.referral.detailsModal.settings")}</h4>
               <div className="refForm__grid">
+                <label className="field">
+                  <span className="field__label">{t("admin.referral.field.first_bonus")}</span>
+                  <input
+                    className="input"
+                    inputMode="numeric"
+                    value={form.firstPaymentBonusPercent}
+                    placeholder={t("admin.referral.field.percent_ph")}
+                    onChange={(event) => setForm({
+                      ...form,
+                      firstPaymentBonusPercent: event.target.value.replace(/\D/g, ""),
+                    })}
+                  />
+                </label>
                 {form.linkType === "partner" ? (
-                  <>
-                    <label className="field">
-                      <span className="field__label">{t("admin.referral.field.first_bonus")}</span>
-                      <input
-                        className="input"
-                        inputMode="numeric"
-                        value={form.firstPaymentBonusPercent}
-                        placeholder={t("admin.referral.field.percent_ph")}
-                        onChange={(event) => setForm({
-                          ...form,
-                          firstPaymentBonusPercent: event.target.value.replace(/\D/g, ""),
-                        })}
-                      />
-                    </label>
-                    <label className="field">
-                      <span className="field__label">{t("admin.referral.field.reward")}</span>
-                      <input
-                        className="input"
-                        inputMode="numeric"
-                        value={form.partnerRewardPercent}
-                        placeholder={t("admin.referral.field.percent_ph")}
-                        onChange={(event) => setForm({
-                          ...form,
-                          partnerRewardPercent: event.target.value.replace(/\D/g, ""),
-                        })}
-                      />
-                    </label>
-                  </>
+                  <label className="field">
+                    <span className="field__label">{t("admin.referral.field.reward")}</span>
+                    <input
+                      className="input"
+                      inputMode="numeric"
+                      value={form.partnerRewardPercent}
+                      placeholder={t("admin.referral.field.percent_ph")}
+                      onChange={(event) => setForm({
+                        ...form,
+                        partnerRewardPercent: event.target.value.replace(/\D/g, ""),
+                      })}
+                    />
+                  </label>
                 ) : (
                   <label className="field">
                     <span className="field__label">{t("admin.referral.field.ad_cost")}</span>
@@ -846,11 +842,9 @@ export function ReferralAliasesSection() {
 
             <section className="refAnalytics__section">
               <h4 className="refAnalytics__title">{t("admin.referral.detailsModal.settings")}</h4>
+              <InfoRow label={t("admin.referral.field.first_bonus")} value={`+${infoItem.first_payment_bonus_percent}%`} />
               {infoItem.link_type === "partner" ? (
-                <>
-                  <InfoRow label={t("admin.referral.field.first_bonus")} value={`+${infoItem.first_payment_bonus_percent}%`} />
-                  <InfoRow label={t("admin.referral.field.reward")} value={`${infoItem.partner_reward_percent}%`} />
-                </>
+                <InfoRow label={t("admin.referral.field.reward")} value={`${infoItem.partner_reward_percent}%`} />
               ) : (
                 <InfoRow
                   label={t("admin.referral.field.ad_cost")}

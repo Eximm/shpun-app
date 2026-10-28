@@ -19,12 +19,26 @@ test("campaign links work without a partner and count each billing user once", a
   assert.equal(campaign.link_type, "campaign");
   assert.equal(campaign.partner_id, 0);
   assert.equal(campaign.billing_comment, "Реклама Telegram — Новости");
+  assert.equal(campaign.first_payment_bonus_percent, 0);
 
   repo.recordReferralAliasVisit(campaign.alias);
   assert.equal(repo.recordReferralAliasRegistrationForUser(campaign.alias, 501), true);
   assert.equal(repo.recordReferralAliasRegistrationForUser(campaign.alias, 501), false);
   assert.equal(repo.findReferralAlias(campaign.alias)?.visits_count, 1);
   assert.equal(repo.findReferralAlias(campaign.alias)?.registrations_count, 1);
+});
+
+test("campaign bonus is saved and validated without a partner or commission", async () => {
+  const repo = await import("./referralAliasesRepo.js");
+  const input = { alias: "youtube_bonus", linkType: "campaign", billingComment: "YouTube", firstPaymentBonusPercent: 25, partnerId: 123, partnerRewardPercent: 30 };
+  const campaign = repo.saveReferralAlias(input);
+  assert.equal(campaign.partner_id, 0);
+  assert.equal(campaign.partner_reward_percent, 0);
+  assert.equal(campaign.first_payment_bonus_percent, 25);
+  assert.equal(repo.findReferralAlias(input.alias)?.first_payment_bonus_percent, 25);
+  for (const firstPaymentBonusPercent of [-1, 101, "invalid"]) {
+    assert.throws(() => repo.saveReferralAlias({ ...input, firstPaymentBonusPercent }), /invalid_bonus_percent/);
+  }
 });
 
 test("partner links retain their existing validation and defaults", async () => {

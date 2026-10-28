@@ -137,7 +137,7 @@ export async function referralsRoutes(app: FastifyInstance) {
       alias: item.alias,
       linkType: item.link_type,
       partnerId: item.link_type === "partner" ? item.partner_id : 0,
-      firstPayPercent: item.link_type === "partner" ? item.first_payment_bonus_percent : 0,
+      firstPayPercent: item.first_payment_bonus_percent,
       // Canonical SHM comment, computed by ShpunApp so no consumer has to know
       // the partner/campaign rule.
       comment: referralComment(item),
@@ -237,6 +237,7 @@ export async function referralsRoutes(app: FastifyInstance) {
     const claimResult = await shmShpunAppTemplate<any>(shmSessionId, "campaign.claim", {
       campaign_alias: item.alias,
       campaign_comment: referralComment(item),
+      first_pay: item.first_payment_bonus_percent,
       referral_secret: String(process.env.SHM_REFERRAL_SECRET ?? ""),
     });
     if (!claimResult.ok) {

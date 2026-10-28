@@ -128,6 +128,7 @@ saveReferralAlias({
   linkType: "campaign",
   partnerId: 0,
   billingComment: "Реклама Telegram",
+  firstPaymentBonusPercent: 15,
   enabled: true,
 });
 
@@ -294,12 +295,26 @@ test("campaign alias is claimed without a partner id", async () => {
     password: "supersecret1",
     mode: "register",
     referral_alias: "telegram_news",
+    partner_id: 777,
+    first_pay: 99,
   });
   assert.equal(res.statusCode, 200);
   const claim = shmStub.calls.find((c) => c.body.includes("action=campaign.claim"));
   assert.ok(claim, "campaign.claim must be called for a campaign alias");
   assert.ok(claim!.body.includes("campaign_alias=telegram_news"));
+  const params = new URLSearchParams(claim!.body);
+  assert.equal(params.get("first_pay"), "15");
+  assert.equal(params.has("partner_id"), false);
+  assert.equal(params.get("referral_secret"), "test-referral-secret");
+  assert.ok(!shmRegisterBodies("campaign@gmail.com")[0].includes("partner_id"));
   assert.equal(findReferralAlias("telegram_news")?.registrations_count, before + 1);
+});
+
+test("logging in through a campaign does not attach or reset a first-payment bonus", async () => {
+  const before = shmStub.calls.filter((call) => call.body.includes("action=campaign.claim")).length;
+  const res = await register({ login: "returning@gmail.com", password: "supersecret1", mode: "login", referral_alias: "telegram_news" });
+  assert.equal(res.statusCode, 200);
+  assert.equal(shmStub.calls.filter((call) => call.body.includes("action=campaign.claim")).length, before);
 });
 
 /* ── Campaign click/visit accounting ─────────────────────────────────────── */
@@ -532,6 +547,7 @@ test("internal telegram-resolve returns the campaign billing comment", async () 
   const json = JSON.parse(res.body);
   assert.equal(json.linkType, "campaign");
   assert.equal(json.partnerId, 0);
+  assert.equal(json.firstPayPercent, 15);
   assert.equal(json.billing_comment, "Реклама Telegram");
   assert.equal(json.billingComment, "Реклама Telegram");
   assert.equal(json.comment, "Реклама Telegram");
@@ -606,6 +622,8 @@ test("internal telegram-claim writes a campaign comment", async () => {
   assert.ok(claims.length > 0, "SHM campaign.claim must be called");
   const body = claims[claims.length - 1].body;
   assert.ok(body.includes("campaign_alias=telegram_news"));
+  assert.equal(new URLSearchParams(body).get("first_pay"), "15");
+  assert.equal(new URLSearchParams(body).has("partner_id"), false);
   assert.ok(body.includes("campaign_comment="));
   assert.ok(body.includes("referral_secret=test-referral-secret"));
 });

@@ -298,6 +298,7 @@ async function tryAttachReferral(
       const claimResult = await callShmTemplate(shmSessionId, "campaign.claim", {
         campaign_alias: campaign.alias,
         campaign_comment: referralComment(campaign),
+        first_pay: campaign.first_payment_bonus_percent,
         referral_secret: String(process.env.SHM_REFERRAL_SECRET ?? ""),
       });
       const claimData = (claimResult as any)?.data && typeof (claimResult as any).data === "object"

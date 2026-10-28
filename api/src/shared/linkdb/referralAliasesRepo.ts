@@ -122,7 +122,7 @@ export function saveReferralAlias(input: {
   const partnerId = linkType === "campaign" ? 0 : Math.trunc(Number(input.partnerId));
   const campaignCode = String(input.campaignCode ?? "").trim() || null;
   const billingComment = String(input.billingComment ?? "").trim() || null;
-  const bonus = linkType === "campaign" ? 0 : Math.trunc(Number(input.firstPaymentBonusPercent ?? 0));
+  const bonus = Math.trunc(Number(input.firstPaymentBonusPercent ?? 0));
   const reward = linkType === "campaign" ? 0 : Math.trunc(Number(input.partnerRewardPercent ?? 30));
   // Manual ad cost only applies to campaign links; partner cost comes from the
   // billing commission model, never from a hand-entered number.
