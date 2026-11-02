@@ -65,6 +65,7 @@ type MonitoredServer = {
   uplink_mbps: number | null;
   visibility: Visibility;
   affects_public_health: number;
+  health_group?: string | null;
   node_exporter_enabled: number;
   exporter_auth_type: "none" | "basic";
   exporter_username: string;
@@ -142,6 +143,7 @@ const EMPTY_FORM = {
   active: true,
   visibility: "public" as Visibility,
   affectsPublicHealth: true,
+  healthGroup: "",
   nodeExporterEnabled: true,
   exporterAuthType: "none" as "none" | "basic",
   exporterUsername: "",
@@ -224,6 +226,7 @@ function trafficShort(mbps: number | null | undefined): string {
 }
 
 function healthShort(health: HealthTier, state: CurrentCheck["state"] | undefined, t: TFn): string {
+  if (!state || state === "no_data") return t("admin.monitoring.state.no_data");
   if (health === "healthy") return t("admin.monitoring.health.ok");
   if (state === "offline") return t("admin.monitoring.state.offline");
   return t("admin.monitoring.state.stale");
@@ -415,6 +418,7 @@ export function ServerStatusSection() {
       active: Number(item.active) === 1,
       visibility: item.visibility,
       affectsPublicHealth: Number(item.affects_public_health) === 1,
+      healthGroup: item.health_group || "",
       nodeExporterEnabled: Number(item.node_exporter_enabled) === 1,
       exporterAuthType: item.exporter_auth_type,
       exporterUsername: item.exporter_username || "",
@@ -451,6 +455,7 @@ export function ServerStatusSection() {
       active: form.active,
       visibility: form.visibility,
       affectsPublicHealth: form.affectsPublicHealth,
+      healthGroup: form.healthGroup,
       nodeExporterEnabled: form.nodeExporterEnabled,
       exporterAuthType: form.exporterAuthType,
       exporterUsername: form.exporterUsername,
@@ -856,7 +861,7 @@ export function ServerStatusSection() {
                       >⠿</span>
                       <div className="mon-row__identity">
                         <span className="mon-row__title">
-                          <span className={`serverStatus-dot serverStatus-dot--${Number(item.active) ? "online" : "offline"}`} />
+                          <span className={`serverStatus-dot serverStatus-dot--${current?.state === "fresh" && current.online === true ? "online" : current?.state === "offline" ? "offline" : current?.state === "stale" ? "warn" : "pending"}`} />
                           {item.visibility === "admin_only" ? <span className="mon-row__vis" title={t("admin.monitoring.badge.internal")}>🔒</span> : null}
                           <span className="mon-row__name" title={item.title || item.host}>{item.country_code ? `${countryFlag(item.country_code)} ` : ""}{item.title || item.host}</span>
                         </span>
@@ -1125,6 +1130,11 @@ export function ServerStatusSection() {
             <label className="admin-serverStatus-check">
               <input type="checkbox" checked={form.affectsPublicHealth} onChange={(e) => setForm((p) => ({ ...p, affectsPublicHealth: e.target.checked }))} />
               {t("admin.servers.field.affects_health")}
+            </label>
+            <label className="field admin-serverStatus-fieldWide">
+              <span className="field__label">{t("admin.servers.field.health_group")}</span>
+              <input className="input" maxLength={100} value={form.healthGroup} onChange={(e) => setForm((p) => ({ ...p, healthGroup: e.target.value }))} />
+              <small>{t("admin.servers.field.health_group_hint")}</small>
             </label>
             <label className="admin-serverStatus-check">
               <input type="checkbox" checked={form.nodeExporterEnabled} onChange={(e) => setForm((p) => ({ ...p, nodeExporterEnabled: e.target.checked }))} />

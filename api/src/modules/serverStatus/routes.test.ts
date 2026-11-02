@@ -115,3 +115,31 @@ test("manual server-status refresh is admin-only", async () => {
 test.after(async () => {
   await app.close();
 });
+
+test("persisted redundancy config drives the header without exposing topology", async () => {
+  const { linkDb } = await import("../../shared/linkdb/db.js");
+  const { updateMonitoredServer, getMonitoredServer } = await import("./repo.js");
+  linkDb.prepare("UPDATE monitored_servers SET affects_public_health = 0").run();
+  const ids: number[] = [];
+  for (const city of ["SPB", "MSK"]) {
+    const created = createMonitoredServer({ host: `${city}.internal`, kind: "gateway", visibility: "admin_only", healthGroup: "app-mirrors" });
+    assert.ok(created.ok);
+    ids.push(created.item.id);
+  }
+  const now = Math.floor(Date.now() / 1000);
+  for (const [i, id] of ids.entries()) {
+    linkDb.prepare(`INSERT INTO monitoring_current (server_id, updated_at, last_attempt_at, state, online)
+      VALUES (?, ?, ?, ?, ?)`).run(id, now, now, i ? "fresh" : "offline", i);
+  }
+  const health = async () => (await app.inject({ method: "GET", url: "/api/health" })).json();
+  assert.equal((await health()).status, "ok");
+  assert.deepEqual(Object.keys(await health()).sort(), ["ok", "status", "updatedAt"]);
+  assert.ok(updateMonitoredServer(ids[1], { title: "Moscow renamed" }).ok);
+  assert.equal(getMonitoredServer(ids[1])?.health_group, "app-mirrors");
+  linkDb.prepare("UPDATE monitoring_current SET state = 'offline', online = 0 WHERE server_id = ?").run(ids[1]);
+  assert.equal((await health()).status, "down");
+  linkDb.prepare("UPDATE monitoring_current SET state = 'fresh', online = 1, last_attempt_at = ? WHERE server_id = ?").run(now - 86400, ids[1]);
+  assert.equal((await health()).status, "unknown");
+  assert.ok(updateMonitoredServer(ids[1], { healthGroup: "" }).ok);
+  assert.equal(getMonitoredServer(ids[1])?.health_group, null);
+});

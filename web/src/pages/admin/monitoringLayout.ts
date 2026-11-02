@@ -138,7 +138,7 @@ export function healthTier(input: { state?: string | null; active?: number | boo
   if (input.active === 0 || input.active === false) return "warning";
   if (input.state === "offline") return "critical";
   if (input.state === "stale" || input.state === "no_data") return "warning";
-  return "healthy";
+  return input.state === "fresh" ? "healthy" : "warning";
 }
 
 /* ── Manual node order ────────────────────────────────────────────────────── */

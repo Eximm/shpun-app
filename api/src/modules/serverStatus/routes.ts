@@ -156,6 +156,8 @@ export async function serverStatusRoutes(app: FastifyInstance) {
         checks.map((c) => ({
           kind: c.kind,
           online: c.online,
+          state: c.state,
+          healthGroup: byId.get(c.id)?.health_group,
           visibility: byId.get(c.id)?.visibility,
           affectsPublicHealth: byId.get(c.id)?.affects_public_health === 1,
         })),

@@ -18,6 +18,7 @@ export type MonitoredServerRow = {
   uplink_mbps: number | null;
   visibility: ServerVisibility;
   affects_public_health: number;
+  health_group?: string | null;
   node_exporter_enabled: number;
   exporter_auth_type: ExporterAuthType;
   exporter_username: string;
@@ -65,6 +66,7 @@ function addColumn(sql: string) {
 addColumn(`ALTER TABLE monitored_servers ADD COLUMN country_code TEXT`);
 addColumn(`ALTER TABLE monitored_servers ADD COLUMN visibility TEXT NOT NULL DEFAULT 'public'`);
 addColumn(`ALTER TABLE monitored_servers ADD COLUMN affects_public_health INTEGER NOT NULL DEFAULT 1`);
+addColumn(`ALTER TABLE monitored_servers ADD COLUMN health_group TEXT`);
 addColumn(`ALTER TABLE monitored_servers ADD COLUMN node_exporter_enabled INTEGER NOT NULL DEFAULT 1`);
 addColumn(`ALTER TABLE monitored_servers ADD COLUMN exporter_auth_type TEXT NOT NULL DEFAULT 'none'`);
 addColumn(`ALTER TABLE monitored_servers ADD COLUMN exporter_username TEXT NOT NULL DEFAULT ''`);
@@ -226,6 +228,7 @@ export function createMonitoredServer(input: {
   uplinkMbps?: unknown;
   visibility?: unknown;
   affectsPublicHealth?: unknown;
+  healthGroup?: unknown;
   nodeExporterEnabled?: unknown;
   exporterAuthType?: unknown;
   exporterUsername?: unknown;
@@ -261,8 +264,8 @@ export function createMonitoredServer(input: {
     INSERT INTO monitored_servers
       (title, host, exporter_url, kind, country_code, active, sort_order, uplink_mbps,
        visibility, affects_public_health, node_exporter_enabled, exporter_auth_type,
-       exporter_username, exporter_password_encrypted, thresholds_json)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       exporter_username, exporter_password_encrypted, thresholds_json, health_group)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     title,
     host,
@@ -279,6 +282,7 @@ export function createMonitoredServer(input: {
     clean(input.exporterUsername, 200),
     password ? encryptSecret(password) : null,
     thresholds.json,
+    clean(input.healthGroup, 100) || null,
   );
 
   return { ok: true as const, item: getMonitoredServer(Number(info.lastInsertRowid))! };
@@ -344,6 +348,7 @@ export function updateMonitoredServer(id: number, input: Record<string, unknown>
         exporter_username = ?,
         exporter_password_encrypted = ?,
         thresholds_json = ?,
+        health_group = ?,
         updated_at = datetime('now')
     WHERE id = ?
   `).run(
@@ -364,6 +369,7 @@ export function updateMonitoredServer(id: number, input: Record<string, unknown>
     "exporterUsername" in input ? clean(input.exporterUsername, 200) : current.exporter_username,
     passwordEncrypted,
     thresholdsJson,
+    "healthGroup" in input ? clean(input.healthGroup, 100) || null : current.health_group ?? null,
     id,
   );
 

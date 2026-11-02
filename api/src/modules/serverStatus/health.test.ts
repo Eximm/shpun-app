@@ -59,3 +59,30 @@ test("critical tier with no confirmed state is degraded, not green", () => {
 test("high load does not turn a significant outage into something worse", () => {
   assert.equal(aggregateHealthStatus([c("infra", false, 10), c("vpn", true, 99)]), "down");
 });
+const mirror = (online: boolean | null, state?: "fresh" | "stale" | "offline" | "no_data") =>
+  ({ kind: "gateway" as const, online, healthGroup: "app-mirrors", state });
+
+test("DNS replicas tolerate either mirror failing without hiding total failure", () => {
+  for (const states of [[false, true], [true, false]] as const) {
+    assert.equal(aggregateHealthStatus([mirror(states[0]), mirror(states[1]), c("vpn", true)]), "ok");
+  }
+  assert.equal(aggregateHealthStatus([mirror(false), mirror(false), c("infra", true)]), "down");
+});
+
+test("stale and missing replicas cannot prove failover availability", () => {
+  assert.equal(aggregateHealthStatus([mirror(false), mirror(true, "stale"), c("vpn", true)]), "degraded");
+  assert.equal(aggregateHealthStatus([mirror(null), mirror(null)]), "unknown");
+  assert.equal(aggregateHealthStatus([mirror(null), mirror(true, "fresh")]), "ok");
+});
+
+test("replicas do not mask independent critical dependencies or VPN failure", () => {
+  assert.equal(aggregateHealthStatus([mirror(false), mirror(true), c("infra", false)]), "degraded");
+  assert.equal(aggregateHealthStatus([mirror(false), mirror(true), c("vpn", false)]), "down");
+  assert.equal(aggregateHealthStatus([mirror(false), { kind: "infra", online: true, healthGroup: "billing" }]), "down");
+  assert.equal(aggregateHealthStatus([mirror(false), { kind: "vpn", online: true, healthGroup: "app-mirrors" }]), "down");
+});
+
+test("diagnostic-only nodes are ignored before evaluating redundancy", () => {
+  assert.equal(aggregateHealthStatus([mirror(false), { ...mirror(true), affectsPublicHealth: false }]), "down");
+  assert.equal(aggregateHealthStatus([{ ...mirror(false), visibility: "admin_only", affectsPublicHealth: true }, mirror(true)]), "ok");
+});

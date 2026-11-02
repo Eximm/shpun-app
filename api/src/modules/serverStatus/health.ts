@@ -7,6 +7,8 @@
 // a header badge or a public status line. This module derives an aggregated
 // status and a minimal public projection from the existing monitor snapshot.
 //
+// Explicit healthGroup replicas are evaluated as one service: any fresh online
+// replica is sufficient. Losing redundancy remains an admin incident.
 // Aggregation model (availability, not observability):
 //   - kind = "infra" | "gateway"  -> critical tier (account / auth / edge).
 //   - kind = "vpn"                -> individual VPN node, non-critical on its own.
@@ -41,6 +43,10 @@ export type HealthCheckInput = {
   affectsPublicHealth?: boolean;
   /** Explicit critical-tier override (defaults from `kind`). */
   critical?: boolean;
+  /** Explicit interchangeable replicas of one service; never inferred from kind/name. */
+  healthGroup?: string | null;
+  state?: "fresh" | "stale" | "offline" | "no_data";
+
 };
 
 export type PublicServerCheck = {
@@ -91,7 +97,25 @@ function isEffective(c: HealthCheckInput): boolean {
 }
 
 export function aggregateHealthStatus(input: HealthCheckInput[]): SystemHealthStatus {
-  const checks = input.filter(isEffective);
+  const effective = input.filter(isEffective).map((c) => ({
+    ...c,
+    online: c.state === "stale" || c.state === "no_data" ? null : c.online,
+  }));
+  const groups = new Map<string, HealthCheckInput[]>();
+  const checks = effective.filter((c) => {
+    if (!c.healthGroup?.trim()) return true;
+    // Critical dependencies and VPN capacity must never mask each other.
+    const key = `${isCritical(c) ? "critical" : "vpn"}:${c.healthGroup.trim()}`;
+    groups.set(key, [...(groups.get(key) ?? []), c]);
+    return false;
+  });
+  for (const members of groups.values()) {
+    const online = members.some((c) => c.online === true) ? true
+      : members.every((c) => c.online === false) ? false : null;
+    // Loss of a named critical service is an outage even if other services work.
+    if (isCritical(members[0]) && online === false) return "down";
+    checks.push({ ...members[0], online });
+  }
   if (checks.length === 0) return "unknown";
 
   const known = checks.filter((c) => c.online != null);
@@ -115,7 +139,7 @@ export function aggregateHealthStatus(input: HealthCheckInput[]): SystemHealthSt
   }
 
   // Critical tier exists but has no confirmed state yet -> be honest, not green.
-  if (critical.length > 0 && criticalKnown.length === 0) {
+  if (critical.some((c) => c.online == null)) {
     return "degraded";
   }
 
