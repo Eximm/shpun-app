@@ -28,6 +28,7 @@ export type IncidentDto = {
   confirmedAt: number | null;
   resolvedAt: number | null;
   lastSeenAt: number;
+  acknowledgedAt?: number | null;
   value: number | null;
   triggerValue: number | null;
   peakValue: number | null;
@@ -78,7 +79,7 @@ function UplinkDiagnostics({ context }: { context: IncidentContext }) {
 }
 
 export function MonitoringIncidents({
-  active, history, counts, total, tab, onTab, severity, onSeverity, range, onRange, onOpenIncident, refreshing,
+  active, history, counts, total, tab, onTab, severity, onSeverity, range, onRange, onOpenIncident, onAcknowledge, acknowledging, refreshing,
 }: {
   active: IncidentDto[];
   history: IncidentDto[];
@@ -91,9 +92,13 @@ export function MonitoringIncidents({
   range: IncidentRange;
   onRange: (range: IncidentRange) => void;
   onOpenIncident: (incident: IncidentDto) => void;
+  onAcknowledge: (incident: IncidentDto) => void;
+  acknowledging: number[];
   refreshing: boolean;
 }) {
   const { t } = useI18n();
+  const attention = active.filter((inc) => inc.acknowledgedAt == null);
+  const acknowledged = active.filter((inc) => inc.acknowledgedAt != null);
 
   return (
     <section className="mon-incidents" id="mon-incidents">
@@ -151,11 +156,11 @@ export function MonitoringIncidents({
       </div>
 
       {tab === "active" ? (
-        active.length === 0 ? (
-          <div className="mon-incidents__empty">✓ {t("admin.monitoring.incidents.empty.active")}</div>
+        attention.length === 0 ? (
+          <div className="mon-incidents__empty">{t(active.length ? "admin.monitoring.incidents.empty.attention" : "admin.monitoring.incidents.empty.active")}</div>
         ) : (
           <div className="mon-incidentList">
-            {active.map((inc) => {
+            {attention.map((inc) => {
               const unit = unitFor(inc.ruleType);
               const showWas = inc.triggerValue != null && inc.value != null && inc.triggerValue !== inc.value;
               return (
@@ -179,6 +184,11 @@ export function MonitoringIncidents({
                       {`${t("admin.monitoring.incident.started")} ${fmtClock(inc.openedAt)} · ${t("admin.monitoring.incident.duration")} ${formatDuration(inc.durationSec)}`}
                     </div>
                   </button>
+                  <div className="mon-incidentCard__actions">
+                    <button type="button" className="btn btn--soft" disabled={acknowledging.includes(inc.id)} onClick={() => onAcknowledge(inc)}>
+                      {t(acknowledging.includes(inc.id) ? "common.loading" : "admin.monitoring.incidents.acknowledge")}
+                    </button>
+                  </div>
                   {inc.context && <UplinkDiagnostics context={inc.context} />}
                 </div>
               );
@@ -219,6 +229,16 @@ export function MonitoringIncidents({
             <div className="mon-incidents__more">{t("admin.monitoring.incidents.more", { shown: history.length, total })}</div>
           )}
         </div>
+      )}
+      {tab === "active" && acknowledged.length > 0 && (
+        <details className="mon-incidents__acknowledged">
+          <summary>{t("admin.monitoring.incidents.acknowledged")} ({acknowledged.length})</summary>
+          {acknowledged.map((inc) => (
+            <button key={inc.id} type="button" className="mon-incidents__acknowledgedItem" onClick={() => onOpenIncident(inc)}>
+              {severityIcon(inc.severity)} {inc.serverTitle} · {t(incidentRuleKey(inc.ruleType))} · {t(`admin.monitoring.incident.state.${inc.state}`)}
+            </button>
+          ))}
+        </details>
       )}
       {refreshing && <div className="mon-incidents__refreshing">{t("common.loading")}</div>}
     </section>

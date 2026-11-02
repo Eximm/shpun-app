@@ -269,6 +269,7 @@ export function ServerStatusSection() {
   const [actionAnchor, setActionAnchor] = useState<HTMLElement | null>(null);
   const [actionServerId, setActionServerId] = useState<number | null>(null);
   const [focusMetric, setFocusMetric] = useState<string | null>(null);
+  const [acknowledging, setAcknowledging] = useState<number[]>([]);
   const [globalActive, setGlobalActive] = useState<IncidentDto[]>([]);
   const [globalHistory, setGlobalHistory] = useState<IncidentDto[]>([]);
   const [globalCounts, setGlobalCounts] = useState<IncidentCounts>({ critical: 0, warning: 0, total: 0 });
@@ -316,6 +317,25 @@ export function ServerStatusSection() {
       setGlobalTotal(r.total ?? 0);
     } catch {
       /* keep previous incident data */
+    }
+  }
+
+  async function acknowledge(incident: IncidentDto) {
+    if (acknowledging.includes(incident.id)) return;
+    setAcknowledging((ids) => [...ids, incident.id]);
+    setError(null);
+    try {
+      const r = await apiFetch<{ ok: true; incident: IncidentDto }>(`/admin/monitoring/incidents/${incident.id}/acknowledge`, {
+        method: "POST", body: { severity: incident.severity },
+      });
+      setGlobalActive((items) => items.map((i) => i.id === r.incident.id ? r.incident : i));
+      setDetail((current) => current ? { ...current, activeIncidents: current.activeIncidents.map((i) => i.id === r.incident.id ? r.incident : i) } : current);
+      await loadIncidents();
+    } catch {
+      setError(t("admin.monitoring.incidents.acknowledge_failed"));
+      await loadIncidents();
+    } finally {
+      setAcknowledging((ids) => ids.filter((id) => id !== incident.id));
     }
   }
 
@@ -781,6 +801,8 @@ export function ServerStatusSection() {
             range={incidentRange}
             onRange={(r) => { setIncidentRange(r); void loadIncidents({ range: r }); }}
             onOpenIncident={openIncident}
+            onAcknowledge={(inc) => void acknowledge(inc)}
+            acknowledging={acknowledging}
             refreshing={refreshing}
           />
 
@@ -965,6 +987,7 @@ export function ServerStatusSection() {
                                           <span className="mon-incident__rule">{t(incidentRuleKey(inc.ruleType))}</span>
                                           <span className="mon-incident__badge">{`${t(`admin.monitoring.incident.severity.${inc.severity}`)} · ${t(`admin.monitoring.incident.state.${inc.state}`)}`}</span>
                                         </div>
+                                        {inc.acknowledgedAt != null && <div className="mon-incident__meta">{t("admin.monitoring.incidents.acknowledged_status")} · {fmtClockLocal(inc.acknowledgedAt)}</div>}
                                         <div className="mon-incident__values">
                                           {showWas ? `${t("admin.monitoring.incident.was")} ${formatIncidentValue(inc.triggerValue, unit)} · ` : ""}
                                           {inc.value != null ? `${t("admin.monitoring.incident.now")} ${formatIncidentValue(inc.value, unit)}` : ""}

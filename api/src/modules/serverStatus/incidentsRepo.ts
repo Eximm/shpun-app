@@ -35,6 +35,8 @@ export type MonitoringIncidentRow = {
   notification_state: string;
   notify_count: number;
   last_notified_at: number | null;
+  acknowledged_at: number | null;
+  acknowledged_by: number | null;
 };
 
 linkDb.exec(`
@@ -75,6 +77,8 @@ try { linkDb.exec(`ALTER TABLE monitoring_incidents ADD COLUMN server_title TEXT
 try { linkDb.exec(`ALTER TABLE monitoring_incidents ADD COLUMN server_kind TEXT`); } catch { /* exists */ }
 try { linkDb.exec(`ALTER TABLE monitoring_incidents ADD COLUMN trigger_value REAL`); } catch { /* exists */ }
 try { linkDb.exec(`ALTER TABLE monitoring_incidents ADD COLUMN peak_value REAL`); } catch { /* exists */ }
+try { linkDb.exec(`ALTER TABLE monitoring_incidents ADD COLUMN acknowledged_at INTEGER`); } catch { /* exists */ }
+try { linkDb.exec(`ALTER TABLE monitoring_incidents ADD COLUMN acknowledged_by INTEGER`); } catch { /* exists */ }
 linkDb.exec(`CREATE INDEX IF NOT EXISTS idx_monitoring_incidents_opened ON monitoring_incidents(opened_at);`);
 
 linkDb.exec(`
@@ -188,7 +192,7 @@ export function setAlerting(id: number, ts: number) {
 
 export function escalateIncident(id: number, severity: IncidentSeverity, message: string) {
   linkDb
-    .prepare(`UPDATE monitoring_incidents SET severity = ?, message = ? WHERE id = ? AND resolved_at IS NULL`)
+    .prepare(`UPDATE monitoring_incidents SET severity = ?, message = ?, acknowledged_at = NULL, acknowledged_by = NULL WHERE id = ? AND resolved_at IS NULL`)
     .run(severity, message.slice(0, 300), id);
 }
 
@@ -331,7 +335,7 @@ export function queryIncidents(params: IncidentQuery = {}) {
   const limit = Math.max(1, Math.min(200, params.limit ?? 50));
   const offset = Math.max(0, params.offset ?? 0);
   const order = status === "active"
-    ? `CASE severity WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END, last_seen_at DESC`
+    ? `CASE WHEN acknowledged_at IS NULL THEN 0 ELSE 1 END, CASE severity WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END, last_seen_at DESC`
     : `COALESCE(resolved_at, last_seen_at) DESC, id DESC`;
 
   return linkDb
@@ -391,4 +395,15 @@ export function resolveIncidentsForServer(serverId: number, ts: number) {
     resolved += 1;
   }
   return resolved;
+}
+
+
+/** Shared operator acknowledgement; deliberately independent of incident lifecycle. */
+export function acknowledgeIncident(id: number, severity: IncidentSeverity, adminId: number | null, ts: number) {
+  return linkDb.prepare(`
+    UPDATE monitoring_incidents
+    SET acknowledged_at = COALESCE(acknowledged_at, ?),
+        acknowledged_by = CASE WHEN acknowledged_at IS NULL THEN ? ELSE acknowledged_by END
+    WHERE id = ? AND severity = ? AND resolved_at IS NULL AND state IN ('alerting', 'recovering')
+  `).run(ts, adminId, id, severity).changes > 0;
 }

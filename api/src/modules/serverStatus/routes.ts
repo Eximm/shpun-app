@@ -27,6 +27,8 @@ import { isServerStatusAdmin } from "./adminGuard.js";
 import { getGlobalThresholds, resolveThresholds, setGlobalThresholds } from "./settingsRepo.js";
 import { historyStats, querySeries, querySeriesMeta } from "./historyRepo.js";
 import {
+  acknowledgeIncident,
+  getIncident,
   countActiveIncidents,
   countIncidents,
   listActiveIncidents,
@@ -79,6 +81,7 @@ function toIncidentDto(row: MonitoringIncidentRow, fallbackTitle?: string | null
     confirmedAt: row.confirmed_at,
     resolvedAt: row.resolved_at,
     lastSeenAt: row.last_seen_at,
+    acknowledgedAt: row.acknowledged_at ?? null,
     value: row.value,
     triggerValue: row.trigger_value ?? null,
     peakValue: row.peak_value ?? row.value ?? null,
@@ -345,6 +348,23 @@ export async function serverStatusRoutes(app: FastifyInstance) {
       recentIncidents: listRecentIncidents(20, id).map((inc) => toIncidentDto(inc, row.title)),
       historyStats: historyStats(id),
     });
+  });
+
+  app.post("/admin/monitoring/incidents/:id/acknowledge", async (req, reply) => {
+    if (!(await requireAdmin(req, reply))) return;
+    const id = Number((req.params as any).id);
+    const severity = (req.body as any)?.severity;
+    if (!Number.isSafeInteger(id) || id <= 0 || !["info", "warning", "critical"].includes(severity)) {
+      return reply.code(400).send({ ok: false, error: "invalid_acknowledgement" });
+    }
+    if (!getIncident(id)) return reply.code(404).send({ ok: false, error: "not_found" });
+    const session = getSessionFromRequest(req) as any;
+    const actor = Number(session?.shmUserId);
+    // Match the severity the operator actually saw: an unseen escalation must remain visible.
+    if (!acknowledgeIncident(id, severity, Number.isSafeInteger(actor) && actor > 0 ? actor : null, Math.floor(Date.now() / 1000))) {
+      return reply.code(409).send({ ok: false, error: "incident_changed" });
+    }
+    return reply.send({ ok: true, incident: toIncidentDto(getIncident(id)!) });
   });
 
   app.get("/admin/monitoring/incidents", async (req, reply) => {

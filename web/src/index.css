@@ -9614,3 +9614,8 @@ button.reviews-star:not(:disabled) {
   .supportMsg--assistant, .supportAssistantDots i { animation: none; }
 }
 .supportMsg__sources { display: grid; gap: 5px; margin-top: 8px; font-size: 12px; overflow-wrap: anywhere; }
+
+.mon-incidentCard__actions { display: flex; justify-content: flex-end; padding: 0 12px 10px; }
+.mon-incidents__acknowledged { margin-top: 10px; color: var(--muted); font-size: 12px; }
+.mon-incidents__acknowledged > summary { cursor: pointer; padding: 6px 0; }
+.mon-incidents__acknowledgedItem { display: block; width: 100%; text-align: left; color: var(--muted); background: transparent; border: 0; padding: 8px 0; cursor: pointer; overflow-wrap: anywhere; }

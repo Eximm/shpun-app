@@ -118,6 +118,60 @@ test("deleted server history keeps its name snapshot", async () => {
   assert.ok(row, "history must survive server deletion with its name snapshot");
 });
 
+
+function ack(id: number | string, severity: string = "critical", sid = "sid-admin") {
+  return app.inject({ method: "POST", url: `/api/admin/monitoring/incidents/${id}/acknowledge`, headers: headers(sid), payload: { severity } });
+}
+
+test("acknowledgement requires admin and validates incident identity and severity", async () => {
+  const id = findActiveIncident(bId, "offline")!.id;
+  assert.equal((await app.inject({ method: "POST", url: `/api/admin/monitoring/incidents/${id}/acknowledge`, payload: { severity: "critical" } })).statusCode, 401);
+  assert.equal((await ack(id, "critical", "sid-user")).statusCode, 403);
+  assert.equal((await ack("1.5")).statusCode, 400);
+  assert.equal((await ack(id, "invalid")).statusCode, 400);
+  assert.equal((await ack(999999)).statusCode, 404);
+  assert.equal(findActiveIncident(bId, "offline")!.acknowledged_at, null);
+});
+
+test("acknowledgement persists, is idempotent and leaves health, counts and lifecycle intact", async () => {
+  const before = findActiveIncident(bId, "offline")!;
+  const counts = countActiveIncidents();
+  const current = linkDb.prepare("SELECT * FROM monitoring_current WHERE server_id = ?").get(bId);
+  const res = await ack(before.id);
+  assert.equal(res.statusCode, 200);
+  assert.ok(res.json().incident.acknowledgedAt > 0);
+  const after = findActiveIncident(bId, "offline")!;
+  assert.equal(after.acknowledged_by, 901);
+  assert.equal(after.state, before.state);
+  assert.equal(after.resolved_at, null);
+  assert.equal(after.notification_state, before.notification_state);
+  assert.deepEqual(countActiveIncidents(), counts);
+  assert.deepEqual(linkDb.prepare("SELECT * FROM monitoring_current WHERE server_id = ?").get(bId), current);
+  assert.equal((await ack(before.id)).json().incident.acknowledgedAt, after.acknowledged_at);
+  assert.equal((await incidents()).active.find((i: any) => i.id === before.id).acknowledgedAt, after.acknowledged_at);
+});
+
+test("escalation restores attention and rejects acknowledgement of an unseen severity", async () => {
+  const rule = { ruleType: "high_cpu", severity: "warning" as const, active: true, hold: true, value: 95, threshold: 90, confirmAfterChecks: 1, message: "CPU" };
+  const run = (severity: "warning" | "critical", ts: number) => evaluateServerIncidents({ serverId: bId, serverTitle: "Prague", ts, thresholds, rules: [{ ...rule, severity }] });
+  run("warning", T0 + 600);
+  const id = findActiveIncident(bId, "high_cpu")!.id;
+  assert.equal((await ack(id, "warning")).statusCode, 200);
+  run("warning", T0 + 660);
+  assert.ok(findActiveIncident(bId, "high_cpu")!.acknowledged_at);
+  run("critical", T0 + 720);
+  assert.equal(findActiveIncident(bId, "high_cpu")!.acknowledged_at, null);
+  assert.equal((await ack(id, "warning")).statusCode, 409);
+  assert.equal((await incidents("?limit=1")).active[0].id, id, "unacknowledged incident must take priority over an acknowledged outage");
+  assert.equal((await ack(id)).statusCode, 200);
+  resolveIncident(id, T0 + 780);
+  assert.equal((await ack(id)).statusCode, 409);
+  run("critical", T0 + 840);
+  const reopened = findActiveIncident(bId, "high_cpu")!;
+  assert.notEqual(reopened.id, id);
+  assert.equal(reopened.acknowledged_at, null);
+});
+
 test.after(async () => {
   await app.close();
   linkDb.close();
