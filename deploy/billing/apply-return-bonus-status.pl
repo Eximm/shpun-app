@@ -27,7 +27,7 @@ my $tt = Template->new({ START_TAG => '\{\{', END_TAG => '\}\}', ANYCASE => 1, E
 $tt->context->template(\$source) or die $tt->error;
 # Verify the actual billing-backed lifecycle without exposing private settings.
 switch_user($verify_user);
-my $rendered = $tpl->parse(data => $source);
+my $rendered = $tpl->parse(data => $source, vars => { user => get_service("user", _id => $verify_user) });
 my $result = decode_json($rendered);
 die "Read-only projection invalid" unless $result->{ok} == 1 && ref $result->{return_bonus} eq 'HASH';
 die "Restored promotion is not represented" unless $result->{return_bonus}{tariff_user_service_id} == $verify_service && $result->{return_bonus}{tariff_activated} == 1;
