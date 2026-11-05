@@ -1,6 +1,6 @@
 use strict;
 use warnings;
-BEGIN { $ENV{REQUEST_METHOD} = 'GET'; $ENV{QUERY_STRING} = 'action=promo.return.status'; }
+BEGIN { $ENV{REQUEST_METHOD} = 'GET'; $ENV{QUERY_STRING} = 'action=promo.return.status&session_id=local-validation'; }
 use SHM;
 use Core::System::ServiceManager qw(get_service);
 use Core::Utils qw(switch_user);
