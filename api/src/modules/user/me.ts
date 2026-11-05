@@ -1,8 +1,11 @@
 // api/src/modules/user/me.ts
 
-import { shmGetMe, shmShpunAppStatus } from "../../shared/shm/shmClient.js";
+import { shmGetMe, shmShpunAppStatus, shmShpunAppReturnBonus } from "../../shared/shm/shmClient.js";
+
+import { publicReturnBonus } from "./returnBonus.js";
 
 export type MeView = {
+  returnBonus: ReturnType<typeof publicReturnBonus>;
   userId: number;
   login: string;
   fullName?: string;
@@ -41,9 +44,10 @@ function toBool(v: any): boolean {
 export async function fetchMe(shmSessionId: string): Promise<MeResult> {
   // Параллельно: данные пользователя + статус ShpynApp.
   // Два запроса вместо четырёх последовательных.
-  const [meResp, statusResp] = await Promise.all([
+  const [meResp, statusResp, returnResp] = await Promise.all([
     shmGetMe(shmSessionId),
     shmShpunAppStatus(shmSessionId),
+    shmShpunAppReturnBonus(shmSessionId).catch(() => null),
   ]);
 
   if (!meResp.ok) {
@@ -75,6 +79,7 @@ export async function fetchMe(shmSessionId: string): Promise<MeResult> {
   const emailStepDone    = appData ? toBool(onboardingData?.step_email)    : true;
 
   const me: MeView = {
+    returnBonus: returnResp?.ok && (returnResp.json as any)?.ok === 1 ? publicReturnBonus(returnResp.json) : null,
     userId:   toNum(meRaw.user_id, 0),
     login:    toStr(meRaw.login, ""),
     fullName: toStr(meRaw.full_name, "") || undefined,

@@ -1,6 +1,7 @@
 // FILE: web/src/pages/PromoModal.tsx
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useOnboardingPromptSlot } from '../shared/onboardingPromptCoordinator'
 import { apiFetch } from '../shared/api/client'
 import { useI18n } from '../shared/i18n'
 import { useAccountMoney } from '../shared/money/useAccountMoney'
@@ -237,6 +238,7 @@ export type PromoModalProps = {
 
 export function PromoModal({ open, onClose, onSuccess }: PromoModalProps) {
   const { t } = useI18n()
+  const promptGranted = useOnboardingPromptSlot("promo_manual", open)
   const formatCurrency = useAccountMoney()
   const [code,    setCode]    = useState('')
   const [phase,   setPhase]   = useState<Phase>({ tag: 'idle' })
@@ -310,7 +312,7 @@ export function PromoModal({ open, onClose, onSuccess }: PromoModalProps) {
 
   const handleClose = () => { if (phase.tag !== 'loading') onClose() }
 
-  if (!mounted) return null
+  if (!mounted || !promptGranted) return null
 
   const isLoading = phase.tag === 'loading'
   const isSuccess = phase.tag === 'success'

@@ -1,9 +1,12 @@
 // FILE: api/src/modules/services/routes.ts
+import { publicReturnBonus } from "../user/returnBonus.js";
 import type { FastifyInstance } from "fastify";
 import { getSessionFromRequest } from "../../shared/session/sessionStore.js";
 import { parseShmPeriod } from "../../shared/shm/period.js";
 import {
   shmCreateServiceOrder,
+  shmShpunAppReturnBonus,
+  shmShpunAppPromoOpportunities,
   shmDeleteUserService,
   shmGetServiceOrder,
   shmGetUserEmail,
@@ -528,6 +531,8 @@ export async function servicesRoutes(app: FastifyInstance) {
         createdAt,
         expireAt,
         daysLeft: calcDaysLeft(expireAt),
+        nextServiceId: us?.next != null ? Number(us.next) || null : null,
+        autoBill: us?.auto_bill === 1 || us?.auto_bill === "1",
         price: Number(svc?.cost ?? 0) || 0,
         periodMonths: Number(svc?.period ?? 1) || 1,
         currency: "RUB",
@@ -1238,6 +1243,9 @@ export async function servicesRoutes(app: FastifyInstance) {
           periodRaw,
           periodHuman: p.human,
           flags: { orderOnlyOnce: !!x?.config?.order_only_once },
+          noDiscount: Number(x?.no_discount ?? 0) === 1,
+          bonusLimitPercent: parseConfigObject(x?.config).limit_bonus_percent == null || parseConfigObject(x?.config).limit_bonus_percent === ""
+            ? 100 : Math.max(0, Math.min(100, Number(parseConfigObject(x?.config).limit_bonus_percent) || 0)),
         };
       });
 
@@ -1715,6 +1723,26 @@ export async function servicesRoutes(app: FastifyInstance) {
           error: "trial_already_used",
           message: "Пробный доступ для этой группы услуг уже был использован ранее.",
         });
+      }
+    }
+
+    // The assistant may have been open while a payment activated a promotion.
+    // Recheck at the mutation boundary, including old browser tabs.
+    {
+      const [account, services, promotions] = await Promise.all([
+        shmShpunAppReturnBonus(shmSessionId), loadUserServicesForOrderCheck(), shmShpunAppPromoOpportunities(shmSessionId),
+      ]);
+      if (!account.ok || !(account.json as any)?.return_bonus || !services.ok || !promotions.ok || ![1, "1", true].includes((promotions.json as any)?.ok)) {
+        return reply.code(503).send({ ok: false, error: "assistant_state_unavailable" });
+      }
+      const returnBonus = publicReturnBonus(account.json);
+      const current = services.items.find((x: any) => !x.parent && String(x.status).toUpperCase() !== "REMOVED");
+      const promoService = services.items.find((x: any) => Number(x.user_service_id) === returnBonus?.userServiceId && Number(x.service_id) === returnBonus?.tariffId && String(x.status).toUpperCase() !== "REMOVED");
+      const offer = (promotions.json as any)?.return_offer;
+      const firstPay = (promotions.json as any)?.first_pay;
+      const flag = (v: unknown) => v === true || v === 1 || v === "1";
+      if ((body.assistant === true && (current || flag(firstPay?.pending) || (flag(offer?.active) && flag(offer?.eligible)))) || flag(offer?.pending) || returnBonus?.pending || (promoService && (body.assistant === true || serviceId === Number(promoService.next)))) {
+        return reply.code(409).send({ ok: false, error: "assistant_existing_access", userServiceId: current?.user_service_id ?? null });
       }
     }
 

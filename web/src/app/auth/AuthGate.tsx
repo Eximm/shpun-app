@@ -37,9 +37,14 @@ function bonusOfferDismissedKey(userId: number, authSessionId: string, offerId: 
   return `${BONUS_OFFER_DISMISSED_PREFIX}${userId}:${authSessionId || "current"}:${offerId}`;
 }
 
+function bonusFlowHandled(userId: number, authSessionId: string): boolean {
+  try { return sessionStorage.getItem(bonusOfferDismissedKey(userId, authSessionId, "handled")) === "1"; }
+  catch { return false; }
+}
+
 function readBonusOfferDismissed(userId: number, authSessionId: string, offerId: string): boolean {
   try {
-    return sessionStorage.getItem(bonusOfferDismissedKey(userId, authSessionId, offerId)) === "1";
+    return bonusFlowHandled(userId, authSessionId) || sessionStorage.getItem(bonusOfferDismissedKey(userId, authSessionId, offerId)) === "1";
   } catch {
     return false;
   }
@@ -48,6 +53,7 @@ function readBonusOfferDismissed(userId: number, authSessionId: string, offerId:
 function writeBonusOfferDismissed(userId: number, authSessionId: string, offerId: string) {
   try {
     sessionStorage.setItem(bonusOfferDismissedKey(userId, authSessionId, offerId), "1");
+    sessionStorage.setItem(bonusOfferDismissedKey(userId, authSessionId, "handled"), "1");
   } catch {
     // ignore
   }
@@ -292,6 +298,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   });
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const [bonusOpportunities, setBonusOpportunities] = useState<BonusOpportunity[]>([]);
+  const [bonusChecked, setBonusChecked] = useState(false);
   const [bonusPromptClosed, setBonusPromptClosed] = useState(false);
   const telegramMiniApp = useMemo(() => isTelegramMiniAppEnv(), []);
 
@@ -321,15 +328,15 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     (offer) => !readBonusOfferDismissed(uid, serverAuthSessionId, offer.id)
   ) ?? null;
   const showBonusOpportunity = Boolean(activeBonusOpportunity) && !bonusPromptClosed;
-  const assistantFlow = loc.pathname === "/assistant" || new URLSearchParams(loc.search).get("assistant") === "1";
-  const profilePromptGranted = useOnboardingPromptSlot("profile", needsFirstLoginOnboarding && !assistantFlow);
+  const assistantFlow = ["/assistant", "/payments", "/services/order"].includes(loc.pathname) || new URLSearchParams(loc.search).get("assistant") === "1";
+  const profilePromptGranted = useOnboardingPromptSlot("profile", needsFirstLoginOnboarding && bonusChecked && !bonusFlowHandled(uid, serverAuthSessionId) && !showBonusOpportunity && !me?.returnBonus?.pending && !assistantFlow);
   const bonusPromptGranted = useOnboardingPromptSlot(
     "bonus_offer",
-    !needsFirstLoginOnboarding && showBonusOpportunity && !assistantFlow
+    showBonusOpportunity && !assistantFlow
   );
   const pushPromptGranted = useOnboardingPromptSlot(
     "push",
-    !needsFirstLoginOnboarding && !showBonusOpportunity && !assistantFlow && pushPromptOpen
+    !needsFirstLoginOnboarding && bonusChecked && !bonusFlowHandled(uid, serverAuthSessionId) && !showBonusOpportunity && !me?.returnBonus?.pending && !assistantFlow && pushPromptOpen
   );
 
   const authInProgress = hasFreshAuthPending();
@@ -424,6 +431,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     setBonusPromptClosed(false);
+    setBonusChecked(false);
     if (!uid || loading) {
       setBonusOpportunities([]);
       return () => { cancelled = true; };
@@ -434,7 +442,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       })
       .catch(() => {
         if (!cancelled) setBonusOpportunities([]);
-      });
+      }).finally(() => { if (!cancelled) setBonusChecked(true); });
     return () => { cancelled = true; };
   }, [uid, serverAuthSessionId, loading]);
 
@@ -656,7 +664,10 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         offer={activeBonusOpportunity}
         onActivate={async (code) => {
           await apiFetch("/promo/apply", { method: "POST", body: { code } });
+          if (activeBonusOpportunity && uid) writeBonusOfferDismissed(uid, serverAuthSessionId, activeBonusOpportunity.id);
+          setBonusPromptClosed(true);
           await refetchMe();
+          navigate("/home");
         }}
         onOpenPayments={() => {
           if (activeBonusOpportunity && uid) writeBonusOfferDismissed(uid, serverAuthSessionId, activeBonusOpportunity.id);

@@ -846,3 +846,8 @@ export async function shmShpunAppPromoProfile(
 export async function shmShpunAppPromoOpportunities(shmSessionId: string) {
   return await shmShpunAppTemplate<any>(shmSessionId, 'promo.opportunities.status')
 }
+
+/** Read-only, whitelisted promotion lifecycle; private user settings stay in SHM. */
+export async function shmShpunAppReturnBonus(shmSessionId: string) {
+  return await shmShpunAppTemplate<any>(shmSessionId, 'promo.return.status');
+}

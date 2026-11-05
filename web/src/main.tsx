@@ -13,7 +13,7 @@ import "./index.css";
 
 import { Login }            from "./pages/Login";
 import { Home }             from "./pages/Home";
-import { isConnectionAssistantSnoozed } from "./shared/connectionAssistant";
+import { isConnectionAssistantSnoozed, shouldAutoStartAssistant } from "./shared/connectionAssistant";
 import { Feed }             from "./pages/Feed";
 import { Services }         from "./pages/Services";
 import { ServicesOrder }    from "./pages/ServicesOrder";
@@ -32,6 +32,7 @@ import { AdminPage }        from "./pages/AdminPage";
 import { LegalDocs }        from "./pages/LegalDocs";
 import { HelpHome, HelpSearchView, HelpCategoryView, HelpArticleView } from "./pages/Help";
 
+import { useMe } from "./app/auth/useMe";
 import { AuthGate }                from "./app/auth/AuthGate";
 import { BottomNav }               from "./app/layout/BottomNav";
 import { SupportBell }              from "./app/layout/SupportBell";
@@ -86,7 +87,7 @@ if (import.meta.env.PROD) {
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
-type ServicesSummaryResp = { ok: true; summary?: { active?: number; pending?: number; notPaid?: number; blocked?: number } };
+type ServicesSummaryResp = { ok: true; items: Array<{ status: string }>; summary?: { active?: number; pending?: number; notPaid?: number; blocked?: number } };
 
 const ROUTE_ORDER = ["/", "/home", "/feed", "/services", "/payments", "/profile"];
 
@@ -158,10 +159,11 @@ function AuthedLayout() {
 /* ─── LandingRoute ───────────────────────────────────────────────────────── */
 
 function LandingRoute() {
+  const { me } = useMe();
   const { t } = useI18n();
   const loc   = useLocation();
   const snoozed = isConnectionAssistantSnoozed();
-  const cachedDestination = snoozed ? "home" : sessionStorage.getItem("landing_destination");
+  const cachedDestination = snoozed ? "home" : null;
   // "services" used to be cached for clients who postponed the assistant.
   // It made the Home tab render the Services page, so intentionally ignore
   // that legacy value and calculate a real landing destination again.
@@ -175,10 +177,12 @@ function LandingRoute() {
     let cancelled = false;
     void (async () => {
       try {
-        const resp   = await apiFetch<ServicesSummaryResp>("/services", { method: "GET" });
-        const active = Number(resp?.summary?.active ?? 0);
+        const [resp, offers] = await Promise.all([
+          apiFetch<ServicesSummaryResp>("/services", { method: "GET" }),
+          apiFetch<{ items: unknown[] }>("/promo/opportunities", { method: "GET" }),
+        ]);
         if (cancelled) return;
-        const destination = active > 0 || isConnectionAssistantSnoozed() ? "home" : "assistant";
+        const destination = !isConnectionAssistantSnoozed() && shouldAutoStartAssistant(resp.items ?? [], offers.items ?? [], Boolean(me?.returnBonus?.pending), me?.profile.created ?? null) ? "assistant" : "home";
         sessionStorage.setItem("landing_destination", destination);
         setState(destination);
       } catch { if (!cancelled) setState("home"); }

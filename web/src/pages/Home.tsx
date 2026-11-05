@@ -10,6 +10,7 @@ import { apiFetch } from "../shared/api/client";
 import { toast } from "../shared/ui/toast";
 import { buildHomeNewsPreview } from "../shared/ui/newsPreview";
 import { renderNewsText } from "../shared/ui/newsRichText";
+import { ReturnBonusCard } from "../shared/ui/ReturnBonusCard";
 import { PromoModal } from "./PromoModal";
 import { getTelegramWebApp, isTelegramMiniAppEnv } from "../shared/telegram/sdk";
 
@@ -375,6 +376,7 @@ export function Home() {
         </div>
       </div>
 
+      <ReturnBonusCard />
       {/* ── Акцентный блок: баланс + CTA ── */}
       <div className="home-balance-card" style={{
         background: balanceCardStyle.background,

@@ -1,0 +1,36 @@
+import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+import { build } from 'esbuild';
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const dir = mkdtempSync(path.join(tmpdir(), 'shpun-return-test-'));
+try {
+ const outfile = path.join(dir, 'policy.cjs');
+ await build({ stdin: { resolveDir: root, contents: 'export * from "./src/shared/connectionAssistant.ts"; export * from "./src/shared/returnBonus.ts";', loader: 'ts' }, bundle: true, platform: 'node', format: 'cjs', outfile });
+ const p = createRequire(import.meta.url)(outfile);
+ const now = Date.now();
+ assert.equal(p.shouldAutoStartAssistant([], [], false, new Date(now - 3600000).toISOString(), now), true);
+ assert.equal(p.shouldAutoStartAssistant([], [{}], false, new Date(now).toISOString(), now), false);
+ assert.equal(p.shouldAutoStartAssistant([], [], true, new Date(now).toISOString(), now), false);
+ assert.equal(p.shouldAutoStartAssistant([], [], false, '2024-11-05', now), false);
+ assert.equal(p.shouldAutoStartAssistant([], [], false, null, now), false);
+ const active = { userServiceId: 99, serviceId: 56, category: 'remnawave', status: 'active', title: 'Promo', nextServiceId: 51 };
+ const unpaid = { userServiceId: 98, category: 'remnawave', status: 'not_paid' };
+ assert.equal(p.selectConnectionService([unpaid, active], 98).userServiceId, 99);
+ assert.equal(p.shouldOfferConnectionAssistant([unpaid, active]), false);
+ const bonus = { tariffActivated: true, userServiceId: 99, tariffId: 56 };
+ assert.equal(p.returnBonusService([active], bonus), active);
+ assert.equal(p.returnBonusService([{ ...active, serviceId: 51 }], bonus), null, 'converted ordinary Flex must not be called promotional');
+ assert.equal(p.returnBonusService([{ ...active, status: 'removed' }], bonus), null);
+ assert.equal(p.renewalCoverage(280, 200).sufficient, true);
+ assert.equal(p.renewalCoverage(280, 200, 0, 12, 50).amount, 188);
+ assert.equal(p.renewalCoverage(100, 200, 0, 300, 50).amount, 100);
+ assert.equal(p.renewalCoverage(0, 200, 0, 300, 50).sufficient, false);
+ assert.equal(p.renewalCoverage(80, 200).shortage, 120);
+ assert.equal(p.renewalCoverage(200, null), null);
+ assert.equal(p.renewalCoverage(160, 200, 20).sufficient, true);
+ console.log('PASS returning-customer priority, existing-access selection, conversion and renewal balance');
+} finally { rmSync(dir, { recursive: true, force: true }); }

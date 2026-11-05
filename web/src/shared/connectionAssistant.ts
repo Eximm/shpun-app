@@ -4,6 +4,8 @@ export const CONNECTION_ASSISTANT_SNOOZE_KEY = "connection-assistant.snoozed-unt
 
 export function selectConnectionService<T extends { userServiceId: number; category: string; parent?: number | null; status: string }>(items: readonly T[], targetUsi = 0): T | null {
   const targeted = items.find((item) => item.userServiceId === targetUsi && item.status !== "removed");
+  const active = visibleFlexServices(items).find((item) => item.status === "active");
+  if (active && targeted?.status !== "active") return active;
   if (targeted) return flexPrimaryService(targeted, items);
   const weight: Record<string, number> = { active: 0, pending: 1, init: 2, not_paid: 3, blocked: 4, error: 5 };
   return visibleFlexServices(items)
@@ -17,6 +19,12 @@ export function isConnectionAssistantSnoozed(): boolean {
 }
 
 export function shouldOfferConnectionAssistant(items: readonly { status: string }[]): boolean {
-  return !items.some((item) => item.status === "active")
-    || items.some((item) => ["not_paid", "pending", "init", "error"].includes(item.status));
+  return !items.some((item) => item.status === "active");
+}
+
+export function shouldAutoStartAssistant(items: readonly { status: string }[], offers: readonly unknown[], pendingBonus = false, createdAt: string | null = null, now = Date.now()): boolean {
+  // Returning accounts keep their history even when no service is currently active.
+  // Nothing automatically starts an order until promotions have been checked.
+  const age = createdAt ? now - Date.parse(createdAt) : Number.NaN;
+  return Number.isFinite(age) && age >= 0 && age < 24 * 60 * 60 * 1000 && items.length === 0 && offers.length === 0 && !pendingBonus;
 }

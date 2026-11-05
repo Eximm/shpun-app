@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 
-export type OnboardingSurface = "profile" | "bonus_offer" | "pwa_install" | "push";
+export type OnboardingSurface = "promo_manual" | "profile" | "bonus_offer" | "pwa_install" | "push";
 
 const PRIORITY: Record<OnboardingSurface, number> = {
+  promo_manual: 100,
   profile: 40,
   bonus_offer: 30,
   pwa_install: 20,

@@ -281,6 +281,7 @@ export async function userRoutes(app: FastifyInstance) {
       bonus:         toNum(meRaw.bonus, 0),
       discount:      toNum(meRaw.discount, 0),
       referralsCount: toNum(meRaw.referrals_count, 0),
+      returnBonus: meResult.me.returnBonus,
       referralBonus: {
         pending: Boolean(referralBonusRaw?.pending),
         percent: toNum(referralBonusRaw?.percent, 0),

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMe } from "../app/auth/useMe";
+import { ReturnBonusCard } from "../shared/ui/ReturnBonusCard";
 import { EmailVerifyModal } from "./Profile";
 import { apiFetch } from "../shared/api/client";
 import { clearPendingEmailVerification, markPendingEmailVerification } from "../shared/emailVerificationState";
@@ -20,6 +21,9 @@ type ServiceItem = {
   statusRaw: string;
   price: number;
   currency: string;
+  expireAt?: string | null;
+  nextServiceId?: number | null;
+  autoBill?: boolean;
 };
 
 type ServicesResponse = {
@@ -246,7 +250,7 @@ export function ConnectionAssistant() {
     if (!silent) setLoading(true);
     setError(null);
     try {
-      const response = await apiFetch<ServicesResponse>("/services", { method: "GET" });
+      const [response] = await Promise.all([apiFetch<ServicesResponse>("/services", { method: "GET" }), refetchMe()]);
       setItems(Array.isArray(response.items) ? response.items : []);
     } catch (nextError) {
       setError(nextError);
@@ -254,7 +258,7 @@ export function ConnectionAssistant() {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [t]);
+  }, [t, refetchMe]);
 
   useEffect(() => { void load(false); }, [load]);
 
@@ -265,9 +269,11 @@ export function ConnectionAssistant() {
   }, [refetchMe]);
 
   const current = useMemo(() => selectConnectionService(items, targetUsi), [items, targetUsi]);
+  const returnFlow = Boolean(me?.returnBonus?.pending || (me?.returnBonus?.tariffActivated && items.some((item) => item.userServiceId === me.returnBonus?.userServiceId && item.serviceId === me.returnBonus?.tariffId && item.status !== "removed")));
+
 
   useEffect(() => {
-    if (!current || !isWaiting(current.status)) return;
+    if (returnFlow) return;
     let stopped = false;
     const refresh = () => { if (!stopped) void load(true); };
     const timer = window.setInterval(refresh, 3500);
@@ -280,7 +286,7 @@ export function ConnectionAssistant() {
       window.removeEventListener("focus", refresh);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [current, load]);
+  }, [current, load, returnFlow]);
 
   useEffect(() => {
     if (!current || current.status !== "active" || !needsSubscriptionLink(current.category)) return;
@@ -313,10 +319,10 @@ export function ConnectionAssistant() {
   }, [current, subscriptionReadyUsi]);
 
   useEffect(() => {
-    if (!current || current.status !== "active") return;
+    if (returnFlow || !current || current.status !== "active") return;
     if (needsSubscriptionLink(current.category) && subscriptionReadyUsi !== current.userServiceId) return;
     navigate(`/services?usi=${encodeURIComponent(String(current.userServiceId))}&connect=1&assistant=1`, { replace: true });
-  }, [current, navigate, subscriptionReadyUsi]);
+  }, [current, navigate, subscriptionReadyUsi, returnFlow]);
 
   function chooseDevice(device: DeviceKind) {
     const kind = device === "router" ? "marzban_router" : "flex";
@@ -372,6 +378,14 @@ export function ConnectionAssistant() {
       </div>
     );
   }
+
+  if (returnFlow) return <div className="section"><ReturnBonusCard /><button className="btn" type="button" onClick={exitToHome}>{t("assistant.connect.exit")}</button></div>;
+
+  if (current && ["blocked", "error"].includes(current.status)) return <div className="assistant assistant--center">
+    <h1>{t("returnPlan.inactive.title")}</h1><p className="p">{t("returnPlan.inactive.text")}</p>
+    <button className="btn btn--primary" onClick={() => navigate(`/services?usi=${current.userServiceId}`)}>{t("returnPlan.open")}</button>
+    <button className="btn" onClick={exitToHome}>{t("assistant.connect.exit")}</button>
+  </div>;
 
   if (current && isPayable(current.status)) {
     const params = new URLSearchParams({

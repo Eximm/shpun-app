@@ -41,6 +41,7 @@ export type MeResponse = {
   bonus: number;
   discount: number;
   referralsCount?: number;
+  returnBonus?: { pending: boolean; applied: boolean; tariffActivated: boolean; userServiceId: number; tariffId: number; days: number; percent: number } | null;
   referralBonus?: {
     pending: boolean;
     percent: number;

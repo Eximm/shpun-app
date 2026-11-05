@@ -1,0 +1,16 @@
+{{ ELSIF action == "promo.return.status" }}
+  {{ rb = s.ShpynApp.return_bonus || {} }}
+  {{ toJson({
+    ok = 1,
+    return_bonus = {
+      pending = rb.pending || 0,
+      applied = rb.applied || 0,
+      tariff_activated = rb.tariff_activated || 0,
+      tariff_user_service_id = rb.tariff_user_service_id || 0,
+      tariff_id = rb.tariff_id || 0,
+      tariff_days = rb.tariff_days || 0,
+      percent = rb.percent || rb.applied_percent || 0
+    }
+  }) }}
+  {{ RETURN }}
+

@@ -641,9 +641,19 @@ export function ServicesOrder() {
     setErr(null)
 
     try {
+      if (assistantMode) {
+        const [services, offers] = await Promise.all([
+          apiFetch<{ items: Array<{ status: string }> }>('/services'),
+          apiFetch<{ items: Array<{ kind: string }> }>('/promo/opportunities'),
+        ]);
+        if (services.items.some((item) => ['active', 'pending', 'init'].includes(item.status)) || offers.items.some((item) => item.kind !== 'review_bonus')) {
+          navigate('/home', { replace: true });
+          return;
+        }
+      }
       const r = await apiFetch<CreateResp>('/services/order', {
         method: 'PUT',
-        body: JSON.stringify({ service_id: selected.serviceId }),
+        body: JSON.stringify({ service_id: selected.serviceId, assistant: assistantMode }),
       })
 
       const item = r.item
@@ -668,6 +678,9 @@ export function ServicesOrder() {
         }
       }
     } catch (e: any) {
+      if (assistantMode && String(e?.code || e?.error || e?.data?.error) === 'assistant_existing_access') {
+        navigate('/home', { replace: true }); return;
+      }
       const info = getOrderError(e, t)
       setErr(info.description)
       const code = String(e?.error || e?.code || '').trim()

@@ -9619,3 +9619,7 @@ button.reviews-star:not(:disabled) {
 .mon-incidents__acknowledged { margin-top: 10px; color: var(--muted); font-size: 12px; }
 .mon-incidents__acknowledged > summary { cursor: pointer; padding: 6px 0; }
 .mon-incidents__acknowledgedItem { display: block; width: 100%; text-align: left; color: var(--muted); background: transparent; border: 0; padding: 8px 0; cursor: pointer; overflow-wrap: anywhere; }
+
+.return-bonus-card { margin-bottom: 12px; border-color: rgba(43,227,143,.3); }
+.return-bonus-card .p { margin-top: 10px; }
+.return-bonus-card .btn { margin-top: 12px; width: 100%; white-space: normal; }
