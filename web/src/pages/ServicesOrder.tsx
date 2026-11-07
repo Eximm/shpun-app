@@ -1,6 +1,6 @@
 // FILE: web/src/pages/ServicesOrder.tsx
 
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { apiFetch } from '../shared/api/client'
@@ -469,11 +469,17 @@ export function ServicesOrder() {
   const [creating, setCreating] = useState(false)
   const [created, setCreated] = useState<CreateResp['item'] | null>(null)
   const [activePlan, setActivePlan] = useState<{
-    tariffId: number; userServiceId: number; promotional: boolean; date: string | null; autoBill: boolean
+    tariffId: number
+    userServiceId: number
+    title: string
+    promotional: boolean
+    date: string | null
+    autoBill: boolean
   } | null>(null)
-  const [confirmAdditional, setConfirmAdditional] = useState(false)
-  const planForSelection = activePlan?.tariffId === selected?.serviceId ? activePlan : null
-  const duplicateNotice = planForSelection && !confirmAdditional ? planForSelection : null
+  const duplicateNotice = activePlan?.tariffId === selected?.serviceId ? activePlan : null
+  const duplicateDialog = useRef<HTMLDialogElement>(null)
+  const paymentSection = useRef<HTMLDivElement>(null)
+  const scrollToPayment = useRef(false)
   const [paySystems, setPaySystems] = useState<PaySystem[]>([])
   const [overlayOpen, setOverlayOpen] = useState(false)
   const [detailsCollapsed, setDetailsCollapsed] = useState(false)
@@ -536,6 +542,17 @@ export function ServicesOrder() {
     if (needTopup > 0) return true
     return String(created.status || '').toLowerCase() === 'not_paid'
   }, [created, needTopup])
+
+  useEffect(() => {
+    const dialog = duplicateDialog.current
+    if (duplicateNotice && dialog && !dialog.open) dialog.showModal()
+  }, [duplicateNotice, loading, meLoading])
+
+  useEffect(() => {
+    if (!shouldShowPay || !scrollToPayment.current || !paymentSection.current) return
+    scrollToPayment.current = false
+    paymentSection.current.scrollIntoView({ block: 'start' })
+  }, [shouldShowPay])
 
   const calcCards = useMemo(() => {
     if (!selected) return []
@@ -640,8 +657,8 @@ export function ServicesOrder() {
     }
   }, [selectedCat])
 
-  async function createOrder() {
-    if (!selected || creating || duplicateNotice) return
+  async function createOrder(additionalFor?: number) {
+    if (!selected || creating || additionalFor !== duplicateNotice?.userServiceId) return
 
     setCreating(true)
     setErr(null)
@@ -662,15 +679,17 @@ export function ServicesOrder() {
         body: JSON.stringify({
           service_id: selected.serviceId,
           assistant: assistantMode,
-          additional_for_user_service_id: confirmAdditional ? planForSelection?.userServiceId : undefined,
+          additional_for_user_service_id: additionalFor,
         }),
       })
 
       const item = r.item
+      const status = String(item?.status || '').toLowerCase()
+      scrollToPayment.current = additionalFor !== undefined && (status === 'not_paid' || needTopup > 0)
+      setActivePlan(null)
       setCreated(item)
       setDetailsCollapsed(true)
 
-      const status = String(item?.status || '').toLowerCase()
       const seed = String(item?.userServiceId || '')
 
       if (status === 'not_paid' || needTopup > 0) {
@@ -693,10 +712,10 @@ export function ServicesOrder() {
       const reason = e?.data?.reason
       if (!assistantMode && code === 'assistant_existing_access' && (reason === 'return_plan_active' || reason === 'active_plan') && Number.isSafeInteger(existingServiceId) && existingServiceId > 0) {
         const expire = Date.parse(e.data.expireAt ?? '')
-        setConfirmAdditional(false)
         setActivePlan({
           tariffId: selected.serviceId,
           userServiceId: existingServiceId,
+          title: String(e.data.serviceTitle ?? '').trim() || selected.title,
           promotional: reason === 'return_plan_active',
           date: Number.isFinite(expire) ? new Date(expire).toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' }) : null,
           autoBill: e.data.autoBill === true,
@@ -706,6 +725,7 @@ export function ServicesOrder() {
       if (assistantMode && code === 'assistant_existing_access') {
         navigate('/home', { replace: true }); return;
       }
+      setActivePlan(null)
       const info = getOrderError(e, t)
       setErr(info.description)
       if (code === 'trial_email_verification_required' || code === 'trial_email_unacceptable') {
@@ -901,7 +921,6 @@ export function ServicesOrder() {
     setSelectedCat(null)
     setCreated(null)
     setActivePlan(null)
-    setConfirmAdditional(false)
     setPaySystems([])
     setWaitMsg(null)
     setErr(null)
@@ -932,6 +951,55 @@ export function ServicesOrder() {
 
   return (
     <div className="section">
+      {duplicateNotice && selected && createPortal(
+        <dialog
+          ref={duplicateDialog}
+          className="card modal__card duplicate-order-modal"
+          aria-labelledby="duplicate-order-title"
+          onCancel={(event) => {
+            event.preventDefault()
+            if (!creating) setActivePlan(null)
+          }}
+        >
+          <div className="card__body">
+            <div className="modal__head">
+              <div className="duplicate-order-modal__icon" aria-hidden="true">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 22s7-3.2 7-10V5l-7-3-7 3v7c0 6.8 7 10 7 10Z" />
+                  <path d="m9 12 2 2 4-4" />
+                </svg>
+              </div>
+              <button className="btn modal__close" type="button" disabled={creating} onClick={() => setActivePlan(null)} aria-label={t('common.close')}>✕</button>
+            </div>
+            <h2 id="duplicate-order-title" className="duplicate-order-modal__title">
+              {t('servicesOrder.active_plan.title', { title: duplicateNotice.title })}
+            </h2>
+            {duplicateNotice.date && (
+              <p className="duplicate-order-modal__schedule">
+                {duplicateNotice.promotional && duplicateNotice.autoBill
+                  ? t('returnPlan.transition', { date: duplicateNotice.date, title: selected.title })
+                  : t(duplicateNotice.autoBill ? 'servicesOrder.active_plan.renewal' : 'servicesOrder.active_plan.expiry', { date: duplicateNotice.date })}
+              </p>
+            )}
+            <p className="p">{t('servicesOrder.active_plan.help')}</p>
+            <div className="duplicate-order-modal__links">
+              <button className="btn btn--soft" type="button" disabled={creating} onClick={() => navigate(`/services?usi=${duplicateNotice.userServiceId}${duplicateNotice.promotional ? '&connect=1&assistant=1' : ''}`)}>
+                {t('servicesOrder.error.open_service')}
+              </button>
+              <button className="btn btn--soft" type="button" disabled={creating} onClick={() => navigate(`/support?topic=service&usi=${duplicateNotice.userServiceId}`)}>
+                {t('servicesOrder.active_plan.support')}
+              </button>
+            </div>
+            <div className="duplicate-order-modal__checkout">
+              <p className="p">{t('servicesOrder.active_plan.confirm', { price: fmtMoney(priceCalc.discounted, selected.currency) })}</p>
+              <button className="btn btn--primary" type="button" disabled={creating} onClick={() => void createOrder(duplicateNotice.userServiceId)}>
+                {t(creating ? 'connect.wait' : 'servicesOrder.active_plan.continue')}
+              </button>
+            </div>
+          </div>
+        </dialog>,
+        document.body,
+      )}
       {overlayOpen &&
         createPortal(
           <div className="modal" role="dialog" aria-modal="true" onMouseDown={() => setOverlayOpen(false)}>
@@ -1185,7 +1253,7 @@ export function ServicesOrder() {
 
               {selected.descr && <p className="p" style={{ marginTop: 4 }}>{selected.descr}</p>}
 
-              {!duplicateNotice && !detailsCollapsed && calcCards.length > 0 && (
+              {!detailsCollapsed && calcCards.length > 0 && (
                 <div className="kv kv--2" style={{ marginTop: 12 }}>
                   {calcCards.map((item) => (
                     <div key={item.key} className="kv__item">
@@ -1196,27 +1264,8 @@ export function ServicesOrder() {
                 </div>
               )}
 
-              {duplicateNotice ? (
-                <div className="home-alert home-alert--ok" style={{ marginTop: 12 }} role="status">
-                  <strong>{t(duplicateNotice.promotional ? 'servicesOrder.return_plan.active' : 'servicesOrder.active_plan.title')}</strong>
-                  {duplicateNotice.promotional && (
-                    <p className="p">{t('returnPlan.active.text', { date: duplicateNotice.date ?? t('returnPlan.date_unknown') })}</p>
-                  )}
-                  {duplicateNotice.promotional && duplicateNotice.date && duplicateNotice.autoBill && (
-                    <p className="p">{t('returnPlan.transition', { date: duplicateNotice.date, title: selected.title })}</p>
-                  )}
-                  <p className="p">{t('servicesOrder.active_plan.help')}</p>
-                  <div className="actions actions--1" style={{ marginTop: 12 }}>
-                    <button className="btn btn--primary" type="button" onClick={() => navigate(`/services?usi=${duplicateNotice.userServiceId}${duplicateNotice.promotional ? '&connect=1&assistant=1' : ''}`)}>
-                      {t(duplicateNotice.promotional ? 'returnPlan.setup' : 'servicesOrder.error.open_service')}
-                    </button>
-                    <button className="btn" type="button" onClick={() => navigate(`/support?topic=service&usi=${duplicateNotice.userServiceId}`)}>{t('servicesOrder.active_plan.support')}</button>
-                    <button className="btn" type="button" onClick={() => setConfirmAdditional(true)}>{t('servicesOrder.active_plan.another')}</button>
-                  </div>
-                </div>
-              ) : !created ? (
+              {!created ? (
                 <div className="actions actions--1" style={{ marginTop: 14 }}>
-                  {confirmAdditional && planForSelection && <p className="p">{t('servicesOrder.active_plan.confirm')}</p>}
                   <button
                     className="btn"
                     onClick={() => void createOrder()}
@@ -1244,7 +1293,7 @@ export function ServicesOrder() {
           </div>
 
           {created && shouldShowPay && (
-            <div className="section">
+            <div className="section" ref={paymentSection}>
               <div className="card">
                 <div className="card__body" style={{ padding: '12px 14px' }}>
                   <div

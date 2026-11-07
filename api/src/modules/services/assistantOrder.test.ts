@@ -44,13 +44,14 @@ test("pending bonus blocks an order even from an older client", async () => {
 test("activated promotion blocks a duplicate paid plan and a stale wizard", async () => {
   const expire = "2026-11-12T10:29:18.000Z";
   pending = false;
-  services = [{ user_service_id: 99, service_id: 56, status: "ACTIVE", next: 51, expire, auto_bill: 1, service: { category: "remnawave" } }];
+  services = [{ user_service_id: 99, service_id: 56, status: "ACTIVE", next: 51, expire, auto_bill: 1, service: { name: "Flex 7 days", category: "remnawave" } }];
   const duplicate = await order(false);
   assert.equal(duplicate.statusCode, 409);
   const response = duplicate.json();
   assert.equal(response.error, "assistant_existing_access");
   assert.equal(response.reason, "return_plan_active");
   assert.equal(response.userServiceId, 99);
+  assert.equal(response.serviceTitle, "Flex 7 days");
   assert.equal(response.expireAt, expire);
   assert.equal(response.autoBill, true);
   assert.ok(response.message);

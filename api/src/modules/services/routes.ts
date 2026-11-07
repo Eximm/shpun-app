@@ -1755,6 +1755,7 @@ export async function servicesRoutes(app: FastifyInstance) {
           reason: activeReturnPlan ? "return_plan_active" : "active_plan",
           message: "У вас уже есть активная услуга. Откройте её в разделе «Услуги». Если с ней есть проблемы, обратитесь в поддержку.",
           userServiceId: Number(existingActive.user_service_id),
+          serviceTitle: String(existingActive.service?.name ?? "").trim(),
           expireAt: toIso(existingActive.expire),
           autoBill: flag(existingActive.auto_bill),
         });
