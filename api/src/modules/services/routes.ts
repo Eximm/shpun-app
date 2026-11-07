@@ -1741,8 +1741,31 @@ export async function servicesRoutes(app: FastifyInstance) {
       const offer = (promotions.json as any)?.return_offer;
       const firstPay = (promotions.json as any)?.first_pay;
       const flag = (v: unknown) => v === true || v === 1 || v === "1";
-      if ((body.assistant === true && (current || flag(firstPay?.pending) || (flag(offer?.active) && flag(offer?.eligible)))) || flag(offer?.pending) || returnBonus?.pending || (promoService && (body.assistant === true || serviceId === Number(promoService.next)))) {
-        return reply.code(409).send({ ok: false, error: "assistant_existing_access", userServiceId: current?.user_service_id ?? null });
+      const activeReturnPlan = promoService && Number(promoService.next) === serviceId && mapStatus(promoService.status) === "active"
+        ? promoService : null;
+      const existingActive = activeReturnPlan ?? services.items.find((item: any) =>
+        !Number(item.parent) && Number(item.service_id) === serviceId && mapStatus(item.status) === "active"
+      );
+      const additionalConfirmed = existingActive && body.assistant !== true &&
+        body.additional_for_user_service_id === Number(existingActive.user_service_id);
+      if (existingActive && !additionalConfirmed) {
+        return reply.code(409).send({
+          ok: false,
+          error: "assistant_existing_access",
+          reason: activeReturnPlan ? "return_plan_active" : "active_plan",
+          message: "У вас уже есть активная услуга. Откройте её в разделе «Услуги». Если с ней есть проблемы, обратитесь в поддержку.",
+          userServiceId: Number(existingActive.user_service_id),
+          expireAt: toIso(existingActive.expire),
+          autoBill: flag(existingActive.auto_bill),
+        });
+      }
+      if ((body.assistant === true && (current || flag(firstPay?.pending) || (flag(offer?.active) && flag(offer?.eligible)))) || flag(offer?.pending) || returnBonus?.pending || (promoService && !activeReturnPlan && serviceId === Number(promoService.next))) {
+        return reply.code(409).send({
+          ok: false,
+          error: "assistant_existing_access",
+          message: "У вас уже есть услуга или бонус на подключение. Проверьте их на главной странице.",
+          userServiceId: current?.user_service_id ?? null,
+        });
       }
     }
 
