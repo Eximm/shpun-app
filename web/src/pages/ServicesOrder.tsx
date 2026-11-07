@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom'
 import { apiFetch } from '../shared/api/client'
 import { useMe } from '../app/auth/useMe'
 import { useI18n } from '../shared/i18n'
+import { ServiceNote } from '../shared/ui/ServiceNote'
 import { toast } from '../shared/ui/toast'
 import { getMood } from '../shared/payments-mood'
 
@@ -418,9 +419,7 @@ function CategoryCard({ cat, onClick }: { cat: ServiceCategory; onClick: () => v
         )}
       </div>
 
-      <p className="p" style={{ marginTop: 0, marginBottom: 14 }}>
-        {cat.short_descr}
-      </p>
+      {cat.short_descr?.trim() && <ServiceNote>{cat.short_descr}</ServiceNote>}
 
       <div
         style={{
@@ -1177,13 +1176,13 @@ export function ServicesOrder() {
                     {selectedCat.emoji && <span style={{ fontSize: 22 }}>{selectedCat.emoji}</span>}
                     {selectedCat.title}
                   </div>
-                  {selectedCat.descr && <p className="p" style={{ marginTop: 4 }}>{selectedCat.descr}</p>}
                 </div>
 
                 <button className="btn" onClick={closeCategory} type="button" style={{ flexShrink: 0 }}>
                   ← {t('common.close')}
                 </button>
               </div>
+              {selectedCat.descr?.trim() && <ServiceNote>{selectedCat.descr}</ServiceNote>}
 
               {selectedCat.hint_button_label && selectedCat.hint_button_url && (
                 <div className="actions actions--1" style={{ marginTop: 12 }}>
@@ -1231,7 +1230,7 @@ export function ServicesOrder() {
                         </span>
                       </div>
 
-                      {tariff.descr && <p className="p" style={{ marginTop: 6 }}>{tariff.descr}</p>}
+                      {tariff.descr?.trim() && <ServiceNote>{tariff.descr}</ServiceNote>}
 
                       <div className="actions actions--1" style={{ marginTop: 12 }}>
                         <span className="btn" style={getCategoryButtonStyle(selectedCat)}>
@@ -1259,18 +1258,7 @@ export function ServicesOrder() {
               </div>
 
               {selected.descr?.trim() && (
-                <div className="so__note so__tariffAbout">
-                  <span className="so__tariffAboutIcon" aria-hidden="true">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
-                      <circle cx="12" cy="12" r="9" />
-                      <path d="M12 11v5m0-8h.01" />
-                    </svg>
-                  </span>
-                  <div>
-                    <h2 className="so__noteTitle">{t('servicesOrder.plan_about')}</h2>
-                    <p className="p">{selected.descr}</p>
-                  </div>
-                </div>
+                <ServiceNote title={t('servicesOrder.plan_about')}>{selected.descr}</ServiceNote>
               )}
 
               {!detailsCollapsed && calcCards.length > 0 && (

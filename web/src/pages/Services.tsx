@@ -9,6 +9,7 @@ import { toastApiError } from "../shared/ui/toast/toastApiError";
 import { normalizeError } from "../shared/api/errorText";
 import { getMood } from "../shared/payments-mood";
 import { useI18n } from "../shared/i18n";
+import { ServiceNote } from "../shared/ui/ServiceNote";
 import { PasswordReminder } from "../app/auth/PasswordReminder";
 import { useMe } from "../app/auth/useMe";
 import { flexPrimaryService, visibleFlexServices, useFlexPrimaryImport } from "../shared/flexPrimaryImport";
@@ -351,9 +352,9 @@ function ConnectInline({ kind, service, mobileKey, onDone, t }: {
       )}
     </section>
   ) : mobileKey ? (
-    <div className="pre cm__additionalKey" style={{ marginTop: 12, fontSize: 12, color: "rgba(255,255,255,.65)", borderColor: "rgba(96,165,250,.2)", background: "rgba(96,165,250,.04)" }}>
+    <ServiceNote className="cm__additionalKey">
       {t("services.flex_plus.after_primary_hint")}
-    </div>
+    </ServiceNote>
   ) : null;
 
   return (
@@ -488,7 +489,7 @@ function ServiceRow({ s, expanded, connectOpen, onToggle, onToggleConnect, onRef
       )}
       {expanded && (
         <div className="svc-row__details" style={{ padding: "0 12px 10px", display: "flex", flexDirection: "column", gap: 6 }}>
-          {s.descr ? <p className="p" style={{ marginTop: 0, marginBottom: 2, fontSize: 12 }}>{s.descr}</p> : null}
+          {s.descr?.trim() && <ServiceNote>{s.descr}</ServiceNote>}
 
           {isChild && (
             <div style={{
@@ -987,10 +988,10 @@ export function Services() {
                       <div className="services-cat__title">{kindTitle(kind, t)}</div>
                       <span className="services-cat__chev" aria-hidden>{open ? "▲" : "▼"}</span>
                     </div>
-                    <p className="p" style={{ marginTop: 4 }}>{kindDescr(kind, t)}</p>
                   </div>
                   <span className="badge" style={{ flexShrink: 0 }}>{total}</span>
                 </button>
+                <ServiceNote>{kindDescr(kind, t)}</ServiceNote>
 
                 {open && (
                   <div className="services-group__list" style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>

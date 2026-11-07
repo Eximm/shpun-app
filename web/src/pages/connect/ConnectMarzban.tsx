@@ -7,6 +7,7 @@ import QRCode from "qrcode";
 import { apiFetch } from "../../shared/api/client";
 import { getMood } from "../../shared/payments-mood";
 import { toast } from "../../shared/ui/toast";
+import { ServiceNote } from "../../shared/ui/ServiceNote";
 import { useI18n } from "../../shared/i18n";
 import { useMe } from "../../app/auth/useMe";
 import { markFlexPrimaryImport } from "../../shared/flexPrimaryImport";
@@ -764,9 +765,11 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange, co
       <div ref={setupCardRef} className="card cm__setupCard" style={{ marginTop: 12 }}>
         <div className="card__body">
           <div ref={installStepRef} className={`cm__focusStep${assistantMode && ready && assistantStep === "install" ? " cm__focusStep--active" : ""}${assistantMode && ready && assistantStep === "import" ? " cm__focusStep--dimmed" : ""}`}>
-          {!assistantMode && <div className="pre" style={{ borderColor: "rgba(124,92,255,0.22)", background: "rgba(124,92,255,0.05)" }}>
-            <b>{t("connect.step1.label")}</b> {t("connect.step_install_desc").replace("{client}", selectedLinks.title).replace("{platform}", platformLabel(platform))}
-          </div>}
+          {!assistantMode && (
+            <ServiceNote title={t("connect.step1.label")}>
+              {t("connect.step_install_desc").replace("{client}", selectedLinks.title).replace("{platform}", platformLabel(platform))}
+            </ServiceNote>
+          )}
           {assistantMode ? (
             <div className="actions actions--1">
               <button className="btn btn--primary" type="button" onClick={() => openRecommendedDownload(client)}>
@@ -820,9 +823,9 @@ export default function ConnectMarzban({ usi, service, onAssistantStepChange, co
           </div>
 
           <div ref={importStepRef} className={`cm__focusStep${assistantMode && ready && assistantStep === "import" ? " cm__focusStep--active" : ""}${assistantMode && ready && assistantStep === "install" ? " cm__focusStep--dimmed" : ""}`}>
-          {!assistantMode && <div className="pre" style={{ marginTop: 12, borderColor: "rgba(77,215,255,0.22)", background: "rgba(77,215,255,0.05)" }}>
-            <b>{t("connect.step2.label")}</b> {t("connect.step_import_desc")}
-          </div>}
+          {!assistantMode && (
+            <ServiceNote title={t("connect.step2.label")}>{t("connect.step_import_desc")}</ServiceNote>
+          )}
           <div className="actions actions--1">
             <button className="btn btn--primary" onClick={() => void openImport(false, effectiveClient)} disabled={!ready} type="button">
               {loading ? `\u23F3 ${t("connect.wait")}` : assistantMode ? `\u{1F511} ${t("connect.assistant.import_key")}` : `\u26A1 ${t("connect.add_sub")} ${selectedLinks.title}`}
