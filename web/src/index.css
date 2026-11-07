@@ -651,14 +651,41 @@ button, a { -webkit-tap-highlight-color: transparent; }
   line-height: 1.2;
   overflow-wrap: anywhere;
 }
-.duplicate-order-modal__schedule {
-  margin: 0 0 12px;
-  padding: 10px 12px;
-  border-inline-start: 2px solid #9d8bff;
-  border-radius: 8px;
-  background: rgba(157, 139, 255, .09);
-  line-height: 1.45;
+.so__note {
+  padding: 12px 14px;
+  border: 1px solid rgba(164, 151, 255, .13);
+  border-radius: 12px;
+  background: rgba(157, 139, 255, .055);
 }
+.so__noteTitle {
+  margin: 0 0 4px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+.so__note .p { margin: 0; line-height: 1.5; overflow-wrap: anywhere; }
+.so__tariffAbout {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  margin-top: 12px;
+}
+.so__tariffAboutIcon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 10px;
+  background: rgba(157, 139, 255, .13);
+  color: #c8baff;
+}
+.duplicate-order-modal__schedule {
+  margin-bottom: 8px;
+  border-inline-start: 2px solid #9d8bff;
+  background: rgba(157, 139, 255, .09);
+}
+.duplicate-order-modal__current { background: rgba(255, 255, 255, .035); }
 .duplicate-order-modal__links {
   display: flex;
   flex-wrap: wrap;
@@ -667,9 +694,8 @@ button, a { -webkit-tap-highlight-color: transparent; }
 }
 .duplicate-order-modal__links .btn { flex: 1 1 130px; white-space: normal; }
 .duplicate-order-modal__checkout {
-  margin-top: 16px;
-  padding-top: 14px;
-  border-top: 1px solid rgba(255, 255, 255, .1);
+  margin-top: 8px;
+  background: linear-gradient(140deg, rgba(157, 139, 255, .10), rgba(70, 207, 240, .035));
 }
 .duplicate-order-modal__checkout .btn { width: 100%; margin-top: 10px; }
 

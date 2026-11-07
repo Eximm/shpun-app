@@ -975,22 +975,29 @@ export function ServicesOrder() {
               {t('servicesOrder.active_plan.title', { title: duplicateNotice.title })}
             </h2>
             {duplicateNotice.date && (
-              <p className="duplicate-order-modal__schedule">
-                {duplicateNotice.promotional && duplicateNotice.autoBill
-                  ? t('returnPlan.transition', { date: duplicateNotice.date, title: selected.title })
-                  : t(duplicateNotice.autoBill ? 'servicesOrder.active_plan.renewal' : 'servicesOrder.active_plan.expiry', { date: duplicateNotice.date })}
-              </p>
+              <div className="so__note duplicate-order-modal__schedule">
+                <h3 className="so__noteTitle">{t('servicesOrder.active_plan.schedule')}</h3>
+                <p className="p">
+                  {duplicateNotice.promotional && duplicateNotice.autoBill
+                    ? t('returnPlan.transition', { date: duplicateNotice.date, title: selected.title })
+                    : t(duplicateNotice.autoBill ? 'servicesOrder.active_plan.renewal' : 'servicesOrder.active_plan.expiry', { date: duplicateNotice.date })}
+                </p>
+              </div>
             )}
-            <p className="p">{t('servicesOrder.active_plan.help')}</p>
-            <div className="duplicate-order-modal__links">
-              <button className="btn btn--soft" type="button" disabled={creating} onClick={() => navigate(`/services?usi=${duplicateNotice.userServiceId}${duplicateNotice.promotional ? '&connect=1&assistant=1' : ''}`)}>
-                {t('servicesOrder.error.open_service')}
-              </button>
-              <button className="btn btn--soft" type="button" disabled={creating} onClick={() => navigate(`/support?topic=service&usi=${duplicateNotice.userServiceId}`)}>
-                {t('servicesOrder.active_plan.support')}
-              </button>
+            <div className="so__note duplicate-order-modal__current">
+              <h3 className="so__noteTitle">{t('servicesOrder.active_plan.current')}</h3>
+              <p className="p">{t('servicesOrder.active_plan.help')}</p>
+              <div className="duplicate-order-modal__links">
+                <button className="btn btn--soft" type="button" disabled={creating} onClick={() => navigate(`/services?usi=${duplicateNotice.userServiceId}${duplicateNotice.promotional ? '&connect=1&assistant=1' : ''}`)}>
+                  {t('servicesOrder.error.open_service')}
+                </button>
+                <button className="btn btn--soft" type="button" disabled={creating} onClick={() => navigate(`/support?topic=service&usi=${duplicateNotice.userServiceId}`)}>
+                  {t('servicesOrder.active_plan.support')}
+                </button>
+              </div>
             </div>
-            <div className="duplicate-order-modal__checkout">
+            <div className="so__note duplicate-order-modal__checkout">
+              <h3 className="so__noteTitle">{t('servicesOrder.active_plan.additional')}</h3>
               <p className="p">{t('servicesOrder.active_plan.confirm')}</p>
               <button className="btn btn--primary" type="button" disabled={creating} onClick={() => void createOrder(duplicateNotice.userServiceId)}>
                 {t(creating ? 'connect.wait' : 'servicesOrder.active_plan.continue')}
@@ -1251,7 +1258,20 @@ export function ServicesOrder() {
                 </button>
               </div>
 
-              {selected.descr && <p className="p" style={{ marginTop: 4 }}>{selected.descr}</p>}
+              {selected.descr?.trim() && (
+                <div className="so__note so__tariffAbout">
+                  <span className="so__tariffAboutIcon" aria-hidden="true">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="M12 11v5m0-8h.01" />
+                    </svg>
+                  </span>
+                  <div>
+                    <h2 className="so__noteTitle">{t('servicesOrder.plan_about')}</h2>
+                    <p className="p">{selected.descr}</p>
+                  </div>
+                </div>
+              )}
 
               {!detailsCollapsed && calcCards.length > 0 && (
                 <div className="kv kv--2" style={{ marginTop: 12 }}>
