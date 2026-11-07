@@ -991,7 +991,7 @@ export function ServicesOrder() {
               </button>
             </div>
             <div className="duplicate-order-modal__checkout">
-              <p className="p">{t('servicesOrder.active_plan.confirm', { price: fmtMoney(priceCalc.discounted, selected.currency) })}</p>
+              <p className="p">{t('servicesOrder.active_plan.confirm')}</p>
               <button className="btn btn--primary" type="button" disabled={creating} onClick={() => void createOrder(duplicateNotice.userServiceId)}>
                 {t(creating ? 'connect.wait' : 'servicesOrder.active_plan.continue')}
               </button>
