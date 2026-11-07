@@ -971,16 +971,16 @@ export function ServicesOrder() {
               <button className="btn modal__close" type="button" disabled={creating} onClick={() => setActivePlan(null)} aria-label={t('common.close')}>✕</button>
             </div>
             <h2 id="duplicate-order-title" className="duplicate-order-modal__title">
-              {t('servicesOrder.active_plan.title', { title: duplicateNotice.title })}
+              {t(duplicateNotice.promotional ? 'servicesOrder.active_plan.promo_title' : 'servicesOrder.active_plan.title', { title: duplicateNotice.title })}
             </h2>
-            {duplicateNotice.date && (
+            {(duplicateNotice.date || (duplicateNotice.promotional && duplicateNotice.autoBill)) && (
               <div className="so__note duplicate-order-modal__schedule">
-                <h3 className="so__noteTitle">{t('servicesOrder.active_plan.schedule')}</h3>
-                <p className="p">
-                  {duplicateNotice.promotional && duplicateNotice.autoBill
-                    ? t('returnPlan.transition', { date: duplicateNotice.date, title: selected.title })
-                    : t(duplicateNotice.autoBill ? 'servicesOrder.active_plan.renewal' : 'servicesOrder.active_plan.expiry', { date: duplicateNotice.date })}
-                </p>
+                {duplicateNotice.date && (
+                  <h3 className="so__noteTitle">{t('servicesOrder.active_plan.expiry', { date: duplicateNotice.date })}</h3>
+                )}
+                {duplicateNotice.promotional && duplicateNotice.autoBill && (
+                  <p className="p">{t('servicesOrder.active_plan.promo_transition', { title: selected.title })}</p>
+                )}
               </div>
             )}
             <div className="so__note duplicate-order-modal__current">
@@ -996,7 +996,6 @@ export function ServicesOrder() {
               </div>
             </div>
             <div className="so__note duplicate-order-modal__checkout">
-              <h3 className="so__noteTitle">{t('servicesOrder.active_plan.additional')}</h3>
               <p className="p">{t('servicesOrder.active_plan.confirm')}</p>
               <button className="btn btn--primary" type="button" disabled={creating} onClick={() => void createOrder(duplicateNotice.userServiceId)}>
                 {t(creating ? 'connect.wait' : 'servicesOrder.active_plan.continue')}

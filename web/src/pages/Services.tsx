@@ -111,26 +111,6 @@ function statusLabel(s: UiStatus, t: T) {
   }
 }
 
-function statusTint(s: UiStatus) {
-  switch (s) {
-    case "active":
-      return { bg: "rgba(43,227,143,.06)", border: "rgba(43,227,143,.22)", stripe: "#2be38f", chipBg: "rgba(43,227,143,.12)", chipBorder: "rgba(43,227,143,.28)", chipColor: "#2be38f" };
-    case "pending":
-    case "init":
-      return { bg: "rgba(59,130,246,.06)", border: "rgba(59,130,246,.22)", stripe: "#3b82f6", chipBg: "rgba(59,130,246,.12)", chipBorder: "rgba(59,130,246,.28)", chipColor: "#93c5fd" };
-    case "not_paid":
-      return { bg: "rgba(245,158,11,.06)", border: "rgba(245,158,11,.22)", stripe: "#f59e0b", chipBg: "rgba(245,158,11,.12)", chipBorder: "rgba(245,158,11,.28)", chipColor: "#f59e0b" };
-    case "blocked":
-  return {
-    bg: "rgba(255,77,109,.06)", border: "rgba(255,77,109,.22)", stripe: "#ff4d6d", chipBg: "rgba(255,77,109,.12)", chipBorder: "rgba(255,77,109,.28)", chipColor: "#ff4d6d"
-  };
-    case "error":
-      return { bg: "rgba(255,77,109,.06)", border: "rgba(255,77,109,.22)", stripe: "#ff4d6d", chipBg: "rgba(255,77,109,.12)", chipBorder: "rgba(255,77,109,.28)", chipColor: "#ff4d6d" };
-    default:
-      return { bg: "rgba(255,255,255,.03)", border: "rgba(255,255,255,.09)", stripe: "rgba(255,255,255,.20)", chipBg: "rgba(255,255,255,.06)", chipBorder: "rgba(255,255,255,.12)", chipColor: "rgba(255,255,255,.55)" };
-  }
-}
-
 function fmtDate(iso: string | null) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -190,11 +170,10 @@ function DaysProgress({ daysLeft, periodMonths }: { daysLeft: number | null; per
   if (daysLeft == null || daysLeft < 0) return null;
   const total = (periodMonths || 1) * 30;
   const pct   = Math.min(100, Math.max(0, Math.round((daysLeft / total) * 100)));
-  const color = daysLeft <= 5 ? "#f59e0b" : daysLeft <= 10 ? "#f59e0b" : "#2be38f";
   return (
-    <div className="svc-progress" style={{ height: 3, borderRadius: 99, background: "rgba(255,255,255,.08)", overflow: "hidden", margin: "6px 0 0" }}>
-      <div className="svc-progress__bar" style={{ height: "100%", width: `${pct}%`, borderRadius: 99, background: color, transition: "width 500ms ease" }} />
-    </div>
+    <span className={`svc-progress${daysLeft <= 10 ? " svc-progress--ending" : ""}`} aria-hidden="true">
+      <span className="svc-progress__bar" style={{ width: `${pct}%` }} />
+    </span>
   );
 }
 
@@ -421,7 +400,6 @@ function ServiceRow({ s, expanded, connectOpen, onToggle, onToggleConnect, onRef
   onToggle: () => void; onToggleConnect: () => void; onRefresh: () => void;
   onAskDelete: (s: ApiServiceItem) => void; onAskStop: (s: ApiServiceItem) => void; t: T;
 }) {
-  const tint       = statusTint(s.status);
   const kind       = detectKind(s.category);
   const canConnect = kind !== "unknown" && s.status === "active";
   const assistantMode = new URLSearchParams(window.location.search).get("assistant") === "1";
@@ -431,47 +409,42 @@ function ServiceRow({ s, expanded, connectOpen, onToggle, onToggleConnect, onRef
   const supportUrl = `/support?topic=service&usi=${encodeURIComponent(String(s.userServiceId))}`;
 
   return (
-    <div data-usi={s.userServiceId} className={"svc-row" + (isChild ? " svc-row--child" : "") + (expanded ? " svc-row--expanded" : "")} style={{
-      borderRadius: isChild ? "0 0 11px 11px" : 11,
-      background: tint.bg,
-      border: isChild ? "none" : `.5px solid ${tint.border}`,
-      "--svc-stripe": tint.stripe,
-    } as React.CSSProperties}>
-
-      {/* Заголовок — кликабельный */}
-      <button className={`svc-row__toggle${assistantMode && connectOpen ? " svc-row__toggle--assistant-muted" : ""}`} type="button" onClick={onToggle} aria-expanded={expanded} disabled={assistantMode && connectOpen} style={{
-        width: "100%", display: "flex", alignItems: "center", gap: 10,
-        padding: isChild ? "10px 12px" : "10px 12px",
-        background: "transparent", border: "none", cursor: "pointer", textAlign: "left",
-      }}>
-        {/* Цветная полоска */}
-        <div className="svc-row__stripe" style={{ width: 3, height: 36, borderRadius: 99, flexShrink: 0, background: tint.stripe }} />
-
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-            <span style={{ display: "inline-flex", padding: "2px 8px", borderRadius: 999, fontSize: 10, fontWeight: 800, background: tint.chipBg, border: `.5px solid ${tint.chipBorder}`, color: tint.chipColor, whiteSpace: "nowrap" }}>
-              {statusLabel(s.status, t)}
-            </span>
-          </div>
-          <div style={{ fontSize: 13, fontWeight: 800, color: "rgba(255,255,255,.90)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            #{s.userServiceId} — {s.title}
-          </div>
+    <div data-usi={s.userServiceId} className={`svc-row svc-row--${s.status}`}>
+      <button className={`svc-row__toggle${assistantMode && connectOpen ? " svc-row__toggle--assistant-muted" : ""}`} type="button" onClick={onToggle} aria-expanded={expanded} disabled={assistantMode && connectOpen}>
+        <span className="svc-row__head">
+          <span className="svc-row__identity">
+            <strong>{s.title}</strong>
+            <span className="svc-row__id">#{s.userServiceId}</span>
+          </span>
+          <span className="svc-row__status">{statusLabel(s.status, t)}</span>
+          <span className="svc-row__chevron" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </span>
+        </span>
+        <span className="svc-row__facts">
           {(until || hint) && (
-            <div style={{ fontSize: 10, color: "rgba(255,255,255,.40)", marginTop: 2 }}>
-              {until ? `${t("services.meta.until")}: ${until}` : ""}{until && hint ? " · " : ""}{hint}
-            </div>
+            <span className="svc-row__fact">
+              <span className="svc-row__label">{t(until ? "services.meta.until" : "services.meta.state")}</span>
+              {until && <strong>{until}</strong>}
+              {hint && <span className="svc-row__secondary">{hint}</span>}
+              {s.status === "active" && <DaysProgress daysLeft={s.daysLeft} periodMonths={s.periodMonths} />}
+            </span>
           )}
-          {s.status === "active" && <DaysProgress daysLeft={s.daysLeft} periodMonths={s.periodMonths} />}
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,.45)", whiteSpace: "nowrap" }}>
-            {fmtMoney(s.price, s.currency)} / {s.periodMonths || 1}{t("services.month_short")}
-          </div>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,.30)" }}>{expanded ? "▲" : "▼"}</div>
-        </div>
+          <span className="svc-row__fact">
+            <span className="svc-row__label">{t("services.meta.price")}</span>
+            <strong>{fmtMoney(s.price, s.currency)}</strong>
+            <span className="svc-row__secondary">{t("services.meta.price_period").replace("{months}", String(s.periodMonths || 1))}</span>
+          </span>
+        </span>
       </button>
 
+      {mobileKey && canConnect && !connectOpen && (
+        <ServiceNote className="svc-row__plusHint" title={t("services.flex_plus.next_title")}>
+          {t("services.flex_plus.inside_hint")}
+        </ServiceNote>
+      )}
       {canConnect && !expanded && (
         <div className="svc-row__quickConnect">
           <button className="btn btn--primary" type="button" onClick={onToggleConnect}>
@@ -480,15 +453,8 @@ function ServiceRow({ s, expanded, connectOpen, onToggle, onToggleConnect, onRef
         </div>
       )}
 
-      {/* Действия */}
-      {mobileKey && !connectOpen && (
-        <div className="svc-row__plusHint">
-          <span className="svc-row__plusHintIcon" aria-hidden="true">📶</span>
-          <p>{t("services.flex_plus.inside_hint")}</p>
-        </div>
-      )}
       {expanded && (
-        <div className="svc-row__details" style={{ padding: "0 12px 10px", display: "flex", flexDirection: "column", gap: 6 }}>
+        <div className="svc-row__details">
           {s.descr?.trim() && <ServiceNote>{s.descr}</ServiceNote>}
 
           {isChild && (
@@ -558,26 +524,11 @@ function ServiceCard({ main, children, expandedId, connectOpenId, onToggle, onTo
   onToggle: (id: number) => void; onToggleConnect: (id: number) => void; onRefresh: () => void;
   onAskDelete: (s: ApiServiceItem) => void; onAskStop: (s: ApiServiceItem) => void; t: T;
 }) {
-  const tint = statusTint(main.status);
   const mobileKey = main.category === "remnawave" ? children.find((child) => isFlexPlus(child.category) && child.status !== "removed") ?? null : null;
   const visibleChildren = children.filter((child) => flexPrimaryService(child, [main, ...children]) === child);
 
-  const pulseAnim =
-    main.status === "blocked" || main.status === "error"
-      ? "svc-danger-pulse 1.8s ease-in-out infinite"
-      : main.status === "not_paid"
-        ? "svc-warn-pulse 2.2s ease-in-out infinite"
-        : undefined;
-
   return (
-    <div className={`svc-card svc-card--${main.status}`} style={{
-      borderRadius: 12,
-      background: tint.bg,
-      border: `.5px solid ${tint.border}`,
-      overflow: "hidden",
-      animation: pulseAnim,
-      "--svc-stripe": tint.stripe,
-    } as React.CSSProperties}>
+    <div className="svc-card">
       {/* Основная услуга */}
       <ServiceRow
         s={main}
