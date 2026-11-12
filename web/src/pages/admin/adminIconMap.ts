@@ -49,6 +49,7 @@ export const ADMIN_SECTION_ICON: Record<AdminTab, AdminNavIconName> = {
   support: "lifebuoy",
   help: "help",
   serverStatus: "server",
+  gateways: "gateway",
 };
 
 /** Icon for a recent-activity event type. */

@@ -22,6 +22,7 @@ import { ReferralAliasesSection } from "./admin/ReferralAliasesSection";
 import { HelpSection } from "./admin/HelpSection";
 import { isHelpEditorDirty } from "./admin/helpEditorGuard";
 import { ServerStatusSection } from "./admin/ServerStatusSection";
+import { GatewayRoutingSection } from "./admin/GatewayRoutingSection";
 import { ReviewsSection } from "./admin/ReviewsSection";
 import { PromotionsSection } from "./admin/PromotionsSection";
 import { SupportSection } from "./admin/SupportSection";
@@ -66,6 +67,7 @@ export function AdminPage() {
     { tab: "help", title: t("admin.tab.help"), subtitle: t("admin.tab.help.sub"), icon: ADMIN_SECTION_ICON.help },
     { tab: "support", title: t("admin.tab.support"), subtitle: t("admin.tab.support.sub"), icon: ADMIN_SECTION_ICON.support, badge: overview.data.attention.support + overview.data.attention.partnership },
     { tab: "serverStatus", title: t("admin.tab.serverStatus"), subtitle: t("admin.tab.serverStatus.sub"), icon: ADMIN_SECTION_ICON.serverStatus },
+    { tab: "gateways", title: t("admin.tab.gateways"), subtitle: t("admin.tab.gateways.sub"), icon: ADMIN_SECTION_ICON.gateways },
   ];
   const activeItem = navItems.find((item) => item.tab === activeTab) ?? navItems[0];
 
@@ -192,6 +194,7 @@ export function AdminPage() {
             <SupportSection key={supportKey} initialKind={initialKind} initialTicketId={initialTicketId} />
           )}
           {activeTab === "serverStatus" && <ServerStatusSection />}
+          {activeTab === "gateways" && <GatewayRoutingSection />}
         </section>
       </div>
     </div>

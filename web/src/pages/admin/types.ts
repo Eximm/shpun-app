@@ -176,6 +176,7 @@ export const ADMIN_TABS = [
   "referralAliases",
   "help",
   "serverStatus",
+  "gateways",
   "support",
 ] as const;
 
