@@ -7,6 +7,7 @@ import multipart from '@fastify/multipart'
 import { registerRoutes } from './routes/index.js'
 import { getSessionBySid } from '../shared/session/sessionStore.js'
 import { registerTolerantJsonBodyParser } from './plugins/jsonBody.js'
+import { registerSensitiveRateLimits } from '../shared/http/rateLimit.js'
 
 function parseAllowedOrigins(): string[] {
   const raw = (process.env.APP_ORIGIN || '').trim()
@@ -23,7 +24,7 @@ export function sanitizeRequestUrlForLog(raw: string): string {
   try {
     const parsed = new URL(raw, 'http://internal.invalid')
     for (const name of parsed.searchParams.keys()) {
-      if (/^(token|code|password|session_id)$/i.test(name)) {
+      if (/^(token|code|password|session_id|secret)$/i.test(name)) {
         parsed.searchParams.set(name, '<redacted>')
       }
     }
@@ -103,6 +104,10 @@ export async function buildServer() {
 
   // Tolerate empty JSON bodies from server-to-server clients (SHM Telegram template).
   registerTolerantJsonBodyParser(app)
+
+  // Abuse protection for a small set of sensitive auth/email endpoints.
+  // Generous per-IP limits; polling endpoints are intentionally untouched.
+  registerSensitiveRateLimits(app)
 
   // API responses can contain session and service data. Keep every response
   // out of browser, reverse-proxy, and CDN caches by default.

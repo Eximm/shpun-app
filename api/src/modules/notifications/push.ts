@@ -1,6 +1,6 @@
 ﻿// FILE: api/src/modules/notifications/push.ts
 import type { FastifyInstance } from "fastify";
-import { randomUUID } from "crypto";
+import { randomUUID, timingSafeEqual } from "crypto";
 import { getSessionFromRequest } from "../../shared/session/sessionStore.js";
 import {
   listEvents,
@@ -23,6 +23,14 @@ import {
   recordPushDelivery,
 } from "../../shared/linkdb/notificationsRepo.js";
 import { shmShpunAppAdminStatus } from "../../shared/shm/shmClient.js";
+
+function signaturesMatch(provided: string, expected: string): boolean {
+  if (!provided || !expected) return false;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
 
 function envStr(name: string, def = "") {
   const v = String(process.env[name] ?? "").trim();
@@ -177,7 +185,7 @@ export async function pushRoutes(app: FastifyInstance) {
         return reply.code(401).send({ ok: false, error: "missing_signature" });
       }
 
-      if (sign !== secret) {
+      if (!signaturesMatch(sign, secret)) {
         console.warn("BILLING_PUSH_REJECT", { reason: "bad_signature" });
         return reply.code(401).send({ ok: false, error: "bad_signature" });
       }
