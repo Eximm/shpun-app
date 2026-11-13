@@ -36,12 +36,30 @@ const SAMPLE_CSV = [
   "reality_de,BACKEND,UP,8,,,,,,",
 ].join("\n");
 
+const CONFIG = [
+  "frontend rf_reality_canary_443",
+  "    acl canary_rt1 req.ssl_sni -i rt1.shpyn.online img1.avito.ru",
+  "    use_backend reality_fi    if canary_rt1",
+  "    default_backend reality_fi",
+  "backend reality_fi",
+  "    server fi_real_v4 1.1.1.1:8443 check",
+  "backend reality_de",
+  "    server de_real 2.2.2.2:8443 check",
+  "backend router_fi",
+  "    server fi_router 1.1.1.1:2096 check",
+  "",
+].join("\n");
+
+let applyReply = "APPLIED reloaded";
+let lastAppliedConfig = "";
 const calls: any[] = [];
 bridge.setGatewayBridgeTransport(async (_host, payload) => {
   calls.push(payload);
   if (payload.action === "show-stat") return { ok: true, raw: SAMPLE_CSV };
   if (payload.action === "set-state" || payload.action === "set-weight") return { ok: true, raw: "" };
   if (payload.action === "persist-state") return { ok: true, raw: "" };
+  if (payload.action === "get-config") return { ok: true, raw: CONFIG };
+  if (payload.action === "apply-config") { lastAppliedConfig = String(payload.config ?? ""); return { ok: true, raw: applyReply }; }
   return { ok: false, error: "unexpected" };
 });
 
@@ -113,6 +131,54 @@ test("mutations are recorded in the audit log", async () => {
   assert.equal(changes[0].admin_user_id, 90);
   assert.ok(changes.some((c) => c.action === "weight"));
   assert.ok(changes.some((c) => c.action.startsWith("state:")));
+});
+
+const put = (url: string, sid: string, body: any) =>
+  app.inject({ method: "PUT", url, headers: hdr(sid), payload: body });
+
+test("route-map lists editable SNI rules and backends", async () => {
+  const r = await app.inject({ method: "GET", url: `/api/admin/gateways/${gatewayId}/route-map`, headers: hdr("sid-admin") });
+  assert.equal(r.statusCode, 200);
+  const body = r.json();
+  assert.ok(body.backends.includes("reality_de"));
+  assert.equal(body.rules.find((x: any) => x.acl === "canary_rt1").backend, "reality_fi");
+});
+
+test("repoint applies a validated config and records audit", async () => {
+  applyReply = "APPLIED reloaded";
+  const r = await put(`/api/admin/gateways/${gatewayId}/route-map`, "sid-admin", { acl: "canary_rt1", backend: "reality_de" });
+  assert.equal(r.statusCode, 200);
+  assert.equal(r.json().from, "reality_fi");
+  assert.match(lastAppliedConfig, /use_backend reality_de\s+if canary_rt1/);
+  const changes = (await app.inject({ method: "GET", url: `/api/admin/gateways/${gatewayId}/changes`, headers: hdr("sid-admin") })).json().changes as any[];
+  assert.ok(changes.some((c) => c.action === "route"));
+});
+
+test("repoint rejects cross-family backend", async () => {
+  const r = await put(`/api/admin/gateways/${gatewayId}/route-map`, "sid-admin", { acl: "canary_rt1", backend: "router_fi" });
+  assert.equal(r.statusCode, 400);
+  assert.equal(r.json().error, "family_mismatch");
+});
+
+test("repoint rejects unknown backend and rule", async () => {
+  const r1 = await put(`/api/admin/gateways/${gatewayId}/route-map`, "sid-admin", { acl: "canary_rt1", backend: "reality_zz" });
+  assert.equal(r1.statusCode, 400);
+  assert.equal(r1.json().error, "backend_not_found");
+  const r2 = await put(`/api/admin/gateways/${gatewayId}/route-map`, "sid-admin", { acl: "canary_rt9", backend: "reality_de" });
+  assert.equal(r2.statusCode, 404);
+});
+
+test("repoint surfaces a rejected apply (validation/reload failure)", async () => {
+  applyReply = "ERROR: config test failed";
+  const r = await put(`/api/admin/gateways/${gatewayId}/route-map`, "sid-admin", { acl: "canary_rt1", backend: "reality_de" });
+  assert.equal(r.statusCode, 502);
+  assert.equal(r.json().error, "apply_rejected");
+  applyReply = "APPLIED reloaded";
+});
+
+test("non-admin cannot repoint", async () => {
+  const r = await put(`/api/admin/gateways/${gatewayId}/route-map`, "sid-user", { acl: "canary_rt1", backend: "reality_de" });
+  assert.equal(r.statusCode, 403);
 });
 
 test("mutation on a non-gateway is rejected", async () => {

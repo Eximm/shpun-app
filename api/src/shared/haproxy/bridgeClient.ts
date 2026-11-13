@@ -17,7 +17,9 @@ export type GatewayBridgeAction =
   | "show-servers-state"
   | "set-state"
   | "set-weight"
-  | "persist-state";
+  | "persist-state"
+  | "get-config"
+  | "apply-config";
 
 export type GatewayBridgePayload = {
   action: GatewayBridgeAction;
@@ -25,6 +27,7 @@ export type GatewayBridgePayload = {
   server?: string;
   state?: string;
   weight?: number;
+  config?: string;
 };
 
 export type GatewayBridgeResponse = {
@@ -164,4 +167,18 @@ export function gatewaySetServerWeight(
 /** Best-effort: dump runtime server state so it survives a reload. */
 export function gatewayPersistState(host: string): Promise<string> {
   return call(host, { action: "persist-state" });
+}
+
+/** Read the live haproxy.cfg (via the privileged helper). */
+export function gatewayGetConfig(host: string): Promise<string> {
+  return call(host, { action: "get-config" });
+}
+
+/**
+ * Validate + apply a new haproxy.cfg: the server-side helper backs up the
+ * current config, runs `haproxy -c`, installs and gracefully reloads only on
+ * success, and rolls back if the reload fails. Returns the helper's reply.
+ */
+export function gatewayApplyConfig(host: string, config: string): Promise<string> {
+  return call(host, { action: "apply-config", config });
 }

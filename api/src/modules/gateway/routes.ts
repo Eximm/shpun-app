@@ -13,7 +13,10 @@ import {
   gatewaySetServerState,
   gatewaySetServerWeight,
   gatewayPersistState,
+  gatewayGetConfig,
+  gatewayApplyConfig,
 } from "../../shared/haproxy/bridgeClient.js";
+import { parseRouteMap, repointRoute } from "../../shared/haproxy/configRouteMap.js";
 import { parseShowStat, type GatewayServer } from "../../shared/haproxy/statParser.js";
 import {
   isValidHaproxyName,
@@ -233,6 +236,84 @@ export async function gatewayRoutes(app: FastifyInstance) {
     void gatewayPersistState(gw.host).catch(() => {});
 
     return reply.send({ ok: true, backend, server, weight });
+  });
+
+  // GET /api/admin/gateways/:id/route-map — editable SNI->country rules.
+  app.get("/admin/gateways/:id/route-map", async (req, reply) => {
+    if (!(await requireAdmin(req, reply))) return;
+    const gw = loadGateway(req, reply);
+    if (!gw) return;
+    try {
+      const config = await gatewayGetConfig(gw.host);
+      const map = parseRouteMap(config);
+      return reply.send({ ok: true, gateway: gw, backends: map.backends, rules: map.rules });
+    } catch (err) {
+      req.log.warn({ err: String(err), gateway: gw.host }, "gateway_get_config_failed");
+      return reply.code(502).send({ ok: false, error: "gateway_unreachable" });
+    }
+  });
+
+  // PUT /api/admin/gateways/:id/route-map — repoint one SNI rule to a backend.
+  app.put("/admin/gateways/:id/route-map", async (req, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    const gw = loadGateway(req, reply);
+    if (!gw) return;
+
+    const body = (req.body ?? {}) as any;
+    const acl = String(body.acl ?? "");
+    const backend = String(body.backend ?? "");
+
+    let config: string;
+    try {
+      config = await gatewayGetConfig(gw.host);
+    } catch (err) {
+      req.log.warn({ err: String(err), gateway: gw.host }, "gateway_get_config_failed");
+      return reply.code(502).send({ ok: false, error: "gateway_unreachable" });
+    }
+
+    const map = parseRouteMap(config);
+    const rule = map.rules.find((r) => r.acl === acl);
+    if (!rule) return reply.code(404).send({ ok: false, error: "rule_not_found" });
+    if (!map.backends.includes(backend)) {
+      return reply.code(400).send({ ok: false, error: "backend_not_found" });
+    }
+    // Guardrail: keep within the same backend family (reality/router/xhttp...),
+    // since a syntactically valid but cross-family repoint would silently break
+    // the route (`haproxy -c` cannot catch that).
+    const newFamily = backend.indexOf("_") > 0 ? backend.slice(0, backend.indexOf("_")) : backend;
+    if (newFamily !== rule.family) {
+      return reply.code(400).send({ ok: false, error: "family_mismatch", expected: rule.family });
+    }
+    if (backend === rule.backend) {
+      return reply.send({ ok: true, acl, backend, unchanged: true });
+    }
+
+    const edited = repointRoute(config, acl, backend);
+    if (!edited.ok) return reply.code(400).send({ ok: false, error: edited.error });
+
+    let raw: string;
+    try {
+      raw = await gatewayApplyConfig(gw.host, edited.config);
+    } catch (err) {
+      req.log.warn({ err: String(err), gateway: gw.host }, "gateway_apply_config_failed");
+      return reply.code(502).send({ ok: false, error: "apply_failed" });
+    }
+    if (!/APPLIED/.test(raw)) {
+      return reply.code(502).send({ ok: false, error: "apply_rejected", message: raw.slice(0, 500) });
+    }
+
+    recordGatewayChange({
+      adminUserId: admin.userId,
+      gatewayId: gw.id,
+      gatewayHost: gw.host,
+      backend,
+      server: acl,
+      action: "route",
+      detail: { acl, from: edited.from, to: backend },
+    });
+
+    return reply.send({ ok: true, acl, from: edited.from, backend });
   });
 
   // GET /api/admin/gateways/:id/changes — recent audit log.

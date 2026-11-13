@@ -38,6 +38,10 @@ type ChangeRow = {
   action: string;
 };
 type ChangesResp = { ok: true; changes: ChangeRow[] };
+type RouteRule = { frontend: string; acl: string; backend: string; family: string; domains: string[] };
+type RouteMapResp = { ok: true; backends: string[]; rules: RouteRule[] };
+
+const familyOf = (b: string) => (b.indexOf("_") > 0 ? b.slice(0, b.indexOf("_")) : b);
 
 const STATUS_TONE: Record<ServerStatus, string> = {
   up: "var(--ok, #1d9e75)",
@@ -56,6 +60,7 @@ export function GatewayRoutingSection() {
   const [gateways, setGateways] = useState<Gateway[]>([]);
   const [activeId, setActiveId] = useState<number | null>(null);
   const [routes, setRoutes] = useState<RoutesResp | null>(null);
+  const [routeMap, setRouteMap] = useState<RouteMapResp | null>(null);
   const [changes, setChanges] = useState<ChangeRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -79,8 +84,9 @@ export function GatewayRoutingSection() {
     Promise.all([
       apiFetch<RoutesResp>(`/admin/gateways/${id}/routes`),
       apiFetch<ChangesResp>(`/admin/gateways/${id}/changes?limit=20`).catch(() => ({ ok: true, changes: [] }) as ChangesResp),
+      apiFetch<RouteMapResp>(`/admin/gateways/${id}/route-map`).catch(() => null),
     ])
-      .then(([r, c]) => { setRoutes(r); setChanges(c.changes); })
+      .then(([r, c, rm]) => { setRoutes(r); setChanges(c.changes); setRouteMap(rm); })
       .catch(() => { setError(t("admin.gateways.error")); setRoutes(null); })
       .finally(() => setLoading(false));
   }, [t]);
@@ -120,6 +126,22 @@ export function GatewayRoutingSection() {
 
   const setWeight = (s: GatewayServer, weight: number) =>
     mutate("servers/weight", { backend: s.backend, server: s.name, weight }, skey(s.backend, s.name));
+
+  async function repoint(acl: string, backend: string) {
+    if (activeId == null) return;
+    if (!window.confirm(t("admin.gateways.routemap.confirm"))) return;
+    const key = `route:${acl}`;
+    setBusy((m) => ({ ...m, [key]: true }));
+    setError("");
+    try {
+      await apiFetch(`/admin/gateways/${activeId}/route-map`, { method: "PUT", body: { acl, backend } });
+      load(activeId);
+    } catch {
+      setError(t("admin.gateways.actionError"));
+    } finally {
+      setBusy((m) => ({ ...m, [key]: false }));
+    }
+  }
 
   return (
     <div className="admin-section">
@@ -183,6 +205,36 @@ export function GatewayRoutingSection() {
               </div>
             ))}
           </div>
+
+          {routeMap && routeMap.rules.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <h3 style={{ fontSize: 15, marginBottom: 4 }}>{t("admin.gateways.routemap.title")}</h3>
+              <p className="admin-section__hint" style={{ marginTop: 0 }}>{t("admin.gateways.routemap.hint")}</p>
+              <div className="card" style={{ padding: 12, display: "grid", gap: 6 }}>
+                {routeMap.rules.map((rule) => {
+                  const candidates = routeMap.backends.filter((b) => familyOf(b) === rule.family);
+                  const key = `route:${rule.acl}`;
+                  return (
+                    <div key={`${rule.frontend}:${rule.acl}`} style={{ display: "grid", gridTemplateColumns: "minmax(0,1.3fr) auto minmax(0,1fr)", gap: 8, alignItems: "center", fontSize: 13 }}>
+                      <span style={{ fontFamily: "var(--font-mono, monospace)", overflow: "hidden", textOverflow: "ellipsis" }} title={rule.domains.join(", ")}>
+                        <span style={{ color: "var(--muted, #888780)" }}>{rule.acl}</span> · {rule.domains[0] ?? ""}
+                      </span>
+                      <span aria-hidden="true" style={{ color: "var(--muted, #888780)" }}>→</span>
+                      <select
+                        value={rule.backend}
+                        disabled={!!busy[key]}
+                        onChange={(e) => { if (e.target.value !== rule.backend) repoint(rule.acl, e.target.value); }}
+                        style={{ width: "100%" }}
+                        aria-label={rule.acl}
+                      >
+                        {candidates.map((b) => <option key={b} value={b}>{b}</option>)}
+                      </select>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {changes.length > 0 && (
             <div style={{ marginTop: 16 }}>
