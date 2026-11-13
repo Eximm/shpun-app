@@ -141,7 +141,7 @@ export function applyEdit(id: number, preview: EditPreview) {
 
 /** Known API error codes that have a dedicated message. */
 const KNOWN_ERRORS = new Set([
-  "gateway_unreachable", "config_changed", "apply_failed", "apply_rejected",
+  "gateway_unreachable", "config_changed", "apply_failed", "apply_rejected", "apply_timeout",
   "last_active_server", "backend_in_use", "backend_would_be_empty",
   "server_exists", "backend_exists", "acl_exists",
   "invalid_name", "invalid_addr", "invalid_domains", "invalid_weight", "invalid_params",

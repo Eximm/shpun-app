@@ -9,6 +9,8 @@
 // produces the exact new config text and is covered by tests so the single
 // changed token is provably the only difference.
 
+import { splitAclArgs } from "./configEditor.js";
+
 const NAME_RE = /^[A-Za-z0-9_.:-]{1,128}$/;
 
 export type RouteRule = {
@@ -51,7 +53,8 @@ export function parseRouteMap(config: string): RouteMap {
 
     const acl = /^\s+acl\s+(\S+)\s+req\.ssl_sni\s+-i\s+(.+?)\s*$/.exec(line);
     if (acl) {
-      aclDomains.set(acl[1], acl[2].split(/\s+/).filter(Boolean));
+      // `-i` is already consumed; drop any further flags (e.g. `-m end`).
+      aclDomains.set(acl[1], splitAclArgs(acl[2].split(/\s+/).filter(Boolean)).values);
       continue;
     }
 

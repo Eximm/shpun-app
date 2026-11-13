@@ -53,7 +53,7 @@ const CONFIG = [
 let applyReply = "APPLIED reloaded";
 let lastAppliedConfig = "";
 const calls: any[] = [];
-bridge.setGatewayBridgeTransport(async (_host, payload) => {
+const transport: Parameters<typeof bridge.setGatewayBridgeTransport>[0] = async (_host, payload) => {
   calls.push(payload);
   if (payload.action === "show-stat") return { ok: true, raw: SAMPLE_CSV };
   if (payload.action === "set-state" || payload.action === "set-weight") return { ok: true, raw: "" };
@@ -61,7 +61,8 @@ bridge.setGatewayBridgeTransport(async (_host, payload) => {
   if (payload.action === "get-config") return { ok: true, raw: CONFIG };
   if (payload.action === "apply-config") { lastAppliedConfig = String(payload.config ?? ""); return { ok: true, raw: applyReply }; }
   return { ok: false, error: "unexpected" };
-});
+};
+bridge.setGatewayBridgeTransport(transport);
 
 const app = Fastify({ logger: false });
 await app.register(async (api) => { await gatewayRoutes(api); }, { prefix: "/api" });
@@ -133,13 +134,22 @@ test("mutations are recorded in the audit log", async () => {
   assert.ok(changes.some((c) => c.action.startsWith("state:")));
 });
 
-const put = (url: string, sid: string, body: any) =>
-  app.inject({ method: "PUT", url, headers: hdr(sid), payload: body });
+const getRouteMap = () =>
+  app.inject({ method: "GET", url: `/api/admin/gateways/${gatewayId}/route-map`, headers: hdr("sid-admin") });
+// Supplies the current config hash unless the test sets baseHash itself.
+const put = async (url: string, sid: string, body: any) =>
+  app.inject({
+    method: "PUT",
+    url,
+    headers: hdr(sid),
+    payload: "baseHash" in body ? body : { ...body, baseHash: (await getRouteMap()).json().configHash },
+  });
 
 test("route-map lists editable SNI rules and backends", async () => {
-  const r = await app.inject({ method: "GET", url: `/api/admin/gateways/${gatewayId}/route-map`, headers: hdr("sid-admin") });
+  const r = await getRouteMap();
   assert.equal(r.statusCode, 200);
   const body = r.json();
+  assert.match(body.configHash, /^[0-9a-f]{64}$/);
   assert.ok(body.backends.includes("reality_de"));
   assert.equal(body.rules.find((x: any) => x.acl === "canary_rt1").backend, "reality_fi");
 });
@@ -152,6 +162,39 @@ test("repoint applies a validated config and records audit", async () => {
   assert.match(lastAppliedConfig, /use_backend reality_de\s+if canary_rt1/);
   const changes = (await app.inject({ method: "GET", url: `/api/admin/gateways/${gatewayId}/changes`, headers: hdr("sid-admin") })).json().changes as any[];
   assert.ok(changes.some((c) => c.action === "config:route.repoint"));
+});
+
+test("repoint requires a matching base hash", async () => {
+  lastAppliedConfig = "";
+  const missing = await put(`/api/admin/gateways/${gatewayId}/route-map`, "sid-admin", { acl: "canary_rt1", backend: "reality_de", baseHash: undefined });
+  assert.equal(missing.statusCode, 400);
+  assert.equal(missing.json().error, "base_hash_required");
+  const stale = await put(`/api/admin/gateways/${gatewayId}/route-map`, "sid-admin", { acl: "canary_rt1", backend: "reality_de", baseHash: "0".repeat(64) });
+  assert.equal(stale.statusCode, 409);
+  assert.equal(stale.json().error, "config_changed");
+  assert.equal(lastAppliedConfig, "");
+});
+
+test("apply timeout is reported as an unknown outcome (504)", async () => {
+  const { configHash } = (await getRouteMap()).json();
+  bridge.setGatewayBridgeTransport(async (_host, payload) => {
+    if (payload.action === "get-config") return { ok: true, raw: CONFIG };
+    if (payload.action === "persist-state") return { ok: true, raw: "" };
+    if (payload.action === "apply-config") throw new Error("haproxy_bridge_ssh_timeout");
+    return { ok: false, error: "unexpected" };
+  });
+  try {
+    const r = await put(`/api/admin/gateways/${gatewayId}/route-map`, "sid-admin", { acl: "canary_rt1", backend: "reality_de", baseHash: configHash });
+    assert.equal(r.statusCode, 504);
+    assert.equal(r.json().error, "apply_timeout");
+  } finally {
+    bridge.setGatewayBridgeTransport(transport);
+  }
+});
+
+test("apply-config gets a longer SSH timeout than reads", () => {
+  assert.equal(bridge.bridgeTimeoutMs("show-stat"), 15_000);
+  assert.ok(bridge.bridgeTimeoutMs("apply-config") >= 60_000);
 });
 
 test("repoint rejects cross-family backend", async () => {

@@ -194,7 +194,10 @@ async function runConfigEdit(
       raw = await gatewayApplyConfig(gw.host, edited.config);
     } catch (err) {
       opts.log.warn({ err: String(err), gateway: gw.host }, "gateway_apply_config_failed");
-      return { status: 502, body: { ok: false, error: "apply_failed" } };
+      // On a timeout the helper may still have applied (or rolled back) on the
+      // gateway: the outcome is unknown, so the client must re-read the config.
+      const timedOut = /haproxy_bridge_ssh_timeout/.test(String(err));
+      return { status: timedOut ? 504 : 502, body: { ok: false, error: timedOut ? "apply_timeout" : "apply_failed" } };
     }
     if (!/APPLIED/.test(raw)) {
       return { status: 502, body: { ok: false, error: "apply_rejected", message: raw.slice(0, 2000) } };
@@ -379,7 +382,7 @@ export async function gatewayRoutes(app: FastifyInstance) {
     try {
       const config = await gatewayGetConfig(gw.host);
       const map = parseRouteMap(config);
-      return reply.send({ ok: true, gateway: gw, backends: map.backends, rules: map.rules });
+      return reply.send({ ok: true, gateway: gw, configHash: configHash(config), backends: map.backends, rules: map.rules });
     } catch (err) {
       req.log.warn({ err: String(err), gateway: gw.host }, "gateway_get_config_failed");
       return reply.code(502).send({ ok: false, error: "gateway_unreachable" });
@@ -388,7 +391,9 @@ export async function gatewayRoutes(app: FastifyInstance) {
 
   // PUT /api/admin/gateways/:id/route-map — repoint one SNI rule to a backend.
   // Kept for compatibility; goes through the same serialized, hash-guarded
-  // edit pipeline as /config/edit.
+  // edit pipeline as /config/edit and, like it, requires baseHash (returned
+  // by GET /route-map or GET /config) so a stale client cannot overwrite a
+  // newer config.
   app.put("/admin/gateways/:id/route-map", async (req, reply) => {
     const admin = await requireAdmin(req, reply);
     if (!admin) return;
@@ -398,7 +403,8 @@ export async function gatewayRoutes(app: FastifyInstance) {
     const body = (req.body ?? {}) as any;
     const acl = String(body.acl ?? "");
     const backend = String(body.backend ?? "");
-    const baseHash = typeof body.baseHash === "string" ? body.baseHash : null;
+    const baseHash = typeof body.baseHash === "string" && /^[0-9a-f]{64}$/.test(body.baseHash) ? body.baseHash : null;
+    if (!baseHash) return reply.code(400).send({ ok: false, error: "base_hash_required" });
 
     let frontend = typeof body.frontend === "string" ? body.frontend : "";
     if (!frontend) {

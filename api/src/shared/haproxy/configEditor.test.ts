@@ -7,6 +7,7 @@ import {
   normalizeDomains,
   parseAddr,
   parseConfigModel,
+  splitAclArgs,
   type EditOp,
 } from "./configEditor.js";
 
@@ -92,6 +93,38 @@ test("route.repoint changes one token and keeps family", () => {
   assert.equal(changed(CFG, r.config).length, 2);
   err({ type: "route.repoint", frontend: "rf_reality_443", acl: "canary_rt1", backend: "router_fi" }, "family_mismatch");
   err({ type: "route.repoint", frontend: "rf_reality_443", acl: "canary_rt1", backend: "reality_fi" }, "unchanged");
+});
+
+test("route.domains keeps the fetch, extra flags and comment", () => {
+  const cfg = [
+    "frontend f",
+    "    acl a1 req_ssl_sni -i -m end example.com other.example.com # keep me",
+    "    use_backend b if a1",
+    "backend b",
+    "    server s 1.1.1.1:1 check",
+    "",
+  ].join("\n");
+  const m = parseConfigModel(cfg);
+  // `end` is the -m argument, not a domain.
+  assert.deepEqual(m.frontends[0].acls[0].domains, ["example.com", "other.example.com"]);
+  const r = applyEdit(cfg, { type: "route.domains", frontend: "f", acl: "a1", domains: "new.example.com" });
+  assert.equal(r.ok, true);
+  if (r.ok) {
+    assert.equal(r.config.split("\n")[1], "    acl a1 req_ssl_sni -i -m end new.example.com # keep me");
+  }
+});
+
+test("acls loaded from a file (-f) are not editable", () => {
+  const cfg = "frontend f\n    acl a1 req.ssl_sni -i -f /etc/haproxy/sni.lst\n    use_backend b if a1\nbackend b\n    server s 1.1.1.1:1\n";
+  const m = parseConfigModel(cfg);
+  assert.equal(m.frontends[0].acls[0].sni, false);
+  assert.equal(m.frontends[0].rules[0].editable, false);
+});
+
+test("splitAclArgs separates flags (with arguments) from values", () => {
+  assert.deepEqual(splitAclArgs(["-i", "-m", "end", "a.com", "-x"]), { flags: ["-i", "-m", "end"], values: ["a.com", "-x"] });
+  assert.deepEqual(splitAclArgs(["-i", "--", "-weird"]), { flags: ["-i", "--"], values: ["-weird"] });
+  assert.deepEqual(splitAclArgs(["-i"]), { flags: ["-i"], values: [] });
 });
 
 test("route.domains rewrites the acl line only", () => {

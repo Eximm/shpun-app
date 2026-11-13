@@ -100,6 +100,26 @@ export function normalizeDomains(input: unknown): string[] | null {
   return out;
 }
 
+/** HAProxy ACL flags that consume the following token as their argument. */
+const ACL_FLAGS_WITH_ARG = new Set(["-m", "-f", "-u"]);
+
+/**
+ * Splits the arguments after `acl <name> <fetch>` into leading flags (with
+ * their arguments, e.g. `-i -m end`) and the matched values. Everything after
+ * the first value, or after `--`, is a value.
+ */
+export function splitAclArgs(rest: string[]): { flags: string[]; values: string[] } {
+  const flags: string[] = [];
+  for (let i = 0; i < rest.length; i++) {
+    const t = rest[i];
+    if (t === "--") return { flags: [...flags, t], values: rest.slice(i + 1) };
+    if (!t.startsWith("-")) return { flags, values: rest.slice(i) };
+    flags.push(t);
+    if (ACL_FLAGS_WITH_ARG.has(t) && i + 1 < rest.length) flags.push(rest[++i]);
+  }
+  return { flags, values: [] };
+}
+
 /* ─── Model ──────────────────────────────────────────────────────────────── */
 
 type SectionKind = "global" | "defaults" | "frontend" | "backend" | "listen" | "other";
@@ -231,8 +251,10 @@ function parse(config: string): Parsed {
         if (acl) {
           const sni = acl[2] === "req.ssl_sni" || acl[2] === "req_ssl_sni";
           const rest = (acl[3] ?? "").split(/\s+/).filter(Boolean);
-          const domains = sni ? rest.filter((x) => !x.startsWith("-")) : [];
-          f.acls.push({ name: acl[1], domains, line: i, sni: sni && rest[0] === "-i" });
+          const { flags, values } = splitAclArgs(rest);
+          const domains = sni ? values : [];
+          // Values loaded from a file (-f) are not editable inline.
+          f.acls.push({ name: acl[1], domains, line: i, sni: sni && rest[0] === "-i" && !flags.includes("-f") });
           continue;
         }
         const ub = /^\s+use_backend\s+(\S+)\s+(?:if|unless)\s+(.+?)\s*$/.exec(line);
@@ -426,7 +448,18 @@ export function applyEdit(config: string, op: EditOp): EditResult {
       if (domains.join(" ") === acl.domains.join(" ")) return fail("unchanged");
       const sameName = f.acls.filter((a) => a.name === op.acl);
       if (sameName.length > 1) return fail("ambiguous_rule");
-      replace.set(acl.line, `${indentOf(lines[acl.line])}acl ${acl.name} req.ssl_sni -i ${domains.join(" ")}`);
+      // Keep the original fetch, flags (e.g. `-m end`) and trailing comment;
+      // only the matched values are replaced.
+      const orig = lines[acl.line];
+      const body = stripComment(orig);
+      const am = /^(\s+)acl\s+(\S+)\s+(\S+)(?:\s+(.*?))?\s*$/.exec(body);
+      if (!am) return fail("rule_not_found");
+      const { flags } = splitAclArgs((am[4] ?? "").split(/\s+/).filter(Boolean));
+      const comment = orig.slice(body.length);
+      replace.set(
+        acl.line,
+        `${am[1]}acl ${acl.name} ${am[3]} ${[...flags, ...domains].join(" ")}${comment ? ` ${comment.trimStart()}` : ""}`,
+      );
       summary = `${f.name}: ${op.acl} domains = ${domains.join(", ")}`;
       target = { backend: f.name, server: op.acl };
       break;

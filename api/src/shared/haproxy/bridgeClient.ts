@@ -60,6 +60,20 @@ function sshConfig() {
   return { user, keyPath, knownHostsPath };
 }
 
+/**
+ * Per-action SSH timeout. apply-config runs `haproxy -c`, a backup and a
+ * graceful reload (with rollback) on the gateway, so it gets a much longer
+ * budget: killing the client mid-apply leaves the outcome unknown to us.
+ */
+export function bridgeTimeoutMs(action: GatewayBridgeAction): number {
+  const fromEnv = (name: string, fallback: number) => {
+    const n = Number(process.env[name]);
+    return Number.isFinite(n) && n >= 1_000 ? n : fallback;
+  };
+  if (action === "apply-config") return fromEnv("HAPROXY_BRIDGE_APPLY_TIMEOUT_MS", 90_000);
+  return fromEnv("HAPROXY_BRIDGE_TIMEOUT_MS", 15_000);
+}
+
 function runSsh(host: string, payload: GatewayBridgePayload): Promise<GatewayBridgeResponse> {
   const cleanHost = String(host ?? "").trim();
   if (!cleanHost) return Promise.reject(new Error("haproxy_bridge_host_missing"));
@@ -96,7 +110,7 @@ function runSsh(host: string, payload: GatewayBridgePayload): Promise<GatewayBri
     const timer = setTimeout(() => {
       child.kill("SIGKILL");
       finish(new Error("haproxy_bridge_ssh_timeout"));
-    }, 15_000);
+    }, bridgeTimeoutMs(payload.action));
 
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");

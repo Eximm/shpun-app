@@ -137,7 +137,10 @@ export function GatewayRoutingSection() {
     } catch (e) {
       // Someone else changed the config: refresh so the next attempt is based
       // on the current state, and let the dialog explain what happened.
-      if (e instanceof ApiError && e.code === "config_changed") void load(activeId, { silent: true });
+      // On a timeout the outcome is unknown — refresh to show the real state.
+      if (e instanceof ApiError && (e.code === "config_changed" || e.code === "apply_timeout")) {
+        void load(activeId, { silent: true });
+      }
       throw e;
     }
   }, [activeId, preview, load, t]);
