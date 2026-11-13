@@ -70,6 +70,10 @@ async function requireAdmin(req: any, reply: any): Promise<AdminSession | null> 
   return { shmSessionId: s.shmSessionId, userId: Number.isFinite(uid) && uid > 0 ? uid : null };
 }
 
+function isRoutingGateway(row: { kind: string; haproxy_routing?: number | null }): boolean {
+  return row.kind === "gateway" && Number(row.haproxy_routing) === 1;
+}
+
 /** Loads the gateway row (admin gateway only) or sends the error response. */
 function loadGateway(req: any, reply: any): { id: number; title: string; host: string } | null {
   const id = Number((req.params as any)?.id);
@@ -84,6 +88,12 @@ function loadGateway(req: any, reply: any): { id: number; title: string; host: s
   }
   if (row.kind !== "gateway") {
     reply.code(400).send({ ok: false, error: "not_a_gateway" });
+    return null;
+  }
+  // kind=gateway also covers app mirrors (e.g. RU MIRROR MSK/SPB): only rows
+  // explicitly marked as HAProxy VPN gateways may be read or edited here.
+  if (!isRoutingGateway(row)) {
+    reply.code(400).send({ ok: false, error: "routing_not_enabled" });
     return null;
   }
   return { id: row.id, title: row.title, host: row.host };
@@ -237,11 +247,12 @@ async function runConfigEdit(
 }
 
 export async function gatewayRoutes(app: FastifyInstance) {
-  // GET /api/admin/gateways — gateway inventory (kind=gateway).
+  // GET /api/admin/gateways — HAProxy VPN gateways (kind=gateway with
+  // haproxy_routing); app mirrors and other edge servers are not listed.
   app.get("/admin/gateways", async (req, reply) => {
     if (!(await requireAdmin(req, reply))) return;
     const gateways = listMonitoredServers()
-      .filter((s) => s.kind === "gateway")
+      .filter(isRoutingGateway)
       .map((s) => ({
         id: s.id,
         title: s.title,

@@ -27,6 +27,7 @@ test("a fetch implementation that ignores abort cannot freeze the collector", as
       uplink_mbps: null,
       visibility: "admin_only",
       affects_public_health: 1,
+      haproxy_routing: 0,
       node_exporter_enabled: 1,
       exporter_auth_type: "none",
       exporter_username: "",

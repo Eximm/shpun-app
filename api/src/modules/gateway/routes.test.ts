@@ -9,7 +9,7 @@ process.env.DATA_DIR = mkdtempSync(path.join(tmpdir(), "shpun-gateway-"));
 const Fastify = (await import("fastify")).default;
 const { gatewayRoutes } = await import("./routes.js");
 const { setServerStatusAdminChecker } = await import("../serverStatus/adminGuard.js");
-const { createMonitoredServer } = await import("../serverStatus/repo.js");
+const { createMonitoredServer, updateMonitoredServer, deleteMonitoredServer } = await import("../serverStatus/repo.js");
 const bridge = await import("../../shared/haproxy/bridgeClient.js");
 const { putSession } = await import("../../shared/session/sessionStore.js");
 
@@ -17,7 +17,10 @@ putSession("sid-user", { shmSessionId: "shm-user", shmUserId: 10, login: "u", cr
 putSession("sid-admin", { shmSessionId: "shm-admin", shmUserId: 90, login: "a", createdAt: Date.now() });
 setServerStatusAdminChecker(async (sid) => sid === "shm-admin");
 
-const gw = createMonitoredServer({ title: "REALITY GW", host: "ruin.example", kind: "gateway", visibility: "admin_only" });
+const gw = createMonitoredServer({ title: "REALITY GW", host: "ruin.example", kind: "gateway", visibility: "admin_only", haproxyRouting: true });
+// An app mirror: kind=gateway for health, but not a HAProxy VPN gateway.
+const mirror = createMonitoredServer({ title: "RU MIRROR MSK", host: "mirror.example", kind: "gateway", visibility: "admin_only" });
+const mirrorId = mirror.ok ? mirror.item.id : 0;
 assert.equal(gw.ok, true);
 const gatewayId = gw.ok ? gw.item.id : 0;
 const vpn = createMonitoredServer({ title: "Helsinki", host: "fi.example", kind: "vpn" });
@@ -75,6 +78,39 @@ test("topology read returns parsed backends", async () => {
   const r = await app.inject({ method: "GET", url: `/api/admin/gateways/${gatewayId}/routes`, headers: hdr("sid-admin") });
   assert.equal(r.statusCode, 200);
   assert.equal(r.json().topology.backends.length, 2);
+});
+
+test("only HAProxy routing gateways are listed and accessible (mirrors are not)", async () => {
+  const list = await app.inject({ method: "GET", url: "/api/admin/gateways", headers: hdr("sid-admin") });
+  assert.equal(list.statusCode, 200);
+  assert.deepEqual(list.json().gateways.map((g: any) => g.id), [gatewayId]);
+  const before = calls.length;
+  for (const p of ["routes", "config", "route-map", "changes"]) {
+    const r = await app.inject({ method: "GET", url: `/api/admin/gateways/${mirrorId}/${p}`, headers: hdr("sid-admin") });
+    assert.equal(r.statusCode, 400, p);
+    assert.equal(r.json().error, "routing_not_enabled", p);
+  }
+  const w = await post(`/api/admin/gateways/${mirrorId}/servers/state`, "sid-admin", { backend: "b", server: "s", state: "maint" });
+  assert.equal(w.json().error, "routing_not_enabled");
+  // The bridge is never contacted for a mirror.
+  assert.equal(calls.length, before);
+});
+
+test("haproxy routing flag: opt-in on update, cleared when kind is not gateway", () => {
+  const s = createMonitoredServer({ title: "tmp", host: "tmp.example", kind: "gateway" });
+  assert.ok(s.ok);
+  if (!s.ok) return;
+  assert.equal(s.item.haproxy_routing, 0);
+  const on = updateMonitoredServer(s.item.id, { haproxyRouting: true });
+  assert.ok(on.ok && on.item.haproxy_routing === 1);
+  const keep = updateMonitoredServer(s.item.id, { title: "tmp2" });
+  assert.ok(keep.ok && keep.item.haproxy_routing === 1);
+  const vpnKind = updateMonitoredServer(s.item.id, { kind: "vpn" });
+  assert.ok(vpnKind.ok && vpnKind.item.haproxy_routing === 0);
+  const ignored = createMonitoredServer({ title: "v", host: "v.example", kind: "vpn", haproxyRouting: true });
+  assert.ok(ignored.ok && ignored.item.haproxy_routing === 0);
+  deleteMonitoredServer(s.item.id);
+  if (ignored.ok) deleteMonitoredServer(ignored.item.id);
 });
 
 test("non-admin cannot mutate", async () => {

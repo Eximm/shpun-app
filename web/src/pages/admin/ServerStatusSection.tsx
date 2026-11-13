@@ -65,6 +65,7 @@ type MonitoredServer = {
   uplink_mbps: number | null;
   visibility: Visibility;
   affects_public_health: number;
+  haproxy_routing?: number;
   health_group?: string | null;
   node_exporter_enabled: number;
   exporter_auth_type: "none" | "basic";
@@ -143,6 +144,7 @@ const EMPTY_FORM = {
   active: true,
   visibility: "public" as Visibility,
   affectsPublicHealth: true,
+  haproxyRouting: false,
   healthGroup: "",
   nodeExporterEnabled: true,
   exporterAuthType: "none" as "none" | "basic",
@@ -438,6 +440,7 @@ export function ServerStatusSection() {
       active: Number(item.active) === 1,
       visibility: item.visibility,
       affectsPublicHealth: Number(item.affects_public_health) === 1,
+      haproxyRouting: Number(item.haproxy_routing) === 1,
       healthGroup: item.health_group || "",
       nodeExporterEnabled: Number(item.node_exporter_enabled) === 1,
       exporterAuthType: item.exporter_auth_type,
@@ -475,6 +478,7 @@ export function ServerStatusSection() {
       active: form.active,
       visibility: form.visibility,
       affectsPublicHealth: form.affectsPublicHealth,
+      haproxyRouting: form.kind === "gateway" && form.haproxyRouting,
       healthGroup: form.healthGroup,
       nodeExporterEnabled: form.nodeExporterEnabled,
       exporterAuthType: form.exporterAuthType,
@@ -1136,6 +1140,15 @@ export function ServerStatusSection() {
                 <option value="infra">{t("admin.servers.kind.infra")}</option>
               </select>
             </label>
+            {form.kind === "gateway" && (
+              <label className="admin-serverStatus-check admin-serverStatus-fieldWide">
+                <input type="checkbox" checked={form.haproxyRouting} onChange={(e) => setForm((p) => ({ ...p, haproxyRouting: e.target.checked }))} />
+                <span>
+                  {t("admin.servers.field.haproxy_routing")}
+                  <small> {t("admin.servers.field.haproxy_routing_hint")}</small>
+                </span>
+              </label>
+            )}
             <label className="field">
               <span className="field__label">{t("admin.servers.field.country")}</span>
               <select className="input" value={form.countryCode} onChange={(e) => setForm((p) => ({ ...p, countryCode: e.target.value }))}>

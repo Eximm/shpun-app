@@ -18,6 +18,8 @@ export type MonitoredServerRow = {
   uplink_mbps: number | null;
   visibility: ServerVisibility;
   affects_public_health: number;
+  /** 1 = HAProxy VPN-traffic gateway managed in the "Gateways" admin section. */
+  haproxy_routing: number;
   health_group?: string | null;
   node_exporter_enabled: number;
   exporter_auth_type: ExporterAuthType;
@@ -74,6 +76,10 @@ addColumn(`ALTER TABLE monitored_servers ADD COLUMN exporter_password_encrypted 
 addColumn(`ALTER TABLE monitored_servers ADD COLUMN remnawave_integration_id INTEGER`);
 addColumn(`ALTER TABLE monitored_servers ADD COLUMN remnawave_node_uuid TEXT`);
 addColumn(`ALTER TABLE monitored_servers ADD COLUMN thresholds_json TEXT`);
+// Only kind=gateway rows that really run the HAProxy VPN bridge get this;
+// app mirrors are also kind=gateway (critical health tier) but must never be
+// touched by the routing editor. Default 0: opt in per server.
+addColumn(`ALTER TABLE monitored_servers ADD COLUMN haproxy_routing INTEGER NOT NULL DEFAULT 0`);
 
 linkDb.exec(`
 CREATE INDEX IF NOT EXISTS idx_monitored_servers_visibility_active
@@ -228,6 +234,7 @@ export function createMonitoredServer(input: {
   uplinkMbps?: unknown;
   visibility?: unknown;
   affectsPublicHealth?: unknown;
+  haproxyRouting?: unknown;
   healthGroup?: unknown;
   nodeExporterEnabled?: unknown;
   exporterAuthType?: unknown;
@@ -264,8 +271,9 @@ export function createMonitoredServer(input: {
     INSERT INTO monitored_servers
       (title, host, exporter_url, kind, country_code, active, sort_order, uplink_mbps,
        visibility, affects_public_health, node_exporter_enabled, exporter_auth_type,
-       exporter_username, exporter_password_encrypted, thresholds_json, health_group)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       exporter_username, exporter_password_encrypted, thresholds_json, health_group,
+       haproxy_routing)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     title,
     host,
@@ -283,6 +291,7 @@ export function createMonitoredServer(input: {
     password ? encryptSecret(password) : null,
     thresholds.json,
     clean(input.healthGroup, 100) || null,
+    kind(input.kind) === "gateway" ? boolInt(input.haproxyRouting, 0) : 0,
   );
 
   return { ok: true as const, item: getMonitoredServer(Number(info.lastInsertRowid))! };
@@ -331,6 +340,8 @@ export function updateMonitoredServer(id: number, input: Record<string, unknown>
     thresholdsJson = sanitized.json;
   }
 
+  const nextKind = "kind" in input ? kind(input.kind) : current.kind;
+
   linkDb.prepare(`
     UPDATE monitored_servers
     SET title = ?,
@@ -349,13 +360,14 @@ export function updateMonitoredServer(id: number, input: Record<string, unknown>
         exporter_password_encrypted = ?,
         thresholds_json = ?,
         health_group = ?,
+        haproxy_routing = ?,
         updated_at = datetime('now')
     WHERE id = ?
   `).run(
     "title" in input ? (clean(input.title, 160) || host) : current.title,
     host,
     exporterUrl,
-    "kind" in input ? kind(input.kind) : current.kind,
+    nextKind,
     "countryCode" in input ? countryCode(input.countryCode) : current.country_code,
     "active" in input ? (input.active === false ? 0 : 1) : current.active,
     "sortOrder" in input && Number.isFinite(Number(input.sortOrder)) ? Math.trunc(Number(input.sortOrder)) : current.sort_order,
@@ -370,6 +382,9 @@ export function updateMonitoredServer(id: number, input: Record<string, unknown>
     passwordEncrypted,
     thresholdsJson,
     "healthGroup" in input ? clean(input.healthGroup, 100) || null : current.health_group ?? null,
+    nextKind === "gateway"
+      ? ("haproxyRouting" in input ? boolInt(input.haproxyRouting, current.haproxy_routing) : current.haproxy_routing)
+      : 0,
     id,
   );
 
