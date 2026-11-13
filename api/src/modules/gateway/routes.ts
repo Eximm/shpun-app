@@ -1,8 +1,16 @@
 // api/src/modules/gateway/routes.ts
 //
-// Phase 1 (READ-ONLY) admin routes for gateway HAProxy routing visibility.
-// Lists gateways (from monitored_servers, kind=gateway) and returns a live
-// backend/server topology read through the locked-down bridge. No mutations.
+// Admin routes for gateway HAProxy routing (all admin-gated, all audited):
+//   - read: gateway inventory, live backend/server topology (`show stat`),
+//     and the structural config model (frontends / SNI routes / backends /
+//     servers / nodes) parsed from haproxy.cfg;
+//   - runtime actions (instant, no reload): server state + weight;
+//   - structural config edits (routes, servers, addresses, nodes, backends):
+//     computed here as a surgical text edit, previewed as a diff (dryRun),
+//     then validated (`haproxy -c`) and gracefully reloaded by the bridge's
+//     privileged helper, which rolls back on failure.
+// Config edits are serialized per gateway and guarded by an optimistic
+// concurrency hash so two admins cannot silently overwrite each other.
 
 import type { FastifyInstance } from "fastify";
 import { getSessionFromRequest } from "../../shared/session/sessionStore.js";
@@ -16,7 +24,15 @@ import {
   gatewayGetConfig,
   gatewayApplyConfig,
 } from "../../shared/haproxy/bridgeClient.js";
-import { parseRouteMap, repointRoute } from "../../shared/haproxy/configRouteMap.js";
+import { parseRouteMap } from "../../shared/haproxy/configRouteMap.js";
+import {
+  applyEdit,
+  configHash,
+  diffConfigs,
+  parseConfigModel,
+  EDIT_OP_TYPES,
+  type EditOp,
+} from "../../shared/haproxy/configEditor.js";
 import { parseShowStat, type GatewayServer } from "../../shared/haproxy/statParser.js";
 import {
   isValidHaproxyName,
@@ -78,22 +94,133 @@ function findServer(
 }
 
 /**
- * Guardrail: refuse to take the last active (non-backup) UP server of a backend
- * out of rotation (maint/drain), which would blackhole that route — unless the
- * caller explicitly forces it.
+ * Guardrail: refuse to take the last server that actually carries traffic
+ * (UP, non-backup, weight > 0) out of rotation — via maint/drain or via
+ * weight 0, which is equivalent — since that would blackhole the route,
+ * unless the caller explicitly forces it.
  */
+function isCarryingTraffic(s: GatewayServer): boolean {
+  return s.status === "up" && !s.isBackup && (s.weight == null || s.weight > 0);
+}
+
 function wouldOrphanBackend(
   topology: ReturnType<typeof parseShowStat>,
   backend: string,
   server: string,
-  nextState: ServerState,
+  change: { state?: ServerState; weight?: number },
 ): boolean {
-  if (nextState === "ready") return false;
+  if (change.state === "ready") return false;
+  if (change.weight != null && change.weight > 0) return false;
   const b = topology.backends.find((x) => x.name === backend);
   if (!b) return false;
-  const activeUp = b.servers.filter((s) => s.status === "up" && !s.isBackup);
-  if (activeUp.length !== 1) return false;
-  return activeUp[0].name === server;
+  const active = b.servers.filter(isCarryingTraffic);
+  if (active.length !== 1) return false;
+  return active[0].name === server;
+}
+
+/** Strict weight parsing: an integer (or integer string) within bounds. */
+function parseWeight(v: unknown): number | null {
+  if (typeof v === "number") return Number.isInteger(v) && v >= WEIGHT_MIN && v <= WEIGHT_MAX ? v : null;
+  if (typeof v === "string" && /^\d{1,3}$/.test(v.trim())) {
+    const n = Number(v.trim());
+    return n >= WEIGHT_MIN && n <= WEIGHT_MAX ? n : null;
+  }
+  return null;
+}
+
+/* ─── Serialized, hash-guarded config edits ───────────────────────────────── */
+
+const gatewayLocks = new Map<number, Promise<unknown>>();
+
+/** Runs `fn` exclusively per gateway (config read → edit → apply). */
+function withGatewayLock<T>(gatewayId: number, fn: () => Promise<T>): Promise<T> {
+  const prev = gatewayLocks.get(gatewayId) ?? Promise.resolve();
+  const run = prev.catch(() => {}).then(fn);
+  const tail = run.catch(() => {});
+  gatewayLocks.set(gatewayId, tail);
+  void tail.then(() => { if (gatewayLocks.get(gatewayId) === tail) gatewayLocks.delete(gatewayId); });
+  return run;
+}
+
+const CONFLICT_ERRORS = new Set([
+  "last_active_server",
+  "backend_in_use",
+  "backend_would_be_empty",
+  "server_exists",
+  "backend_exists",
+  "acl_exists",
+]);
+
+type EditOutcome = { status: number; body: Record<string, unknown> };
+
+async function runConfigEdit(
+  gw: { id: number; title: string; host: string },
+  op: EditOp,
+  opts: { baseHash: string | null; dryRun: boolean; admin: AdminSession; log: any },
+): Promise<EditOutcome> {
+  return withGatewayLock(gw.id, async () => {
+    let config: string;
+    try {
+      config = await gatewayGetConfig(gw.host);
+    } catch (err) {
+      opts.log.warn({ err: String(err), gateway: gw.host }, "gateway_get_config_failed");
+      return { status: 502, body: { ok: false, error: "gateway_unreachable" } };
+    }
+    const hash = configHash(config);
+    if (opts.baseHash && opts.baseHash !== hash) {
+      return { status: 409, body: { ok: false, error: "config_changed", configHash: hash } };
+    }
+
+    const edited = applyEdit(config, op);
+    if (!edited.ok) {
+      if (edited.error === "unchanged") {
+        return { status: 200, body: { ok: true, unchanged: true, configHash: hash, diff: [] } };
+      }
+      const status = CONFLICT_ERRORS.has(edited.error) ? 409 : 400;
+      return { status, body: { ok: false, error: edited.error, ...(edited.detail ?? {}) } };
+    }
+
+    const diff = diffConfigs(config, edited.config);
+    if (opts.dryRun) {
+      return { status: 200, body: { ok: true, dryRun: true, summary: edited.summary, diff, configHash: hash } };
+    }
+
+    // Best-effort: dump runtime server state first so runtime-only changes
+    // (maint/drain/weight) survive the reload.
+    await gatewayPersistState(gw.host).catch(() => "");
+
+    let raw: string;
+    try {
+      raw = await gatewayApplyConfig(gw.host, edited.config);
+    } catch (err) {
+      opts.log.warn({ err: String(err), gateway: gw.host }, "gateway_apply_config_failed");
+      return { status: 502, body: { ok: false, error: "apply_failed" } };
+    }
+    if (!/APPLIED/.test(raw)) {
+      return { status: 502, body: { ok: false, error: "apply_rejected", message: raw.slice(0, 2000) } };
+    }
+
+    recordGatewayChange({
+      adminUserId: opts.admin.userId,
+      gatewayId: gw.id,
+      gatewayHost: gw.host,
+      backend: edited.target.backend.slice(0, 256),
+      server: edited.target.server.slice(0, 256),
+      action: `config:${op.type}`,
+      detail: { summary: edited.summary, op, from: hash.slice(0, 12), to: configHash(edited.config).slice(0, 12) },
+    });
+
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        summary: edited.summary,
+        diff,
+        configHash: configHash(edited.config),
+        ...(edited.from ? { from: edited.from } : {}),
+      },
+    };
+  });
 }
 
 export async function gatewayRoutes(app: FastifyInstance) {
@@ -156,7 +283,7 @@ export async function gatewayRoutes(app: FastifyInstance) {
     const current = findServer(topology, backend, server);
     if (!current) return reply.code(404).send({ ok: false, error: "server_not_found" });
 
-    if (!force && wouldOrphanBackend(topology, backend, server, state)) {
+    if (!force && wouldOrphanBackend(topology, backend, server, { state })) {
       return reply.code(409).send({ ok: false, error: "last_active_server", backend });
     }
 
@@ -195,11 +322,12 @@ export async function gatewayRoutes(app: FastifyInstance) {
     const body = (req.body ?? {}) as any;
     const backend = String(body.backend ?? "");
     const server = String(body.server ?? "");
-    const weight = Number(body.weight);
+    const weight = parseWeight(body.weight);
+    const force = body.force === true;
     if (!isValidHaproxyName(backend) || !isValidHaproxyName(server)) {
       return reply.code(400).send({ ok: false, error: "invalid_name" });
     }
-    if (!Number.isInteger(weight) || weight < WEIGHT_MIN || weight > WEIGHT_MAX) {
+    if (weight == null) {
       return reply.code(400).send({ ok: false, error: "invalid_weight" });
     }
 
@@ -212,6 +340,11 @@ export async function gatewayRoutes(app: FastifyInstance) {
     }
     const current = findServer(topology, backend, server);
     if (!current) return reply.code(404).send({ ok: false, error: "server_not_found" });
+
+    // Weight 0 takes the server out of rotation just like maint/drain.
+    if (!force && wouldOrphanBackend(topology, backend, server, { weight })) {
+      return reply.code(409).send({ ok: false, error: "last_active_server", backend });
+    }
 
     try {
       const raw = await gatewaySetServerWeight(gw.host, backend, server, weight);
@@ -231,7 +364,7 @@ export async function gatewayRoutes(app: FastifyInstance) {
       backend,
       server,
       action: "weight",
-      detail: { from: current.weight, to: weight },
+      detail: { from: current.weight, to: weight, force },
     });
     void gatewayPersistState(gw.host).catch(() => {});
 
@@ -254,6 +387,8 @@ export async function gatewayRoutes(app: FastifyInstance) {
   });
 
   // PUT /api/admin/gateways/:id/route-map — repoint one SNI rule to a backend.
+  // Kept for compatibility; goes through the same serialized, hash-guarded
+  // edit pipeline as /config/edit.
   app.put("/admin/gateways/:id/route-map", async (req, reply) => {
     const admin = await requireAdmin(req, reply);
     if (!admin) return;
@@ -263,57 +398,65 @@ export async function gatewayRoutes(app: FastifyInstance) {
     const body = (req.body ?? {}) as any;
     const acl = String(body.acl ?? "");
     const backend = String(body.backend ?? "");
+    const baseHash = typeof body.baseHash === "string" ? body.baseHash : null;
 
-    let config: string;
+    let frontend = typeof body.frontend === "string" ? body.frontend : "";
+    if (!frontend) {
+      try {
+        const map = parseRouteMap(await gatewayGetConfig(gw.host));
+        const rules = map.rules.filter((r) => r.acl === acl);
+        if (rules.length === 0) return reply.code(404).send({ ok: false, error: "rule_not_found" });
+        if (rules.length > 1) return reply.code(400).send({ ok: false, error: "ambiguous_rule" });
+        frontend = rules[0].frontend;
+      } catch (err) {
+        req.log.warn({ err: String(err), gateway: gw.host }, "gateway_get_config_failed");
+        return reply.code(502).send({ ok: false, error: "gateway_unreachable" });
+      }
+    }
+
+    const res = await runConfigEdit(gw, { type: "route.repoint", frontend, acl, backend }, {
+      baseHash, dryRun: false, admin, log: req.log,
+    });
+    if (res.body.error === "rule_not_found" || res.body.error === "frontend_not_found") {
+      return reply.code(404).send(res.body);
+    }
+    return reply.code(res.status).send(res.body.ok ? { ...res.body, acl, backend } : res.body);
+  });
+
+  // GET /api/admin/gateways/:id/config — structural model + concurrency hash.
+  app.get("/admin/gateways/:id/config", async (req, reply) => {
+    if (!(await requireAdmin(req, reply))) return;
+    const gw = loadGateway(req, reply);
+    if (!gw) return;
     try {
-      config = await gatewayGetConfig(gw.host);
+      const config = await gatewayGetConfig(gw.host);
+      return reply.send({ ok: true, gateway: gw, configHash: configHash(config), model: parseConfigModel(config) });
     } catch (err) {
       req.log.warn({ err: String(err), gateway: gw.host }, "gateway_get_config_failed");
       return reply.code(502).send({ ok: false, error: "gateway_unreachable" });
     }
+  });
 
-    const map = parseRouteMap(config);
-    const rule = map.rules.find((r) => r.acl === acl);
-    if (!rule) return reply.code(404).send({ ok: false, error: "rule_not_found" });
-    if (!map.backends.includes(backend)) {
-      return reply.code(400).send({ ok: false, error: "backend_not_found" });
-    }
-    // Guardrail: keep within the same backend family (reality/router/xhttp...),
-    // since a syntactically valid but cross-family repoint would silently break
-    // the route (`haproxy -c` cannot catch that).
-    const newFamily = backend.indexOf("_") > 0 ? backend.slice(0, backend.indexOf("_")) : backend;
-    if (newFamily !== rule.family) {
-      return reply.code(400).send({ ok: false, error: "family_mismatch", expected: rule.family });
-    }
-    if (backend === rule.backend) {
-      return reply.send({ ok: true, acl, backend, unchanged: true });
-    }
+  // POST /api/admin/gateways/:id/config/edit — { op, baseHash, dryRun }.
+  // dryRun returns the diff without touching the gateway; a real apply
+  // requires baseHash (from GET /config or the dry run) to match.
+  app.post("/admin/gateways/:id/config/edit", async (req, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    const gw = loadGateway(req, reply);
+    if (!gw) return;
 
-    const edited = repointRoute(config, acl, backend);
-    if (!edited.ok) return reply.code(400).send({ ok: false, error: edited.error });
-
-    let raw: string;
-    try {
-      raw = await gatewayApplyConfig(gw.host, edited.config);
-    } catch (err) {
-      req.log.warn({ err: String(err), gateway: gw.host }, "gateway_apply_config_failed");
-      return reply.code(502).send({ ok: false, error: "apply_failed" });
+    const body = (req.body ?? {}) as any;
+    const op = body.op as EditOp | undefined;
+    if (!op || typeof op !== "object" || !(EDIT_OP_TYPES as readonly string[]).includes(String((op as any).type))) {
+      return reply.code(400).send({ ok: false, error: "invalid_op" });
     }
-    if (!/APPLIED/.test(raw)) {
-      return reply.code(502).send({ ok: false, error: "apply_rejected", message: raw.slice(0, 500) });
-    }
+    const dryRun = body.dryRun === true;
+    const baseHash = typeof body.baseHash === "string" && /^[0-9a-f]{64}$/.test(body.baseHash) ? body.baseHash : null;
+    if (!dryRun && !baseHash) return reply.code(400).send({ ok: false, error: "base_hash_required" });
 
-    recordGatewayChange({
-      adminUserId: admin.userId,
-      gatewayId: gw.id,
-      gatewayHost: gw.host,
-      backend,
-      server: acl,
-      action: "route",
-      detail: { acl, from: edited.from, to: backend },
-    });
-
-    return reply.send({ ok: true, acl, from: edited.from, backend });
+    const res = await runConfigEdit(gw, op, { baseHash, dryRun, admin, log: req.log });
+    return reply.code(res.status).send(res.body);
   });
 
   // GET /api/admin/gateways/:id/changes — recent audit log.

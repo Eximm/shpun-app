@@ -2,9 +2,11 @@
 //
 // Talks to the locked-down HAProxy bridge on a gateway over SSH, mirroring the
 // Remnawave HWID bridge pattern (forced command, dedicated key, strict host
-// key checking). Phase 1 is READ-ONLY: only `show-stat` / `show-servers-state`
-// are ever requested, and the server-side forced command enforces that
-// allowlist regardless of what we send.
+// key checking). The server-side forced command enforces its own action
+// allowlist (reads, runtime state/weight, persist-state, get/apply-config) and
+// re-validates every argument regardless of what we send; apply-config is run
+// through a privileged helper that backs up, runs `haproxy -c`, reloads
+// gracefully and rolls back on failure.
 //
 // The gateway host is passed in (resolved from monitored_servers); the SSH
 // user, key and known_hosts come from the environment and are shared across

@@ -151,7 +151,7 @@ test("repoint applies a validated config and records audit", async () => {
   assert.equal(r.json().from, "reality_fi");
   assert.match(lastAppliedConfig, /use_backend reality_de\s+if canary_rt1/);
   const changes = (await app.inject({ method: "GET", url: `/api/admin/gateways/${gatewayId}/changes`, headers: hdr("sid-admin") })).json().changes as any[];
-  assert.ok(changes.some((c) => c.action === "route"));
+  assert.ok(changes.some((c) => c.action === "config:route.repoint"));
 });
 
 test("repoint rejects cross-family backend", async () => {
@@ -185,4 +185,107 @@ test("mutation on a non-gateway is rejected", async () => {
   const r = await post(`/api/admin/gateways/${vpnId}/servers/state`, "sid-admin", { backend: "b", server: "s", state: "maint" });
   assert.equal(r.statusCode, 400);
   assert.equal(r.json().error, "not_a_gateway");
+});
+
+test("weight 0 on the last carrying server is guardrailed like maint", async () => {
+  const r = await post(`/api/admin/gateways/${gatewayId}/servers/weight`, "sid-admin", { backend: "reality_fi", server: "fi_real_v4", weight: 0 });
+  assert.equal(r.statusCode, 409);
+  assert.equal(r.json().error, "last_active_server");
+  const forced = await post(`/api/admin/gateways/${gatewayId}/servers/weight`, "sid-admin", { backend: "reality_fi", server: "fi_real_v4", weight: 0, force: true });
+  assert.equal(forced.statusCode, 200);
+  const other = await post(`/api/admin/gateways/${gatewayId}/servers/weight`, "sid-admin", { backend: "reality_de", server: "de_v4", weight: 0 });
+  assert.equal(other.statusCode, 200);
+});
+
+test("weight must be an explicit integer (null / empty / float rejected)", async () => {
+  for (const weight of [null, "", 1.5, "1e2", true]) {
+    const r = await post(`/api/admin/gateways/${gatewayId}/servers/weight`, "sid-admin", { backend: "reality_de", server: "de_v4", weight });
+    assert.equal(r.statusCode, 400, `weight=${JSON.stringify(weight)}`);
+  }
+  const s = await post(`/api/admin/gateways/${gatewayId}/servers/weight`, "sid-admin", { backend: "reality_de", server: "de_v4", weight: "5" });
+  assert.equal(s.statusCode, 200);
+});
+
+const getConfig = () => app.inject({ method: "GET", url: `/api/admin/gateways/${gatewayId}/config`, headers: hdr("sid-admin") });
+
+test("config model exposes frontends, backends, nodes and a hash", async () => {
+  const r = await getConfig();
+  assert.equal(r.statusCode, 200);
+  const body = r.json();
+  assert.match(body.configHash, /^[0-9a-f]{64}$/);
+  assert.equal(body.model.frontends[0].name, "rf_reality_canary_443");
+  assert.ok(body.model.backends.some((b: any) => b.name === "router_fi"));
+  assert.ok(body.model.nodes.some((n: any) => n.host === "1.1.1.1" && n.members.length === 2));
+  const denied = await app.inject({ method: "GET", url: `/api/admin/gateways/${gatewayId}/config`, headers: hdr("sid-user") });
+  assert.equal(denied.statusCode, 403);
+});
+
+test("config edit: dry run returns a diff and applies nothing", async () => {
+  const { configHash } = (await getConfig()).json();
+  lastAppliedConfig = "";
+  const r = await post(`/api/admin/gateways/${gatewayId}/config/edit`, "sid-admin", {
+    dryRun: true,
+    op: { type: "server.add", backend: "reality_de", name: "de2", addr: "3.3.3.3:8443" },
+  });
+  assert.equal(r.statusCode, 200);
+  const body = r.json();
+  assert.equal(body.dryRun, true);
+  assert.equal(body.configHash, configHash);
+  assert.ok(body.diff.some((d: any) => d.kind === "add" && /server de2 3\.3\.3\.3:8443 check/.test(d.text)));
+  assert.equal(lastAppliedConfig, "");
+});
+
+test("config edit: apply requires a matching base hash", async () => {
+  const op = { type: "server.update", backend: "reality_de", server: "de_real", addr: "4.4.4.4:8443" };
+  const missing = await post(`/api/admin/gateways/${gatewayId}/config/edit`, "sid-admin", { op });
+  assert.equal(missing.statusCode, 400);
+  assert.equal(missing.json().error, "base_hash_required");
+  const stale = await post(`/api/admin/gateways/${gatewayId}/config/edit`, "sid-admin", { op, baseHash: "0".repeat(64) });
+  assert.equal(stale.statusCode, 409);
+  assert.equal(stale.json().error, "config_changed");
+
+  const { configHash } = (await getConfig()).json();
+  const r = await post(`/api/admin/gateways/${gatewayId}/config/edit`, "sid-admin", { op, baseHash: configHash });
+  assert.equal(r.statusCode, 200);
+  assert.match(lastAppliedConfig, /server de_real 4\.4\.4\.4:8443 check/);
+  const changes = (await app.inject({ method: "GET", url: `/api/admin/gateways/${gatewayId}/changes`, headers: hdr("sid-admin") })).json().changes as any[];
+  assert.equal(changes[0].action, "config:server.update");
+  assert.equal(changes[0].server, "de_real");
+});
+
+test("config edit: guardrail conflicts map to 409, bad input to 400", async () => {
+  const { configHash } = (await getConfig()).json();
+  const empty = await post(`/api/admin/gateways/${gatewayId}/config/edit`, "sid-admin", {
+    baseHash: configHash, op: { type: "server.remove", backend: "reality_fi", server: "fi_real_v4" },
+  });
+  assert.equal(empty.statusCode, 409);
+  assert.equal(empty.json().error, "backend_would_be_empty");
+  const inUse = await post(`/api/admin/gateways/${gatewayId}/config/edit`, "sid-admin", {
+    baseHash: configHash, op: { type: "backend.remove", name: "reality_fi" },
+  });
+  assert.equal(inUse.statusCode, 409);
+  const bad = await post(`/api/admin/gateways/${gatewayId}/config/edit`, "sid-admin", {
+    baseHash: configHash, op: { type: "server.add", backend: "reality_de", name: "x", addr: "1.1.1.1:1\nglobal" },
+  });
+  assert.equal(bad.statusCode, 400);
+  assert.equal(bad.json().error, "invalid_addr");
+  const unknown = await post(`/api/admin/gateways/${gatewayId}/config/edit`, "sid-admin", { baseHash: configHash, op: { type: "rm -rf" } });
+  assert.equal(unknown.statusCode, 400);
+  const user = await post(`/api/admin/gateways/${gatewayId}/config/edit`, "sid-user", { dryRun: true, op: { type: "backend.remove", name: "router_fi" } });
+  assert.equal(user.statusCode, 403);
+});
+
+test("config edits on one gateway are serialized", async () => {
+  const { configHash } = (await getConfig()).json();
+  const op = (addr: string) => ({ type: "server.update", backend: "reality_de", server: "de_real", addr });
+  const [a, b] = await Promise.all([
+    post(`/api/admin/gateways/${gatewayId}/config/edit`, "sid-admin", { op: op("5.5.5.5:8443"), baseHash: configHash }),
+    post(`/api/admin/gateways/${gatewayId}/config/edit`, "sid-admin", { op: op("6.6.6.6:8443"), baseHash: configHash }),
+  ]);
+  // The fake gateway keeps returning the same config, so both see the same
+  // hash; what matters is that the two read→apply sequences never interleave.
+  assert.equal(a.statusCode, 200);
+  assert.equal(b.statusCode, 200);
+  const order = calls.filter((c) => c.action === "get-config" || c.action === "apply-config").slice(-4).map((c) => c.action);
+  assert.deepEqual(order, ["get-config", "apply-config", "get-config", "apply-config"]);
 });

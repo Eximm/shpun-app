@@ -14,7 +14,8 @@ export type ActionMenuItem = {
 };
 
 const MENU_W = 184;
-const MENU_H = 96;
+// Approximate rendered height: padding + one row per item.
+const menuHeight = (count: number) => 12 + Math.max(1, count) * 38;
 const MARGIN = 8;
 
 export function ActionMenu({
@@ -36,11 +37,12 @@ export function ActionMenu({
     const r = anchorEl.getBoundingClientRect();
     const left = Math.min(window.innerWidth - MENU_W - MARGIN, Math.max(MARGIN, r.right - MENU_W));
     let top = r.bottom + 6;
-    if (top + MENU_H > window.innerHeight - MARGIN) {
-      top = Math.max(MARGIN, r.top - MENU_H - 6);
+    const h = menuHeight(items.length);
+    if (top + h > window.innerHeight - MARGIN) {
+      top = Math.max(MARGIN, r.top - h - 6);
     }
     setPos({ top, left });
-  }, [open, anchorEl]);
+  }, [open, anchorEl, items.length]);
 
   useEffect(() => {
     if (!open) return;
