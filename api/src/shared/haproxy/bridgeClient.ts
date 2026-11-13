@@ -12,7 +12,20 @@
 
 import { spawn } from "node:child_process";
 
-export type GatewayBridgeAction = "show-stat" | "show-servers-state";
+export type GatewayBridgeAction =
+  | "show-stat"
+  | "show-servers-state"
+  | "set-state"
+  | "set-weight"
+  | "persist-state";
+
+export type GatewayBridgePayload = {
+  action: GatewayBridgeAction;
+  backend?: string;
+  server?: string;
+  state?: string;
+  weight?: number;
+};
 
 export type GatewayBridgeResponse = {
   ok?: boolean;
@@ -22,7 +35,7 @@ export type GatewayBridgeResponse = {
 
 export type GatewayBridgeTransport = (
   host: string,
-  payload: { action: GatewayBridgeAction },
+  payload: GatewayBridgePayload,
 ) => Promise<GatewayBridgeResponse>;
 
 let override: GatewayBridgeTransport | null = null;
@@ -42,7 +55,7 @@ function sshConfig() {
   return { user, keyPath, knownHostsPath };
 }
 
-function runSsh(host: string, payload: { action: GatewayBridgeAction }): Promise<GatewayBridgeResponse> {
+function runSsh(host: string, payload: GatewayBridgePayload): Promise<GatewayBridgeResponse> {
   const cleanHost = String(host ?? "").trim();
   if (!cleanHost) return Promise.reject(new Error("haproxy_bridge_host_missing"));
   const { user, keyPath, knownHostsPath } = sshConfig();
@@ -111,9 +124,9 @@ function runSsh(host: string, payload: { action: GatewayBridgeAction }): Promise
   });
 }
 
-async function call(host: string, action: GatewayBridgeAction): Promise<string> {
+async function call(host: string, payload: GatewayBridgePayload): Promise<string> {
   const transport = override ?? runSsh;
-  const res = await transport(host, { action });
+  const res = await transport(host, payload);
   if (!res || res.ok === false) {
     throw new Error(`haproxy_bridge_error:${res?.error ?? "unknown"}`);
   }
@@ -121,9 +134,34 @@ async function call(host: string, action: GatewayBridgeAction): Promise<string> 
 }
 
 export function gatewayShowStat(host: string): Promise<string> {
-  return call(host, "show-stat");
+  return call(host, { action: "show-stat" });
 }
 
 export function gatewayShowServersState(host: string): Promise<string> {
-  return call(host, "show-servers-state");
+  return call(host, { action: "show-servers-state" });
+}
+
+/** Set a server's admin state (ready/drain/maint). Returns the raw reply. */
+export function gatewaySetServerState(
+  host: string,
+  backend: string,
+  server: string,
+  state: string,
+): Promise<string> {
+  return call(host, { action: "set-state", backend, server, state });
+}
+
+/** Set a server's absolute weight (0..256). Returns the raw reply. */
+export function gatewaySetServerWeight(
+  host: string,
+  backend: string,
+  server: string,
+  weight: number,
+): Promise<string> {
+  return call(host, { action: "set-weight", backend, server, weight });
+}
+
+/** Best-effort: dump runtime server state so it survives a reload. */
+export function gatewayPersistState(host: string): Promise<string> {
+  return call(host, { action: "persist-state" });
 }
