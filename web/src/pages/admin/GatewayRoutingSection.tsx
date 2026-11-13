@@ -63,6 +63,7 @@ export function GatewayRoutingSection() {
   const [routeMap, setRouteMap] = useState<RouteMapResp | null>(null);
   const [changes, setChanges] = useState<ChangeRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<Record<string, boolean>>({});
 
@@ -78,17 +79,23 @@ export function GatewayRoutingSection() {
     return () => { alive = false; };
   }, [t]);
 
-  const load = useCallback((id: number) => {
-    setLoading(true);
+  // silent=true refreshes data in place after an action without blanking the
+  // section (no full-spinner), so applying a change doesn't "reload the page".
+  const load = useCallback((id: number, opts?: { silent?: boolean }) => {
+    const silent = opts?.silent ?? false;
+    if (silent) setRefreshing(true); else setLoading(true);
     setError("");
-    Promise.all([
+    return Promise.all([
       apiFetch<RoutesResp>(`/admin/gateways/${id}/routes`),
       apiFetch<ChangesResp>(`/admin/gateways/${id}/changes?limit=20`).catch(() => ({ ok: true, changes: [] }) as ChangesResp),
       apiFetch<RouteMapResp>(`/admin/gateways/${id}/route-map`).catch(() => null),
     ])
       .then(([r, c, rm]) => { setRoutes(r); setChanges(c.changes); setRouteMap(rm); })
-      .catch(() => { setError(t("admin.gateways.error")); setRoutes(null); })
-      .finally(() => setLoading(false));
+      .catch(() => {
+        setError(t("admin.gateways.error"));
+        if (!silent) setRoutes(null);
+      })
+      .finally(() => { if (silent) setRefreshing(false); else setLoading(false); });
   }, [t]);
 
   useEffect(() => { if (activeId != null) load(activeId); }, [activeId, load]);
@@ -97,6 +104,12 @@ export function GatewayRoutingSection() {
     () => routes?.topology.backends.reduce((n, b) => n + b.servers.length, 0) ?? 0,
     [routes],
   );
+  // Which gateway is selected — shown in the error line so that with several
+  // gateways (or during a server move) it is clear which host failed.
+  const activeGateway = useMemo(
+    () => gateways.find((g) => g.id === activeId) ?? null,
+    [gateways, activeId],
+  );
 
   async function mutate(path: string, body: Record<string, unknown>, key: string) {
     if (activeId == null) return;
@@ -104,13 +117,13 @@ export function GatewayRoutingSection() {
     setError("");
     try {
       await apiFetch(`/admin/gateways/${activeId}/${path}`, { method: "POST", body });
-      load(activeId);
+      await load(activeId, { silent: true });
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
         if (window.confirm(t("admin.gateways.confirm.orphan"))) {
           try {
             await apiFetch(`/admin/gateways/${activeId}/${path}`, { method: "POST", body: { ...body, force: true } });
-            load(activeId);
+            await load(activeId, { silent: true });
           } catch { setError(t("admin.gateways.actionError")); }
         }
       } else {
@@ -135,7 +148,7 @@ export function GatewayRoutingSection() {
     setError("");
     try {
       await apiFetch(`/admin/gateways/${activeId}/route-map`, { method: "PUT", body: { acl, backend } });
-      load(activeId);
+      await load(activeId, { silent: true });
     } catch {
       setError(t("admin.gateways.actionError"));
     } finally {
@@ -151,9 +164,16 @@ export function GatewayRoutingSection() {
           <p className="admin-section__hint">{t("admin.gateways.readonly")}</p>
         </div>
         {activeId != null && (
-          <button type="button" className="btn btn--ghost" onClick={() => load(activeId)} disabled={loading}>
-            {t("admin.gateways.refresh")}
-          </button>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            {refreshing && (
+              <span className="admin-section__hint" style={{ margin: 0, fontSize: 12 }}>
+                {t("admin.gateways.updating")}
+              </span>
+            )}
+            <button type="button" className="btn btn--ghost" onClick={() => load(activeId)} disabled={loading || refreshing}>
+              {t("admin.gateways.refresh")}
+            </button>
+          </span>
         )}
       </header>
 
@@ -170,7 +190,11 @@ export function GatewayRoutingSection() {
       )}
 
       {loading && <p className="admin-section__hint">{t("admin.gateways.loading")}</p>}
-      {error && <p className="admin-section__hint" style={{ color: "var(--danger, #e24b4a)" }}>{error}</p>}
+      {error && (
+        <p className="admin-section__hint" style={{ color: "var(--danger, #e24b4a)" }}>
+          {error}{activeGateway ? ` — ${activeGateway.title} (${activeGateway.host})` : ""}
+        </p>
+      )}
 
       {routes && !loading && (
         <>
