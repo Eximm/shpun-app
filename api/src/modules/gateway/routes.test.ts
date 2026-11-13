@@ -175,7 +175,7 @@ test("repoint requires a matching base hash", async () => {
   assert.equal(lastAppliedConfig, "");
 });
 
-test("apply timeout is reported as an unknown outcome (504)", async () => {
+test("apply timeout is reported as an unknown outcome (424 apply_timeout)", async () => {
   const { configHash } = (await getRouteMap()).json();
   bridge.setGatewayBridgeTransport(async (_host, payload) => {
     if (payload.action === "get-config") return { ok: true, raw: CONFIG };
@@ -185,7 +185,7 @@ test("apply timeout is reported as an unknown outcome (504)", async () => {
   });
   try {
     const r = await put(`/api/admin/gateways/${gatewayId}/route-map`, "sid-admin", { acl: "canary_rt1", backend: "reality_de", baseHash: configHash });
-    assert.equal(r.statusCode, 504);
+    assert.equal(r.statusCode, 424);
     assert.equal(r.json().error, "apply_timeout");
   } finally {
     bridge.setGatewayBridgeTransport(transport);
@@ -214,7 +214,7 @@ test("repoint rejects unknown backend and rule", async () => {
 test("repoint surfaces a rejected apply (validation/reload failure)", async () => {
   applyReply = "ERROR: config test failed";
   const r = await put(`/api/admin/gateways/${gatewayId}/route-map`, "sid-admin", { acl: "canary_rt1", backend: "reality_de" });
-  assert.equal(r.statusCode, 502);
+  assert.equal(r.statusCode, 424);
   assert.equal(r.json().error, "apply_rejected");
   applyReply = "APPLIED reloaded";
 });

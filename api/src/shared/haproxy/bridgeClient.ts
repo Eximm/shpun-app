@@ -126,6 +126,11 @@ function runSsh(host: string, payload: GatewayBridgePayload): Promise<GatewayBri
       if (stderr.length > 16_000) stderr = stderr.slice(-16_000);
     });
     child.on("error", (error) => finish(error));
+    // If ssh exits early (host key / auth failure, unreachable host) while we
+    // are still writing the request, stdin emits EPIPE. Without a listener
+    // that is an uncaught 'error' event and would crash the whole API process;
+    // the 'close' handler below reports the real failure instead.
+    child.stdin.on("error", () => {});
     child.on("close", (code) => {
       if (settled) return;
       if (code !== 0) {

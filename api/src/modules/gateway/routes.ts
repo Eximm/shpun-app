@@ -44,6 +44,16 @@ import {
 } from "../../shared/haproxy/runtimeCommands.js";
 import { recordGatewayChange, listGatewayChanges } from "./auditRepo.js";
 
+/**
+ * Status for "the gateway (bridge / HAProxy) failed", as opposed to this API
+ * failing. Deliberately not 5xx: proxies in front of the app (e.g. the
+ * app.shpun.net mirror) replace upstream 5xx with their own stub page, which
+ * would hide the error code and the `haproxy -c` output from the admin UI.
+ * The client distinguishes cases by `error` (gateway_unreachable,
+ * apply_rejected, apply_timeout, runtime_rejected, …), not by status.
+ */
+const GATEWAY_FAILED = 424;
+
 type AdminSession = { shmSessionId: string; userId: number | null };
 
 async function requireAdmin(req: any, reply: any): Promise<AdminSession | null> {
@@ -164,7 +174,7 @@ async function runConfigEdit(
       config = await gatewayGetConfig(gw.host);
     } catch (err) {
       opts.log.warn({ err: String(err), gateway: gw.host }, "gateway_get_config_failed");
-      return { status: 502, body: { ok: false, error: "gateway_unreachable" } };
+      return { status: GATEWAY_FAILED, body: { ok: false, error: "gateway_unreachable" } };
     }
     const hash = configHash(config);
     if (opts.baseHash && opts.baseHash !== hash) {
@@ -197,10 +207,10 @@ async function runConfigEdit(
       // On a timeout the helper may still have applied (or rolled back) on the
       // gateway: the outcome is unknown, so the client must re-read the config.
       const timedOut = /haproxy_bridge_ssh_timeout/.test(String(err));
-      return { status: timedOut ? 504 : 502, body: { ok: false, error: timedOut ? "apply_timeout" : "apply_failed" } };
+      return { status: GATEWAY_FAILED, body: { ok: false, error: timedOut ? "apply_timeout" : "apply_failed" } };
     }
     if (!/APPLIED/.test(raw)) {
-      return { status: 502, body: { ok: false, error: "apply_rejected", message: raw.slice(0, 2000) } };
+      return { status: GATEWAY_FAILED, body: { ok: false, error: "apply_rejected", message: raw.slice(0, 2000) } };
     }
 
     recordGatewayChange({
@@ -252,7 +262,7 @@ export async function gatewayRoutes(app: FastifyInstance) {
       return reply.send({ ok: true, gateway: gw, topology });
     } catch (err) {
       req.log.warn({ err: String(err), gateway: gw.host }, "gateway_bridge_failed");
-      return reply.code(502).send({ ok: false, error: "gateway_unreachable" });
+      return reply.code(GATEWAY_FAILED).send({ ok: false, error: "gateway_unreachable" });
     }
   });
 
@@ -280,7 +290,7 @@ export async function gatewayRoutes(app: FastifyInstance) {
       topology = await loadTopology(gw.host);
     } catch (err) {
       req.log.warn({ err: String(err), gateway: gw.host }, "gateway_bridge_failed");
-      return reply.code(502).send({ ok: false, error: "gateway_unreachable" });
+      return reply.code(GATEWAY_FAILED).send({ ok: false, error: "gateway_unreachable" });
     }
 
     const current = findServer(topology, backend, server);
@@ -294,11 +304,11 @@ export async function gatewayRoutes(app: FastifyInstance) {
       const raw = await gatewaySetServerState(gw.host, backend, server, state);
       const res = interpretRuntimeReply(raw);
       if (!res.ok) {
-        return reply.code(502).send({ ok: false, error: "runtime_rejected", message: res.message });
+        return reply.code(GATEWAY_FAILED).send({ ok: false, error: "runtime_rejected", message: res.message });
       }
     } catch (err) {
       req.log.warn({ err: String(err), gateway: gw.host }, "gateway_set_state_failed");
-      return reply.code(502).send({ ok: false, error: "gateway_unreachable" });
+      return reply.code(GATEWAY_FAILED).send({ ok: false, error: "gateway_unreachable" });
     }
 
     recordGatewayChange({
@@ -339,7 +349,7 @@ export async function gatewayRoutes(app: FastifyInstance) {
       topology = await loadTopology(gw.host);
     } catch (err) {
       req.log.warn({ err: String(err), gateway: gw.host }, "gateway_bridge_failed");
-      return reply.code(502).send({ ok: false, error: "gateway_unreachable" });
+      return reply.code(GATEWAY_FAILED).send({ ok: false, error: "gateway_unreachable" });
     }
     const current = findServer(topology, backend, server);
     if (!current) return reply.code(404).send({ ok: false, error: "server_not_found" });
@@ -353,11 +363,11 @@ export async function gatewayRoutes(app: FastifyInstance) {
       const raw = await gatewaySetServerWeight(gw.host, backend, server, weight);
       const res = interpretRuntimeReply(raw);
       if (!res.ok) {
-        return reply.code(502).send({ ok: false, error: "runtime_rejected", message: res.message });
+        return reply.code(GATEWAY_FAILED).send({ ok: false, error: "runtime_rejected", message: res.message });
       }
     } catch (err) {
       req.log.warn({ err: String(err), gateway: gw.host }, "gateway_set_weight_failed");
-      return reply.code(502).send({ ok: false, error: "gateway_unreachable" });
+      return reply.code(GATEWAY_FAILED).send({ ok: false, error: "gateway_unreachable" });
     }
 
     recordGatewayChange({
@@ -385,7 +395,7 @@ export async function gatewayRoutes(app: FastifyInstance) {
       return reply.send({ ok: true, gateway: gw, configHash: configHash(config), backends: map.backends, rules: map.rules });
     } catch (err) {
       req.log.warn({ err: String(err), gateway: gw.host }, "gateway_get_config_failed");
-      return reply.code(502).send({ ok: false, error: "gateway_unreachable" });
+      return reply.code(GATEWAY_FAILED).send({ ok: false, error: "gateway_unreachable" });
     }
   });
 
@@ -416,7 +426,7 @@ export async function gatewayRoutes(app: FastifyInstance) {
         frontend = rules[0].frontend;
       } catch (err) {
         req.log.warn({ err: String(err), gateway: gw.host }, "gateway_get_config_failed");
-        return reply.code(502).send({ ok: false, error: "gateway_unreachable" });
+        return reply.code(GATEWAY_FAILED).send({ ok: false, error: "gateway_unreachable" });
       }
     }
 
@@ -439,7 +449,7 @@ export async function gatewayRoutes(app: FastifyInstance) {
       return reply.send({ ok: true, gateway: gw, configHash: configHash(config), model: parseConfigModel(config) });
     } catch (err) {
       req.log.warn({ err: String(err), gateway: gw.host }, "gateway_get_config_failed");
-      return reply.code(502).send({ ok: false, error: "gateway_unreachable" });
+      return reply.code(GATEWAY_FAILED).send({ ok: false, error: "gateway_unreachable" });
     }
   });
 

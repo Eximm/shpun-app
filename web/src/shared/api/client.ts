@@ -191,6 +191,18 @@ export async function apiFetch<T = unknown>(path: string, init: ApiFetchInit = {
 
   const text = await res.text();
 
+  // Our API always answers JSON. An HTML body means a proxy in front of it
+  // (e.g. the app.shpun.net mirror) replaced an upstream error with its own
+  // stub page — often with status 200. Never treat that as success.
+  const contentType = res.headers.get("content-type") || "";
+  if (/text\/html/i.test(contentType) || /^\s*<(!doctype|html)/i.test(text)) {
+    throw new ApiError(defaultMessageByStatus(res.ok ? 502 : res.status), {
+      status: res.ok ? 502 : res.status,
+      code: "upstream_unavailable",
+      data: { proxied: true, status: res.status },
+    });
+  }
+
   let data: any = null;
   if (text) {
     try {

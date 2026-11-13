@@ -23,6 +23,7 @@ import { HelpSection } from "./admin/HelpSection";
 import { isHelpEditorDirty } from "./admin/helpEditorGuard";
 import { ServerStatusSection } from "./admin/ServerStatusSection";
 import { GatewayRoutingSection } from "./admin/GatewayRoutingSection";
+import { SectionErrorBoundary } from "./admin/SectionErrorBoundary";
 import { ReviewsSection } from "./admin/ReviewsSection";
 import { PromotionsSection } from "./admin/PromotionsSection";
 import { SupportSection } from "./admin/SupportSection";
@@ -194,7 +195,7 @@ export function AdminPage() {
             <SupportSection key={supportKey} initialKind={initialKind} initialTicketId={initialTicketId} />
           )}
           {activeTab === "serverStatus" && <ServerStatusSection />}
-          {activeTab === "gateways" && <GatewayRoutingSection />}
+          {activeTab === "gateways" && <SectionErrorBoundary><GatewayRoutingSection /></SectionErrorBoundary>}
         </section>
       </div>
     </div>
