@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useMe } from "../app/auth/useMe";
+import { AppearanceControls } from "../app/appearance/AppearanceControls";
 import { resetAuthenticatedClientState } from "../app/auth/authState";
 import { apiFetch } from "../shared/api/client";
 import type { PasswordSetResponse, UserEmailResponse } from "../shared/api/types";
@@ -1051,7 +1052,7 @@ export function Profile() {
           <div className="profile-more-group">
             <div className="profile-more-group__title">{t("profile.settings.appearance")}</div>
             <div className="profile-menu-list">
-              <ProfileMenuItem icon={<ProfileIcon name="moon" />} title={t("profile.settings.theme")} subtitle={t("profile.settings.theme_sub")} badge={<ProfileSwitch checked disabled />} onClick={() => showToast(t("profile.settings.theme_toast"))} />
+              <AppearanceControls />
             </div>
           </div>
 

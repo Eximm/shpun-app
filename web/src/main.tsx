@@ -10,6 +10,10 @@ import {
   Outlet,
 } from "react-router-dom";
 import "./index.css";
+import "./app/appearance/appearance.css";
+import { AppearanceProvider, useAppearance } from "./app/appearance/AppearanceProvider";
+import { SeasonalBackdrop } from "./app/appearance/SeasonalBackdrop";
+import { SeasonalLauncher } from "./app/appearance/SeasonalLauncher";
 
 import { Login }            from "./pages/Login";
 import { Home }             from "./pages/Home";
@@ -114,12 +118,15 @@ function routeRank(pathname: string) {
 
 function AppShell({ children }: { children: React.ReactNode }) {
   const loc   = useLocation();
+  const { theme } = useAppearance();
   const assistantFlow = loc.pathname === "/assistant" || new URLSearchParams(loc.search).get("assistant") === "1";
   const hideNav = loc.pathname === "/login" || loc.pathname.startsWith("/legal") || assistantFlow;
   const tone = routeTone(loc.pathname);
+  const seasonalTheme = !hideNav && tone !== "admin" && theme !== "classic" ? theme : undefined;
 
   return (
-    <div className={`app app--${tone}`}>
+    <div className={`app app--${tone}`} data-seasonal={seasonalTheme}>
+      {seasonalTheme && <SeasonalBackdrop />}
       <div className="app-ambient" aria-hidden="true" />
       <header className="topbar">
         <div className="topbar__inner safe">
@@ -131,6 +138,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
           <div className="topbar__end">
+            {!hideNav && tone !== "admin" && <SeasonalLauncher />}
             <SupportBell />
             <SystemHealthBadge />
           </div>
@@ -312,6 +320,7 @@ if (happImportTarget) {
 } else root.render(
   <React.StrictMode>
     <I18nProvider>
+      <AppearanceProvider>
       <ToastProvider>
         <BrowserRouter>
           <AppShell>
@@ -355,6 +364,7 @@ if (happImportTarget) {
           </AppShell>
         </BrowserRouter>
       </ToastProvider>
+      </AppearanceProvider>
     </I18nProvider>
   </React.StrictMode>
 );

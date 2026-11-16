@@ -169,6 +169,7 @@ export const ADMIN_TABS = [
   "overview",
   "reviews",
   "promotions",
+  "appearance",
   "broadcasts",
   "orderRules",
   "trialProtection",

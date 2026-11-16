@@ -7,6 +7,7 @@
 import type { AdminTab } from "./types";
 
 export type AdminNavIconName =
+  | "palette"
   | "dashboard"
   | "star"
   | "megaphone"
@@ -38,6 +39,7 @@ export type AdminNavIconName =
 
 /** Canonical section -> icon mapping (single entity, single icon). */
 export const ADMIN_SECTION_ICON: Record<AdminTab, AdminNavIconName> = {
+  appearance: "palette",
   overview: "dashboard",
   reviews: "star",
   promotions: "gift",

@@ -1,0 +1,75 @@
+.seasonal-backdrop { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.seasonal-scene { position: absolute; inset: -8px; background-position: center top; background-repeat: no-repeat; background-size: cover; transform: translate(var(--scene-x, 0px), var(--scene-y, 0px)); transition: transform 1s ease-out; }
+.seasonal-scene--neon { background-image: linear-gradient(#0c0d1b45, #0c0d1b60), url('/themes/neon-background.webp'); background-color: #0c0d1b; }
+.seasonal-scene--winter { background-image: linear-gradient(#00140e20, #00140e40), url('/themes/winter-background.webp'); background-color: #00140e; }
+.seasonal-scene--moving { animation: seasonal-daylight 18s ease-in-out infinite alternate; }
+.seasonal-particles { position: absolute; width: 100%; height: 100%; }
+.app[data-seasonal="neon"], .app[data-seasonal="winter"] { --accent: #e9a0b5; --accent-2: #edc2a4; }
+.app[data-seasonal="winter"] { --accent: #c5a970; --accent-2: #4fbfa3; }
+.app[data-seasonal] > .main { position: relative; z-index: 1; }
+.app[data-seasonal] > .app-ambient { display: none; }
+.app[data-seasonal] .card { background-color: rgba(12,13,27,.94); }
+.app[data-seasonal="winter"] .card { background-color: rgba(5,21,22,.95); }
+.app[data-seasonal="neon"] .topbar { background: rgba(12,13,27,.88); border-bottom-color: #e9a0b52a; }
+.app[data-seasonal="winter"] .topbar { background: rgba(3,22,20,.9); border-bottom-color: #c5a97040; }
+.app[data-seasonal="neon"] .bottomnav { background: rgba(12,13,27,.96); }
+.app[data-seasonal="neon"] .home-balance-card { backdrop-filter: blur(12px); }
+.app[data-seasonal] .home-balance-card { position: relative; isolation: isolate; }
+.app[data-seasonal] .home-balance-card::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: #0c0d1bdc; z-index: -1; pointer-events: none; }
+.seasonal-launcher { display: inline-flex; gap: 7px; padding: 7px 10px; min-height: 36px; white-space: nowrap; }
+.seasonal-launcher img { width: 35px; height: 25px; object-fit: contain; }
+.seasonal-launcher span { font-size: 12px; }
+.appearance-controls { display: flex; flex-direction: column; gap: 10px; }
+.appearance-check { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; }
+.appearance-check input { width: 18px; height: 18px; accent-color: var(--accent); flex-shrink: 0; }
+.appearance-check span { font-size: 13px; line-height: 1.45; }
+.seasonal-dialog { width: min(620px, calc(100% - 24px)); max-height: calc(100dvh - 32px); margin: auto; padding: 0; border: 1px solid #ffffff25; border-radius: 20px; background: #101121; color: #f5f3fa; box-shadow: 0 20px 90px #000a; overflow-y: auto; overscroll-behavior: contain; }
+.seasonal-dialog::backdrop { background: #030510c9; backdrop-filter: blur(8px); }
+.seasonal-dialog--winter { background: #071c18; }
+.seasonal-dialog-inner { padding: 20px; }
+.seasonal-tabs { display: flex; gap: 8px; margin: 12px 0 16px; }
+.seasonal-game-stats { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 12px 0; font-size: 13px; color: #e7cede; font-variant-numeric: tabular-nums; }
+.seasonal-game-buttons { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; margin: 14px 0; }
+.seasonal-game-buttons .btn { min-width: 44px; }
+.seasonal-game-note { margin-top: 12px; opacity: .8; font-size: 12px; }
+.seasonal-road { position: relative; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 14px; background: linear-gradient(#3f334600, #15182535), url('/themes/neon-road.webp') center / cover; border: 1px solid #e9a0b52a; touch-action: pan-x; }
+.seasonal-road-lines { position: absolute; inset: 32% -100% 0 0; background: repeating-linear-gradient(105deg, transparent 0 120px, #ffdec118 120px 170px, transparent 170px 300px); }
+.seasonal-road--playing .seasonal-road-lines { animation: seasonal-road 1.8s linear infinite; }
+.seasonal-car { position: absolute; width: 28%; left: 7%; transform: translateY(-50%); transition: top 140ms ease-out; user-select: none; filter: drop-shadow(0 6px 5px #0007); z-index: 2; }
+.seasonal-road--playing .seasonal-car { animation: seasonal-engine .3s ease-in-out infinite alternate; }
+.seasonal-road-item { position: absolute; transform: translate(-50%, -50%); font-size: clamp(22px, 5vw, 34px); line-height: 1; }
+.seasonal-road-pause { position: absolute; left: 14%; right: 14%; bottom: 4%; text-align: center; background: #0c0d1be6; border-radius: 10px; padding: 8px 12px; font-size: 13px; }
+.seasonal-tree-palette { display: flex; justify-content: center; gap: 8px; margin: 14px 0 8px; }
+.seasonal-tree-palette img { width: 26px; height: 34px; object-fit: contain; }
+.seasonal-tree-stage { position: relative; width: min(100%, 340px); aspect-ratio: 4 / 5; margin: 0 auto; touch-action: pan-y; }
+.seasonal-tree-image { width: 100%; height: 100%; object-fit: contain; pointer-events: none; user-select: none; transition: filter .4s; }
+.seasonal-tree-stage:not(.seasonal-tree-stage--lit) .seasonal-tree-image { filter: brightness(.65) saturate(.75); }
+.seasonal-tree-stage--lit .seasonal-tree-image { filter: drop-shadow(0 0 14px #f3c56d35); }
+.seasonal-tree-ornament { position: absolute; transform: translate(-50%, -50%); width: 44px; height: 44px; padding: 6px; background: none; border: 0; cursor: grab; touch-action: none; }
+.seasonal-tree-ornament:active { cursor: grabbing; }
+.seasonal-tree-ornament img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+.seasonal-tree-sparkles { display: none; position: absolute; inset: 20% 0 0; color: #ffdc87; text-align: center; pointer-events: none; font-size: 32px; }
+.seasonal-tree-stage--celebrate .seasonal-tree-sparkles { display: block; animation: seasonal-sparkles 1.6s ease-out both; }
+.appearance-admin-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; margin: 16px 0; }
+.appearance-admin-choice { display: flex; flex-direction: column; gap: 8px; padding: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; cursor: pointer; }
+.appearance-admin-choice:has(input:checked) { border-color: var(--accent); }
+.appearance-admin-choice img { width: 100%; height: 120px; object-fit: cover; object-position: center top; border-radius: 8px; }
+.appearance-admin-classic { height: 120px; display: grid; place-items: center; border-radius: 8px; background: #0b0f17; color: #c2baff; }
+.appearance-admin-choice label { display: flex; gap: 7px; align-items: center; }
+@keyframes seasonal-road { to { transform: translateX(-62px); } }
+@keyframes seasonal-engine { from { transform: translateY(-50%) rotate(-.4deg); } to { transform: translateY(-49%) rotate(.4deg); } }
+@keyframes seasonal-daylight { from { filter: brightness(.95); } to { filter: brightness(1.07); } }
+@keyframes seasonal-sparkles { 0% { opacity: 0; transform: translateY(50%) scale(.7); } 30% { opacity: 1; } 100% { opacity: 0; transform: translateY(-10%) scale(1.3); } }
+@media (min-width: 1400px) { .seasonal-scene { background-size: 100% auto; } }
+@media (max-width: 600px) {
+  .seasonal-scene { background-size: auto 100%; opacity: .8; }
+  .seasonal-launcher { padding: 6px; }
+  .seasonal-launcher span { display: none; }
+  .seasonal-dialog-inner { padding: 14px; }
+  .appearance-admin-grid { grid-template-columns: 1fr; }
+  .appearance-admin-choice img, .appearance-admin-classic { height: 130px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .seasonal-scene, .seasonal-road-lines, .seasonal-tree-sparkles { animation: none !important; transition: none !important; }
+  .seasonal-car { transition: none; animation: none !important; }
+}

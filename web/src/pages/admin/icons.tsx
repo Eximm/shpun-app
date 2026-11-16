@@ -33,6 +33,12 @@ export function AdminSectionIcon({ name, size = 18 }: { name: AdminNavIconName; 
   };
 
   switch (name) {
+    case "palette":
+      return <svg {...common}>
+        <path d="M12 3a9 9 0 1 0 0 18h1.1a2.4 2.4 0 0 0 1.8-4c-.6-.7-.2-1.8.8-1.8H17a4 4 0 0 0 4-4C21 6.7 17 3 12 3Z" />
+        <circle cx="7.5" cy="10" r=".7" /><circle cx="10.5" cy="6.8" r=".7" />
+        <circle cx="15" cy="7" r=".7" /><circle cx="17.5" cy="10.5" r=".7" />
+      </svg>;
     case "dashboard":
       return (
         <svg {...common}>

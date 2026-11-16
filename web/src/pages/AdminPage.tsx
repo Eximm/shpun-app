@@ -28,6 +28,7 @@ import { ReviewsSection } from "./admin/ReviewsSection";
 import { PromotionsSection } from "./admin/PromotionsSection";
 import { SupportSection } from "./admin/SupportSection";
 import { ADMIN_TABS, type AdminTab } from "./admin/types";
+import { AppearanceSection } from "./admin/AppearanceSection";
 
 const TAB_SET: readonly string[] = ADMIN_TABS;
 
@@ -60,6 +61,7 @@ export function AdminPage() {
     { tab: "overview", title: t("admin.tab.overview"), subtitle: t("admin.tab.overview.sub"), icon: ADMIN_SECTION_ICON.overview, badge: overview.data.attention.total },
     { tab: "reviews", title: t("admin.tab.reviews"), subtitle: t("admin.tab.reviews.sub"), icon: ADMIN_SECTION_ICON.reviews, badge: overview.data.attention.reviews },
     { tab: "promotions", title: t("admin.tab.promotions"), subtitle: t("admin.tab.promotions.sub"), icon: ADMIN_SECTION_ICON.promotions },
+    { tab: "appearance", title: t("appearance.title"), subtitle: t("appearance.admin_nav_sub"), icon: ADMIN_SECTION_ICON.appearance },
     { tab: "broadcasts", title: t("admin.tab.broadcasts"), subtitle: t("admin.tab.broadcasts.sub"), icon: ADMIN_SECTION_ICON.broadcasts },
     { tab: "orderRules", title: t("admin.tab.orders"), subtitle: t("admin.tab.orders.sub"), icon: ADMIN_SECTION_ICON.orderRules },
     { tab: "trialProtection", title: t("admin.tab.trial"), subtitle: t("admin.tab.trial.sub"), icon: ADMIN_SECTION_ICON.trialProtection },
@@ -183,6 +185,7 @@ export function AdminPage() {
 
         <section className="admin-workspace" aria-label={activeItem.title}>
           {activeTab === "overview" && <OverviewSection overview={overview} onOpen={openSection} />}
+          {activeTab === "appearance" && <AppearanceSection />}
           {activeTab === "reviews" && <ReviewsSection />}
           {activeTab === "promotions" && <PromotionsSection />}
           {activeTab === "broadcasts" && <BroadcastsSection />}

@@ -3,6 +3,7 @@
 import type { FastifyInstance } from 'fastify'
 
 import { adminRoutes } from "../../modules/admin/routes.js";
+import { appearanceRoutes } from "../../modules/appearance/routes.js";
 import { authRoutes } from '../../modules/auth/routes.js'
 import { userRoutes } from '../../modules/user/routes.js'
 import { servicesRoutes } from '../../modules/services/routes.js'
@@ -31,6 +32,7 @@ export async function registerRoutes(app: FastifyInstance) {
       await activityRoutes(api)
       await referralsRoutes(api)
       await adminRoutes(api)
+      await appearanceRoutes(api)
       await promoRoutes(api)
       await promoAdminRoutes(api)
       await reviewsRoutes(api)
