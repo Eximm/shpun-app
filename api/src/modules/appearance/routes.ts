@@ -9,7 +9,7 @@ export async function appearanceRoutes(app: FastifyInstance, authorize = ensureA
   app.put<{ Body: AppearanceSettings }>("/admin/appearance", {
     schema: { body: { type: "object", additionalProperties: false,
       required: ["theme", "effectsEnabled", "gamesEnabled"], properties: {
-        theme: { type: "string", enum: ["classic", "neon", "winter"] },
+        theme: { type: "string", enum: ["classic", "winter"] },
         effectsEnabled: { type: "boolean" }, gamesEnabled: { type: "boolean" },
       } } },
   }, async (req, reply) => {

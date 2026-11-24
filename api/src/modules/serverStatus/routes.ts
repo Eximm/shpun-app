@@ -40,6 +40,7 @@ import {
   type MonitoringIncidentRow,
 } from "./incidentsRepo.js";
 import { deliverMonitoringIncidentEvents } from "./monitoringNotifications.js";
+import { prepareMonitoringAccess } from "./access.js";
 
 function int(v: unknown, fallback = 0) {
   const n = Number(v);
@@ -224,9 +225,9 @@ export async function serverStatusRoutes(app: FastifyInstance) {
     if (!(await requireAdmin(req, reply))) return;
     const result = createMonitoredServer((req.body ?? {}) as any);
     if (!result.ok) return reply.code(400).send({ ok: false, error: result.error });
-    // No scrape here: the background collector picks up the new server on the
-    // next cycle (current may be null until then).
-    return reply.send({ ok: true, item: toAdminServer(result.item) });
+    const access = result.item.active && result.item.node_exporter_enabled ? await prepareMonitoringAccess(result.item) : null;
+    if (access) app.log.info({ serverId: result.item.id, ok: access.ok, error: access.error }, "monitoring_access_setup");
+    return reply.send({ ok: true, item: toAdminServer(result.item), access });
   });
 
   app.put("/admin/monitored-servers/:id", async (req, reply) => {
@@ -246,7 +247,9 @@ export async function serverStatusRoutes(app: FastifyInstance) {
       deleteCurrent(id);
       resolveIncidentsForServer(id, Math.floor(Date.now() / 1000));
     }
-    return reply.send({ ok: true, item: toAdminServer(result.item) });
+    const access = endpointChanged && result.item.active && result.item.node_exporter_enabled ? await prepareMonitoringAccess(result.item) : null;
+    if (access) app.log.info({ serverId: id, ok: access.ok, error: access.error }, "monitoring_access_setup");
+    return reply.send({ ok: true, item: toAdminServer(result.item), access });
   });
 
   app.delete("/admin/monitored-servers/:id", async (req, reply) => {
@@ -269,6 +272,18 @@ export async function serverStatusRoutes(app: FastifyInstance) {
     }
     const probe = await probeNodeExporter(row);
     return reply.send({ ok: true, probe });
+  });
+
+  app.post("/admin/monitored-servers/:id/prepare-monitoring", async (req, reply) => {
+    if (!(await requireAdmin(req, reply))) return;
+    const row = getMonitoredServer(int((req.params as any)?.id));
+    if (!row) return reply.code(404).send({ ok: false, error: "not_found" });
+    if (!row.active || !row.node_exporter_enabled) {
+      return reply.code(400).send({ ok: false, error: "node_exporter_disabled" });
+    }
+    const access = await prepareMonitoringAccess(row);
+    app.log.info({ serverId: row.id, ok: access.ok, error: access.error }, "monitoring_access_setup");
+    return reply.send({ ok: true, access });
   });
 
   /* ── Admin: settings ──────────────────────────────────────────────────── */

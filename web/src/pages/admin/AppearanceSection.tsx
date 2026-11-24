@@ -35,7 +35,7 @@ export function AppearanceSection() {
         {t(saving ? "common.saving" : "common.save")}</button>} />
     {loading ? <p className="p">{t("common.loading")}</p> : <>
       <div className="appearance-admin-grid">
-        {(["classic", "neon", "winter"] as SeasonalTheme[]).map((theme) => <label key={theme} className="appearance-admin-choice">
+        {(["classic", "winter"] as SeasonalTheme[]).map((theme) => <label key={theme} className="appearance-admin-choice">
           {theme === "classic" ? <div className="appearance-admin-classic">Shpun App</div> : <img src={`/themes/${theme}-background.webp`} alt="" />}
           <span><input type="radio" name="global-appearance" checked={settings.theme === theme} disabled={saving}
             onChange={() => setSettings({ ...settings, theme })} /> {t(`appearance.theme.${theme}`)}</span>

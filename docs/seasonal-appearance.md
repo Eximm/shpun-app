@@ -1,34 +1,29 @@
-# Seasonal appearance
+# Winter appearance
 
-The existing page layout, balances, service states, payment flows and navigation remain unchanged. Two optional visual skins add original illustrated backgrounds and local, recreational interactions.
+The existing dashboard layout and billing flows are preserved. Admins select Classic or Winter Shpun in `/admin?tab=appearance`, with independent switches for background effects and activities. Clients can opt out on their device. Previous unsupported theme values fall back to Classic.
 
-- **Vice Coast**: warm peach/dusty pink/lavender Florida artwork, floating light particles, mouse-responsive scenery, and a 30-second three-lane driving game.
-- **Winter Shpun**: snowy evergreen artwork, mouse-responsive falling snow, and a tree that can be decorated with draggable, keyboard-accessible ornaments. Lights and a brief sparkle effect are interactive.
+The winter room includes a persistent tree with draggable ornaments, keyboard movement/deletion, automatic decoration, ten-step undo, a star that plays an original short bell phrase, twinkling ornaments, light switching and snow shaking. Three gifts reveal holiday wishes. A manually started 30-second snow-catching activity supports pointer, touch and an accessible slider, with a local best score.
 
-## Administration
+Sound is OFF by default. Users explicitly enable quiet synthetic bells and snow crunch in the winter room. No external music, autoplay, background loop or audio download. Audio suspends on hiding the page and closes when leaving the room. Theme/motion choices, tree, sound preference and snow record stay local to the device. No rewards, billing changes or gameplay telemetry.
 
-Open `/admin?tab=appearance`. Select Classic, Vice Coast, or Winter Shpun, optionally disable background animation or games globally, then Save. The backend reuses the existing SHM administrator check. A regular user or anonymous visitor cannot save settings.
+Original WebP scenery, tree and ornament assets remain under `web/public/themes/`. Background effects pause while hidden and respect device reduced-motion settings. Manually started snowfall can be played with background animation disabled.
 
-The persisted configuration is a singleton in `app_appearance_settings` in the existing SQLite database. A new installation defaults to Classic. `GET /api/appearance` exposes only the theme and two feature flags. `PUT /api/admin/appearance` requires administrator authorization and validates the complete payload. Open clients refresh on focus/visibility or within one minute; failed refreshes retain the last successful configuration.
+Verification: API `npm run test:appearance`; web `npm run build`, `npm run check:all`; optional `node scripts/test-appearance-browser.cjs` with PLAYWRIGHT_PACKAGE and CHROMIUM_CHANNEL. Browser checks use isolated API fixtures, never real payments or orders.
 
-The winter switch is manual: select Winter Shpun here in early December. There is no automatic date or recurring task.
+Prepared for a combined application release with the separate domain and monitoring changes. Production activation is separate from a local build.
 
-## Client controls
+## Visual foundation, November 2026
 
-The seasonal header button opens a native dialog with Play and Appearance tabs. Appearance controls are also available in Profile → Settings. Customers may disable the theme or background motion separately. These preferences persist on the device and synchronize across its open tabs. OS reduced-motion preferences always disable background animation. Classic or global game disabling removes the relevant activity. Admin screens, authentication, legal pages and the connection assistant retain their normal styling.
+The winter room now has a responsive illustrated introduction, five activity sections (tree, collection, snowfall, globe, wishes), and eight persistent decoration types. Existing v1 trees remain compatible; unknown decoration types safely use the original bauble. Collection selection takes customers directly to the tree. There are no locked reward claims, fake levels, prize buttons or daily gifts.
 
-No automatic audio, payments, billing bonuses, rewards, account mutation, external game services, or gameplay telemetry. The driving record and tree decorations are stored only locally. Keyboard and touch controls are supported. Background animation pauses when the page is hidden and cleans up on theme change; driving pauses on visibility loss and on dialog close.
+3D icons are original Microsoft Fluent Emoji PNG files under MIT, pinned to commit 1ffb34c752ecf5d402f04cfb4b392c77f57c54bc and served locally. Source list and full copyright/license are bundled under web/public/themes/icons. The snow game also uses image sprites rather than system emoji. The globe supports touch/pointer tilting and a keyboard-accessible shake action.
 
-## Assets and visual references
+The actual seasonal award system is separate: see winter-flex-rewards.md. Visual decorations on the device do not establish reward eligibility.
 
-Files under `web/public/themes/` are original generated illustrations, optimized to WebP. Transparent sprites retain alpha. The background for Vice Coast was reworked after inspecting Rockstar's official GTA VI website and artwork gallery; no official artwork, game logo, protagonists, soundtrack, or other downloaded Rockstar material is shipped in the application.
+## Interactive snow and discoveries
 
-- https://www.rockstargames.com/VI
-- https://www.rockstargames.com/VI/media/artwork-wallpapers
+Snow has four device-local modes: off, light, steady and flurry. An irregular bounded height field builds on actual visible card tops; flakes collide with the banks. Thin SVG hit areas accept brushing while ordinary links/buttons remain clickable. Wide gaps allow taller banks; narrow gaps keep snow below the next tile. Layout updates on scroll, resize and route/content changes. No hidden-tab time catch-up. Canvas is capped to roughly 30 FPS / DPR 1.5, up to 125 flakes and 16 visible surfaces. Theme/motion opt-out removes the interaction layer; open dialogs pause accumulation.
 
-## Verification
+Brushing converts removed snow volume into a bounded local stash. Sweeping an empty area grants nothing. Mouse, touch and keyboard clearing are supported. Snow can be spent once per construction step on three snowman stages; the completed friend sits by the tree. A small tracks hint exposes this activity organically. Greeting the snowman and repeated touches of the tree star reveal small cosmetic responses. These are not prize actions or server progression. Sound is opt-in and synchronized between weather and room controls.
 
-- API: `npm run test:appearance` — public-safe defaults, admin authorization, validation, persistence and rollback.
-- Web: `npm run test:appearance` — lane bounds, collision/collection, game completion and frame-gap safety.
-- Optional browser acceptance: `node scripts/test-appearance-browser.cjs` from `web`, with Playwright available. `PLAYWRIGHT_PACKAGE` can specify an existing runtime package; `CHROMIUM_CHANNEL` can select an installed browser. `APPEARANCE_SCREENSHOT_DIR` optionally stores test screenshots.
-- The browser suite uses isolated API fixtures. It verifies real animation, steering and pause, ornament dragging and keyboard controls, lights, persistence, reduced motion, administrator saving, save failure, global theme switching and classic rollback. It creates no real orders and sends no real payments.
+New local keys: shpun.winter.snowfall.v1 and shpun.winter.snowman.v1. Cosmetic inventory is intentionally not a billing entitlement.

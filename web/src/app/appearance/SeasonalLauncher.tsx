@@ -3,8 +3,8 @@ import { createPortal } from "react-dom";
 import { useI18n } from "../../shared/i18n";
 import { useAppearance, type SeasonalTheme } from "./AppearanceProvider";
 import { AppearanceControls } from "./AppearanceControls";
-import { NeonRace } from "./NeonRace";
-import { WinterTree } from "./WinterTree";
+import { WinterPlayground } from "./WinterPlayground";
+
 
 export function SeasonalGameDialog({ theme, onClose }: { theme: Exclude<SeasonalTheme, "classic">; onClose: () => void }) {
   const { t } = useI18n();
@@ -32,7 +32,7 @@ export function SeasonalGameDialog({ theme, onClose }: { theme: Exclude<Seasonal
           onClick={() => setTab("settings")}>{t("appearance.title")}</button>
       </div>
       {tab === "settings" ? <AppearanceControls /> : <>
-        {theme === "neon" ? <NeonRace /> : <WinterTree />}
+        <WinterPlayground />
         <p className="p seasonal-game-note">{t("appearance.game_note")}</p>
       </>}
     </div>
@@ -43,11 +43,16 @@ export function SeasonalLauncher() {
   const { t } = useI18n();
   const { settings, disabled } = useAppearance();
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const discover = () => { if (settings.gamesEnabled) setOpen(true); };
+    window.addEventListener("shpun-winter-discovery", discover);
+    return () => window.removeEventListener("shpun-winter-discovery", discover);
+  }, [settings.gamesEnabled]);
   if (settings.theme === "classic") return null;
   return <>
     <button type="button" className="btn seasonal-launcher" onClick={() => setOpen(true)} aria-label={t("appearance.open")}
       aria-haspopup="dialog">
-      <img src={settings.theme === "neon" ? "/themes/neon-car.webp" : "/themes/winter-bauble.webp"} alt="" />
+      <img src="/themes/winter-bauble.webp" alt="" />
       <span>{t(disabled || !settings.gamesEnabled ? "appearance.title" : "appearance.play")}</span>
     </button>
     {open && <SeasonalGameDialog key={settings.theme} theme={settings.theme} onClose={() => setOpen(false)} />}

@@ -1,28 +1,20 @@
-const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const path = require("node:path");
-const vm = require("node:vm");
-const ts = require("typescript");
-const code = ts.transpileModule(fs.readFileSync(path.join(__dirname, "../src/app/appearance/raceModel.ts"), "utf8"), {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-}).outputText;
-const exportsObject = {};
-vm.runInNewContext(code, { exports: exportsObject });
-const { newRace, steerRace, advanceRace } = exportsObject;
-let race = newRace();
-race = steerRace(race, -1); race = steerRace(race, -1);
-assert.equal(race.lane, 0);
-race = steerRace(steerRace(steerRace(race, 1), 1), 1);
-assert.equal(race.lane, 2);
-race = { ...newRace(), spawnAt: 999, items: [{ id: 1, x: 27, lane: 1, kind: "star" }, { id: 2, x: 27, lane: 0, kind: "barrier" }] };
-race = advanceRace(race, .05);
-assert.equal(race.stars, 1); assert.equal(race.lives, 3);
-race = advanceRace(race, .05);
-assert.equal(race.stars, 1, "a star can only be collected once");
-race = advanceRace({ ...newRace(), spawnAt: 999, lives: 1, items: [{ id: 1, x: 25, lane: 1, kind: "barrier" }] }, .05);
-assert.equal(race.finished, true); assert.equal(race.lives, 0);
-assert.equal(advanceRace(race, .05), race, "finished races are immutable");
-race = advanceRace({ ...newRace(), spawnAt: 999, elapsed: 29.99 }, .05);
-assert.equal(race.finished, true);
-assert.equal(advanceRace(newRace(), 100).elapsed, .1, "background frame gaps are bounded");
-console.log("PASS lane bounds, collection, collision, timer and paused/background safety");
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const ts = require('typescript');
+const filename = path.resolve(__dirname,'../src/app/appearance/treeModel.ts');
+const result = ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}});
+const moduleValue = {exports:{}};
+new Function('module','exports', result.outputText)(moduleValue,moduleValue.exports);
+const { restoreTree } = moduleValue.exports;
+const valid = {id:1,x:50,y:50,color:0};
+assert.deepEqual(restoreTree(JSON.stringify([valid])),[valid]);
+for(const raw of ['null','{}','broken','[null]']) assert.deepEqual(restoreTree(raw),[]);
+for(const item of [{...valid,id:1.5},{...valid,id:-1},{...valid,x:99},{...valid,y:1},{...valid,color:99}]) assert.deepEqual(restoreTree(JSON.stringify([item])),[]);
+assert.equal(restoreTree(JSON.stringify([valid,valid])).length,1);
+assert.equal(restoreTree(JSON.stringify(Array.from({length:40},(_,i)=>({...valid,id:i+1})))).length,24);
+assert.deepEqual(restoreTree(JSON.stringify([{...valid,unexpected:'discard'}])),[valid]);
+console.log('PASS tree restore: corrupted data, bounds, colors, duplicate IDs and decoration limit');
+
+assert.deepEqual(restoreTree(JSON.stringify([{...valid,kind:"bell"} ])),[{...valid,kind:"bell"}]);
+assert.deepEqual(restoreTree(JSON.stringify([{...valid,kind:"unknown"} ])),[valid]);

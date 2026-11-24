@@ -1,19 +1,40 @@
 .seasonal-backdrop { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
 .seasonal-scene { position: absolute; inset: -8px; background-position: center top; background-repeat: no-repeat; background-size: cover; transform: translate(var(--scene-x, 0px), var(--scene-y, 0px)); transition: transform 1s ease-out; }
-.seasonal-scene--neon { background-image: linear-gradient(#0c0d1b45, #0c0d1b60), url('/themes/neon-background.webp'); background-color: #0c0d1b; }
 .seasonal-scene--winter { background-image: linear-gradient(#00140e20, #00140e40), url('/themes/winter-background.webp'); background-color: #00140e; }
 .seasonal-scene--moving { animation: seasonal-daylight 18s ease-in-out infinite alternate; }
 .seasonal-particles { position: absolute; width: 100%; height: 100%; }
-.app[data-seasonal="neon"], .app[data-seasonal="winter"] { --accent: #e9a0b5; --accent-2: #edc2a4; }
+.snow-weather { position: fixed; inset: 0; z-index: 3; pointer-events: none; overflow: hidden; }
+.snowdrift { position: fixed; height: 28px; padding: 0; border: 0; background: none; pointer-events: none; touch-action: none; user-select: none; }
+.snowdrift svg { display: block; overflow: visible; pointer-events: none; filter: drop-shadow(0 2px 1px #244b6938); }
+.snowdrift path { pointer-events: visiblePainted; cursor: grab; }
+.snowdrift:active path { cursor: grabbing; }
+.snowdrift:focus-visible { outline: 2px solid #f3d797; outline-offset: 2px; border-radius: 12px; }
+.snow-discovery { pointer-events: auto; position: fixed; left: max(16px, env(safe-area-inset-left)); bottom: calc(90px + env(safe-area-inset-bottom)); max-width: min(330px,calc(100vw - 32px)); display: flex; align-items: center; gap: 12px; padding: 12px 16px; border: 1px solid #dbc58b70; border-radius: 16px; color: #f7e9bf; background: #0c2923f5; box-shadow: 0 8px 35px #0008; cursor: pointer; font: inherit; text-align: left; font-size: 13px; }
+.snow-discovery img { width: 44px; height: 44px; object-fit: contain; }
+.winter-snowfall-control { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 13px; min-height: 44px; }
+.winter-snowfall-control select { color: #eee9da; background: #102d25; border: 1px solid #d8c18a60; border-radius: 10px; padding: 10px; max-width: 60%; }
+.winter-snowman-corner { grid-column: 1 / -1; border-top: 1px solid #d7c18d25; margin-top: 12px; padding-top: 10px; }
+.winter-footprints { display: flex; align-items: center; gap: 10px; min-height: 44px; background: none; border: 0; color: #b5cec8; font: inherit; font-size: 13px; cursor: pointer; }
+.winter-footprints img { width: 24px; height: 24px; opacity: .8; }
+.winter-snowman-workshop { display: grid; grid-template-columns: minmax(100px,.6fr) minmax(0,1fr); align-items: center; gap: 20px; padding: 12px; background: radial-gradient(ellipse at 20% 50%,#9fc4de15,transparent 70%); }
+.winter-snowman-preview svg { width: 100%; max-height: 200px; }
+.winter-snowman-workshop h4 { margin: 0 0 10px; color: #f1dfac; }
+.winter-snowman-workshop .btn { margin: 8px 6px 0 0; font-size: 12px; }
+.winter-snowman-friend { width: 100%; height: 180px; padding: 0; background: none; border: 0; cursor: pointer; }
+.winter-snowman-friend img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 8px 10px #0004); }
+.winter-snowman-friend--wave { animation: winter-friend-wave .4s ease-in-out 3; }
+.winter-tree-snowman { position: absolute; right: 0; bottom: 2%; width: 82px; height: 95px; padding: 0; background: none; border: 0; cursor: pointer; }
+.winter-tree-snowman img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 6px 7px #0005); }
+.winter-tree--aurora::before { content: ""; position: absolute; inset: 0 -5%; border-radius: 50%; background: conic-gradient(from 20deg,transparent,#7ce5ad30,#8e96f140,transparent,#d5b3ea35,transparent); filter: blur(22px); pointer-events: none; }
+.seasonal-tree-editor > p[aria-live] { grid-column: 1 / -1; }
+@keyframes winter-friend-wave { 25% { transform: rotate(-5deg); } 75% { transform: rotate(5deg); } }
+@media (prefers-reduced-motion: reduce) { .winter-snowman-friend--wave { animation: none; } }
 .app[data-seasonal="winter"] { --accent: #c5a970; --accent-2: #4fbfa3; }
 .app[data-seasonal] > .main { position: relative; z-index: 1; }
 .app[data-seasonal] > .app-ambient { display: none; }
 .app[data-seasonal] .card { background-color: rgba(12,13,27,.94); }
 .app[data-seasonal="winter"] .card { background-color: rgba(5,21,22,.95); }
-.app[data-seasonal="neon"] .topbar { background: rgba(12,13,27,.88); border-bottom-color: #e9a0b52a; }
 .app[data-seasonal="winter"] .topbar { background: rgba(3,22,20,.9); border-bottom-color: #c5a97040; }
-.app[data-seasonal="neon"] .bottomnav { background: rgba(12,13,27,.96); }
-.app[data-seasonal="neon"] .home-balance-card { backdrop-filter: blur(12px); }
 .app[data-seasonal] .home-balance-card { position: relative; isolation: isolate; }
 .app[data-seasonal] .home-balance-card::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: #0c0d1bdc; z-index: -1; pointer-events: none; }
 .seasonal-launcher { display: inline-flex; gap: 7px; padding: 7px 10px; min-height: 36px; white-space: nowrap; }
@@ -26,19 +47,66 @@
 .seasonal-dialog { width: min(620px, calc(100% - 24px)); max-height: calc(100dvh - 32px); margin: auto; padding: 0; border: 1px solid #ffffff25; border-radius: 20px; background: #101121; color: #f5f3fa; box-shadow: 0 20px 90px #000a; overflow-y: auto; overscroll-behavior: contain; }
 .seasonal-dialog::backdrop { background: #030510c9; backdrop-filter: blur(8px); }
 .seasonal-dialog--winter { background: #071c18; }
+.seasonal-dialog--winter { width: min(840px, calc(100% - 24px)); border-color: #bca36c55; background: radial-gradient(ellipse at 0 0,#24483a66,transparent 65%),#071c18; }
+.seasonal-dialog .modal__head { position: sticky; top: -20px; z-index: 8; padding: 14px 0; background: #071c18f5; border-bottom: 1px solid #d9bc7830; }
+.seasonal-dialog .modal__head h2 { font-size: clamp(20px,4vw,26px); }
+.winter-room-intro { display: flex; align-items: center; gap: 16px; padding: 18px 0; }
+.winter-room-intro > img { width: 76px; height: 76px; object-fit: contain; flex-shrink: 0; }
+.winter-room-intro h3 { margin: 5px 0 8px; font-size: clamp(22px,4vw,28px); color: #f4e6bb; }
+.winter-room-eyebrow { margin: 0; color: #b8d8c8; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; }
+.winter-activity-nav { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 8px; margin: 10px 0 20px; }
+.winter-activity-nav .btn { min-width: 0; padding: 10px 6px; display: flex; flex-direction: column; gap: 7px; text-align: center; font-size: 12px; white-space: normal; border-color: #d5c48d26; background: #ffffff07; }
+.winter-activity-nav .btn--accent { background: linear-gradient(145deg,#62734a55,#15564b77); border-color: #d5c48d99; color: #fff1c4; box-shadow: 0 4px 18px #0002; }
+.winter-activity-nav img { width: 36px; height: 36px; object-fit: contain; }
+.winter-decoration-picker { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 6px; margin: 12px 0; }
+.winter-tree-tools { border: 1px solid #d5c48d30; background: #ffffff04; border-radius: 12px; padding: 8px; margin: 12px 0; }
+.winter-tree-tools summary { display: flex; align-items: center; gap: 10px; cursor: pointer; min-height: 36px; font-size: 13px; color: #f1e4b7; }
+.winter-tree-tools summary::after { content: "+"; margin-left: auto; font-size: 20px; }
+.winter-tree-tools[open] summary::after { content: "−"; }
+.winter-tree-tools summary img { width: 30px; height: 30px; object-fit: contain; }
+.winter-decoration-picker .btn { padding: 5px; min-height: 48px; }
+.winter-decoration-picker img { width: 36px; height: 36px; object-fit: contain; }
+.winter-collection-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin: 20px 0; }
+.winter-collection-item.btn { display: flex; flex-direction: column; gap: 12px; padding: 18px 8px; font-size: 13px; background: radial-gradient(ellipse at 50% 0,#d2ad4f20,transparent 75%),#ffffff05; white-space: normal; }
+.winter-collection-item img { width: 70px; height: 70px; object-fit: contain; transition: transform .2s; }
+.winter-collection-item:hover img { transform: translateY(-4px) rotate(5deg); }
+.winter-gift img { width: 72px; height: 72px; object-fit: contain; pointer-events: none; }
+.winter-globe-room { text-align: center; }
+.winter-globe { display: block; position: relative; width: min(100%,300px); aspect-ratio: 1; border: 0; padding: 0; background: radial-gradient(circle,#97bedf20,transparent 70%); margin: 12px auto; cursor: grab; touch-action: pan-y; transition: transform .2s; }
+.winter-globe-image { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 15px 22px #0007); pointer-events: none; }
+.winter-globe-flakes { position: absolute; inset: 5% 6% 15%; overflow: hidden; border-radius: 50%; pointer-events: none; }
+.winter-globe-flakes img { position: absolute; width: 15px; height: 15px; opacity: 0; }
+.winter-globe--snowing .winter-globe-flakes img { animation: winter-globe-snow 1.1s ease-out 2; }
+@keyframes winter-globe-snow { 0% { opacity: 0; transform: translateY(-20px) rotate(0); } 30% { opacity: .9; } 100% { opacity: 0; transform: translateY(80px) rotate(100deg); } }
+@media (min-width: 650px) {
+  .seasonal-tree-editor { display: grid; grid-template-columns: minmax(0,1fr) minmax(230px,.8fr); column-gap: 22px; align-items: start; }
+  .seasonal-tree-editor > p:first-child { grid-column: 1 / -1; }
+  .winter-decoration-picker { grid-column: 2; grid-row: 2; }
+.winter-tree-tools { grid-column: 2; grid-row: 2 / 4; }
+  .seasonal-tree-palette { grid-column: 2; grid-row: 3; }
+  .seasonal-tree-stage { grid-column: 1; grid-row: 2 / 6; }
+  .seasonal-tree-editor > .seasonal-game-buttons { grid-column: 2; }
+  .seasonal-tree-editor > p:last-child { grid-column: 1 / -1; }
+}
+@media (max-width: 600px) {
+  .winter-room-intro { padding: 8px 0; gap: 10px; }
+  .winter-room-intro > img { width: 42px; height: 42px; }
+  .winter-room-intro h3 { font-size: 18px; margin: 2px 0; }
+  .winter-room-intro .p, .winter-room-eyebrow { display: none; }
+  .winter-activity-nav img { width: 28px; height: 28px; }
+  .winter-activity-nav { margin-bottom: 10px; }
+  .winter-activity-nav { display: flex; overflow-x: auto; padding-bottom: 8px; scroll-snap-type: x proximity; }
+  .winter-activity-nav .btn { flex: 0 0 92px; scroll-snap-align: start; }
+  .winter-collection-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .seasonal-dialog .modal__head { top: -14px; }
+}
+@media (prefers-reduced-motion: reduce) { .winter-collection-item:hover img { transform: none; } .winter-globe { transition: none; } .winter-globe-flakes img { animation: none !important; } }
 .seasonal-dialog-inner { padding: 20px; }
 .seasonal-tabs { display: flex; gap: 8px; margin: 12px 0 16px; }
 .seasonal-game-stats { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 12px 0; font-size: 13px; color: #e7cede; font-variant-numeric: tabular-nums; }
 .seasonal-game-buttons { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; margin: 14px 0; }
 .seasonal-game-buttons .btn { min-width: 44px; }
 .seasonal-game-note { margin-top: 12px; opacity: .8; font-size: 12px; }
-.seasonal-road { position: relative; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 14px; background: linear-gradient(#3f334600, #15182535), url('/themes/neon-road.webp') center / cover; border: 1px solid #e9a0b52a; touch-action: pan-x; }
-.seasonal-road-lines { position: absolute; inset: 32% -100% 0 0; background: repeating-linear-gradient(105deg, transparent 0 120px, #ffdec118 120px 170px, transparent 170px 300px); }
-.seasonal-road--playing .seasonal-road-lines { animation: seasonal-road 1.8s linear infinite; }
-.seasonal-car { position: absolute; width: 28%; left: 7%; transform: translateY(-50%); transition: top 140ms ease-out; user-select: none; filter: drop-shadow(0 6px 5px #0007); z-index: 2; }
-.seasonal-road--playing .seasonal-car { animation: seasonal-engine .3s ease-in-out infinite alternate; }
-.seasonal-road-item { position: absolute; transform: translate(-50%, -50%); font-size: clamp(22px, 5vw, 34px); line-height: 1; }
-.seasonal-road-pause { position: absolute; left: 14%; right: 14%; bottom: 4%; text-align: center; background: #0c0d1be6; border-radius: 10px; padding: 8px 12px; font-size: 13px; }
 .seasonal-tree-palette { display: flex; justify-content: center; gap: 8px; margin: 14px 0 8px; }
 .seasonal-tree-palette img { width: 26px; height: 34px; object-fit: contain; }
 .seasonal-tree-stage { position: relative; width: min(100%, 340px); aspect-ratio: 4 / 5; margin: 0 auto; touch-action: pan-y; }
@@ -48,16 +116,30 @@
 .seasonal-tree-ornament { position: absolute; transform: translate(-50%, -50%); width: 44px; height: 44px; padding: 6px; background: none; border: 0; cursor: grab; touch-action: none; }
 .seasonal-tree-ornament:active { cursor: grabbing; }
 .seasonal-tree-ornament img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+.winter-tree-star { position: absolute; left: 50%; top: 7%; transform: translateX(-50%); width: 48px; height: 48px; border-radius: 50%; background: none; border: 0; cursor: pointer; }
+.winter-tree-star--lit { background: radial-gradient(circle,#ffe49a40,transparent 70%); box-shadow: 0 0 30px #ffd66b30; }
+.winter-tree--twinkle .seasonal-tree-ornament { animation: winter-twinkle 2.8s ease-in-out infinite alternate; }
+.winter-tree--twinkle .seasonal-tree-ornament:nth-child(2n) { animation-delay: -1.4s; }
+.winter-tree--shake { animation: winter-shake .5s ease-in-out 2; }
+.winter-gift-grid { display: flex; justify-content: center; gap: 14px; padding: 25px 0; }
+.winter-gift { width: 90px; height: 100px; font-size: 52px; border-color: #bfa76a80; background: linear-gradient(145deg,#1d473c,#10231e); }
+.winter-gift:hover { transform: translateY(-5px) rotate(-4deg); }
+.winter-gift--open { box-shadow: 0 0 24px #e8c97150; }
+.winter-wish { min-height: 70px; text-align: center; color: #f4dba0; }
+.winter-snow-game { display: block; width: 100%; aspect-ratio: 5 / 3; border-radius: 16px; border: 1px solid #a5d3d240; background: linear-gradient(#06202aaa,#081d21dd), url('/themes/winter-background.webp') center / cover; touch-action: pan-y; }
+.winter-snow-stats { padding: 12px 0; font-variant-numeric: tabular-nums; }
+.appearance-check .winter-mitten-range { width: 100%; min-width: 0; }
+@keyframes winter-twinkle { to { opacity: .65; filter: brightness(1.5); } }
+@keyframes winter-shake { 25% { transform: rotate(-2deg); } 75% { transform: rotate(2deg); } }
+@media (prefers-reduced-motion: reduce) { .winter-tree--twinkle *, .winter-tree--shake { animation: none !important; } .winter-gift:hover { transform: none; } }
 .seasonal-tree-sparkles { display: none; position: absolute; inset: 20% 0 0; color: #ffdc87; text-align: center; pointer-events: none; font-size: 32px; }
 .seasonal-tree-stage--celebrate .seasonal-tree-sparkles { display: block; animation: seasonal-sparkles 1.6s ease-out both; }
-.appearance-admin-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; margin: 16px 0; }
+.appearance-admin-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; margin: 16px 0; }
 .appearance-admin-choice { display: flex; flex-direction: column; gap: 8px; padding: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; cursor: pointer; }
 .appearance-admin-choice:has(input:checked) { border-color: var(--accent); }
 .appearance-admin-choice img { width: 100%; height: 120px; object-fit: cover; object-position: center top; border-radius: 8px; }
 .appearance-admin-classic { height: 120px; display: grid; place-items: center; border-radius: 8px; background: #0b0f17; color: #c2baff; }
 .appearance-admin-choice label { display: flex; gap: 7px; align-items: center; }
-@keyframes seasonal-road { to { transform: translateX(-62px); } }
-@keyframes seasonal-engine { from { transform: translateY(-50%) rotate(-.4deg); } to { transform: translateY(-49%) rotate(.4deg); } }
 @keyframes seasonal-daylight { from { filter: brightness(.95); } to { filter: brightness(1.07); } }
 @keyframes seasonal-sparkles { 0% { opacity: 0; transform: translateY(50%) scale(.7); } 30% { opacity: 1; } 100% { opacity: 0; transform: translateY(-10%) scale(1.3); } }
 @media (min-width: 1400px) { .seasonal-scene { background-size: 100% auto; } }
@@ -70,6 +152,4 @@
   .appearance-admin-choice img, .appearance-admin-classic { height: 130px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .seasonal-scene, .seasonal-road-lines, .seasonal-tree-sparkles { animation: none !important; transition: none !important; }
-  .seasonal-car { transition: none; animation: none !important; }
 }

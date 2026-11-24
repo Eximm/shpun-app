@@ -3,6 +3,7 @@ import { apiFetch } from "../../shared/api/client";
 import { useI18n } from "../../shared/i18n";
 import { AdminSectionHeader, AdminSectionIcon, ADMIN_SECTION_ICON, ModalShell } from "./shared";
 import { ActionMenu } from "./ActionMenu";
+import { ServiceNote } from "../../shared/ui/ServiceNote";
 import {
   canReorderAcrossKinds,
   COLLAPSED_TYPES_KEY,
@@ -52,6 +53,7 @@ type TFn = ReturnType<typeof useI18n>["t"];
 
 type ServerKind = "vpn" | "gateway" | "infra";
 type Visibility = "public" | "admin_only";
+type MonitoringAccess = { ok: boolean; error: string | null };
 
 type MonitoredServer = {
   id: number;
@@ -261,6 +263,7 @@ export function ServerStatusSection() {
   const [forceBusy, setForceBusy] = useState(false);
   const [collector, setCollector] = useState<CollectorState | null>(null);
   const [busy, setBusy] = useState(false);
+  const [preparingId, setPreparingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(() => sanitizeSelectedNode(readLayoutJson(SELECTED_NODE_KEY, null)));
@@ -488,9 +491,12 @@ export function ServerStatusSection() {
     if (form.exporterPassword) body.exporterPassword = form.exporterPassword;
 
     try {
-      if (editingId) await apiFetch(`/admin/monitored-servers/${editingId}`, { method: "PUT", body });
-      else await apiFetch("/admin/monitored-servers", { method: "POST", body });
+      const response = await apiFetch<{ ok: true; access?: MonitoringAccess | null }>(
+        editingId ? `/admin/monitored-servers/${editingId}` : "/admin/monitored-servers",
+        { method: editingId ? "PUT" : "POST", body },
+      );
       setEditorOpen(false);
+      if (response.access) showAccessResult(response.access);
       await loadAll({ silent: true });
     } catch (e: any) {
       setError(e?.message || t("admin.servers.err.save"));
@@ -517,6 +523,35 @@ export function ServerStatusSection() {
       else setNotice(t("admin.monitoring.test.fail", { code: r.probe.errorCode || "unknown" }));
     } catch (e: any) {
       setError(e?.message || t("admin.servers.err.load"));
+    }
+  }
+
+  function showAccessResult(access: MonitoringAccess) {
+    if (access.ok) {
+      setNotice(t("admin.monitoring.access.ready"));
+    } else {
+      const code = access.error || "apply_failed";
+      setNotice(t("admin.monitoring.access.saved") + " " + t(`admin.monitoring.access.error.${code}`));
+    }
+  }
+
+  async function prepareMonitoring(id: number) {
+    if (busy) return;
+    setBusy(true);
+    setPreparingId(id);
+    setNotice(null);
+    setError(null);
+    try {
+      const response = await apiFetch<{ ok: true; access: MonitoringAccess }>(
+        `/admin/monitored-servers/${id}/prepare-monitoring`, { method: "POST" },
+      );
+      showAccessResult(response.access);
+      await loadAll({ silent: true });
+    } catch (e: any) {
+      setError(e?.message || t("admin.servers.err.save"));
+    } finally {
+      setPreparingId(null);
+      setBusy(false);
     }
   }
 
@@ -976,6 +1011,9 @@ export function ServerStatusSection() {
                               <button className="btn btn--soft admin-gap-top-sm" type="button" onClick={() => void testNodeExporter(item.id)} disabled={Number(item.node_exporter_enabled) !== 1}>
                                 {t("admin.monitoring.test.node_exporter")}
                               </button>
+                              <button className="btn btn--soft admin-gap-top-sm" type="button" onClick={() => void prepareMonitoring(item.id)} disabled={busy || Number(item.node_exporter_enabled) !== 1 || Number(item.active) !== 1}>
+                                {t(preparingId === item.id ? "admin.monitoring.access.working" : "admin.monitoring.access.prepare")}
+                              </button>
                             </div>
 
                             <div className="mon-detail__section">
@@ -1121,8 +1159,9 @@ export function ServerStatusSection() {
         <ModalShell
           kicker="Node exporter"
           title={editingId ? t("admin.servers.editor.edit_title") : t("admin.servers.editor.add_title")}
-          onClose={() => setEditorOpen(false)}
+          onClose={() => { if (!busy) setEditorOpen(false); }}
         >
+          <ServiceNote>{t("admin.monitoring.access.hint")}</ServiceNote>
           <div className="admin-serverStatus-form">
             <label className="field">
               <span className="field__label">{t("admin.servers.field.title")}</span>
@@ -1224,7 +1263,7 @@ export function ServerStatusSection() {
             )}
           </div>
           <div className="actions actions--2 admin-gap-top-sm">
-            <button className="btn btn--primary" type="button" onClick={() => void save()} disabled={busy || !form.host.trim()}>{editingId ? t("common.save") : t("admin.servers.action.add")}</button>
+            <button className="btn btn--primary" type="button" onClick={() => void save()} disabled={busy || !form.host.trim()}>{busy ? t("admin.monitoring.access.saving") : editingId ? t("common.save") : t("admin.servers.action.add")}</button>
             <button className="btn" type="button" onClick={() => setEditorOpen(false)} disabled={busy}>{t("common.cancel")}</button>
           </div>
         </ModalShell>

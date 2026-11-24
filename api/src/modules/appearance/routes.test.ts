@@ -22,14 +22,14 @@ test("appearance defaults to classic and exposes only visual settings", async ()
   assert.equal(response.headers["cache-control"], "no-store");
 });
 test("anonymous and regular users cannot change the global theme", async () => {
-  const payload = { theme: "neon", effectsEnabled: true, gamesEnabled: true };
+  const payload = { theme: "winter", effectsEnabled: true, gamesEnabled: true };
   const anonymous = await app.inject({ method: "PUT", url: "/admin/appearance", payload });
   const regular = await app.inject({ method: "PUT", url: "/admin/appearance", payload, headers: { "x-app-sid": "appearance-user" } });
   assert.equal(anonymous.statusCode, 401); assert.equal(regular.statusCode, 403);
   assert.equal(getAppearance().theme, "classic");
 });
 test("admin can switch both themes, disable effects/games and roll back; values persist", async () => {
-  for (const theme of ["neon", "winter", "classic"]) {
+  for (const theme of ["winter", "classic"]) {
     const payload = { theme, effectsEnabled: false, gamesEnabled: false };
     const response = await app.inject({ method: "PUT", url: "/admin/appearance", payload, headers: { "x-app-sid": "appearance-admin" } });
     assert.equal(response.statusCode, 200);
@@ -38,7 +38,7 @@ test("admin can switch both themes, disable effects/games and roll back; values 
   }
 });
 test("invalid themes and missing settings never overwrite a saved theme", async () => {
-  for (const payload of [{ theme: "arbitrary", effectsEnabled: true, gamesEnabled: true }, { theme: "neon" }]) {
+  for (const payload of [{ theme: "arbitrary", effectsEnabled: true, gamesEnabled: true }, { theme: "winter" }]) {
     const response = await app.inject({ method: "PUT", url: "/admin/appearance", payload, headers: { "x-app-sid": "appearance-admin" } });
     assert.equal(response.statusCode, 400);
     assert.equal(getAppearance().theme, "classic");
