@@ -10,7 +10,7 @@ export function updatePhoneSnow(state: PhoneSnowState, gravity: Vector | null, a
   const previous = state.gravity;
   const nextGravity = gravity ? (previous ? { x: previous.x * .9 + gravity.x * .1, y: previous.y * .9 + gravity.y * .1, z: previous.z * .9 + gravity.z * .1 } : gravity) : previous;
   const radians = angle * Math.PI / 180;
-  const targetWind = nextGravity ? Math.max(-1, Math.min(1, (nextGravity.x * Math.cos(radians) + nextGravity.y * Math.sin(radians)) / 7)) : 0;
+  const targetWind = nextGravity ? Math.max(-1, Math.min(1, -(nextGravity.x * Math.cos(radians) + nextGravity.y * Math.sin(radians)) / 7)) : 0;
   const next = { ...state, gravity: nextGravity, wind: state.wind * .85 + targetWind * .15, lastAt: at };
   const linear = acceleration ?? (gravity && previous ? { x: gravity.x - previous.x, y: gravity.y - previous.y, z: gravity.z - previous.z } : null);
   if (!linear || Math.hypot(linear.x, linear.y, linear.z) < 11.5) return next;

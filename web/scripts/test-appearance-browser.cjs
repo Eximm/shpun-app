@@ -129,6 +129,19 @@ const { chromium } = require(process.env.PLAYWRIGHT_PACKAGE || "playwright");
     assert.equal(state.writes.at(-1).theme,"classic");await page.goto(`${base}/home`);await page.locator(".home-page").waitFor();
     assert.equal(await page.locator(".seasonal-backdrop,.seasonal-launcher").count(),0);
     await context.close();
+    const automaticPhone=await setup("winter",{hasTouch:true,viewport:{width:393,height:852}});
+    await automaticPhone.context.addInitScript(()=>{
+      Object.defineProperty(DeviceMotionEvent,"requestPermission",{configurable:true,value:undefined});
+      setInterval(()=>window.dispatchEvent(new DeviceMotionEvent("devicemotion",{accelerationIncludingGravity:{x:0,y:0,z:9.8},acceleration:{x:0,y:0,z:0}})),100);
+    });
+    await automaticPhone.page.reload();await automaticPhone.page.locator(".home-page").waitFor();
+    await automaticPhone.page.getByRole("button",{name:"Настройки зимней темы",exact:true}).click();
+    assert.equal(await automaticPhone.page.getByRole("switch",{name:"Движение телефона",exact:true}).isChecked(),true,"sensor defaults on without permission API");
+    await automaticPhone.page.getByRole("switch",{name:"Движение телефона",exact:true}).uncheck();
+    await automaticPhone.page.reload();await automaticPhone.page.locator(".home-page").waitFor();
+    await automaticPhone.page.getByRole("button",{name:"Настройки зимней темы",exact:true}).click();
+    assert.equal(await automaticPhone.page.getByRole("switch",{name:"Движение телефона",exact:true}).isChecked(),false,"explicit opt-out survives reload");
+    await automaticPhone.context.close();
     const phoneCase=await setup("winter",{hasTouch:true,viewport:{width:393,height:852}});
     await phoneCase.context.addInitScript(()=>{
       window.__motionRequests=0;window.__motionResult="granted";

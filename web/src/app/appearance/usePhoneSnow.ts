@@ -4,7 +4,7 @@ import { motionVector, newPhoneSnowState, updatePhoneSnow } from "./phoneSnowMod
 const KEY = "shpun.winter.phone-motion.v1";
 type MotionPermission = typeof DeviceMotionEvent & { requestPermission?: () => Promise<string> };
 function sensor() { return typeof DeviceMotionEvent === "undefined" ? null : DeviceMotionEvent as MotionPermission; }
-function preferred() { try { return localStorage.getItem(KEY) === "1"; } catch { return false; } }
+function preferred() { const automatic = !sensor()?.requestPermission; try { const saved = localStorage.getItem(KEY); return saved === null ? automatic : saved === "1"; } catch { return automatic; } }
 function remember(value: boolean) { try { localStorage.setItem(KEY, value ? "1" : "0"); } catch { /* session only */ } }
 export function usePhoneSnow(allowed: boolean) {
   const supported = !!sensor() && window.isSecureContext && navigator.maxTouchPoints > 0;
@@ -43,7 +43,7 @@ export function usePhoneSnow(allowed: boolean) {
     };
     visibility(); setStatus("active");
     const check = setTimeout(() => {
-      if (!received && !document.hidden) { setEnabled(false); setStatus("unavailable"); remember(false); }
+      if (!received && !document.hidden) { setEnabled(false); setStatus("unavailable"); }
     }, 7000);
     document.addEventListener("visibilitychange", visibility); screen.orientation?.addEventListener("change", reset);
     return () => { clearTimeout(check); window.removeEventListener("devicemotion", sample); document.removeEventListener("visibilitychange", visibility);
