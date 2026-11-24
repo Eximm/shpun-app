@@ -1,6 +1,7 @@
 ﻿// api/src/modules/user/routes.ts
 
 import type { FastifyInstance } from "fastify";
+import { clientIpFromRequest } from "../../shared/http/clientIpContext.js";
 import { getSessionFromRequest } from "../../shared/session/sessionStore.js";
 import { fetchMe } from "./me.js";
 import {
@@ -107,11 +108,7 @@ function isAlreadyBoundTelegramMessage(msg: string): boolean {
 }
 
 function getClientIp(req: any): string {
-  return (
-    String(req.headers["x-forwarded-for"] ?? "").split(",")[0].trim() ||
-    String(req.headers["x-real-ip"] ?? "").trim() ||
-    String(req.ip ?? "")
-  );
+  return clientIpFromRequest(req);
 }
 
 function isProbablyEmptyTelegramWidgetPayload(p: any): boolean {

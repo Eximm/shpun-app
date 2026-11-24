@@ -1,5 +1,7 @@
 ﻿// FILE: api/src/shared/shm/shmClient.ts
 
+import { currentRequestClientIp } from '../http/clientIpContext.js'
+
 export type ShmResult<T = unknown> = {
   ok: boolean
   status: number
@@ -126,6 +128,12 @@ export async function shmFetch<T = unknown>(
   const headers: Record<string, string> = {
     Accept: 'application/json',
     ...(opts?.headers ?? {}),
+  }
+
+  const clientIp = currentRequestClientIp()
+  if (clientIp) {
+    headers['X-Real-IP'] = clientIp
+    headers['X-Forwarded-For'] = clientIp
   }
 
   if (sessionId) {

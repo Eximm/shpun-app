@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { clientIpFromRequest } from "../../shared/http/clientIpContext.js";
 import {
   createDevice,
   getDeviceByToken,
@@ -84,9 +85,7 @@ export function getRequestDeviceToken(req: any): string {
 }
 
 export function getRequestIp(req: any): string {
-  const xff = String(req?.headers?.["x-forwarded-for"] ?? "").trim();
-  if (xff) return xff.split(",")[0].trim();
-  return String(req?.ip ?? "").trim();
+  return clientIpFromRequest(req);
 }
 
 export function getRequestUserAgent(req: any): string {

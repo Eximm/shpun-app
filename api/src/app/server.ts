@@ -8,6 +8,7 @@ import { registerRoutes } from './routes/index.js'
 import { getSessionBySid } from '../shared/session/sessionStore.js'
 import { registerTolerantJsonBodyParser } from './plugins/jsonBody.js'
 import { registerSensitiveRateLimits } from '../shared/http/rateLimit.js'
+import { registerClientIpContext, trustedProxyAddresses } from '../shared/http/clientIpContext.js'
 
 function parseAllowedOrigins(): string[] {
   const raw = (process.env.APP_ORIGIN || '').trim()
@@ -37,6 +38,7 @@ export function sanitizeRequestUrlForLog(raw: string): string {
 export async function buildServer() {
   const isProd = process.env.NODE_ENV === 'production'
   const allowed = parseAllowedOrigins()
+  const trustedProxies = trustedProxyAddresses(process.env.APP_TRUSTED_PROXY_IPS ?? '')
 
   const app = Fastify({
     logger: {
@@ -63,8 +65,13 @@ export async function buildServer() {
             },
           },
     },
-    trustProxy: isProd,
+    trustProxy: isProd ? (address: string) => trustedProxies.has(address) : false,
   })
+
+  if (isProd && trustedProxies.size === 0) {
+    app.log.warn('APP_TRUSTED_PROXY_IPS is empty; only the direct peer IP will be used')
+  }
+  registerClientIpContext(app)
 
   await app.register(cors, {
     credentials: true,

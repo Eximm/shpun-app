@@ -1,6 +1,7 @@
 ﻿// api/src/modules/auth/routes.ts
 
 import type { FastifyInstance } from "fastify";
+import { clientIpFromRequest } from "../../shared/http/clientIpContext.js";
 import { createHash } from "node:crypto";
 import { verifyTelegramInitData, verifyTelegramWidgetPayload } from "../../shared/telegram/verifyInitData.js";
 import { setPassword } from "./password.js";
@@ -417,11 +418,7 @@ function withAuthOk(url: string): string {
 }
 
 function getClientIp(req: any): string {
-  return (
-    String(req.headers["x-forwarded-for"] ?? "").split(",")[0].trim() ||
-    String(req.headers["x-real-ip"] ?? "").trim() ||
-    String(req.ip ?? "")
-  );
+  return clientIpFromRequest(req);
 }
 
 function shmSessionIdFromResponse(rr: any): string {
