@@ -43,8 +43,6 @@ export function AppearanceSection() {
       </div>
       <label className="appearance-check"><input type="checkbox" checked={settings.effectsEnabled} disabled={saving}
         onChange={(event) => setSettings({ ...settings, effectsEnabled: event.target.checked })} /><span>{t("appearance.admin_effects")}</span></label>
-      <label className="appearance-check"><input type="checkbox" checked={settings.gamesEnabled} disabled={saving}
-        onChange={(event) => setSettings({ ...settings, gamesEnabled: event.target.checked })} /><span>{t("appearance.admin_games")}</span></label>
       <p className="p">{t("appearance.admin_switch_hint")}</p>
     </>}
     {message && <p className="p" role="status">{message}</p>}

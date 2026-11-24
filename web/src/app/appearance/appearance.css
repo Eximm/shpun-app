@@ -51,6 +51,30 @@
 .appearance-check { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; }
 .appearance-check input { width: 18px; height: 18px; accent-color: var(--accent); flex-shrink: 0; }
 .appearance-check span { font-size: 13px; line-height: 1.45; }
+.seasonal-dialog.winter-settings-dialog { width: min(480px,calc(100% - 24px)); max-height: calc(100dvh - 32px); background: #101f22; border: 1px solid #b8d2db30; border-radius: 22px; color: #eef6f7; }
+.winter-settings-inner { padding: 22px; }
+.winter-settings-header { display: flex; align-items: center; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid #d8e8ed20; margin-bottom: 6px; }
+.winter-settings-header > img { width: 40px; height: 40px; object-fit: contain; }
+.winter-settings-header > div { flex: 1; min-width: 0; }
+.winter-settings-header h2 { font-size: 21px; margin: 0 0 5px; line-height: 1.2; }
+.winter-settings-header p { margin: 0; font-size: 12px; color: #a5b8bf; line-height: 1.4; }
+.winter-settings-header > button { min-width: 40px; min-height: 40px; padding: 0; font-size: 22px; }
+.winter-settings-controls { gap: 0; }
+.winter-setting-row { display: flex; justify-content: space-between; align-items: center; gap: 18px; min-height: 80px; padding: 16px 0; border-bottom: 1px solid #d8e8ed15; cursor: pointer; }
+.winter-setting-row > span { flex: 1; min-width: 0; }
+.winter-setting-row strong { display: block; font-size: 14px; font-weight: 700; line-height: 1.35; }
+.winter-setting-row small { display: block; font-size: 12px; color: #a5b8bf; margin-top: 5px; line-height: 1.45; }
+.winter-setting-toggle { appearance: none; -webkit-appearance: none; flex-shrink: 0; width: 42px; height: 25px; border-radius: 20px; background: #56666d; border: 1px solid #d6e5ea30; position: relative; cursor: pointer; margin: 0; transition: background .18s; }
+.winter-setting-toggle::after { content: ""; position: absolute; width: 17px; height: 17px; left: 3px; top: 3px; border-radius: 50%; background: #f4f8fa; transition: transform .18s; }
+.winter-setting-toggle:checked { background: #2c9a88; }
+.winter-setting-toggle:checked::after { transform: translateX(17px); }
+.winter-setting-toggle:disabled { opacity: .4; cursor: default; }
+.winter-setting-toggle:focus-visible { outline: 2px solid #9ce6f1; outline-offset: 3px; }
+.winter-setting-row select { font: inherit; font-size: 12px; color: #edf6f7; background: #1a3035; border: 1px solid #a7c9d440; border-radius: 10px; padding: 10px 8px; max-width: 47%; min-width: 0; }
+.winter-settings-note { font-size: 11px; color: #a5b8bf; margin: 14px 0 0; line-height: 1.5; }
+.winter-settings-done.btn { width: 100%; min-height: 44px; margin-top: 18px; background: #25474c; border-color: #8bb8c04a; color: #f2f7f8; box-shadow: none; }
+@media (max-width: 380px) { .winter-settings-inner { padding: 16px; } .winter-settings-header h2 { font-size: 19px; } .winter-setting-row { gap: 12px; } }
+@media (prefers-reduced-motion: reduce) { .winter-setting-toggle, .winter-setting-toggle::after { transition: none; } }
 .seasonal-dialog { width: min(620px, calc(100% - 24px)); max-height: calc(100dvh - 32px); margin: auto; padding: 0; border: 1px solid #ffffff25; border-radius: 20px; background: #101121; color: #f5f3fa; box-shadow: 0 20px 90px #000a; overflow-y: auto; overscroll-behavior: contain; }
 .seasonal-dialog::backdrop { background: #030510c9; backdrop-filter: blur(8px); }
 .seasonal-dialog--winter { background: #071c18; }

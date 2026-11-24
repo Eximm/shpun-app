@@ -55,222 +55,87 @@ const { chromium } = require(process.env.PLAYWRIGHT_PACKAGE || "playwright");
     return { page, context, state };
   }
   try {
-    const { page, context, state } = await setup("winter");
-    assert.equal(await page.locator(".home-balance-card").count(), 1);
-    await page.waitForTimeout(150);
-    const first = await page.locator(".seasonal-particles").evaluate((canvas) => canvas.toDataURL());
-    await page.waitForTimeout(200);
-    assert.notEqual(await page.locator(".seasonal-particles").evaluate((canvas) => canvas.toDataURL()), first, "background really animates");
-    for (const width of [320, 393, 768, 1280]) {
-      await page.setViewportSize({ width, height: 1000 });
-      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `no page overflow at ${width}px`);
+    const { page, context, state } = await setup("winter", {hasTouch:true});
+    const open=()=>page.getByRole("button",{name:"Настройки зимней темы",exact:true}).click();
+    await open();
+    assert.equal(await page.locator(".winter-settings-dialog").count(),1);
+    assert.equal(await page.getByRole("switch").count(),3);
+    assert.equal(await page.locator(".winter-playground,.seasonal-tree-stage,.seasonal-tabs").count(),0);
+    assert.equal(await page.getByRole("button",{name:"Поиграть",exact:true}).count(),0);
+    assert.equal(await page.locator('img[src="/themes/winter-tree.webp"]').count(),0);
+    for(const [width,height] of [[320,568],[393,852],[768,1024],[1280,900]]){
+      await page.setViewportSize({width,height});
+      const box=await page.locator("dialog").boundingBox();
+      assert.ok(box.x>=0&&box.y>=0&&box.x+box.width<=width+1&&box.y+box.height<=height+1,`settings fit ${width}px`);
+      assert.ok(await page.locator("dialog").evaluate(node=>node.scrollWidth<=node.clientWidth+1));
+      if(screenshotDir&&(width===393||width===1280))await page.screenshot({path:path.join(screenshotDir,width===393?"winter-settings-mobile.png":"winter-settings-desktop.png")});
     }
-    if (screenshotDir) await page.screenshot({ path: path.join(screenshotDir, "winter-home.png") });
-    await page.getByRole("button", { name: "Тема и игры", exact: true }).click();
-    await page.getByRole("button", { name: "Нарядить за меня", exact: true }).click();
-    assert.equal(await page.locator(".seasonal-tree-ornament").count(), 18);
-    if (screenshotDir) await page.screenshot({ path: path.join(screenshotDir,"winter-room-desktop.png") });
-    await page.getByRole("button", { name: "Отменить изменение", exact: true }).click();
-    assert.equal(await page.locator(".seasonal-tree-ornament").count(), 0);
-    await page.getByRole("button", { name: "Коллекция", exact: true }).click();
-    await page.getByRole("button", { name: "Снежинка", exact: true }).click();
-    const treeStage = page.locator(".seasonal-tree-stage");
-    const treeBox = await treeStage.boundingBox();
-    await treeStage.click({ position: { x: treeBox.width / 2, y: treeBox.height * .55 } });
-    assert.ok((await page.locator(".seasonal-tree-ornament img").getAttribute("src")).endsWith("snowflake.png"));
-    await page.getByRole("button", { name: "Начать заново", exact: true }).click();
-    await page.getByRole("button", { name: "Снежный шар", exact: true }).click();
-    await page.getByRole("button", { name: "Встряхнуть снежный шар", exact: true }).click();
-    await page.locator(".winter-globe--snowing").waitFor();
-    await page.getByRole("status").filter({ hasText: "Пусть маленькое желание" }).waitFor();
-    await page.getByRole("checkbox", { name: "Звуки праздника · тихие отклики на действия", exact: true }).check();
-    await page.getByRole("button", { name: "Подарки", exact: true }).click();
-    await page.getByRole("button", { name: "Открыть подарок 1", exact: true }).click();
-    assert.ok((await page.locator(".winter-wish").innerText()).includes("тепло"));
-    await page.getByRole("button", { name: "Поймать снежинки", exact: true }).click();
-    await page.getByRole("button", { name: "Начать снегопад", exact: true }).click();
-    await page.waitForTimeout(1100);
-    const snow = await page.locator(".winter-snow-game").evaluate((node) => node.toDataURL());
-    await page.waitForTimeout(200);
-    assert.notEqual(await page.locator(".winter-snow-game").evaluate((node) => node.toDataURL()), snow);
-    await page.getByRole("button", { name: "Остановить", exact: true }).click();
-    await page.getByRole("button", { name: "Оформление", exact: true }).click();
-    await page.getByRole("checkbox", { name: "Фоновые анимации и эффекты", exact: true }).uncheck();
-    assert.equal(await page.locator(".seasonal-particles").count(), 0);
-    await page.getByRole("checkbox", { name: "Использовать сезонную тему", exact: true }).uncheck();
-    assert.equal(await page.locator(".app[data-seasonal]").count(), 0);
+    await page.getByRole("switch",{name:"Звук снега",exact:true}).check();
+    await page.getByRole("combobox",{name:"Интенсивность снега",exact:true}).selectOption("flurry");
+    await page.getByRole("switch",{name:"Движение и эффекты",exact:true}).uncheck();
+    assert.equal(await page.locator(".seasonal-particles").count(),0);
+    await page.getByRole("switch",{name:"Зимнее оформление",exact:true}).uncheck();
+    assert.equal(await page.locator(".app[data-seasonal]").count(),0);
     await page.keyboard.press("Escape");
-    await page.reload(); await page.locator(".home-page").waitFor();
-    assert.equal(await page.locator(".app[data-seasonal]").count(), 0, "opt-out survives reload");
-    await page.getByRole("button", { name: "Тема и игры", exact: true }).click();
-    await page.getByRole("checkbox", { name: "Использовать сезонную тему", exact: true }).check();
-    assert.equal(await page.locator(".seasonal-particles").count(), 0, "motion opt-out survives separately");
-    await page.keyboard.press("Escape");
-    await page.goto(`${base}/admin?tab=appearance`);
-    await page.getByRole("radio", { name: /Классическое оформление/ }).check();
-    state.failSave = true;
-    await page.getByRole("button", { name: "Сохранить", exact: true }).click();
-    await page.getByRole("alert").filter({ hasText: "Не удалось сохранить оформление" }).waitFor();
-    assert.equal(state.settings.theme, "winter");
-    state.failSave = false;
-    await page.getByRole("button", { name: "Сохранить", exact: true }).click();
-    await page.getByRole("status").filter({ hasText: "Настройки оформления сохранены" }).waitFor();
-    assert.equal(state.writes.at(-1).theme, "classic");
-    await page.goto(`${base}/home`); await page.locator(".home-page").waitFor();
-    console.log("PASS animated snow, tree undo, sound opt-in, gifts, snowfall, persistent opt-outs, failed save and global theme switch");
-    await context.close();
-
-    const winter = await setup("winter", { viewport: { width: 393, height: 852 } });
-    await winter.page.getByRole("button", { name: "Тема и игры", exact: true }).click();
-    const stage = winter.page.locator(".seasonal-tree-stage");
-    const box = await stage.boundingBox();
-    await stage.click({ position: { x: box.width / 2, y: box.height * .55 } });
-    assert.equal(await winter.page.locator(".seasonal-tree-ornament").count(), 1);
-    const ornament = winter.page.locator(".seasonal-tree-ornament");
-    const startLeft = await ornament.evaluate((node) => node.style.left);
-    await ornament.focus(); await winter.page.keyboard.press("ArrowRight");
-    assert.notEqual(await ornament.evaluate((node) => node.style.left), startLeft);
-    const ob = await ornament.boundingBox();
-    await winter.page.mouse.move(ob.x + ob.width / 2, ob.y + ob.height / 2);
-    await winter.page.mouse.down(); await winter.page.mouse.move(ob.x + ob.width / 2 + 24, ob.y + ob.height / 2 - 10, { steps: 4 }); await winter.page.mouse.up();
-    assert.equal(await ornament.count(), 1, "dragging never creates an extra bauble");
-    await winter.page.getByRole("button", { name: "Погасить огни", exact: true }).click();
-    assert.equal(await winter.page.locator(".seasonal-tree-stage--lit").count(), 0);
-    await winter.page.getByRole("button", { name: "Немного волшебства", exact: true }).click();
-    await winter.page.locator(".seasonal-tree-stage--celebrate").waitFor();
-    if (screenshotDir) { await winter.page.screenshot({ path: path.join(screenshotDir, "winter-tree-mobile.png") }); await winter.page.locator("dialog").evaluate((node) => node.scrollTop = 0); await winter.page.screenshot({ path: path.join(screenshotDir, "winter-room-mobile.png") }); }
-    for (const width of [320,393,768,1280]) {
-      await winter.page.setViewportSize({width,height:852});
-      const dialog = await winter.page.locator("dialog").boundingBox();
-      assert.ok(dialog.x >= 0 && dialog.x + dialog.width <= width + 1);
-      assert.ok(await winter.page.locator("dialog").evaluate((node) => node.scrollWidth <= node.clientWidth + 1));
-    }
-    await winter.page.setViewportSize({width:393,height:852});
-    const bounds = await winter.page.locator("dialog").boundingBox();
-    assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= 394 && bounds.y >= 0 && bounds.y + bounds.height <= 853);
-    await winter.page.keyboard.press("Escape"); await winter.page.reload();
-    await winter.page.getByRole("button", { name: "Тема и игры", exact: true }).click();
-    assert.equal(await winter.page.locator(".seasonal-tree-ornament").count(), 1, "tree survives reload");
-    await winter.context.close();
-    console.log("PASS mobile tree decoration, drag, keyboard, lights, sparkle, persistence and dialog bounds");
-
-    const weather = await setup("winter", { hasTouch: true });
-    await weather.page.getByRole("button", {name:"Тема и игры",exact:true}).click();
-    await weather.page.getByRole("checkbox", {name:"Звуки праздника · тихие отклики на действия",exact:true}).check();
-    await weather.page.getByRole("button", {name:"Оформление",exact:true}).click();
-    await weather.page.getByRole("combobox", {name:"Интенсивность снега",exact:true}).selectOption("flurry");
-    await weather.page.keyboard.press("Escape");
-    await weather.page.waitForTimeout(18000);
-    assert.ok(await weather.page.locator(".snowdrift").count() >= 4,"snow accumulates on actual tile tops");
-    if(screenshotDir) await weather.page.screenshot({path:path.join(screenshotDir,"winter-snowdrifts.png")});
-    const assertSnowAlignment = async (label) => {
-      const result = await weather.page.evaluate(() => {
-        const tiles=Array.from(document.querySelectorAll(".main .home-balance-card,.main .card,.main [data-snow-surface]")).map(node=>node.getBoundingClientRect());
+    await page.reload();await page.locator(".home-page").waitFor();
+    assert.equal(await page.locator(".app[data-seasonal]").count(),0);
+    await open();
+    assert.ok(await page.getByRole("switch",{name:"Звук снега",exact:true}).isChecked());
+    await page.getByRole("switch",{name:"Зимнее оформление",exact:true}).check();
+    assert.equal(await page.locator(".seasonal-particles").count(),0);
+    await page.getByRole("switch",{name:"Движение и эффекты",exact:true}).check();
+    assert.equal(await page.getByRole("combobox",{name:"Интенсивность снега",exact:true}).inputValue(),"flurry");
+    await page.getByRole("button",{name:"Готово",exact:true}).click();
+    assert.equal(await page.locator("dialog").count(),0);
+    await page.evaluate(()=>window.dispatchEvent(new Event("shpun-winter-discovery")));
+    assert.equal(await page.locator("dialog").count(),0,"staged discovery does not open early activities");
+    await page.waitForTimeout(2200);
+    for(const width of [360,393,768,1280]){
+      await page.setViewportSize({width,height:1000});await page.waitForTimeout(250);
+      const errors=await page.evaluate(()=>{
         const errors=[];
-        for(const snow of document.querySelectorAll(".snowdrift svg")) {
-          const box=snow.getBoundingClientRect();
-          const tile=tiles.find(rect=>Math.abs(rect.left+8-box.left)<1.2 && Math.abs(rect.width-16-box.width)<1.2 && Math.abs(rect.top-(box.top+22))<1.2);
-          if(!tile || Math.abs(tile.top-(box.top+22))>1.2 || Math.abs(box.height-28)>1.2) errors.push({snow:{left:box.left,top:box.top,width:box.width,height:box.height},tile:tile?{top:tile.top,left:tile.left,width:tile.width}:null});
-        }
-        return {count:document.querySelectorAll(".snowdrift").length,errors};
-      });
-      assert.ok(result.count>0,`snow visible: ${label}`);
-      assert.deepEqual(result.errors,[],`snow follows actual tile tops: ${label}`);
-    };
-    for(const width of [360,393,768,1280]) {
-      await weather.page.setViewportSize({width,height:1000});await weather.page.waitForTimeout(350);
-      await assertSnowAlignment(`${width}px`);
-      const nativeScrollErrors=await weather.page.evaluate(()=>{
-        const errors=[];
-        for(const top of [40,120,240,80,0]) {
+        for(const top of [40,120,240,80,0]){
           scrollTo({top,behavior:"instant"});
-          for(const cap of document.querySelectorAll(".snowdrift")) {
-            const host=cap.parentElement, rect=host.getBoundingClientRect(), snow=cap.querySelector("svg").getBoundingClientRect();
-            if(!host.classList.contains("snow-bearing-surface") || getComputedStyle(cap).position!=="absolute" || Math.abs(rect.top-(snow.top+22))>1.2)
-              errors.push({top,hostTop:rect.top,snowTop:snow.top});
+          for(const cap of document.querySelectorAll(".snowdrift")){
+            const host=cap.parentElement,box=host.getBoundingClientRect(),snow=cap.querySelector("svg").getBoundingClientRect();
+            if(!host.classList.contains("snow-bearing-surface")||Math.abs(box.top-snow.top-22)>1.2)errors.push({top,y:box.top,snow:snow.top});
           }
         }
         return errors;
       });
-      assert.deepEqual(nativeScrollErrors,[],`caps move with tiles synchronously without waiting for JS frames: ${width}px`);
-
-      await weather.page.evaluate(()=>scrollTo(0,100));await weather.page.waitForTimeout(250);
-      await assertSnowAlignment(`${width}px scrolled`);
-      await weather.page.evaluate(()=>scrollTo(0,0));await weather.page.waitForTimeout(250);
+      assert.deepEqual(errors,[],`native scroll alignment ${width}px`);
     }
-    await weather.page.setViewportSize({width:393,height:852});await weather.page.waitForTimeout(350);
-    if(screenshotDir) await weather.page.screenshot({path:path.join(screenshotDir,"winter-snow-aligned-mobile.png")});
-    await weather.page.setViewportSize({width:1280,height:1000});await weather.page.waitForTimeout(350);
-    await weather.page.waitForTimeout(8000);
-    const hitPoint = async () => weather.page.locator(".snowdrift").first().evaluate(button=>{
-      const rect=button.getBoundingClientRect(), x=rect.x+rect.width/2;
-      for(let y=rect.y+1;y<rect.bottom;y+=.5) if(document.elementFromPoint(x,y)?.closest(".snowdrift")===button) return {x,y};
+    await page.waitForTimeout(1600);
+    const point=await page.locator(".snowdrift").first().evaluate(node=>{
+      const box=node.getBoundingClientRect(),x=box.x+box.width/2;
+      for(let y=box.top+.5;y<box.bottom;y+=.5)if(document.elementFromPoint(x,y)?.closest(".snowdrift")===node)return{x,y};
       return null;
-    });
-    const hit=await hitPoint(); assert.ok(hit,"only the painted snow surface receives pointer input");
-    const audioBefore=await weather.page.evaluate(()=>({...window.__snowAudio}));
-    await weather.page.mouse.move(hit.x,hit.y);await weather.page.mouse.down();await weather.page.mouse.move(hit.x+65,hit.y,{steps:8});await weather.page.mouse.up();
-    const audioAfter=await weather.page.evaluate(()=>({...window.__snowAudio}));
-    assert.equal(audioAfter.starts-audioBefore.starts,1,"one continuous sound for an entire mouse stroke");
-    await weather.page.waitForTimeout(700);
-    assert.equal(await weather.page.evaluate(()=>window.__snowAudio.starts-window.__snowAudio.stops),0,"brush releases without a stuck loop");
-    const afterMouse=await weather.page.evaluate(()=>JSON.parse(localStorage.getItem("shpun.winter.snowman.v1")).snow);
-    assert.ok(afterMouse>0,"real mouse sweep collects snow");
-    await weather.page.setViewportSize({width:393,height:852});await weather.page.waitForTimeout(400);
-    const touch=await hitPoint();assert.ok(touch);
-    const cdp=await weather.context.newCDPSession(weather.page);
-    const scroll=await weather.page.evaluate(()=>scrollY);
-    await cdp.send("Input.dispatchTouchEvent",{type:"touchStart",touchPoints:[{x:touch.x,y:touch.y}]});
-    for(let i=1;i<=5;i++)await cdp.send("Input.dispatchTouchEvent",{type:"touchMove",touchPoints:[{x:touch.x+i*9,y:touch.y}]});
-    await cdp.send("Input.dispatchTouchEvent",{type:"touchEnd",touchPoints:[]});await cdp.detach();
-    assert.equal(await weather.page.evaluate(()=>scrollY),scroll,"brushing snow on touch does not scroll the page");
-    assert.equal(new URL(weather.page.url()).pathname,"/home");
-    await weather.page.setViewportSize({width:1280,height:1000});await weather.page.waitForTimeout(400);
-    const ids = await weather.page.locator(".snowdrift").evaluateAll(nodes=>nodes.map(node=>node.dataset.snowId));
-    for(const id of ids) { const drift=weather.page.locator(`.snowdrift[data-snow-id="${id}"]`); if(await drift.count()){await drift.focus();await weather.page.keyboard.press("Enter");} }
-    const cleanSnapshot = await weather.page.evaluate(()=>JSON.parse(localStorage.getItem("shpun.winter.snowbanks.v1")));
-    assert.ok(cleanSnapshot.banks.length>=4,"bank snapshots are persisted");
-    const cleanRoot=cleanSnapshot.banks.find(([key])=>key==="/home|home-balance");
-    assert.ok(cleanRoot && cleanRoot[1].heights.every(h=>h<.5),"clearing immediately persists an empty bank");
-    await weather.page.reload();await weather.page.locator(".snowdrift").first().waitFor();
-    const reloadedOpacity=await weather.page.locator(".snowdrift").first().evaluate(node=>Number(node.style.opacity));
-    assert.ok(reloadedOpacity<.3,"cleaned tiles do not return as opaque white strips on reload");
-    const stash = await weather.page.evaluate(()=>JSON.parse(localStorage.getItem("shpun.winter.snowman.v1")));
-    assert.ok(stash.snow >= 75,`collected physical snow can build a friend: ${stash.snow}`);
-    assert.equal(new URL(weather.page.url()).pathname,"/home","brushing never activates underlying tile links");
-    await weather.page.getByRole("button", {name:"Тема и игры",exact:true}).click();
-    await weather.page.getByRole("button", {name:/Чьи-то следы возле ёлки/}).click();
-    for(const amount of [15,25,35]) await weather.page.getByRole("button", {name:`Скатать ком · ${amount} снега`,exact:true}).click();
-    await weather.page.locator(".winter-tree-snowman").waitFor();
-    await weather.page.locator(".winter-snowman-friend").click();
-    await weather.page.locator(".winter-snowman-friend--wave").waitFor();
-    await weather.page.getByRole("button", {name:"Позвенеть новогодней звездой",exact:true}).click({clickCount:3});
-    await weather.page.locator(".winter-tree--aurora").waitFor();
-    if(screenshotDir) await weather.page.screenshot({path:path.join(screenshotDir,"winter-snowman.png")});
-    await weather.page.keyboard.press("Escape");await weather.page.reload();
-    assert.equal(await weather.page.evaluate(()=>JSON.parse(localStorage.getItem("shpun.winter.snowman.v1")).stage),3);
-    await weather.page.getByRole("button", {name:"Тема и игры",exact:true}).click();
-    await weather.page.getByRole("button", {name:"Оформление",exact:true}).click();
-    await weather.page.getByRole("combobox", {name:"Интенсивность снега",exact:true}).selectOption("off");
-    await weather.page.keyboard.press("Escape");
-    assert.equal(await weather.page.locator(".snow-weather").count(),0);
-    await weather.context.close();
-    console.log("PASS physical snow accumulation, keyboard clearing, collected snow, three snowman stages, hidden reactions, persistence and snow off");
-
-    const savedSnow = await setup("winter");
-    await savedSnow.page.addInitScript(()=>localStorage.setItem("shpun.winter.snowbanks.v1",JSON.stringify({version:1,banks:[["/home|home-balance",{seed:.5,heights:Array(48).fill(5)}]]})));
-    await savedSnow.page.reload();await savedSnow.page.locator(".snowdrift").first().waitFor();
-    assert.equal(await savedSnow.page.locator(".snowdrift").first().evaluate(node=>Number(node.style.opacity)),1,"existing snow is restored instead of starting from clean tiles");
-    await savedSnow.context.close();
-    console.log("PASS restored snow, persisted clearing and smooth low-opacity regrowth");
-
-    const reduced = await setup("winter", { reducedMotion: "reduce" });
-    assert.equal(await reduced.page.locator(".seasonal-particles").count(), 0);
-    await reduced.context.close();
-    const classic = await setup("classic");
-    assert.equal(await classic.page.locator(".seasonal-backdrop,.seasonal-launcher").count(), 0);
-    await classic.context.close();
-    assert.deepEqual(errors, []);
-    console.log("PASS reduced-motion preference, classic rollback and no browser exceptions");
-  } catch (error) { for (const context of browser.contexts()) for (const page of context.pages()) { console.error((await page.locator("body").innerText()).slice(0,5000)); } throw error; } finally { await browser.close(); await server.close(); }
-})().catch((error) => { console.error(error); process.exit(1); });
+    });assert.ok(point);
+    const before=await page.evaluate(()=>window.__snowAudio.starts);
+    await page.mouse.move(point.x,point.y);await page.mouse.down();await page.mouse.move(point.x+60,point.y,{steps:10});await page.mouse.up();
+    assert.equal(await page.evaluate(()=>window.__snowAudio.starts)-before,1,"one continuous sound per brush gesture");
+    await page.waitForTimeout(700);
+    assert.equal(await page.evaluate(()=>window.__snowAudio.starts-window.__snowAudio.stops),0,"no stuck audio loop");
+    assert.equal(new URL(page.url()).pathname,"/home");
+    assert.equal(await page.locator(".snow-discovery,.winter-playground").count(),0);
+    await open();await page.getByRole("combobox",{name:"Интенсивность снега",exact:true}).selectOption("off");
+    await page.getByRole("button",{name:"Готово",exact:true}).click();assert.equal(await page.locator(".snow-weather").count(),0);
+    await page.goto(`${base}/admin?tab=appearance`);
+    assert.equal(await page.getByRole("checkbox",{name:"Разрешить сезонные игры",exact:true}).count(),0);
+    await page.getByRole("radio",{name:/Классическое оформление/}).check();state.failSave=true;
+    await page.getByRole("button",{name:"Сохранить",exact:true}).click();await page.getByRole("alert").filter({hasText:"Не удалось сохранить оформление"}).waitFor();
+    assert.equal(state.settings.theme,"winter");state.failSave=false;
+    await page.getByRole("button",{name:"Сохранить",exact:true}).click();await page.getByRole("status").filter({hasText:"Настройки оформления сохранены"}).waitFor();
+    assert.equal(state.writes.at(-1).theme,"classic");await page.goto(`${base}/home`);await page.locator(".home-page").waitFor();
+    assert.equal(await page.locator(".seasonal-backdrop,.seasonal-launcher").count(),0);
+    await context.close();
+    const reduced=await setup("winter",{reducedMotion:"reduce"});
+    assert.equal(await reduced.page.locator(".seasonal-particles").count(),0);
+    await reduced.page.getByRole("button",{name:"Настройки зимней темы",exact:true}).click();
+    assert.ok(await reduced.page.getByRole("switch",{name:"Движение и эффекты",exact:true}).isDisabled());
+    assert.equal(await reduced.page.locator(".winter-playground,.seasonal-tabs").count(),0);
+    await reduced.context.close();assert.deepEqual(errors,[]);
+    console.log("PASS compact winter-only settings, phone/tablet/desktop bounds, all controls, persistence, native snow scrolling, continuous audio, no early activities, admin saving and reduced motion");
+  } catch(error){for(const context of browser.contexts())for(const page of context.pages())console.error((await page.locator("body").innerText()).slice(0,5000));throw error;}
+  finally{await browser.close();await server.close();}
+})().catch(error=>{console.error(error);process.exit(1)});

@@ -3,6 +3,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { useI18n } from "../../shared/i18n";
 import { useAppearance } from "./AppearanceProvider";
 import { bankCeiling, bankPath, brushBank, createDustedBank, depositFlake, growBank, restoreBanks, serializeBanks, snowOpacity, SNOWFALL, type SnowBank } from "./snowModel";
+import { WINTER_ACTIVITIES_ENABLED } from "./winterFeatures";
 import { useWinterSound } from "./winterSound";
 
 const BANKS_KEY = "shpun.winter.snowbanks.v1";
@@ -158,7 +159,7 @@ export function SnowWeather() {
     if (removed < .01) return;
     collectedFraction.current += removed / 6;
     const units = Math.floor(collectedFraction.current);
-    if (units > 0) { collectedFraction.current -= units; collectSnow(units); if (workshop.snow < 15 && workshop.snow + units >= 15) setHint(true); }
+    if (units > 0) { collectedFraction.current -= units; collectSnow(units); if (WINTER_ACTIVITIES_ENABLED && workshop.snow < 15 && workshop.snow + units >= 15) setHint(true); }
     if (whole) audio.current.play("snow"); else audio.current.brushSnow(Math.min(1, .2 + removed / 5));
     for (let i = 0; i < 12 && puffs.current.length < 90; i++) puffs.current.push({ x: clientX, y: liveBox.top - 4, vx: (Math.random() - .5) * 120, vy: -20 - Math.random() * 65, life: .6 + Math.random() * .4 });
     if (whole) persistence.current();
@@ -183,7 +184,7 @@ export function SnowWeather() {
         <path d={cap.path} fill={`url(#${gradientId}-${cap.id})`} />
       </svg>
     </button>, cap.element, String(cap.id)))}
-    {hint && settings.gamesEnabled && <button type="button" className="snow-discovery" onClick={() => { setHint(false); window.dispatchEvent(new Event("shpun-winter-discovery")); }}>
+    {WINTER_ACTIVITIES_ENABLED && hint && settings.gamesEnabled && <button type="button" className="snow-discovery" onClick={() => { setHint(false); window.dispatchEvent(new Event("shpun-winter-discovery")); }}>
       <img src="/themes/icons/snowman.png" alt="" /><span>{t("appearance.snow.discovery")}</span>
     </button>}
   </div></>;
