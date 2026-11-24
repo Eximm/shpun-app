@@ -78,30 +78,24 @@ export function bankPath(bank: SnowBank, width: number): string {
 }
 export const SNOWMAN_COSTS = [15, 25, 35] as const;
 
-// Conservative height transport; friction holds shallow tilts, downhill edge sheds mass.
-export function slideBank(bank: SnowBank, tilt: number, seconds: number, width: number, maximum = 17) {
-  const spill = { left: 0, right: 0 };
-  const strength = Math.max(0, Math.min(1, Math.abs(tilt)) - .22);
-  if (!strength || seconds <= 0 || width <= 0) return spill;
-  const right = tilt > 0, n = bank.heights.length;
-  const fraction = Math.min(.45, Math.min(.06, seconds) * strength * 150 / (width / (n - 1)));
-  for (let j = 1; j < n - 1; j++) {
-    const i = right ? n - 1 - j : j, to = i + (right ? 1 : -1);
-    const edge = to === 0 || to === n - 1;
-    const amount = Math.min(bank.heights[i] * fraction, edge ? Infinity : Math.max(0, maximum - bank.heights[to]));
-    bank.heights[i] -= amount;
-    if (edge) spill[right ? "right" : "left"] += amount; else bank.heights[to] += amount;
-  }
-  return spill;
-}
-export function loosenBank(bank: SnowBank, tilt: number) {
-  const spill = { left: 0, right: 0 }, n = bank.heights.length;
-  for (let i = 1; i < n - 1; i++) {
-    if (i > 10 && i < n - 11) continue;
-    const side = i < n / 2 ? "left" : "right";
-    const downhill = Math.abs(tilt) < .22 || (tilt > 0) === (side === "right");
-    const amount = bank.heights[i] * (downhill ? .32 : .06);
-    bank.heights[i] -= amount; spill[side] += amount;
+// Cohesive snow breaks off as a contiguous patch; thin dust never flows.
+export function loosenBank(bank: SnowBank, tilt: number, width = 300, shake = true) {
+  const spill = { left: 0, right: 0 }, n = bank.heights.length, cell = width / (n - 1);
+  if (width <= 0) return spill;
+  for (const side of [-1, 1]) {
+    if (Math.abs(tilt) > .22 && (tilt > 0) !== (side > 0)) continue;
+    const candidates = Array.from({length: 12}, (_, j) => side < 0 ? j + 1 : n - 2 - j);
+    const peak = candidates.reduce((best, i) => bank.heights[i] > bank.heights[best] ? i : best, candidates[0]);
+    if (bank.heights[peak] < 2.2) continue;
+    const patch = candidates.filter(i => Math.abs(i - peak) <= 3);
+    const amount = patch.reduce((sum, i) => sum + bank.heights[i] * (1 - Math.abs(i - peak) * .16) * (shake ? .65 : .5), 0);
+    const area = amount * cell;
+    if (area < 18) continue;
+    const scale = Math.min(1, 90 / area);
+    for (const i of patch) {
+      const take = bank.heights[i] * (1 - Math.abs(i - peak) * .16) * (shake ? .65 : .5) * scale;
+      bank.heights[i] -= take; spill[side < 0 ? "left" : "right"] += take;
+    }
   }
   return spill;
 }

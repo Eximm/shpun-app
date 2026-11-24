@@ -41,23 +41,25 @@ assert.ok(SNOWFALL.flurry.speed>SNOWFALL.light.speed*2);
 assert.ok(SNOWFALL.flurry.drift>SNOWFALL.light.drift*3);
 console.log('PASS distinct phone/desktop snowfall density, speed, drift and bounded particle budget');
 
-const {slideBank,loosenBank,landSnow,fallSnow}=moduleValue.exports;
+const {loosenBank,landSnow,fallSnow}=moduleValue.exports;
+for(const roof of [createBank(),createDustedBank(.3)]) {
+  const before=roof.heights.slice();
+  for(let i=0;i<100;i++)assert.deepEqual(loosenBank(roof,.8,300),{left:0,right:0});
+  assert.deepEqual(roof.heights,before,'empty or thin snow cannot drip or produce particles');
+}
 const roof=createBank();roof.heights=roof.heights.map((_,i)=>i>0&&i<47?4:0);
 const roofInitial=volume(roof),beforeStill=roof.heights.slice();
-assert.deepEqual(slideBank(roof,.1,.04,300),{left:0,right:0});assert.deepEqual(roof.heights,beforeStill,'static friction');
-let rightSpill=0,leftSpill=0;
-for(let i=0;i<240;i++){const spill=slideBank(roof,.8,.04,300);rightSpill+=spill.right;leftSpill+=spill.left;}
-assert.equal(leftSpill,0);assert.ok(rightSpill>0 && volume(roof)>0,'partial downhill shedding');
-assert.ok(Math.abs(roofInitial-volume(roof)-rightSpill)<1e-8,'roof transport conserves mass');
-const mirror=createBank();mirror.heights=beforeStill.slice();let mirrorSpill=0;
-for(let i=0;i<240;i++)mirrorSpill+=slideBank(mirror,-.8,.04,300).left;
-assert.ok(Math.abs(mirrorSpill-rightSpill)<1e-8,'left and right physics mirror each other');
-const preShake=volume(roof),loose=loosenBank(roof,.8);
-assert.ok(loose.right>loose.left);assert.ok(Math.abs(preShake-volume(roof)-loose.left-loose.right)<1e-8);
+const right=loosenBank(roof,.8,300,false);
+assert.equal(right.left,0);assert.ok(right.right*300/47>=18 && volume(roof)>0,'one cohesive downhill patch');
+assert.ok(Math.abs(roofInitial-volume(roof)-right.right)<1e-8,'detached patch conserves mass');
+const mirror=createBank();mirror.heights=beforeStill.slice();const left=loosenBank(mirror,-.8,300,false);
+assert.ok(Math.abs(left.left-right.right)<1e-8);assert.equal(left.right,0);
+const preShake=volume(roof),loose=loosenBank(roof,.8,300);
+assert.ok(loose.right>0 && loose.left===0);assert.ok(Math.abs(preShake-volume(roof)-loose.right)<1e-8);
 const lower=createBank(),area=80,remainder=landSnow(lower,.8,area,500,8);
 assert.ok(Math.abs(volume(lower)*500/47+remainder-area)<1e-8,'landing conserves area across tile widths');
 const full=createBank();full.heights.fill(8);assert.equal(landSnow(full,.5,80,300,8),80,'full roof cannot create or hide mass');
 const airborne={x:0,y:0,vx:10,vy:0,area:8,age:0};
 for(let i=0;i<25;i++)fallSnow(airborne,.04,.6);
 assert.ok(airborne.x>60 && airborne.y>180 && airborne.vy>370,'downward gravity and downhill acceleration');
-console.log('PASS roof friction, mirrored downhill shedding, partial shake, mass conservation and ballistic landing');
+console.log('PASS no empty/thin snow drips, cohesive patches, mirrored shedding, partial shake, mass conservation and ballistic landing');

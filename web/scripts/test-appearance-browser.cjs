@@ -169,6 +169,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_PACKAGE || "playwright");
     const phoneCase=await setup("winter",{hasTouch:true,viewport:{width:393,height:852}});
     await phoneCase.context.addInitScript(()=>{
       window.__motionRequests=0;window.__motionResult="granted";window.__roofChunks=0;
+      localStorage.setItem("shpun.winter.snowbanks.v1",JSON.stringify({version:1,banks:[["/home|home-balance",{seed:.5,heights:Array.from({length:48},(_,i)=>i>0&&i<47?4:0)}]]}));
       const ellipse=CanvasRenderingContext2D.prototype.ellipse;
       CanvasRenderingContext2D.prototype.ellipse=function(...args){if(this.canvas.classList.contains("seasonal-particles"))window.__roofChunks++;return ellipse.apply(this,args);};
       Object.defineProperty(DeviceMotionEvent,"requestPermission",{configurable:true,value:async()=>{window.__motionRequests++;return window.__motionResult;}});
@@ -203,6 +204,14 @@ const { chromium } = require(process.env.PLAYWRIGHT_PACKAGE || "playwright");
     await phoneCase.page.getByRole("switch",{name:"Движение телефона",exact:true}).click();
     await phoneCase.page.getByRole("status").filter({hasText:"Доступ к движению телефона не разрешён"}).waitFor();
     assert.equal(await phoneCase.page.getByRole("switch",{name:"Движение телефона",exact:true}).isChecked(),false);
+    await phoneCase.page.evaluate(()=>window.__motionResult="granted");
+    await phoneCase.page.getByRole("switch",{name:"Движение телефона",exact:true}).check();
+    await phoneCase.page.getByRole("button",{name:"Готово",exact:true}).click();
+    await phoneCase.page.evaluate(()=>{window.__tiltTimer=setInterval(()=>window.dispatchEvent(new DeviceMotionEvent("devicemotion",{accelerationIncludingGravity:{x:-6,y:0,z:7.7},acceleration:{x:0,y:0,z:0}})),50);});
+    await phoneCase.page.waitForTimeout(3300);
+    const heldChunks=await phoneCase.page.evaluate(()=>window.__roofChunks);
+    await phoneCase.page.waitForTimeout(1100);
+    assert.equal(await phoneCase.page.evaluate(()=>window.__roofChunks),heldChunks,"holding a tilt does not produce a continuous snow stream");
     await phoneCase.context.close();
     console.log("PASS explicit sensor permission, short shake effect, cooldown, no destructive actions, opt-out and permission denial");
 

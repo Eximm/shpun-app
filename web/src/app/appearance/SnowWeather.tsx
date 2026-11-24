@@ -2,12 +2,12 @@ import { createPortal } from "react-dom";
 import { useEffect, useId, useRef, useState } from "react";
 import { useI18n } from "../../shared/i18n";
 import { useAppearance } from "./AppearanceProvider";
-import { bankPath, brushBank, createDustedBank, depositFlake, growBank, restoreBanks, serializeBanks, snowOpacity, snowfallCount, SNOWFALL, slideBank, loosenBank, landSnow, fallSnow, type SnowChunk, type SnowBank } from "./snowModel";
+import { bankPath, brushBank, createDustedBank, depositFlake, growBank, restoreBanks, serializeBanks, snowOpacity, snowfallCount, SNOWFALL, loosenBank, landSnow, fallSnow, type SnowChunk, type SnowBank } from "./snowModel";
 import { WINTER_ACTIVITIES_ENABLED } from "./winterFeatures";
 import { useWinterSound } from "./winterSound";
 
 const BANKS_KEY = "shpun.winter.snowbanks.v1";
-type Surface = { id: number; element: HTMLElement; bank: SnowBank; x: number; y: number; width: number; limit: number; visible: boolean; borderTop: number; borderLeft: number; navigation: boolean; spillLeft: number; spillRight: number };
+type Surface = { id: number; element: HTMLElement; bank: SnowBank; x: number; y: number; width: number; limit: number; visible: boolean; borderTop: number; borderLeft: number; navigation: boolean; releaseArmed: boolean; releaseAt: number };
 type Cap = { id: number; x: number; y: number; width: number; path: string; opacity: number; element: HTMLElement; borderTop: number; borderLeft: number };
 type Flake = { x: number; y: number; speed: number; radius: number; phase: number; settles: boolean; life?: number };
 type Puff = { x: number; y: number; vx: number; vy: number; life: number };
@@ -84,7 +84,7 @@ export function SnowWeather() {
         if (savedBanks.size > 64) savedBanks.delete(savedBanks.keys().next().value!);
         element.classList.add("snow-bearing-surface"); decorated.add(element);
         const css = getComputedStyle(element);
-        const surface = old.get(element) ?? { id: sequence.current++, element, bank, x: 0, y: 0, width: 0, limit: 17, visible: true, borderTop: 0, borderLeft: 0, navigation: element === navigation, spillLeft: 0, spillRight: 0 };
+        const surface = old.get(element) ?? { id: sequence.current++, element, bank, x: 0, y: 0, width: 0, limit: 17, visible: true, borderTop: 0, borderLeft: 0, navigation: element === navigation, releaseArmed: true, releaseAt: -Infinity };
         const positioned = { ...surface, x: box.left + 8, y: box.top, width: Math.max(1, box.width - 16), limit: element === navigation ? 8 : Math.max(3, Math.min(17, gap - 2)), visible: element === navigation || (box.top > headerBottom + 18 && box.top < height - 65),
           borderTop: parseFloat(css.borderTopWidth) || 0, borderLeft: parseFloat(css.borderLeftWidth) || 0 };
         old.set(element, positioned);
@@ -101,15 +101,11 @@ export function SnowWeather() {
     const leave = () => { pointerX = -1000; pointerY = -1000; };
     const recycle = (p: Flake, top = true) => { p.x = Math.random() * width; p.y = top ? -10 - Math.random() * 30 : Math.random() * height; };
     const shed = (surface: Surface, spill: { left: number; right: number }, tilt: number) => {
-      // Batching subpixel spills avoids a spray of dots or unbounded particle counts.
-      surface.spillLeft += spill.left * surface.width / 47;
-      surface.spillRight += spill.right * surface.width / 47;
       for (const side of [-1, 1]) {
-        const key = side < 0 ? "spillLeft" : "spillRight";
-        if (surface[key] < 1 || chunks.length >= 80) continue;
+        const area = spill[side < 0 ? "left" : "right"] * surface.width / 47;
+        if (area < 18 || chunks.length >= 48) continue;
         chunks.push({ x: surface.x + (side < 0 ? -10 : surface.width + 10), y: surface.y - 2,
-          vx: side * (24 + Math.abs(tilt) * 70), vy: 6, area: surface[key], age: 0 });
-        surface[key] = 0;
+          vx: side * (12 + Math.abs(tilt) * 24), vy: 8, area, age: 0 });
       }
     };
     const frame = (time: number) => {
@@ -124,7 +120,7 @@ export function SnowWeather() {
       else if (Number.isFinite(movement.shakeAt) && movement.shakeAt !== handledShake) {
         handledShake = movement.shakeAt; gustUntil = time + 2400;
         for (const surface of surfaces.current) if (surface.visible && !surface.navigation)
-          shed(surface, loosenBank(surface.bank, movement.wind), movement.wind);
+          shed(surface, loosenBank(surface.bank, movement.wind, surface.width), movement.wind);
         // A temporary foreground layer makes a shake visible even in light snow.
         const extra = Math.min(70, Math.round(width / 8));
         for (let i = 0; i < extra && particles.length < 310; i++) particles.push({
@@ -144,7 +140,14 @@ export function SnowWeather() {
           if (!surface.visible) continue;
           growBank(surface.bank, dt, snowfall);
           for (let i = 0; i < surface.bank.heights.length; i++) surface.bank.heights[i] = Math.min(surface.limit, surface.bank.heights[i]);
-          if (device.enabled && !surface.navigation) shed(surface, slideBank(surface.bank, movement.wind, dt, surface.width, surface.limit), movement.wind);
+          if (device.enabled && !surface.navigation) {
+            const tilt = movement.wind;
+            if (Math.abs(tilt) < .18 && time - surface.releaseAt > 1600) surface.releaseArmed = true;
+            if (surface.releaseArmed && Math.abs(tilt) > .45 && time - surface.releaseAt > 1600) {
+              surface.releaseArmed = false; surface.releaseAt = time;
+              shed(surface, loosenBank(surface.bank, tilt, surface.width, false), tilt);
+            }
+          }
         }
         for (let index = particles.length - 1; index >= 0; index--) {
           const p = particles[index];
@@ -186,7 +189,9 @@ export function SnowWeather() {
           if (chunk.area < .05 || chunk.y > height + 20 || chunk.x < -30 || chunk.x > width + 30 || chunk.age > 6) { chunks.splice(i, 1); continue; }
           ctx.globalAlpha = Math.min(1, Math.max(0, (6 - chunk.age) / .4)); ctx.fillStyle = "#f1faff";
           const radius = Math.max(1.2, Math.min(6, Math.sqrt(chunk.area / Math.PI)));
-          ctx.beginPath(); ctx.ellipse(chunk.x, chunk.y, radius * 1.25, radius * .75, chunk.vx * .003, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(chunk.x, chunk.y, radius, radius * .8, chunk.age * .9, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(chunk.x - radius * .55, chunk.y + radius * .2, radius * .55, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(chunk.x + radius * .45, chunk.y - radius * .3, radius * .6, 0, Math.PI * 2); ctx.fill();
         }
         for (let i = puffs.current.length - 1; i >= 0; i--) {
           const p = puffs.current[i]; p.life -= dt; p.vy += 110 * dt; p.x += p.vx * dt; p.y += p.vy * dt;
