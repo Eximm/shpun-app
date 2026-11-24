@@ -130,3 +130,8 @@ export function detachUnsupportedBank(bank: SnowBank, width: number) {
   }
   return patches;
 }
+
+export function canvasClientTransform(bitmapWidth: number, bitmapHeight: number, box: { left: number; top: number; width: number; height: number }) {
+  const a = bitmapWidth / Math.max(1, box.width), d = bitmapHeight / Math.max(1, box.height);
+  return { a, d, e: -box.left * a, f: -box.top * d };
+}

@@ -52,3 +52,22 @@ near(screenGravity(normalizeMotion({x:-9.8,y:0,z:0},true),90),0,1);
 near(screenGravity(normalizeMotion({x:9.8,y:0,z:0},true),270),0,1);
 assert.equal(normalizeMotion(null,true),null);
 console.log('PASS Apple CoreMotion polarity, iPad desktop mode and unchanged Android convention');
+
+let gentle=updatePhoneSnow(newPhoneSnowState(),g,zero,0);
+gentle=updatePhoneSnow(gentle,g,{x:5,y:0,z:0},200);
+gentle=updatePhoneSnow(gentle,g,{x:-5,y:0,z:0},280);
+assert.equal(gentle.shakeAt,280,'moderate 80ms opposing impulses trigger a shake');
+let rawOnly=updatePhoneSnow(newPhoneSnowState(),g,zero,0);
+rawOnly=updatePhoneSnow(rawOnly,{x:6,y:0,z:9.8},zero,200);
+rawOnly=updatePhoneSnow(rawOnly,{x:-6,y:0,z:9.8},zero,280);
+assert.equal(rawOnly.shakeAt,280,'zero linear acceleration falls back to raw motion');
+let turn=updatePhoneSnow(newPhoneSnowState(),g,{x:5,y:0,z:0},200);
+turn=updatePhoneSnow(turn,g,{x:0,y:5,z:0},280);
+assert.equal(turn.shakeAt,-Infinity,'orthogonal motion is not an opposing shake');
+console.log('PASS moderate iPhone shakes, short opposing pulses, zero-linear fallback and orthogonal rejection');
+
+let shortPeak=updatePhoneSnow(newPhoneSnowState(),g,zero,0);
+shortPeak=updatePhoneSnow(shortPeak,g,{x:5,y:0,z:0},200);
+shortPeak=updatePhoneSnow(shortPeak,g,zero,260);
+shortPeak=updatePhoneSnow(shortPeak,g,{x:-5,y:0,z:0},280);
+assert.equal(shortPeak.shakeAt,280,'short impulse after a nearby idle sensor sample is never dropped');

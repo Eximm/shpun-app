@@ -76,3 +76,12 @@ for(const direction of [{x:1,y:0},{x:-1,y:0},{x:0,y:-1},{x:0,y:1}]){
   assert.ok(Math.abs(c.x-direction.x*190)<1e-8 && Math.abs(c.y-direction.y*190)<1e-8,'ballistics follows all gravity directions');
 }
 console.log('PASS full unsupported roof release, no regrowth emissions, conserved slab mass and four-way gravity');
+
+const {canvasClientTransform}=moduleValue.exports;
+for(const box of [{left:0,top:0,width:393,height:852},{left:0,top:20,width:341.91,height:741.24},{left:12,top:-16,width:786,height:1704}]){
+ const m=canvasClientTransform(590,1278,box),client={x:120,y:240};
+ const bitmap={x:client.x*m.a+m.e,y:client.y*m.d+m.f};
+ assert.ok(Math.abs(box.left+bitmap.x/590*box.width-client.x)<1e-8);
+ assert.ok(Math.abs(box.top+bitmap.y/1278*box.height-client.y)<1e-8,'DPR/zoom/offset never shift brush animation');
+}
+console.log('PASS client-to-canvas registration with DPR, body zoom and canvas offsets');

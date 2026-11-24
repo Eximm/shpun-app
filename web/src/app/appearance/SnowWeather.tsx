@@ -2,7 +2,7 @@ import { createPortal } from "react-dom";
 import { useEffect, useId, useRef, useState } from "react";
 import { useI18n } from "../../shared/i18n";
 import { useAppearance } from "./AppearanceProvider";
-import { bankPath, brushBank, createDustedBank, depositFlake, growBank, restoreBanks, serializeBanks, snowOpacity, snowfallCount, SNOWFALL, loosenBank, landSnow, fallSnow, detachUnsupportedBank, type SnowChunk, type SnowBank } from "./snowModel";
+import { bankPath, brushBank, createDustedBank, depositFlake, growBank, restoreBanks, serializeBanks, snowOpacity, snowfallCount, SNOWFALL, loosenBank, landSnow, fallSnow, detachUnsupportedBank, canvasClientTransform, type SnowChunk, type SnowBank } from "./snowModel";
 import { WINTER_ACTIVITIES_ENABLED } from "./winterFeatures";
 import { useWinterSound } from "./winterSound";
 
@@ -30,7 +30,7 @@ export function SnowWeather() {
   const persistence = useRef(persist); persistence.current = persist;
   const sequence = useRef(1);
   const puffs = useRef<Puff[]>([]);
-  const drag = useRef<{ id: number; x: number } | null>(null);
+  const drag = useRef<{ id: number; x: number; y: number } | null>(null);
   const [caps, setCaps] = useState<Cap[]>([]);
   const gradientId = useId().replace(/:/g, "");
   const collectedFraction = useRef(0);
@@ -140,7 +140,10 @@ export function SnowWeather() {
       }
       const gustStrength = Math.max(0, (gustUntil - time) / 2400);
       if ((gustStrength > 0) !== previousGust) { previousGust = gustStrength > 0; setGust(previousGust); }
-      ctx.clearRect(0, 0, width, height);
+      ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, target.width, target.height);
+      const canvasBox = target.getBoundingClientRect();
+      const transform = canvasClientTransform(target.width, target.height, canvasBox);
+      ctx.setTransform(transform.a, 0, 0, transform.d, transform.e, transform.f);
       if (!modal) {
         for (const surface of surfaces.current) {
           if (gravity.y <= .25) {
@@ -236,10 +239,11 @@ export function SnowWeather() {
       for (const element of decorated) element.classList.remove("snow-bearing-surface"); };
   }, [motion, snowfall, savedBanks]);
 
-  const sweep = (cap: Cap, clientX: number, whole = false) => {
+  const sweep = (cap: Cap, clientX: number, clientY?: number, whole = false) => {
     const surface = surfaces.current.find((s) => s.id === cap.id); if (!surface) return;
     const liveBox = surface.element.getBoundingClientRect();
     const x = Math.max(0, Math.min(1, (clientX - liveBox.left - 8) / Math.max(1, liveBox.width - 16)));
+    const originY = clientY ?? liveBox.top - surface.bank.heights[Math.round(x * 47)] / 2;
     const removed = whole ? surface.bank.heights.reduce((sum, h) => sum + h, 0) : brushBank(surface.bank, x, Math.max(.09, 40 / surface.width));
     if (whole) surface.bank.heights.fill(0);
     if (removed < .01) return;
@@ -247,7 +251,7 @@ export function SnowWeather() {
     const units = Math.floor(collectedFraction.current);
     if (units > 0) { collectedFraction.current -= units; collectSnow(units); if (WINTER_ACTIVITIES_ENABLED && workshop.snow < 15 && workshop.snow + units >= 15) setHint(true); }
     if (whole) audio.current.play("snow"); else audio.current.brushSnow(Math.min(1, .2 + removed / 5));
-    for (let i = 0; i < 12 && puffs.current.length < 90; i++) puffs.current.push({ x: clientX, y: liveBox.top - 4, vx: (Math.random() - .5) * 120, vy: -20 - Math.random() * 65, life: .6 + Math.random() * .4 });
+    for (let i = 0; i < 12 && puffs.current.length < 90; i++) puffs.current.push({ x: clientX, y: originY, vx: (Math.random() - .5) * 120, vy: -20 - Math.random() * 65, life: .6 + Math.random() * .4 });
     if (whole) persistence.current();
     setCaps((old) => old.map((s) => s.id === cap.id ? { ...s, path: bankPath(surface.bank, surface.width), opacity: snowOpacity(surface.bank) } : s));
   };
@@ -259,12 +263,12 @@ export function SnowWeather() {
     {caps.map((cap) => createPortal(<button key={cap.id} type="button" className="snowdrift" data-snow-id={cap.id} aria-label={t("appearance.snow.brush")} tabIndex={cap.opacity > .05 ? 0 : -1}
       style={{ left: 8 / overlay.scale - cap.borderLeft, top: -22 / overlay.scale - cap.borderTop,
         width: cap.width / overlay.scale, height: 28 / overlay.scale, opacity: cap.opacity }}
-      onPointerDown={(event) => { event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); drag.current = { id: cap.id, x: event.clientX }; sweep(cap, event.clientX); }}
-      onPointerMove={(event) => { if (drag.current?.id !== cap.id) return; const from = drag.current.x; const steps = Math.max(1, Math.ceil(Math.abs(event.clientX - from) / 12));
-        for (let i = 1; i <= steps; i++) sweep(cap, from + (event.clientX - from) * i / steps); drag.current.x = event.clientX; }}
+      onPointerDown={(event) => { event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); drag.current = { id: cap.id, x: event.clientX, y: event.clientY }; sweep(cap, event.clientX, event.clientY); }}
+      onPointerMove={(event) => { if (drag.current?.id !== cap.id) return; const from = drag.current.x, fromY = drag.current.y; const steps = Math.max(1, Math.ceil(Math.abs(event.clientX - from) / 12));
+        for (let i = 1; i <= steps; i++) sweep(cap, from + (event.clientX - from) * i / steps, fromY + (event.clientY - fromY) * i / steps); drag.current.x = event.clientX; drag.current.y = event.clientY; }}
       onPointerUp={() => { drag.current = null; audio.current.stopSnow(); persistence.current(); }} onPointerCancel={() => { drag.current = null; audio.current.stopSnow(); persistence.current(); }}
       onLostPointerCapture={() => audio.current.stopSnow()}
-      onClick={(event) => { if (event.detail === 0) sweep(cap, cap.x + cap.width / 2, true); }}>
+      onClick={(event) => { if (event.detail === 0) sweep(cap, cap.x + cap.width / 2, undefined, true); }}>
       <svg width="100%" height="100%" viewBox={`0 0 ${cap.width} 28`} aria-hidden="true">
         <defs><linearGradient id={`${gradientId}-${cap.id}`} x2="0" y2="1"><stop offset="0%" stopColor="#fff" /><stop offset="55%" stopColor="#edf8ff" /><stop offset="100%" stopColor="#a9cddc" /></linearGradient></defs>
         <path d={cap.path} fill={`url(#${gradientId}-${cap.id})`} />

@@ -230,14 +230,21 @@ const browserType = require(process.env.PLAYWRIGHT_PACKAGE || "playwright")[engi
       window.__gravity={x:0,y:/iPhone/.test(navigator.userAgent)?-9.8:9.8,z:0};window.__screenAngle=0;window.__fallTrace=[];
       Object.defineProperty(screen,"orientation",{configurable:true,value:document.createDocumentFragment()});
       Object.defineProperty(screen.orientation,"angle",{configurable:true,get:()=>window.__screenAngle});
-      localStorage.setItem("shpun.winter.snowbanks.v1",JSON.stringify({version:1,banks:["/home|home-balance","/winter|bottom-navigation"].map(key=>[key,{seed:.5,heights:Array.from({length:48},(_,i)=>i>0&&i<47?4:0)}])}));
+      localStorage.setItem("shpun.winter.snowbanks.v1",JSON.stringify({version:1,banks:["/home|home-balance","/winter|bottom-navigation"].map(key=>[key,{seed:.5,heights:Array.from({length:48},(_,i)=>i>0&&i<47?12:0)}])}));
       setInterval(()=>window.dispatchEvent(new DeviceMotionEvent("devicemotion",{accelerationIncludingGravity:window.__gravity,acceleration:{x:0,y:0,z:0}})),50);
       const clear=CanvasRenderingContext2D.prototype.clearRect,arc=CanvasRenderingContext2D.prototype.arc;
       CanvasRenderingContext2D.prototype.clearRect=function(...args){this.__firstArc=true;return clear.apply(this,args);};
-      CanvasRenderingContext2D.prototype.arc=function(...args){if(this.__firstArc&&this.canvas.classList.contains("seasonal-particles")){window.__fallTrace.push([args[0],args[1]]);this.__firstArc=false;}return arc.apply(this,args);};
+      CanvasRenderingContext2D.prototype.arc=function(...args){
+        if(this.__firstArc&&this.canvas.classList.contains("seasonal-particles")){window.__fallTrace.push([args[0],args[1]]);this.__firstArc=false;}
+        if(window.__brushPoints&&window.__brushPoints.length<12&&args[2]===1.8&&this.canvas.classList.contains("seasonal-particles")){
+          const t=this.getTransform(),r=this.canvas.getBoundingClientRect();
+          window.__brushPoints.push({x:r.left+(args[0]*t.a+args[1]*t.c+t.e)/this.canvas.width*r.width,y:r.top+(args[0]*t.b+args[1]*t.d+t.f)/this.canvas.height*r.height});
+        }
+        return arc.apply(this,args);
+      };
     });
     async function gravityScenario(vector,angle,axis,sign,unsupported){
-      await gravityCase.page.reload();await gravityCase.page.locator(".home-page").waitFor();
+      await gravityCase.page.waitForLoadState("networkidle");await gravityCase.page.reload();await gravityCase.page.locator(".home-page").waitFor();
       await gravityCase.page.waitForTimeout(150);
       await gravityCase.page.evaluate(({vector,angle})=>{window.__gravity=/iPhone/.test(navigator.userAgent)?{x:-vector.x,y:-vector.y,z:-vector.z}:vector;window.__screenAngle=angle;if(angle)screen.orientation.dispatchEvent(new Event("change"));},{vector,angle});
       await gravityCase.page.waitForTimeout(1100);
@@ -250,11 +257,28 @@ const browserType = require(process.env.PLAYWRIGHT_PACKAGE || "playwright")[engi
       assert.ok(displacement.n>=5&&displacement.sum*sign>3,"flakes follow screen-space gravity "+JSON.stringify({vector,angle,displacement}));
       if(unsupported)assert.equal(await gravityCase.page.locator(".home-balance-card .snowdrift").evaluate(el=>Number(el.style.opacity)),0,"unsupported snow does not regrow");
     }
+    for(const offset of [0,18]){
+      await gravityCase.page.waitForLoadState("networkidle");await gravityCase.page.reload();await gravityCase.page.locator(".home-page").waitFor();await gravityCase.page.waitForTimeout(250);
+      await gravityCase.page.locator("canvas.seasonal-particles").evaluate((el,offset)=>{el.style.transform=`translateY(${offset}px) scaleY(.93)`;el.style.transformOrigin="top left";},offset);
+      await gravityCase.page.waitForTimeout(80);
+      const point=await gravityCase.page.locator(".home-balance-card .snowdrift").evaluate(el=>{const r=el.getBoundingClientRect(),x=r.x+r.width/2;for(let y=r.top+.5;y<r.bottom;y+=.5)if(document.elementFromPoint(x,y)?.closest(".snowdrift")===el)return{x,y:y+2};return null;});
+      assert.ok(point,"accumulated snow is brushable");
+      await gravityCase.page.evaluate(()=>{window.__brushPoints=[];});
+      await gravityCase.page.mouse.move(point.x,point.y);await gravityCase.page.mouse.down();await gravityCase.page.waitForTimeout(100);await gravityCase.page.mouse.up();
+      const dust=await gravityCase.page.evaluate(()=>window.__brushPoints);
+      assert.equal(dust.length,12,"brush produces a bounded dust burst");
+      assert.ok(dust.every(p=>Math.abs(p.y-point.y)<6&&p.y<=point.y+1.5),"dust painted at the actual brush point despite canvas offset "+JSON.stringify({offset,point,dust}));
+    }
+    await gravityCase.page.waitForLoadState("networkidle");await gravityCase.page.reload();await gravityCase.page.locator(".home-page").waitFor();await gravityCase.page.waitForTimeout(150);
+    await gravityCase.page.evaluate(()=>{window.__shakePulse=(x)=>{const apple=/iPhone/.test(navigator.userAgent),sign=apple?-1:1;window.dispatchEvent(new DeviceMotionEvent("devicemotion",{accelerationIncludingGravity:{x:x*sign,y:9.8*sign,z:0},acceleration:{x:x*sign,y:0,z:0}}));};window.__shakePulse(5);});
+    await gravityCase.page.waitForTimeout(85);await gravityCase.page.evaluate(()=>window.__shakePulse(-5));
+    await gravityCase.page.locator(".snow-weather--gust").waitFor();
+    console.log("PASS brush origin with thick snow and shifted/scaled canvas; moderate iPhone shake produces a gust");
     await gravityScenario({x:-9.8,y:0,z:0},0,0,1,true);
     await gravityScenario({x:0,y:-9.8,z:0},0,1,-1,true);
     await gravityScenario({x:9.8,y:0,z:0},90,1,1,false);
     await gravityScenario({x:-9.8,y:0,z:0},270,1,1,false);
-    await gravityCase.context.close();
+    await gravityCase.page.waitForLoadState("networkidle");await gravityCase.context.close();
     console.log("PASS locked 90/180-degree roof release, reversed snowfall, no unsupported regrowth and screen auto-rotation");
 
     const reduced=await setup("winter",{reducedMotion:"reduce"});
@@ -262,8 +286,8 @@ const browserType = require(process.env.PLAYWRIGHT_PACKAGE || "playwright")[engi
     await reduced.page.getByRole("button",{name:"Настройки зимней темы",exact:true}).click();
     assert.ok(await reduced.page.getByRole("switch",{name:"Движение и эффекты",exact:true}).isDisabled());
     assert.equal(await reduced.page.locator(".winter-playground,.seasonal-tabs").count(),0);
-    await reduced.context.close();assert.deepEqual(errors,[]);
-    console.log("PASS compact winter-only settings, phone/tablet/desktop bounds, all controls, persistence, native snow scrolling, continuous audio, no early activities, admin saving and reduced motion");
+    await reduced.page.waitForLoadState("networkidle");await reduced.context.close();assert.deepEqual(errors,[]);
+    console.log(process.env.APPEARANCE_FOCUS==="gravity" ? "PASS targeted motion, brush registration, orientation and reduced-motion cases" : "PASS compact winter-only settings, phone/tablet/desktop bounds, all controls, persistence, native snow scrolling, continuous audio, no early activities, admin saving and reduced motion");
   } catch(error){for(const context of browser.contexts())for(const page of context.pages())console.error((await page.locator("body").innerText()).slice(0,5000));throw error;}
   finally{await browser.close();await server.close();}
 })().catch(error=>{console.error(error);process.exit(1)});
