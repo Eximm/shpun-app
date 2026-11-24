@@ -157,6 +157,31 @@ const { chromium } = require(process.env.PLAYWRIGHT_PACKAGE || "playwright");
     await weather.page.waitForTimeout(18000);
     assert.ok(await weather.page.locator(".snowdrift").count() >= 4,"snow accumulates on actual tile tops");
     if(screenshotDir) await weather.page.screenshot({path:path.join(screenshotDir,"winter-snowdrifts.png")});
+    const assertSnowAlignment = async (label) => {
+      const result = await weather.page.evaluate(() => {
+        const tiles=Array.from(document.querySelectorAll(".main .home-balance-card,.main .card,.main [data-snow-surface]")).map(node=>node.getBoundingClientRect());
+        const errors=[];
+        for(const snow of document.querySelectorAll(".snowdrift svg")) {
+          const box=snow.getBoundingClientRect();
+          const tile=tiles.find(rect=>Math.abs(rect.left+8-box.left)<1.2 && Math.abs(rect.width-16-box.width)<1.2 && Math.abs(rect.top-(box.top+22))<1.2);
+          if(!tile || Math.abs(tile.top-(box.top+22))>1.2 || Math.abs(box.height-28)>1.2) errors.push({snow:{left:box.left,top:box.top,width:box.width,height:box.height},tile:tile?{top:tile.top,left:tile.left,width:tile.width}:null});
+        }
+        return {count:document.querySelectorAll(".snowdrift").length,errors};
+      });
+      assert.ok(result.count>0,`snow visible: ${label}`);
+      assert.deepEqual(result.errors,[],`snow follows actual tile tops: ${label}`);
+    };
+    for(const width of [360,393,768,1280]) {
+      await weather.page.setViewportSize({width,height:1000});await weather.page.waitForTimeout(350);
+      await assertSnowAlignment(`${width}px`);
+      await weather.page.evaluate(()=>scrollTo(0,100));await weather.page.waitForTimeout(250);
+      await assertSnowAlignment(`${width}px scrolled`);
+      await weather.page.evaluate(()=>scrollTo(0,0));await weather.page.waitForTimeout(250);
+    }
+    await weather.page.setViewportSize({width:393,height:852});await weather.page.waitForTimeout(350);
+    if(screenshotDir) await weather.page.screenshot({path:path.join(screenshotDir,"winter-snow-aligned-mobile.png")});
+    await weather.page.setViewportSize({width:1280,height:1000});await weather.page.waitForTimeout(350);
+    await weather.page.waitForTimeout(8000);
     const hitPoint = async () => weather.page.locator(".snowdrift").first().evaluate(button=>{
       const rect=button.getBoundingClientRect(), x=rect.x+rect.width/2;
       for(let y=rect.y+1;y<rect.bottom;y+=.5) if(document.elementFromPoint(x,y)?.closest(".snowdrift")===button) return {x,y};

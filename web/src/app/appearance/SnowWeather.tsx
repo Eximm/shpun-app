@@ -15,7 +15,11 @@ export function SnowWeather() {
   const { play } = useWinterSound();
   const audio = useRef(play); audio.current = play;
   const canvas = useRef<HTMLCanvasElement>(null);
+  const scaleProbe = useRef<HTMLSpanElement>(null);
+  const [overlay, setOverlay] = useState({ scale: 1, x: 0, y: 0 });
   const surfaces = useRef<Surface[]>([]);
+  const surfaceCache = useRef(new WeakMap<HTMLElement, Surface>());
+  const sequence = useRef(1);
   const puffs = useRef<Puff[]>([]);
   const drag = useRef<{ id: number; x: number } | null>(null);
   const [caps, setCaps] = useState<Cap[]>([]);
@@ -28,11 +32,18 @@ export function SnowWeather() {
     if (!motion || snowfall === "off") { setCaps([]); return; }
     const target = canvas.current, ctx = target?.getContext("2d");
     if (!target || !ctx) return;
-    let width = 0, height = 0, raf = 0, previous = 0, published = 0, layoutAt = 0, dirty = true, nextId = Math.max(0, ...surfaces.current.map((s) => s.id)) + 1;
+    let width = 0, height = 0, raf = 0, previous = 0, published = 0, layoutAt = 0, dirty = true;
     let pointerX = -1000, pointerY = -1000;
     const particles: Flake[] = [];
     const resize = () => {
       width = innerWidth; height = innerHeight;
+      // body uses CSS zoom (.87 mobile / .92 tablet). Card DOMRects and
+      // pointer coordinates are visual pixels; positioned children use CSS
+      // pixels. Measure the actual scale instead of applying that zoom twice.
+      const measured = (scaleProbe.current?.getBoundingClientRect().width ?? 100) / 100;
+      const scale = Number.isFinite(measured) && measured > 0 ? measured : 1;
+      const origin = target.parentElement!.getBoundingClientRect();
+      setOverlay({ scale, x: origin.left, y: origin.top });
       const dpr = Math.min(devicePixelRatio || 1, 1.5);
       target.width = Math.round(width * dpr); target.height = Math.round(height * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       dirty = true;
@@ -45,14 +56,16 @@ export function SnowWeather() {
       const main = document.querySelector(".app[data-seasonal=winter] > .main");
       const elements = main ? Array.from(main.querySelectorAll<HTMLElement>(".home-balance-card,.card,[data-snow-surface]"))
         .filter((el) => !el.parentElement?.closest(".card,.home-balance-card,[data-snow-surface]")) : [];
-      const old = new Map(surfaces.current.map((s) => [s.element, s]));
+      const old = surfaceCache.current;
       const headerBottom = document.querySelector(".topbar")?.getBoundingClientRect().bottom ?? 70;
       const boxes = elements.slice(0, 16).map((element) => ({ element, box: element.getBoundingClientRect() }));
       surfaces.current = boxes.filter(({ box }) => box.width > 85 && box.height > 40 && box.top > headerBottom + 18 && box.top < height - 65).map(({ element, box }) => {
         const above = boxes.filter((other) => other.element !== element && other.box.bottom <= box.top + 1 && other.box.right > box.left && other.box.left < box.right);
         const gap = above.length ? box.top - Math.max(...above.map((other) => other.box.bottom)) : 30;
-        const surface = old.get(element) ?? { id: nextId++, element, bank: createBank(Math.random()), x: 0, y: 0, width: 0, limit: 17 };
-        return { ...surface, x: box.left + 8, y: box.top, width: Math.max(1, box.width - 16), limit: Math.max(3, Math.min(17, gap - 2)) };
+        const surface = old.get(element) ?? { id: sequence.current++, element, bank: createBank(Math.random()), x: 0, y: 0, width: 0, limit: 17 };
+        const positioned = { ...surface, x: box.left + 8, y: box.top, width: Math.max(1, box.width - 16), limit: Math.max(3, Math.min(17, gap - 2)) };
+        old.set(element, positioned);
+        return positioned;
       });
       dirty = false;
     };
@@ -67,7 +80,8 @@ export function SnowWeather() {
     const frame = (time: number) => {
       if (previous && time - previous < 32) { raf = requestAnimationFrame(frame); return; }
       const dt = Math.min(previous ? (time - previous) / 1000 : 0, .06); previous = time;
-      if (dirty || time - layoutAt > 650) { layout(); layoutAt = time; }
+      const layoutChanged = dirty || time - layoutAt > 650;
+      if (layoutChanged) { layout(); layoutAt = time; }
       const modal = !!document.querySelector("dialog[open]");
       ctx.clearRect(0, 0, width, height);
       if (!modal) {
@@ -96,7 +110,7 @@ export function SnowWeather() {
           ctx.globalAlpha = p.life; ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(p.x, p.y, 1.8, 0, Math.PI * 2); ctx.fill();
         }
       }
-      if (time - published > 160) {
+      if (layoutChanged || time - published > 160) {
         setCaps(modal ? [] : surfaces.current.filter((s) => Math.max(...s.bank.heights) > .6).map((s) => ({ id: s.id, x: s.x, y: s.y, width: s.width, path: bankPath(s.bank, s.width) })));
         published = time;
       }
@@ -127,15 +141,17 @@ export function SnowWeather() {
   };
   if (!motion || snowfall === "off") return null;
   return <div className="snow-weather">
+    <span ref={scaleProbe} className="snow-scale-probe" aria-hidden="true" />
     <canvas className="seasonal-particles" ref={canvas} aria-hidden="true" />
     {caps.map((cap) => <button key={cap.id} type="button" className="snowdrift" data-snow-id={cap.id} aria-label={t("appearance.snow.brush")}
-      style={{ left: cap.x, top: cap.y - 22, width: cap.width }}
+      style={{ left: (cap.x - overlay.x) / overlay.scale, top: (cap.y - 22 - overlay.y) / overlay.scale,
+        width: cap.width / overlay.scale, height: 28 / overlay.scale }}
       onPointerDown={(event) => { event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); drag.current = { id: cap.id, x: event.clientX }; sweep(cap, event.clientX); }}
       onPointerMove={(event) => { if (drag.current?.id !== cap.id) return; const from = drag.current.x; const steps = Math.max(1, Math.ceil(Math.abs(event.clientX - from) / 12));
         for (let i = 1; i <= steps; i++) sweep(cap, from + (event.clientX - from) * i / steps); drag.current.x = event.clientX; }}
       onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }}
       onClick={(event) => { if (event.detail === 0) sweep(cap, cap.x + cap.width / 2, true); }}>
-      <svg width="100%" height="28" viewBox={`0 0 ${cap.width} 28`} aria-hidden="true">
+      <svg width="100%" height="100%" viewBox={`0 0 ${cap.width} 28`} aria-hidden="true">
         <defs><linearGradient id={`${gradientId}-${cap.id}`} x2="0" y2="1"><stop offset="0%" stopColor="#fff" /><stop offset="55%" stopColor="#edf8ff" /><stop offset="100%" stopColor="#a9cddc" /></linearGradient></defs>
         <path d={cap.path} fill={`url(#${gradientId}-${cap.id})`} />
       </svg>
