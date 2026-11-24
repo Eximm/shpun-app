@@ -2,14 +2,14 @@ import { createPortal } from "react-dom";
 import { useEffect, useId, useRef, useState } from "react";
 import { useI18n } from "../../shared/i18n";
 import { useAppearance } from "./AppearanceProvider";
-import { bankCeiling, bankPath, brushBank, createDustedBank, depositFlake, growBank, restoreBanks, serializeBanks, snowOpacity, snowfallCount, SNOWFALL, type SnowBank } from "./snowModel";
+import { bankPath, brushBank, createDustedBank, depositFlake, growBank, restoreBanks, serializeBanks, snowOpacity, snowfallCount, SNOWFALL, slideBank, loosenBank, landSnow, fallSnow, type SnowChunk, type SnowBank } from "./snowModel";
 import { WINTER_ACTIVITIES_ENABLED } from "./winterFeatures";
 import { useWinterSound } from "./winterSound";
 
 const BANKS_KEY = "shpun.winter.snowbanks.v1";
-type Surface = { id: number; element: HTMLElement; bank: SnowBank; x: number; y: number; width: number; limit: number; visible: boolean; borderTop: number; borderLeft: number };
+type Surface = { id: number; element: HTMLElement; bank: SnowBank; x: number; y: number; width: number; limit: number; visible: boolean; borderTop: number; borderLeft: number; navigation: boolean; spillLeft: number; spillRight: number };
 type Cap = { id: number; x: number; y: number; width: number; path: string; opacity: number; element: HTMLElement; borderTop: number; borderLeft: number };
-type Flake = { x: number; y: number; speed: number; radius: number; phase: number; life?: number };
+type Flake = { x: number; y: number; speed: number; radius: number; phase: number; settles: boolean; life?: number };
 type Puff = { x: number; y: number; vx: number; vy: number; life: number };
 
 export function SnowWeather() {
@@ -45,6 +45,7 @@ export function SnowWeather() {
     let pointerX = -1000, pointerY = -1000, gustUntil = 0, handledShake = -Infinity, previousGust = false;
     const particles: Flake[] = [];
     const decorated = new Set<HTMLElement>();
+    const chunks: SnowChunk[] = [];
     const resize = () => {
       width = innerWidth; height = innerHeight;
       // body uses CSS zoom (.87 mobile / .92 tablet). Card DOMRects and
@@ -59,17 +60,19 @@ export function SnowWeather() {
       particles.length = 0;
       const count = snowfallCount(snowfall, width, height);
       for (let i = 0; i < count; i++) particles.push({ x: Math.random() * width, y: (i + Math.random()) / count * height,
-        speed: 26 + Math.random() * 48, radius: .8 + Math.random() * 2.2, phase: Math.random() * 6.28 });
+        speed: 26 + Math.random() * 48, radius: .8 + Math.random() * 2.2, phase: Math.random() * 6.28, settles: i % 4 === 0 });
     };
     const layout = () => {
       const main = document.querySelector(".app[data-seasonal=winter] > .main");
       const elements = main ? Array.from(main.querySelectorAll<HTMLElement>(".home-balance-card,.card,[data-snow-surface]"))
         .filter((el) => !el.parentElement?.closest(".card,.home-balance-card,[data-snow-surface]")) : [];
+      const navigation = document.querySelector<HTMLElement>(".bottomnav");
+      if (navigation) elements.push(navigation);
       const old = surfaceCache.current;
       for (const element of decorated) if (!element.isConnected) { element.classList.remove("snow-bearing-surface"); decorated.delete(element); }
       const headerBottom = document.querySelector(".topbar")?.getBoundingClientRect().bottom ?? 70;
-      const boxes = elements.slice(0, 16).map((element, index) => ({ element, box: element.getBoundingClientRect(),
-        key: `${location.pathname}|${element.dataset.snowKey || (element.classList.contains("home-balance-card") ? "home-balance" : `card-${index}`)}` }));
+      const boxes = elements.filter(el => el !== navigation).slice(0, 16).concat(navigation ? [navigation] : []).map((element, index) => ({ element, box: element.getBoundingClientRect(),
+        key: element === navigation ? "/winter|bottom-navigation" : `${location.pathname}|${element.dataset.snowKey || (element.classList.contains("home-balance-card") ? "home-balance" : `card-${index}`)}` }));
       surfaces.current = boxes.filter(({ box }) => box.width > 85 && box.height > 40).map(({ element, box, key }) => {
         const above = boxes.filter((other) => other.element !== element && other.box.bottom <= box.top + 1 && other.box.right > box.left && other.box.left < box.right);
         const gap = above.length ? box.top - Math.max(...above.map((other) => other.box.bottom)) : 30;
@@ -81,8 +84,8 @@ export function SnowWeather() {
         if (savedBanks.size > 64) savedBanks.delete(savedBanks.keys().next().value!);
         element.classList.add("snow-bearing-surface"); decorated.add(element);
         const css = getComputedStyle(element);
-        const surface = old.get(element) ?? { id: sequence.current++, element, bank, x: 0, y: 0, width: 0, limit: 17, visible: true, borderTop: 0, borderLeft: 0 };
-        const positioned = { ...surface, x: box.left + 8, y: box.top, width: Math.max(1, box.width - 16), limit: Math.max(3, Math.min(17, gap - 2)), visible: box.top > headerBottom + 18 && box.top < height - 65,
+        const surface = old.get(element) ?? { id: sequence.current++, element, bank, x: 0, y: 0, width: 0, limit: 17, visible: true, borderTop: 0, borderLeft: 0, navigation: element === navigation, spillLeft: 0, spillRight: 0 };
+        const positioned = { ...surface, x: box.left + 8, y: box.top, width: Math.max(1, box.width - 16), limit: element === navigation ? 8 : Math.max(3, Math.min(17, gap - 2)), visible: element === navigation || (box.top > headerBottom + 18 && box.top < height - 65),
           borderTop: parseFloat(css.borderTopWidth) || 0, borderLeft: parseFloat(css.borderLeftWidth) || 0 };
         old.set(element, positioned);
         return positioned;
@@ -97,6 +100,18 @@ export function SnowWeather() {
     const move = (event: PointerEvent) => { pointerX = event.clientX; pointerY = event.clientY; };
     const leave = () => { pointerX = -1000; pointerY = -1000; };
     const recycle = (p: Flake, top = true) => { p.x = Math.random() * width; p.y = top ? -10 - Math.random() * 30 : Math.random() * height; };
+    const shed = (surface: Surface, spill: { left: number; right: number }, tilt: number) => {
+      // Batching subpixel spills avoids a spray of dots or unbounded particle counts.
+      surface.spillLeft += spill.left * surface.width / 47;
+      surface.spillRight += spill.right * surface.width / 47;
+      for (const side of [-1, 1]) {
+        const key = side < 0 ? "spillLeft" : "spillRight";
+        if (surface[key] < 1 || chunks.length >= 80) continue;
+        chunks.push({ x: surface.x + (side < 0 ? -10 : surface.width + 10), y: surface.y - 2,
+          vx: side * (24 + Math.abs(tilt) * 70), vy: 6, area: surface[key], age: 0 });
+        surface[key] = 0;
+      }
+    };
     const frame = (time: number) => {
       if (previous && time - previous < 32) { raf = requestAnimationFrame(frame); return; }
       const dt = Math.min(previous ? (time - previous) / 1000 : 0, .06); previous = time;
@@ -108,11 +123,13 @@ export function SnowWeather() {
       if (!device.enabled || modal) { handledShake = movement.shakeAt; gustUntil = 0; }
       else if (Number.isFinite(movement.shakeAt) && movement.shakeAt !== handledShake) {
         handledShake = movement.shakeAt; gustUntil = time + 2400;
+        for (const surface of surfaces.current) if (surface.visible && !surface.navigation)
+          shed(surface, loosenBank(surface.bank, movement.wind), movement.wind);
         // A temporary foreground layer makes a shake visible even in light snow.
         const extra = Math.min(70, Math.round(width / 8));
         for (let i = 0; i < extra && particles.length < 310; i++) particles.push({
           x: Math.random() * width, y: (i + Math.random()) / extra * height,
-          speed: 45 + Math.random() * 65, radius: 1.2 + Math.random() * 2, phase: Math.random() * Math.PI * 2, life: 2.4,
+          speed: 45 + Math.random() * 65, radius: 1.2 + Math.random() * 2, phase: Math.random() * Math.PI * 2, settles: false, life: 2.4,
         });
         for (let i = 0; i < 30 && puffs.current.length < 90; i++) puffs.current.push({
           x: Math.random() * width, y: Math.random() * height, vx: (Math.random() - .5) * 240, vy: -45 - Math.random() * 90, life: .8 + Math.random() * .5,
@@ -126,7 +143,8 @@ export function SnowWeather() {
         for (const surface of surfaces.current) {
           if (!surface.visible) continue;
           growBank(surface.bank, dt, snowfall);
-          for (let i = 0; i < surface.bank.heights.length; i++) surface.bank.heights[i] = Math.min(bankCeiling(surface.bank, i, surface.limit), surface.bank.heights[i]);
+          for (let i = 0; i < surface.bank.heights.length; i++) surface.bank.heights[i] = Math.min(surface.limit, surface.bank.heights[i]);
+          if (device.enabled && !surface.navigation) shed(surface, slideBank(surface.bank, movement.wind, dt, surface.width, surface.limit), movement.wind);
         }
         for (let index = particles.length - 1; index >= 0; index--) {
           const p = particles[index];
@@ -141,14 +159,34 @@ export function SnowWeather() {
             if (p.x < surface.x || p.x > surface.x + surface.width) continue;
             const x = (p.x - surface.x) / surface.width;
             const edge = surface.y - surface.bank.heights[Math.round(x * 47)];
-            if (before <= edge && p.y >= edge) { if (p.life === undefined) depositFlake(surface.bank, x, p.radius * .12);
-              // Depositing must not remove foreground flakes from the lower viewport.
-              break; }
+            if (before <= edge && p.y >= edge && (surface.navigation || p.settles)) {
+              if (p.life === undefined) depositFlake(surface.bank, x, p.radius * .18);
+              // The foreground layer remains free-falling; only a quarter catches on roofs.
+              // Replenish captured flakes over the viewport to preserve lower-screen coverage.
+              recycle(p, surface.navigation); break;
+            }
           }
           if (p.y > height + 12) recycle(p);
           if (p.x < -15) p.x = width + 14; else if (p.x > width + 15) p.x = -14;
           ctx.globalAlpha = (.3 + p.radius * .17) * (p.life === undefined ? 1 : Math.min(1, p.life / .6)); ctx.fillStyle = "#f5fbff";
           ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2); ctx.fill();
+        }
+        for (let i = chunks.length - 1; i >= 0; i--) {
+          const chunk = chunks[i], before = chunk.y;
+          fallSnow(chunk, dt, device.enabled ? movement.wind : 0);
+          for (const surface of surfaces.current) {
+            if (!surface.visible || chunk.x < surface.x || chunk.x > surface.x + surface.width) continue;
+            const x = (chunk.x - surface.x) / surface.width;
+            const edge = surface.y - surface.bank.heights[Math.round(x * 47)];
+            if (before <= edge && chunk.y >= edge) {
+              chunk.area = landSnow(surface.bank, x, chunk.area, surface.width, surface.limit);
+              break;
+            }
+          }
+          if (chunk.area < .05 || chunk.y > height + 20 || chunk.x < -30 || chunk.x > width + 30 || chunk.age > 6) { chunks.splice(i, 1); continue; }
+          ctx.globalAlpha = Math.min(1, Math.max(0, (6 - chunk.age) / .4)); ctx.fillStyle = "#f1faff";
+          const radius = Math.max(1.2, Math.min(6, Math.sqrt(chunk.area / Math.PI)));
+          ctx.beginPath(); ctx.ellipse(chunk.x, chunk.y, radius * 1.25, radius * .75, chunk.vx * .003, 0, Math.PI * 2); ctx.fill();
         }
         for (let i = puffs.current.length - 1; i >= 0; i--) {
           const p = puffs.current[i]; p.life -= dt; p.vy += 110 * dt; p.x += p.vx * dt; p.y += p.vy * dt;

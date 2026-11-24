@@ -6,7 +6,7 @@
 .snow-weather { position: fixed; inset: 0; z-index: 3; pointer-events: none; overflow: hidden; }
 .snow-scale-probe { position: absolute; width: 100px; height: 1px; visibility: hidden; pointer-events: none; }
 .snow-tile-frame { min-width: 0; }
-.app[data-seasonal] .snow-bearing-surface { position: relative; overflow: visible !important; }
+.app[data-seasonal] .snow-bearing-surface:not(.bottomnav) { position: relative; overflow: visible !important; }
 .app[data-seasonal] .snow-bearing-surface > .card__body { border-radius: inherit; overflow: hidden; }
 .snowdrift { position: absolute; z-index: 3; height: 28px; padding: 0; border: 0; background: none; pointer-events: none; touch-action: none; user-select: none; }
 .snowdrift { transition: opacity 350ms linear; animation: snow-bank-arrive 800ms ease-out; }
@@ -184,3 +184,5 @@
 }
 @media (prefers-reduced-motion: reduce) {
 }
+
+.app[data-seasonal] .bottomnav.snow-bearing-surface { overflow: visible; }

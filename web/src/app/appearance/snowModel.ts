@@ -44,7 +44,7 @@ export function growBank(bank: SnowBank, seconds: number, intensity: Snowfall) {
     const x = i / (bank.heights.length - 1);
     const edge = Math.pow(Math.sin(x * Math.PI), .45);
     const shape = .25 + 1.5 * Math.pow(Math.max(0, Math.sin(x * 9 + bank.seed * 8)), 2) + .4 * Math.pow(Math.max(0, Math.cos(x * 21 + bank.seed * 5)), 3);
-    bank.heights[i] = Math.min(bankCeiling(bank, i), bank.heights[i] + dt * rate * shape * edge);
+    bank.heights[i] = Math.min(Math.max(bank.heights[i], bankCeiling(bank, i)), bank.heights[i] + dt * rate * shape * edge);
   }
 }
 export function depositFlake(bank: SnowBank, x: number, amount = .35) {
@@ -52,7 +52,7 @@ export function depositFlake(bank: SnowBank, x: number, amount = .35) {
   const center = x * (bank.heights.length - 1);
   for (let i = 1; i < bank.heights.length - 1; i++) {
     const weight = Math.max(0, 1 - Math.abs(i - center) / 3);
-    bank.heights[i] = Math.min(bankCeiling(bank, i), bank.heights[i] + weight * amount);
+    bank.heights[i] = Math.min(Math.max(bank.heights[i], bankCeiling(bank, i)), bank.heights[i] + weight * amount);
   }
 }
 export function brushBank(bank: SnowBank, x: number, radius = .14): number {
@@ -77,3 +77,50 @@ export function bankPath(bank: SnowBank, width: number): string {
   return path + ` T ${width} 22 L 0 22 Z`;
 }
 export const SNOWMAN_COSTS = [15, 25, 35] as const;
+
+// Conservative height transport; friction holds shallow tilts, downhill edge sheds mass.
+export function slideBank(bank: SnowBank, tilt: number, seconds: number, width: number, maximum = 17) {
+  const spill = { left: 0, right: 0 };
+  const strength = Math.max(0, Math.min(1, Math.abs(tilt)) - .22);
+  if (!strength || seconds <= 0 || width <= 0) return spill;
+  const right = tilt > 0, n = bank.heights.length;
+  const fraction = Math.min(.45, Math.min(.06, seconds) * strength * 150 / (width / (n - 1)));
+  for (let j = 1; j < n - 1; j++) {
+    const i = right ? n - 1 - j : j, to = i + (right ? 1 : -1);
+    const edge = to === 0 || to === n - 1;
+    const amount = Math.min(bank.heights[i] * fraction, edge ? Infinity : Math.max(0, maximum - bank.heights[to]));
+    bank.heights[i] -= amount;
+    if (edge) spill[right ? "right" : "left"] += amount; else bank.heights[to] += amount;
+  }
+  return spill;
+}
+export function loosenBank(bank: SnowBank, tilt: number) {
+  const spill = { left: 0, right: 0 }, n = bank.heights.length;
+  for (let i = 1; i < n - 1; i++) {
+    if (i > 10 && i < n - 11) continue;
+    const side = i < n / 2 ? "left" : "right";
+    const downhill = Math.abs(tilt) < .22 || (tilt > 0) === (side === "right");
+    const amount = bank.heights[i] * (downhill ? .32 : .06);
+    bank.heights[i] -= amount; spill[side] += amount;
+  }
+  return spill;
+}
+// Area is in visual square pixels so chunks conserve snow across different tile widths.
+export function landSnow(bank: SnowBank, x: number, area: number, width: number, maximum = 17) {
+  if (width <= 0 || area <= 0 || !Number.isFinite(area) || x < 0 || x > 1) return area;
+  const cell = width / (bank.heights.length - 1), center = Math.max(1, Math.min(bank.heights.length - 2, Math.round(x * (bank.heights.length - 1))));
+  let left = area;
+  for (const offset of [0,-1,1,-2,2,-3,3]) {
+    const i = center + offset; if (i < 1 || i >= bank.heights.length - 1) continue;
+    const add = Math.min(left / cell, Math.max(0, maximum - bank.heights[i]));
+    bank.heights[i] += add; left -= add * cell;
+  }
+  return Math.max(0, left);
+}
+export type SnowChunk = { x: number; y: number; vx: number; vy: number; area: number; age: number };
+export function fallSnow(chunk: SnowChunk, seconds: number, tilt: number) {
+  const dt = Math.max(0, Math.min(.06, seconds));
+  chunk.x += chunk.vx * dt + .5 * tilt * 210 * dt * dt;
+  chunk.y += chunk.vy * dt + .5 * 380 * dt * dt;
+  chunk.vx += tilt * 210 * dt; chunk.vy += 380 * dt; chunk.age += dt;
+}

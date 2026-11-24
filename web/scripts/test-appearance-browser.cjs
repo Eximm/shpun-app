@@ -94,6 +94,8 @@ const { chromium } = require(process.env.PLAYWRIGHT_PACKAGE || "playwright");
       await page.setViewportSize({width,height:1000});await page.waitForTimeout(250);
       const errors=await page.evaluate(()=>{
         const errors=[];
+        const nav=document.querySelector(".bottomnav");
+        if(getComputedStyle(nav).position!=="fixed"||!nav.querySelector(".snowdrift"))errors.push("navigation snow must preserve fixed navigation");
         for(const top of [40,120,240,80,0]){
           scrollTo({top,behavior:"instant"});
           for(const cap of document.querySelectorAll(".snowdrift")){
@@ -166,7 +168,9 @@ const { chromium } = require(process.env.PLAYWRIGHT_PACKAGE || "playwright");
     await weather.context.close();
     const phoneCase=await setup("winter",{hasTouch:true,viewport:{width:393,height:852}});
     await phoneCase.context.addInitScript(()=>{
-      window.__motionRequests=0;window.__motionResult="granted";
+      window.__motionRequests=0;window.__motionResult="granted";window.__roofChunks=0;
+      const ellipse=CanvasRenderingContext2D.prototype.ellipse;
+      CanvasRenderingContext2D.prototype.ellipse=function(...args){if(this.canvas.classList.contains("seasonal-particles"))window.__roofChunks++;return ellipse.apply(this,args);};
       Object.defineProperty(DeviceMotionEvent,"requestPermission",{configurable:true,value:async()=>{window.__motionRequests++;return window.__motionResult;}});
     });
     await phoneCase.page.reload();await phoneCase.page.locator(".home-page").waitFor();
@@ -177,8 +181,13 @@ const { chromium } = require(process.env.PLAYWRIGHT_PACKAGE || "playwright");
     const reading=async(x)=>phoneCase.page.evaluate(x=>window.dispatchEvent(new DeviceMotionEvent("devicemotion",{accelerationIncludingGravity:{x:0,y:0,z:9.8},acceleration:{x,y:0,z:0}})),x);
     await reading(0);
     await phoneCase.page.getByRole("button",{name:"Готово",exact:true}).click();
+    const roofPath=await phoneCase.page.locator(".home-balance-card .snowdrift path").getAttribute("d");
     await phoneCase.page.waitForTimeout(50);await reading(16);await phoneCase.page.waitForTimeout(140);await reading(-16);
     await phoneCase.page.locator(".snow-weather--gust").waitFor();
+    await phoneCase.page.waitForTimeout(180);
+    assert.notEqual(await phoneCase.page.locator(".home-balance-card .snowdrift path").getAttribute("d"),roofPath,"shake changes the actual roof bank");
+    assert.equal(await phoneCase.page.locator(".bottomnav .snowdrift").count(),1);
+    assert.ok(await phoneCase.page.evaluate(()=>window.__roofChunks>0),"shed roof snow is drawn as falling chunks");
     if(screenshotDir)await phoneCase.page.screenshot({path:path.join(screenshotDir,"winter-shake-gust.png")});
     assert.equal(new URL(phoneCase.page.url()).pathname,"/home");
     assert.equal(await phoneCase.page.evaluate(()=>JSON.parse(localStorage.getItem("shpun.winter.snowman.v1")).snow),0,"shaking never clears banks or awards collected snow");
