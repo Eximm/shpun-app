@@ -1,11 +1,12 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useI18n } from "../../shared/i18n";
 import { useAppearance } from "./AppearanceProvider";
-import { bankCeiling, bankPath, brushBank, createBank, depositFlake, growBank, SNOWFALL, type SnowBank } from "./snowModel";
+import { bankCeiling, bankPath, brushBank, createDustedBank, depositFlake, growBank, restoreBanks, serializeBanks, snowOpacity, SNOWFALL, type SnowBank } from "./snowModel";
 import { useWinterSound } from "./winterSound";
 
+const BANKS_KEY = "shpun.winter.snowbanks.v1";
 type Surface = { id: number; element: HTMLElement; bank: SnowBank; x: number; y: number; width: number; limit: number };
-type Cap = { id: number; x: number; y: number; width: number; path: string };
+type Cap = { id: number; x: number; y: number; width: number; path: string; opacity: number };
 type Flake = { x: number; y: number; speed: number; radius: number; phase: number };
 type Puff = { x: number; y: number; vx: number; vy: number; life: number };
 
@@ -19,6 +20,9 @@ export function SnowWeather() {
   const [overlay, setOverlay] = useState({ scale: 1, x: 0, y: 0 });
   const surfaces = useRef<Surface[]>([]);
   const surfaceCache = useRef(new WeakMap<HTMLElement, Surface>());
+  const [savedBanks] = useState(() => { try { return restoreBanks(localStorage.getItem(BANKS_KEY)); } catch { return new Map<string, SnowBank>(); } });
+  const persist = () => { try { localStorage.setItem(BANKS_KEY, serializeBanks(savedBanks)); } catch { /* session-only snow still works */ } };
+  const persistence = useRef(persist); persistence.current = persist;
   const sequence = useRef(1);
   const puffs = useRef<Puff[]>([]);
   const drag = useRef<{ id: number; x: number } | null>(null);
@@ -32,7 +36,7 @@ export function SnowWeather() {
     if (!motion || snowfall === "off") { setCaps([]); return; }
     const target = canvas.current, ctx = target?.getContext("2d");
     if (!target || !ctx) return;
-    let width = 0, height = 0, raf = 0, previous = 0, published = 0, layoutAt = 0, dirty = true;
+    let width = 0, height = 0, raf = 0, previous = 0, published = 0, layoutAt = 0, savedAt = 0, dirty = true;
     let pointerX = -1000, pointerY = -1000;
     const particles: Flake[] = [];
     const resize = () => {
@@ -58,11 +62,18 @@ export function SnowWeather() {
         .filter((el) => !el.parentElement?.closest(".card,.home-balance-card,[data-snow-surface]")) : [];
       const old = surfaceCache.current;
       const headerBottom = document.querySelector(".topbar")?.getBoundingClientRect().bottom ?? 70;
-      const boxes = elements.slice(0, 16).map((element) => ({ element, box: element.getBoundingClientRect() }));
-      surfaces.current = boxes.filter(({ box }) => box.width > 85 && box.height > 40 && box.top > headerBottom + 18 && box.top < height - 65).map(({ element, box }) => {
+      const boxes = elements.slice(0, 16).map((element, index) => ({ element, box: element.getBoundingClientRect(),
+        key: `${location.pathname}|${element.dataset.snowKey || (element.classList.contains("home-balance-card") ? "home-balance" : `card-${index}`)}` }));
+      surfaces.current = boxes.filter(({ box }) => box.width > 85 && box.height > 40 && box.top > headerBottom + 18 && box.top < height - 65).map(({ element, box, key }) => {
         const above = boxes.filter((other) => other.element !== element && other.box.bottom <= box.top + 1 && other.box.right > box.left && other.box.left < box.right);
         const gap = above.length ? box.top - Math.max(...above.map((other) => other.box.bottom)) : 30;
-        const surface = old.get(element) ?? { id: sequence.current++, element, bank: createBank(Math.random()), x: 0, y: 0, width: 0, limit: 17 };
+        let bank = old.get(element)?.bank ?? savedBanks.get(key);
+        if (!bank) {
+          bank = createDustedBank(Math.random());
+        }
+        savedBanks.delete(key); savedBanks.set(key, bank);
+        if (savedBanks.size > 64) savedBanks.delete(savedBanks.keys().next().value!);
+        const surface = old.get(element) ?? { id: sequence.current++, element, bank, x: 0, y: 0, width: 0, limit: 17 };
         const positioned = { ...surface, x: box.left + 8, y: box.top, width: Math.max(1, box.width - 16), limit: Math.max(3, Math.min(17, gap - 2)) };
         old.set(element, positioned);
         return positioned;
@@ -110,21 +121,25 @@ export function SnowWeather() {
           ctx.globalAlpha = p.life; ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(p.x, p.y, 1.8, 0, Math.PI * 2); ctx.fill();
         }
       }
-      if (layoutChanged || time - published > 160) {
-        setCaps(modal ? [] : surfaces.current.filter((s) => Math.max(...s.bank.heights) > .6).map((s) => ({ id: s.id, x: s.x, y: s.y, width: s.width, path: bankPath(s.bank, s.width) })));
+      if (layoutChanged || time - published > 80) {
+        setCaps(modal ? [] : surfaces.current.map((s) => ({ id: s.id, x: s.x, y: s.y, width: s.width, path: bankPath(s.bank, s.width), opacity: snowOpacity(s.bank) })));
         published = time;
       }
+      if (time - savedAt > 2000) { persistence.current(); savedAt = time; }
       if (!document.hidden) raf = requestAnimationFrame(frame);
     };
-    const visibility = () => { cancelAnimationFrame(raf); previous = 0; if (!document.hidden) { dirty = true; raf = requestAnimationFrame(frame); } };
+    const visibility = () => { cancelAnimationFrame(raf); previous = 0; if (!document.hidden) { dirty = true; raf = requestAnimationFrame(frame); } else persistence.current(); };
+    const save = () => persistence.current();
     resize(); layout(); visibility();
     window.addEventListener("resize", resize); window.addEventListener("scroll", mark, { passive: true, capture: true });
     window.addEventListener("pointermove", move, { passive: true }); window.addEventListener("pointerout", leave);
     document.addEventListener("visibilitychange", visibility);
+    window.addEventListener("pagehide", save);
     return () => { observer.disconnect(); ro.disconnect(); cancelAnimationFrame(raf); ctx.clearRect(0,0,width,height);
       window.removeEventListener("resize", resize); window.removeEventListener("scroll", mark, true); window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerout", leave); document.removeEventListener("visibilitychange", visibility); };
-  }, [motion, snowfall]);
+      window.removeEventListener("pointerout", leave); document.removeEventListener("visibilitychange", visibility);
+      window.removeEventListener("pagehide", save); persistence.current(); };
+  }, [motion, snowfall, savedBanks]);
 
   const sweep = (cap: Cap, clientX: number, whole = false) => {
     const surface = surfaces.current.find((s) => s.id === cap.id); if (!surface) return;
@@ -137,19 +152,20 @@ export function SnowWeather() {
     if (units > 0) { collectedFraction.current -= units; collectSnow(units); if (workshop.snow < 15 && workshop.snow + units >= 15) setHint(true); }
     audio.current("snow");
     for (let i = 0; i < 12 && puffs.current.length < 90; i++) puffs.current.push({ x: clientX, y: cap.y - 4, vx: (Math.random() - .5) * 120, vy: -20 - Math.random() * 65, life: .6 + Math.random() * .4 });
-    setCaps((old) => old.map((s) => s.id === cap.id ? { ...s, path: bankPath(surface.bank, surface.width) } : s));
+    if (whole) persistence.current();
+    setCaps((old) => old.map((s) => s.id === cap.id ? { ...s, path: bankPath(surface.bank, surface.width), opacity: snowOpacity(surface.bank) } : s));
   };
   if (!motion || snowfall === "off") return null;
   return <div className="snow-weather">
     <span ref={scaleProbe} className="snow-scale-probe" aria-hidden="true" />
     <canvas className="seasonal-particles" ref={canvas} aria-hidden="true" />
-    {caps.map((cap) => <button key={cap.id} type="button" className="snowdrift" data-snow-id={cap.id} aria-label={t("appearance.snow.brush")}
+    {caps.map((cap) => <button key={cap.id} type="button" className="snowdrift" data-snow-id={cap.id} aria-label={t("appearance.snow.brush")} tabIndex={cap.opacity > .05 ? 0 : -1}
       style={{ left: (cap.x - overlay.x) / overlay.scale, top: (cap.y - 22 - overlay.y) / overlay.scale,
-        width: cap.width / overlay.scale, height: 28 / overlay.scale }}
+        width: cap.width / overlay.scale, height: 28 / overlay.scale, opacity: cap.opacity }}
       onPointerDown={(event) => { event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); drag.current = { id: cap.id, x: event.clientX }; sweep(cap, event.clientX); }}
       onPointerMove={(event) => { if (drag.current?.id !== cap.id) return; const from = drag.current.x; const steps = Math.max(1, Math.ceil(Math.abs(event.clientX - from) / 12));
         for (let i = 1; i <= steps; i++) sweep(cap, from + (event.clientX - from) * i / steps); drag.current.x = event.clientX; }}
-      onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }}
+      onPointerUp={() => { drag.current = null; persistence.current(); }} onPointerCancel={() => { drag.current = null; persistence.current(); }}
       onClick={(event) => { if (event.detail === 0) sweep(cap, cap.x + cap.width / 2, true); }}>
       <svg width="100%" height="100%" viewBox={`0 0 ${cap.width} 28`} aria-hidden="true">
         <defs><linearGradient id={`${gradientId}-${cap.id}`} x2="0" y2="1"><stop offset="0%" stopColor="#fff" /><stop offset="55%" stopColor="#edf8ff" /><stop offset="100%" stopColor="#a9cddc" /></linearGradient></defs>

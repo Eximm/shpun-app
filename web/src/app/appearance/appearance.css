@@ -6,6 +6,9 @@
 .snow-weather { position: fixed; inset: 0; z-index: 3; pointer-events: none; overflow: hidden; }
 .snow-scale-probe { position: absolute; width: 100px; height: 1px; visibility: hidden; pointer-events: none; }
 .snowdrift { position: fixed; height: 28px; padding: 0; border: 0; background: none; pointer-events: none; touch-action: none; user-select: none; }
+.snowdrift { transition: opacity 350ms linear; animation: snow-bank-arrive 800ms ease-out; }
+@keyframes snow-bank-arrive { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .snowdrift { animation: none; transition: none; } }
 .snowdrift svg { display: block; overflow: visible; pointer-events: none; filter: drop-shadow(0 2px 1px #244b6938); }
 .snowdrift path { pointer-events: visiblePainted; cursor: grab; }
 .snowdrift:active path { cursor: grabbing; }

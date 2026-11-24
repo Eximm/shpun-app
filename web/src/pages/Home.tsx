@@ -113,7 +113,7 @@ function StatCell({ to, icon, label, value, sub, accent }: {
       : undefined;
 
   return (
-    <Link to={to} data-snow-surface style={{
+    <Link to={to} data-snow-surface data-snow-key={`home-tile-${icon}`} style={{
       display: "block", background: bg,
       border: `0.5px solid ${borderColor}`, borderRadius: 13,
       padding: "11px 12px", textDecoration: "none", color: "inherit",

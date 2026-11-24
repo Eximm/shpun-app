@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const ts = require('typescript');
-const compiled = ts.transpileModule(fs.readFileSync(path.resolve(__dirname,'../src/app/appearance/snowModel.ts'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}});
+const compiled = ts.transpileModule(fs.readFileSync(path.resolve(__dirname,'../src/app/appearance/snowModel.ts'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}});
 const moduleValue={exports:{}}; new Function('module','exports',compiled.outputText)(moduleValue,moduleValue.exports);
 const {createBank,growBank,depositFlake,brushBank,bankPath,SNOWMAN_COSTS}=moduleValue.exports;
 const banks=['off','light','steady','flurry'].map((intensity)=>{const bank=createBank(.3);for(let i=0;i<600;i++)growBank(bank,.1,intensity);return bank;});
@@ -19,3 +19,13 @@ const tiny=createBank();growBank(tiny,3600,'flurry');assert.ok(volume(tiny)<3,'n
 assert.ok(bankPath(banks[2],375).endsWith('Z'));
 assert.deepEqual(SNOWMAN_COSTS,[15,25,35]);
 console.log('PASS snow intensity, bounded accumulation, brushing conservation, zero farming, frame gaps and snowman costs');
+
+const {restoreBanks,serializeBanks,snowOpacity,createDustedBank}=moduleValue.exports;
+assert.equal(snowOpacity(createBank()),0);
+const dust=createDustedBank(.25);assert.ok(snowOpacity(dust)>0 && snowOpacity(dust)<.6);
+const restored=restoreBanks(serializeBanks(new Map([['/home|balance',banks[3]],['/home|cleaned',createBank()]])));
+assert.ok(volume(restored.get('/home|balance'))>0);
+assert.equal(volume(restored.get('/home|cleaned')),0,'cleared banks stay empty on restore');
+for(const raw of ['broken','null','{}','{"version":2,"banks":[]}','{"version":1,"banks":[["/bad",{"seed":0.5,"heights":[null]}]]}'])assert.equal(restoreBanks(raw).size,0);
+assert.equal(restoreBanks(serializeBanks(new Map(Array.from({length:100},(_,i)=>['/card'+i,createBank()])))).size,64);
+console.log('PASS persistent banks, clean reload, bounded dust opacity and corrupted/oversized snapshots');

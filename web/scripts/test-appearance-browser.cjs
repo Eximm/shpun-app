@@ -203,6 +203,13 @@ const { chromium } = require(process.env.PLAYWRIGHT_PACKAGE || "playwright");
     await weather.page.setViewportSize({width:1280,height:1000});await weather.page.waitForTimeout(400);
     const ids = await weather.page.locator(".snowdrift").evaluateAll(nodes=>nodes.map(node=>node.dataset.snowId));
     for(const id of ids) { const drift=weather.page.locator(`.snowdrift[data-snow-id="${id}"]`); if(await drift.count()){await drift.focus();await weather.page.keyboard.press("Enter");} }
+    const cleanSnapshot = await weather.page.evaluate(()=>JSON.parse(localStorage.getItem("shpun.winter.snowbanks.v1")));
+    assert.ok(cleanSnapshot.banks.length>=4,"bank snapshots are persisted");
+    const cleanRoot=cleanSnapshot.banks.find(([key])=>key==="/home|home-balance");
+    assert.ok(cleanRoot && cleanRoot[1].heights.every(h=>h<.5),"clearing immediately persists an empty bank");
+    await weather.page.reload();await weather.page.locator(".snowdrift").first().waitFor();
+    const reloadedOpacity=await weather.page.locator(".snowdrift").first().evaluate(node=>Number(node.style.opacity));
+    assert.ok(reloadedOpacity<.3,"cleaned tiles do not return as opaque white strips on reload");
     const stash = await weather.page.evaluate(()=>JSON.parse(localStorage.getItem("shpun.winter.snowman.v1")));
     assert.ok(stash.snow >= 75,`collected physical snow can build a friend: ${stash.snow}`);
     assert.equal(new URL(weather.page.url()).pathname,"/home","brushing never activates underlying tile links");
@@ -224,6 +231,13 @@ const { chromium } = require(process.env.PLAYWRIGHT_PACKAGE || "playwright");
     assert.equal(await weather.page.locator(".snow-weather").count(),0);
     await weather.context.close();
     console.log("PASS physical snow accumulation, keyboard clearing, collected snow, three snowman stages, hidden reactions, persistence and snow off");
+
+    const savedSnow = await setup("winter");
+    await savedSnow.page.addInitScript(()=>localStorage.setItem("shpun.winter.snowbanks.v1",JSON.stringify({version:1,banks:[["/home|home-balance",{seed:.5,heights:Array(48).fill(5)}]]})));
+    await savedSnow.page.reload();await savedSnow.page.locator(".snowdrift").first().waitFor();
+    assert.equal(await savedSnow.page.locator(".snowdrift").first().evaluate(node=>Number(node.style.opacity)),1,"existing snow is restored instead of starting from clean tiles");
+    await savedSnow.context.close();
+    console.log("PASS restored snow, persisted clearing and smooth low-opacity regrowth");
 
     const reduced = await setup("winter", { reducedMotion: "reduce" });
     assert.equal(await reduced.page.locator(".seasonal-particles").count(), 0);
