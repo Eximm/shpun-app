@@ -242,7 +242,8 @@ const { chromium } = require(process.env.PLAYWRIGHT_PACKAGE || "playwright");
     }
     await gravityScenario({x:-9.8,y:0,z:0},0,0,1,true);
     await gravityScenario({x:0,y:-9.8,z:0},0,1,-1,true);
-    await gravityScenario({x:-9.8,y:0,z:0},90,1,1,false);
+    await gravityScenario({x:9.8,y:0,z:0},90,1,1,false);
+    await gravityScenario({x:-9.8,y:0,z:0},270,1,1,false);
     await gravityCase.context.close();
     console.log("PASS locked 90/180-degree roof release, reversed snowfall, no unsupported regrowth and screen auto-rotation");
 
