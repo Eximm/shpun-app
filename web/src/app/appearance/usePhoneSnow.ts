@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { motionVector, newPhoneSnowState, updatePhoneSnow } from "./phoneSnowModel";
+import { motionVector, normalizeMotion, usesAppleMotionConvention, newPhoneSnowState, updatePhoneSnow } from "./phoneSnowModel";
 
 const KEY = "shpun.winter.phone-motion.v1";
 type MotionPermission = typeof DeviceMotionEvent & { requestPermission?: () => Promise<string> };
@@ -29,9 +29,10 @@ export function usePhoneSnow(allowed: boolean) {
   useEffect(() => {
     if (!enabled || !allowed || !supported) { data.current = newPhoneSnowState(); return; }
     let received = false, attached = false;
+    const appleMotion = usesAppleMotionConvention(navigator);
     const sample = (event: DeviceMotionEvent) => {
       if (document.hidden) return;
-      const gravity = motionVector(event.accelerationIncludingGravity), acceleration = motionVector(event.acceleration);
+      const gravity = normalizeMotion(motionVector(event.accelerationIncludingGravity), appleMotion), acceleration = normalizeMotion(motionVector(event.acceleration), appleMotion);
       if (!gravity && !acceleration) return;
       received = true;
       data.current = updatePhoneSnow(data.current, gravity, acceleration, performance.now(), screenAngle());

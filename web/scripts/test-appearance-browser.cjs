@@ -3,13 +3,14 @@
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
-const { chromium } = require(process.env.PLAYWRIGHT_PACKAGE || "playwright");
+const engine = process.env.APPEARANCE_BROWSER || "chromium";
+const browserType = require(process.env.PLAYWRIGHT_PACKAGE || "playwright")[engine];
 
 (async () => {
   const { createServer } = await import(pathToFileURL(require.resolve("vite")).href);
   const server = await createServer({ root: path.resolve(__dirname, ".."), server: { host: "127.0.0.1", port: 5194, strictPort: true } });
   await server.listen();
-  const browser = await chromium.launch({ headless: true, ...(process.env.CHROMIUM_CHANNEL ? { channel: process.env.CHROMIUM_CHANNEL } : {}) });
+  const browser = await browserType.launch({ headless: true, ...(engine === "chromium" && process.env.CHROMIUM_CHANNEL ? { channel: process.env.CHROMIUM_CHANNEL } : {}) });
   const errors = [];
   const base = server.resolvedUrls.local[0].replace(/\/$/, "");
   const screenshotDir = process.env.APPEARANCE_SCREENSHOT_DIR;
@@ -19,9 +20,11 @@ const { chromium } = require(process.env.PLAYWRIGHT_PACKAGE || "playwright");
       for (const kind of ["pwa_install", "push"]) sessionStorage.setItem(`onboarding.prompt.shown.session.v1:${kind}`, "1");
       localStorage.setItem("push_disabled_by_user", "1");
       window.__snowAudio = { starts:0, stops:0 };
+      if(typeof AudioBufferSourceNode!=="undefined") {
       const start=AudioBufferSourceNode.prototype.start, stop=AudioBufferSourceNode.prototype.stop;
       AudioBufferSourceNode.prototype.start=function(...args){ if(this.loop)window.__snowAudio.starts++;return start.apply(this,args); };
       AudioBufferSourceNode.prototype.stop=function(...args){ if(this.loop)window.__snowAudio.stops++;return stop.apply(this,args); };
+      }
 
     });
     const page = await context.newPage();
@@ -55,6 +58,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_PACKAGE || "playwright");
     return { page, context, state };
   }
   try {
+    if(process.env.APPEARANCE_FOCUS!=="gravity") {
     const { page, context, state } = await setup("winter", {hasTouch:true});
     const open=()=>page.getByRole("button",{name:"Настройки зимней темы",exact:true}).click();
     await open();
@@ -215,10 +219,16 @@ const { chromium } = require(process.env.PLAYWRIGHT_PACKAGE || "playwright");
     await phoneCase.context.close();
     console.log("PASS explicit sensor permission, short shake effect, cooldown, no destructive actions, opt-out and permission denial");
 
-    const gravityCase=await setup("winter",{hasTouch:true,viewport:{width:393,height:852}});
+    }
+    const gravityCase=await setup("winter",{hasTouch:true,viewport:{width:393,height:852},...(process.env.MOTION_APPLE_FIXTURE?{userAgent:"Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1"}:{})});
     await gravityCase.context.addInitScript(()=>{
+      // Windows WebKit has no device sensors; inject only the sensor transport.
+      window.DeviceMotionEvent=function(type,init){const e=document.createEvent("Event");e.initEvent(type,false,false);Object.assign(e,init);return e;};
+      // Desktop WebKit on Windows reports zero even with touch emulation.
+      Object.defineProperty(navigator,"maxTouchPoints",{configurable:true,get:()=>5});
       Object.defineProperty(DeviceMotionEvent,"requestPermission",{configurable:true,value:undefined});
-      window.__gravity={x:0,y:9.8,z:0};window.__screenAngle=0;window.__fallTrace=[];
+      window.__gravity={x:0,y:/iPhone/.test(navigator.userAgent)?-9.8:9.8,z:0};window.__screenAngle=0;window.__fallTrace=[];
+      Object.defineProperty(screen,"orientation",{configurable:true,value:document.createDocumentFragment()});
       Object.defineProperty(screen.orientation,"angle",{configurable:true,get:()=>window.__screenAngle});
       localStorage.setItem("shpun.winter.snowbanks.v1",JSON.stringify({version:1,banks:["/home|home-balance","/winter|bottom-navigation"].map(key=>[key,{seed:.5,heights:Array.from({length:48},(_,i)=>i>0&&i<47?4:0)}])}));
       setInterval(()=>window.dispatchEvent(new DeviceMotionEvent("devicemotion",{accelerationIncludingGravity:window.__gravity,acceleration:{x:0,y:0,z:0}})),50);
@@ -229,11 +239,11 @@ const { chromium } = require(process.env.PLAYWRIGHT_PACKAGE || "playwright");
     async function gravityScenario(vector,angle,axis,sign,unsupported){
       await gravityCase.page.reload();await gravityCase.page.locator(".home-page").waitFor();
       await gravityCase.page.waitForTimeout(150);
-      await gravityCase.page.evaluate(({vector,angle})=>{window.__gravity=vector;window.__screenAngle=angle;if(angle)screen.orientation.dispatchEvent(new Event("change"));},{vector,angle});
+      await gravityCase.page.evaluate(({vector,angle})=>{window.__gravity=/iPhone/.test(navigator.userAgent)?{x:-vector.x,y:-vector.y,z:-vector.z}:vector;window.__screenAngle=angle;if(angle)screen.orientation.dispatchEvent(new Event("change"));},{vector,angle});
       await gravityCase.page.waitForTimeout(1100);
       if(unsupported){
         for(const selector of [".home-balance-card .snowdrift",".bottomnav .snowdrift"])
-          assert.equal(await gravityCase.page.locator(selector).evaluate(el=>Number(el.style.opacity)),0,"unsupported roof empties completely");
+          assert.equal(await gravityCase.page.locator(selector).evaluate(el=>Number(el.style.opacity)),0,"unsupported roof empties completely "+selector);
       }
       await gravityCase.page.evaluate(()=>window.__fallTrace=[]);await gravityCase.page.waitForTimeout(450);
       const displacement=await gravityCase.page.evaluate(axis=>{let sum=0,n=0;const points=window.__fallTrace;for(let i=1;i<points.length;i++){const d=points[i][axis]-points[i-1][axis];if(Math.abs(d)<15){sum+=d;n++;}}return{sum,n};},axis);

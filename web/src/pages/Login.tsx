@@ -453,7 +453,22 @@ export function Login() {
     if (authModal === "none") return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = previousOverflow; };
+    document.body.classList.add("login-auth-open");
+    const root = document.documentElement, viewport = window.visualViewport;
+    const updateViewport = () => {
+      root.style.setProperty("--auth-vv-height", `${viewport?.height ?? innerHeight}px`);
+      root.style.setProperty("--auth-vv-width", `${viewport?.width ?? innerWidth}px`);
+      root.style.setProperty("--auth-vv-top", `${viewport?.offsetTop ?? 0}px`);
+      root.style.setProperty("--auth-vv-left", `${viewport?.offsetLeft ?? 0}px`);
+    };
+    updateViewport(); viewport?.addEventListener("resize", updateViewport); viewport?.addEventListener("scroll", updateViewport);
+    window.addEventListener("resize", updateViewport);
+    return () => {
+      document.body.style.overflow = previousOverflow; document.body.classList.remove("login-auth-open");
+      viewport?.removeEventListener("resize", updateViewport); viewport?.removeEventListener("scroll", updateViewport);
+      window.removeEventListener("resize", updateViewport);
+      for (const key of ["height","width","top","left"]) root.style.removeProperty(`--auth-vv-${key}`);
+    };
   }, [authModal]);
 
   useEffect(() => {
@@ -1078,16 +1093,21 @@ export function Login() {
     const container = document.getElementById("tg-widget-container");
     if (!container) return;
     let frame: HTMLIFrameElement | null = null;
-    const fit = () => {
+    let fitFrame = 0;
+    const fitNow = () => {
       if (!frame) return;
-      const width = frame.offsetWidth;
-      const height = frame.offsetHeight;
+      const width = parseFloat(frame.style.width) || Number(frame.getAttribute("width")) || frame.offsetWidth;
+      const height = parseFloat(frame.style.height) || Number(frame.getAttribute("height")) || frame.offsetHeight;
       if (!width || !height || !container.clientWidth) return;
       const scale = Math.min(1, container.clientWidth / width);
       // CSS transforms on an iframe under body zoom shift its painted origin
       // in mobile Chromium. Zoom participates in layout and preserves its edge.
-      frame.style.zoom = String(scale);
-      container.style.height = `${Math.ceil(height * scale)}px`;
+      if (Math.abs(Number(frame.style.zoom || 1) - scale) > .0001) frame.style.zoom = String(scale);
+      const fittedHeight = `${Math.ceil(height * scale)}px`;
+      if (container.style.height !== fittedHeight) container.style.height = fittedHeight;
+    };
+    const fit = () => {
+      if (!fitFrame) fitFrame = requestAnimationFrame(() => { fitFrame = 0; fitNow(); });
     };
     const resize = new ResizeObserver(fit);
     resize.observe(container);
@@ -1095,18 +1115,19 @@ export function Login() {
       const next = container.querySelector("iframe");
       if (next !== frame) {
         if (frame) resize.unobserve(frame);
-        frame = next;
-        if (frame) resize.observe(frame);
-        else container.style.height = "";
+        attributes.disconnect(); frame = next;
+        if (frame) { resize.observe(frame); attributes.observe(frame, { attributes: true, attributeFilter: ["width", "height", "style"] }); }
+        else { attributes.disconnect(); container.style.height = ""; }
       }
       fit();
     };
+    const attributes = new MutationObserver(fit);
     const mutations = new MutationObserver(findFrame);
     mutations.observe(container, { childList: true });
     findFrame();
     return () => {
       resize.disconnect();
-      mutations.disconnect();
+      mutations.disconnect(); attributes.disconnect(); cancelAnimationFrame(fitFrame);
     };
   }, [authModal, mode]);
 

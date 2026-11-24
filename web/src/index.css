@@ -9871,3 +9871,18 @@ button.reviews-star:not(:disabled) {
   .gw-pick__row { grid-template-columns: minmax(0, 1fr) 72px; }
   .gw-pick__backup { grid-column: 1 / -1; }
 }
+
+/* Auth overlays use unzoomed CSS pixels: nested zoom and iOS input magnification
+   otherwise disagree about iframe and fixed-dialog geometry. */
+body.login-auth-open { zoom: 1; }
+.loginAuthModal {
+  inset: auto; left: var(--auth-vv-left, 0px); top: var(--auth-vv-top, 0px);
+  width: var(--auth-vv-width, 100%); height: var(--auth-vv-height, 100dvh);
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+}
+.loginAuthModal__card { min-width: 0; max-width: 100%; max-height: 100%; display: flex; flex-direction: column; }
+.loginAuthModal__card > .card__body { min-width: 0; min-height: 0; max-height: 100%; }
+.loginAuthModal .modal__content, .loginAuthModal .auth__form, .loginAuthModal .field, .loginAuthModal .input { min-width: 0; max-width: 100%; }
+.loginAuthModal .pwdfield { grid-template-columns: minmax(0, 1fr) auto; }
+.login__widgetBox--modal iframe { color-scheme: normal; background: transparent; border: 0; }
+@media (pointer: coarse) { .loginAuthModal .input { font-size: 16px; } }

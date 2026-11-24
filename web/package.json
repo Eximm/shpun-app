@@ -34,6 +34,7 @@
     "test:clipboard": "node scripts/test-clipboard-attachments.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
+    "test:auth-browser": "node scripts/test-auth-browser.cjs",
     "test:appearance": "node scripts/test-appearance.cjs && node scripts/test-snow.cjs && node scripts/test-snow-sound.cjs && node scripts/test-phone-snow.cjs"
   },
   "dependencies": {

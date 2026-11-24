@@ -5,6 +5,12 @@ export function motionVector(value: { x: number | null; y: number | null; z: num
   if (!value || ![value.x, value.y, value.z].every((n) => typeof n === "number" && Number.isFinite(n) && Math.abs(n) < 100)) return null;
   return value as Vector;
 }
+export function usesAppleMotionConvention(platform: { userAgent: string; platform: string; maxTouchPoints: number }) {
+  return /iPhone|iPad|iPod/.test(platform.userAgent) || (platform.platform === "MacIntel" && platform.maxTouchPoints > 1);
+}
+export function normalizeMotion(value: Vector | null, apple: boolean): Vector | null {
+  return value && apple ? { x: -value.x, y: -value.y, z: -value.z } : value;
+}
 // Device axes stay in the natural orientation. Canvas Y points down.
 export function screenGravity(gravity: Vector, angle: number) {
   const radians = angle * Math.PI / 180;

@@ -40,3 +40,15 @@ console.log('PASS locked portrait 90/180-degree gravity and compensated screen a
 for(const [angle,c,s] of [[0,1,0],[90,0,1],[180,-1,0],[270,0,-1]]){
   const x=3,y=7,m=Math.hypot(x,y);near(screenGravity({x,y,z:0},angle),-(x*c-y*s)/m,(x*s+y*c)/m);
 }
+
+const {usesAppleMotionConvention,normalizeMotion}=mod.exports;
+assert.equal(usesAppleMotionConvention({userAgent:'iPhone AppleWebKit',platform:'iPhone',maxTouchPoints:5}),true);
+assert.equal(usesAppleMotionConvention({userAgent:'Macintosh Safari',platform:'MacIntel',maxTouchPoints:5}),true);
+assert.equal(usesAppleMotionConvention({userAgent:'Android Chrome',platform:'Linux arm',maxTouchPoints:5}),false);
+assert.equal(usesAppleMotionConvention({userAgent:'Macintosh Safari',platform:'MacIntel',maxTouchPoints:0}),false);
+near(screenGravity(normalizeMotion({x:0,y:-9.8,z:0},true),0),0,1);
+near(screenGravity(normalizeMotion({x:0,y:9.8,z:0},true),0),0,-1);
+near(screenGravity(normalizeMotion({x:-9.8,y:0,z:0},true),90),0,1);
+near(screenGravity(normalizeMotion({x:9.8,y:0,z:0},true),270),0,1);
+assert.equal(normalizeMotion(null,true),null);
+console.log('PASS Apple CoreMotion polarity, iPad desktop mode and unchanged Android convention');

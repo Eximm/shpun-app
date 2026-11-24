@@ -49,3 +49,5 @@ Reference for device coordinates: https://www.w3.org/TR/orientation-event/
 
 Screen remapping follows Chromium SensorReadingRemapper: sensor screen X = device X*cos(angle) - device Y*sin(angle), sensor screen Y = device X*sin(angle) + device Y*cos(angle). Canvas gravity is (-screen X, +screen Y). Regression tests use this independent reference for all four orientation angles and both landscape browser scenarios.
 Reference: https://raw.githubusercontent.com/chromium/chromium/main/third_party/blink/renderer/modules/sensor/sensor_reading_remapper.cc
+
+iOS motion correction: Apple's WebCoreMotionManager forwards CoreMotion gravity (upright Y is negative), while the Android/Chromium fixture follows proper-acceleration polarity. Normalize all three axes before filtering and screen remapping for iPhone/iPad/iPod and touch-capable MacIntel iPad desktop mode. Desktop macOS and Android are unchanged. Regression fixtures cover upright/inverted Apple readings, both landscape angles, iPad detection and cross-engine screen-space flake movement. WebKit source: https://raw.githubusercontent.com/WebKit/WebKit/main/Source/WebCore/platform/ios/WebCoreMotionManager.mm
