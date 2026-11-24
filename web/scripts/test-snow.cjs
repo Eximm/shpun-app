@@ -60,6 +60,19 @@ const lower=createBank(),area=80,remainder=landSnow(lower,.8,area,500,8);
 assert.ok(Math.abs(volume(lower)*500/47+remainder-area)<1e-8,'landing conserves area across tile widths');
 const full=createBank();full.heights.fill(8);assert.equal(landSnow(full,.5,80,300,8),80,'full roof cannot create or hide mass');
 const airborne={x:0,y:0,vx:10,vy:0,area:8,age:0};
-for(let i=0;i<25;i++)fallSnow(airborne,.04,.6);
+for(let i=0;i<25;i++)fallSnow(airborne,.04,{x:.6,y:1});
 assert.ok(airborne.x>60 && airborne.y>180 && airborne.vy>370,'downward gravity and downhill acceleration');
 console.log('PASS no empty/thin snow drips, cohesive patches, mirrored shedding, partial shake, mass conservation and ballistic landing');
+
+const {detachUnsupportedBank}=moduleValue.exports;
+const upsideDown=createDustedBank(.4),upsideMass=volume(upsideDown)*300/47;
+const pieces=detachUnsupportedBank(upsideDown,300);
+assert.equal(volume(upsideDown),0,'unsupported roof empties entirely including thin dust');
+assert.ok(Math.abs(pieces.reduce((sum,p)=>sum+p.area,0)-upsideMass)<1e-8);
+assert.deepEqual(detachUnsupportedBank(upsideDown,300),[],'empty roof never emits more chunks');
+for(const direction of [{x:1,y:0},{x:-1,y:0},{x:0,y:-1},{x:0,y:1}]){
+  const c={x:0,y:0,vx:0,vy:0,area:8,age:0};
+  for(let i=0;i<25;i++)fallSnow(c,.04,direction);
+  assert.ok(Math.abs(c.x-direction.x*190)<1e-8 && Math.abs(c.y-direction.y*190)<1e-8,'ballistics follows all gravity directions');
+}
+console.log('PASS full unsupported roof release, no regrowth emissions, conserved slab mass and four-way gravity');

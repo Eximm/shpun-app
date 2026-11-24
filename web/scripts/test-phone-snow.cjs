@@ -22,3 +22,15 @@ assert.ok(landscape.wind<-.3&&landscape.wind>=-1,'landscape tilt follows screen 
 let fallback=updatePhoneSnow(newPhoneSnowState(),g,null,0);
 fallback=updatePhoneSnow(fallback,{x:16,y:0,z:9.8},null,150);
 fallback=updatePhoneSnow(fallback,{x:-16,y:0,z:9.8},null,300);assert.equal(fallback.shakeAt,300,'raw accelerometer fallback works without linear acceleration');
+
+const {screenGravity}=mod.exports;
+const near=(v,x,y)=>assert.ok(Math.abs(v.x-x)<1e-8&&Math.abs(v.y-y)<1e-8);
+near(screenGravity({x:0,y:9.8,z:0},0),0,1);
+near(screenGravity({x:-9.8,y:0,z:0},0),1,0);
+near(screenGravity({x:9.8,y:0,z:0},0),-1,0);
+near(screenGravity({x:0,y:-9.8,z:0},0),0,-1);
+near(screenGravity({x:-9.8,y:0,z:0},90),0,1);
+near(screenGravity({x:9.8,y:0,z:0},270),0,1);
+near(screenGravity({x:0,y:-9.8,z:0},180),0,1);
+assert.equal(screenGravity({x:.1,y:0,z:9.8},0),null,'flat phone has no reliable screen-plane gravity');
+console.log('PASS locked portrait 90/180-degree gravity and compensated screen auto-rotation');

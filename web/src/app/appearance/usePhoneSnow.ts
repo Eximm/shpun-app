@@ -4,6 +4,7 @@ import { motionVector, newPhoneSnowState, updatePhoneSnow } from "./phoneSnowMod
 const KEY = "shpun.winter.phone-motion.v1";
 type MotionPermission = typeof DeviceMotionEvent & { requestPermission?: () => Promise<string> };
 function sensor() { return typeof DeviceMotionEvent === "undefined" ? null : DeviceMotionEvent as MotionPermission; }
+function screenAngle() { return screen.orientation?.angle ?? (window as Window & { orientation?: number }).orientation ?? 0; }
 function preferred() { const automatic = !sensor()?.requestPermission; try { const saved = localStorage.getItem(KEY); return saved === null ? automatic : saved === "1"; } catch { return automatic; } }
 function remember(value: boolean) { try { localStorage.setItem(KEY, value ? "1" : "0"); } catch { /* session only */ } }
 export function usePhoneSnow(allowed: boolean) {
@@ -33,9 +34,13 @@ export function usePhoneSnow(allowed: boolean) {
       const gravity = motionVector(event.accelerationIncludingGravity), acceleration = motionVector(event.acceleration);
       if (!gravity && !acceleration) return;
       received = true;
-      data.current = updatePhoneSnow(data.current, gravity, acceleration, performance.now(), screen.orientation?.angle ?? 0);
+      data.current = updatePhoneSnow(data.current, gravity, acceleration, performance.now(), screenAngle());
     };
     const reset = () => { data.current = newPhoneSnowState(); };
+    const rotate = () => {
+      const state = data.current;
+      data.current = { ...state, gravity: null, impulse: null, lastAt: -Infinity };
+    };
     const visibility = () => {
       reset();
       if (document.hidden && attached) { window.removeEventListener("devicemotion", sample); attached = false; }
@@ -45,9 +50,9 @@ export function usePhoneSnow(allowed: boolean) {
     const check = setTimeout(() => {
       if (!received && !document.hidden) { setEnabled(false); setStatus("unavailable"); }
     }, 7000);
-    document.addEventListener("visibilitychange", visibility); screen.orientation?.addEventListener("change", reset);
+    document.addEventListener("visibilitychange", visibility); screen.orientation?.addEventListener("change", rotate); window.addEventListener("orientationchange", rotate);
     return () => { clearTimeout(check); window.removeEventListener("devicemotion", sample); document.removeEventListener("visibilitychange", visibility);
-      screen.orientation?.removeEventListener("change", reset); reset(); };
+      screen.orientation?.removeEventListener("change", rotate); window.removeEventListener("orientationchange", rotate); reset(); };
   }, [enabled, allowed, supported]);
   return { supported, enabled: enabled && allowed, status, toggle, data };
 }

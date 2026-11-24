@@ -215,6 +215,37 @@ const { chromium } = require(process.env.PLAYWRIGHT_PACKAGE || "playwright");
     await phoneCase.context.close();
     console.log("PASS explicit sensor permission, short shake effect, cooldown, no destructive actions, opt-out and permission denial");
 
+    const gravityCase=await setup("winter",{hasTouch:true,viewport:{width:393,height:852}});
+    await gravityCase.context.addInitScript(()=>{
+      Object.defineProperty(DeviceMotionEvent,"requestPermission",{configurable:true,value:undefined});
+      window.__gravity={x:0,y:9.8,z:0};window.__screenAngle=0;window.__fallTrace=[];
+      Object.defineProperty(screen.orientation,"angle",{configurable:true,get:()=>window.__screenAngle});
+      localStorage.setItem("shpun.winter.snowbanks.v1",JSON.stringify({version:1,banks:["/home|home-balance","/winter|bottom-navigation"].map(key=>[key,{seed:.5,heights:Array.from({length:48},(_,i)=>i>0&&i<47?4:0)}])}));
+      setInterval(()=>window.dispatchEvent(new DeviceMotionEvent("devicemotion",{accelerationIncludingGravity:window.__gravity,acceleration:{x:0,y:0,z:0}})),50);
+      const clear=CanvasRenderingContext2D.prototype.clearRect,arc=CanvasRenderingContext2D.prototype.arc;
+      CanvasRenderingContext2D.prototype.clearRect=function(...args){this.__firstArc=true;return clear.apply(this,args);};
+      CanvasRenderingContext2D.prototype.arc=function(...args){if(this.__firstArc&&this.canvas.classList.contains("seasonal-particles")){window.__fallTrace.push([args[0],args[1]]);this.__firstArc=false;}return arc.apply(this,args);};
+    });
+    async function gravityScenario(vector,angle,axis,sign,unsupported){
+      await gravityCase.page.reload();await gravityCase.page.locator(".home-page").waitFor();
+      await gravityCase.page.waitForTimeout(150);
+      await gravityCase.page.evaluate(({vector,angle})=>{window.__gravity=vector;window.__screenAngle=angle;if(angle)screen.orientation.dispatchEvent(new Event("change"));},{vector,angle});
+      await gravityCase.page.waitForTimeout(1100);
+      if(unsupported){
+        for(const selector of [".home-balance-card .snowdrift",".bottomnav .snowdrift"])
+          assert.equal(await gravityCase.page.locator(selector).evaluate(el=>Number(el.style.opacity)),0,"unsupported roof empties completely");
+      }
+      await gravityCase.page.evaluate(()=>window.__fallTrace=[]);await gravityCase.page.waitForTimeout(450);
+      const displacement=await gravityCase.page.evaluate(axis=>{let sum=0,n=0;const points=window.__fallTrace;for(let i=1;i<points.length;i++){const d=points[i][axis]-points[i-1][axis];if(Math.abs(d)<15){sum+=d;n++;}}return{sum,n};},axis);
+      assert.ok(displacement.n>=5&&displacement.sum*sign>3,"flakes follow screen-space gravity "+JSON.stringify({vector,angle,displacement}));
+      if(unsupported)assert.equal(await gravityCase.page.locator(".home-balance-card .snowdrift").evaluate(el=>Number(el.style.opacity)),0,"unsupported snow does not regrow");
+    }
+    await gravityScenario({x:-9.8,y:0,z:0},0,0,1,true);
+    await gravityScenario({x:0,y:-9.8,z:0},0,1,-1,true);
+    await gravityScenario({x:-9.8,y:0,z:0},90,1,1,false);
+    await gravityCase.context.close();
+    console.log("PASS locked 90/180-degree roof release, reversed snowfall, no unsupported regrowth and screen auto-rotation");
+
     const reduced=await setup("winter",{reducedMotion:"reduce"});
     assert.equal(await reduced.page.locator(".seasonal-particles").count(),0);
     await reduced.page.getByRole("button",{name:"Настройки зимней темы",exact:true}).click();

@@ -2,7 +2,7 @@ import { createPortal } from "react-dom";
 import { useEffect, useId, useRef, useState } from "react";
 import { useI18n } from "../../shared/i18n";
 import { useAppearance } from "./AppearanceProvider";
-import { bankPath, brushBank, createDustedBank, depositFlake, growBank, restoreBanks, serializeBanks, snowOpacity, snowfallCount, SNOWFALL, loosenBank, landSnow, fallSnow, type SnowChunk, type SnowBank } from "./snowModel";
+import { bankPath, brushBank, createDustedBank, depositFlake, growBank, restoreBanks, serializeBanks, snowOpacity, snowfallCount, SNOWFALL, loosenBank, landSnow, fallSnow, detachUnsupportedBank, type SnowChunk, type SnowBank } from "./snowModel";
 import { WINTER_ACTIVITIES_ENABLED } from "./winterFeatures";
 import { useWinterSound } from "./winterSound";
 
@@ -99,11 +99,17 @@ export function SnowWeather() {
     const ro = new ResizeObserver(mark); if (main) ro.observe(main);
     const move = (event: PointerEvent) => { pointerX = event.clientX; pointerY = event.clientY; };
     const leave = () => { pointerX = -1000; pointerY = -1000; };
-    const recycle = (p: Flake, top = true) => { p.x = Math.random() * width; p.y = top ? -10 - Math.random() * 30 : Math.random() * height; };
+    const recycle = (p: Flake, upstream = true) => {
+      const down = phone.current.enabled ? phone.current.data.current.down : { x: 0, y: 1 };
+      p.x = Math.random() * width; p.y = Math.random() * height;
+      if (!upstream) return;
+      if (Math.abs(down.x) > Math.abs(down.y)) p.x = down.x > 0 ? -12 : width + 12;
+      else p.y = down.y > 0 ? -12 : height + 12;
+    };
     const shed = (surface: Surface, spill: { left: number; right: number }, tilt: number) => {
       for (const side of [-1, 1]) {
         const area = spill[side < 0 ? "left" : "right"] * surface.width / 47;
-        if (area < 18 || chunks.length >= 48) continue;
+        if (area < 18 || chunks.length >= 128) continue;
         chunks.push({ x: surface.x + (side < 0 ? -10 : surface.width + 10), y: surface.y - 2,
           vx: side * (12 + Math.abs(tilt) * 24), vy: 8, area, age: 0 });
       }
@@ -116,6 +122,7 @@ export function SnowWeather() {
       const modal = !!document.querySelector("dialog[open]");
       const device = phone.current;
       const movement = device.data.current;
+      const gravity = device.enabled ? movement.down : { x: 0, y: 1 };
       if (!device.enabled || modal) { handledShake = movement.shakeAt; gustUntil = 0; }
       else if (Number.isFinite(movement.shakeAt) && movement.shakeAt !== handledShake) {
         handledShake = movement.shakeAt; gustUntil = time + 2400;
@@ -133,10 +140,18 @@ export function SnowWeather() {
       }
       const gustStrength = Math.max(0, (gustUntil - time) / 2400);
       if ((gustStrength > 0) !== previousGust) { previousGust = gustStrength > 0; setGust(previousGust); }
-      const phoneWind = device.enabled ? movement.wind * 38 : 0;
       ctx.clearRect(0, 0, width, height);
       if (!modal) {
         for (const surface of surfaces.current) {
+          if (gravity.y <= .25) {
+            const patches = detachUnsupportedBank(surface.bank, surface.width);
+            if (surface.visible) for (const patch of patches) {
+              if (patch.area < 1 || chunks.length >= 128) continue;
+              chunks.push({ x: surface.x + patch.at * surface.width, y: surface.y - patch.height - 2,
+                vx: gravity.x * 24, vy: gravity.y * 24, area: patch.area, age: 0 });
+            }
+            continue;
+          }
           if (!surface.visible) continue;
           growBank(surface.bank, dt, snowfall);
           for (let i = 0; i < surface.bank.heights.length; i++) surface.bank.heights[i] = Math.min(surface.limit, surface.bank.heights[i]);
@@ -153,8 +168,10 @@ export function SnowWeather() {
           const p = particles[index];
           if (p.life !== undefined) { p.life -= dt; if (p.life <= 0) { particles.splice(index, 1); continue; } }
           const before = p.y;
-          p.y += p.speed * SNOWFALL[snowfall].speed * (1 + gustStrength * 1.8) * dt;
-          p.x += (Math.sin(time / 1600 + p.phase) * (13 * SNOWFALL[snowfall].drift + gustStrength * 130) + 5 + phoneWind + gustStrength * 55) * dt;
+          const fallSpeed = p.speed * SNOWFALL[snowfall].speed * (1 + gustStrength * 1.8);
+          const swirl = Math.sin(time / 1600 + p.phase) * (13 * SNOWFALL[snowfall].drift + gustStrength * 100) + gustStrength * 35;
+          p.y += (gravity.y * fallSpeed - gravity.x * swirl) * dt;
+          p.x += (gravity.x * fallSpeed + gravity.y * swirl + (device.enabled ? 0 : 5)) * dt;
           const dx = p.x - pointerX, dy = p.y - pointerY, distance = Math.hypot(dx, dy);
           if (distance > 0 && distance < 65) { p.x += dx / distance * dt * 50; p.y += dy / distance * dt * 30; }
           for (const surface of surfaces.current) {
@@ -162,31 +179,30 @@ export function SnowWeather() {
             if (p.x < surface.x || p.x > surface.x + surface.width) continue;
             const x = (p.x - surface.x) / surface.width;
             const edge = surface.y - surface.bank.heights[Math.round(x * 47)];
-            if (before <= edge && p.y >= edge && (surface.navigation || p.settles)) {
+            if (gravity.y > .25 && before <= edge && p.y >= edge && (surface.navigation || p.settles)) {
               if (p.life === undefined) depositFlake(surface.bank, x, p.radius * .18);
               // The foreground layer remains free-falling; only a quarter catches on roofs.
               // Replenish captured flakes over the viewport to preserve lower-screen coverage.
               recycle(p, surface.navigation); break;
             }
           }
-          if (p.y > height + 12) recycle(p);
-          if (p.x < -15) p.x = width + 14; else if (p.x > width + 15) p.x = -14;
+          if (p.y > height + 16 || p.y < -16 || p.x < -16 || p.x > width + 16) recycle(p);
           ctx.globalAlpha = (.3 + p.radius * .17) * (p.life === undefined ? 1 : Math.min(1, p.life / .6)); ctx.fillStyle = "#f5fbff";
           ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2); ctx.fill();
         }
         for (let i = chunks.length - 1; i >= 0; i--) {
           const chunk = chunks[i], before = chunk.y;
-          fallSnow(chunk, dt, device.enabled ? movement.wind : 0);
+          fallSnow(chunk, dt, gravity);
           for (const surface of surfaces.current) {
             if (!surface.visible || chunk.x < surface.x || chunk.x > surface.x + surface.width) continue;
             const x = (chunk.x - surface.x) / surface.width;
             const edge = surface.y - surface.bank.heights[Math.round(x * 47)];
-            if (before <= edge && chunk.y >= edge) {
+            if (gravity.y > .25 && before <= edge && chunk.y >= edge) {
               chunk.area = landSnow(surface.bank, x, chunk.area, surface.width, surface.limit);
               break;
             }
           }
-          if (chunk.area < .05 || chunk.y > height + 20 || chunk.x < -30 || chunk.x > width + 30 || chunk.age > 6) { chunks.splice(i, 1); continue; }
+          if (chunk.area < .05 || chunk.y > height + 20 || chunk.y < -30 || chunk.x < -30 || chunk.x > width + 30 || chunk.age > 6) { chunks.splice(i, 1); continue; }
           ctx.globalAlpha = Math.min(1, Math.max(0, (6 - chunk.age) / .4)); ctx.fillStyle = "#f1faff";
           const radius = Math.max(1.2, Math.min(6, Math.sqrt(chunk.area / Math.PI)));
           ctx.beginPath(); ctx.ellipse(chunk.x, chunk.y, radius, radius * .8, chunk.age * .9, 0, Math.PI * 2); ctx.fill();
@@ -194,7 +210,7 @@ export function SnowWeather() {
           ctx.beginPath(); ctx.arc(chunk.x + radius * .45, chunk.y - radius * .3, radius * .6, 0, Math.PI * 2); ctx.fill();
         }
         for (let i = puffs.current.length - 1; i >= 0; i--) {
-          const p = puffs.current[i]; p.life -= dt; p.vy += 110 * dt; p.x += p.vx * dt; p.y += p.vy * dt;
+          const p = puffs.current[i]; p.life -= dt; p.vy += gravity.y * 110 * dt; p.vx += gravity.x * 110 * dt; p.x += p.vx * dt; p.y += p.vy * dt;
           if (p.life <= 0) { puffs.current.splice(i, 1); continue; }
           ctx.globalAlpha = p.life; ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(p.x, p.y, 1.8, 0, Math.PI * 2); ctx.fill();
         }

@@ -112,9 +112,21 @@ export function landSnow(bank: SnowBank, x: number, area: number, width: number,
   return Math.max(0, left);
 }
 export type SnowChunk = { x: number; y: number; vx: number; vy: number; area: number; age: number };
-export function fallSnow(chunk: SnowChunk, seconds: number, tilt: number) {
+export function fallSnow(chunk: SnowChunk, seconds: number, gravity: { x: number; y: number }) {
   const dt = Math.max(0, Math.min(.06, seconds));
-  chunk.x += chunk.vx * dt + .5 * tilt * 210 * dt * dt;
-  chunk.y += chunk.vy * dt + .5 * 380 * dt * dt;
-  chunk.vx += tilt * 210 * dt; chunk.vy += 380 * dt; chunk.age += dt;
+  chunk.x += chunk.vx * dt + .5 * gravity.x * 380 * dt * dt;
+  chunk.y += chunk.vy * dt + .5 * gravity.y * 380 * dt * dt;
+  chunk.vx += gravity.x * 380 * dt; chunk.vy += gravity.y * 380 * dt; chunk.age += dt;
+}
+
+export function detachUnsupportedBank(bank: SnowBank, width: number) {
+  const patches: { at: number; area: number; height: number }[] = [], cell = width / (bank.heights.length - 1);
+  for (let start = 0; start < bank.heights.length; start += 8) {
+    let mass = 0, center = 0, peak = 0;
+    for (let i = start; i < Math.min(start + 8, bank.heights.length); i++) {
+      const h = bank.heights[i]; mass += h; center += i * h; peak = Math.max(peak, h); bank.heights[i] = 0;
+    }
+    if (mass > 0) patches.push({at: center / mass / (bank.heights.length - 1), area: mass * cell, height: peak});
+  }
+  return patches;
 }
