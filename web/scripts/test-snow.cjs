@@ -29,3 +29,14 @@ assert.equal(volume(restored.get('/home|cleaned')),0,'cleared banks stay empty o
 for(const raw of ['broken','null','{}','{"version":2,"banks":[]}','{"version":1,"banks":[["/bad",{"seed":0.5,"heights":[null]}]]}'])assert.equal(restoreBanks(raw).size,0);
 assert.equal(restoreBanks(serializeBanks(new Map(Array.from({length:100},(_,i)=>['/card'+i,createBank()])))).size,64);
 console.log('PASS persistent banks, clean reload, bounded dust opacity and corrupted/oversized snapshots');
+
+const {snowfallCount,SNOWFALL}=moduleValue.exports;
+for(const [w,h] of [[320,568],[393,852],[768,1024],[1920,1080]]) {
+  const counts=['light','steady','flurry'].map(i=>snowfallCount(i,w,h));
+  assert.ok(counts[0]>=24 && counts[1]>=counts[0]*2 && counts[2]>=counts[1]*1.6,'distinct density even on narrow phones');
+  assert.ok(counts[2]<=240,'bounded particle budget');
+}
+assert.equal(snowfallCount('off',393,852),0);
+assert.ok(SNOWFALL.flurry.speed>SNOWFALL.light.speed*2);
+assert.ok(SNOWFALL.flurry.drift>SNOWFALL.light.drift*3);
+console.log('PASS distinct phone/desktop snowfall density, speed, drift and bounded particle budget');

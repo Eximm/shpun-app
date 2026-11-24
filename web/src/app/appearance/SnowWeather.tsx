@@ -2,14 +2,14 @@ import { createPortal } from "react-dom";
 import { useEffect, useId, useRef, useState } from "react";
 import { useI18n } from "../../shared/i18n";
 import { useAppearance } from "./AppearanceProvider";
-import { bankCeiling, bankPath, brushBank, createDustedBank, depositFlake, growBank, restoreBanks, serializeBanks, snowOpacity, SNOWFALL, type SnowBank } from "./snowModel";
+import { bankCeiling, bankPath, brushBank, createDustedBank, depositFlake, growBank, restoreBanks, serializeBanks, snowOpacity, snowfallCount, SNOWFALL, type SnowBank } from "./snowModel";
 import { WINTER_ACTIVITIES_ENABLED } from "./winterFeatures";
 import { useWinterSound } from "./winterSound";
 
 const BANKS_KEY = "shpun.winter.snowbanks.v1";
 type Surface = { id: number; element: HTMLElement; bank: SnowBank; x: number; y: number; width: number; limit: number; visible: boolean; borderTop: number; borderLeft: number };
 type Cap = { id: number; x: number; y: number; width: number; path: string; opacity: number; element: HTMLElement; borderTop: number; borderLeft: number };
-type Flake = { x: number; y: number; speed: number; radius: number; phase: number };
+type Flake = { x: number; y: number; speed: number; radius: number; phase: number; life?: number };
 type Puff = { x: number; y: number; vx: number; vy: number; life: number };
 
 export function SnowWeather() {
@@ -57,8 +57,8 @@ export function SnowWeather() {
       target.width = Math.round(width * dpr); target.height = Math.round(height * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       dirty = true;
       particles.length = 0;
-      const count = Math.round(SNOWFALL[snowfall].count * Math.min(1, width / 900));
-      for (let i = 0; i < count; i++) particles.push({ x: Math.random() * width, y: Math.random() * height,
+      const count = snowfallCount(snowfall, width, height);
+      for (let i = 0; i < count; i++) particles.push({ x: Math.random() * width, y: (i + Math.random()) / count * height,
         speed: 26 + Math.random() * 48, radius: .8 + Math.random() * 2.2, phase: Math.random() * 6.28 });
     };
     const layout = () => {
@@ -107,12 +107,18 @@ export function SnowWeather() {
       const movement = device.data.current;
       if (!device.enabled || modal) { handledShake = movement.shakeAt; gustUntil = 0; }
       else if (Number.isFinite(movement.shakeAt) && movement.shakeAt !== handledShake) {
-        handledShake = movement.shakeAt; gustUntil = time + 1600;
+        handledShake = movement.shakeAt; gustUntil = time + 2400;
+        // A temporary foreground layer makes a shake visible even in light snow.
+        const extra = Math.min(70, Math.round(width / 8));
+        for (let i = 0; i < extra && particles.length < 310; i++) particles.push({
+          x: Math.random() * width, y: (i + Math.random()) / extra * height,
+          speed: 45 + Math.random() * 65, radius: 1.2 + Math.random() * 2, phase: Math.random() * Math.PI * 2, life: 2.4,
+        });
         for (let i = 0; i < 30 && puffs.current.length < 90; i++) puffs.current.push({
-          x: Math.random() * width, y: Math.random() * height * .65, vx: (Math.random() - .5) * 130, vy: -25 - Math.random() * 55, life: .8 + Math.random() * .5,
+          x: Math.random() * width, y: Math.random() * height, vx: (Math.random() - .5) * 240, vy: -45 - Math.random() * 90, life: .8 + Math.random() * .5,
         });
       }
-      const gustStrength = Math.max(0, (gustUntil - time) / 1600);
+      const gustStrength = Math.max(0, (gustUntil - time) / 2400);
       if ((gustStrength > 0) !== previousGust) { previousGust = gustStrength > 0; setGust(previousGust); }
       const phoneWind = device.enabled ? movement.wind * 38 : 0;
       ctx.clearRect(0, 0, width, height);
@@ -122,10 +128,12 @@ export function SnowWeather() {
           growBank(surface.bank, dt, snowfall);
           for (let i = 0; i < surface.bank.heights.length; i++) surface.bank.heights[i] = Math.min(bankCeiling(surface.bank, i, surface.limit), surface.bank.heights[i]);
         }
-        for (const p of particles) {
+        for (let index = particles.length - 1; index >= 0; index--) {
+          const p = particles[index];
+          if (p.life !== undefined) { p.life -= dt; if (p.life <= 0) { particles.splice(index, 1); continue; } }
           const before = p.y;
-          p.y += p.speed * (1 + gustStrength * .65) * dt;
-          p.x += (Math.sin(time / 1600 + p.phase) * (13 + gustStrength * 30) + 5 + phoneWind) * dt;
+          p.y += p.speed * SNOWFALL[snowfall].speed * (1 + gustStrength * 1.8) * dt;
+          p.x += (Math.sin(time / 1600 + p.phase) * (13 * SNOWFALL[snowfall].drift + gustStrength * 130) + 5 + phoneWind + gustStrength * 55) * dt;
           const dx = p.x - pointerX, dy = p.y - pointerY, distance = Math.hypot(dx, dy);
           if (distance > 0 && distance < 65) { p.x += dx / distance * dt * 50; p.y += dy / distance * dt * 30; }
           for (const surface of surfaces.current) {
@@ -133,10 +141,13 @@ export function SnowWeather() {
             if (p.x < surface.x || p.x > surface.x + surface.width) continue;
             const x = (p.x - surface.x) / surface.width;
             const edge = surface.y - surface.bank.heights[Math.round(x * 47)];
-            if (before <= edge && p.y >= edge) { depositFlake(surface.bank, x, p.radius * .12); recycle(p); break; }
+            if (before <= edge && p.y >= edge) { if (p.life === undefined) depositFlake(surface.bank, x, p.radius * .12);
+              // Depositing must not remove foreground flakes from the lower viewport.
+              break; }
           }
-          if (p.y > height + 12 || p.x < -15 || p.x > width + 15) recycle(p);
-          ctx.globalAlpha = .3 + p.radius * .17; ctx.fillStyle = "#f5fbff";
+          if (p.y > height + 12) recycle(p);
+          if (p.x < -15) p.x = width + 14; else if (p.x > width + 15) p.x = -14;
+          ctx.globalAlpha = (.3 + p.radius * .17) * (p.life === undefined ? 1 : Math.min(1, p.life / .6)); ctx.fillStyle = "#f5fbff";
           ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2); ctx.fill();
         }
         for (let i = puffs.current.length - 1; i >= 0; i--) {

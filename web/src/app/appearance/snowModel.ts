@@ -1,5 +1,8 @@
 export type Snowfall = "off" | "light" | "steady" | "flurry";
-export const SNOWFALL = { off: { count: 0, rate: 0 }, light: { count: 26, rate: .055 }, steady: { count: 65, rate: .16 }, flurry: { count: 125, rate: .38 } };
+export const SNOWFALL = { off: { count: 0, rate: 0, speed: 0, drift: 0 }, light: { count: 44, rate: .055, speed: .7, drift: .6 }, steady: { count: 100, rate: .16, speed: 1, drift: 1 }, flurry: { count: 190, rate: .38, speed: 1.5, drift: 2.2 } };
+export function snowfallCount(intensity: Snowfall, width: number, height: number) {
+  return Math.min(240, Math.round(SNOWFALL[intensity].count * Math.max(.65, Math.min(1.25, width / 900)) * Math.max(.85, Math.min(1.3, height / 900))));
+}
 export type SnowBank = { heights: number[]; seed: number };
 export function createBank(seed = .5): SnowBank { return { heights: Array(48).fill(0), seed }; }
 export function createDustedBank(seed = .5): SnowBank {

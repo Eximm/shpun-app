@@ -142,6 +142,28 @@ const { chromium } = require(process.env.PLAYWRIGHT_PACKAGE || "playwright");
     await automaticPhone.page.getByRole("button",{name:"Настройки зимней темы",exact:true}).click();
     assert.equal(await automaticPhone.page.getByRole("switch",{name:"Движение телефона",exact:true}).isChecked(),false,"explicit opt-out survives reload");
     await automaticPhone.context.close();
+    const weather=await setup("winter",{viewport:{width:393,height:852}});
+    async function chooseSnow(value) {
+      await weather.page.getByRole("button",{name:"Настройки зимней темы",exact:true}).click();
+      await weather.page.getByRole("combobox",{name:"Интенсивность снега"}).selectOption(value);
+      await weather.page.getByRole("button",{name:"Готово",exact:true}).click();
+      await weather.page.waitForTimeout(150);
+    }
+    const coverage=()=>weather.page.locator("canvas.seasonal-particles").evaluate(c=>{
+      const pixels=c.getContext("2d").getImageData(0,0,c.width,c.height).data,bands=[0,0,0];
+      for(let y=0;y<c.height;y++)for(let x=0;x<c.width;x++)if(pixels[(y*c.width+x)*4+3]>30)bands[Math.min(2,Math.floor(y/c.height*3))]++;
+      return bands;
+    });
+    await chooseSnow("light");
+    const light=await coverage();assert.ok(light.every(n=>n>20),"light snow starts across the whole viewport");
+    if(screenshotDir)await weather.page.screenshot({path:path.join(screenshotDir,"winter-light-snow.png")});
+    await weather.page.waitForTimeout(20000);
+    const settled=await coverage();assert.ok(settled[2]>20,"upper cards never starve lower viewport of snow");
+    await chooseSnow("flurry");const dense=await coverage();
+    assert.ok(dense.reduce((a,b)=>a+b,0)>light.reduce((a,b)=>a+b,0)*1.8,"heavy snow is visibly denser on phone");
+    if(screenshotDir)await weather.page.screenshot({path:path.join(screenshotDir,"winter-heavy-snow.png")});
+    console.log("PASS whole-viewport light snow after 20 seconds and visibly denser heavy snow",{light,settled,dense});
+    await weather.context.close();
     const phoneCase=await setup("winter",{hasTouch:true,viewport:{width:393,height:852}});
     await phoneCase.context.addInitScript(()=>{
       window.__motionRequests=0;window.__motionResult="granted";
@@ -157,9 +179,10 @@ const { chromium } = require(process.env.PLAYWRIGHT_PACKAGE || "playwright");
     await phoneCase.page.getByRole("button",{name:"Готово",exact:true}).click();
     await phoneCase.page.waitForTimeout(50);await reading(16);await phoneCase.page.waitForTimeout(140);await reading(-16);
     await phoneCase.page.locator(".snow-weather--gust").waitFor();
+    if(screenshotDir)await phoneCase.page.screenshot({path:path.join(screenshotDir,"winter-shake-gust.png")});
     assert.equal(new URL(phoneCase.page.url()).pathname,"/home");
     assert.equal(await phoneCase.page.evaluate(()=>JSON.parse(localStorage.getItem("shpun.winter.snowman.v1")).snow),0,"shaking never clears banks or awards collected snow");
-    await phoneCase.page.waitForTimeout(1900);assert.equal(await phoneCase.page.locator(".snow-weather--gust").count(),0);
+    await phoneCase.page.waitForTimeout(2600);assert.equal(await phoneCase.page.locator(".snow-weather--gust").count(),0);
     await reading(16);await phoneCase.page.waitForTimeout(140);await reading(-16);await phoneCase.page.waitForTimeout(100);
     assert.equal(await phoneCase.page.locator(".snow-weather--gust").count(),0,"shake cooldown prevents continuous effects");
     await phoneCase.page.getByRole("button",{name:"Настройки зимней темы",exact:true}).click();
