@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { apiFetch } from "../../shared/api/client";
 import { SNOWMAN_COSTS, type Snowfall } from "./snowModel";
+import { usePhoneSnow } from "./usePhoneSnow";
 
 export type SeasonalTheme = "classic" | "winter";
 export type AppearanceSettings = { theme: SeasonalTheme; effectsEnabled: boolean; gamesEnabled: boolean };
@@ -32,11 +33,14 @@ type AppearanceContextValue = {
   collectSnow: (amount: number) => void;
   buildSnowman: () => void;
   resetSnowman: () => void;
+  phoneSnow: ReturnType<typeof usePhoneSnow>;
+  setPhoneSceneActive: (value: boolean) => void;
 };
 const AppearanceContext = createContext<AppearanceContextValue | null>(null);
 
 export function AppearanceProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState(defaults);
+  const [phoneSceneActive, setPhoneSceneActive] = useState(false);
   const [snowfall, updateSnowfall] = useState(readSnowfall);
   const [workshop, setWorkshop] = useState(readWorkshop);
   const setSnowfall = useCallback((value: Snowfall) => { updateSnowfall(value); try { localStorage.setItem(SNOW_KEY, value); } catch { /* optional */ } }, []);
@@ -87,8 +91,10 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
     };
   }, []);
   const theme = disabled ? "classic" : settings.theme;
+  const motion = settings.effectsEnabled && !motionOff && !reducedMotion;
+  const phoneSnow = usePhoneSnow(phoneSceneActive && theme === "winter" && motion && snowfall !== "off");
   return <AppearanceContext.Provider value={{ settings, theme, disabled, motion: settings.effectsEnabled && !motionOff && !reducedMotion,
-    reducedMotion, setDisabled, setMotion, snowfall, setSnowfall, workshop, collectSnow, buildSnowman, resetSnowman }}>{children}</AppearanceContext.Provider>;
+    reducedMotion, setDisabled, setMotion, snowfall, setSnowfall, workshop, collectSnow, buildSnowman, resetSnowman, phoneSnow, setPhoneSceneActive }}>{children}</AppearanceContext.Provider>;
 }
 
 export function useAppearance() {

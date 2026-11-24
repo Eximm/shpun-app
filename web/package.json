@@ -34,7 +34,7 @@
     "test:clipboard": "node scripts/test-clipboard-attachments.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test:appearance": "node scripts/test-appearance.cjs && node scripts/test-snow.cjs && node scripts/test-snow-sound.cjs"
+    "test:appearance": "node scripts/test-appearance.cjs && node scripts/test-snow.cjs && node scripts/test-snow-sound.cjs && node scripts/test-phone-snow.cjs"
   },
   "dependencies": {
     "qrcode": "^1.5.4",

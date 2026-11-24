@@ -4,7 +4,7 @@ import { useWinterSound } from "./winterSound";
 
 export function AppearanceControls({ showHeading = true }: { showHeading?: boolean }) {
   const { t } = useI18n();
-  const { settings, disabled, motion, reducedMotion, setDisabled, setMotion, snowfall, setSnowfall } = useAppearance();
+  const { settings, disabled, motion, reducedMotion, setDisabled, setMotion, snowfall, setSnowfall, phoneSnow } = useAppearance();
   const sound = useWinterSound();
   const active = !disabled && settings.theme !== "classic";
   return <div className="appearance-controls winter-settings-controls">
@@ -31,6 +31,13 @@ export function AppearanceControls({ showHeading = true }: { showHeading?: boole
       <input className="winter-setting-toggle" type="checkbox" role="switch" aria-label={t("appearance.settings_sound")} checked={sound.enabled}
         onChange={(event) => sound.setEnabled(event.target.checked)} />
     </label>
+    {phoneSnow.supported && <label className="winter-setting-row">
+      <span><strong>{t("appearance.phone.title")}</strong><small>{t("appearance.phone.hint")}</small></span>
+      <input className="winter-setting-toggle" type="checkbox" role="switch" aria-label={t("appearance.phone.title")} checked={phoneSnow.enabled}
+        disabled={!active || !motion || snowfall === "off" || phoneSnow.status === "asking"} onChange={(event) => void phoneSnow.toggle(event.target.checked)} />
+    </label>}
+    {phoneSnow.status === "denied" && <p className="p winter-settings-note" role="status">{t("appearance.phone.denied")}</p>}
+    {phoneSnow.status === "unavailable" && <p className="p winter-settings-note" role="status">{t("appearance.phone.unavailable")}</p>}
     {reducedMotion && <p className="p winter-settings-note">{t("appearance.reduced_motion")}</p>}
     <p className="p winter-settings-note">{t("appearance.local_preference")}</p>
   </div>;

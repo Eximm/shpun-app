@@ -13,7 +13,10 @@ type Flake = { x: number; y: number; speed: number; radius: number; phase: numbe
 type Puff = { x: number; y: number; vx: number; vy: number; life: number };
 
 export function SnowWeather() {
-  const { snowfall, motion, collectSnow, workshop, settings } = useAppearance();
+  const { snowfall, motion, collectSnow, workshop, settings, phoneSnow, setPhoneSceneActive } = useAppearance();
+  const phone = useRef(phoneSnow); phone.current = phoneSnow;
+  const [gust, setGust] = useState(false);
+  useEffect(() => { setPhoneSceneActive(true); return () => setPhoneSceneActive(false); }, [setPhoneSceneActive]);
   const { t } = useI18n();
   const sounds = useWinterSound();
   const audio = useRef(sounds); audio.current = sounds;
@@ -39,7 +42,7 @@ export function SnowWeather() {
     const target = canvas.current, ctx = target?.getContext("2d");
     if (!target || !ctx) return;
     let width = 0, height = 0, raf = 0, previous = 0, published = 0, layoutAt = 0, savedAt = 0, dirty = true;
-    let pointerX = -1000, pointerY = -1000;
+    let pointerX = -1000, pointerY = -1000, gustUntil = 0, handledShake = -Infinity, previousGust = false;
     const particles: Flake[] = [];
     const decorated = new Set<HTMLElement>();
     const resize = () => {
@@ -100,6 +103,18 @@ export function SnowWeather() {
       const layoutChanged = dirty || time - layoutAt > 650;
       if (layoutChanged) { layout(); layoutAt = time; }
       const modal = !!document.querySelector("dialog[open]");
+      const device = phone.current;
+      const movement = device.data.current;
+      if (!device.enabled || modal) { handledShake = movement.shakeAt; gustUntil = 0; }
+      else if (Number.isFinite(movement.shakeAt) && movement.shakeAt !== handledShake) {
+        handledShake = movement.shakeAt; gustUntil = time + 1600;
+        for (let i = 0; i < 30 && puffs.current.length < 90; i++) puffs.current.push({
+          x: Math.random() * width, y: Math.random() * height * .65, vx: (Math.random() - .5) * 130, vy: -25 - Math.random() * 55, life: .8 + Math.random() * .5,
+        });
+      }
+      const gustStrength = Math.max(0, (gustUntil - time) / 1600);
+      if ((gustStrength > 0) !== previousGust) { previousGust = gustStrength > 0; setGust(previousGust); }
+      const phoneWind = device.enabled ? movement.wind * 38 : 0;
       ctx.clearRect(0, 0, width, height);
       if (!modal) {
         for (const surface of surfaces.current) {
@@ -109,7 +124,8 @@ export function SnowWeather() {
         }
         for (const p of particles) {
           const before = p.y;
-          p.y += p.speed * dt; p.x += (Math.sin(time / 1600 + p.phase) * 13 + 5) * dt;
+          p.y += p.speed * (1 + gustStrength * .65) * dt;
+          p.x += (Math.sin(time / 1600 + p.phase) * (13 + gustStrength * 30) + 5 + phoneWind) * dt;
           const dx = p.x - pointerX, dy = p.y - pointerY, distance = Math.hypot(dx, dy);
           if (distance > 0 && distance < 65) { p.x += dx / distance * dt * 50; p.y += dy / distance * dt * 30; }
           for (const surface of surfaces.current) {
@@ -167,7 +183,7 @@ export function SnowWeather() {
   };
   if (!motion || snowfall === "off") return null;
   return <>
-  <div className="snow-weather">
+  <div className={`snow-weather${gust ? " snow-weather--gust" : ""}`}>
     <span ref={scaleProbe} className="snow-scale-probe" aria-hidden="true" />
     <canvas className="seasonal-particles" ref={canvas} aria-hidden="true" />
     {caps.map((cap) => createPortal(<button key={cap.id} type="button" className="snowdrift" data-snow-id={cap.id} aria-label={t("appearance.snow.brush")} tabIndex={cap.opacity > .05 ? 0 : -1}

@@ -1,0 +1,23 @@
+export type Vector = { x: number; y: number; z: number };
+export type PhoneSnowState = { gravity: Vector | null; wind: number; shakeAt: number; impulse: Vector | null; impulseAt: number; lastAt: number };
+export function newPhoneSnowState(): PhoneSnowState { return { gravity: null, wind: 0, shakeAt: -Infinity, impulse: null, impulseAt: 0, lastAt: -Infinity }; }
+export function motionVector(value: { x: number | null; y: number | null; z: number | null } | null): Vector | null {
+  if (!value || ![value.x, value.y, value.z].every((n) => typeof n === "number" && Number.isFinite(n) && Math.abs(n) < 100)) return null;
+  return value as Vector;
+}
+export function updatePhoneSnow(state: PhoneSnowState, gravity: Vector | null, acceleration: Vector | null, at: number, angle = 0): PhoneSnowState {
+  if ((!gravity && !acceleration) || at - state.lastAt < 25) return state;
+  const previous = state.gravity;
+  const nextGravity = gravity ? (previous ? { x: previous.x * .9 + gravity.x * .1, y: previous.y * .9 + gravity.y * .1, z: previous.z * .9 + gravity.z * .1 } : gravity) : previous;
+  const radians = angle * Math.PI / 180;
+  const targetWind = nextGravity ? Math.max(-1, Math.min(1, (nextGravity.x * Math.cos(radians) + nextGravity.y * Math.sin(radians)) / 7)) : 0;
+  const next = { ...state, gravity: nextGravity, wind: state.wind * .85 + targetWind * .15, lastAt: at };
+  const linear = acceleration ?? (gravity && previous ? { x: gravity.x - previous.x, y: gravity.y - previous.y, z: gravity.z - previous.z } : null);
+  if (!linear || Math.hypot(linear.x, linear.y, linear.z) < 11.5) return next;
+  if (state.impulse && at - state.impulseAt >= 100 && at - state.impulseAt < 650) {
+    const dot = linear.x * state.impulse.x + linear.y * state.impulse.y + linear.z * state.impulse.z;
+    if (dot < 0 && at - state.shakeAt >= 4000) return { ...next, shakeAt: at, impulse: null, impulseAt: 0 };
+  }
+  if (!state.impulse || at - state.impulseAt >= 650) return { ...next, impulse: linear, impulseAt: at };
+  return next;
+}
