@@ -113,7 +113,7 @@ function StatCell({ to, icon, label, value, sub, accent }: {
       : undefined;
 
   return (
-    <Link to={to} data-snow-surface data-snow-key={`home-tile-${icon}`} style={{
+    <div className="snow-tile-frame" data-snow-surface data-snow-key={`home-tile-${icon}`}><Link to={to} style={{
       display: "block", background: bg,
       border: `0.5px solid ${borderColor}`, borderRadius: 13,
       padding: "11px 12px", textDecoration: "none", color: "inherit",
@@ -128,7 +128,7 @@ function StatCell({ to, icon, label, value, sub, accent }: {
         {value}
       </div>
       {sub && <div style={{ fontSize: 10, color: subColor, marginTop: 3, lineHeight: 1.3 }}>{sub}</div>}
-    </Link>
+    </Link></div>
   );
 }
 

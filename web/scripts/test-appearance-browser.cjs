@@ -174,6 +174,20 @@ const { chromium } = require(process.env.PLAYWRIGHT_PACKAGE || "playwright");
     for(const width of [360,393,768,1280]) {
       await weather.page.setViewportSize({width,height:1000});await weather.page.waitForTimeout(350);
       await assertSnowAlignment(`${width}px`);
+      const nativeScrollErrors=await weather.page.evaluate(()=>{
+        const errors=[];
+        for(const top of [40,120,240,80,0]) {
+          scrollTo({top,behavior:"instant"});
+          for(const cap of document.querySelectorAll(".snowdrift")) {
+            const host=cap.parentElement, rect=host.getBoundingClientRect(), snow=cap.querySelector("svg").getBoundingClientRect();
+            if(!host.classList.contains("snow-bearing-surface") || getComputedStyle(cap).position!=="absolute" || Math.abs(rect.top-(snow.top+22))>1.2)
+              errors.push({top,hostTop:rect.top,snowTop:snow.top});
+          }
+        }
+        return errors;
+      });
+      assert.deepEqual(nativeScrollErrors,[],`caps move with tiles synchronously without waiting for JS frames: ${width}px`);
+
       await weather.page.evaluate(()=>scrollTo(0,100));await weather.page.waitForTimeout(250);
       await assertSnowAlignment(`${width}px scrolled`);
       await weather.page.evaluate(()=>scrollTo(0,0));await weather.page.waitForTimeout(250);
