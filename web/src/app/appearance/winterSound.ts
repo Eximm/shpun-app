@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { createSnowFoley } from "./snowFoley";
 
-export type WinterSound = "bell" | "snow" | "gift" | "melody";
+export type WinterSound = "bell" | "snow" | "roll" | "gift" | "melody";
 const KEY = "shpun.winter.sound.v1";
 export function useWinterSound() {
   const [enabled, updateEnabled] = useState(() => { try { return localStorage.getItem(KEY) === "1"; } catch { return false; } });
@@ -10,11 +11,12 @@ export function useWinterSound() {
     window.dispatchEvent(new CustomEvent("shpun-winter-sound", { detail: value }));
   };
   const context = useRef<AudioContext | null>(null);
+  const friction = useRef<ReturnType<typeof createSnowFoley> | null>(null);
   const allowed = useRef(enabled);
   allowed.current = enabled;
-  const last = useRef(0);
+  const last = useRef<Partial<Record<WinterSound, number>>>({});
   useEffect(() => {
-    if (!enabled) void context.current?.suspend();
+    if (!enabled) { friction.current?.dispose(); friction.current = null; void context.current?.close(); context.current = null; }
   }, [enabled]);
   useEffect(() => {
     const sync = (event: Event) => updateEnabled(Boolean((event as CustomEvent).detail));
@@ -23,29 +25,32 @@ export function useWinterSound() {
     return () => { window.removeEventListener("shpun-winter-sound", sync); window.removeEventListener("storage", storage); };
   }, []);
   useEffect(() => {
-    const hidden = () => { if (document.hidden) void context.current?.suspend(); };
+    const hidden = () => { if (document.hidden) { friction.current?.dispose(); friction.current = null; void context.current?.close(); context.current = null; } };
     document.addEventListener("visibilitychange", hidden);
-    return () => { document.removeEventListener("visibilitychange", hidden); void context.current?.close(); context.current = null; };
+    return () => { document.removeEventListener("visibilitychange", hidden); friction.current?.dispose(); friction.current = null; void context.current?.close(); context.current = null; };
   }, []);
+  const brushSnow = (strength = .5, holdMs = 160, rolling = false) => {
+    if (!allowed.current || document.hidden) return;
+    try {
+      const ctx = context.current ??= new AudioContext();
+      // Schedule during the gesture; repeated moves only change the gain of
+      // this one looping voice, even while resume() is still pending.
+      friction.current ??= createSnowFoley(ctx);
+      friction.current.stroke(strength, holdMs, rolling ? "roll" : "brush");
+      if (ctx.state !== "running") void ctx.resume().catch(() => {});
+    } catch { /* cosmetic sound remains optional */ }
+  };
+  const stopSnow = () => friction.current?.release();
   const play = (kind: WinterSound, force = false) => {
-    if ((!enabled && !force) || document.hidden || performance.now() - last.current < 100) return;
-    last.current = performance.now();
+    const cooldown = kind === "roll" ? 650 : kind === "snow" ? 400 : 100;
+    if ((!enabled && !force) || document.hidden || performance.now() - (last.current[kind] ?? -Infinity) < cooldown) return;
+    last.current[kind] = performance.now();
+    if (kind === "snow" || kind === "roll") { brushSnow(kind === "roll" ? .7 : .35, kind === "roll" ? 420 : 120, kind === "roll"); return; }
     try {
       const ctx = context.current ??= new AudioContext();
       void ctx.resume().then(() => {
-        if (ctx.state !== "running" || document.hidden || (!allowed.current && !force)) return;
+        if (context.current !== ctx || ctx.state !== "running" || document.hidden || (!allowed.current && !force)) return;
         const at = ctx.currentTime;
-        if (kind === "snow") {
-          const buffer = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * .16), ctx.sampleRate);
-          const data = buffer.getChannelData(0);
-          for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
-          const source = ctx.createBufferSource(); source.buffer = buffer;
-          const filter = ctx.createBiquadFilter(); filter.type = "lowpass"; filter.frequency.value = 1800;
-          const volume = ctx.createGain(); volume.gain.value = .035;
-          source.connect(filter).connect(volume).connect(ctx.destination); source.start();
-          source.onended = () => { source.disconnect(); filter.disconnect(); volume.disconnect(); };
-          return;
-        }
         // A short original bell phrase; no downloaded music or autoplay loop.
         const notes = kind === "melody" ? [784, 988, 1175, 988, 880, 1047, 1568] : kind === "gift" ? [659, 880, 1319] : [1175, 1568];
         notes.forEach((frequency, index) => {
@@ -59,5 +64,5 @@ export function useWinterSound() {
       }).catch(() => {});
     } catch { /* audio is optional on unsupported devices */ }
   };
-  return { enabled, setEnabled, play };
+  return { enabled, setEnabled, play, brushSnow, stopSnow };
 }

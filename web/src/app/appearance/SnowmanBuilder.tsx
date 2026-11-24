@@ -39,7 +39,7 @@ export function SnowmanBuilder({ play }: { play: (sound: WinterSound) => void })
       </div>
       <div><h4>{t(`appearance.snow.stage${workshop.stage}`)}</h4><p className="p" role="status">{t("appearance.snow.stash", { count: Math.floor(workshop.snow) })}</p>
         {workshop.stage < 3 ? <button className="btn" type="button" disabled={workshop.snow < cost}
-          onClick={() => { buildSnowman(); play("snow"); }}>{t("appearance.snow.roll", { count: cost })}</button> : <>
+          onClick={() => { buildSnowman(); play("roll"); }}>{t("appearance.snow.roll", { count: cost })}</button> : <>
           <p className="p">{t("appearance.snow.friend_hint")}</p>
           <button className="btn" type="button" onClick={() => { setScarf((value) => (value + 65) % 360); play("bell"); }}>{t("appearance.snow.scarf")}</button>
           <button className="btn" type="button" onClick={() => { resetSnowman(); play("snow"); }}>{t("appearance.snow.rebuild")}</button>

@@ -14,8 +14,8 @@ type Puff = { x: number; y: number; vx: number; vy: number; life: number };
 export function SnowWeather() {
   const { snowfall, motion, collectSnow, workshop, settings } = useAppearance();
   const { t } = useI18n();
-  const { play } = useWinterSound();
-  const audio = useRef(play); audio.current = play;
+  const sounds = useWinterSound();
+  const audio = useRef(sounds); audio.current = sounds;
   const canvas = useRef<HTMLCanvasElement>(null);
   const scaleProbe = useRef<HTMLSpanElement>(null);
   const [overlay, setOverlay] = useState({ scale: 1 });
@@ -159,7 +159,7 @@ export function SnowWeather() {
     collectedFraction.current += removed / 6;
     const units = Math.floor(collectedFraction.current);
     if (units > 0) { collectedFraction.current -= units; collectSnow(units); if (workshop.snow < 15 && workshop.snow + units >= 15) setHint(true); }
-    audio.current("snow");
+    if (whole) audio.current.play("snow"); else audio.current.brushSnow(Math.min(1, .2 + removed / 5));
     for (let i = 0; i < 12 && puffs.current.length < 90; i++) puffs.current.push({ x: clientX, y: liveBox.top - 4, vx: (Math.random() - .5) * 120, vy: -20 - Math.random() * 65, life: .6 + Math.random() * .4 });
     if (whole) persistence.current();
     setCaps((old) => old.map((s) => s.id === cap.id ? { ...s, path: bankPath(surface.bank, surface.width), opacity: snowOpacity(surface.bank) } : s));
@@ -175,7 +175,8 @@ export function SnowWeather() {
       onPointerDown={(event) => { event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); drag.current = { id: cap.id, x: event.clientX }; sweep(cap, event.clientX); }}
       onPointerMove={(event) => { if (drag.current?.id !== cap.id) return; const from = drag.current.x; const steps = Math.max(1, Math.ceil(Math.abs(event.clientX - from) / 12));
         for (let i = 1; i <= steps; i++) sweep(cap, from + (event.clientX - from) * i / steps); drag.current.x = event.clientX; }}
-      onPointerUp={() => { drag.current = null; persistence.current(); }} onPointerCancel={() => { drag.current = null; persistence.current(); }}
+      onPointerUp={() => { drag.current = null; audio.current.stopSnow(); persistence.current(); }} onPointerCancel={() => { drag.current = null; audio.current.stopSnow(); persistence.current(); }}
+      onLostPointerCapture={() => audio.current.stopSnow()}
       onClick={(event) => { if (event.detail === 0) sweep(cap, cap.x + cap.width / 2, true); }}>
       <svg width="100%" height="100%" viewBox={`0 0 ${cap.width} 28`} aria-hidden="true">
         <defs><linearGradient id={`${gradientId}-${cap.id}`} x2="0" y2="1"><stop offset="0%" stopColor="#fff" /><stop offset="55%" stopColor="#edf8ff" /><stop offset="100%" stopColor="#a9cddc" /></linearGradient></defs>

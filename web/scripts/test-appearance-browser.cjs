@@ -18,6 +18,11 @@ const { chromium } = require(process.env.PLAYWRIGHT_PACKAGE || "playwright");
     await context.addInitScript(() => {
       for (const kind of ["pwa_install", "push"]) sessionStorage.setItem(`onboarding.prompt.shown.session.v1:${kind}`, "1");
       localStorage.setItem("push_disabled_by_user", "1");
+      window.__snowAudio = { starts:0, stops:0 };
+      const start=AudioBufferSourceNode.prototype.start, stop=AudioBufferSourceNode.prototype.stop;
+      AudioBufferSourceNode.prototype.start=function(...args){ if(this.loop)window.__snowAudio.starts++;return start.apply(this,args); };
+      AudioBufferSourceNode.prototype.stop=function(...args){ if(this.loop)window.__snowAudio.stops++;return stop.apply(this,args); };
+
     });
     const page = await context.newPage();
     page.on("pageerror", (error) => errors.push(error.message));
@@ -151,6 +156,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_PACKAGE || "playwright");
 
     const weather = await setup("winter", { hasTouch: true });
     await weather.page.getByRole("button", {name:"Тема и игры",exact:true}).click();
+    await weather.page.getByRole("checkbox", {name:"Звуки праздника · тихие отклики на действия",exact:true}).check();
     await weather.page.getByRole("button", {name:"Оформление",exact:true}).click();
     await weather.page.getByRole("combobox", {name:"Интенсивность снега",exact:true}).selectOption("flurry");
     await weather.page.keyboard.press("Escape");
@@ -202,7 +208,12 @@ const { chromium } = require(process.env.PLAYWRIGHT_PACKAGE || "playwright");
       return null;
     });
     const hit=await hitPoint(); assert.ok(hit,"only the painted snow surface receives pointer input");
+    const audioBefore=await weather.page.evaluate(()=>({...window.__snowAudio}));
     await weather.page.mouse.move(hit.x,hit.y);await weather.page.mouse.down();await weather.page.mouse.move(hit.x+65,hit.y,{steps:8});await weather.page.mouse.up();
+    const audioAfter=await weather.page.evaluate(()=>({...window.__snowAudio}));
+    assert.equal(audioAfter.starts-audioBefore.starts,1,"one continuous sound for an entire mouse stroke");
+    await weather.page.waitForTimeout(700);
+    assert.equal(await weather.page.evaluate(()=>window.__snowAudio.starts-window.__snowAudio.stops),0,"brush releases without a stuck loop");
     const afterMouse=await weather.page.evaluate(()=>JSON.parse(localStorage.getItem("shpun.winter.snowman.v1")).snow);
     assert.ok(afterMouse>0,"real mouse sweep collects snow");
     await weather.page.setViewportSize({width:393,height:852});await weather.page.waitForTimeout(400);
